@@ -1,0 +1,132 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  company   String?
+  avatarUrl String?
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects ProjectMember[]
+}
+
+model Project {
+  id            String   @id @default(uuid())
+  name          String
+  description   String?
+  domain        String
+  companyName   String?
+  progress      Float    @default(0)
+  status        String   @default("active")
+  deadline      DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  userId        String
+
+  teamMembers   ProjectMember[]
+  requirements  Requirement[]
+  functions     SystemFunction[]
+  architectures Architecture[]
+  verifications VerificationPlan[]
+  documents     Document[]
+  traceLinks    TraceLink[]
+}
+
+model ProjectMember {
+  id        String   @id @default(uuid())
+  projectId String
+  userId    String
+  role      String
+  joinedAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+}
+
+model Requirement {
+  id          String   @id @default(uuid())
+  projectId   String
+  title       String
+  description String
+  priority    String
+  status      String
+  stage       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model SystemFunction {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  description String
+  sourceReqId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Architecture {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model VerificationPlan {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model TraceLink {
+  id            String   @id @default(uuid())
+  projectId    String
+  sourceType   String
+  sourceId     String
+  targetType   String
+  targetId     String
+  linkType     String
+  confidence   Float?
+  isAuto       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  type        String
+  content     String?
+  fileUrl     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
