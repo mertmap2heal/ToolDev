@@ -57,7 +57,7 @@ export const getWorkflowProgress = async (projectId: string): Promise<WorkflowPr
     description: `Complete ${formatStageTitle(stage)} stage`,
     order: index + 1,
     isCompleted: completedStages.includes(stage),
-    isLocked: index > completedStages.length,
+    isLocked: false, // All options are unlocked - users can access any stage
     dependencies: index > 0 ? [`step-${index}`] : undefined,
   }))
 
