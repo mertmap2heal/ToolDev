@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { Search, X, Filter, ChevronDown, ChevronUp } from 'lucide-react'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
 
-export default function RequirementsPage() {
+export default function ReportsPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [searchQuery, setSearchQuery] = useState('')
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
@@ -11,7 +11,7 @@ export default function RequirementsPage() {
   return (
     <div className="space-y-6">
       <ProjectNavigation />
-      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Requirements</h2>
+      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Reports</h2>
 
       {/* Search */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
@@ -19,7 +19,7 @@ export default function RequirementsPage() {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
           <input
             type="text"
-            placeholder="Search requirements..."
+            placeholder="Search reports..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
@@ -59,7 +59,7 @@ export default function RequirementsPage() {
       </div>
 
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-        <p className="text-gray-600 dark:text-gray-400">Requirements form will be implemented here</p>
+        <p className="text-gray-600 dark:text-gray-400">Reports will be implemented here</p>
       </div>
     </div>
   )

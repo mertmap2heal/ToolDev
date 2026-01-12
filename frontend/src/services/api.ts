@@ -32,7 +32,8 @@ class ApiClient {
       (error: AxiosError) => {
         if (error.response?.status === 401) {
           localStorage.removeItem('token')
-          window.location.href = '/login'
+          // Don't redirect - just let the app handle it gracefully
+          console.log('Unauthorized - API call failed, but app will continue')
         }
         return Promise.reject(error)
       }
@@ -80,11 +81,23 @@ class ApiClient {
       return {
         success: false,
         error: error.response.data?.error || error.response.data?.message || 'An error occurred',
+        statusCode: error.response.status,
       }
     }
+    
+    // Network errors (backend not running, CORS, etc.)
+    if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error') || error.message?.includes('Failed to fetch')) {
+      return {
+        success: false,
+        error: `Cannot connect to backend server. Please make sure the backend is running on ${API_BASE_URL}. Check the console for more details.`,
+        statusCode: 0,
+      }
+    }
+    
     return {
       success: false,
       error: error.message || 'Network error',
+      statusCode: 0,
     }
   }
 }

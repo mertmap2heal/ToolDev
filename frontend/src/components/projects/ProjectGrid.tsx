@@ -38,7 +38,14 @@ export default function ProjectGrid({ projects, searchQuery, filterValue, sortVa
   if (filteredProjects.length === 0) {
     return (
       <div className="text-center py-12 text-gray-500">
-        No projects found. Create your first project to get started.
+        {projects.length === 0 ? (
+          <div>
+            <p className="text-lg mb-2">No projects found.</p>
+            <p className="text-sm">Create your first project to get started, or check your connection to the backend API.</p>
+          </div>
+        ) : (
+          <p>No projects match your search criteria.</p>
+        )}
       </div>
     )
   }

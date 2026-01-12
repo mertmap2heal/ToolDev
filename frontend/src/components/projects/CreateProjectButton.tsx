@@ -1,10 +1,23 @@
+import { useState } from 'react'
 import { Plus } from 'lucide-react'
+import CreateProjectModal from './CreateProjectModal'
 
 export default function CreateProjectButton() {
+  const [isModalOpen, setIsModalOpen] = useState(false)
+
   return (
-    <button className="w-full md:w-auto bg-blue-500 hover:bg-blue-600 text-white font-semibold py-4 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors">
-      <Plus size={20} />
-      <span>Create a New Project</span>
-    </button>
+    <>
+      <button
+        onClick={() => setIsModalOpen(true)}
+        className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg flex items-center gap-2 transition-colors text-sm"
+      >
+        <Plus size={16} />
+        <span>Create Project</span>
+      </button>
+      <CreateProjectModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
+    </>
   )
 }
