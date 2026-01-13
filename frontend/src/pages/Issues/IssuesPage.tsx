@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Search, Filter, AlertCircle, X, Edit2, Trash2, Plus, ChevronDown, ChevronUp } from 'lucide-react'
+import { Search, Filter, AlertCircle, X, Edit2, Trash2, Plus, ChevronDown, ChevronUp, FileText } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
 import { issueService } from '../../services/issue.service'
@@ -8,6 +8,7 @@ import { functionService } from '../../services/function.service'
 import DeleteConfirmationModal from '../../components/projects/DeleteConfirmationModal'
 import IssueSourceDetailsModal from '../../components/issues/IssueSourceDetailsModal'
 import CreateIssueModal from '../../components/issues/CreateIssueModal'
+import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import type { Issue } from '../../../shared/types/engineering.types'
 import type { SystemFunction } from '../../../shared/types/engineering.types'
 import clsx from 'clsx'
@@ -25,6 +26,7 @@ export default function IssuesPage() {
   const [viewingSource, setViewingSource] = useState<Issue | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
+  const [changeRequestModal, setChangeRequestModal] = useState<{ isOpen: boolean; sourceId: string; sourceName: string } | null>(null)
   const queryClient = useQueryClient()
 
   const { data: issues = [], isLoading: issuesLoading } = useQuery({
@@ -424,6 +426,20 @@ export default function IssuesPage() {
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-2">
                         <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setChangeRequestModal({
+                              isOpen: true,
+                              sourceId: issue.id,
+                              sourceName: issue.title,
+                            })
+                          }}
+                          className="p-1 hover:bg-green-100 dark:hover:bg-green-900/20 rounded text-green-600 dark:text-green-400"
+                          title="Create Change Request"
+                        >
+                          <FileText size={16} />
+                        </button>
+                        <button
                           onClick={(e) => handleEditClick(e, issue)}
                           className="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded text-blue-600 dark:text-blue-400"
                           title="Edit status"
@@ -470,11 +486,23 @@ export default function IssuesPage() {
       )}
 
       {projectId && (
-        <CreateIssueModal
-          isOpen={isCreateModalOpen}
-          onClose={() => setIsCreateModalOpen(false)}
-          projectId={projectId}
-        />
+        <>
+          <CreateIssueModal
+            isOpen={isCreateModalOpen}
+            onClose={() => setIsCreateModalOpen(false)}
+            projectId={projectId}
+          />
+          {changeRequestModal && (
+            <CreateChangeRequestModal
+              isOpen={changeRequestModal.isOpen}
+              onClose={() => setChangeRequestModal(null)}
+              projectId={projectId}
+              sourceType="issue"
+              sourceId={changeRequestModal.sourceId}
+              sourceName={changeRequestModal.sourceName}
+            />
+          )}
+        </>
       )}
     </div>
   )

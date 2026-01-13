@@ -12,6 +12,7 @@ import MBSEModelsPage from './pages/MBSEModels/MBSEModelsPage'
 import ReportsPage from './pages/Reports/ReportsPage'
 import IssuesPage from './pages/Issues/IssuesPage'
 import ParametersPage from './pages/Parameters/ParametersPage'
+import ChangeRequestsPage from './pages/ChangeRequests/ChangeRequestsPage'
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
           <Route path="projects/:projectId/requirements" element={<RequirementsPage />} />
           <Route path="projects/:projectId/functions" element={<SystemFunctionsPage />} />
           <Route path="projects/:projectId/parameters" element={<ParametersPage />} />
+          <Route path="projects/:projectId/change-requests" element={<ChangeRequestsPage />} />
           <Route path="projects/:projectId/architecture" element={<ArchitecturePage />} />
           <Route path="projects/:projectId/reports" element={<ReportsPage />} />
           <Route path="projects/:projectId/verification" element={<VerificationPage />} />

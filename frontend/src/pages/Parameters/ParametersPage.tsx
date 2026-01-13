@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Search, X, Trash2, Edit2, Plus, Filter, ChevronDown, ChevronUp } from 'lucide-react'
+import { Search, X, Trash2, Edit2, Plus, Filter, ChevronDown, ChevronUp, FileText } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
 import { parameterService } from '../../services/parameter.service'
@@ -8,6 +8,7 @@ import DeleteConfirmationModal from '../../components/projects/DeleteConfirmatio
 import EditParameterModal from '../../components/parameters/EditParameterModal'
 import SourceDetailsModal from '../../components/parameters/SourceDetailsModal'
 import CreateParameterModal from '../../components/parameters/CreateParameterModal'
+import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import type { Parameter } from '../../../shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
@@ -20,6 +21,7 @@ export default function ParametersPage() {
   const [viewingSource, setViewingSource] = useState<Parameter | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
+  const [changeRequestModal, setChangeRequestModal] = useState<{ isOpen: boolean; sourceId: string; sourceName: string } | null>(null)
   const [dataTypeFilter, setDataTypeFilter] = useState<string>('all')
   const [unitFilter, setUnitFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
@@ -328,6 +330,20 @@ export default function ParametersPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setChangeRequestModal({
+                              isOpen: true,
+                              sourceId: param.id,
+                              sourceName: param.name,
+                            })
+                          }}
+                          className="p-1 hover:bg-green-100 dark:hover:bg-green-900/20 rounded text-green-600 dark:text-green-400"
+                          title="Create Change Request"
+                        >
+                          <FileText size={16} />
+                        </button>
+                        <button
                           onClick={(e) => handleEditClick(e, param)}
                           className="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded text-blue-600 dark:text-blue-400"
                           title="Edit parameter"
@@ -381,6 +397,16 @@ export default function ParametersPage() {
             onClose={() => setIsCreateModalOpen(false)}
             projectId={projectId}
           />
+          {changeRequestModal && projectId && (
+            <CreateChangeRequestModal
+              isOpen={changeRequestModal.isOpen}
+              onClose={() => setChangeRequestModal(null)}
+              projectId={projectId}
+              sourceType="parameter"
+              sourceId={changeRequestModal.sourceId}
+              sourceName={changeRequestModal.sourceName}
+            />
+          )}
         </>
       )}
     </div>

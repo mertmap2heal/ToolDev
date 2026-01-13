@@ -1,14 +1,19 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { ChevronDown, ChevronRight, Plus, AlertCircle, Trash2, Edit2, Filter, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronRight, Plus, AlertCircle, Trash2, Edit2, Filter, ChevronUp, FileText } from 'lucide-react'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
 import CreateFunctionModal from '../../components/functions/CreateFunctionModal'
 import DeleteFunctionModal from '../../components/functions/DeleteFunctionModal'
 import RaiseIssueModal from '../../components/functions/RaiseIssueModal'
 import ParameterTextRenderer from '../../components/functions/ParameterTextRenderer'
+import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { functionService } from '../../services/function.service'
+import { issueService } from '../../services/issue.service'
+import { changeRequestService } from '../../services/changeRequest.service'
 import type { SystemFunction } from '../../../shared/types/engineering.types'
+import type { Issue } from '../../../shared/types/engineering.types'
+import type { ChangeRequest } from '../../../shared/types/engineering.types'
 
 
 interface ExpandedRow {
@@ -16,6 +21,8 @@ interface ExpandedRow {
   linkedRequirements: Array<{ id: string; description: string }>
   linkedTestCases: Array<{ id: string; description: string }>
   linkedMilestones: Array<{ id: string; description: string }>
+  linkedIssues: Array<{ id: string; title: string; description: string }>
+  linkedChangeRequests: Array<{ id: string; title: string; description: string }>
 }
 
 export default function SystemFunctionsPage() {
@@ -25,6 +32,7 @@ export default function SystemFunctionsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isRaiseIssueModalOpen, setIsRaiseIssueModalOpen] = useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string; name: string; functionId: string } | null>(null)
+  const [changeRequestModal, setChangeRequestModal] = useState<{ isOpen: boolean; sourceId: string; sourceName: string } | null>(null)
   const [selectedFunctions, setSelectedFunctions] = useState<Set<string>>(new Set())
   const [editingFunctions, setEditingFunctions] = useState<Map<string, Partial<SystemFunction>>>(new Map())
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
@@ -42,6 +50,28 @@ export default function SystemFunctionsPage() {
         return response.data
       }
       throw new Error(response.error || 'Failed to load functions')
+    },
+    enabled: !!projectId,
+  })
+
+  // Fetch issues for linked elements
+  const { data: issues = [] } = useQuery({
+    queryKey: ['issues', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const response = await issueService.getIssues(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId,
+  })
+
+  // Fetch change requests for linked elements
+  const { data: changeRequests = [] } = useQuery({
+    queryKey: ['change-requests', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const response = await changeRequestService.getChangeRequests(projectId)
+      return response.success && response.data ? response.data : []
     },
     enabled: !!projectId,
   })
@@ -107,27 +137,48 @@ export default function SystemFunctionsPage() {
     },
   })
 
-  // Mock linked elements - will be replaced with API call
+  // Get linked elements for a function
   const getLinkedElements = (functionId: string): ExpandedRow => {
-    if (functionId === '1') {
-      return {
-        functionId: '1',
-        linkedRequirements: [
-          { id: 'REQ-01', description: 'Requirement Description' },
-        ],
-        linkedTestCases: [
-          { id: 'TC-01', description: 'Test Case Description' },
-        ],
-        linkedMilestones: [
-          { id: 'PM-01', description: 'Start and Due Date of the Function' },
-        ],
-      }
-    }
-    return {
-      functionId,
+    // Find issues linked to this function
+    const linkedIssues = issues
+      .filter((issue) => issue.relatedFunctionIds?.includes(functionId))
+      .map((issue) => ({
+        id: issue.id,
+        title: issue.title,
+        description: issue.description,
+      }))
+
+    // Find change requests linked to this function
+    const linkedChangeRequests = changeRequests
+      .filter((cr) => cr.sourceType === 'function' && cr.sourceId === functionId)
+      .map((cr) => ({
+        id: cr.id,
+        title: cr.title,
+        description: cr.description,
+      }))
+
+    // Mock data for requirements, test cases, and milestones (to be replaced with API calls)
+    const mockData = functionId === '1' ? {
+      linkedRequirements: [
+        { id: 'REQ-01', description: 'Requirement Description' },
+      ],
+      linkedTestCases: [
+        { id: 'TC-01', description: 'Test Case Description' },
+      ],
+      linkedMilestones: [
+        { id: 'PM-01', description: 'Start and Due Date of the Function' },
+      ],
+    } : {
       linkedRequirements: [],
       linkedTestCases: [],
       linkedMilestones: [],
+    }
+
+    return {
+      functionId,
+      ...mockData,
+      linkedIssues,
+      linkedChangeRequests,
     }
   }
 
@@ -515,6 +566,20 @@ export default function SystemFunctionsPage() {
                         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-2">
                             <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setChangeRequestModal({
+                                  isOpen: true,
+                                  sourceId: func.id,
+                                  sourceName: `${func.functionId || 'N/A'}: ${func.name}`,
+                                })
+                              }}
+                              className="p-1 hover:bg-green-100 dark:hover:bg-green-900/20 rounded text-green-600 dark:text-green-400"
+                              title="Create Change Request"
+                            >
+                              <FileText size={16} />
+                            </button>
+                            <button
                               onClick={(e) => handleEditClick(e, func)}
                               className="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded text-blue-600 dark:text-blue-400"
                               title="Edit function"
@@ -692,9 +757,69 @@ export default function SystemFunctionsPage() {
                                         ))}
                                       </>
                                     )}
+                                    {linkedData.linkedIssues.length > 0 && (
+                                      <>
+                                        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 mt-3">
+                                          Issues
+                                        </div>
+                                        {linkedData.linkedIssues.map((issue) => (
+                                          <div
+                                            key={issue.id}
+                                            className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
+                                          >
+                                            <span>•</span>
+                                            <span>
+                                              {issue.title}: {issue.description}
+                                            </span>
+                                            <button 
+                                              onClick={(e) => {
+                                                e.stopPropagation()
+                                                if (projectId) {
+                                                  window.location.href = `/projects/${projectId}/issues`
+                                                }
+                                              }}
+                                              className="text-blue-600 dark:text-blue-400 hover:underline ml-2"
+                                            >
+                                              → See Related/Linked Items
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </>
+                                    )}
+                                    {linkedData.linkedChangeRequests.length > 0 && (
+                                      <>
+                                        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 mt-3">
+                                          Change Requests
+                                        </div>
+                                        {linkedData.linkedChangeRequests.map((cr) => (
+                                          <div
+                                            key={cr.id}
+                                            className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
+                                          >
+                                            <span>•</span>
+                                            <span>
+                                              {cr.title}: {cr.description}
+                                            </span>
+                                            <button 
+                                              onClick={(e) => {
+                                                e.stopPropagation()
+                                                if (projectId) {
+                                                  window.location.href = `/projects/${projectId}/change-requests`
+                                                }
+                                              }}
+                                              className="text-blue-600 dark:text-blue-400 hover:underline ml-2"
+                                            >
+                                              → See Related/Linked Items
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </>
+                                    )}
                                     {linkedData.linkedRequirements.length === 0 &&
                                       linkedData.linkedTestCases.length === 0 &&
-                                      linkedData.linkedMilestones.length === 0 && (
+                                      linkedData.linkedMilestones.length === 0 &&
+                                      linkedData.linkedIssues.length === 0 &&
+                                      linkedData.linkedChangeRequests.length === 0 && (
                                         <div className="text-sm text-gray-500 dark:text-gray-400 italic">
                                           No linked elements found.
                                         </div>
@@ -736,6 +861,16 @@ export default function SystemFunctionsPage() {
             onCancel={handleCancelDelete}
             isDeleting={deleteFunctionMutation.isPending}
           />
+          {changeRequestModal && projectId && (
+            <CreateChangeRequestModal
+              isOpen={changeRequestModal.isOpen}
+              onClose={() => setChangeRequestModal(null)}
+              projectId={projectId}
+              sourceType="function"
+              sourceId={changeRequestModal.sourceId}
+              sourceName={changeRequestModal.sourceName}
+            />
+          )}
         </>
       )}
     </div>

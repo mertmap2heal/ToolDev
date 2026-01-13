@@ -124,3 +124,28 @@ export interface UpdateParameterDto {
   defaultValue?: string
   unit?: string
 }
+
+export interface ChangeRequest {
+  id: string
+  projectId: string
+  title: string
+  description: string
+  sourceType: 'function' | 'issue' | 'parameter'
+  sourceId: string
+  priority: 'low' | 'medium' | 'high' | 'critical'
+  status: 'pending' | 'approved' | 'rejected' | 'in-review'
+  requestedBy?: string
+  reviewedBy?: string
+  reviewComments?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateChangeRequestDto {
+  title: string
+  description: string
+  sourceType: 'function' | 'issue' | 'parameter'
+  sourceId: string
+  priority: 'low' | 'medium' | 'high' | 'critical'
+  requestedBy?: string
+}

@@ -11,6 +11,7 @@ import aiRoutes from './ai.routes'
 import documentationRoutes from './documentation.routes'
 import issuesRoutes from './issues.routes'
 import parametersRoutes from './parameters.routes'
+import changeRequestsRoutes from './changeRequests.routes'
 
 const router = Router()
 
@@ -26,5 +27,6 @@ router.use('/ai', aiRoutes)
 router.use('/documentation', documentationRoutes)
 router.use('/issues', issuesRoutes)
 router.use('/parameters', parametersRoutes)
+router.use('/change-requests', changeRequestsRoutes)
 
 export default router

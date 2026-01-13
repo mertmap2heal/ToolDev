@@ -8,7 +8,8 @@ import {
   FileCheck,
   Settings,
   BookOpen,
-  Sliders
+  Sliders,
+  GitBranch
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -25,6 +26,7 @@ const navigationItems: NavigationItem[] = [
   { id: 'requirements', label: 'Requirements', icon: FileCheck, route: 'requirements' },
   { id: 'functions', label: 'Functions', icon: Settings, route: 'functions' },
   { id: 'parameters', label: 'Parameters', icon: Sliders, route: 'parameters' },
+  { id: 'change-requests', label: 'Change Requests', icon: GitBranch, route: 'change-requests' },
   { id: 'reports', label: 'Reports', icon: FileText, route: 'reports' },
   { id: 'verification', label: 'Verification', icon: CheckCircle2, route: 'verification' },
   { id: 'issues', label: 'Issues', icon: AlertCircle, route: 'issues' },
