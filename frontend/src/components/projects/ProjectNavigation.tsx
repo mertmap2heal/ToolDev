@@ -9,7 +9,8 @@ import {
   Settings,
   BookOpen,
   Sliders,
-  GitBranch
+  GitBranch,
+  ClipboardList
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -24,6 +25,7 @@ const navigationItems: NavigationItem[] = [
   { id: 'stakeholder', label: 'Stakeholder', icon: Users, route: 'stakeholder' },
   { id: 'mbse-models', label: 'MBSE Models', icon: Boxes, route: 'mbse-models' },
   { id: 'requirements', label: 'Requirements', icon: FileCheck, route: 'requirements' },
+  { id: 'tasks', label: 'Tasks', icon: ClipboardList, route: 'tasks' },
   { id: 'functions', label: 'Functions', icon: Settings, route: 'functions' },
   { id: 'parameters', label: 'Parameters', icon: Sliders, route: 'parameters' },
   { id: 'change-requests', label: 'Change Requests', icon: GitBranch, route: 'change-requests' },
