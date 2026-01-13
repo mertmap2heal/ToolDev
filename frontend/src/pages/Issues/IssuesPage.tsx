@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import { useParams } from 'react-router-dom'
 import { Search, Filter, AlertCircle, X, Edit2, Trash2, Plus, ChevronDown, ChevronUp, FileText } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -28,6 +29,24 @@ export default function IssuesPage() {
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
   const [changeRequestModal, setChangeRequestModal] = useState<{ isOpen: boolean; sourceId: string; sourceName: string } | null>(null)
   const queryClient = useQueryClient()
+  const { getStatusesForItemType, statuses } = useStatusDefinitionsStore()
+  
+  // Get available statuses for Issues
+  const availableStatuses = useMemo(() => {
+    const issueStatuses = getStatusesForItemType('Issue')
+    // If no statuses are configured, return default ones
+    if (issueStatuses.length === 0) {
+      return [
+        { name: 'open', displayName: 'Open' },
+        { name: 'in-progress', displayName: 'In Progress' },
+        { name: 'closed', displayName: 'Closed' }
+      ]
+    }
+    return issueStatuses.map(s => ({
+      name: s.name.toLowerCase().replace(/\s+/g, '-'),
+      displayName: s.name
+    }))
+  }, [getStatusesForItemType, statuses])
 
   const { data: issues = [], isLoading: issuesLoading } = useQuery({
     queryKey: ['issues', projectId],
@@ -76,6 +95,31 @@ export default function IssuesPage() {
   }
 
   const getStatusColor = (status: string) => {
+    // Get status from store to use its color
+    const normalizedStatus = status.toLowerCase().replace(/\s+/g, '-')
+    const issueStatuses = getStatusesForItemType('Issue')
+    const foundStatus = issueStatuses.find(s => 
+      s.name.toLowerCase().replace(/\s+/g, '-') === normalizedStatus
+    )
+    
+    if (foundStatus) {
+      // Map store color to Tailwind classes
+      switch (foundStatus.color) {
+        case 'red':
+          return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+        case 'yellow':
+          return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
+        case 'green':
+          return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+        case 'blue':
+          return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+        case 'gray':
+        default:
+          return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+      }
+    }
+    
+    // Fallback to old mapping for backward compatibility
     switch (status) {
       case 'open':
         return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
@@ -247,9 +291,11 @@ export default function IssuesPage() {
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 >
                   <option value="all">All Statuses</option>
-                  <option value="open">Open</option>
-                  <option value="in-progress">In Progress</option>
-                  <option value="closed">Closed</option>
+                  {availableStatuses.map((status) => (
+                    <option key={status.name} value={status.name}>
+                      {status.displayName}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -384,9 +430,11 @@ export default function IssuesPage() {
                           onClick={(e) => e.stopPropagation()}
                           autoFocus
                         >
-                          <option value="open">Open</option>
-                          <option value="in-progress">In Progress</option>
-                          <option value="closed">Closed</option>
+                          {availableStatuses.map((status) => (
+                            <option key={status.name} value={status.name}>
+                              {status.displayName}
+                            </option>
+                          ))}
                         </select>
                       ) : (
                         <span
@@ -395,7 +443,11 @@ export default function IssuesPage() {
                             getStatusColor(issue.status)
                           )}
                         >
-                          {issue.status.charAt(0).toUpperCase() + issue.status.slice(1).replace('-', ' ')}
+                          {(() => {
+                            const normalizedStatus = issue.status.toLowerCase().replace(/\s+/g, '-')
+                            const foundStatus = availableStatuses.find(s => s.name === normalizedStatus)
+                            return foundStatus ? foundStatus.displayName : issue.status.charAt(0).toUpperCase() + issue.status.slice(1).replace('-', ' ')
+                          })()}
                         </span>
                       )}
                     </td>

@@ -14,6 +14,7 @@ import IssuesPage from './pages/Issues/IssuesPage'
 import ParametersPage from './pages/Parameters/ParametersPage'
 import ChangeRequestsPage from './pages/ChangeRequests/ChangeRequestsPage'
 import TasksPage from './pages/Tasks/TasksPage'
+import LifecycleManagementPage from './pages/LifecycleManagement/LifecycleManagementPage'
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
           <Route path="projects/:projectId/verification" element={<VerificationPage />} />
           <Route path="projects/:projectId/issues" element={<IssuesPage />} />
           <Route path="projects/:projectId/documentation" element={<DocumentationPage />} />
+          <Route path="lifecycle" element={<LifecycleManagementPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

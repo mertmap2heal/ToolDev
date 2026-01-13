@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { functionService } from '../../services/function.service'
 import ParameterTextRenderer from './ParameterTextRenderer'
+import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import type { CreateSystemFunctionDto } from '../../../shared/types/engineering.types'
 
 interface CreateFunctionModalProps {
@@ -12,17 +13,62 @@ interface CreateFunctionModalProps {
 }
 
 export default function CreateFunctionModal({ isOpen, onClose, projectId }: CreateFunctionModalProps) {
+  const { getStatusesForItemType, statuses } = useStatusDefinitionsStore()
+  
+  // Get available statuses for Functions
+  const availableStatuses = useMemo(() => {
+    const functionStatuses = getStatusesForItemType('Function')
+    // If no statuses are configured, return default ones
+    if (functionStatuses.length === 0) {
+      return [
+        { name: 'draft', displayName: 'Draft' },
+        { name: 'work-in-progress', displayName: 'Work in Progress' },
+        { name: 'in-review', displayName: 'In Review' },
+        { name: 'done', displayName: 'Done' }
+      ]
+    }
+    return functionStatuses.map(s => ({
+      name: s.name.toLowerCase().replace(/\s+/g, '-'),
+      displayName: s.name
+    }))
+  }, [getStatusesForItemType, statuses])
+  
+  // Get initial status (first status marked as initial, or first available status)
+  const initialStatus = useMemo(() => {
+    const functionStatuses = getStatusesForItemType('Function')
+    const initialStatusDef = functionStatuses.find(s => s.isInitial)
+    if (initialStatusDef) {
+      return initialStatusDef.name.toLowerCase().replace(/\s+/g, '-')
+    }
+    return availableStatuses[0]?.name || 'draft'
+  }, [getStatusesForItemType, availableStatuses, statuses])
+
   const [formData, setFormData] = useState<CreateSystemFunctionDto>({
     functionId: '',
     name: '',
     description: '',
-    status: 'draft',
+    status: initialStatus,
     owner: '',
     verificationMethod: '',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const queryClient = useQueryClient()
+  
+  // Reset form data when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setFormData({
+        functionId: '',
+        name: '',
+        description: '',
+        status: initialStatus,
+        owner: '',
+        verificationMethod: '',
+      })
+      setErrors({})
+    }
+  }, [isOpen, initialStatus])
 
   const createFunctionMutation = useMutation({
     mutationFn: (data: CreateSystemFunctionDto) => functionService.createFunction(projectId, data),
@@ -34,7 +80,7 @@ export default function CreateFunctionModal({ isOpen, onClose, projectId }: Crea
           functionId: '',
           name: '',
           description: '',
-          status: 'draft',
+          status: initialStatus,
           owner: '',
           verificationMethod: '',
         })
@@ -191,14 +237,15 @@ export default function CreateFunctionModal({ isOpen, onClose, projectId }: Crea
               Status
             </label>
             <select
-              value={formData.status || 'draft'}
+              value={formData.status || initialStatus}
               onChange={(e) => handleChange('status', e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
-              <option value="draft">Draft</option>
-              <option value="work-in-progress">Work in Progress</option>
-              <option value="in-review">In Review</option>
-              <option value="done">Done</option>
+              {availableStatuses.map((status) => (
+                <option key={status.name} value={status.name}>
+                  {status.displayName}
+                </option>
+              ))}
             </select>
           </div>
 
