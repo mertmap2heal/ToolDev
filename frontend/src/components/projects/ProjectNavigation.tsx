@@ -10,7 +10,9 @@ import {
   BookOpen,
   Sliders,
   GitBranch,
-  ClipboardList
+  ClipboardList,
+  Archive,
+  Activity
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -33,6 +35,8 @@ const navigationItems: NavigationItem[] = [
   { id: 'verification', label: 'Verification', icon: CheckCircle2, route: 'verification' },
   { id: 'issues', label: 'Issues', icon: AlertCircle, route: 'issues' },
   { id: 'documentation', label: 'Documentation', icon: BookOpen, route: 'documentation' },
+  { id: 'lifecycle-status', label: 'Lifecycle Status', icon: Activity, route: 'lifecycle-status' },
+  { id: 'archive', label: 'Archive', icon: Archive, route: 'archive' },
 ]
 
 export default function ProjectNavigation() {

@@ -1402,34 +1402,6 @@ function StatusDefinitionsContent() {
                 />
               </div>
 
-              {/* Applicable Item Types */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Applicable Item Types
-                </label>
-                <div className="space-y-2">
-                  {availableItemTypes.map((itemType) => (
-                    <label
-                      key={itemType}
-                      className="flex items-center p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={editingStatus.applicableItemTypes.includes(itemType)}
-                        onChange={() => handleItemTypeToggle(itemType)}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <span className="ml-3 text-sm text-gray-900 dark:text-white">{itemType}</span>
-                    </label>
-                  ))}
-                </div>
-                {editingStatus.applicableItemTypes.length > 0 && (
-                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                    {editingStatus.applicableItemTypes.length} item type{editingStatus.applicableItemTypes.length !== 1 ? 's' : ''} selected
-                  </p>
-                )}
-              </div>
-
               {/* Action Buttons */}
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <button

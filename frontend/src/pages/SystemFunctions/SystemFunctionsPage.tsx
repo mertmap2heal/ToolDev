@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { ChevronDown, ChevronRight, Plus, AlertCircle, Trash2, Edit2, Filter, ChevronUp, FileText } from 'lucide-react'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
@@ -11,7 +11,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
 import { changeRequestService } from '../../services/changeRequest.service'
-import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import type { SystemFunction } from '../../../shared/types/engineering.types'
 import type { Issue } from '../../../shared/types/engineering.types'
 import type { ChangeRequest } from '../../../shared/types/engineering.types'
@@ -41,25 +40,6 @@ export default function SystemFunctionsPage() {
   const [ownerFilter, setOwnerFilter] = useState<string>('all')
   const [verificationMethodFilter, setVerificationMethodFilter] = useState<string>('all')
   const queryClient = useQueryClient()
-  const { getStatusesForItemType, statuses } = useStatusDefinitionsStore()
-  
-  // Get available statuses for Functions
-  const availableStatuses = useMemo(() => {
-    const functionStatuses = getStatusesForItemType('Function')
-    // If no statuses are configured, return default ones
-    if (functionStatuses.length === 0) {
-      return [
-        { name: 'draft', displayName: 'Draft' },
-        { name: 'work-in-progress', displayName: 'Work in Progress' },
-        { name: 'in-review', displayName: 'In Review' },
-        { name: 'done', displayName: 'Done' }
-      ]
-    }
-    return functionStatuses.map(s => ({
-      name: s.name.toLowerCase().replace(/\s+/g, '-'),
-      displayName: s.name
-    }))
-  }, [getStatusesForItemType, statuses])
 
   const { data: functions = [], isLoading } = useQuery({
     queryKey: ['functions', projectId],
@@ -244,28 +224,14 @@ export default function SystemFunctionsPage() {
   }
 
   const getStatusDisplay = (status?: string) => {
-    if (!status) return '<No Status>'
-    // Normalize the status for matching (lowercase, replace spaces with hyphens)
-    const normalizedStatus = status.toLowerCase().trim().replace(/\s+/g, '-')
-    
-    // Try exact match first
-    let foundStatus = availableStatuses.find(s => s.name === normalizedStatus)
-    
-    // If not found, try matching without case sensitivity and with different separators
-    if (!foundStatus) {
-      foundStatus = availableStatuses.find(s => 
-        s.name.toLowerCase() === normalizedStatus || 
-        s.name.toLowerCase().replace(/-/g, ' ') === normalizedStatus.replace(/-/g, ' ') ||
-        s.displayName.toLowerCase() === status.toLowerCase()
-      )
+    if (!status) return '<Draft/Work in Progress/In Review/Done>'
+    const statusMap: Record<string, string> = {
+      'draft': 'Draft',
+      'work-in-progress': 'Work in Progress',
+      'in-review': 'In Review',
+      'done': 'Done',
     }
-    
-    if (foundStatus) {
-      return foundStatus.displayName
-    }
-    
-    // Fallback: capitalize and format the status name
-    return status.split(/[-_\s]+/).map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')
+    return statusMap[status] || status
   }
 
   const handleDeleteClick = (e: React.MouseEvent, func: SystemFunction, functionId: string) => {
@@ -421,11 +387,10 @@ export default function SystemFunctionsPage() {
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 >
                   <option value="all">All Statuses</option>
-                  {availableStatuses.map((status) => (
-                    <option key={status.name} value={status.name}>
-                      {status.displayName}
-                    </option>
-                  ))}
+                  <option value="draft">Draft</option>
+                  <option value="work-in-progress">Work in Progress</option>
+                  <option value="in-review">In Review</option>
+                  <option value="done">Done</option>
                 </select>
               </div>
 
@@ -661,15 +626,14 @@ export default function SystemFunctionsPage() {
                                   </label>
                                   <select
                                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={displayData.status || availableStatuses[0]?.name || 'draft'}
+                                    value={displayData.status || 'draft'}
                                     onClick={(e) => e.stopPropagation()}
                                     onChange={(e) => handleFieldChange(func.id, 'status', e.target.value)}
                                   >
-                                    {availableStatuses.map((status) => (
-                                      <option key={status.name} value={status.name}>
-                                        {status.displayName}
-                                      </option>
-                                    ))}
+                                    <option value="draft">Draft</option>
+                                    <option value="work-in-progress">Work in Progress</option>
+                                    <option value="in-review">In Review</option>
+                                    <option value="done">Done</option>
                                   </select>
                                 </div>
 

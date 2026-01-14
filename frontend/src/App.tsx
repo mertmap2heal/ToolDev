@@ -15,6 +15,8 @@ import ParametersPage from './pages/Parameters/ParametersPage'
 import ChangeRequestsPage from './pages/ChangeRequests/ChangeRequestsPage'
 import TasksPage from './pages/Tasks/TasksPage'
 import LifecycleManagementPage from './pages/LifecycleManagement/LifecycleManagementPage'
+import ArchivePage from './pages/Archive/ArchivePage'
+import LifecycleStatusPage from './pages/LifecycleStatus/LifecycleStatusPage'
 
 function App() {
   return (
@@ -34,6 +36,8 @@ function App() {
           <Route path="projects/:projectId/verification" element={<VerificationPage />} />
           <Route path="projects/:projectId/issues" element={<IssuesPage />} />
           <Route path="projects/:projectId/documentation" element={<DocumentationPage />} />
+          <Route path="projects/:projectId/lifecycle-status" element={<LifecycleStatusPage />} />
+          <Route path="projects/:projectId/archive" element={<ArchivePage />} />
           <Route path="lifecycle" element={<LifecycleManagementPage />} />
         </Route>
       </Routes>
