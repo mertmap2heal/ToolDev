@@ -1,11 +1,21 @@
 export interface Requirement {
   id: string
   projectId: string
+  requirementId?: string
   title: string
   description: string
+  parentId?: string
+  parent?: Requirement
+  children?: Requirement[]
   priority: 'low' | 'medium' | 'high' | 'critical'
-  status: 'draft' | 'review' | 'approved' | 'rejected'
+  status: string
   stage: string
+  owner?: string
+  verificationMethod?: string
+  acceptanceCriteria?: string
+  source?: string
+  category?: string
+  relatedDocuments?: string[]
   createdAt: string
   updatedAt: string
 }
@@ -43,9 +53,35 @@ export interface VerificationPlan {
 }
 
 export interface CreateRequirementDto {
+  requirementId?: string
   title: string
   description: string
+  parentId?: string
   priority: 'low' | 'medium' | 'high' | 'critical'
+  status?: string
+  stage?: string
+  owner?: string
+  verificationMethod?: string
+  acceptanceCriteria?: string
+  source?: string
+  category?: string
+  relatedDocuments?: string[]
+}
+
+export interface UpdateRequirementDto {
+  requirementId?: string
+  title?: string
+  description?: string
+  parentId?: string
+  priority?: 'low' | 'medium' | 'high' | 'critical'
+  status?: string
+  stage?: string
+  owner?: string
+  verificationMethod?: string
+  acceptanceCriteria?: string
+  source?: string
+  category?: string
+  relatedDocuments?: string[]
 }
 
 export interface CreateSystemFunctionDto {

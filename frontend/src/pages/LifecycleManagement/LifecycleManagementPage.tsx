@@ -29,6 +29,7 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import { useStatusDefinitionsStore, type StatusDefinition } from '../../store/statusDefinitionsStore'
+import { useLifecycleStore } from '../../store/lifecycleStore'
 
 type TabId = 'library' | 'builder' | 'status' | 'user-groups' | 'transitions' | 'control' | 'baselines' | 'audit'
 
@@ -94,7 +95,7 @@ export default function LifecycleManagementPage() {
   const [activeTab, setActiveTab] = useState<TabId>('library')
   const [searchQuery, setSearchQuery] = useState('')
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
-  const [lifecycles, setLifecycles] = useState<any[]>([])
+  const { lifecycles, setLifecycles } = useLifecycleStore()
 
   const activeTabData = tabs.find(tab => tab.id === activeTab)!
 
@@ -176,8 +177,8 @@ export default function LifecycleManagementPage() {
 
       {/* Tab Content */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-        {activeTab === 'library' && <LifecycleLibraryContent lifecycles={lifecycles} setLifecycles={setLifecycles} />}
-        {activeTab === 'builder' && <LifecycleBuilderContent lifecycles={lifecycles} setLifecycles={setLifecycles} />}
+        {activeTab === 'library' && <LifecycleLibraryContent />}
+        {activeTab === 'builder' && <LifecycleBuilderContent />}
         {activeTab === 'status' && <StatusDefinitionsContent />}
         {activeTab === 'user-groups' && <UserGroupsContent />}
         {activeTab === 'transitions' && <TransitionRulesContent />}
@@ -190,7 +191,8 @@ export default function LifecycleManagementPage() {
 }
 
 // Lifecycle Library Content
-function LifecycleLibraryContent({ lifecycles, setLifecycles }: { lifecycles: any[]; setLifecycles: (lifecycles: any[]) => void }) {
+function LifecycleLibraryContent() {
+  const { lifecycles, setLifecycles } = useLifecycleStore()
   const [activeSubsection, setActiveSubsection] = useState<string>('standard')
   const [selectedLifecycle, setSelectedLifecycle] = useState<string | null>(null)
   const [showViewModal, setShowViewModal] = useState(false)
@@ -442,11 +444,13 @@ function LifecycleLibraryContent({ lifecycles, setLifecycles }: { lifecycles: an
               description: lifecycleData.description || '',
               type: lifecycleData.type || 'project',
               version: lifecycleData.version || '1.0',
-              statusCount: 0,
+              statusCount: lifecycleData.steps?.length || 0,
               itemCount: 0,
               lastModified: new Date().toLocaleDateString(),
               applicableItemTypes: lifecycleData.applicableItemTypes || [],
-              statuses: []
+              statuses: [],
+              steps: lifecycleData.steps || [],
+              transitionRules: lifecycleData.transitionRules || []
             }
             setLifecycles([...lifecycles, newLifecycle])
             setIsCreateLifecycleModalOpen(false)
@@ -586,18 +590,20 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
   }
 
   const updateTransitionRules = () => {
-    const rules: Array<{ fromStatusId: string; toStatusId: string; allowedUserGroups: string[] }> = []
-    for (let i = 0; i < formData.steps.length - 1; i++) {
-      const fromStep = formData.steps[i]
-      const toStep = formData.steps[i + 1]
+    // Keep existing rules, but ensure sequential forward transitions exist
+    const existingRules = new Map(
+      formData.transitionRules.map(rule => [`${rule.fromStatusId}-${rule.toStatusId}`, rule])
+    )
+    
+    // Add sequential forward transitions if they don't exist
+    const sortedSteps = [...formData.steps].sort((a, b) => a.order - b.order)
+    for (let i = 0; i < sortedSteps.length - 1; i++) {
+      const fromStep = sortedSteps[i]
+      const toStep = sortedSteps[i + 1]
       if (fromStep.statusId && toStep.statusId) {
-        const existingRule = formData.transitionRules.find(
-          r => r.fromStatusId === fromStep.statusId && r.toStatusId === toStep.statusId
-        )
-        if (existingRule) {
-          rules.push(existingRule)
-        } else {
-          rules.push({
+        const key = `${fromStep.statusId}-${toStep.statusId}`
+        if (!existingRules.has(key)) {
+          existingRules.set(key, {
             fromStatusId: fromStep.statusId,
             toStatusId: toStep.statusId,
             allowedUserGroups: []
@@ -605,7 +611,56 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
         }
       }
     }
-    setFormData(prev => ({ ...prev, transitionRules: rules }))
+    
+    setFormData(prev => ({ ...prev, transitionRules: Array.from(existingRules.values()) }))
+  }
+
+  const handleAddCustomTransition = () => {
+    const newRule = {
+      fromStatusId: '',
+      toStatusId: '',
+      allowedUserGroups: []
+    }
+    setFormData(prev => ({
+      ...prev,
+      transitionRules: [...prev.transitionRules, newRule]
+    }))
+  }
+
+  const handleRemoveTransition = (fromStatusId: string, toStatusId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      transitionRules: prev.transitionRules.filter(
+        r => !(r.fromStatusId === fromStatusId && r.toStatusId === toStatusId)
+      )
+    }))
+  }
+
+  // Helper function to get step order by statusId
+  const getStepOrder = (statusId: string): number => {
+    const step = formData.steps.find(s => s.statusId === statusId)
+    return step ? step.order : -1
+  }
+
+  // Helper function to determine transition type
+  const getTransitionType = (fromStatusId: string, toStatusId: string): 'forward' | 'backward' | 'self' => {
+    if (fromStatusId === toStatusId) return 'self'
+    const fromOrder = getStepOrder(fromStatusId)
+    const toOrder = getStepOrder(toStatusId)
+    if (fromOrder === -1 || toOrder === -1) return 'forward' // Default if not found
+    return toOrder < fromOrder ? 'backward' : 'forward'
+  }
+
+  const handleTransitionChange = (oldFromStatusId: string, oldToStatusId: string, field: 'fromStatusId' | 'toStatusId', newValue: string) => {
+    setFormData(prev => ({
+      ...prev,
+      transitionRules: prev.transitionRules.map(rule => {
+        if (rule.fromStatusId === oldFromStatusId && rule.toStatusId === oldToStatusId) {
+          return { ...rule, [field]: newValue }
+        }
+        return rule
+      })
+    }))
   }
 
   const handleTransitionRuleChange = (fromStatusId: string, toStatusId: string, userGroup: string, allowed: boolean) => {
@@ -810,6 +865,107 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
                 </div>
               )}
 
+              {/* Visual Lifecycle Flow */}
+              {formData.steps.length > 0 && (() => {
+                const sortedSteps = [...formData.steps].sort((a, b) => a.order - b.order)
+                const backwardTransitions = formData.transitionRules.filter(rule => 
+                  getTransitionType(rule.fromStatusId, rule.toStatusId) === 'backward'
+                )
+                
+                return (
+                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900/50 dark:to-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
+                      <PlayCircle size={18} />
+                      Lifecycle Flow Preview
+                    </h4>
+                    <div className="flex items-center gap-3 overflow-x-auto pb-4 px-2">
+                      {sortedSteps.map((step, index) => {
+                        const status = statuses.find(s => s.id === step.statusId)
+                        const hasBackward = backwardTransitions.some(rule => rule.fromStatusId === step.statusId)
+                        
+                        return (
+                          <div key={step.id} className="flex items-center gap-3 flex-shrink-0">
+                            <div className="relative">
+                              <div
+                                className={clsx(
+                                  'min-w-[140px] max-w-[180px] px-4 py-3 rounded-lg shadow-lg border-2 transition-all hover:scale-105',
+                                  index === 0
+                                    ? 'bg-green-500 border-green-600 text-white'
+                                    : index === sortedSteps.length - 1
+                                    ? 'bg-red-500 border-red-600 text-white'
+                                    : 'bg-blue-500 border-blue-600 text-white'
+                                )}
+                              >
+                                <div className="text-xs font-medium opacity-90 mb-1">
+                                  Step {index + 1}
+                                </div>
+                                <div className="text-sm font-semibold break-words">
+                                  {status?.name || 'Select Status'}
+                                </div>
+                                {status?.description && (
+                                  <div className="text-xs opacity-75 mt-1 line-clamp-2 break-words">
+                                    {status.description}
+                                  </div>
+                                )}
+                              </div>
+                              {hasBackward && (
+                                <div className="absolute -top-2 -right-2 w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center">
+                                  <ArrowRight size={12} className="text-white rotate-180" />
+                                </div>
+                              )}
+                            </div>
+                            {index < sortedSteps.length - 1 && (
+                              <ArrowRight size={32} className="flex-shrink-0 text-blue-400 dark:text-blue-500" />
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                    
+                    {backwardTransitions.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 font-medium">
+                          Backward Transitions:
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {backwardTransitions.map((rule, idx) => {
+                            const fromStatus = statuses.find(s => s.id === rule.fromStatusId)
+                            const toStatus = statuses.find(s => s.id === rule.toStatusId)
+                            return (
+                              <span
+                                key={idx}
+                                className="px-2 py-1 bg-orange-100 dark:bg-orange-900/20 text-orange-800 dark:text-orange-400 rounded text-xs"
+                              >
+                                {fromStatus?.name || 'Unknown'} → {toStatus?.name || 'Unknown'}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 flex flex-wrap gap-4 text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-green-500 rounded"></div>
+                        <span className="text-gray-600 dark:text-gray-400">Start</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-blue-500 rounded"></div>
+                        <span className="text-gray-600 dark:text-gray-400">Middle</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-red-500 rounded"></div>
+                        <span className="text-gray-600 dark:text-gray-400">End</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <ArrowRight size={16} className="text-orange-500 rotate-180" />
+                        <span className="text-gray-600 dark:text-gray-400">Backward</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
               {formData.steps.length === 0 ? (
                 <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-12 text-center">
                   <PlayCircle size={48} className="mx-auto text-gray-400 dark:text-gray-500 mb-4" />
@@ -917,58 +1073,137 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
           {/* Step 3: Transition Rules */}
           {currentStep === 2 && (
             <div className="space-y-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Configure Transition Rules</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Assign user group permissions for each status transition
-              </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Configure Transition Rules</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Define allowed transitions between statuses. Add forward, backward, or skip transitions as needed.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddCustomTransition}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
+                >
+                  <Plus size={16} />
+                  <span>Add Transition</span>
+                </button>
+              </div>
 
-              {formData.transitionRules.length === 0 ? (
+              {formData.steps.length === 0 ? (
                 <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-12 text-center">
                   <ArrowRight size={48} className="mx-auto text-gray-400 dark:text-gray-500 mb-4" />
-                  <p className="text-gray-600 dark:text-gray-400">No transition rules available. Please add lifecycle steps first.</p>
+                  <p className="text-gray-600 dark:text-gray-400">No lifecycle steps available. Please add lifecycle steps first.</p>
+                </div>
+              ) : formData.transitionRules.length === 0 ? (
+                <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-12 text-center">
+                  <ArrowRight size={48} className="mx-auto text-gray-400 dark:text-gray-500 mb-4" />
+                  <p className="text-gray-600 dark:text-gray-400 mb-4">No transition rules defined. Click "Add Transition" to create custom transitions.</p>
+                  <button
+                    type="button"
+                    onClick={updateTransitionRules}
+                    className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg"
+                  >
+                    Auto-generate Sequential Transitions
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-6">
                   {formData.transitionRules.map((rule, index) => {
                     const fromStatus = statuses.find(s => s.id === rule.fromStatusId)
                     const toStatus = statuses.find(s => s.id === rule.toStatusId)
+                    const transitionType = getTransitionType(rule.fromStatusId, rule.toStatusId)
+                    const statusOptions = formData.steps
+                      .filter(s => s.statusId)
+                      .map(step => ({ step, status: statuses.find(s => s.id === step.statusId) }))
+                      .filter(item => item.status)
+                    
                     return (
                       <div
-                        key={`${rule.fromStatusId}-${rule.toStatusId}`}
+                        key={`${rule.fromStatusId}-${rule.toStatusId}-${index}`}
                         className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800"
                       >
-                        <div className="flex items-center gap-4 mb-4">
-                          <div className="flex items-center gap-2">
-                            <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-400 rounded-lg text-sm font-medium">
-                              {fromStatus?.name || 'Unknown'}
-                            </span>
-                            <ArrowRight size={20} className="text-gray-400" />
-                            <span className="px-3 py-1 bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-400 rounded-lg text-sm font-medium">
-                              {toStatus?.name || 'Unknown'}
-                            </span>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3 flex-1">
+                            <select
+                              value={rule.fromStatusId}
+                              onChange={(e) => handleTransitionChange(rule.fromStatusId, rule.toStatusId, 'fromStatusId', e.target.value)}
+                              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            >
+                              <option value="">From Status</option>
+                              {statusOptions.map(({ step, status }) => (
+                                <option key={step.id} value={step.statusId}>
+                                  {status!.name}
+                                </option>
+                              ))}
+                            </select>
+                            
+                            <div className="flex items-center">
+                              {transitionType === 'backward' ? (
+                                <ArrowRight size={24} className="text-orange-500 dark:text-orange-400 rotate-180" />
+                              ) : transitionType === 'self' ? (
+                                <div className="w-6 h-6 rounded-full border-2 border-purple-500 dark:border-purple-400"></div>
+                              ) : (
+                                <ArrowRight size={24} className="text-green-500 dark:text-green-400" />
+                              )}
+                            </div>
+                            
+                            <select
+                              value={rule.toStatusId}
+                              onChange={(e) => handleTransitionChange(rule.fromStatusId, rule.toStatusId, 'toStatusId', e.target.value)}
+                              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            >
+                              <option value="">To Status</option>
+                              {statusOptions.map(({ step, status }) => (
+                                <option key={step.id} value={step.statusId}>
+                                  {status!.name}
+                                </option>
+                              ))}
+                            </select>
+                            
+                            {transitionType === 'backward' && (
+                              <span className="px-2 py-1 bg-orange-100 dark:bg-orange-900/20 text-orange-800 dark:text-orange-400 rounded text-xs font-medium">
+                                Backward
+                              </span>
+                            )}
+                            {transitionType === 'self' && (
+                              <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/20 text-purple-800 dark:text-purple-400 rounded text-xs font-medium">
+                                Self-loop
+                              </span>
+                            )}
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTransition(rule.fromStatusId, rule.toStatusId)}
+                            className="p-2 text-red-600 hover:text-red-700 dark:text-red-400"
+                            title="Remove transition"
+                          >
+                            <Trash2 size={18} />
+                          </button>
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                            Allowed User Groups
-                          </label>
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                            {availableRoles.map((role) => (
-                              <label
-                                key={role}
-                                className="flex items-center p-2 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={rule.allowedUserGroups.includes(role)}
-                                  onChange={(e) => handleTransitionRuleChange(rule.fromStatusId, rule.toStatusId, role, e.target.checked)}
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                />
-                                <span className="ml-2 text-sm text-gray-900 dark:text-white">{role}</span>
-                              </label>
-                            ))}
+                        {rule.fromStatusId && rule.toStatusId && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                              Allowed User Groups
+                            </label>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                              {availableRoles.map((role) => (
+                                <label
+                                  key={role}
+                                  className="flex items-center p-2 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={rule.allowedUserGroups.includes(role)}
+                                    onChange={(e) => handleTransitionRuleChange(rule.fromStatusId, rule.toStatusId, role, e.target.checked)}
+                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  />
+                                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{role}</span>
+                                </label>
+                              ))}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     )
                   })}
@@ -1313,7 +1548,8 @@ function CloneLifecycleModal({ lifecycleId, lifecycle, onClose }: { lifecycleId:
 }
 
 // Library Builder Content
-function LifecycleBuilderContent({ lifecycles, setLifecycles }: { lifecycles: any[]; setLifecycles: (lifecycles: any[]) => void }) {
+function LifecycleBuilderContent() {
+  const { lifecycles, setLifecycles } = useLifecycleStore()
   const [isCreating, setIsCreating] = useState(false)
   const [editingLibrary, setEditingLibrary] = useState<any>(null)
   const [deletingLibrary, setDeletingLibrary] = useState<any>(null)
