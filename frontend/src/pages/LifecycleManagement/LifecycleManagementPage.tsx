@@ -23,12 +23,14 @@ import {
   Folder,
   Settings,
   ChevronRight,
-  PlayCircle
+  PlayCircle,
+  Users,
+  UserPlus
 } from 'lucide-react'
 import clsx from 'clsx'
 import { useStatusDefinitionsStore, type StatusDefinition } from '../../store/statusDefinitionsStore'
 
-type TabId = 'library' | 'builder' | 'status' | 'transitions' | 'control' | 'baselines' | 'audit'
+type TabId = 'library' | 'builder' | 'status' | 'user-groups' | 'transitions' | 'control' | 'baselines' | 'audit'
 
 interface Tab {
   id: TabId
@@ -55,6 +57,12 @@ const tabs: Tab[] = [
     label: 'Status Definitions',
     icon: Tag,
     description: 'Define and manage lifecycle status values and properties'
+  },
+  {
+    id: 'user-groups',
+    label: 'User Groups',
+    icon: Users,
+    description: 'Manage user groups and assign users to roles in the aircraft development process'
   },
   {
     id: 'transitions',
@@ -171,6 +179,7 @@ export default function LifecycleManagementPage() {
         {activeTab === 'library' && <LifecycleLibraryContent lifecycles={lifecycles} setLifecycles={setLifecycles} />}
         {activeTab === 'builder' && <LifecycleBuilderContent lifecycles={lifecycles} setLifecycles={setLifecycles} />}
         {activeTab === 'status' && <StatusDefinitionsContent />}
+        {activeTab === 'user-groups' && <UserGroupsContent />}
         {activeTab === 'transitions' && <TransitionRulesContent />}
         {activeTab === 'control' && <ItemLifecycleControlContent />}
         {activeTab === 'baselines' && <BaselinesVersionsContent />}
@@ -219,15 +228,24 @@ function LifecycleLibraryContent({ lifecycles, setLifecycles }: { lifecycles: an
     setShowCloneModal(true)
   }
 
+  const [isCreateLifecycleModalOpen, setIsCreateLifecycleModalOpen] = useState(false)
+
   return (
     <div className="space-y-6">
-      <div className="mb-4">
+      <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Lifecycle Library</h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
             Select and reuse predefined lifecycles from standard, organization, or project libraries
           </p>
         </div>
+        <button
+          onClick={() => setIsCreateLifecycleModalOpen(true)}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
+        >
+          <Plus size={16} />
+          <span>Create a Lifecycle</span>
+        </button>
       </div>
 
       {/* Subsections */}
@@ -412,6 +430,630 @@ function LifecycleLibraryContent({ lifecycles, setLifecycles }: { lifecycles: an
           }}
         />
       )}
+
+      {/* Create Lifecycle Modal */}
+      {isCreateLifecycleModalOpen && (
+        <CreateLifecycleModal
+          onClose={() => setIsCreateLifecycleModalOpen(false)}
+          onSave={(lifecycleData) => {
+            const newLifecycle = {
+              id: `lifecycle-${Date.now()}`,
+              name: lifecycleData.name,
+              description: lifecycleData.description || '',
+              type: lifecycleData.type || 'project',
+              version: lifecycleData.version || '1.0',
+              statusCount: 0,
+              itemCount: 0,
+              lastModified: new Date().toLocaleDateString(),
+              applicableItemTypes: lifecycleData.applicableItemTypes || [],
+              statuses: []
+            }
+            setLifecycles([...lifecycles, newLifecycle])
+            setIsCreateLifecycleModalOpen(false)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// Create Lifecycle Modal
+function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave: (data: any) => void }) {
+  const { statuses } = useStatusDefinitionsStore()
+  const [selectedLibrary, setSelectedLibrary] = useState<'standard' | 'organization' | 'project'>('standard')
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    type: 'project',
+    version: '1.0',
+    applicableItemTypes: [] as string[],
+    steps: [] as Array<{ id: string; statusId: string; order: number }>,
+    transitionRules: [] as Array<{ fromStatusId: string; toStatusId: string; allowedUserGroups: string[] }>
+  })
+  const [availableRoles, setAvailableRoles] = useState<string[]>([])
+  const [currentStep, setCurrentStep] = useState(0)
+
+  const availableItemTypes = ['Function', 'Test', 'Issue', 'Parameter', 'Requirement', 'Change Request', 'Task', 'Stakeholder', 'Documentation']
+
+  // Load available roles from UserGroupsContent (we'll need to pass this or use a store)
+  useEffect(() => {
+    // For now, use common roles - in production, this should come from a store or API
+    setAvailableRoles([
+      'Systems Engineer',
+      'Requirements Engineer',
+      'Design Engineer',
+      'Integration Engineer',
+      'Test Engineer',
+      'Verification Engineer',
+      'Validation Engineer',
+      'Configuration Manager',
+      'Quality Assurance',
+      'Project Manager',
+      'Safety Engineer',
+      'Software Engineer',
+      'Hardware Engineer',
+      'Systems Architect',
+      'Test Manager',
+      'Compliance Engineer'
+    ])
+  }, [])
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!formData.name.trim()) {
+      alert('Lifecycle name is required')
+      return
+    }
+    if (formData.steps.length === 0) {
+      alert('Please add at least one lifecycle step')
+      return
+    }
+    if (formData.applicableItemTypes.length === 0) {
+      alert('Please select at least one applicable item type')
+      return
+    }
+    onSave({
+      ...formData,
+      type: selectedLibrary
+    })
+  }
+
+  const handleItemTypeToggle = (itemType: string) => {
+    setFormData(prev => ({
+      ...prev,
+      applicableItemTypes: prev.applicableItemTypes.includes(itemType)
+        ? prev.applicableItemTypes.filter(t => t !== itemType)
+        : [...prev.applicableItemTypes, itemType]
+    }))
+  }
+
+  const handleAddStep = () => {
+    if (statuses.length === 0) {
+      alert('Please create status definitions first')
+      return
+    }
+    const newStep = {
+      id: `step-${Date.now()}`,
+      statusId: '',
+      order: formData.steps.length
+    }
+    setFormData(prev => ({
+      ...prev,
+      steps: [...prev.steps, newStep]
+    }))
+  }
+
+  const handleStepStatusChange = (stepId: string, statusId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      steps: prev.steps.map(step => 
+        step.id === stepId ? { ...step, statusId } : step
+      )
+    }))
+    // Auto-create transition rules for adjacent steps
+    updateTransitionRules()
+  }
+
+  const handleRemoveStep = (stepId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      steps: prev.steps.filter(step => step.id !== stepId).map((step, index) => ({
+        ...step,
+        order: index
+      })),
+      transitionRules: prev.transitionRules.filter(rule => 
+        rule.fromStatusId !== stepId && rule.toStatusId !== stepId
+      )
+    }))
+  }
+
+  const handleMoveStep = (stepId: string, direction: 'up' | 'down') => {
+    const stepIndex = formData.steps.findIndex(s => s.id === stepId)
+    if (stepIndex === -1) return
+    
+    const newIndex = direction === 'up' ? stepIndex - 1 : stepIndex + 1
+    if (newIndex < 0 || newIndex >= formData.steps.length) return
+
+    const newSteps = [...formData.steps]
+    const [moved] = newSteps.splice(stepIndex, 1)
+    newSteps.splice(newIndex, 0, moved)
+    
+    setFormData(prev => ({
+      ...prev,
+      steps: newSteps.map((step, index) => ({ ...step, order: index }))
+    }))
+    updateTransitionRules()
+  }
+
+  const updateTransitionRules = () => {
+    const rules: Array<{ fromStatusId: string; toStatusId: string; allowedUserGroups: string[] }> = []
+    for (let i = 0; i < formData.steps.length - 1; i++) {
+      const fromStep = formData.steps[i]
+      const toStep = formData.steps[i + 1]
+      if (fromStep.statusId && toStep.statusId) {
+        const existingRule = formData.transitionRules.find(
+          r => r.fromStatusId === fromStep.statusId && r.toStatusId === toStep.statusId
+        )
+        if (existingRule) {
+          rules.push(existingRule)
+        } else {
+          rules.push({
+            fromStatusId: fromStep.statusId,
+            toStatusId: toStep.statusId,
+            allowedUserGroups: []
+          })
+        }
+      }
+    }
+    setFormData(prev => ({ ...prev, transitionRules: rules }))
+  }
+
+  const handleTransitionRuleChange = (fromStatusId: string, toStatusId: string, userGroup: string, allowed: boolean) => {
+    setFormData(prev => {
+      const ruleIndex = prev.transitionRules.findIndex(
+        r => r.fromStatusId === fromStatusId && r.toStatusId === toStatusId
+      )
+      if (ruleIndex === -1) return prev
+
+      const updatedRules = [...prev.transitionRules]
+      if (allowed) {
+        updatedRules[ruleIndex] = {
+          ...updatedRules[ruleIndex],
+          allowedUserGroups: [...updatedRules[ruleIndex].allowedUserGroups, userGroup]
+        }
+      } else {
+        updatedRules[ruleIndex] = {
+          ...updatedRules[ruleIndex],
+          allowedUserGroups: updatedRules[ruleIndex].allowedUserGroups.filter(g => g !== userGroup)
+        }
+      }
+      return { ...prev, transitionRules: updatedRules }
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
+      <div
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between z-10">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Create New Lifecycle
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Step Indicator */}
+          <div className="flex items-center gap-2 mb-6 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setCurrentStep(0)}
+              className={clsx(
+                'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                currentStep === 0
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+              )}
+            >
+              1. Library & Basic Info
+            </button>
+            <ChevronRight size={16} className="text-gray-400" />
+            <button
+              type="button"
+              onClick={() => setCurrentStep(1)}
+              className={clsx(
+                'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                currentStep === 1
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+              )}
+            >
+              2. Lifecycle Steps
+            </button>
+            <ChevronRight size={16} className="text-gray-400" />
+            <button
+              type="button"
+              onClick={() => setCurrentStep(2)}
+              className={clsx(
+                'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                currentStep === 2
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+              )}
+            >
+              3. Transition Rules
+            </button>
+            <ChevronRight size={16} className="text-gray-400" />
+            <button
+              type="button"
+              onClick={() => setCurrentStep(3)}
+              className={clsx(
+                'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                currentStep === 3
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+              )}
+            >
+              4. Applicable Items
+            </button>
+          </div>
+
+          {/* Step 1: Library & Basic Info */}
+          {currentStep === 0 && (
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Select Library <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-3 gap-4">
+                  {(['standard', 'organization', 'project'] as const).map((lib) => (
+                    <button
+                      key={lib}
+                      type="button"
+                      onClick={() => setSelectedLibrary(lib)}
+                      className={clsx(
+                        'p-4 border-2 rounded-lg text-left transition-all',
+                        selectedLibrary === lib
+                          ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                      )}
+                    >
+                      <div className="font-semibold text-gray-900 dark:text-white capitalize mb-1">
+                        {lib === 'standard' ? 'Standard' : lib === 'organization' ? 'Organization' : 'Project'} Lifecycles
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {lib === 'standard' ? 'System-wide templates' : lib === 'organization' ? 'Organization templates' : 'Project-specific templates'}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Lifecycle Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="Enter lifecycle name"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Description
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  rows={3}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                  placeholder="Enter lifecycle description"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Version
+                </label>
+                <input
+                  type="text"
+                  value={formData.version}
+                  onChange={(e) => setFormData({ ...formData, version: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="1.0"
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(1)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                >
+                  Next: Lifecycle Steps
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Lifecycle Steps */}
+          {currentStep === 1 && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Define Lifecycle Steps</h3>
+                <button
+                  type="button"
+                  onClick={handleAddStep}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
+                >
+                  <Plus size={16} />
+                  <span>Add Step</span>
+                </button>
+              </div>
+
+              {statuses.length === 0 && (
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                  <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                    Please create status definitions first in the Status Definitions tab.
+                  </p>
+                </div>
+              )}
+
+              {formData.steps.length === 0 ? (
+                <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-12 text-center">
+                  <PlayCircle size={48} className="mx-auto text-gray-400 dark:text-gray-500 mb-4" />
+                  <p className="text-gray-600 dark:text-gray-400">No lifecycle steps defined. Click "Add Step" to get started.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {formData.steps.map((step, index) => {
+                    const status = statuses.find(s => s.id === step.statusId)
+                    return (
+                      <div
+                        key={step.id}
+                        className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="flex flex-col items-center gap-2">
+                            <div className={clsx(
+                              'w-12 h-12 rounded-full flex items-center justify-center text-sm font-semibold text-white',
+                              index === 0 ? 'bg-green-500' : index === formData.steps.length - 1 ? 'bg-red-500' : 'bg-blue-500'
+                            )}>
+                              {index + 1}
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              {index > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveStep(step.id, 'up')}
+                                  className="p-1 text-gray-400 hover:text-gray-600"
+                                  title="Move up"
+                                >
+                                  <ChevronUp size={16} />
+                                </button>
+                              )}
+                              {index < formData.steps.length - 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveStep(step.id, 'down')}
+                                  className="p-1 text-gray-400 hover:text-gray-600"
+                                  title="Move down"
+                                >
+                                  <ChevronDown size={16} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex-1">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                              Select Status
+                            </label>
+                            <select
+                              value={step.statusId}
+                              onChange={(e) => handleStepStatusChange(step.id, e.target.value)}
+                              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            >
+                              <option value="">Select a status</option>
+                              {statuses.map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  {s.name}
+                                </option>
+                              ))}
+                            </select>
+                            {status && (
+                              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                {status.description || 'No description'}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveStep(step.id)}
+                            className="p-2 text-red-600 hover:text-red-700 dark:text-red-400"
+                            title="Remove step"
+                          >
+                            <Trash2 size={20} />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              <div className="flex justify-between">
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(0)}
+                  className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateTransitionRules()
+                    setCurrentStep(2)
+                  }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                >
+                  Next: Transition Rules
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Transition Rules */}
+          {currentStep === 2 && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Configure Transition Rules</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Assign user group permissions for each status transition
+              </p>
+
+              {formData.transitionRules.length === 0 ? (
+                <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-12 text-center">
+                  <ArrowRight size={48} className="mx-auto text-gray-400 dark:text-gray-500 mb-4" />
+                  <p className="text-gray-600 dark:text-gray-400">No transition rules available. Please add lifecycle steps first.</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {formData.transitionRules.map((rule, index) => {
+                    const fromStatus = statuses.find(s => s.id === rule.fromStatusId)
+                    const toStatus = statuses.find(s => s.id === rule.toStatusId)
+                    return (
+                      <div
+                        key={`${rule.fromStatusId}-${rule.toStatusId}`}
+                        className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800"
+                      >
+                        <div className="flex items-center gap-4 mb-4">
+                          <div className="flex items-center gap-2">
+                            <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-400 rounded-lg text-sm font-medium">
+                              {fromStatus?.name || 'Unknown'}
+                            </span>
+                            <ArrowRight size={20} className="text-gray-400" />
+                            <span className="px-3 py-1 bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-400 rounded-lg text-sm font-medium">
+                              {toStatus?.name || 'Unknown'}
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            Allowed User Groups
+                          </label>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            {availableRoles.map((role) => (
+                              <label
+                                key={role}
+                                className="flex items-center p-2 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={rule.allowedUserGroups.includes(role)}
+                                  onChange={(e) => handleTransitionRuleChange(rule.fromStatusId, rule.toStatusId, role, e.target.checked)}
+                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <span className="ml-2 text-sm text-gray-900 dark:text-white">{role}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              <div className="flex justify-between">
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(1)}
+                  className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(3)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                >
+                  Next: Applicable Items
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Applicable Item Types */}
+          {currentStep === 3 && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Select Applicable Item Types</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Choose which item types this lifecycle applies to
+              </p>
+
+              <div className="space-y-2">
+                {availableItemTypes.map((itemType) => (
+                  <label
+                    key={itemType}
+                    className="flex items-center p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={formData.applicableItemTypes.includes(itemType)}
+                      onChange={() => handleItemTypeToggle(itemType)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="ml-3 text-sm text-gray-900 dark:text-white">{itemType}</span>
+                  </label>
+                ))}
+              </div>
+              {formData.applicableItemTypes.length > 0 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {formData.applicableItemTypes.length} item type{formData.applicableItemTypes.length !== 1 ? 's' : ''} selected
+                </p>
+              )}
+
+              <div className="flex justify-between">
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(2)}
+                  className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg"
+                >
+                  Previous
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                >
+                  Create Lifecycle
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons (always visible) */}
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
@@ -1554,6 +2196,319 @@ function BaselinesVersionsContent() {
             Create Baseline
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// User Groups Content
+function UserGroupsContent() {
+  const commonRoles = [
+    'Systems Engineer',
+    'Requirements Engineer',
+    'Design Engineer',
+    'Integration Engineer',
+    'Test Engineer',
+    'Verification Engineer',
+    'Validation Engineer',
+    'Configuration Manager',
+    'Quality Assurance',
+    'Project Manager',
+    'Safety Engineer',
+    'Software Engineer',
+    'Hardware Engineer',
+    'Systems Architect',
+    'Test Manager',
+    'Compliance Engineer'
+  ]
+
+  const [roles, setRoles] = useState<string[]>(commonRoles)
+  const [editingRole, setEditingRole] = useState<{ index: number; name: string } | null>(null)
+  const [newRoleName, setNewRoleName] = useState('')
+  const [isAddingRole, setIsAddingRole] = useState(false)
+  const [userAssignments, setUserAssignments] = useState<Record<string, string[]>>({})
+  const [availableUsers, setAvailableUsers] = useState<string[]>(['John Doe', 'Jane Smith', 'Bob Johnson', 'Alice Williams', 'Charlie Brown'])
+  const [selectedRoleForAssignment, setSelectedRoleForAssignment] = useState<string>('')
+  const [selectedUserForAssignment, setSelectedUserForAssignment] = useState<string>('')
+
+  const handleAddRole = () => {
+    if (newRoleName.trim() && !roles.includes(newRoleName.trim())) {
+      setRoles([...roles, newRoleName.trim()])
+      setNewRoleName('')
+      setIsAddingRole(false)
+    }
+  }
+
+  const handleEditRole = (index: number) => {
+    setEditingRole({ index, name: roles[index] })
+  }
+
+  const handleSaveEdit = () => {
+    if (editingRole && editingRole.name.trim()) {
+      const updatedRoles = [...roles]
+      const oldRoleName = roles[editingRole.index]
+      updatedRoles[editingRole.index] = editingRole.name.trim()
+      setRoles(updatedRoles)
+      
+      // Update user assignments if role name changed
+      if (oldRoleName !== editingRole.name.trim() && userAssignments[oldRoleName]) {
+        const updatedAssignments = { ...userAssignments }
+        updatedAssignments[editingRole.name.trim()] = updatedAssignments[oldRoleName]
+        delete updatedAssignments[oldRoleName]
+        setUserAssignments(updatedAssignments)
+      }
+      
+      setEditingRole(null)
+    }
+  }
+
+  const handleDeleteRole = (roleName: string) => {
+    if (window.confirm(`Are you sure you want to delete the role "${roleName}"? This will also remove all user assignments for this role.`)) {
+      setRoles(roles.filter(r => r !== roleName))
+      const updatedAssignments = { ...userAssignments }
+      delete updatedAssignments[roleName]
+      setUserAssignments(updatedAssignments)
+    }
+  }
+
+  const handleAssignUser = () => {
+    if (selectedRoleForAssignment && selectedUserForAssignment) {
+      setUserAssignments(prev => ({
+        ...prev,
+        [selectedRoleForAssignment]: [...(prev[selectedRoleForAssignment] || []), selectedUserForAssignment]
+      }))
+      setSelectedRoleForAssignment('')
+      setSelectedUserForAssignment('')
+    }
+  }
+
+  const handleRemoveUserFromRole = (roleName: string, userName: string) => {
+    setUserAssignments(prev => ({
+      ...prev,
+      [roleName]: (prev[roleName] || []).filter(u => u !== userName)
+    }))
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="mb-4">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">User Groups</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            Manage user groups and assign users to roles in the aircraft development process
+          </p>
+        </div>
+      </div>
+
+      {/* Roles Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Roles</h3>
+          {!isAddingRole ? (
+            <button
+              onClick={() => setIsAddingRole(true)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
+            >
+              <Plus size={16} />
+              <span>Add Role</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newRoleName}
+                onChange={(e) => setNewRoleName(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleAddRole()}
+                placeholder="Enter role name"
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                autoFocus
+              />
+              <button
+                onClick={handleAddRole}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => {
+                  setIsAddingRole(false)
+                  setNewRoleName('')
+                }}
+                className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+
+        {roles.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {roles.map((role, index) => (
+              <div
+                key={role}
+                className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  {editingRole?.index === index ? (
+                    <div className="flex items-center gap-2 flex-1">
+                      <input
+                        type="text"
+                        value={editingRole.name}
+                        onChange={(e) => setEditingRole({ ...editingRole, name: e.target.value })}
+                        onKeyPress={(e) => e.key === 'Enter' && handleSaveEdit()}
+                        className="flex-1 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        autoFocus
+                      />
+                      <button
+                        onClick={handleSaveEdit}
+                        className="p-1 text-green-600 hover:text-green-700"
+                        title="Save"
+                      >
+                        <CheckCircle size={16} />
+                      </button>
+                      <button
+                        onClick={() => setEditingRole(null)}
+                        className="p-1 text-gray-400 hover:text-gray-600"
+                        title="Cancel"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <h4 className="font-medium text-gray-900 dark:text-white">{role}</h4>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleEditRole(index)}
+                          className="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                          title="Edit role"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteRole(role)}
+                          className="p-1 text-red-600 hover:text-red-700 dark:text-red-400"
+                          title="Delete role"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {(userAssignments[role] || []).length} user{(userAssignments[role] || []).length !== 1 ? 's' : ''} assigned
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-12 text-center">
+            <Users size={48} className="mx-auto text-gray-400 dark:text-gray-500 mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              No Roles Defined
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400">
+              Add roles to get started with user group management.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* User Assignment Section */}
+      <div className="mt-8 space-y-4">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Assign Users to Roles</h3>
+        
+        <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Select Role
+              </label>
+              <select
+                value={selectedRoleForAssignment}
+                onChange={(e) => setSelectedRoleForAssignment(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="">Select a role</option>
+                {roles.map((role) => (
+                  <option key={role} value={role}>
+                    {role}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Select User
+              </label>
+              <select
+                value={selectedUserForAssignment}
+                onChange={(e) => setSelectedUserForAssignment(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="">Select a user</option>
+                {availableUsers
+                  .filter(user => !selectedRoleForAssignment || !(userAssignments[selectedRoleForAssignment] || []).includes(user))
+                  .map((user) => (
+                    <option key={user} value={user}>
+                      {user}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          </div>
+          <button
+            onClick={handleAssignUser}
+            disabled={!selectedRoleForAssignment || !selectedUserForAssignment}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            <UserPlus size={16} />
+            <span>Assign User</span>
+          </button>
+        </div>
+
+        {/* User Assignments Display */}
+        {roles.length > 0 && (
+          <div className="space-y-4">
+            {roles.map((role) => {
+              const assignedUsers = userAssignments[role] || []
+              if (assignedUsers.length === 0) return null
+              
+              return (
+                <div
+                  key={role}
+                  className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold text-gray-900 dark:text-white">{role}</h4>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      {assignedUsers.length} user{assignedUsers.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {assignedUsers.map((user) => (
+                      <div
+                        key={user}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-400 rounded-lg text-sm"
+                      >
+                        <span>{user}</span>
+                        <button
+                          onClick={() => handleRemoveUserFromRole(role, user)}
+                          className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                          title="Remove user"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )
