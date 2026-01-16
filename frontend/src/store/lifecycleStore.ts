@@ -23,6 +23,7 @@ export interface Lifecycle {
   itemCount: number
   lastModified: string
   applicableItemTypes: string[]
+  libraryId?: string // ID of the custom library this lifecycle belongs to (if any)
   statuses?: any[]
   steps?: LifecycleStep[]
   transitionRules?: TransitionRule[]

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Library,
   Wrench,
@@ -28,8 +28,15 @@ import {
   UserPlus
 } from 'lucide-react'
 import clsx from 'clsx'
+import { useQuery } from '@tanstack/react-query'
 import { useStatusDefinitionsStore, type StatusDefinition } from '../../store/statusDefinitionsStore'
-import { useLifecycleStore } from '../../store/lifecycleStore'
+import { useLifecycleStore, type Lifecycle } from '../../store/lifecycleStore'
+import { projectService } from '../../services/project.service'
+import { functionService } from '../../services/function.service'
+import { requirementService } from '../../services/requirement.service'
+import { issueService } from '../../services/issue.service'
+import { parameterService } from '../../services/parameter.service'
+import { changeRequestService } from '../../services/changeRequest.service'
 
 type TabId = 'library' | 'builder' | 'status' | 'user-groups' | 'transitions' | 'control' | 'baselines' | 'audit'
 
@@ -177,9 +184,9 @@ export default function LifecycleManagementPage() {
 
       {/* Tab Content */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-        {activeTab === 'library' && <LifecycleLibraryContent />}
+        {activeTab === 'library' && <LifecycleLibraryContent searchQuery={searchQuery} />}
         {activeTab === 'builder' && <LifecycleBuilderContent />}
-        {activeTab === 'status' && <StatusDefinitionsContent />}
+        {activeTab === 'status' && <StatusDefinitionsContent searchQuery={searchQuery} />}
         {activeTab === 'user-groups' && <UserGroupsContent />}
         {activeTab === 'transitions' && <TransitionRulesContent />}
         {activeTab === 'control' && <ItemLifecycleControlContent />}
@@ -190,29 +197,132 @@ export default function LifecycleManagementPage() {
   )
 }
 
+// Component to calculate item count for a lifecycle
+function LifecycleItemCount({ lifecycle }: { lifecycle: any }) {
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: async () => {
+      const response = await projectService.getProjects()
+      return response.success && response.data ? response.data : []
+    },
+  })
+
+  const { data: itemCount } = useQuery({
+    queryKey: ['lifecycle-item-count', lifecycle.id, lifecycle.applicableItemTypes, projects.map(p => p.id)],
+    queryFn: async () => {
+      if (!lifecycle.applicableItemTypes || lifecycle.applicableItemTypes.length === 0) {
+        return 0
+      }
+
+      let totalCount = 0
+
+      // Fetch items for each project
+      for (const project of projects) {
+        for (const itemType of lifecycle.applicableItemTypes) {
+          try {
+            if (itemType === 'Function') {
+              const response = await functionService.getFunctions(project.id)
+              if (response.success && response.data) {
+                totalCount += response.data.length
+              }
+            } else if (itemType === 'Requirement') {
+              const response = await requirementService.getRequirements(project.id)
+              if (response.success && response.data) {
+                totalCount += response.data.length
+              }
+            } else if (itemType === 'Issue') {
+              const response = await issueService.getIssues(project.id)
+              if (response.success && response.data) {
+                totalCount += response.data.length
+              }
+            } else if (itemType === 'Parameter') {
+              const response = await parameterService.getParameters(project.id)
+              if (response.success && response.data) {
+                totalCount += response.data.length
+              }
+            } else if (itemType === 'Change Request') {
+              const response = await changeRequestService.getChangeRequests(project.id)
+              if (response.success && response.data) {
+                totalCount += response.data.length
+              }
+            }
+            // Add more item types as needed (Test, Task, Stakeholder, Documentation, etc.)
+          } catch (error) {
+            console.error(`Error fetching ${itemType} for project ${project.id}:`, error)
+          }
+        }
+      }
+
+      return totalCount
+    },
+    enabled: projects.length > 0 && lifecycle.applicableItemTypes && lifecycle.applicableItemTypes.length > 0,
+  })
+
+  return <span>{itemCount ?? lifecycle.itemCount ?? 0} Items</span>
+}
+
 // Lifecycle Library Content
-function LifecycleLibraryContent() {
-  const { lifecycles, setLifecycles } = useLifecycleStore()
+function LifecycleLibraryContent({ searchQuery = '' }: { searchQuery?: string }) {
+  const { lifecycles, setLifecycles, updateLifecycle, addLifecycle } = useLifecycleStore()
   const [activeSubsection, setActiveSubsection] = useState<string>('standard')
   const [selectedLifecycle, setSelectedLifecycle] = useState<string | null>(null)
   const [showViewModal, setShowViewModal] = useState(false)
   const [showApplyModal, setShowApplyModal] = useState(false)
   const [showCloneModal, setShowCloneModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingLifecycle, setEditingLifecycle] = useState<any>(null)
 
   // Get created libraries (those with type 'project' that were created via Library Builder)
-  const createdLibraries = lifecycles.filter(lc => lc.type === 'project' && lc.id?.startsWith('lifecycle-'))
+  // Libraries have id starting with 'library-' to distinguish them from lifecycles
+  const createdLibraries = lifecycles.filter(lc => lc.type === 'project' && lc.id?.startsWith('library-'))
   
   // Get standard, organization, and project (non-created) lifecycles
-  const standardLifecycles = lifecycles.filter(lc => lc.type === 'standard')
-  const organizationLifecycles = lifecycles.filter(lc => lc.type === 'organization')
-  const projectLifecycles = lifecycles.filter(lc => lc.type === 'project' && !lc.id?.startsWith('lifecycle-'))
+  // Exclude libraries (id starts with 'library-') from lifecycle lists
+  const standardLifecycles = lifecycles.filter(lc => lc.type === 'standard' && !lc.id?.startsWith('library-'))
+  const organizationLifecycles = lifecycles.filter(lc => lc.type === 'organization' && !lc.id?.startsWith('library-'))
+  const projectLifecycles = lifecycles.filter(lc => lc.type === 'project' && !lc.id?.startsWith('library-') && !lc.id?.startsWith('lifecycle-'))
 
   const getCurrentLifecycles = () => {
-    if (activeSubsection === 'standard') return standardLifecycles
-    if (activeSubsection === 'organization') return organizationLifecycles
-    if (activeSubsection === 'project') return projectLifecycles
-    // For created libraries, find by ID
-    return lifecycles.filter(lc => lc.id === activeSubsection)
+    let filtered: Lifecycle[] = []
+    
+    if (activeSubsection === 'standard') {
+      filtered = standardLifecycles
+    } else if (activeSubsection === 'organization') {
+      filtered = organizationLifecycles
+    } else if (activeSubsection === 'project') {
+      filtered = projectLifecycles
+    } else {
+      // For created libraries, find lifecycles that belong to this specific library
+      // Filter by libraryId to show only lifecycles created under this custom library
+      filtered = lifecycles.filter(lc => {
+        // Exclude libraries (they have 'library-' prefix)
+        if (lc.id?.startsWith('library-')) return false
+        // Only include actual lifecycles (those with steps)
+        // Lifecycles created via CreateLifecycleModal have id starting with 'lifecycle-'
+        // For custom libraries, filter by libraryId matching the activeSubsection (library ID)
+        if (lc.id?.startsWith('lifecycle-') && lc.steps && lc.steps.length > 0) {
+          // If this is a custom library (activeSubsection is a library ID), filter by libraryId
+          if (activeSubsection && activeSubsection !== 'standard' && activeSubsection !== 'organization' && activeSubsection !== 'project') {
+            return lc.libraryId === activeSubsection
+          }
+          // Otherwise, return all lifecycles (fallback)
+          return true
+        }
+        return false
+      })
+    }
+    
+    // Apply search filter if searchQuery is provided
+    if (searchQuery && searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim()
+      filtered = filtered.filter(lc => 
+        lc.name.toLowerCase().includes(query) ||
+        (lc.description && lc.description.toLowerCase().includes(query)) ||
+        lc.version.toLowerCase().includes(query)
+      )
+    }
+    
+    return filtered
   }
 
   const handleViewLifecycle = (id: string) => {
@@ -228,6 +338,14 @@ function LifecycleLibraryContent() {
   const handleCloneLifecycle = (id: string) => {
     setSelectedLifecycle(id)
     setShowCloneModal(true)
+  }
+
+  const handleEditLifecycle = (id: string) => {
+    const lifecycle = getCurrentLifecycles().find(l => l.id === id)
+    if (lifecycle) {
+      setEditingLifecycle(lifecycle)
+      setShowEditModal(true)
+    }
   }
 
   const [isCreateLifecycleModalOpen, setIsCreateLifecycleModalOpen] = useState(false)
@@ -310,35 +428,53 @@ function LifecycleLibraryContent() {
       {getCurrentLifecycles().length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {getCurrentLifecycles().map((lifecycle) => {
-            // Determine subsection type for styling
-            const subsectionType = activeSubsection === 'standard' ? 'standard' : 
-                                  activeSubsection === 'organization' ? 'organization' : 
-                                  activeSubsection === 'project' ? 'project' : 
-                                  'project' // Created libraries default to project styling
+            // Determine tag label and styling
+            let tagLabel = 'Project'
+            let tagStyle = 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400'
+            
+            // First check if we're viewing a custom library tab
+            if (activeSubsection && activeSubsection !== 'standard' && activeSubsection !== 'organization' && activeSubsection !== 'project') {
+              // We're viewing a custom library tab - show the custom library name
+              const customLibrary = lifecycles.find(lc => lc.id === activeSubsection && lc.id?.startsWith('library-'))
+              if (customLibrary) {
+                tagLabel = customLibrary.name
+                tagStyle = 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-400'
+              }
+            } else if (lifecycle.libraryId) {
+              // Lifecycle belongs to a custom library (but we're not viewing that library's tab)
+              const customLibrary = lifecycles.find(lc => lc.id === lifecycle.libraryId && lc.id?.startsWith('library-'))
+              if (customLibrary) {
+                tagLabel = customLibrary.name
+                tagStyle = 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-400'
+              }
+            } else if (activeSubsection === 'standard') {
+              tagLabel = 'Standard'
+              tagStyle = 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+            } else if (activeSubsection === 'organization') {
+              tagLabel = 'Organization'
+              tagStyle = 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+            }
+            
             return (
-            <div
-              key={lifecycle.id}
-              className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow bg-white dark:bg-gray-800"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{lifecycle.name}</h3>
-                  <span className={clsx(
-                    'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mb-2',
-                    subsectionType === 'standard'
-                      ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-                      : subsectionType === 'organization'
-                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
-                      : 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400'
-                  )}>
-                    {subsectionType === 'standard' ? 'Standard' : subsectionType === 'organization' ? 'Organization' : 'Project'}
-                  </span>
+              <div
+                key={lifecycle.id}
+                className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow bg-white dark:bg-gray-800"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{lifecycle.name}</h3>
+                    <span className={clsx(
+                      'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mb-2',
+                      tagStyle
+                    )}>
+                      {tagLabel}
+                    </span>
                 </div>
               </div>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{lifecycle.description}</p>
               <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-500 mb-4">
                 <span>{lifecycle.statusCount} Statuses</span>
-                <span>{lifecycle.itemCount} Items</span>
+                <LifecycleItemCount lifecycle={lifecycle} />
                 <span>v{lifecycle.version}</span>
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-500 mb-4">
@@ -356,12 +492,12 @@ function LifecycleLibraryContent() {
                   <span>View</span>
                 </button>
                 <button
-                  onClick={() => handleApplyLifecycle(lifecycle.id)}
-                  className="flex-1 px-3 py-2 bg-blue-100 dark:bg-blue-900/20 hover:bg-blue-200 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg flex items-center justify-center gap-2 text-sm transition-colors"
-                  title="Apply lifecycle to item type or project"
+                  onClick={() => handleEditLifecycle(lifecycle.id)}
+                  className="flex-1 px-3 py-2 bg-indigo-100 dark:bg-indigo-900/20 hover:bg-indigo-200 dark:hover:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-lg flex items-center justify-center gap-2 text-sm transition-colors"
+                  title="Edit lifecycle"
                 >
-                  <CheckCircle size={14} />
-                  <span>Apply</span>
+                  <Edit2 size={14} />
+                  <span>Edit</span>
                 </button>
                 <button
                   onClick={() => handleCloneLifecycle(lifecycle.id)}
@@ -436,8 +572,19 @@ function LifecycleLibraryContent() {
       {/* Create Lifecycle Modal */}
       {isCreateLifecycleModalOpen && (
         <CreateLifecycleModal
+          initialLibrary={(activeSubsection === 'standard' ? 'standard' : 
+                          activeSubsection === 'organization' ? 'organization' : 
+                          activeSubsection === 'project' ? 'project' : 
+                          'project') as 'standard' | 'organization' | 'project'} // Default to project for created libraries
+          hideLibrarySelection={true} // Hide library selection when a specific tab is already selected (always true when coming from tab selection)
+          activeSubsection={activeSubsection} // Pass activeSubsection for custom library naming
           onClose={() => setIsCreateLifecycleModalOpen(false)}
           onSave={(lifecycleData) => {
+            // Determine if this lifecycle belongs to a custom library
+            const libraryId = (activeSubsection && activeSubsection !== 'standard' && activeSubsection !== 'organization' && activeSubsection !== 'project')
+              ? activeSubsection // Custom library ID
+              : undefined
+            
             const newLifecycle = {
               id: `lifecycle-${Date.now()}`,
               name: lifecycleData.name,
@@ -448,6 +595,7 @@ function LifecycleLibraryContent() {
               itemCount: 0,
               lastModified: new Date().toLocaleDateString(),
               applicableItemTypes: lifecycleData.applicableItemTypes || [],
+              libraryId: libraryId, // Associate with custom library if created under one
               statuses: [],
               steps: lifecycleData.steps || [],
               transitionRules: lifecycleData.transitionRules || []
@@ -457,25 +605,111 @@ function LifecycleLibraryContent() {
           }}
         />
       )}
+
+      {/* Edit Lifecycle Modal */}
+      {showEditModal && editingLifecycle && (
+        <CreateLifecycleModal
+          editingLifecycle={editingLifecycle}
+          onClose={() => {
+            setShowEditModal(false)
+            setEditingLifecycle(null)
+          }}
+          onSave={(lifecycleData) => {
+            const updatedLifecycle = {
+              ...editingLifecycle,
+              name: lifecycleData.name,
+              description: lifecycleData.description || '',
+              version: lifecycleData.version || editingLifecycle.version,
+              statusCount: lifecycleData.steps?.length || editingLifecycle.statusCount,
+              applicableItemTypes: lifecycleData.applicableItemTypes || [],
+              steps: lifecycleData.steps || [],
+              transitionRules: lifecycleData.transitionRules || [],
+              lastModified: new Date().toLocaleDateString()
+            }
+            updateLifecycle(editingLifecycle.id, updatedLifecycle)
+            setShowEditModal(false)
+            setEditingLifecycle(null)
+          }}
+        />
+      )}
     </div>
   )
 }
 
 // Create Lifecycle Modal
-function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave: (data: any) => void }) {
+function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrary, hideLibrarySelection, activeSubsection }: { onClose: () => void; onSave: (data: any) => void; editingLifecycle?: any; initialLibrary?: 'standard' | 'organization' | 'project'; hideLibrarySelection?: boolean; activeSubsection?: string }) {
   const { statuses } = useStatusDefinitionsStore()
-  const [selectedLibrary, setSelectedLibrary] = useState<'standard' | 'organization' | 'project'>('standard')
+  const { lifecycles } = useLifecycleStore()
+  const [selectedLibrary, setSelectedLibrary] = useState<'standard' | 'organization' | 'project'>(
+    editingLifecycle?.type || initialLibrary || 'standard'
+  )
+  
+  // Function to generate auto-name based on library and order
+  const generateAutoName = (libraryType: 'standard' | 'organization' | 'project', subsection?: string): string => {
+    // Get existing lifecycles in the same library
+    let existingLifecycles: Lifecycle[] = []
+    
+    if (subsection && subsection !== 'standard' && subsection !== 'organization' && subsection !== 'project') {
+      // Custom library - find by library ID
+      const library = lifecycles.find(lc => lc.id === subsection && lc.id?.startsWith('library-'))
+      if (library) {
+        // Extract prefix from library name (first 3-4 uppercase letters or first word)
+        const libraryNamePrefix = library.name
+          .split(/\s+/)
+          .map(word => word.substring(0, 3).toUpperCase())
+          .join('')
+          .substring(0, 4) || 'LIB'
+        // Count existing lifecycles with this prefix pattern
+        // This is a simple approach - in production, you'd want to track library membership explicitly
+        const existingWithPrefix = lifecycles.filter(lc => 
+          lc.name.startsWith(libraryNamePrefix + '-') &&
+          lc.id?.startsWith('lifecycle-') &&
+          lc.steps &&
+          lc.steps.length > 0
+        )
+        const count = existingWithPrefix.length + 1
+        return `${libraryNamePrefix}-${String(count).padStart(3, '0')}`
+      }
+    }
+    
+    // Standard library types
+    if (libraryType === 'standard') {
+      existingLifecycles = lifecycles.filter(lc => lc.type === 'standard' && !lc.id?.startsWith('library-'))
+      const count = existingLifecycles.length + 1
+      return `STD-${String(count).padStart(3, '0')}`
+    } else if (libraryType === 'organization') {
+      existingLifecycles = lifecycles.filter(lc => lc.type === 'organization' && !lc.id?.startsWith('library-'))
+      const count = existingLifecycles.length + 1
+      return `ORG-${String(count).padStart(3, '0')}`
+    } else {
+      existingLifecycles = lifecycles.filter(lc => lc.type === 'project' && !lc.id?.startsWith('library-') && !lc.id?.startsWith('lifecycle-'))
+      const count = existingLifecycles.length + 1
+      return `PRJ-${String(count).padStart(3, '0')}`
+    }
+  }
+  
   const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    type: 'project',
-    version: '1.0',
-    applicableItemTypes: [] as string[],
-    steps: [] as Array<{ id: string; statusId: string; order: number }>,
-    transitionRules: [] as Array<{ fromStatusId: string; toStatusId: string; allowedUserGroups: string[] }>
+    name: editingLifecycle?.name || (editingLifecycle ? '' : generateAutoName(editingLifecycle?.type || initialLibrary || 'standard', activeSubsection)),
+    description: editingLifecycle?.description || '',
+    type: editingLifecycle?.type || 'project',
+    version: editingLifecycle?.version || '1.0',
+    applicableItemTypes: editingLifecycle?.applicableItemTypes || [] as string[],
+    steps: editingLifecycle?.steps || [] as Array<{ id: string; statusId: string; order: number }>,
+    transitionRules: editingLifecycle?.transitionRules || [] as Array<{ fromStatusId: string; toStatusId: string; allowedUserGroups: string[] }>
   })
+  
+  // Update auto-name when library selection changes (only for new lifecycles, not editing)
+  useEffect(() => {
+    if (!editingLifecycle) {
+      const autoName = generateAutoName(selectedLibrary, activeSubsection)
+      setFormData(prev => ({ ...prev, name: autoName }))
+    }
+  }, [selectedLibrary, activeSubsection, editingLifecycle])
   const [availableRoles, setAvailableRoles] = useState<string[]>([])
   const [currentStep, setCurrentStep] = useState(0)
+  const [connectingFrom, setConnectingFrom] = useState<string | null>(null)
+  const [previewConnection, setPreviewConnection] = useState<{ from: string; to: { x: number; y: number } } | null>(null)
+  const stepRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   const availableItemTypes = ['Function', 'Test', 'Issue', 'Parameter', 'Requirement', 'Change Request', 'Task', 'Stakeholder', 'Documentation']
 
@@ -502,20 +736,128 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
     ])
   }, [])
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  // Validation functions for each step
+  // IMPORTANT: All validation rules apply universally to standard, organization, and project lifecycle libraries,
+  // as well as custom lifecycle libraries. There are no type-specific bypasses - all lifecycle types must meet 
+  // the same validation requirements. The creation flow, validation, and button states are identical for all library types.
+  const validateStep0 = (): boolean => {
+    if (!editingLifecycle && !selectedLibrary) {
+      alert('Please select a library')
+      return false
+    }
     if (!formData.name.trim()) {
       alert('Lifecycle name is required')
-      return
+      return false
     }
+    return true
+  }
+
+  // Applies to ALL lifecycle types (standard, organization, project) - no exceptions
+  const validateStep1 = (): boolean => {
     if (formData.steps.length === 0) {
       alert('Please add at least one lifecycle step')
-      return
+      return false
     }
+    // A lifecycle requires at least 2 statuses to have transitions
+    if (formData.steps.length < 2) {
+      alert('A lifecycle must have at least 2 statuses. Please add another step before proceeding.')
+      return false
+    }
+    // Check if all steps have a status selected
+    const stepsWithoutStatus = formData.steps.filter(step => !step.statusId)
+    if (stepsWithoutStatus.length > 0) {
+      alert('Please select a status for all steps before proceeding')
+      return false
+    }
+    return true
+  }
+
+  // Validation for transition rules - applies to ALL lifecycle types (standard, organization, project)
+  // This validation is universal and cannot be bypassed based on lifecycle type
+  const validateStep2 = (): boolean => {
+    // Check if there are any transition rules
+    if (formData.transitionRules.length === 0) {
+      alert('Please add at least one transition rule')
+      return false
+    }
+    
+    // Check that all transition rules have both from and to statuses selected
+    const incompleteRules = formData.transitionRules.filter(
+      rule => !rule.fromStatusId || !rule.toStatusId
+    )
+    if (incompleteRules.length > 0) {
+      alert('Please complete all transition rules by selecting both "From" and "To" statuses')
+      return false
+    }
+    
+    // Check that each transition rule has at least one user group selected
+    // This requirement applies to standard, organization, and project lifecycles
+    const rulesWithoutUserGroups = formData.transitionRules.filter(
+      rule => rule.allowedUserGroups.length === 0
+    )
+    if (rulesWithoutUserGroups.length > 0) {
+      alert('Please select at least one user group for each transition rule')
+      return false
+    }
+    
+    return true
+  }
+
+  // Helper function to check if user groups are selected for each transition rule
+  // Applies to ALL lifecycle types (standard, organization, project)
+  const hasAllUserGroupsSelected = (): boolean => {
+    if (formData.transitionRules.length === 0) return false
+    
+    // Get all rules that have both from and to statuses selected
+    const completeRules = formData.transitionRules.filter(
+      rule => rule.fromStatusId && rule.toStatusId
+    )
+    
+    // If there are no complete rules, button should be disabled
+    if (completeRules.length === 0) return false
+    
+    // Check that EVERY complete rule has at least one user group selected
+    // This requirement applies universally to standard, organization, and project lifecycles
+    return completeRules.every(rule => rule.allowedUserGroups.length > 0)
+  }
+
+  // Applies to ALL lifecycle types (standard, organization, project) - no exceptions
+  const validateStep3 = (): boolean => {
     if (formData.applicableItemTypes.length === 0) {
       alert('Please select at least one applicable item type')
-      return
+      return false
     }
+    return true
+  }
+
+  const handleNextStep = (nextStep: number) => {
+    let isValid = true
+    
+    if (currentStep === 0) {
+      isValid = validateStep0()
+    } else if (currentStep === 1) {
+      isValid = validateStep1()
+    } else if (currentStep === 2) {
+      isValid = validateStep2()
+    } else if (currentStep === 3) {
+      isValid = validateStep3()
+    }
+    
+    if (isValid) {
+      if (currentStep === 1) {
+        updateTransitionRules()
+      }
+      setCurrentStep(nextStep)
+    }
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!validateStep0()) return
+    if (!validateStep1()) return
+    if (!validateStep2()) return
+    if (!validateStep3()) return
+    
     onSave({
       ...formData,
       type: selectedLibrary
@@ -548,14 +890,88 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
   }
 
   const handleStepStatusChange = (stepId: string, statusId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      steps: prev.steps.map(step => 
+    // Check if the status is already used in another step
+    if (statusId) {
+      const isDuplicate = formData.steps.some(step => 
+        step.id !== stepId && step.statusId === statusId
+      )
+      if (isDuplicate) {
+        alert('This status has already been selected for another step. Please choose a different status.')
+        return
+      }
+    }
+    
+    setFormData(prev => {
+      // Update the step with new status
+      const updatedSteps = prev.steps.map(step => 
         step.id === stepId ? { ...step, statusId } : step
       )
-    }))
-    // Auto-create transition rules for adjacent steps
-    updateTransitionRules()
+      
+      // Auto-create transition rules for adjacent steps with updated steps
+      const sortedSteps = [...updatedSteps].sort((a, b) => a.order - b.order)
+      const newSequentialRules: Array<{ fromStatusId: string; toStatusId: string; allowedUserGroups: string[] }> = []
+      
+      // Create only forward sequential transitions (from step i to step i+1)
+      for (let i = 0; i < sortedSteps.length - 1; i++) {
+        const fromStep = sortedSteps[i]
+        const toStep = sortedSteps[i + 1]
+        if (fromStep.statusId && toStep.statusId) {
+          // Only create forward transitions (toOrder > fromOrder)
+          const fromOrder = fromStep.order
+          const toOrder = toStep.order
+          if (toOrder > fromOrder) {
+            newSequentialRules.push({
+              fromStatusId: fromStep.statusId,
+              toStatusId: toStep.statusId,
+              allowedUserGroups: []
+            })
+          }
+        }
+      }
+      
+      // Keep existing rules that are NOT sequential forward transitions
+      // (preserve manually created backward, skip, or self-loop transitions)
+      const existingNonSequentialRules = prev.transitionRules.filter(rule => {
+        if (!rule.fromStatusId || !rule.toStatusId) return false
+        
+        // Check if this is a sequential forward transition
+        const fromStep = sortedSteps.find(s => s.statusId === rule.fromStatusId)
+        const toStep = sortedSteps.find(s => s.statusId === rule.toStatusId)
+        if (!fromStep || !toStep) return true // Keep if steps not found (might be invalid)
+        
+        const isSequential = toStep.order === fromStep.order + 1
+        const isForward = toStep.order > fromStep.order
+        
+        // Keep if it's NOT a sequential forward transition (user-created backward/skip/self-loop)
+        return !(isSequential && isForward)
+      })
+      
+      // Combine: new sequential forward rules + existing non-sequential rules
+      const allRules = [...newSequentialRules, ...existingNonSequentialRules]
+      
+      // Remove duplicates
+      const uniqueRules = new Map<string, { fromStatusId: string; toStatusId: string; allowedUserGroups: string[] }>()
+      allRules.forEach(rule => {
+        const key = `${rule.fromStatusId}-${rule.toStatusId}`
+        if (!uniqueRules.has(key)) {
+          uniqueRules.set(key, rule)
+        } else {
+          // If duplicate exists, prefer the one with user groups (existing rule)
+          const existing = uniqueRules.get(key)!
+          if (existing.allowedUserGroups.length > 0) {
+            uniqueRules.set(key, existing)
+          } else {
+            uniqueRules.set(key, rule)
+          }
+        }
+      })
+      
+      return {
+        ...prev,
+        steps: updatedSteps,
+        transitionRules: Array.from(uniqueRules.values())
+      }
+    })
   }
 
   const handleRemoveStep = (stepId: string) => {
@@ -590,20 +1006,21 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
   }
 
   const updateTransitionRules = () => {
-    // Keep existing rules, but ensure sequential forward transitions exist
-    const existingRules = new Map(
-      formData.transitionRules.map(rule => [`${rule.fromStatusId}-${rule.toStatusId}`, rule])
-    )
-    
-    // Add sequential forward transitions if they don't exist
+    // Only create sequential forward transitions between adjacent steps
+    // Do NOT create backward transitions - those must be created manually by the user
     const sortedSteps = [...formData.steps].sort((a, b) => a.order - b.order)
+    const newSequentialRules: Array<{ fromStatusId: string; toStatusId: string; allowedUserGroups: string[] }> = []
+    
+    // Create only forward sequential transitions (from step i to step i+1)
     for (let i = 0; i < sortedSteps.length - 1; i++) {
       const fromStep = sortedSteps[i]
       const toStep = sortedSteps[i + 1]
       if (fromStep.statusId && toStep.statusId) {
-        const key = `${fromStep.statusId}-${toStep.statusId}`
-        if (!existingRules.has(key)) {
-          existingRules.set(key, {
+        // Only create forward transitions (toOrder > fromOrder)
+        const fromOrder = fromStep.order
+        const toOrder = toStep.order
+        if (toOrder > fromOrder) {
+          newSequentialRules.push({
             fromStatusId: fromStep.statusId,
             toStatusId: toStep.statusId,
             allowedUserGroups: []
@@ -612,7 +1029,44 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
       }
     }
     
-    setFormData(prev => ({ ...prev, transitionRules: Array.from(existingRules.values()) }))
+    // Keep existing rules that are NOT sequential forward transitions
+    // (preserve manually created backward, skip, or self-loop transitions)
+    const existingNonSequentialRules = formData.transitionRules.filter(rule => {
+      if (!rule.fromStatusId || !rule.toStatusId) return false
+      
+      // Check if this is a sequential forward transition
+      const fromStep = sortedSteps.find(s => s.statusId === rule.fromStatusId)
+      const toStep = sortedSteps.find(s => s.statusId === rule.toStatusId)
+      if (!fromStep || !toStep) return true // Keep if steps not found (might be invalid)
+      
+      const isSequential = toStep.order === fromStep.order + 1
+      const isForward = toStep.order > fromStep.order
+      
+      // Keep if it's NOT a sequential forward transition (user-created backward/skip/self-loop)
+      return !(isSequential && isForward)
+    })
+    
+    // Combine: new sequential forward rules + existing non-sequential rules
+    const allRules = [...newSequentialRules, ...existingNonSequentialRules]
+    
+    // Remove duplicates
+    const uniqueRules = new Map<string, { fromStatusId: string; toStatusId: string; allowedUserGroups: string[] }>()
+    allRules.forEach(rule => {
+      const key = `${rule.fromStatusId}-${rule.toStatusId}`
+      if (!uniqueRules.has(key)) {
+        uniqueRules.set(key, rule)
+      } else {
+        // If duplicate exists, prefer the one with user groups (existing rule)
+        const existing = uniqueRules.get(key)!
+        if (existing.allowedUserGroups.length > 0) {
+          uniqueRules.set(key, existing)
+        } else {
+          uniqueRules.set(key, rule)
+        }
+      }
+    })
+    
+    setFormData(prev => ({ ...prev, transitionRules: Array.from(uniqueRules.values()) }))
   }
 
   const handleAddCustomTransition = () => {
@@ -687,72 +1141,100 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto"
+        className="bg-gradient-to-br from-slate-50 via-white to-slate-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 rounded-xl shadow-2xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-700"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between z-10">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Create New Lifecycle
+        <div className="sticky top-0 bg-gradient-to-r from-slate-50 to-white dark:from-slate-900 dark:to-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-5 flex items-center justify-between z-10 backdrop-blur-sm">
+          <h3 className="text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent">
+            {editingLifecycle ? `Edit Lifecycle: ${editingLifecycle.name}` : 'Create New Lifecycle'}
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg p-1.5 transition-colors"
           >
             <X size={20} />
           </button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Step Indicator */}
-          <div className="flex items-center gap-2 mb-6 flex-wrap">
+          <div className="flex items-center gap-2 mb-8 flex-wrap">
             <button
               type="button"
-              onClick={() => setCurrentStep(0)}
+              onClick={() => {
+                // Allow going back to previous steps without validation
+                setCurrentStep(0)
+              }}
               className={clsx(
-                'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                'px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 shadow-sm',
                 currentStep === 0
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                  ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-indigo-500/50 ring-2 ring-indigo-500/20'
+                  : 'bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
               )}
             >
               1. Library & Basic Info
             </button>
-            <ChevronRight size={16} className="text-gray-400" />
+            <ChevronRight size={16} className="text-slate-400" />
             <button
               type="button"
-              onClick={() => setCurrentStep(1)}
+              onClick={() => {
+                // Allow going back to previous steps without validation
+                if (currentStep > 1) {
+                  setCurrentStep(1)
+                } else {
+                  handleNextStep(1)
+                }
+              }}
               className={clsx(
-                'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                'px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 shadow-sm',
                 currentStep === 1
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                  ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-indigo-500/50 ring-2 ring-indigo-500/20'
+                  : 'bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
               )}
             >
               2. Lifecycle Steps
             </button>
-            <ChevronRight size={16} className="text-gray-400" />
+            <ChevronRight size={16} className="text-slate-400" />
             <button
               type="button"
-              onClick={() => setCurrentStep(2)}
+              onClick={() => {
+                // Allow going back to previous steps without validation
+                if (currentStep > 2) {
+                  setCurrentStep(2)
+                } else {
+                  // Only allow forward navigation if validation passes
+                  handleNextStep(2)
+                }
+              }}
+              disabled={currentStep < 2 && (formData.steps.length < 2 || formData.steps.some(step => !step.statusId))}
               className={clsx(
-                'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                'px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 shadow-sm',
                 currentStep === 2
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                  ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-indigo-500/50 ring-2 ring-indigo-500/20'
+                  : currentStep < 2 && (formData.steps.length < 2 || formData.steps.some(step => !step.statusId))
+                  ? 'bg-slate-300 dark:bg-slate-600 text-slate-500 dark:text-slate-400 cursor-not-allowed opacity-50'
+                  : 'bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
               )}
             >
               3. Transition Rules
             </button>
-            <ChevronRight size={16} className="text-gray-400" />
+            <ChevronRight size={16} className="text-slate-400" />
             <button
               type="button"
-              onClick={() => setCurrentStep(3)}
+              onClick={() => {
+                // Allow going back to previous steps without validation
+                if (currentStep > 3) {
+                  setCurrentStep(3)
+                } else {
+                  handleNextStep(3)
+                }
+              }}
               className={clsx(
-                'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                'px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 shadow-sm',
                 currentStep === 3
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                  ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-indigo-500/50 ring-2 ring-indigo-500/20'
+                  : 'bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
               )}
             >
               4. Applicable Items
@@ -762,43 +1244,65 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
           {/* Step 1: Library & Basic Info */}
           {currentStep === 0 && (
             <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Select Library <span className="text-red-500">*</span>
-                </label>
-                <div className="grid grid-cols-3 gap-4">
-                  {(['standard', 'organization', 'project'] as const).map((lib) => (
-                    <button
-                      key={lib}
-                      type="button"
-                      onClick={() => setSelectedLibrary(lib)}
-                      className={clsx(
-                        'p-4 border-2 rounded-lg text-left transition-all',
-                        selectedLibrary === lib
-                          ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                      )}
-                    >
-                      <div className="font-semibold text-gray-900 dark:text-white capitalize mb-1">
-                        {lib === 'standard' ? 'Standard' : lib === 'organization' ? 'Organization' : 'Project'} Lifecycles
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {lib === 'standard' ? 'System-wide templates' : lib === 'organization' ? 'Organization templates' : 'Project-specific templates'}
-                      </div>
-                    </button>
-                  ))}
+              {!editingLifecycle && !hideLibrarySelection && (
+                <div>
+                  <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2.5">
+                    Select Library <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-3 gap-4">
+                    {(['standard', 'organization', 'project'] as const).map((lib) => (
+                      <button
+                        key={lib}
+                        type="button"
+                        onClick={() => setSelectedLibrary(lib)}
+                        className={clsx(
+                          'p-5 border-2 rounded-xl text-left transition-all duration-200 shadow-sm',
+                          selectedLibrary === lib
+                            ? 'border-indigo-500 bg-gradient-to-br from-indigo-50 to-indigo-100/50 dark:from-indigo-950/30 dark:to-indigo-900/20 shadow-indigo-500/20 ring-2 ring-indigo-500/10'
+                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-white dark:bg-slate-800/50 hover:shadow-md'
+                        )}
+                      >
+                        <div className="font-semibold text-slate-900 dark:text-slate-100 capitalize mb-1.5">
+                          {lib === 'standard' ? 'Standard' : lib === 'organization' ? 'Organization' : 'Project'} Lifecycles
+                        </div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400">
+                          {lib === 'standard' ? 'System-wide templates' : lib === 'organization' ? 'Organization templates' : 'Project-specific templates'}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
+              {!editingLifecycle && hideLibrarySelection && (() => {
+                // Determine library name to display
+                let libraryName = 'Project Lifecycles'
+                if (activeSubsection && activeSubsection !== 'standard' && activeSubsection !== 'organization' && activeSubsection !== 'project') {
+                  const customLibrary = lifecycles.find(lc => lc.id === activeSubsection && lc.id?.startsWith('library-'))
+                  libraryName = customLibrary ? customLibrary.name : 'Project Lifecycles'
+                } else if (activeSubsection === 'standard') {
+                  libraryName = 'Standard Lifecycles'
+                } else if (activeSubsection === 'organization') {
+                  libraryName = 'Organization Lifecycles'
+                }
+                
+                return (
+                  <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg">
+                    <p className="text-sm text-indigo-800 dark:text-indigo-300">
+                      <strong>Library:</strong> This lifecycle will be created in the <strong>{libraryName}</strong> library.
+                    </p>
+                  </div>
+                )
+              })()}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Lifecycle Name <span className="text-red-500">*</span>
+                <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2.5">
+                  Lifecycle Name <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-slate-700/50 text-slate-900 dark:text-slate-100 transition-all"
                   placeholder="Enter lifecycle name"
                   required
                 />
@@ -812,20 +1316,20 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                  className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-slate-700/50 text-slate-900 dark:text-slate-100 resize-none transition-all"
                   placeholder="Enter lifecycle description"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2.5">
                   Version
                 </label>
                 <input
                   type="text"
                   value={formData.version}
                   onChange={(e) => setFormData({ ...formData, version: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-slate-700/50 text-slate-900 dark:text-slate-100 transition-all"
                   placeholder="1.0"
                 />
               </div>
@@ -833,8 +1337,8 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
               <div className="flex justify-end">
                 <button
                   type="button"
-                  onClick={() => setCurrentStep(1)}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                  onClick={() => handleNextStep(1)}
+                  className="px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-lg font-semibold shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40 transition-all duration-200"
                 >
                   Next: Lifecycle Steps
                 </button>
@@ -845,16 +1349,8 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
           {/* Step 2: Lifecycle Steps */}
           {currentStep === 1 && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Define Lifecycle Steps</h3>
-                <button
-                  type="button"
-                  onClick={handleAddStep}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
-                >
-                  <Plus size={16} />
-                  <span>Add Step</span>
-                </button>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Define Lifecycle Steps</h3>
               </div>
 
               {statuses.length === 0 && (
@@ -865,101 +1361,537 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
                 </div>
               )}
 
-              {/* Visual Lifecycle Flow */}
+              {/* Interactive Flow Builder Canvas */}
               {formData.steps.length > 0 && (() => {
                 const sortedSteps = [...formData.steps].sort((a, b) => a.order - b.order)
-                const backwardTransitions = formData.transitionRules.filter(rule => 
-                  getTransitionType(rule.fromStatusId, rule.toStatusId) === 'backward'
-                )
                 
+                const handleStepClick = (stepId: string, statusId: string) => {
+                  if (!statusId) return
+                  
+                  if (connectingFrom === stepId) {
+                    // Cancel connection
+                    setConnectingFrom(null)
+                    setPreviewConnection(null)
+                  } else if (connectingFrom) {
+                    // Complete connection
+                    const sourceStep = sortedSteps.find(s => s.id === connectingFrom)
+                    if (sourceStep && sourceStep.statusId && stepId !== connectingFrom) {
+                      const existingRule = formData.transitionRules.find(
+                        r => r.fromStatusId === sourceStep.statusId && r.toStatusId === statusId
+                      )
+                      
+                      if (!existingRule) {
+                        setFormData(prev => ({
+                          ...prev,
+                          transitionRules: [
+                            ...prev.transitionRules,
+                            {
+                              fromStatusId: sourceStep.statusId,
+                              toStatusId: statusId,
+                              allowedUserGroups: []
+                            }
+                          ]
+                        }))
+                      }
+                    }
+                    setConnectingFrom(null)
+                    setPreviewConnection(null)
+                  } else {
+                    // Start connection
+                    setConnectingFrom(stepId)
+                  }
+                }
+                
+                const handleMouseMove = (e: React.MouseEvent) => {
+                  if (connectingFrom) {
+                    const container = e.currentTarget as HTMLElement
+                    const rect = container.getBoundingClientRect()
+                    setPreviewConnection({
+                      from: connectingFrom,
+                      to: {
+                        x: e.clientX - rect.left,
+                        y: e.clientY - rect.top
+                      }
+                    })
+                  }
+                }
+                
+                const getStepCenter = (stepId: string) => {
+                  const element = stepRefs.current.get(stepId)
+                  if (!element) return { x: 0, y: 0 }
+                  const rect = element.getBoundingClientRect()
+                  const container = element.closest('.flow-container') as HTMLElement
+                  if (!container) return { x: 0, y: 0 }
+                  const containerRect = container.getBoundingClientRect()
+                  return {
+                    x: rect.left + rect.width / 2 - containerRect.left,
+                    y: rect.top + rect.height / 2 - containerRect.top
+                  }
+                }
+
+                const handleDeleteTransition = (fromStatusId: string, toStatusId: string, e: React.MouseEvent) => {
+                  e.stopPropagation()
+                  setFormData(prev => ({
+                    ...prev,
+                    transitionRules: prev.transitionRules.filter(
+                      r => !(r.fromStatusId === fromStatusId && r.toStatusId === toStatusId)
+                    )
+                  }))
+                }
+
                 return (
-                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900/50 dark:to-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
-                      <PlayCircle size={18} />
-                      Lifecycle Flow Preview
-                    </h4>
-                    <div className="flex items-center gap-3 overflow-x-auto pb-4 px-2">
-                      {sortedSteps.map((step, index) => {
-                        const status = statuses.find(s => s.id === step.statusId)
-                        const hasBackward = backwardTransitions.some(rule => rule.fromStatusId === step.statusId)
+                  <div className="bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900/50 dark:via-gray-800/30 dark:to-gray-900/50 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-8 shadow-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                        <PlayCircle size={18} />
+                        Interactive Flow Builder
+                      </h4>
+                      <div className="flex items-center gap-2">
+                        {connectingFrom && (
+                          <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                            Click another box to create connection
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div 
+                      className="relative flow-container min-h-[300px] overflow-x-auto overflow-y-auto px-4"
+                      style={{ 
+                        paddingTop: '120px', // Increased padding to accommodate multiple backward arrows
+                        paddingBottom: '120px' // Increased padding to accommodate multiple forward skip arrows
+                      }}
+                      onMouseMove={handleMouseMove}
+                    >
+                      {/* SVG overlay for connections */}
+                      <svg
+                        className="absolute top-0 left-0 w-full pointer-events-none"
+                        style={{ zIndex: 1, height: '100%', minHeight: '100%' }}
+                      >
+                        <defs>
+                          <marker
+                            id="arrow-forward"
+                            markerWidth="8"
+                            markerHeight="8"
+                            refX="7"
+                            refY="3"
+                            orient="auto"
+                          >
+                            <polygon points="0 0, 8 3, 0 6" fill="#3b82f6" />
+                          </marker>
+                          <marker
+                            id="arrow-backward"
+                            markerWidth="8"
+                            markerHeight="8"
+                            refX="7"
+                            refY="3"
+                            orient="auto"
+                          >
+                            <polygon points="0 0, 8 3, 0 6" fill="#f97316" />
+                          </marker>
+                        </defs>
                         
-                        return (
-                          <div key={step.id} className="flex items-center gap-3 flex-shrink-0">
-                            <div className="relative">
+                        {/* Draw all transitions */}
+                        {(() => {
+                          // Helper function to check if a forward transition is sequential (adjacent steps)
+                          const isSequentialForward = (fromStatusId: string, toStatusId: string): boolean => {
+                            const fromStep = sortedSteps.find(s => s.statusId === fromStatusId)
+                            const toStep = sortedSteps.find(s => s.statusId === toStatusId)
+                            if (!fromStep || !toStep) return false
+                            return toStep.order === fromStep.order + 1
+                          }
+                          
+                          // First, calculate all backward arrow paths to detect overlaps
+                          const backwardArrowData = formData.transitionRules
+                            .map((rule, idx) => {
+                              const fromStep = sortedSteps.find(s => s.statusId === rule.fromStatusId)
+                              const toStep = sortedSteps.find(s => s.statusId === rule.toStatusId)
+                              if (!fromStep || !toStep) return null
+                              
+                              const fromPos = getStepCenter(fromStep.id)
+                              const toPos = getStepCenter(toStep.id)
+                              if (!fromPos || !toPos || (fromPos.x === 0 && fromPos.y === 0) || (toPos.x === 0 && toPos.y === 0)) return null
+                              
+                              const transitionType = getTransitionType(rule.fromStatusId, rule.toStatusId)
+                              if (transitionType !== 'backward') return null
+                              
+                              const boxHeight = 100
+                              
+                              // Calculate horizontal segment bounds (the left-going part of the arrow)
+                              const fromX = fromPos.x
+                              const fromY = fromPos.y - (boxHeight / 2)
+                              const toX = toPos.x
+                              const toY = toPos.y - (boxHeight / 2)
+                              
+                              // Horizontal segment goes from min(fromX, toX) to max(fromX, toX) at some Y coordinate
+                              const horizontalXMin = Math.min(fromX, toX)
+                              const horizontalXMax = Math.max(fromX, toX)
+                              
+                              return {
+                                rule,
+                                idx,
+                                fromPos,
+                                toPos,
+                                fromX,
+                                fromY,
+                                toX,
+                                toY,
+                                horizontalXMin,
+                                horizontalXMax,
+                                // Will be set later
+                                verticalOffset: 0
+                              }
+                            })
+                            .filter((item): item is NonNullable<typeof item> => item !== null)
+                          
+                          // Calculate all forward arrow paths that skip states (non-sequential)
+                          const forwardSkipArrowData = formData.transitionRules
+                            .map((rule, idx) => {
+                              const fromStep = sortedSteps.find(s => s.statusId === rule.fromStatusId)
+                              const toStep = sortedSteps.find(s => s.statusId === rule.toStatusId)
+                              if (!fromStep || !toStep) return null
+                              
+                              const fromPos = getStepCenter(fromStep.id)
+                              const toPos = getStepCenter(toStep.id)
+                              if (!fromPos || !toPos || (fromPos.x === 0 && fromPos.y === 0) || (toPos.x === 0 && toPos.y === 0)) return null
+                              
+                              const transitionType = getTransitionType(rule.fromStatusId, rule.toStatusId)
+                              // Only process forward transitions that skip states (non-sequential)
+                              if (transitionType !== 'forward' || isSequentialForward(rule.fromStatusId, rule.toStatusId)) return null
+                              
+                              const boxHeight = 100
+                              
+                              // Calculate horizontal segment bounds (the right-going part of the arrow below boxes)
+                              const fromX = fromPos.x
+                              const fromY = fromPos.y + (boxHeight / 2) // Bottom edge
+                              const toX = toPos.x
+                              const toY = toPos.y + (boxHeight / 2) // Bottom edge
+                              
+                              // Horizontal segment goes from min(fromX, toX) to max(fromX, toX) at some Y coordinate
+                              const horizontalXMin = Math.min(fromX, toX)
+                              const horizontalXMax = Math.max(fromX, toX)
+                              
+                              return {
+                                rule,
+                                idx,
+                                fromPos,
+                                toPos,
+                                fromX,
+                                fromY,
+                                toX,
+                                toY,
+                                horizontalXMin,
+                                horizontalXMax,
+                                // Will be set later
+                                verticalOffset: 0
+                              }
+                            })
+                            .filter((item): item is NonNullable<typeof item> => item !== null)
+                          
+                          // Detect overlaps: arrows with overlapping horizontal segments need different heights
+                          // Sort by horizontal position to process in order
+                          backwardArrowData.sort((a, b) => a.horizontalXMin - b.horizontalXMin)
+                          forwardSkipArrowData.sort((a, b) => a.horizontalXMin - b.horizontalXMin)
+                          
+                          // Assign vertical offsets to prevent overlaps
+                          const heightStep = 25 // Distance between overlapping arrows
+                          const baseVerticalOffset = 40
+                          
+                          // Process backward arrows
+                          for (let i = 0; i < backwardArrowData.length; i++) {
+                            const currentArrow = backwardArrowData[i]
+                            let maxOffset = baseVerticalOffset
+                            
+                            // Check all previous arrows to see if they overlap
+                            for (let j = 0; j < i; j++) {
+                              const previousArrow = backwardArrowData[j]
+                              
+                              // Check if horizontal segments overlap
+                              const horizontalOverlap = 
+                                !(currentArrow.horizontalXMax < previousArrow.horizontalXMin || 
+                                  currentArrow.horizontalXMin > previousArrow.horizontalXMax)
+                              
+                              if (horizontalOverlap) {
+                                // They overlap, so current arrow needs to be higher
+                                maxOffset = Math.max(maxOffset, previousArrow.verticalOffset + heightStep)
+                              }
+                            }
+                            
+                            currentArrow.verticalOffset = maxOffset
+                          }
+                          
+                          // Process forward skip arrows (below boxes)
+                          for (let i = 0; i < forwardSkipArrowData.length; i++) {
+                            const currentArrow = forwardSkipArrowData[i]
+                            let maxOffset = baseVerticalOffset
+                            
+                            // Check all previous arrows to see if they overlap
+                            for (let j = 0; j < i; j++) {
+                              const previousArrow = forwardSkipArrowData[j]
+                              
+                              // Check if horizontal segments overlap
+                              const horizontalOverlap = 
+                                !(currentArrow.horizontalXMax < previousArrow.horizontalXMin || 
+                                  currentArrow.horizontalXMin > previousArrow.horizontalXMax)
+                              
+                              if (horizontalOverlap) {
+                                // They overlap, so current arrow needs to be lower (more offset)
+                                maxOffset = Math.max(maxOffset, previousArrow.verticalOffset + heightStep)
+                              }
+                            }
+                            
+                            currentArrow.verticalOffset = maxOffset
+                          }
+                          
+                          // Create maps for quick lookup
+                          const backwardOffsetMap = new Map<string, number>()
+                          const forwardSkipOffsetMap = new Map<string, number>()
+                          let maxVerticalOffset = baseVerticalOffset
+                          backwardArrowData.forEach(item => {
+                            backwardOffsetMap.set(`${item.rule.fromStatusId}-${item.rule.toStatusId}-${item.idx}`, item.verticalOffset)
+                            maxVerticalOffset = Math.max(maxVerticalOffset, item.verticalOffset)
+                          })
+                          forwardSkipArrowData.forEach(item => {
+                            forwardSkipOffsetMap.set(`${item.rule.fromStatusId}-${item.rule.toStatusId}-${item.idx}`, item.verticalOffset)
+                            maxVerticalOffset = Math.max(maxVerticalOffset, item.verticalOffset)
+                          })
+                          
+                          return formData.transitionRules.map((rule, idx) => {
+                            const fromStep = sortedSteps.find(s => s.statusId === rule.fromStatusId)
+                            const toStep = sortedSteps.find(s => s.statusId === rule.toStatusId)
+                            
+                            if (!fromStep || !toStep) return null
+                            
+                            const fromPos = getStepCenter(fromStep.id)
+                            const toPos = getStepCenter(toStep.id)
+                            
+                            if (!fromPos || !toPos || (fromPos.x === 0 && fromPos.y === 0) || (toPos.x === 0 && toPos.y === 0)) return null
+                            
+                            const transitionType = getTransitionType(rule.fromStatusId, rule.toStatusId)
+                            const isBackward = transitionType === 'backward'
+                            const isSelf = transitionType === 'self'
+                            
+                            const dx = toPos.x - fromPos.x
+                            const dy = toPos.y - fromPos.y
+                            const angle = Math.atan2(dy, dx)
+                            
+                            // Calculate connection points
+                            const boxWidth = 160
+                            const boxHeight = 100
+                            
+                            let fromX: number, fromY: number, toX: number, toY: number
+                            let pathD: string
+                            
+                            if (isSelf) {
+                              // Self-loop: draw a circle above the box
+                              fromX = fromPos.x
+                              fromY = fromPos.y - boxHeight / 2 - 20
+                              return (
+                                <circle
+                                  key={`transition-${idx}`}
+                                  cx={fromX}
+                                  cy={fromY}
+                                  r="20"
+                                  stroke="#a855f7"
+                                  strokeWidth="2"
+                                  fill="none"
+                                  strokeDasharray="4,4"
+                                  className="pointer-events-auto cursor-pointer hover:stroke-purple-600"
+                                  onClick={(e) => handleDeleteTransition(rule.fromStatusId, rule.toStatusId, e)}
+                                />
+                              )
+                            }
+                            
+                            if (isBackward) {
+                              // Get the calculated vertical offset for this backward arrow
+                              const offsetKey = `${rule.fromStatusId}-${rule.toStatusId}-${idx}`
+                              const verticalOffset = backwardOffsetMap.get(offsetKey) || baseVerticalOffset
+                              
+                              // For backward transitions: start and end at top center of boxes
+                              fromX = fromPos.x // Top center
+                              fromY = fromPos.y - (boxHeight / 2) // Top edge
+                              toX = toPos.x // Top center
+                              toY = toPos.y - (boxHeight / 2) // Top edge
+                              
+                              // Calculate the horizontal segment Y coordinate (above both boxes)
+                              const horizontalY = Math.min(fromY, toY) - verticalOffset
+                              
+                              // Path: from top center -> up -> left -> down -> to top center
+                              pathD = `M ${fromX} ${fromY} L ${fromX} ${horizontalY} L ${toX} ${horizontalY} L ${toX} ${toY}`
+                            } else {
+                              // For forward transitions: check if it's sequential or skips states
+                              const isSequential = isSequentialForward(rule.fromStatusId, rule.toStatusId)
+                              
+                              if (isSequential) {
+                                // Sequential forward: use side edges (straight line)
+                                fromX = fromPos.x + Math.cos(angle) * (boxWidth / 2)
+                                fromY = fromPos.y + Math.sin(angle) * (boxHeight / 2)
+                                toX = toPos.x - Math.cos(angle) * (boxWidth / 2)
+                                toY = toPos.y - Math.sin(angle) * (boxHeight / 2)
+                                
+                                // Straight line for sequential forward transitions
+                                pathD = `M ${fromX} ${fromY} L ${toX} ${toY}`
+                              } else {
+                                // Non-sequential forward (skips states): draw below boxes with cornered path
+                                const offsetKey = `${rule.fromStatusId}-${rule.toStatusId}-${idx}`
+                                const verticalOffset = forwardSkipOffsetMap.get(offsetKey) || baseVerticalOffset
+                                
+                                // For forward skip transitions: start and end at bottom center of boxes
+                                fromX = fromPos.x // Bottom center
+                                fromY = fromPos.y + (boxHeight / 2) // Bottom edge
+                                toX = toPos.x // Bottom center
+                                toY = toPos.y + (boxHeight / 2) // Bottom edge
+                                
+                                // Calculate the horizontal segment Y coordinate (below both boxes)
+                                const horizontalY = Math.max(fromY, toY) + verticalOffset
+                                
+                                // Path: from bottom center -> down -> right -> up -> to bottom center
+                                pathD = `M ${fromX} ${fromY} L ${fromX} ${horizontalY} L ${toX} ${horizontalY} L ${toX} ${toY}`
+                              }
+                            }
+                            
+                            return (
+                              <g key={`transition-${idx}`}>
+                                {/* Shadow/glow effect */}
+                                <path
+                                  d={pathD}
+                                  stroke={isBackward ? '#f97316' : '#3b82f6'}
+                                  strokeWidth="3"
+                                  fill="none"
+                                  strokeDasharray={isBackward ? '8,5' : 'none'}
+                                  opacity="0.15"
+                                  className="pointer-events-none"
+                                />
+                                {/* Main path */}
+                                <path
+                                  d={pathD}
+                                  stroke={isBackward ? '#f97316' : '#3b82f6'}
+                                  strokeWidth="2"
+                                  fill="none"
+                                  strokeDasharray={isBackward ? '8,5' : 'none'}
+                                  markerEnd={`url(#arrow-${isBackward ? 'backward' : 'forward'})`}
+                                  className="pointer-events-auto cursor-pointer hover:opacity-90 transition-opacity"
+                                  strokeLinecap="round"
+                                  onClick={(e) => handleDeleteTransition(rule.fromStatusId, rule.toStatusId, e)}
+                                />
+                                {/* Invisible hit area for easier clicking */}
+                                <path
+                                  d={pathD}
+                                  stroke="transparent"
+                                  strokeWidth="15"
+                                  fill="none"
+                                  className="pointer-events-auto cursor-pointer"
+                                  onClick={(e) => handleDeleteTransition(rule.fromStatusId, rule.toStatusId, e)}
+                                />
+                              </g>
+                            )
+                          }).filter(Boolean)
+                        })()}
+                        
+                        {/* Preview connection while connecting */}
+                        {connectingFrom && previewConnection && (() => {
+                          const fromCenter = getStepCenter(connectingFrom)
+                          if (fromCenter.x === 0 && fromCenter.y === 0) return null
+                          return (
+                            <path
+                              d={`M ${fromCenter.x} ${fromCenter.y} L ${previewConnection.to.x} ${previewConnection.to.y}`}
+                              stroke="#60a5fa"
+                              strokeWidth="2.5"
+                              fill="none"
+                              strokeDasharray="4,4"
+                              markerEnd="url(#arrow-forward)"
+                              className="pointer-events-none"
+                            />
+                          )
+                        })()}
+                      </svg>
+                      
+                      {/* Status boxes in horizontal layout */}
+                      <div className="flex items-center justify-start gap-8 w-full" style={{ minWidth: 'max-content' }}>
+                        {sortedSteps.map((step, index) => {
+                          const status = statuses.find(s => s.id === step.statusId)
+                          const isConnecting = connectingFrom === step.id
+                          
+                          return (
+                            <div
+                              key={step.id}
+                              ref={(el) => {
+                                if (el) stepRefs.current.set(step.id, el)
+                              }}
+                              onClick={() => step.statusId && handleStepClick(step.id, step.statusId)}
+                              className={clsx(
+                                'relative z-10 transition-all duration-200',
+                                !step.statusId && 'opacity-50',
+                                step.statusId && 'cursor-pointer',
+                                isConnecting && 'ring-4 ring-blue-400 ring-offset-2'
+                              )}
+                            >
                               <div
                                 className={clsx(
-                                  'min-w-[140px] max-w-[180px] px-4 py-3 rounded-lg shadow-lg border-2 transition-all hover:scale-105',
+                                  'w-[160px] px-5 py-4 rounded-xl shadow-xl border-2 transition-all duration-200',
+                                  'bg-white dark:bg-gray-800',
                                   index === 0
-                                    ? 'bg-green-500 border-green-600 text-white'
+                                    ? 'border-green-500 text-gray-900 dark:text-white shadow-green-500/20'
                                     : index === sortedSteps.length - 1
-                                    ? 'bg-red-500 border-red-600 text-white'
-                                    : 'bg-blue-500 border-blue-600 text-white'
+                                    ? 'border-red-500 text-gray-900 dark:text-white shadow-red-500/20'
+                                    : 'border-blue-500 text-gray-900 dark:text-white shadow-blue-500/20',
+                                  !step.statusId && 'border-gray-400',
+                                  'hover:shadow-2xl'
                                 )}
                               >
-                                <div className="text-xs font-medium opacity-90 mb-1">
-                                  Step {index + 1}
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="text-xs font-bold opacity-90 uppercase tracking-wide">
+                                    Step {index + 1}
+                                  </div>
+                                  {index === 0 && (
+                                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                  )}
+                                  {index === sortedSteps.length - 1 && (
+                                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                                  )}
                                 </div>
-                                <div className="text-sm font-semibold break-words">
+                                <div className="text-base font-bold break-words leading-tight mb-1">
                                   {status?.name || 'Select Status'}
                                 </div>
                                 {status?.description && (
-                                  <div className="text-xs opacity-75 mt-1 line-clamp-2 break-words">
+                                  <div className="text-xs opacity-80 mt-2 line-clamp-2 break-words leading-relaxed">
                                     {status.description}
                                   </div>
                                 )}
                               </div>
-                              {hasBackward && (
-                                <div className="absolute -top-2 -right-2 w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center">
-                                  <ArrowRight size={12} className="text-white rotate-180" />
-                                </div>
-                              )}
                             </div>
-                            {index < sortedSteps.length - 1 && (
-                              <ArrowRight size={32} className="flex-shrink-0 text-blue-400 dark:text-blue-500" />
-                            )}
-                          </div>
-                        )
-                      })}
+                          )
+                        })}
+                      </div>
+                      
                     </div>
                     
-                    {backwardTransitions.length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 font-medium">
-                          Backward Transitions:
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {backwardTransitions.map((rule, idx) => {
-                            const fromStatus = statuses.find(s => s.id === rule.fromStatusId)
-                            const toStatus = statuses.find(s => s.id === rule.toStatusId)
-                            return (
-                              <span
-                                key={idx}
-                                className="px-2 py-1 bg-orange-100 dark:bg-orange-900/20 text-orange-800 dark:text-orange-400 rounded text-xs"
-                              >
-                                {fromStatus?.name || 'Unknown'} → {toStatus?.name || 'Unknown'}
-                              </span>
-                            )
-                          })}
+                    {/* Instructions */}
+                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                        <strong>How to use:</strong> Click on a status box to start a connection, then click on another box to create the connection. Click on a connection line to delete it.
+                      </p>
+                      <div className="flex flex-wrap gap-4 text-xs mt-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 bg-green-500 rounded"></div>
+                          <span className="text-gray-600 dark:text-gray-400">Start</span>
                         </div>
-                      </div>
-                    )}
-                    
-                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 flex flex-wrap gap-4 text-xs">
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 bg-green-500 rounded"></div>
-                        <span className="text-gray-600 dark:text-gray-400">Start</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 bg-blue-500 rounded"></div>
-                        <span className="text-gray-600 dark:text-gray-400">Middle</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 bg-red-500 rounded"></div>
-                        <span className="text-gray-600 dark:text-gray-400">End</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <ArrowRight size={16} className="text-orange-500 rotate-180" />
-                        <span className="text-gray-600 dark:text-gray-400">Backward</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 bg-blue-500 rounded"></div>
+                          <span className="text-gray-600 dark:text-gray-400">Middle</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 bg-red-500 rounded"></div>
+                          <span className="text-gray-600 dark:text-gray-400">End</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-0.5 bg-blue-500"></div>
+                          <span className="text-gray-600 dark:text-gray-400">Forward</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-0.5 bg-orange-500 border-dashed border-t-2"></div>
+                          <span className="text-gray-600 dark:text-gray-400">Backward</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -969,10 +1901,30 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
               {formData.steps.length === 0 ? (
                 <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-12 text-center">
                   <PlayCircle size={48} className="mx-auto text-gray-400 dark:text-gray-500 mb-4" />
-                  <p className="text-gray-600 dark:text-gray-400">No lifecycle steps defined. Click "Add Step" to get started.</p>
+                  <p className="text-gray-600 dark:text-gray-400 mb-6">No lifecycle steps defined. Click "Add Step" to get started.</p>
+                  {statuses.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleAddStep}
+                      className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-lg flex items-center gap-2 font-semibold shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40 transition-all duration-200 mx-auto"
+                    >
+                      <Plus size={16} />
+                      <span>Add Step</span>
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-4">
+                  <div className="flex justify-end mb-2">
+                    <button
+                      type="button"
+                      onClick={handleAddStep}
+                      className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-lg flex items-center gap-2 font-semibold shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40 transition-all duration-200"
+                    >
+                      <Plus size={16} />
+                      <span>Add Step</span>
+                    </button>
+                  </div>
                   {formData.steps.map((step, index) => {
                     const status = statuses.find(s => s.id === step.statusId)
                     return (
@@ -1021,11 +1973,20 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
                               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                             >
                               <option value="">Select a status</option>
-                              {statuses.map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  {s.name}
-                                </option>
-                              ))}
+                              {statuses
+                                .filter(s => {
+                                  // Show all statuses, but if a status is already selected in another step, 
+                                  // only show it if it's the current step's status
+                                  const isUsedInOtherStep = formData.steps.some(
+                                    otherStep => otherStep.id !== step.id && otherStep.statusId === s.id
+                                  )
+                                  return !isUsedInOtherStep || step.statusId === s.id
+                                })
+                                .map((s) => (
+                                  <option key={s.id} value={s.id}>
+                                    {s.name}
+                                  </option>
+                                ))}
                             </select>
                             {status && (
                               <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
@@ -1052,17 +2013,20 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
                 <button
                   type="button"
                   onClick={() => setCurrentStep(0)}
-                  className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg"
+                  className="px-6 py-2.5 bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-semibold transition-all duration-200 shadow-sm hover:shadow-md"
                 >
                   Previous
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    updateTransitionRules()
-                    setCurrentStep(2)
-                  }}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                  onClick={() => handleNextStep(2)}
+                  disabled={formData.steps.length < 2 || formData.steps.some((step: any) => !step.statusId)}
+                  className={clsx(
+                    "px-6 py-2.5 rounded-lg font-semibold shadow-lg transition-all duration-200",
+                    formData.steps.length < 2 || formData.steps.some((step: any) => !step.statusId)
+                      ? "bg-slate-300 dark:bg-slate-600 text-slate-500 dark:text-slate-400 cursor-not-allowed opacity-50"
+                      : "bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40"
+                  )}
                 >
                   Next: Transition Rules
                 </button>
@@ -1075,15 +2039,15 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Configure Transition Rules</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Configure Transition Rules</h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                     Define allowed transitions between statuses. Add forward, backward, or skip transitions as needed.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={handleAddCustomTransition}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
+                  className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-lg flex items-center gap-2 font-semibold shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40 transition-all duration-200"
                 >
                   <Plus size={16} />
                   <span>Add Transition</span>
@@ -1214,14 +2178,20 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
                 <button
                   type="button"
                   onClick={() => setCurrentStep(1)}
-                  className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg"
+                  className="px-6 py-2.5 bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-semibold transition-all duration-200 shadow-sm hover:shadow-md"
                 >
                   Previous
                 </button>
                 <button
                   type="button"
-                  onClick={() => setCurrentStep(3)}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                  onClick={() => handleNextStep(3)}
+                  disabled={!hasAllUserGroupsSelected()}
+                  className={clsx(
+                    "px-6 py-2.5 rounded-lg font-semibold shadow-lg transition-all duration-200",
+                    hasAllUserGroupsSelected()
+                      ? "bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40"
+                      : "bg-slate-300 dark:bg-slate-600 text-slate-500 dark:text-slate-400 cursor-not-allowed opacity-50"
+                  )}
                 >
                   Next: Applicable Items
                 </button>
@@ -1232,8 +2202,8 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
           {/* Step 4: Applicable Item Types */}
           {currentStep === 3 && (
             <div className="space-y-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Select Applicable Item Types</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Select Applicable Item Types</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
                 Choose which item types this lifecycle applies to
               </p>
 
@@ -1263,15 +2233,21 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
                 <button
                   type="button"
                   onClick={() => setCurrentStep(2)}
-                  className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg"
+                  className="px-6 py-2.5 bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-semibold transition-all duration-200 shadow-sm hover:shadow-md"
                 >
                   Previous
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                  disabled={!hasAllUserGroupsSelected() || formData.applicableItemTypes.length === 0}
+                  className={clsx(
+                    "px-6 py-2.5 rounded-lg font-semibold shadow-lg transition-all duration-200",
+                    hasAllUserGroupsSelected() && formData.applicableItemTypes.length > 0
+                      ? "bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40"
+                      : "bg-slate-300 dark:bg-slate-600 text-slate-500 dark:text-slate-400 cursor-not-allowed opacity-50"
+                  )}
                 >
-                  Create Lifecycle
+                  {editingLifecycle ? 'Save Changes' : 'Create Lifecycle'}
                 </button>
               </div>
             </div>
@@ -1295,44 +2271,301 @@ function CreateLifecycleModal({ onClose, onSave }: { onClose: () => void; onSave
 
 // View Lifecycle Modal
 function ViewLifecycleModal({ lifecycleId, lifecycle, onClose }: { lifecycleId: string; lifecycle: any; onClose: () => void }) {
+  const { statuses } = useStatusDefinitionsStore()
+  const [activeTab, setActiveTab] = useState<'overview' | 'items'>('overview')
+
+  // Fetch all projects
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: async () => {
+      const response = await projectService.getProjects()
+      return response.success && response.data ? response.data : []
+    },
+  })
+
+  // Fetch all items for applicable item types
+  const { data: allItems = [], isLoading: itemsLoading } = useQuery({
+    queryKey: ['lifecycle-items', lifecycle.id, lifecycle.applicableItemTypes, projects.map(p => p.id)],
+    queryFn: async () => {
+      if (!lifecycle.applicableItemTypes || lifecycle.applicableItemTypes.length === 0) {
+        return []
+      }
+
+      const items: Array<{
+        id: string
+        name: string
+        type: string
+        status: string
+        projectId: string
+        projectName: string
+        updatedAt: string
+      }> = []
+
+      for (const project of projects) {
+        for (const itemType of lifecycle.applicableItemTypes) {
+          try {
+            if (itemType === 'Function') {
+              const response = await functionService.getFunctions(project.id)
+              if (response.success && response.data) {
+                response.data.forEach((item: any) => {
+                  items.push({
+                    id: item.id,
+                    name: item.name || item.functionId || 'Unnamed Function',
+                    type: 'Function',
+                    status: item.status || 'Unknown',
+                    projectId: project.id,
+                    projectName: project.name,
+                    updatedAt: item.updatedAt || item.createdAt || ''
+                  })
+                })
+              }
+            } else if (itemType === 'Requirement') {
+              const response = await requirementService.getRequirements(project.id)
+              if (response.success && response.data) {
+                response.data.forEach((item: any) => {
+                  items.push({
+                    id: item.id,
+                    name: item.title || item.requirementId || 'Unnamed Requirement',
+                    type: 'Requirement',
+                    status: item.status || 'Unknown',
+                    projectId: project.id,
+                    projectName: project.name,
+                    updatedAt: item.updatedAt || item.createdAt || ''
+                  })
+                })
+              }
+            } else if (itemType === 'Issue') {
+              const response = await issueService.getIssues(project.id)
+              if (response.success && response.data) {
+                response.data.forEach((item: any) => {
+                  items.push({
+                    id: item.id,
+                    name: item.title || 'Unnamed Issue',
+                    type: 'Issue',
+                    status: item.status || 'Unknown',
+                    projectId: project.id,
+                    projectName: project.name,
+                    updatedAt: item.updatedAt || item.createdAt || ''
+                  })
+                })
+              }
+            } else if (itemType === 'Parameter') {
+              const response = await parameterService.getParameters(project.id)
+              if (response.success && response.data) {
+                response.data.forEach((item: any) => {
+                  items.push({
+                    id: item.id,
+                    name: item.name || item.parameterId || 'Unnamed Parameter',
+                    type: 'Parameter',
+                    status: item.status || 'Unknown',
+                    projectId: project.id,
+                    projectName: project.name,
+                    updatedAt: item.updatedAt || item.createdAt || ''
+                  })
+                })
+              }
+            } else if (itemType === 'Change Request') {
+              const response = await changeRequestService.getChangeRequests(project.id)
+              if (response.success && response.data) {
+                response.data.forEach((item: any) => {
+                  items.push({
+                    id: item.id,
+                    name: item.title || 'Unnamed Change Request',
+                    type: 'Change Request',
+                    status: item.status || 'Unknown',
+                    projectId: project.id,
+                    projectName: project.name,
+                    updatedAt: item.updatedAt || item.createdAt || ''
+                  })
+                })
+              }
+            }
+          } catch (error) {
+            console.error(`Error fetching ${itemType} for project ${project.id}:`, error)
+          }
+        }
+      }
+
+      return items
+    },
+    enabled: projects.length > 0 && lifecycle.applicableItemTypes && lifecycle.applicableItemTypes.length > 0,
+  })
+
+  // Helper function to get next user groups for a status
+  const getNextUserGroups = (currentStatusId: string): string[] => {
+    if (!lifecycle.transitionRules || !currentStatusId) return []
+    
+    const transitions = lifecycle.transitionRules.filter(
+      (rule: any) => rule.fromStatusId === currentStatusId
+    )
+    
+    const userGroups = new Set<string>()
+    transitions.forEach((transition: any) => {
+      if (transition.allowedUserGroups && transition.allowedUserGroups.length > 0) {
+        transition.allowedUserGroups.forEach((group: string) => userGroups.add(group))
+      }
+    })
+    
+    return Array.from(userGroups)
+  }
+
+  // Helper function to get status name from ID
+  const getStatusName = (statusId: string): string => {
+    const status = statuses.find(s => s.id === statusId)
+    return status ? status.name : statusId
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto"
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between z-10">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">View Lifecycle: {lifecycle.name}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
             <X size={20} />
           </button>
         </div>
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
-            <p className="text-sm text-gray-900 dark:text-white">{lifecycle.description}</p>
+        
+        {/* Tabs */}
+        <div className="border-b border-gray-200 dark:border-gray-700 px-6">
+          <div className="flex gap-4">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={clsx(
+                'px-4 py-2 border-b-2 transition-colors',
+                activeTab === 'overview'
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-400 font-medium'
+                  : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-300'
+              )}
+            >
+              Overview
+            </button>
+            <button
+              onClick={() => setActiveTab('items')}
+              className={clsx(
+                'px-4 py-2 border-b-2 transition-colors',
+                activeTab === 'items'
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-400 font-medium'
+                  : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-300'
+              )}
+            >
+              Items ({allItems.length})
+            </button>
           </div>
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status Count</label>
-              <p className="text-sm text-gray-900 dark:text-white">{lifecycle.statusCount}</p>
+        </div>
+
+        <div className="p-6">
+          {activeTab === 'overview' ? (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+                <p className="text-sm text-gray-900 dark:text-white">{lifecycle.description}</p>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status Count</label>
+                  <p className="text-sm text-gray-900 dark:text-white">{lifecycle.statusCount}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Item Count</label>
+                  <p className="text-sm text-gray-900 dark:text-white">{allItems.length}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Version</label>
+                  <p className="text-sm text-gray-900 dark:text-white">v{lifecycle.version}</p>
+                </div>
+              </div>
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Applicable Item Types</h3>
+                <div className="flex flex-wrap gap-2">
+                  {lifecycle.applicableItemTypes && lifecycle.applicableItemTypes.length > 0 ? (
+                    lifecycle.applicableItemTypes.map((type: string) => (
+                      <span
+                        key={type}
+                        className="px-3 py-1 bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-400 rounded-full text-sm"
+                      >
+                        {type}
+                      </span>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-600 dark:text-gray-400">No item types specified</p>
+                  )}
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Item Count</label>
-              <p className="text-sm text-gray-900 dark:text-white">{lifecycle.itemCount}</p>
+          ) : (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Items Using This Lifecycle</h3>
+              {itemsLoading ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">Loading items...</div>
+              ) : allItems.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  No items found for this lifecycle's applicable item types.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="border-b border-gray-200 dark:border-gray-700">
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Item Name</th>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Type</th>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Project</th>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Current Status</th>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Next User Groups</th>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Last Change</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allItems.map((item) => {
+                        const nextUserGroups = getNextUserGroups(item.status)
+                        const statusName = getStatusName(item.status)
+                        const lastChange = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'N/A'
+                        
+                        return (
+                          <tr
+                            key={`${item.type}-${item.id}`}
+                            className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                          >
+                            <td className="py-3 px-4 text-sm text-gray-900 dark:text-white">{item.name}</td>
+                            <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">
+                              <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs">{item.type}</span>
+                            </td>
+                            <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">{item.projectName}</td>
+                            <td className="py-3 px-4 text-sm">
+                              <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-400 rounded text-xs">
+                                {statusName}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">
+                              {nextUserGroups.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {nextUserGroups.map((group) => (
+                                    <span
+                                      key={group}
+                                      className="px-2 py-1 bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-400 rounded text-xs"
+                                    >
+                                      {group}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 dark:text-gray-500 text-xs">No transitions available</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">{lastChange}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Version</label>
-              <p className="text-sm text-gray-900 dark:text-white">v{lifecycle.version}</p>
-            </div>
-          </div>
-          <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Status Definitions</h3>
-            <div className="space-y-2">
-              <p className="text-sm text-gray-600 dark:text-gray-400">No status definitions available for this lifecycle.</p>
-            </div>
-          </div>
-          <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+          )}
+          
+          <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700 mt-6">
             <button
               onClick={onClose}
               className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg"
@@ -1631,15 +2864,19 @@ function LifecycleBuilderContent() {
       console.log('Updating library:', updatedLibrary)
     } else {
       // Create new library object - defaults to 'project' type
-      const newLibrary = {
-        id: `lifecycle-${Date.now()}`,
+      // Libraries are containers, not lifecycles, so they don't have steps or transitionRules
+      const newLibrary: Lifecycle = {
+        id: `library-${Date.now()}`, // Use 'library-' prefix to distinguish from lifecycles
         name: formData.name,
         description: formData.description,
         type: 'project' as 'standard' | 'organization' | 'project',
         statusCount: 0,
         itemCount: 0,
         version: '1.0',
-        lastModified: new Date().toLocaleDateString()
+        lastModified: new Date().toLocaleDateString(),
+        applicableItemTypes: [], // Libraries don't have applicable item types
+        steps: [], // Libraries don't have steps
+        transitionRules: [] // Libraries don't have transition rules
       }
 
       // Add to shared lifecycles state
@@ -1747,81 +2984,134 @@ function LifecycleBuilderContent() {
       )}
 
       {/* Libraries List when not creating/editing */}
-      {!isCreating && !editingLibrary && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Libraries ({lifecycles.length})
-            </h3>
-            <button
-              onClick={handleCreateNew}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
-            >
-              <Plus size={16} />
-              <span>Create New Library</span>
-            </button>
-          </div>
+      {!isCreating && !editingLibrary && (() => {
+        // Only show actual libraries (those with 'library-' prefix), not lifecycles
+        const actualLibraries = lifecycles.filter(lc => lc.id?.startsWith('library-'))
+        // Count: 3 built-in (Standard, Organization, Project) + custom libraries
+        const totalLibraryCount = 3 + actualLibraries.length
+        
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Libraries ({totalLibraryCount})
+              </h3>
+              <button
+                onClick={handleCreateNew}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
+              >
+                <Plus size={16} />
+                <span>Create New Library</span>
+              </button>
+            </div>
 
-          {lifecycles.length > 0 ? (
+            {/* Built-in Libraries */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {lifecycles.map((library) => (
-                <div
-                  key={library.id}
-                  className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow bg-white dark:bg-gray-800"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{library.name}</h3>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400 mb-2">
-                        {library.type === 'standard' ? 'Standard' : library.type === 'organization' ? 'Organization' : 'Project'}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">{library.description || 'No description'}</p>
-                  <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-500 mb-4">
-                    <span>{library.statusCount} Statuses</span>
-                    <span>{library.itemCount} Items</span>
-                    <span>v{library.version}</span>
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-500 mb-4">
-                    Modified: {library.lastModified}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <button
-                      onClick={() => handleEdit(library)}
-                      className="flex-1 px-3 py-2 bg-blue-100 dark:bg-blue-900/20 hover:bg-blue-200 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg flex items-center justify-center gap-2 text-sm transition-colors"
-                      title="Edit library"
-                    >
-                      <Edit2 size={14} />
-                      <span>Edit</span>
-                    </button>
-                    <button
-                      onClick={() => handleDeleteClick(library)}
-                      className="flex-1 px-3 py-2 bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg flex items-center justify-center gap-2 text-sm transition-colors"
-                      title="Delete library"
-                    >
-                      <Trash2 size={14} />
-                      <span>Delete</span>
-                    </button>
+              {/* Standard Library */}
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Standard Lifecycles</h3>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400 mb-2">
+                      Standard
+                    </span>
                   </div>
                 </div>
-              ))}
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">System-wide lifecycle templates</p>
+                <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-500 mb-4">
+                  <span>{lifecycles.filter(lc => lc.type === 'standard' && !lc.id?.startsWith('library-')).length} Lifecycles</span>
+                </div>
+              </div>
+
+              {/* Organization Library */}
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Organization Lifecycles</h3>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400 mb-2">
+                      Organization
+                    </span>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">Organization-wide lifecycle templates</p>
+                <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-500 mb-4">
+                  <span>{lifecycles.filter(lc => lc.type === 'organization' && !lc.id?.startsWith('library-')).length} Lifecycles</span>
+                </div>
+              </div>
+
+              {/* Project Library */}
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Project Lifecycles</h3>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400 mb-2">
+                      Project
+                    </span>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">Project-specific lifecycle templates</p>
+                <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-500 mb-4">
+                  <span>{lifecycles.filter(lc => lc.type === 'project' && !lc.id?.startsWith('library-') && !lc.id?.startsWith('lifecycle-')).length} Lifecycles</span>
+                </div>
+              </div>
+
+              {/* Custom Libraries */}
+              {actualLibraries.map((library) => {
+                // Count lifecycles in this custom library
+                const lifecycleCount = lifecycles.filter(lc => 
+                  lc.libraryId === library.id && 
+                  lc.id?.startsWith('lifecycle-') && 
+                  lc.steps && 
+                  lc.steps.length > 0
+                ).length
+                
+                return (
+                  <div
+                    key={library.id}
+                    className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow bg-white dark:bg-gray-800"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{library.name}</h3>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-400 mb-2">
+                          Custom Library
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">{library.description || 'No description'}</p>
+                    <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-500 mb-4">
+                      <span>{lifecycleCount} Lifecycle{lifecycleCount !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-500 mb-4">
+                      Modified: {library.lastModified}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <button
+                        onClick={() => handleEdit(library)}
+                        className="flex-1 px-3 py-2 bg-blue-100 dark:bg-blue-900/20 hover:bg-blue-200 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg flex items-center justify-center gap-2 text-sm transition-colors"
+                        title="Edit library"
+                      >
+                        <Edit2 size={14} />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClick(library)}
+                        className="flex-1 px-3 py-2 bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg flex items-center justify-center gap-2 text-sm transition-colors"
+                        title="Delete library"
+                      >
+                        <Trash2 size={14} />
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-          ) : (
-            <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-12 text-center">
-              <Wrench size={48} className="mx-auto text-gray-400 dark:text-gray-500 mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                No Libraries Created
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Use the "Create New Library" button above to create your first lifecycle library. Created libraries will appear in the Lifecycle Library section.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
+          </div>
+        )
+      })()}
 
       {/* Delete Confirmation Modal */}
       {deletingLibrary && (
@@ -2034,7 +3324,7 @@ function LifecycleDetailView({ lifecycle, onEdit, onClone, onClose }: { lifecycl
 }
 
 // Status Definitions Content
-function StatusDefinitionsContent() {
+function StatusDefinitionsContent({ searchQuery = '' }: { searchQuery?: string }) {
   const predefinedStatuses = [
     'Proposed',
     'Draft',
@@ -2157,7 +3447,7 @@ function StatusDefinitionsContent() {
         </div>
         <button
           onClick={handleCreateNew}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
+          className="px-4 py-2 bg-gray-700 hover:bg-gray-800 dark:bg-gray-600 dark:hover:bg-gray-500 text-white rounded-lg flex items-center gap-2"
         >
           <Plus size={16} />
           <span>Add Status</span>
@@ -2166,47 +3456,25 @@ function StatusDefinitionsContent() {
 
       {/* Status List */}
       <div className="space-y-2">
-        {statuses.map((status) => (
+        {(searchQuery && searchQuery.trim() 
+          ? statuses.filter(status => 
+              status.name.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
+              (status.description && status.description.toLowerCase().includes(searchQuery.toLowerCase().trim()))
+            )
+          : statuses
+        ).map((status) => (
           <div
             key={status.id}
             className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800"
           >
             <div className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-              <div className="flex items-center gap-4 flex-1">
-                <div className={clsx(
-                  'w-4 h-4 rounded-full flex-shrink-0',
-                  status.color === 'gray' && 'bg-gray-400',
-                  status.color === 'yellow' && 'bg-yellow-400',
-                  status.color === 'green' && 'bg-green-400',
-                  status.color === 'blue' && 'bg-blue-400',
-                  status.color === 'red' && 'bg-red-400'
-                )} />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium text-gray-900 dark:text-white">{status.name}</span>
-                    {status.isInitial && (
-                      <span className="px-2 py-0.5 bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400 rounded text-xs font-medium">
-                        Initial
-                      </span>
-                    )}
-                  </div>
-                  {status.applicableItemTypes && status.applicableItemTypes.length > 0 ? (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {status.applicableItemTypes.map((itemType: string) => (
-                        <span
-                          key={itemType}
-                          className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-400 rounded text-xs"
-                        >
-                          {itemType}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">No applicable item types selected</p>
-                  )}
-                </div>
+              <div className="flex-1">
+                <span className="font-medium text-gray-900 dark:text-white">{status.name}</span>
+                {status.description && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{status.description}</p>
+                )}
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-2 flex-shrink-0 ml-4">
                 <button
                   onClick={() => handleEdit(status)}
                   className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-600 dark:text-gray-400"
@@ -2216,7 +3484,7 @@ function StatusDefinitionsContent() {
                 </button>
                 <button
                   onClick={() => handleDeleteClick(status)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-red-600 dark:text-red-400"
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-600 dark:text-gray-400"
                   title="Delete status"
                 >
                   <Trash2 size={16} />
@@ -2260,7 +3528,7 @@ function StatusDefinitionsContent() {
                     "w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg",
                     (!isCreating && isPredefinedStatus(editingStatus.id))
                       ? "bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
-                      : "bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      : "bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-500"
                   )}
                   placeholder="Enter status name"
                 />
@@ -2275,7 +3543,7 @@ function StatusDefinitionsContent() {
                   value={editingStatus.description || ''}
                   onChange={(e) => setEditingStatus({ ...editingStatus, description: e.target.value })}
                   rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
                   placeholder="Enter status description"
                 />
               </div>
@@ -2290,7 +3558,7 @@ function StatusDefinitionsContent() {
                 </button>
                 <button
                   onClick={handleSave}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                  className="px-4 py-2 bg-gray-700 hover:bg-gray-800 dark:bg-gray-600 dark:hover:bg-gray-500 text-white rounded-lg transition-colors"
                 >
                   {isCreating ? 'Create Status' : 'Save Changes'}
                 </button>
@@ -2309,8 +3577,8 @@ function StatusDefinitionsContent() {
           >
             <div className="p-6">
               <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Trash2 size={24} className="text-red-600 dark:text-red-400" />
+                <div className="w-12 h-12 bg-gray-100 dark:bg-gray-900/20 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Trash2 size={24} className="text-gray-600 dark:text-gray-400" />
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Delete Status</h3>
@@ -2337,7 +3605,7 @@ function StatusDefinitionsContent() {
                 </button>
                 <button
                   onClick={handleDeleteConfirm}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                  className="px-4 py-2 bg-gray-700 hover:bg-gray-800 dark:bg-gray-600 dark:hover:bg-gray-500 text-white rounded-lg transition-colors"
                 >
                   Delete
                 </button>
