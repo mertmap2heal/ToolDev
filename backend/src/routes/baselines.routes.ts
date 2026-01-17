@@ -13,14 +13,14 @@ const router = Router()
 
 router.use(authenticateToken)
 
-// Get all baselines for a project
-router.get('/:projectId', getBaselines)
-
-// Compare two baselines
+// Compare two baselines (must come before /:projectId/:baselineId to avoid route conflicts)
 router.get('/:projectId/compare', compareBaselines)
 
-// Get a specific baseline
+// Get a specific baseline (must come before /:projectId to avoid route conflicts)
 router.get('/:projectId/:baselineId', getBaseline)
+
+// Get all baselines for a project
+router.get('/:projectId', getBaselines)
 
 // Create a new baseline
 router.post('/:projectId', createBaseline)

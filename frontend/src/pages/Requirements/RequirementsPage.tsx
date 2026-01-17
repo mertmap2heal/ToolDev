@@ -873,14 +873,14 @@ export default function RequirementsPage() {
         {/* Render children if expanded */}
         {isExpanded && hasChildren && req.children && (
           <>
-            {req.children.map((child) => {
-              const childReq = requirements.find((r) => r.id === child.id)
-              return childReq ? (
-                <React.Fragment key={child.id}>
+            {req.children
+              .map((child) => requirements.find((r) => r.id === child.id))
+              .filter((childReq): childReq is Requirement => childReq !== undefined)
+              .map((childReq) => (
+                <React.Fragment key={childReq.id}>
                   {renderRequirementRow(childReq, level + 1)}
                 </React.Fragment>
-              ) : null
-            })}
+              ))}
           </>
         )}
       </>
@@ -1215,7 +1215,11 @@ export default function RequirementsPage() {
                   </td>
                 </tr>
               ) : (
-                hierarchyRequirements.map((req) => renderRequirementRow(req))
+                hierarchyRequirements.map((req) => (
+                  <React.Fragment key={req.id}>
+                    {renderRequirementRow(req)}
+                  </React.Fragment>
+                ))
               )}
             </tbody>
             </SortableContext>

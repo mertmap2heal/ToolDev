@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { X, Check, AlertTriangle, Link as LinkIcon, ExternalLink, Filter, Download } from 'lucide-react'
+import { X, Check, AlertTriangle, Link as LinkIcon, ExternalLink, Filter, Download, Plus, Trash2, Loader } from 'lucide-react'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { traceabilityService } from '../../services/traceability.service'
 import type { Requirement, SystemFunction } from '../../../../shared/types/engineering.types'
-import type { TraceLink } from '../../../../shared/types/traceability.types'
+import type { TraceLink, LinkType } from '../../../../shared/types/traceability.types'
 import clsx from 'clsx'
 
 interface TraceabilityMatrixProps {
@@ -25,6 +25,8 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
   const [selectedFunc, setSelectedFunc] = useState<string | null>(null)
   const [filterLinked, setFilterLinked] = useState<'all' | 'linked' | 'unlinked'>('all')
   const [showSuspectOnly, setShowSuspectOnly] = useState(false)
+  const [showLinkDialog, setShowLinkDialog] = useState(false)
+  const [selectedLinkType, setSelectedLinkType] = useState<LinkType>('satisfies')
   
   const queryClient = useQueryClient()
 
@@ -167,10 +169,71 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     return 'linked'
   }
 
-  // Handle cell click (for future link creation)
+  // Create link mutation
+  const createLinkMutation = useMutation({
+    mutationFn: (data: { sourceId: string; targetId: string; linkType: LinkType }) => {
+      return traceabilityService.createTraceLink(projectId, {
+        sourceType: 'requirement',
+        sourceId: data.sourceId,
+        targetType: 'function',
+        targetId: data.targetId,
+        linkType: data.linkType,
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+      setShowLinkDialog(false)
+      setSelectedReq(null)
+      setSelectedFunc(null)
+    },
+    onError: (error: any) => {
+      console.error('Create link error:', error)
+      alert(error?.error || 'Failed to create trace link')
+    },
+  })
+
+  // Delete link mutation
+  const deleteLinkMutation = useMutation({
+    mutationFn: (linkId: string) => {
+      return traceabilityService.deleteTraceLink(projectId, linkId)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+      setSelectedReq(null)
+      setSelectedFunc(null)
+    },
+    onError: (error: any) => {
+      console.error('Delete link error:', error)
+      alert(error?.error || 'Failed to delete trace link')
+    },
+  })
+
+  // Handle cell click - create or delete link
   const handleCellClick = (reqId: string, funcId: string) => {
-    setSelectedReq(reqId)
-    setSelectedFunc(funcId)
+    const status = getCellStatus(reqId, funcId)
+    const linkId = linkMap.get(reqId)?.get(funcId)?.linkId
+
+    if (status === 'none') {
+      // Show dialog to create link
+      setSelectedReq(reqId)
+      setSelectedFunc(funcId)
+      setShowLinkDialog(true)
+    } else if (linkId) {
+      // Show confirmation to delete link
+      if (window.confirm('Do you want to delete this trace link?')) {
+        deleteLinkMutation.mutate(linkId)
+      }
+    }
+  }
+
+  // Handle create link
+  const handleCreateLink = () => {
+    if (!selectedReq || !selectedFunc) return
+    createLinkMutation.mutate({
+      sourceId: selectedReq,
+      targetId: selectedFunc,
+      linkType: selectedLinkType,
+    })
   }
 
   // Export matrix as CSV
@@ -355,13 +418,22 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                               status === 'none' && 'bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'
                             )}
                             onClick={() => handleCellClick(req.id, func.id)}
-                            title={`${req.requirementId || req.title} → ${func.functionId || func.name}: ${status === 'linked' ? 'Linked' : status === 'suspect' ? 'Suspect Link' : 'Not linked'}`}
+                            title={
+                              status === 'linked'
+                                ? `${req.requirementId || req.title} → ${func.functionId || func.name}: Linked (Click to delete)`
+                                : status === 'suspect'
+                                ? `${req.requirementId || req.title} → ${func.functionId || func.name}: Suspect Link (Click to delete)`
+                                : `${req.requirementId || req.title} → ${func.functionId || func.name}: Not linked (Click to create link)`
+                            }
                           >
                             {status === 'linked' && (
                               <Check size={16} className="mx-auto text-green-600 dark:text-green-400" />
                             )}
                             {status === 'suspect' && (
                               <AlertTriangle size={16} className="mx-auto text-yellow-600 dark:text-yellow-400" />
+                            )}
+                            {status === 'none' && (
+                              <Plus size={14} className="mx-auto text-gray-400 opacity-50" />
                             )}
                           </td>
                         )
@@ -387,6 +459,95 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
           </button>
         </div>
       </div>
+
+      {/* Create Link Dialog */}
+      {showLinkDialog && selectedReq && selectedFunc && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[500px] p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Create Trace Link
+              </h3>
+              <button
+                onClick={() => {
+                  setShowLinkDialog(false)
+                  setSelectedReq(null)
+                  setSelectedFunc(null)
+                }}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              >
+                <X size={20} className="text-gray-600 dark:text-gray-400" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Requirement</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  {requirements.find((r) => r.id === selectedReq)?.requirementId || selectedReq.substring(0, 8)} - {requirements.find((r) => r.id === selectedReq)?.title}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Function</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  {functions.find((f) => f.id === selectedFunc)?.functionId || selectedFunc.substring(0, 8)} - {functions.find((f) => f.id === selectedFunc)?.name}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Link Type
+                </label>
+                <select
+                  value={selectedLinkType}
+                  onChange={(e) => setSelectedLinkType(e.target.value as LinkType)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="satisfies">Satisfies</option>
+                  <option value="implements">Implements</option>
+                  <option value="verifies">Verifies</option>
+                  <option value="derives">Derives</option>
+                  <option value="refines">Refines</option>
+                </select>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Select the relationship type between the requirement and function
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => {
+                  setShowLinkDialog(false)
+                  setSelectedReq(null)
+                  setSelectedFunc(null)
+                }}
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateLink}
+                disabled={createLinkMutation.isPending}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg flex items-center gap-2"
+              >
+                {createLinkMutation.isPending ? (
+                  <>
+                    <Loader size={14} className="animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <LinkIcon size={14} />
+                    Create Link
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

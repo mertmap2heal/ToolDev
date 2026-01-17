@@ -1,8 +1,12 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { X, Archive, Lock, Trash2, Plus, ArrowLeftRight, Calendar, User, FileText } from 'lucide-react'
+import { X, Archive, Trash2, Plus, ArrowLeftRight, Calendar, User, FileText, Search, CheckSquare, Square, ChevronRight, ChevronLeft, Eye, Download } from 'lucide-react'
 import { baselineService } from '../../services/baseline.service'
-import type { Baseline } from '../../../../shared/types/engineering.types'
+import { requirementService } from '../../services/requirement.service'
+import BaselineViewModal from './BaselineViewModal'
+import BaselineExportModal from './BaselineExportModal'
+import BaselineComparisonModal from './BaselineComparisonModal'
+import type { Baseline, Requirement } from '../../../../shared/types/engineering.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
 
@@ -16,11 +20,19 @@ interface BaselineManagerProps {
  * compare requirement baselines. Baselines freeze the state of all
  * requirements at a point in time for audits and milestone tracking.
  */
+type CreateBaselineStep = 'details' | 'select-requirements'
+
 export default function BaselineManager({ projectId, onClose }: BaselineManagerProps) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [createStep, setCreateStep] = useState<CreateBaselineStep>('details')
   const [newBaselineName, setNewBaselineName] = useState('')
   const [newBaselineDescription, setNewBaselineDescription] = useState('')
+  const [selectedRequirementIds, setSelectedRequirementIds] = useState<Set<string>>(new Set())
+  const [requirementSearchQuery, setRequirementSearchQuery] = useState('')
   const [selectedBaselines, setSelectedBaselines] = useState<string[]>([])
+  const [viewingBaselineId, setViewingBaselineId] = useState<string | null>(null)
+  const [exportingBaselineId, setExportingBaselineId] = useState<string | null>(null)
+  const [comparingBaselines, setComparingBaselines] = useState<{ baselineAId: string; baselineBId: string } | null>(null)
 
   const queryClient = useQueryClient()
 
@@ -34,31 +46,71 @@ export default function BaselineManager({ projectId, onClose }: BaselineManagerP
     enabled: !!projectId,
   })
 
+  // Fetch requirements for selection
+  const { data: requirements = [], isLoading: loadingRequirements } = useQuery({
+    queryKey: ['requirements', projectId],
+    queryFn: async () => {
+      const response = await requirementService.getRequirements(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId && isCreateModalOpen,
+  })
+
+  // Filter requirements based on search
+  const filteredRequirements = useMemo(() => {
+    if (!requirementSearchQuery.trim()) return requirements
+    const query = requirementSearchQuery.toLowerCase()
+    return requirements.filter((req) => {
+      return (
+        req.title.toLowerCase().includes(query) ||
+        req.requirementId?.toLowerCase().includes(query) ||
+        req.description.toLowerCase().includes(query) ||
+        req.category?.toLowerCase().includes(query)
+      )
+    })
+  }, [requirements, requirementSearchQuery])
+
   // Create baseline mutation
   const createMutation = useMutation({
     mutationFn: () => baselineService.createBaseline(projectId, {
       name: newBaselineName,
       description: newBaselineDescription || undefined,
+      requirementIds: selectedRequirementIds.size > 0 ? Array.from(selectedRequirementIds) : undefined,
     }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['baselines', projectId] })
-      setIsCreateModalOpen(false)
-      setNewBaselineName('')
-      setNewBaselineDescription('')
+    onSuccess: (response) => {
+      if (response.success) {
+        queryClient.invalidateQueries({ queryKey: ['baselines', projectId] })
+        setIsCreateModalOpen(false)
+        setCreateStep('details')
+        setNewBaselineName('')
+        setNewBaselineDescription('')
+        setSelectedRequirementIds(new Set())
+        setRequirementSearchQuery('')
+      } else {
+        alert(response.error || 'Failed to create baseline')
+      }
     },
     onError: (error: any) => {
-      alert(error?.error || 'Failed to create baseline')
-    },
-  })
-
-  // Lock baseline mutation
-  const lockMutation = useMutation({
-    mutationFn: (baselineId: string) => baselineService.lockBaseline(projectId, baselineId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['baselines', projectId] })
-    },
-    onError: (error: any) => {
-      alert(error?.error || 'Failed to lock baseline')
+      console.error('Create baseline error:', error)
+      let errorMessage = 'Failed to create baseline'
+      if (error?.error) {
+        errorMessage = error.error
+      } else if (error?.message) {
+        errorMessage = error.message
+      } else if (error?.response?.data?.error) {
+        errorMessage = error.response.data.error
+      }
+      
+      // Show more helpful error messages
+      if (errorMessage.includes('Database schema') || 
+          errorMessage.includes('Unknown model') || 
+          errorMessage.includes('does not exist') ||
+          errorMessage.includes('Cannot read properties') ||
+          errorMessage.includes('npx prisma')) {
+        alert(`Database Error: ${errorMessage}\n\nPlease run: cd backend && npx prisma generate && npx prisma db push`)
+      } else {
+        alert(`Error: ${errorMessage}`)
+      }
     },
   })
 
@@ -86,20 +138,53 @@ export default function BaselineManager({ projectId, onClose }: BaselineManagerP
     })
   }
 
-  // Handle create baseline
-  const handleCreate = () => {
+  // Toggle requirement selection
+  const toggleRequirement = (requirementId: string) => {
+    setSelectedRequirementIds((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(requirementId)) {
+        newSet.delete(requirementId)
+      } else {
+        newSet.add(requirementId)
+      }
+      return newSet
+    })
+  }
+
+  // Select all filtered requirements
+  const selectAllFiltered = () => {
+    setSelectedRequirementIds(new Set(filteredRequirements.map((r) => r.id)))
+  }
+
+  // Deselect all
+  const deselectAll = () => {
+    setSelectedRequirementIds(new Set())
+  }
+
+  // Handle next step in create flow
+  const handleNextStep = () => {
     if (!newBaselineName.trim()) {
       alert('Please enter a baseline name')
       return
     }
+    setCreateStep('select-requirements')
+  }
+
+  // Handle create baseline
+  const handleCreate = () => {
+    // If no requirements selected, backend will include all requirements
+    // This is the expected behavior - user can leave empty to baseline everything
     createMutation.mutate()
   }
 
-  // Handle lock baseline
-  const handleLock = (baseline: Baseline) => {
-    if (window.confirm(`Lock baseline "${baseline.name}"? This action cannot be undone.`)) {
-      lockMutation.mutate(baseline.id)
-    }
+  // Handle cancel/create modal close
+  const handleCloseCreateModal = () => {
+    setIsCreateModalOpen(false)
+    setCreateStep('details')
+    setNewBaselineName('')
+    setNewBaselineDescription('')
+    setSelectedRequirementIds(new Set())
+    setRequirementSearchQuery('')
   }
 
   // Handle delete baseline
@@ -173,12 +258,9 @@ export default function BaselineManager({ projectId, onClose }: BaselineManagerP
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                 Create a baseline to snapshot all current requirements for future reference.
               </p>
-              <button
-                onClick={() => setIsCreateModalOpen(true)}
-                className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-              >
-                Create First Baseline
-              </button>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-4">
+                Click "Create Baseline" in the header above to get started.
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -235,23 +317,28 @@ export default function BaselineManager({ projectId, onClose }: BaselineManagerP
 
                   {/* Actions */}
                   <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setViewingBaselineId(baseline.id)}
+                      className="p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded"
+                      title="View baseline"
+                    >
+                      <Eye size={16} />
+                    </button>
+                    <button
+                      onClick={() => setExportingBaselineId(baseline.id)}
+                      className="p-2 text-purple-600 hover:text-purple-700 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded"
+                      title="Export baseline"
+                    >
+                      <Download size={16} />
+                    </button>
                     {baseline.status !== 'locked' && (
-                      <>
-                        <button
-                          onClick={() => handleLock(baseline)}
-                          className="p-2 text-green-600 hover:text-green-700 hover:bg-green-100 dark:hover:bg-green-900/30 rounded"
-                          title="Lock baseline"
-                        >
-                          <Lock size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(baseline)}
-                          className="p-2 text-red-600 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
-                          title="Delete baseline"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </>
+                      <button
+                        onClick={() => handleDelete(baseline)}
+                        className="p-2 text-red-600 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
+                        title="Delete baseline"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     )}
                   </div>
                 </div>
@@ -276,7 +363,7 @@ export default function BaselineManager({ projectId, onClose }: BaselineManagerP
           <div className="flex items-center gap-2">
             {selectedBaselines.length === 2 && (
               <button
-                onClick={() => alert('Baseline comparison would show diff between selected baselines')}
+                onClick={() => setComparingBaselines({ baselineAId: selectedBaselines[0], baselineBId: selectedBaselines[1] })}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
               >
                 <ArrowLeftRight size={16} />
@@ -292,62 +379,226 @@ export default function BaselineManager({ projectId, onClose }: BaselineManagerP
           </div>
         </div>
 
-        {/* Create Modal */}
+        {/* Create Modal - Multi-step wizard */}
         {isCreateModalOpen && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-[400px]">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Create New Baseline
-              </h3>
-              <div className="space-y-4">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[600px] max-h-[85vh] flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Baseline Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={newBaselineName}
-                    onChange={(e) => setNewBaselineName(e.target.value)}
-                    placeholder="e.g., Release 1.0, Sprint 5 End"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    autoFocus
-                  />
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Create New Baseline
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Step {createStep === 'details' ? 1 : 2} of 2
+                  </p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Description (optional)
-                  </label>
-                  <textarea
-                    value={newBaselineDescription}
-                    onChange={(e) => setNewBaselineDescription(e.target.value)}
-                    placeholder="Purpose of this baseline..."
-                    rows={2}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-                  />
-                </div>
-                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 text-sm text-blue-700 dark:text-blue-300">
-                  This will create a snapshot of all current requirements in the project.
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 mt-6">
                 <button
-                  onClick={() => setIsCreateModalOpen(false)}
+                  onClick={handleCloseCreateModal}
+                  className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                >
+                  <X size={20} className="text-gray-600 dark:text-gray-400" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {createStep === 'details' ? (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Baseline Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={newBaselineName}
+                        onChange={(e) => setNewBaselineName(e.target.value)}
+                        placeholder="e.g., Release 1.0, Sprint 5 End"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        autoFocus
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Description (optional)
+                      </label>
+                      <textarea
+                        value={newBaselineDescription}
+                        onChange={(e) => setNewBaselineDescription(e.target.value)}
+                        placeholder="Purpose of this baseline..."
+                        rows={3}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                      />
+                    </div>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 text-sm text-blue-700 dark:text-blue-300">
+                      {requirements.length > 0
+                        ? `You will be able to select which of ${requirements.length} requirements to include in the next step.`
+                        : 'You will be able to select requirements to include in the next step.'}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                        Select Requirements to Include
+                      </h4>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                        {selectedRequirementIds.size > 0
+                          ? `${selectedRequirementIds.size} of ${requirements.length} requirements selected`
+                          : `No requirements selected. All ${requirements.length} requirements will be included in the baseline.`}
+                      </p>
+
+                      {/* Search */}
+                      <div className="relative mb-3">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                        <input
+                          type="text"
+                          value={requirementSearchQuery}
+                          onChange={(e) => setRequirementSearchQuery(e.target.value)}
+                          placeholder="Search requirements..."
+                          className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                        />
+                      </div>
+
+                      {/* Bulk Actions */}
+                      <div className="flex items-center gap-2 mb-3">
+                        <button
+                          onClick={selectAllFiltered}
+                          className="px-2 py-1 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                        >
+                          Select All
+                        </button>
+                        <span className="text-gray-300 dark:text-gray-600">|</span>
+                        <button
+                          onClick={deselectAll}
+                          className="px-2 py-1 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                        >
+                          Deselect All
+                        </button>
+                      </div>
+
+                      {/* Requirements List */}
+                      <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-96 overflow-y-auto">
+                        {loadingRequirements ? (
+                          <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                            Loading requirements...
+                          </div>
+                        ) : filteredRequirements.length === 0 ? (
+                          <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                            {requirementSearchQuery ? 'No requirements match your search' : 'No requirements found'}
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                            {filteredRequirements.map((req) => (
+                              <label
+                                key={req.id}
+                                className="flex items-start gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => toggleRequirement(req.id)}
+                                  className="mt-0.5 text-gray-600 dark:text-gray-400"
+                                >
+                                  {selectedRequirementIds.has(req.id) ? (
+                                    <CheckSquare size={18} className="text-blue-600" />
+                                  ) : (
+                                    <Square size={18} />
+                                  )}
+                                </button>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
+                                      {req.requirementId || req.id.substring(0, 8)}
+                                    </span>
+                                    <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                      {req.title}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">
+                                    {req.description.replace(/<[^>]*>/g, '').substring(0, 100)}
+                                    {req.description.length > 100 ? '...' : ''}
+                                  </p>
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-between p-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={handleCloseCreateModal}
                   className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                 >
                   Cancel
                 </button>
-                <button
-                  onClick={handleCreate}
-                  disabled={createMutation.isPending || !newBaselineName.trim()}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg"
-                >
-                  {createMutation.isPending ? 'Creating...' : 'Create Baseline'}
-                </button>
+                <div className="flex items-center gap-2">
+                  {createStep === 'select-requirements' && (
+                    <button
+                      onClick={() => setCreateStep('details')}
+                      className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg flex items-center gap-2"
+                    >
+                      <ChevronLeft size={16} />
+                      Back
+                    </button>
+                  )}
+                  {createStep === 'details' ? (
+                    <button
+                      onClick={handleNextStep}
+                      disabled={!newBaselineName.trim()}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg flex items-center gap-2"
+                    >
+                      Next: Select Requirements
+                      <ChevronRight size={16} />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleCreate}
+                      disabled={createMutation.isPending}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg"
+                    >
+                      {createMutation.isPending ? 'Creating...' : 'Create Baseline'}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* View Baseline Modal */}
+      {viewingBaselineId && (
+        <BaselineViewModal
+          projectId={projectId}
+          baselineId={viewingBaselineId}
+          onClose={() => setViewingBaselineId(null)}
+        />
+      )}
+
+      {/* Export Baseline Modal */}
+      {exportingBaselineId && (
+        <BaselineExportModal
+          projectId={projectId}
+          baselineId={exportingBaselineId}
+          onClose={() => setExportingBaselineId(null)}
+        />
+      )}
+
+      {/* Comparison Modal */}
+      {comparingBaselines && (
+        <BaselineComparisonModal
+          projectId={projectId}
+          baselineAId={comparingBaselines.baselineAId}
+          baselineBId={comparingBaselines.baselineBId}
+          onClose={() => setComparingBaselines(null)}
+        />
+      )}
     </div>
   )
 }

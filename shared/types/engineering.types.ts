@@ -109,14 +109,43 @@ export interface BaselineItem {
 export interface CreateBaselineDto {
   name: string
   description?: string
+  requirementIds?: string[] // If not provided, all requirements will be included
+}
+
+export interface RequirementComparisonItem {
+  id: string
+  requirementId: string
+  title: string
+  description?: string
+  priority?: string
+  status?: string
+  category?: string
+  previous?: {
+    title?: string
+    priority?: string
+    status?: string
+  }
 }
 
 export interface BaselineComparison {
-  baselineA: Baseline
-  baselineB: Baseline
-  added: string[]
-  removed: string[]
-  modified: string[]
+  baselineA: {
+    id: string
+    name: string
+    createdAt: string
+  }
+  baselineB: {
+    id: string
+    name: string
+    createdAt: string
+  }
+  added: RequirementComparisonItem[]
+  removed: RequirementComparisonItem[]
+  modified: RequirementComparisonItem[]
+  summary?: {
+    addedCount: number
+    removedCount: number
+    modifiedCount: number
+  }
 }
 
 export interface SystemFunction {
