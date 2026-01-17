@@ -15,6 +15,10 @@ import changeRequestsRoutes from './changeRequests.routes'
 import viewsRoutes from './views.routes'
 import versionsRoutes from './versions.routes'
 import baselinesRoutes from './baselines.routes'
+import useCasesRoutes from './usecases.routes'
+import requirementValidationRoutes from './requirementValidation.routes'
+import templatesRoutes from './templates.routes'
+import reqifRoutes from './reqif.routes'
 
 const router = Router()
 
@@ -34,5 +38,9 @@ router.use('/change-requests', changeRequestsRoutes)
 router.use('/views', viewsRoutes)
 router.use('/versions', versionsRoutes)
 router.use('/baselines', baselinesRoutes)
+router.use('/usecases', useCasesRoutes)
+router.use('/requirement-validation', requirementValidationRoutes)
+router.use('/templates', templatesRoutes)
+router.use('/reqif', reqifRoutes)
 
 export default router

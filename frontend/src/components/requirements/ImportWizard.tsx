@@ -12,7 +12,7 @@ interface ImportWizardProps {
   onClose: () => void
 }
 
-type ImportFormat = 'csv' | 'excel' | 'json'
+type ImportFormat = 'csv' | 'excel' | 'json' | 'reqif'
 type ImportStep = 'upload' | 'mapping' | 'preview' | 'import'
 
 interface ParsedRow {
@@ -52,6 +52,11 @@ const requirementFields = [
   { key: 'stage', label: 'Stage', required: false },
   { key: 'tags', label: 'Tags', required: false },
   { key: 'parentId', label: 'Parent Requirement ID', required: false },
+  { key: 'requirementType', label: 'Requirement Type', required: false },
+  { key: 'requirementLevel', label: 'Requirement Level', required: false },
+  { key: 'risk', label: 'Risk Level', required: false },
+  { key: 'complexity', label: 'Complexity', required: false },
+  { key: 'rationale', label: 'Rationale', required: false },
 ]
 
 const priorityValues = ['low', 'medium', 'high', 'critical']
@@ -68,7 +73,7 @@ function autoMapColumns(fileColumns: string[]): Map<string, string | null> {
     description: ['description', 'desc', 'details', 'requirement description'],
     priority: ['priority', 'prio', 'importance'],
     status: ['status', 'state'],
-    category: ['category', 'type', 'category/type', 'requirement type'],
+    category: ['category', 'type', 'category/type'],
     owner: ['owner', 'assigned to', 'assigned', 'assignee'],
     source: ['source', 'origin'],
     verificationMethod: ['verification method', 'verification', 'verify method', 'verificationmethod'],
@@ -76,6 +81,11 @@ function autoMapColumns(fileColumns: string[]): Map<string, string | null> {
     stage: ['stage', 'phase'],
     tags: ['tags', 'tag'],
     parentId: ['parent requirement id', 'parent id', 'parent', 'parentid', 'parent requirement'],
+    requirementType: ['requirement type', 'req type', 'type', 'mbse type', 'sysml type'],
+    requirementLevel: ['requirement level', 'req level', 'level', 'mbse level', 'sysml level'],
+    risk: ['risk', 'risk level', 'risklevel'],
+    complexity: ['complexity', 'complexity level', 'complexitylevel'],
+    rationale: ['rationale', 'reason', 'justification', 'why'],
   }
 
   fileColumns.forEach((fileCol) => {
@@ -151,8 +161,10 @@ export default function ImportWizard({ projectId, onClose }: ImportWizardProps) 
       setFileFormat('excel')
     } else if (fileName.endsWith('.json')) {
       setFileFormat('json')
+    } else if (fileName.endsWith('.reqif') || fileName.endsWith('.xml')) {
+      setFileFormat('reqif')
     } else {
-      alert('Unsupported file format. Please use CSV, Excel (.xlsx, .xls), or JSON files.')
+      alert('Unsupported file format. Please use CSV, Excel (.xlsx, .xls), JSON, or ReqIF (.reqif, .xml) files.')
       return
     }
   }, [])
@@ -186,6 +198,11 @@ export default function ImportWizard({ projectId, onClose }: ImportWizardProps) 
           alert('JSON file must contain an array of objects')
           return
         }
+      } else if (fileFormat === 'reqif') {
+        // For ReqIF, send directly to backend for parsing and import
+        const text = await file.text()
+        await importReqIF(text)
+        return
       }
 
       if (data.length === 0) {
@@ -379,6 +396,26 @@ export default function ImportWizard({ projectId, onClose }: ImportWizardProps) 
     },
   })
 
+  // Import ReqIF file directly
+  const importReqIF = useCallback(async (reqifXml: string) => {
+    try {
+      const response = await apiClient.post<ImportResult>(`/reqif/${projectId}/import`, {
+        reqifXml,
+      })
+
+      if (response.success && response.data) {
+        setImportResult(response.data)
+        queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+        setCurrentStep('import')
+      } else {
+        throw new Error(response.error || 'Failed to import ReqIF file')
+      }
+    } catch (error: any) {
+      console.error('ReqIF import error:', error)
+      alert(`Failed to import ReqIF file: ${error?.message || 'Unknown error'}`)
+    }
+  }, [projectId, queryClient])
+
   // Handle import execution
   const handleImport = useCallback(() => {
     const rowsToImport = parsedRows.filter((row) => row.action !== 'skip')
@@ -479,7 +516,7 @@ export default function ImportWizard({ projectId, onClose }: ImportWizardProps) 
                   Select File to Import
                 </h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  Supported formats: CSV, Excel (.xlsx, .xls), JSON
+                  Supported formats: CSV, Excel (.xlsx, .xls), JSON, ReqIF (.reqif, .xml)
                 </p>
               </div>
 
@@ -599,7 +636,7 @@ function FileUploadZone({ onFileSelect, selectedFile, format }: FileUploadZonePr
       <input
         type="file"
         id="file-upload"
-        accept=".csv,.xlsx,.xls,.json"
+        accept=".csv,.xlsx,.xls,.json,.reqif,.xml"
         onChange={handleFileInput}
         className="hidden"
       />

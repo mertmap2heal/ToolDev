@@ -1,3 +1,8 @@
+export type RequirementType = 'functional' | 'performance' | 'interface' | 'design_constraint' | 'safety' | 'security' | 'usability' | 'other'
+export type RequirementLevel = 'system' | 'subsystem' | 'component' | 'interface'
+export type RiskLevel = 'low' | 'medium' | 'high' | 'critical'
+export type ComplexityLevel = 'simple' | 'moderate' | 'complex'
+
 export interface Requirement {
   id: string
   projectId: string
@@ -17,6 +22,18 @@ export interface Requirement {
   category?: string
   relatedDocuments?: string[]
   tags?: string[]
+  requirementType?: RequirementType
+  requirementLevel?: RequirementLevel
+  risk?: RiskLevel
+  complexity?: ComplexityLevel
+  rationale?: string
+  assumptions?: string
+  dependencies?: string[]
+  conflicts?: string[]
+  stakeholders?: string[]
+  verificationStatus?: 'not_verified' | 'verified' | 'failed'
+  verificationDate?: string
+  verificationNotes?: string
   comments?: RequirementComment[]
   attachments?: RequirementAttachment[]
   createdAt: string
@@ -57,6 +74,9 @@ export interface SavedView {
   columns?: string
   sortBy?: string
   sortOrder?: string
+  viewpoint?: string // stakeholder, system, verification, etc. (ISO/IEC/IEEE 42010)
+  concerns?: string // what the view addresses
+  viewType?: 'diagram' | 'table' | 'matrix' | 'report' // type of view
   createdAt: string
   updatedAt: string
 }
@@ -180,40 +200,6 @@ export interface VerificationPlan {
   updatedAt: string
 }
 
-export interface CreateRequirementDto {
-  requirementId?: string
-  title: string
-  description: string
-  parentId?: string
-  priority: 'low' | 'medium' | 'high' | 'critical'
-  status?: string
-  stage?: string
-  owner?: string
-  verificationMethod?: string
-  acceptanceCriteria?: string
-  source?: string
-  category?: string
-  relatedDocuments?: string[]
-  tags?: string[]
-}
-
-export interface UpdateRequirementDto {
-  requirementId?: string
-  title?: string
-  description?: string
-  parentId?: string
-  priority?: 'low' | 'medium' | 'high' | 'critical'
-  status?: string
-  stage?: string
-  owner?: string
-  verificationMethod?: string
-  acceptanceCriteria?: string
-  source?: string
-  category?: string
-  relatedDocuments?: string[]
-  tags?: string[]
-}
-
 export interface CreateSystemFunctionDto {
   functionId?: string
   name: string
@@ -296,7 +282,7 @@ export interface ChangeRequest {
   projectId: string
   title: string
   description: string
-  sourceType: 'function' | 'issue' | 'parameter'
+  sourceType: 'function' | 'issue' | 'parameter' | 'requirement'
   sourceId: string
   priority: 'low' | 'medium' | 'high' | 'critical'
   status: 'pending' | 'approved' | 'rejected' | 'in-review'
@@ -313,10 +299,68 @@ export interface ChangeRequest {
 export interface CreateChangeRequestDto {
   title: string
   description: string
-  sourceType: 'function' | 'issue' | 'parameter'
+  sourceType: 'function' | 'issue' | 'parameter' | 'requirement'
   sourceId: string
   priority: 'low' | 'medium' | 'high' | 'critical'
   requestedBy?: string
+}
+
+export interface CreateRequirementDto {
+  requirementId?: string
+  title: string
+  description: string
+  parentId?: string
+  priority?: 'low' | 'medium' | 'high' | 'critical'
+  status?: string
+  stage?: string
+  owner?: string
+  verificationMethod?: string
+  acceptanceCriteria?: string
+  source?: string
+  category?: string
+  relatedDocuments?: string[]
+  tags?: string[]
+  requirementType?: RequirementType
+  requirementLevel?: RequirementLevel
+  risk?: RiskLevel
+  complexity?: ComplexityLevel
+  rationale?: string
+  assumptions?: string
+  dependencies?: string[]
+  conflicts?: string[]
+  stakeholders?: string[]
+  verificationStatus?: 'not_verified' | 'verified' | 'failed'
+  verificationDate?: string
+  verificationNotes?: string
+}
+
+export interface UpdateRequirementDto {
+  requirementId?: string
+  title?: string
+  description?: string
+  parentId?: string | null
+  priority?: 'low' | 'medium' | 'high' | 'critical'
+  status?: string
+  stage?: string
+  owner?: string
+  verificationMethod?: string
+  acceptanceCriteria?: string
+  source?: string
+  category?: string
+  relatedDocuments?: string[]
+  tags?: string[]
+  requirementType?: RequirementType
+  requirementLevel?: RequirementLevel
+  risk?: RiskLevel
+  complexity?: ComplexityLevel
+  rationale?: string
+  assumptions?: string
+  dependencies?: string[]
+  conflicts?: string[]
+  stakeholders?: string[]
+  verificationStatus?: 'not_verified' | 'verified' | 'failed'
+  verificationDate?: string
+  verificationNotes?: string
 }
 
 export interface BulkImportRequest {

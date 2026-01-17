@@ -23,6 +23,8 @@ export const traceabilityService = {
       targetType: link.targetType as any,
       targetId: link.targetId,
       linkType: link.linkType as any,
+      direction: link.direction || undefined,
+      rationale: link.rationale || undefined,
       confidence: link.confidence || undefined,
       isAuto: link.isAuto,
       isSuspect: link.isSuspect || false,
@@ -48,6 +50,8 @@ export const traceabilityService = {
       targetType: link.targetType as any,
       targetId: link.targetId,
       linkType: link.linkType as any,
+      direction: link.direction || undefined,
+      rationale: link.rationale || undefined,
       confidence: link.confidence || undefined,
       isAuto: link.isAuto,
       isSuspect: true,
@@ -110,7 +114,9 @@ export const traceabilityService = {
     sourceId: string,
     targetType: string,
     targetId: string,
-    linkType: string
+    linkType: string,
+    direction?: string,
+    rationale?: string
   ): Promise<TraceLink> {
     const link = await prisma.traceLink.create({
       data: {
@@ -120,6 +126,8 @@ export const traceabilityService = {
         targetType,
         targetId,
         linkType,
+        direction: direction || null,
+        rationale: rationale || null,
         isAuto: false,
         isSuspect: false,
         lastChecked: new Date(),
@@ -134,6 +142,8 @@ export const traceabilityService = {
       targetType: link.targetType as any,
       targetId: link.targetId,
       linkType: link.linkType as any,
+      direction: link.direction || undefined,
+      rationale: link.rationale || undefined,
       confidence: link.confidence || undefined,
       isAuto: link.isAuto,
       isSuspect: link.isSuspect || false,
@@ -162,6 +172,8 @@ export const traceabilityService = {
       targetType: link.targetType as any,
       targetId: link.targetId,
       linkType: link.linkType as any,
+      direction: link.direction || undefined,
+      rationale: link.rationale || undefined,
       confidence: link.confidence || undefined,
       isAuto: link.isAuto,
       isSuspect: link.isSuspect || false,

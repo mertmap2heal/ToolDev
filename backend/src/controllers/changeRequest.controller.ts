@@ -16,10 +16,10 @@ export const createChangeRequest = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    if (!['function', 'issue', 'parameter'].includes(sourceType)) {
+    if (!['function', 'issue', 'parameter', 'requirement'].includes(sourceType)) {
       return res.status(400).json({
         success: false,
-        error: 'sourceType must be one of: function, issue, parameter',
+        error: 'sourceType must be one of: function, issue, parameter, requirement',
       })
     }
 

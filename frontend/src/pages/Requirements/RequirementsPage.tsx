@@ -24,10 +24,14 @@ import SuspectLinksReview from '../../components/requirements/SuspectLinksReview
 import BaselineManager from '../../components/requirements/BaselineManager'
 import ExportBuilder from '../../components/requirements/ExportBuilder'
 import ImportWizard from '../../components/requirements/ImportWizard'
+import RequirementDiagram from '../../components/requirements/RequirementDiagram'
+import RequirementQualityPanel from '../../components/requirements/RequirementQualityPanel'
+import AllocationTable from '../../components/requirements/AllocationTable'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
 import { changeRequestService } from '../../services/changeRequest.service'
+import { traceabilityService } from '../../services/traceability.service'
 import type { Requirement, UpdateRequirementDto } from '../../../shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
@@ -66,6 +70,9 @@ export default function RequirementsPage() {
   const [isBaselineManagerOpen, setIsBaselineManagerOpen] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
+  const [isDiagramOpen, setIsDiagramOpen] = useState(false)
+  const [isAllocationTableOpen, setIsAllocationTableOpen] = useState(false)
+  const [isQualityPanelOpen, setIsQualityPanelOpen] = useState(false)
   
   // Inline editing state
   const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null)
@@ -77,6 +84,7 @@ export default function RequirementsPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [ownerFilter, setOwnerFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
+  const [requirementTypeFilter, setRequirementTypeFilter] = useState<string>('all')
 
   const queryClient = useQueryClient()
 
@@ -102,6 +110,17 @@ export default function RequirementsPage() {
       return response.success && response.data ? response.data : []
     },
     enabled: !!projectId,
+  })
+
+  // Fetch trace links for diagram
+  const { data: traceLinks = [] } = useQuery({
+    queryKey: ['trace-links', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const response = await traceabilityService.getTraceLinks(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId && isDiagramOpen,
   })
 
   // Fetch issues for linking
@@ -142,18 +161,97 @@ export default function RequirementsPage() {
     },
   })
 
-  const bulkUpdateMutation = useMutation({
-    mutationFn: (updates: Partial<Requirement>) => {
+  // Bulk delete mutation
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (requirementIds: string[]) => {
       if (!projectId) throw new Error('Project ID required')
-      return requirementService.bulkUpdateRequirements(projectId, Array.from(selectedRequirements), updates)
+      const results = await Promise.allSettled(
+        requirementIds.map((id) => requirementService.deleteRequirement(projectId, id))
+      )
+      const successful = results.filter((r) => r.status === 'fulfilled').length
+      const failed = results.filter((r) => r.status === 'rejected').length
+      return { successful, failed, total: requirementIds.length }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
       setSelectedRequirements(new Set())
+      if (result.failed > 0) {
+        alert(`Deleted ${result.successful} requirement(s). ${result.failed} failed to delete.`)
+      } else {
+        alert(`Successfully deleted ${result.successful} requirement(s).`)
+      }
     },
     onError: (error: any) => {
-      console.error('Bulk update error:', error)
-      alert(error?.error || 'Failed to update requirements')
+      console.error('Bulk delete error:', error)
+      alert(error?.error || 'Failed to delete requirements')
+    },
+  })
+
+  // Bulk create change requests mutation
+  const bulkCreateChangeRequestsMutation = useMutation({
+    mutationFn: async (requirementIds: string[]) => {
+      if (!projectId) throw new Error('Project ID required')
+      const selectedReqs = requirements.filter((r) => requirementIds.includes(r.id))
+      const results = await Promise.allSettled(
+        selectedReqs.map((req) =>
+          changeRequestService.createChangeRequest(projectId, {
+            title: `Change Request for ${req.requirementId || req.title}`,
+            description: `Change request created from requirement: ${req.title}\n\n${req.description}`,
+            sourceType: 'requirement',
+            sourceId: req.id,
+            priority: req.priority || 'medium',
+          })
+        )
+      )
+      const successful = results.filter((r) => r.status === 'fulfilled').length
+      const failed = results.filter((r) => r.status === 'rejected').length
+      return { successful, failed, total: requirementIds.length }
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['change-requests', projectId] })
+      setSelectedRequirements(new Set())
+      if (result.failed > 0) {
+        alert(`Created ${result.successful} change request(s). ${result.failed} failed to create.`)
+      } else {
+        alert(`Successfully created ${result.successful} change request(s).`)
+      }
+    },
+    onError: (error: any) => {
+      console.error('Bulk create change requests error:', error)
+      alert(error?.error || 'Failed to create change requests')
+    },
+  })
+
+  // Bulk create issues mutation
+  const bulkCreateIssuesMutation = useMutation({
+    mutationFn: async (requirementIds: string[]) => {
+      if (!projectId) throw new Error('Project ID required')
+      const selectedReqs = requirements.filter((r) => requirementIds.includes(r.id))
+      const results = await Promise.allSettled(
+        selectedReqs.map((req) =>
+          issueService.createIssue(projectId, {
+            title: `Issue for ${req.requirementId || req.title}`,
+            description: `Issue created from requirement: ${req.title}\n\n${req.description}`,
+            priority: req.priority || 'medium',
+          })
+        )
+      )
+      const successful = results.filter((r) => r.status === 'fulfilled').length
+      const failed = results.filter((r) => r.status === 'rejected').length
+      return { successful, failed, total: requirementIds.length }
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
+      setSelectedRequirements(new Set())
+      if (result.failed > 0) {
+        alert(`Created ${result.successful} issue(s). ${result.failed} failed to create.`)
+      } else {
+        alert(`Successfully created ${result.successful} issue(s).`)
+      }
+    },
+    onError: (error: any) => {
+      console.error('Bulk create issues error:', error)
+      alert(error?.error || 'Failed to create issues')
     },
   })
 
@@ -450,9 +548,19 @@ export default function RequirementsPage() {
         }
       }
 
+      // Requirement Type filter
+      if (requirementTypeFilter !== 'all') {
+        if (requirementTypeFilter === 'unassigned' && req.requirementType) {
+          return false
+        }
+        if (requirementTypeFilter !== 'unassigned' && req.requirementType !== requirementTypeFilter) {
+          return false
+        }
+      }
+
       return true
     })
-  }, [requirements, searchQuery, statusFilter, priorityFilter, categoryFilter, ownerFilter, sourceFilter])
+  }, [requirements, searchQuery, statusFilter, priorityFilter, categoryFilter, ownerFilter, sourceFilter, requirementTypeFilter])
 
   const hierarchyRequirements = useMemo(() => {
     return buildHierarchy(filteredRequirements)
@@ -461,6 +569,11 @@ export default function RequirementsPage() {
   // Get unique values for filters (must be defined before renderRequirementRow uses them)
   const uniqueStatuses = useMemo(() => 
     Array.from(new Set(requirements.map((r) => r.status).filter(Boolean))),
+    [requirements]
+  )
+  
+  const uniqueRequirementTypes = useMemo(() =>
+    Array.from(new Set(requirements.map((r) => r.requirementType).filter(Boolean))),
     [requirements]
   )
   const uniqueCategories = useMemo(() => 
@@ -489,6 +602,34 @@ export default function RequirementsPage() {
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
     }
+  }
+
+  const getRequirementTypeColor = (type?: string) => {
+    switch (type) {
+      case 'functional':
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+      case 'performance':
+        return 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400'
+      case 'interface':
+        return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-400'
+      case 'design_constraint':
+        return 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400'
+      case 'safety':
+        return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+      case 'security':
+        return 'bg-pink-100 text-pink-800 dark:bg-pink-900/20 dark:text-pink-400'
+      case 'usability':
+        return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+      case 'other':
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+      default:
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+    }
+  }
+
+  const formatRequirementType = (type?: string) => {
+    if (!type) return ''
+    return type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
   }
 
   // Sortable row component for drag and drop
@@ -604,17 +745,24 @@ export default function RequirementsPage() {
                 />
               </div>
             ) : (
-              <span
-                className="font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
-                onClick={() => setDetailRequirement(req)}
-                onDoubleClick={(e) => {
-                  e.stopPropagation()
-                  startInlineEdit(req, 'title')
-                }}
-                title="Double-click to edit"
-              >
-                {req.title}
-              </span>
+              <div className="flex items-center gap-2">
+                <span
+                  className="font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
+                  onClick={() => setDetailRequirement(req)}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation()
+                    startInlineEdit(req, 'title')
+                  }}
+                  title="Double-click to edit"
+                >
+                  {req.title}
+                </span>
+                {req.requirementType && (
+                  <span className={clsx('px-2 py-0.5 text-xs font-medium rounded-full', getRequirementTypeColor(req.requirementType))}>
+                    {formatRequirementType(req.requirementType)}
+                  </span>
+                )}
+              </div>
             )}
           </td>
           {/* Category - inline editable */}
@@ -804,7 +952,7 @@ export default function RequirementsPage() {
             {/* Linked Issues */}
             {rowData.linkedIssues.length > 0 && (
               <tr>
-                  <td colSpan={9} className="px-4 py-2 bg-yellow-50/50 dark:bg-yellow-900/10">
+                  <td colSpan={8} className="px-4 py-2 bg-yellow-50/50 dark:bg-yellow-900/10">
                   <div className="pl-8">
                     <p className="text-xs font-medium text-yellow-600 dark:text-yellow-400 mb-2 flex items-center gap-2">
                       <AlertCircle size={14} />
@@ -912,7 +1060,7 @@ export default function RequirementsPage() {
     <div className="space-y-6">
       <ProjectNavigation />
 
-      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Requirements</h2>
         <div className="flex items-center gap-2">
           {selectedRequirements.size > 0 && (
@@ -922,11 +1070,22 @@ export default function RequirementsPage() {
               </span>
               <select
                 onChange={(e) => {
-                  if (e.target.value && e.target.value !== 'bulk-action') {
-                    const field = e.target.name
-                    const value = e.target.value
-                    const updates: any = { [field]: value }
-                    bulkUpdateMutation.mutate(updates)
+                  const action = e.target.value
+                  if (action && action !== 'bulk-action') {
+                    const requirementIds = Array.from(selectedRequirements)
+                    if (action === 'create-change-request') {
+                      if (window.confirm(`Create change request(s) for ${requirementIds.length} selected requirement(s)?`)) {
+                        bulkCreateChangeRequestsMutation.mutate(requirementIds)
+                      }
+                    } else if (action === 'create-issue') {
+                      if (window.confirm(`Create issue(s) for ${requirementIds.length} selected requirement(s)?`)) {
+                        bulkCreateIssuesMutation.mutate(requirementIds)
+                      }
+                    } else if (action === 'bulk-delete') {
+                      if (window.confirm(`Are you sure you want to delete ${requirementIds.length} requirement(s)? This action cannot be undone.`)) {
+                        bulkDeleteMutation.mutate(requirementIds)
+                      }
+                    }
                     e.target.value = 'bulk-action'
                   }
                 }}
@@ -934,19 +1093,9 @@ export default function RequirementsPage() {
                 defaultValue="bulk-action"
               >
                 <option value="bulk-action">Bulk Actions...</option>
-                <optgroup label="Change Status">
-                  {uniqueStatuses.map((status) => (
-                    <option key={status} value={status} name="status">
-                      Set Status: {status}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="Change Priority">
-                  <option value="low" name="priority">Set Priority: Low</option>
-                  <option value="medium" name="priority">Set Priority: Medium</option>
-                  <option value="high" name="priority">Set Priority: High</option>
-                  <option value="critical" name="priority">Set Priority: Critical</option>
-                </optgroup>
+                <option value="create-change-request">Create Change Request(s)</option>
+                <option value="create-issue">Create Issue(s)</option>
+                <option value="bulk-delete">Delete Selected</option>
               </select>
             </div>
           )}
@@ -989,6 +1138,30 @@ export default function RequirementsPage() {
           >
             <Download size={16} />
             <span className="text-sm">Export</span>
+          </button>
+          <button
+            onClick={() => setIsDiagramOpen(true)}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+            title="View Requirement Diagram"
+          >
+            <FileText size={16} />
+            <span className="text-sm">Diagram</span>
+          </button>
+          <button
+            onClick={() => setIsAllocationTableOpen(true)}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+            title="View Allocation Table"
+          >
+            <Grid3X3 size={16} />
+            <span className="text-sm">Allocation</span>
+          </button>
+          <button
+            onClick={() => setIsQualityPanelOpen(true)}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+            title="Requirement Quality Analysis"
+          >
+            <AlertCircle size={16} />
+            <span className="text-sm">Quality</span>
           </button>
           <button
             onClick={() => {
@@ -1043,7 +1216,7 @@ export default function RequirementsPage() {
         </button>
         {isFiltersExpanded && (
           <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
               {/* Status Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
@@ -1138,6 +1311,29 @@ export default function RequirementsPage() {
                       {source}
                     </option>
                   ))}
+                </select>
+              </div>
+
+              {/* Requirement Type Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                  Requirement Type
+                </label>
+                <select
+                  value={requirementTypeFilter}
+                  onChange={(e) => setRequirementTypeFilter(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="all">All Types</option>
+                  <option value="unassigned">Unassigned</option>
+                  <option value="functional">Functional</option>
+                  <option value="performance">Performance</option>
+                  <option value="interface">Interface</option>
+                  <option value="design_constraint">Design Constraint</option>
+                  <option value="safety">Safety</option>
+                  <option value="security">Security</option>
+                  <option value="usability">Usability</option>
+                  <option value="other">Other</option>
                 </select>
               </div>
             </div>
@@ -1316,10 +1512,11 @@ export default function RequirementsPage() {
         />
       )}
 
-      {isExportOpen && (
+      {isExportOpen && projectId && (
         <ExportBuilder
           requirements={filteredRequirements}
           projectName={projectId}
+          projectId={projectId}
           onClose={() => setIsExportOpen(false)}
         />
       )}
@@ -1328,6 +1525,28 @@ export default function RequirementsPage() {
         <ImportWizard
           projectId={projectId}
           onClose={() => setIsImportOpen(false)}
+        />
+      )}
+
+      {isDiagramOpen && (
+        <RequirementDiagram
+          requirements={requirements}
+          traceLinks={traceLinks}
+          onClose={() => setIsDiagramOpen(false)}
+        />
+      )}
+
+      {isAllocationTableOpen && projectId && (
+        <AllocationTable
+          projectId={projectId}
+          onClose={() => setIsAllocationTableOpen(false)}
+        />
+      )}
+
+      {isQualityPanelOpen && projectId && (
+        <RequirementQualityPanel
+          projectId={projectId}
+          onClose={() => setIsQualityPanelOpen(false)}
         />
       )}
     </div>

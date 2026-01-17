@@ -45,6 +45,9 @@ model Project {
   changeRequests ChangeRequest[]
   savedViews    SavedView[]
   baselines     Baseline[]
+  useCases      UseCase[]
+  actors        Actor[]
+  requirementTemplates RequirementTemplate[]
 }
 
 model ProjectMember {
@@ -77,6 +80,18 @@ model Requirement {
   category          String?
   relatedDocuments  String[]  @default([])
   tags              String[]  @default([])
+  requirementType   String?   // functional, performance, interface, design_constraint, safety, security, usability, other
+  requirementLevel  String?   // system, subsystem, component, interface
+  risk              String?   // low, medium, high, critical
+  complexity        String?   // simple, moderate, complex
+  rationale         String?   // why the requirement exists
+  assumptions       String?  // assumptions related to the requirement
+  dependencies      String[]  @default([]) // JSON array of requirement IDs this depends on
+  conflicts         String[]  @default([]) // JSON array of conflicting requirement IDs
+  stakeholders      String[]  @default([]) // JSON array of stakeholder names/IDs
+  verificationStatus String?  // not_verified, verified, failed
+  verificationDate  DateTime?
+  verificationNotes String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -171,7 +186,9 @@ model TraceLink {
   sourceId     String
   targetType   String
   targetId     String
-  linkType     String
+  linkType     String   // satisfies, implements, verifies, derives, refines, copy, trace, allocate
+  direction    String?  // source → target relationship direction (for clarity)
+  rationale    String?  // why this relationship exists
   confidence   Float?
   isAuto       Boolean  @default(false)
   isSuspect    Boolean  @default(false)
@@ -233,7 +250,7 @@ model ChangeRequest {
   projectId         String
   title             String
   description       String
-  sourceType        String   // 'function' | 'issue' | 'parameter'
+  sourceType        String   // 'function' | 'issue' | 'parameter' | 'requirement'
   sourceId          String
   priority          String   @default("medium")
   status            String   @default("pending") // 'pending' | 'approved' | 'rejected' | 'in-review'
@@ -259,6 +276,9 @@ model SavedView {
   columns       String?  // JSON string of column configuration
   sortBy        String?
   sortOrder     String?
+  viewpoint     String?  // stakeholder, system, verification, etc. (ISO/IEC/IEEE 42010)
+  concerns      String?  // what the view addresses
+  viewType      String?  // diagram, table, matrix, report
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -266,6 +286,7 @@ model SavedView {
 
   @@index([projectId])
   @@index([userId])
+  @@index([viewpoint])
 }
 
 model RequirementVersion {
@@ -324,4 +345,77 @@ model BaselineItem {
 
   @@index([baselineId])
   @@index([requirementId])
+}
+
+model UseCase {
+  id                String   @id @default(uuid())
+  projectId         String
+  useCaseId         String?  @unique
+  name              String
+  description       String?
+  actors            String[] @default([]) // JSON array of actor names
+  preconditions     String?
+  postconditions    String?
+  mainFlow          String?  // step-by-step main flow
+  alternativeFlows  String?  // JSON array of alternative flows
+  extensions        String?  // JSON array of extension flows
+  priority          String?  // low, medium, high, critical
+  complexity        String?  // simple, moderate, complex
+  status            String?  @default("draft")
+  relatedRequirementIds String[] @default([]) // JSON array of requirement IDs
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  project           Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  useCaseActors     UseCaseActor[]
+
+  @@unique([projectId, useCaseId])
+  @@index([projectId])
+}
+
+model Actor {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  type        String   // primary, secondary, system
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  useCaseActors UseCaseActor[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+}
+
+model UseCaseActor {
+  id        String   @id @default(uuid())
+  useCaseId String
+  actorId   String
+
+  useCase   UseCase  @relation(fields: [useCaseId], references: [id], onDelete: Cascade)
+  actor     Actor    @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@unique([useCaseId, actorId])
+  @@index([useCaseId])
+  @@index([actorId])
+}
+
+model RequirementTemplate {
+  id            String   @id @default(uuid())
+  projectId     String
+  name          String
+  description   String?
+  requirementType String?
+  category      String?
+  templateFields String? // JSON string of predefined field values
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  project       Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([isDefault])
 }

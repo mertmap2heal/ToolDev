@@ -10,6 +10,9 @@ export type LinkType =
   | 'verifies'
   | 'derives'
   | 'refines'
+  | 'copy'
+  | 'trace'
+  | 'allocate'
 
 export interface TraceLink {
   id: string
@@ -19,6 +22,8 @@ export interface TraceLink {
   targetType: ArtifactType
   targetId: string
   linkType: LinkType
+  direction?: string // source → target relationship direction (for clarity)
+  rationale?: string // why this relationship exists
   confidence?: number
   isAuto: boolean
   isSuspect?: boolean
@@ -32,6 +37,8 @@ export interface CreateTraceLinkDto {
   targetType: ArtifactType
   targetId: string
   linkType: LinkType
+  direction?: string
+  rationale?: string
 }
 
 export interface TraceabilityGraph {

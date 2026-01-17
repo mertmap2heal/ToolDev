@@ -98,6 +98,18 @@ export default function EditRequirementModal({
       setFormData({
         requirementId: requirement.requirementId,
         title: requirement.title,
+        requirementType: requirement.requirementType,
+        requirementLevel: requirement.requirementLevel,
+        risk: requirement.risk,
+        complexity: requirement.complexity,
+        rationale: requirement.rationale,
+        assumptions: requirement.assumptions,
+        dependencies: requirement.dependencies,
+        conflicts: requirement.conflicts,
+        stakeholders: requirement.stakeholders,
+        verificationStatus: requirement.verificationStatus,
+        verificationDate: requirement.verificationDate,
+        verificationNotes: requirement.verificationNotes,
         description: requirement.description,
         parentId: requirement.parentId,
         priority: requirement.priority,
@@ -562,6 +574,176 @@ export default function EditRequirementModal({
               placeholder="Enter acceptance criteria..."
               minHeight="100px"
             />
+          </div>
+
+          {/* MBSE/UML Fields */}
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
+              MBSE/UML Classification
+            </h3>
+            
+            {/* Requirement Type */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                Requirement Type
+              </label>
+              <select
+                value={formData.requirementType || ''}
+                onChange={(e) => handleChange('requirementType', e.target.value || undefined)}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="">Select requirement type</option>
+                <option value="functional">Functional</option>
+                <option value="performance">Performance</option>
+                <option value="interface">Interface</option>
+                <option value="design_constraint">Design Constraint</option>
+                <option value="safety">Safety</option>
+                <option value="security">Security</option>
+                <option value="usability">Usability</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            {/* Requirement Level */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                Requirement Level
+              </label>
+              <select
+                value={formData.requirementLevel || ''}
+                onChange={(e) => handleChange('requirementLevel', e.target.value || undefined)}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="">Select requirement level</option>
+                <option value="system">System</option>
+                <option value="subsystem">Subsystem</option>
+                <option value="component">Component</option>
+                <option value="interface">Interface</option>
+              </select>
+            </div>
+
+            {/* Risk and Complexity */}
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                  Risk Level
+                </label>
+                <select
+                  value={formData.risk || ''}
+                  onChange={(e) => handleChange('risk', e.target.value || undefined)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="">Select risk level</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                  Complexity
+                </label>
+                <select
+                  value={formData.complexity || ''}
+                  onChange={(e) => handleChange('complexity', e.target.value || undefined)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="">Select complexity</option>
+                  <option value="simple">Simple</option>
+                  <option value="moderate">Moderate</option>
+                  <option value="complex">Complex</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Rationale */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                Rationale
+              </label>
+              <textarea
+                value={formData.rationale || ''}
+                onChange={(e) => handleChange('rationale', e.target.value || undefined)}
+                placeholder="Explain why this requirement exists..."
+                rows={3}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+              />
+            </div>
+
+            {/* Assumptions */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                Assumptions
+              </label>
+              <textarea
+                value={formData.assumptions || ''}
+                onChange={(e) => handleChange('assumptions', e.target.value || undefined)}
+                placeholder="List any assumptions related to this requirement..."
+                rows={2}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+              />
+            </div>
+
+            {/* Stakeholders */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                Stakeholders
+              </label>
+              <input
+                type="text"
+                value={formData.stakeholders?.join(', ') || ''}
+                onChange={(e) => {
+                  const stakeholders = e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+                  handleChange('stakeholders', stakeholders.length > 0 ? stakeholders : undefined)
+                }}
+                placeholder="Enter stakeholders separated by commas"
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+            </div>
+
+            {/* Verification Status */}
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                  Verification Status
+                </label>
+                <select
+                  value={formData.verificationStatus || ''}
+                  onChange={(e) => handleChange('verificationStatus', e.target.value || undefined)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="">Not Verified</option>
+                  <option value="verified">Verified</option>
+                  <option value="failed">Failed</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                  Verification Date
+                </label>
+                <input
+                  type="date"
+                  value={formData.verificationDate ? formData.verificationDate.split('T')[0] : ''}
+                  onChange={(e) => handleChange('verificationDate', e.target.value || undefined)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+            </div>
+
+            {/* Verification Notes */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                Verification Notes
+              </label>
+              <textarea
+                value={formData.verificationNotes || ''}
+                onChange={(e) => handleChange('verificationNotes', e.target.value || undefined)}
+                placeholder="Notes about verification..."
+                rows={2}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+              />
+            </div>
           </div>
 
           {/* Tags */}

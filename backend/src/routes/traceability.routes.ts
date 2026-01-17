@@ -67,7 +67,7 @@ router.get('/:projectId/suspect', async (req, res) => {
 router.post('/:projectId', async (req, res) => {
   try {
     const { projectId } = req.params
-    const { sourceType, sourceId, targetType, targetId, linkType } = req.body
+    const { sourceType, sourceId, targetType, targetId, linkType, direction, rationale } = req.body
 
     if (!sourceType || !sourceId || !targetType || !targetId || !linkType) {
       return res.status(400).json({
@@ -82,7 +82,9 @@ router.post('/:projectId', async (req, res) => {
       sourceId,
       targetType,
       targetId,
-      linkType
+      linkType,
+      direction,
+      rationale
     )
 
     res.status(201).json({

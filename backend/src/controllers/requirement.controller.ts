@@ -242,6 +242,11 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
       category,
       relatedDocuments,
       tags,
+      requirementType,
+      requirementLevel,
+      risk,
+      complexity,
+      rationale,
     } = req.body
 
     if (!title) {
@@ -316,6 +321,11 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
         category: category || null,
         relatedDocuments: relatedDocuments || [],
         tags: tags || [],
+        requirementType: requirementType || null,
+        requirementLevel: requirementLevel || null,
+        risk: risk || null,
+        complexity: complexity || null,
+        rationale: rationale || null,
       },
       include: {
         parent: {
@@ -370,6 +380,18 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       category,
       relatedDocuments,
       tags,
+      requirementType,
+      requirementLevel,
+      risk,
+      complexity,
+      rationale,
+      assumptions,
+      dependencies,
+      conflicts,
+      stakeholders,
+      verificationStatus,
+      verificationDate,
+      verificationNotes,
     } = req.body
 
     // Find the requirement
@@ -470,6 +492,11 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
         category,
         relatedDocuments,
         tags: tags !== undefined ? tags : undefined,
+        requirementType: requirementType !== undefined ? requirementType : undefined,
+        requirementLevel: requirementLevel !== undefined ? requirementLevel : undefined,
+        risk: risk !== undefined ? risk : undefined,
+        complexity: complexity !== undefined ? complexity : undefined,
+        rationale: rationale !== undefined ? rationale : undefined,
       },
       include: {
         parent: {
@@ -919,6 +946,18 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
               acceptanceCriteria: reqData.acceptanceCriteria || null,
               tags: reqData.tags || [],
               parentId: reqData.parentId || null,
+              requirementType: reqData.requirementType || null,
+              requirementLevel: reqData.requirementLevel || null,
+              risk: reqData.risk || null,
+              complexity: reqData.complexity || null,
+              rationale: reqData.rationale || null,
+              assumptions: reqData.assumptions || null,
+              dependencies: reqData.dependencies || [],
+              conflicts: reqData.conflicts || [],
+              stakeholders: reqData.stakeholders || [],
+              verificationStatus: reqData.verificationStatus || null,
+              verificationDate: reqData.verificationDate ? new Date(reqData.verificationDate) : null,
+              verificationNotes: reqData.verificationNotes || null,
             },
           })
 
@@ -1017,6 +1056,18 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
               acceptanceCriteria: updateData.acceptanceCriteria !== undefined ? (updateData.acceptanceCriteria || null) : existing.acceptanceCriteria,
               tags: updateData.tags !== undefined ? updateData.tags : existing.tags,
               parentId: updateData.parentId !== undefined ? (updateData.parentId || null) : existing.parentId,
+              requirementType: updateData.requirementType !== undefined ? (updateData.requirementType || null) : existing.requirementType,
+              requirementLevel: updateData.requirementLevel !== undefined ? (updateData.requirementLevel || null) : existing.requirementLevel,
+              risk: updateData.risk !== undefined ? (updateData.risk || null) : existing.risk,
+              complexity: updateData.complexity !== undefined ? (updateData.complexity || null) : existing.complexity,
+              rationale: updateData.rationale !== undefined ? (updateData.rationale || null) : existing.rationale,
+              assumptions: updateData.assumptions !== undefined ? (updateData.assumptions || null) : existing.assumptions,
+              dependencies: updateData.dependencies !== undefined ? updateData.dependencies : existing.dependencies,
+              conflicts: updateData.conflicts !== undefined ? updateData.conflicts : existing.conflicts,
+              stakeholders: updateData.stakeholders !== undefined ? updateData.stakeholders : existing.stakeholders,
+              verificationStatus: updateData.verificationStatus !== undefined ? (updateData.verificationStatus || null) : existing.verificationStatus,
+              verificationDate: updateData.verificationDate !== undefined ? (updateData.verificationDate ? new Date(updateData.verificationDate) : null) : existing.verificationDate,
+              verificationNotes: updateData.verificationNotes !== undefined ? (updateData.verificationNotes || null) : existing.verificationNotes,
             },
           })
 

@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { X, Download, FileSpreadsheet, FileText, File, CheckSquare, Square } from 'lucide-react'
+import { X, Download, FileSpreadsheet, FileText, File, CheckSquare, Square, Code } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
+import { apiClient } from '../../services/api'
 import type { Requirement } from '../../../../shared/types/engineering.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
@@ -25,10 +26,11 @@ async function loadAutoTable() {
 interface ExportBuilderProps {
   requirements: Requirement[]
   projectName?: string
+  projectId: string
   onClose: () => void
 }
 
-type ExportFormat = 'csv' | 'excel' | 'pdf'
+type ExportFormat = 'csv' | 'excel' | 'pdf' | 'reqif'
 
 interface ExportColumn {
   key: keyof Requirement | 'requirementId'
@@ -56,7 +58,7 @@ const defaultColumns: ExportColumn[] = [
  * ExportBuilder component provides functionality to export requirements
  * to various formats (CSV, Excel, PDF) with customizable column selection.
  */
-export default function ExportBuilder({ requirements, projectName, onClose }: ExportBuilderProps) {
+export default function ExportBuilder({ requirements, projectName, projectId, onClose }: ExportBuilderProps) {
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('csv')
   const [columns, setColumns] = useState<ExportColumn[]>(defaultColumns)
   const [includeHeader, setIncludeHeader] = useState(true)
@@ -168,6 +170,39 @@ export default function ExportBuilder({ requirements, projectName, onClose }: Ex
     XLSX.writeFile(workbook, 'requirements_export.xlsx')
   }
 
+  // Export to ReqIF
+  const exportReqIF = async () => {
+    try {
+      const requirementIds = requirements.map((r) => r.id).join(',')
+      const url = `/reqif/${projectId}/export${requirementIds ? `?requirementIds=${requirementIds}` : ''}`
+      
+      // Use fetch directly for blob response
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}${url}`, {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : '',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to export ReqIF: ${response.statusText}`)
+      }
+
+      const blob = await response.blob()
+      const downloadUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = downloadUrl
+      a.download = `requirements_${projectId}_${Date.now()}.reqif`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(downloadUrl)
+    } catch (error: any) {
+      console.error('ReqIF export error:', error)
+      throw error
+    }
+  }
+
   // Export to PDF
   const exportPdf = async () => {
     const selectedCols = columns.filter((c) => c.selected)
@@ -257,6 +292,9 @@ export default function ExportBuilder({ requirements, projectName, onClose }: Ex
         case 'pdf':
           await exportPdf()
           break
+        case 'reqif':
+          await exportReqIF()
+          break
       }
       onClose()
     } catch (error) {
@@ -300,7 +338,7 @@ export default function ExportBuilder({ requirements, projectName, onClose }: Ex
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Export Format
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <button
                 onClick={() => setSelectedFormat('csv')}
                 className={clsx(
@@ -336,6 +374,18 @@ export default function ExportBuilder({ requirements, projectName, onClose }: Ex
               >
                 <File size={24} className="text-red-600" />
                 <span className="text-sm font-medium text-gray-900 dark:text-white">PDF</span>
+              </button>
+              <button
+                onClick={() => setSelectedFormat('reqif')}
+                className={clsx(
+                  'flex flex-col items-center gap-2 p-3 border rounded-lg transition-colors',
+                  selectedFormat === 'reqif'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                )}
+              >
+                <Code size={24} className="text-purple-600" />
+                <span className="text-sm font-medium text-gray-900 dark:text-white">ReqIF</span>
               </button>
             </div>
           </div>
