@@ -3,6 +3,11 @@ import type { TraceLink, TraceabilityGraph } from '../../../shared/types/traceab
 
 const prisma = new PrismaClient()
 
+/**
+ * Traceability service provides functionality for managing trace links between
+ * artifacts (requirements, functions, etc.) including suspect link detection
+ * and coverage analysis.
+ */
 export const traceabilityService = {
   async getTraceLinks(projectId: string): Promise<TraceLink[]> {
     const links = await prisma.traceLink.findMany({
@@ -20,6 +25,33 @@ export const traceabilityService = {
       linkType: link.linkType as any,
       confidence: link.confidence || undefined,
       isAuto: link.isAuto,
+      isSuspect: link.isSuspect || false,
+      lastChecked: link.lastChecked?.toISOString(),
+      createdAt: link.createdAt.toISOString(),
+    }))
+  },
+
+  async getSuspectLinks(projectId: string): Promise<TraceLink[]> {
+    const links = await prisma.traceLink.findMany({
+      where: { 
+        projectId,
+        isSuspect: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    return links.map((link) => ({
+      id: link.id,
+      projectId: link.projectId,
+      sourceType: link.sourceType as any,
+      sourceId: link.sourceId,
+      targetType: link.targetType as any,
+      targetId: link.targetId,
+      linkType: link.linkType as any,
+      confidence: link.confidence || undefined,
+      isAuto: link.isAuto,
+      isSuspect: true,
+      lastChecked: link.lastChecked?.toISOString(),
       createdAt: link.createdAt.toISOString(),
     }))
   },
@@ -89,6 +121,8 @@ export const traceabilityService = {
         targetId,
         linkType,
         isAuto: false,
+        isSuspect: false,
+        lastChecked: new Date(),
       },
     })
 
@@ -102,7 +136,65 @@ export const traceabilityService = {
       linkType: link.linkType as any,
       confidence: link.confidence || undefined,
       isAuto: link.isAuto,
+      isSuspect: link.isSuspect || false,
+      lastChecked: link.lastChecked?.toISOString(),
       createdAt: link.createdAt.toISOString(),
     }
+  },
+
+  /**
+   * Clears the suspect flag on a link, marking it as reviewed
+   */
+  async clearSuspectLink(projectId: string, linkId: string): Promise<TraceLink> {
+    const link = await prisma.traceLink.update({
+      where: { id: linkId },
+      data: {
+        isSuspect: false,
+        lastChecked: new Date(),
+      },
+    })
+
+    return {
+      id: link.id,
+      projectId: link.projectId,
+      sourceType: link.sourceType as any,
+      sourceId: link.sourceId,
+      targetType: link.targetType as any,
+      targetId: link.targetId,
+      linkType: link.linkType as any,
+      confidence: link.confidence || undefined,
+      isAuto: link.isAuto,
+      isSuspect: link.isSuspect || false,
+      lastChecked: link.lastChecked?.toISOString(),
+      createdAt: link.createdAt.toISOString(),
+    }
+  },
+
+  /**
+   * Marks all downstream links from a source as suspect.
+   * Called when a requirement is updated to flag potentially
+   * impacted downstream artifacts.
+   */
+  async markDownstreamLinksSuspect(projectId: string, sourceId: string): Promise<number> {
+    const result = await prisma.traceLink.updateMany({
+      where: {
+        projectId,
+        sourceId,
+      },
+      data: {
+        isSuspect: true,
+      },
+    })
+
+    return result.count
+  },
+
+  /**
+   * Deletes a trace link
+   */
+  async deleteTraceLink(projectId: string, linkId: string): Promise<void> {
+    await prisma.traceLink.delete({
+      where: { id: linkId },
+    })
   },
 }

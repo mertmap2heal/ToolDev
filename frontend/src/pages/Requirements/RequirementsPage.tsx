@@ -1,16 +1,34 @@
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle } from 'lucide-react'
+import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, Check, GripVertical, Grid3X3, Archive, Download, Upload } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+} from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
 import CreateRequirementModal from '../../components/requirements/CreateRequirementModal'
 import EditRequirementModal from '../../components/requirements/EditRequirementModal'
 import DeleteRequirementModal from '../../components/requirements/DeleteRequirementModal'
+import RequirementDetailDrawer from '../../components/requirements/RequirementDetailDrawer'
+import TraceabilityMatrix from '../../components/requirements/TraceabilityMatrix'
+import SuspectLinksReview from '../../components/requirements/SuspectLinksReview'
+import BaselineManager from '../../components/requirements/BaselineManager'
+import ExportBuilder from '../../components/requirements/ExportBuilder'
+import ImportWizard from '../../components/requirements/ImportWizard'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
 import { changeRequestService } from '../../services/changeRequest.service'
-import type { Requirement } from '../../../shared/types/engineering.types'
+import type { Requirement, UpdateRequirementDto } from '../../../shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
 
@@ -20,6 +38,15 @@ interface ExpandedRow {
   linkedFunctions: Array<{ id: string; functionId?: string; name: string }>
   linkedIssues: Array<{ id: string; title: string }>
   linkedChangeRequests: Array<{ id: string; title: string }>
+}
+
+/**
+ * Interface for tracking inline editing state
+ */
+interface InlineEditState {
+  requirementId: string
+  field: 'title' | 'priority' | 'status' | 'owner' | 'category'
+  value: string
 }
 
 export default function RequirementsPage() {
@@ -32,6 +59,17 @@ export default function RequirementsPage() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [requirementData, setRequirementData] = useState<Map<string, ExpandedRow>>(new Map())
   const [parentRequirement, setParentRequirement] = useState<Requirement | null>(null)
+  const [selectedRequirements, setSelectedRequirements] = useState<Set<string>>(new Set())
+  const [detailRequirement, setDetailRequirement] = useState<Requirement | null>(null)
+  const [isTraceMatrixOpen, setIsTraceMatrixOpen] = useState(false)
+  const [isSuspectReviewOpen, setIsSuspectReviewOpen] = useState(false)
+  const [isBaselineManagerOpen, setIsBaselineManagerOpen] = useState(false)
+  const [isExportOpen, setIsExportOpen] = useState(false)
+  const [isImportOpen, setIsImportOpen] = useState(false)
+  
+  // Inline editing state
+  const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null)
+  const inlineInputRef = useRef<HTMLInputElement>(null)
   
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -103,6 +141,157 @@ export default function RequirementsPage() {
       setDeleteConfirmation(null)
     },
   })
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: (updates: Partial<Requirement>) => {
+      if (!projectId) throw new Error('Project ID required')
+      return requirementService.bulkUpdateRequirements(projectId, Array.from(selectedRequirements), updates)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+      setSelectedRequirements(new Set())
+    },
+    onError: (error: any) => {
+      console.error('Bulk update error:', error)
+      alert(error?.error || 'Failed to update requirements')
+    },
+  })
+
+  // Inline edit mutation for single field updates
+  const inlineUpdateMutation = useMutation({
+    mutationFn: ({ requirementId, updates }: { requirementId: string; updates: UpdateRequirementDto }) => {
+      if (!projectId) throw new Error('Project ID required')
+      return requirementService.updateRequirement(projectId, requirementId, updates)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+      setInlineEdit(null)
+    },
+    onError: (error: any) => {
+      console.error('Inline update error:', error)
+      alert(error?.error || 'Failed to update requirement')
+      setInlineEdit(null)
+    },
+  })
+
+  // Focus input when inline editing starts
+  useEffect(() => {
+    if (inlineEdit && inlineInputRef.current) {
+      inlineInputRef.current.focus()
+      inlineInputRef.current.select()
+    }
+  }, [inlineEdit])
+
+  // Handle starting inline edit
+  const startInlineEdit = (req: Requirement, field: InlineEditState['field']) => {
+    setInlineEdit({
+      requirementId: req.id,
+      field,
+      value: (req[field] as string) || '',
+    })
+  }
+
+  // Handle saving inline edit
+  const saveInlineEdit = () => {
+    if (!inlineEdit) return
+    
+    const updates: UpdateRequirementDto = {
+      [inlineEdit.field]: inlineEdit.value || undefined,
+    }
+    
+    inlineUpdateMutation.mutate({
+      requirementId: inlineEdit.requirementId,
+      updates,
+    })
+  }
+
+  // Handle canceling inline edit
+  const cancelInlineEdit = () => {
+    setInlineEdit(null)
+  }
+
+  // Handle inline edit key events
+  const handleInlineKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      saveInlineEdit()
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      cancelInlineEdit()
+    } else if (e.key === 'Tab') {
+      e.preventDefault()
+      saveInlineEdit()
+    }
+  }
+
+  // Drag and drop state and handlers
+  const [activeRequirement, setActiveRequirement] = useState<Requirement | null>(null)
+  
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  )
+
+  // Update parent mutation for drag and drop
+  const updateParentMutation = useMutation({
+    mutationFn: ({ requirementId, newParentId }: { requirementId: string; newParentId: string | null }) => {
+      if (!projectId) throw new Error('Project ID required')
+      return requirementService.updateRequirementParent(projectId, requirementId, newParentId)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+    },
+    onError: (error: any) => {
+      console.error('Update parent error:', error)
+      alert(error?.error || 'Failed to update requirement parent')
+    },
+  })
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event
+    const draggedReq = requirements.find((r) => r.id === active.id)
+    if (draggedReq) {
+      setActiveRequirement(draggedReq)
+    }
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    setActiveRequirement(null)
+
+    if (!over || active.id === over.id) return
+
+    const activeReq = requirements.find((r) => r.id === active.id)
+    const overReq = requirements.find((r) => r.id === over.id)
+
+    if (!activeReq || !overReq) return
+
+    // Prevent making a requirement its own descendant
+    const isDescendant = (parentId: string | undefined, targetId: string): boolean => {
+      if (!parentId) return false
+      if (parentId === targetId) return true
+      const parent = requirements.find((r) => r.id === parentId)
+      return parent ? isDescendant(parent.parentId, targetId) : false
+    }
+
+    if (isDescendant(overReq.id, activeReq.id)) {
+      alert('Cannot make a requirement a child of its own descendant')
+      return
+    }
+
+    // Set the dropped requirement as a child of the target
+    updateParentMutation.mutate({
+      requirementId: activeReq.id,
+      newParentId: overReq.id,
+    })
+  }
+
+  const handleDragCancel = () => {
+    setActiveRequirement(null)
+  }
 
   // Build hierarchy tree
   const buildHierarchy = (reqs: Requirement[]): Requirement[] => {
@@ -196,17 +385,28 @@ export default function RequirementsPage() {
     })
   }
 
-  // Filter requirements
+  // Filter requirements with enhanced full-text search
   const filteredRequirements = useMemo(() => {
     return requirements.filter((req) => {
-      // Search filter
+      // Enhanced search filter - searches across all text fields
       if (searchQuery) {
         const query = searchQuery.toLowerCase()
-        const matchesSearch =
-          req.title.toLowerCase().includes(query) ||
-          req.description.toLowerCase().includes(query) ||
-          req.requirementId?.toLowerCase().includes(query) ||
-          req.category?.toLowerCase().includes(query)
+        const searchableFields = [
+          req.title,
+          req.description,
+          req.requirementId,
+          req.category,
+          req.owner,
+          req.source,
+          req.acceptanceCriteria,
+          req.verificationMethod,
+          req.stage,
+          ...(req.tags || []),
+          ...(req.relatedDocuments || []),
+        ]
+        const matchesSearch = searchableFields.some(
+          (field) => field && field.toLowerCase().includes(query)
+        )
         if (!matchesSearch) return false
       }
 
@@ -258,6 +458,24 @@ export default function RequirementsPage() {
     return buildHierarchy(filteredRequirements)
   }, [filteredRequirements])
 
+  // Get unique values for filters (must be defined before renderRequirementRow uses them)
+  const uniqueStatuses = useMemo(() => 
+    Array.from(new Set(requirements.map((r) => r.status).filter(Boolean))),
+    [requirements]
+  )
+  const uniqueCategories = useMemo(() => 
+    Array.from(new Set(requirements.map((r) => r.category).filter(Boolean))),
+    [requirements]
+  )
+  const uniqueOwners = useMemo(() => 
+    Array.from(new Set(requirements.map((r) => r.owner).filter(Boolean))),
+    [requirements]
+  )
+  const uniqueSources = useMemo(() => 
+    Array.from(new Set(requirements.map((r) => r.source).filter(Boolean))),
+    [requirements]
+  )
+
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'critical':
@@ -273,6 +491,47 @@ export default function RequirementsPage() {
     }
   }
 
+  // Sortable row component for drag and drop
+  const SortableRow = ({ req, level, children }: { req: Requirement; level: number; children: React.ReactNode }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: req.id })
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+    }
+
+    return (
+      <tr
+        ref={setNodeRef}
+        style={style}
+        className={clsx(
+          'hover:bg-gray-50 dark:hover:bg-gray-700/50 group',
+          level > 0 && 'bg-gray-50/50 dark:bg-gray-900/30',
+          isDragging && 'opacity-50 bg-blue-50 dark:bg-blue-900/20'
+        )}
+        {...attributes}
+      >
+        <td className="px-2 py-3 w-8">
+          <button
+            {...listeners}
+            className="p-1 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+            title="Drag to change parent"
+          >
+            <GripVertical size={16} />
+          </button>
+        </td>
+        {children}
+      </tr>
+    )
+  }
+
   const renderRequirementRow = (req: Requirement, level: number = 0) => {
     const isExpanded = expandedRows.has(req.id)
     const hasChildren = req.children && req.children.length > 0
@@ -281,18 +540,36 @@ export default function RequirementsPage() {
 
     return (
       <>
-        <tr
-          key={req.id}
-          className={clsx(
-            'hover:bg-gray-50 dark:hover:bg-gray-700/50',
-            level > 0 && 'bg-gray-50/50 dark:bg-gray-900/30'
-          )}
-        >
+        <SortableRow key={req.id} req={req} level={level}>
+          <td className="px-4 py-3">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={selectedRequirements.has(req.id)}
+                onChange={(e) => {
+                  e.stopPropagation()
+                  setSelectedRequirements((prev) => {
+                    const newSet = new Set(prev)
+                    if (newSet.has(req.id)) {
+                      newSet.delete(req.id)
+                    } else {
+                      newSet.add(req.id)
+                    }
+                    return newSet
+                  })
+                }}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+            </div>
+          </td>
           <td className="px-4 py-3">
             <div className="flex items-center gap-2" style={{ paddingLeft: `${level * 24}px` }}>
               {hasChildren ? (
                 <button
-                  onClick={() => toggleRow(req.id)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleRow(req.id)
+                  }}
                   className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
                 >
                   {isExpanded ? (
@@ -304,29 +581,172 @@ export default function RequirementsPage() {
               ) : (
                 <div className="w-6" />
               )}
-              <span className="font-mono text-sm text-gray-600 dark:text-gray-400">
+              <span
+                className="font-mono text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                onClick={() => setDetailRequirement(req)}
+              >
                 {req.requirementId || req.id.substring(0, 8)}
               </span>
             </div>
           </td>
+          {/* Title - inline editable */}
           <td className="px-4 py-3">
-            <span className="font-medium text-gray-900 dark:text-white">{req.title}</span>
+            {inlineEdit?.requirementId === req.id && inlineEdit.field === 'title' ? (
+              <div className="flex items-center gap-1">
+                <input
+                  ref={inlineInputRef}
+                  type="text"
+                  value={inlineEdit.value}
+                  onChange={(e) => setInlineEdit({ ...inlineEdit, value: e.target.value })}
+                  onKeyDown={handleInlineKeyDown}
+                  onBlur={saveInlineEdit}
+                  className="flex-1 px-2 py-1 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            ) : (
+              <span
+                className="font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
+                onClick={() => setDetailRequirement(req)}
+                onDoubleClick={(e) => {
+                  e.stopPropagation()
+                  startInlineEdit(req, 'title')
+                }}
+                title="Double-click to edit"
+              >
+                {req.title}
+              </span>
+            )}
           </td>
+          {/* Category - inline editable */}
           <td className="px-4 py-3">
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              {req.category || '—'}
-            </span>
+            {inlineEdit?.requirementId === req.id && inlineEdit.field === 'category' ? (
+              <select
+                value={inlineEdit.value}
+                onChange={(e) => {
+                  setInlineEdit({ ...inlineEdit, value: e.target.value })
+                  setTimeout(() => {
+                    inlineUpdateMutation.mutate({
+                      requirementId: req.id,
+                      updates: { category: e.target.value || undefined },
+                    })
+                  }, 0)
+                }}
+                onBlur={cancelInlineEdit}
+                autoFocus
+                className="px-2 py-1 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">None</option>
+                {uniqueCategories.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            ) : (
+              <span
+                className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                onDoubleClick={() => startInlineEdit(req, 'category')}
+                title="Double-click to edit"
+              >
+                {req.category || '—'}
+              </span>
+            )}
           </td>
+          {/* Priority - inline editable */}
           <td className="px-4 py-3">
-            <span className={clsx('px-2 py-1 rounded-full text-xs font-medium', getPriorityColor(req.priority))}>
-              {req.priority}
-            </span>
+            {inlineEdit?.requirementId === req.id && inlineEdit.field === 'priority' ? (
+              <select
+                value={inlineEdit.value}
+                onChange={(e) => {
+                  setInlineEdit({ ...inlineEdit, value: e.target.value })
+                  setTimeout(() => {
+                    inlineUpdateMutation.mutate({
+                      requirementId: req.id,
+                      updates: { priority: e.target.value as any },
+                    })
+                  }, 0)
+                }}
+                onBlur={cancelInlineEdit}
+                autoFocus
+                className="px-2 py-1 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+            ) : (
+              <span
+                className={clsx('px-2 py-1 rounded-full text-xs font-medium cursor-pointer', getPriorityColor(req.priority))}
+                onDoubleClick={() => startInlineEdit(req, 'priority')}
+                title="Double-click to edit"
+              >
+                {req.priority}
+              </span>
+            )}
           </td>
+          {/* Status - inline editable */}
           <td className="px-4 py-3">
-            <span className="text-sm text-gray-600 dark:text-gray-400">{req.status || 'draft'}</span>
+            {inlineEdit?.requirementId === req.id && inlineEdit.field === 'status' ? (
+              <select
+                value={inlineEdit.value}
+                onChange={(e) => {
+                  setInlineEdit({ ...inlineEdit, value: e.target.value })
+                  setTimeout(() => {
+                    inlineUpdateMutation.mutate({
+                      requirementId: req.id,
+                      updates: { status: e.target.value },
+                    })
+                  }, 0)
+                }}
+                onBlur={cancelInlineEdit}
+                autoFocus
+                className="px-2 py-1 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                {uniqueStatuses.map((status) => (
+                  <option key={status} value={status}>{status}</option>
+                ))}
+              </select>
+            ) : (
+              <span
+                className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                onDoubleClick={() => startInlineEdit(req, 'status')}
+                title="Double-click to edit"
+              >
+                {req.status || 'draft'}
+              </span>
+            )}
           </td>
+          {/* Owner - inline editable */}
           <td className="px-4 py-3">
-            <span className="text-sm text-gray-600 dark:text-gray-400">{req.owner || '—'}</span>
+            {inlineEdit?.requirementId === req.id && inlineEdit.field === 'owner' ? (
+              <select
+                value={inlineEdit.value}
+                onChange={(e) => {
+                  setInlineEdit({ ...inlineEdit, value: e.target.value })
+                  setTimeout(() => {
+                    inlineUpdateMutation.mutate({
+                      requirementId: req.id,
+                      updates: { owner: e.target.value || undefined },
+                    })
+                  }, 0)
+                }}
+                onBlur={cancelInlineEdit}
+                autoFocus
+                className="px-2 py-1 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">Unassigned</option>
+                {uniqueOwners.map((owner) => (
+                  <option key={owner} value={owner}>{owner}</option>
+                ))}
+              </select>
+            ) : (
+              <span
+                className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                onDoubleClick={() => startInlineEdit(req, 'owner')}
+                title="Double-click to edit"
+              >
+                {req.owner || '—'}
+              </span>
+            )}
           </td>
           <td className="px-4 py-3">
             <div className="flex items-center gap-2">
@@ -352,13 +772,13 @@ export default function RequirementsPage() {
               </button>
             </div>
           </td>
-        </tr>
+        </SortableRow>
         {isExpanded && rowData && (
           <>
             {/* Linked Functions */}
             {rowData.linkedFunctions.length > 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-2 bg-blue-50/50 dark:bg-blue-900/10">
+                  <td colSpan={9} className="px-4 py-2 bg-blue-50/50 dark:bg-blue-900/10">
                   <div className="pl-8">
                     <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-2 flex items-center gap-2">
                       <Settings size={14} />
@@ -384,7 +804,7 @@ export default function RequirementsPage() {
             {/* Linked Issues */}
             {rowData.linkedIssues.length > 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-2 bg-yellow-50/50 dark:bg-yellow-900/10">
+                  <td colSpan={9} className="px-4 py-2 bg-yellow-50/50 dark:bg-yellow-900/10">
                   <div className="pl-8">
                     <p className="text-xs font-medium text-yellow-600 dark:text-yellow-400 mb-2 flex items-center gap-2">
                       <AlertCircle size={14} />
@@ -407,7 +827,7 @@ export default function RequirementsPage() {
             {/* Linked Change Requests */}
             {rowData.linkedChangeRequests.length > 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-2 bg-purple-50/50 dark:bg-purple-900/10">
+                <td colSpan={9} className="px-4 py-2 bg-purple-50/50 dark:bg-purple-900/10">
                   <div className="pl-8">
                     <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-2 flex items-center gap-2">
                       <FileText size={14} />
@@ -429,7 +849,7 @@ export default function RequirementsPage() {
             )}
             {/* Description */}
             <tr>
-              <td colSpan={7} className="px-4 py-3 bg-gray-50 dark:bg-gray-900/50">
+              <td colSpan={9} className="px-4 py-3 bg-gray-50 dark:bg-gray-900/50">
                 <div className="pl-8">
                   <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description</p>
                   <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
@@ -455,7 +875,11 @@ export default function RequirementsPage() {
           <>
             {req.children.map((child) => {
               const childReq = requirements.find((r) => r.id === child.id)
-              return childReq ? renderRequirementRow(childReq, level + 1) : null
+              return childReq ? (
+                <React.Fragment key={child.id}>
+                  {renderRequirementRow(childReq, level + 1)}
+                </React.Fragment>
+              ) : null
             })}
           </>
         )}
@@ -484,28 +908,99 @@ export default function RequirementsPage() {
     }
   }
 
-  // Get unique values for filters
-  const uniqueStatuses = Array.from(new Set(requirements.map((r) => r.status).filter(Boolean)))
-  const uniqueCategories = Array.from(new Set(requirements.map((r) => r.category).filter(Boolean)))
-  const uniqueOwners = Array.from(new Set(requirements.map((r) => r.owner).filter(Boolean)))
-  const uniqueSources = Array.from(new Set(requirements.map((r) => r.source).filter(Boolean)))
-
   return (
     <div className="space-y-6">
       <ProjectNavigation />
 
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Requirements</h2>
-        <button
-          onClick={() => {
-            setParentRequirement(null)
-            setIsCreateModalOpen(true)
-          }}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
-        >
-          <Plus size={16} />
-          <span>Create Requirement</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {selectedRequirements.size > 0 && (
+            <div className="flex items-center gap-2 mr-4">
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                {selectedRequirements.size} selected
+              </span>
+              <select
+                onChange={(e) => {
+                  if (e.target.value && e.target.value !== 'bulk-action') {
+                    const field = e.target.name
+                    const value = e.target.value
+                    const updates: any = { [field]: value }
+                    bulkUpdateMutation.mutate(updates)
+                    e.target.value = 'bulk-action'
+                  }
+                }}
+                className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                defaultValue="bulk-action"
+              >
+                <option value="bulk-action">Bulk Actions...</option>
+                <optgroup label="Change Status">
+                  {uniqueStatuses.map((status) => (
+                    <option key={status} value={status} name="status">
+                      Set Status: {status}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Change Priority">
+                  <option value="low" name="priority">Set Priority: Low</option>
+                  <option value="medium" name="priority">Set Priority: Medium</option>
+                  <option value="high" name="priority">Set Priority: High</option>
+                  <option value="critical" name="priority">Set Priority: Critical</option>
+                </optgroup>
+              </select>
+            </div>
+          )}
+          <button
+            onClick={() => setIsTraceMatrixOpen(true)}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+            title="Open Traceability Matrix"
+          >
+            <Grid3X3 size={16} />
+            <span className="text-sm">Matrix</span>
+          </button>
+          <button
+            onClick={() => setIsSuspectReviewOpen(true)}
+            className="px-3 py-2 border border-yellow-300 dark:border-yellow-600 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-900/30 flex items-center gap-2 transition-colors"
+            title="Review Suspect Links"
+          >
+            <AlertCircle size={16} />
+            <span className="text-sm">Suspect</span>
+          </button>
+          <button
+            onClick={() => setIsBaselineManagerOpen(true)}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+            title="Manage Baselines"
+          >
+            <Archive size={16} />
+            <span className="text-sm">Baselines</span>
+          </button>
+          <button
+            onClick={() => setIsImportOpen(true)}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+            title="Import Requirements"
+          >
+            <Upload size={16} />
+            <span className="text-sm">Import</span>
+          </button>
+          <button
+            onClick={() => setIsExportOpen(true)}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+            title="Export Requirements"
+          >
+            <Download size={16} />
+            <span className="text-sm">Export</span>
+          </button>
+          <button
+            onClick={() => {
+              setParentRequirement(null)
+              setIsCreateModalOpen(true)
+            }}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+          >
+            <Plus size={16} />
+            <span>Create Requirement</span>
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -514,7 +1009,7 @@ export default function RequirementsPage() {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
           <input
             type="text"
-            placeholder="Search requirements by title, description, ID, or category..."
+            placeholder="Search all fields (title, description, ID, category, owner, tags, criteria...)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
@@ -653,9 +1148,33 @@ export default function RequirementsPage() {
       {/* Requirements Table */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
+          >
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
               <tr>
+                <th className="px-2 py-3 w-8" title="Drag to reorder">
+                  <GripVertical size={14} className="text-gray-400 mx-auto" />
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-12">
+                  <input
+                    type="checkbox"
+                    checked={selectedRequirements.size > 0 && selectedRequirements.size === filteredRequirements.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedRequirements(new Set(filteredRequirements.map((r) => r.id)))
+                      } else {
+                        setSelectedRequirements(new Set())
+                      }
+                    }}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Requirement ID
                 </th>
@@ -679,16 +1198,17 @@ export default function RequirementsPage() {
                 </th>
               </tr>
             </thead>
+            <SortableContext items={filteredRequirements.map((r) => r.id)} strategy={verticalListSortingStrategy}>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                     Loading requirements...
                   </td>
                 </tr>
               ) : hierarchyRequirements.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                     {requirements.length === 0
                       ? 'No requirements found. Click "Create Requirement" to get started.'
                       : 'No requirements match your search or filter criteria.'}
@@ -698,7 +1218,25 @@ export default function RequirementsPage() {
                 hierarchyRequirements.map((req) => renderRequirementRow(req))
               )}
             </tbody>
+            </SortableContext>
           </table>
+          {/* Drag Overlay */}
+          <DragOverlay>
+            {activeRequirement ? (
+              <div className="bg-white dark:bg-gray-800 border-2 border-blue-500 rounded-lg shadow-lg p-3 opacity-90">
+                <div className="flex items-center gap-2">
+                  <GripVertical size={16} className="text-gray-400" />
+                  <span className="font-mono text-sm text-gray-600 dark:text-gray-400">
+                    {activeRequirement.requirementId || activeRequirement.id.substring(0, 8)}
+                  </span>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {activeRequirement.title}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+          </DragOverlay>
+          </DndContext>
         </div>
       </div>
 
@@ -733,6 +1271,59 @@ export default function RequirementsPage() {
           onConfirm={handleConfirmDelete}
           onCancel={() => setDeleteConfirmation(null)}
           isDeleting={deleteRequirementMutation.isPending}
+        />
+      )}
+
+      {detailRequirement && projectId && (
+        <RequirementDetailDrawer
+          isOpen={!!detailRequirement}
+          requirement={detailRequirement}
+          projectId={projectId}
+          onClose={() => setDetailRequirement(null)}
+          onEdit={(req) => {
+            setDetailRequirement(null)
+            setEditingRequirement(req)
+          }}
+          onDelete={(req) => {
+            setDetailRequirement(null)
+            setDeleteConfirmation(req)
+          }}
+        />
+      )}
+
+      {isTraceMatrixOpen && projectId && (
+        <TraceabilityMatrix
+          projectId={projectId}
+          onClose={() => setIsTraceMatrixOpen(false)}
+        />
+      )}
+
+      {isSuspectReviewOpen && projectId && (
+        <SuspectLinksReview
+          projectId={projectId}
+          onClose={() => setIsSuspectReviewOpen(false)}
+        />
+      )}
+
+      {isBaselineManagerOpen && projectId && (
+        <BaselineManager
+          projectId={projectId}
+          onClose={() => setIsBaselineManagerOpen(false)}
+        />
+      )}
+
+      {isExportOpen && (
+        <ExportBuilder
+          requirements={filteredRequirements}
+          projectName={projectId}
+          onClose={() => setIsExportOpen(false)}
+        />
+      )}
+
+      {isImportOpen && projectId && (
+        <ImportWizard
+          projectId={projectId}
+          onClose={() => setIsImportOpen(false)}
         />
       )}
     </div>

@@ -5,6 +5,7 @@ import { requirementService } from '../../services/requirement.service'
 import { projectService } from '../../services/project.service'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import { useLifecycleStore } from '../../store/lifecycleStore'
+import RichTextEditor from '../common/RichTextEditor'
 import type { CreateRequirementDto, Requirement } from '../../../shared/types/engineering.types'
 
 interface CreateRequirementModalProps {
@@ -48,11 +49,16 @@ export default function CreateRequirementModal({
     source: '',
     category: '',
     relatedDocuments: [],
+    tags: [],
   })
+  const [tagInput, setTagInput] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [customType, setCustomType] = useState('')
   const [showAddType, setShowAddType] = useState(false)
   const [requirementTypes, setRequirementTypes] = useState<string[]>(defaultRequirementTypes)
+  const [customSource, setCustomSource] = useState('')
+  const [showAddSource, setShowAddSource] = useState(false)
+  const [sourceTypes, setSourceTypes] = useState<string[]>(sources)
   const [autoGenerateId, setAutoGenerateId] = useState(true)
 
   const queryClient = useQueryClient()
@@ -163,11 +169,32 @@ export default function CreateRequirementModal({
       source: '',
       category: '',
       relatedDocuments: [],
+      tags: [],
     })
     setErrors({})
     setCustomType('')
     setShowAddType(false)
+    setCustomSource('')
+    setShowAddSource(false)
     setAutoGenerateId(true)
+    setTagInput('')
+  }
+
+  const handleAddTag = () => {
+    if (tagInput.trim() && !formData.tags?.includes(tagInput.trim())) {
+      setFormData((prev) => ({
+        ...prev,
+        tags: [...(prev.tags || []), tagInput.trim()],
+      }))
+      setTagInput('')
+    }
+  }
+
+  const handleRemoveTag = (tag: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      tags: prev.tags?.filter((t) => t !== tag) || [],
+    }))
   }
 
   const handleAddType = () => {
@@ -176,6 +203,15 @@ export default function CreateRequirementModal({
       setFormData((prev) => ({ ...prev, category: customType.trim() }))
       setCustomType('')
       setShowAddType(false)
+    }
+  }
+
+  const handleAddSource = () => {
+    if (customSource.trim() && !sourceTypes.includes(customSource.trim())) {
+      setSourceTypes([...sourceTypes, customSource.trim()])
+      setFormData((prev) => ({ ...prev, source: customSource.trim() }))
+      setCustomSource('')
+      setShowAddSource(false)
     }
   }
 
@@ -304,16 +340,12 @@ export default function CreateRequirementModal({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
               Description <span className="text-red-500">*</span>
             </label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => handleChange('description', e.target.value)}
-              rows={4}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.description
-                  ? 'border-red-500'
-                  : 'border-gray-300 dark:border-gray-600'
-              } bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none`}
-              placeholder="Enter requirement description"
+            <RichTextEditor
+              content={formData.description}
+              onChange={(content) => handleChange('description', content)}
+              placeholder="Enter requirement description with formatting..."
+              minHeight="120px"
+              className={errors.description ? 'ring-2 ring-red-500 rounded-lg' : ''}
             />
             {errors.description && (
               <p className="mt-1 text-sm text-red-500">{errors.description}</p>
@@ -443,18 +475,46 @@ export default function CreateRequirementModal({
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
                 Source/Origin
               </label>
-              <select
-                value={formData.source || ''}
-                onChange={(e) => handleChange('source', e.target.value || undefined)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value="">Select source</option>
-                {sources.map((source) => (
-                  <option key={source} value={source}>
-                    {source}
-                  </option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  value={formData.source || ''}
+                  onChange={(e) => handleChange('source', e.target.value || undefined)}
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="">Select source</option>
+                  {sourceTypes.map((source) => (
+                    <option key={source} value={source}>
+                      {source}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowAddSource(!showAddSource)}
+                  className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2"
+                >
+                  <Plus size={16} />
+                  <span>Add Source</span>
+                </button>
+              </div>
+              {showAddSource && (
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="text"
+                    value={customSource}
+                    onChange={(e) => setCustomSource(e.target.value)}
+                    placeholder="Enter new source type name"
+                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddSource}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                  >
+                    Add
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -482,13 +542,60 @@ export default function CreateRequirementModal({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
               Acceptance Criteria
             </label>
-            <textarea
-              value={formData.acceptanceCriteria || ''}
-              onChange={(e) => handleChange('acceptanceCriteria', e.target.value)}
-              rows={3}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-              placeholder="Enter acceptance criteria"
+            <RichTextEditor
+              content={formData.acceptanceCriteria || ''}
+              onChange={(content) => handleChange('acceptanceCriteria', content)}
+              placeholder="Enter acceptance criteria..."
+              minHeight="100px"
             />
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+              Tags
+            </label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleAddTag()
+                  }
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder="Enter tag and press Enter"
+              />
+              <button
+                type="button"
+                onClick={handleAddTag}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+              >
+                <Plus size={16} />
+              </button>
+            </div>
+            {formData.tags && formData.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {formData.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-sm"
+                  >
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTag(tag)}
+                      className="hover:text-blue-600 dark:hover:text-blue-400"
+                    >
+                      <X size={14} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Error Message */}

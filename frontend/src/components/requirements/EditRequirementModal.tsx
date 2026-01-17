@@ -5,6 +5,7 @@ import { requirementService } from '../../services/requirement.service'
 import { projectService } from '../../services/project.service'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import { useLifecycleStore } from '../../store/lifecycleStore'
+import RichTextEditor from '../common/RichTextEditor'
 import type { Requirement, UpdateRequirementDto } from '../../../shared/types/engineering.types'
 
 interface EditRequirementModalProps {
@@ -41,6 +42,10 @@ export default function EditRequirementModal({
   const [customType, setCustomType] = useState('')
   const [showAddType, setShowAddType] = useState(false)
   const [requirementTypes, setRequirementTypes] = useState<string[]>(defaultRequirementTypes)
+  const [customSource, setCustomSource] = useState('')
+  const [showAddSource, setShowAddSource] = useState(false)
+  const [sourceTypes, setSourceTypes] = useState<string[]>(sources)
+  const [tagInput, setTagInput] = useState('')
 
   const queryClient = useQueryClient()
   const { statuses } = useStatusDefinitionsStore()
@@ -104,12 +109,18 @@ export default function EditRequirementModal({
         source: requirement.source,
         category: requirement.category,
         relatedDocuments: requirement.relatedDocuments,
+        tags: requirement.tags || [],
       })
       setErrors({})
       
       // Add current category to types if it's not in the list
       if (requirement.category && !requirementTypes.includes(requirement.category)) {
         setRequirementTypes([...requirementTypes, requirement.category])
+      }
+      
+      // Add current source to source types if it's not in the list
+      if (requirement.source && !sourceTypes.includes(requirement.source)) {
+        setSourceTypes([...sourceTypes, requirement.source])
       }
     }
   }, [requirement])
@@ -122,13 +133,15 @@ export default function EditRequirementModal({
     onSuccess: (response) => {
       if (response.success) {
         queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+        queryClient.invalidateQueries({ queryKey: ['requirement', projectId, requirement?.id] })
         onClose()
       } else {
+        console.error('Update failed:', response.error)
         setErrors({ submit: response.error || 'Failed to update requirement' })
       }
     },
     onError: (error: any) => {
-      console.error('Update requirement error:', error)
+      console.error('Update requirement mutation error:', error)
       let errorMessage = 'Failed to update requirement.'
       
       if (error?.error) {
@@ -139,6 +152,7 @@ export default function EditRequirementModal({
         errorMessage = error.response.data.error
       }
       
+      console.error('Error message to display:', errorMessage)
       setErrors({ submit: errorMessage })
     },
   })
@@ -152,6 +166,40 @@ export default function EditRequirementModal({
     }
   }
 
+  const handleAddSource = () => {
+    if (customSource.trim() && !sourceTypes.includes(customSource.trim())) {
+      setSourceTypes([...sourceTypes, customSource.trim()])
+      setFormData((prev) => ({ ...prev, source: customSource.trim() }))
+      setCustomSource('')
+      setShowAddSource(false)
+    }
+  }
+
+  const handleAddTag = () => {
+    if (tagInput.trim() && !formData.tags?.includes(tagInput.trim())) {
+      setFormData((prev) => ({
+        ...prev,
+        tags: [...(prev.tags || []), tagInput.trim()],
+      }))
+      setTagInput('')
+    }
+  }
+
+  const handleRemoveTag = (tag: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      tags: prev.tags?.filter((t) => t !== tag) || [],
+    }))
+  }
+
+  // Helper function to check if HTML content is empty (strips HTML tags before checking)
+  const isHtmlEmpty = (html: string | undefined | null): boolean => {
+    if (!html) return true
+    // Remove HTML tags and check if remaining text is empty
+    const textContent = html.replace(/<[^>]*>/g, '').trim()
+    return !textContent || textContent.length === 0
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -161,7 +209,8 @@ export default function EditRequirementModal({
     if (formData.title !== undefined && !formData.title.trim()) {
       newErrors.title = 'Title is required'
     }
-    if (formData.description !== undefined && !formData.description.trim()) {
+    // Check HTML description properly (RichTextEditor returns HTML)
+    if (formData.description !== undefined && isHtmlEmpty(formData.description)) {
       newErrors.description = 'Description is required'
     }
 
@@ -170,17 +219,42 @@ export default function EditRequirementModal({
       return
     }
 
+    // Prepare submit data - don't trim HTML content from RichTextEditor
     const submitData: UpdateRequirementDto = {
       ...formData,
       title: formData.title?.trim(),
-      description: formData.description?.trim(),
+      // Don't trim HTML content - preserve formatting from RichTextEditor
+      description: formData.description || undefined,
       owner: formData.owner?.trim() || undefined,
-      acceptanceCriteria: formData.acceptanceCriteria?.trim() || undefined,
+      // Don't trim acceptanceCriteria if it's HTML from RichTextEditor
+      acceptanceCriteria: formData.acceptanceCriteria || undefined,
       category: formData.category || undefined,
       relatedDocuments: formData.relatedDocuments && formData.relatedDocuments.length > 0 ? formData.relatedDocuments : undefined,
+      // Explicitly include parentId - empty string means clear parent (backend converts to null)
+      // undefined means don't change, string means set parent
+      parentId: formData.parentId !== undefined 
+        ? (formData.parentId === '' ? '' : formData.parentId) 
+        : undefined,
+      // Include all other fields that might have changed
+      requirementId: formData.requirementId || undefined,
+      priority: formData.priority,
+      status: formData.status,
+      stage: formData.stage,
+      verificationMethod: formData.verificationMethod || undefined,
+      source: formData.source || undefined,
+      tags: formData.tags && formData.tags.length > 0 ? formData.tags : undefined,
     }
 
-    updateRequirementMutation.mutate(submitData)
+    console.log('Submitting requirement update:', requirement.id, submitData)
+    
+    updateRequirementMutation.mutate(submitData, {
+      onSuccess: (response) => {
+        console.log('Update successful:', response)
+      },
+      onError: (error) => {
+        console.error('Update mutation error:', error)
+      },
+    })
   }
 
   const handleChange = (field: keyof UpdateRequirementDto, value: any) => {
@@ -269,16 +343,12 @@ export default function EditRequirementModal({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
               Description <span className="text-red-500">*</span>
             </label>
-            <textarea
-              value={formData.description || ''}
-              onChange={(e) => handleChange('description', e.target.value)}
-              rows={4}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.description
-                  ? 'border-red-500'
-                  : 'border-gray-300 dark:border-gray-600'
-              } bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none`}
-              placeholder="Enter requirement description"
+            <RichTextEditor
+              content={formData.description || ''}
+              onChange={(content) => handleChange('description', content)}
+              placeholder="Enter requirement description with formatting..."
+              minHeight="120px"
+              className={errors.description ? 'ring-2 ring-red-500 rounded-lg' : ''}
             />
             {errors.description && (
               <p className="mt-1 text-sm text-red-500">{errors.description}</p>
@@ -292,7 +362,13 @@ export default function EditRequirementModal({
             </label>
             <select
               value={formData.parentId || ''}
-              onChange={(e) => handleChange('parentId', e.target.value || undefined)}
+              onChange={(e) => {
+                // Preserve empty string to clear parent (backend converts '' to null)
+                // Only convert to undefined if we want to keep the current value unchanged
+                // For now, always update - empty string means clear, non-empty means set
+                const newParentId = e.target.value === '' ? '' : e.target.value || undefined
+                handleChange('parentId', newParentId)
+              }}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
               <option value="">None (Top-level requirement)</option>
@@ -413,18 +489,46 @@ export default function EditRequirementModal({
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
                 Source/Origin
               </label>
-              <select
-                value={formData.source || ''}
-                onChange={(e) => handleChange('source', e.target.value || undefined)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value="">Select source</option>
-                {sources.map((source) => (
-                  <option key={source} value={source}>
-                    {source}
-                  </option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  value={formData.source || ''}
+                  onChange={(e) => handleChange('source', e.target.value || undefined)}
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="">Select source</option>
+                  {sourceTypes.map((source) => (
+                    <option key={source} value={source}>
+                      {source}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowAddSource(!showAddSource)}
+                  className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2"
+                >
+                  <Plus size={16} />
+                  <span>Add Source</span>
+                </button>
+              </div>
+              {showAddSource && (
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="text"
+                    value={customSource}
+                    onChange={(e) => setCustomSource(e.target.value)}
+                    placeholder="Enter new source type name"
+                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddSource}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                  >
+                    Add
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -452,13 +556,60 @@ export default function EditRequirementModal({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
               Acceptance Criteria
             </label>
-            <textarea
-              value={formData.acceptanceCriteria || ''}
-              onChange={(e) => handleChange('acceptanceCriteria', e.target.value)}
-              rows={3}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-              placeholder="Enter acceptance criteria"
+            <RichTextEditor
+              content={formData.acceptanceCriteria || ''}
+              onChange={(content) => handleChange('acceptanceCriteria', content)}
+              placeholder="Enter acceptance criteria..."
+              minHeight="100px"
             />
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+              Tags
+            </label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleAddTag()
+                  }
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder="Enter tag and press Enter"
+              />
+              <button
+                type="button"
+                onClick={handleAddTag}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+              >
+                <Plus size={16} />
+              </button>
+            </div>
+            {formData.tags && formData.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {formData.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-sm"
+                  >
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTag(tag)}
+                      className="hover:text-blue-600 dark:hover:text-blue-400"
+                    >
+                      <X size={14} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Error Message */}

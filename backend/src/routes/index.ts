@@ -12,6 +12,9 @@ import documentationRoutes from './documentation.routes'
 import issuesRoutes from './issues.routes'
 import parametersRoutes from './parameters.routes'
 import changeRequestsRoutes from './changeRequests.routes'
+import viewsRoutes from './views.routes'
+import versionsRoutes from './versions.routes'
+import baselinesRoutes from './baselines.routes'
 
 const router = Router()
 
@@ -28,5 +31,8 @@ router.use('/documentation', documentationRoutes)
 router.use('/issues', issuesRoutes)
 router.use('/parameters', parametersRoutes)
 router.use('/change-requests', changeRequestsRoutes)
+router.use('/views', viewsRoutes)
+router.use('/versions', versionsRoutes)
+router.use('/baselines', baselinesRoutes)
 
 export default router

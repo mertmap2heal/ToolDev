@@ -7,7 +7,7 @@ const prisma = new PrismaClient()
 export const createChangeRequest = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
-    const { title, description, sourceType, sourceId, priority, requestedBy } = req.body
+    const { title, description, sourceType, sourceId, priority, requestedBy, risk, effort, justification } = req.body
 
     if (!title || !description || !sourceType || !sourceId) {
       return res.status(400).json({
@@ -32,6 +32,9 @@ export const createChangeRequest = async (req: AuthRequest, res: Response) => {
         sourceId,
         priority: priority || 'medium',
         requestedBy: requestedBy || null,
+        risk: risk || null,
+        effort: effort || null,
+        justification: justification || null,
       },
     })
 

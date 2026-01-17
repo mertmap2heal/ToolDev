@@ -16,8 +16,107 @@ export interface Requirement {
   source?: string
   category?: string
   relatedDocuments?: string[]
+  tags?: string[]
+  comments?: RequirementComment[]
+  attachments?: RequirementAttachment[]
   createdAt: string
   updatedAt: string
+}
+
+export interface RequirementComment {
+  id: string
+  requirementId: string
+  projectId: string
+  content: string
+  authorId?: string
+  authorName?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RequirementAttachment {
+  id: string
+  requirementId: string
+  projectId: string
+  fileName: string
+  fileUrl: string
+  fileSize?: number
+  mimeType?: string
+  uploadedBy?: string
+  uploadedByName?: string
+  createdAt: string
+}
+
+export interface SavedView {
+  id: string
+  projectId: string
+  userId?: string
+  name: string
+  type: 'personal' | 'project' | 'organization'
+  filters?: string
+  columns?: string
+  sortBy?: string
+  sortOrder?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RequirementVersion {
+  id: string
+  requirementId: string
+  projectId: string
+  version: number
+  title: string
+  description: string
+  priority: string
+  status: string
+  stage?: string
+  owner?: string
+  category?: string
+  source?: string
+  verificationMethod?: string
+  acceptanceCriteria?: string
+  tags?: string[]
+  changedBy?: string
+  changedByName?: string
+  changeReason?: string
+  snapshot?: string
+  createdAt: string
+}
+
+export interface Baseline {
+  id: string
+  projectId: string
+  name: string
+  description?: string
+  status: 'active' | 'locked' | 'archived'
+  createdBy?: string
+  createdByName?: string
+  lockedAt?: string
+  itemCount?: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface BaselineItem {
+  id: string
+  baselineId: string
+  requirementId: string
+  snapshot: string
+  createdAt: string
+}
+
+export interface CreateBaselineDto {
+  name: string
+  description?: string
+}
+
+export interface BaselineComparison {
+  baselineA: Baseline
+  baselineB: Baseline
+  added: string[]
+  removed: string[]
+  modified: string[]
 }
 
 export interface SystemFunction {
@@ -66,6 +165,7 @@ export interface CreateRequirementDto {
   source?: string
   category?: string
   relatedDocuments?: string[]
+  tags?: string[]
 }
 
 export interface UpdateRequirementDto {
@@ -82,6 +182,7 @@ export interface UpdateRequirementDto {
   source?: string
   category?: string
   relatedDocuments?: string[]
+  tags?: string[]
 }
 
 export interface CreateSystemFunctionDto {
@@ -173,6 +274,9 @@ export interface ChangeRequest {
   requestedBy?: string
   reviewedBy?: string
   reviewComments?: string
+  risk?: 'low' | 'medium' | 'high' | 'critical'
+  effort?: 'low' | 'medium' | 'high'
+  justification?: string
   createdAt: string
   updatedAt: string
 }
@@ -184,4 +288,16 @@ export interface CreateChangeRequestDto {
   sourceId: string
   priority: 'low' | 'medium' | 'high' | 'critical'
   requestedBy?: string
+}
+
+export interface BulkImportRequest {
+  create?: CreateRequirementDto[]
+  update?: Array<{ id: string; data: Partial<UpdateRequirementDto> }>
+}
+
+export interface BulkImportResult {
+  created: number
+  updated: number
+  skipped: number
+  errors: Array<{ row: number; errors: string[] }>
 }

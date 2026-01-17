@@ -21,6 +21,8 @@ export interface TraceLink {
   linkType: LinkType
   confidence?: number
   isAuto: boolean
+  isSuspect?: boolean
+  lastChecked?: string
   createdAt: string
 }
 

@@ -43,6 +43,8 @@ model Project {
   issues        Issue[]
   parameters    Parameter[]
   changeRequests ChangeRequest[]
+  savedViews    SavedView[]
+  baselines     Baseline[]
 }
 
 model ProjectMember {
@@ -74,16 +76,53 @@ model Requirement {
   source            String?
   category          String?
   relatedDocuments  String[]  @default([])
+  tags              String[]  @default([])
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
   project           Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   parent            Requirement?  @relation("RequirementHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children          Requirement[]  @relation("RequirementHierarchy")
+  comments          RequirementComment[]
+  attachments       RequirementAttachment[]
 
   @@unique([projectId, requirementId])
   @@index([projectId])
   @@index([parentId])
+}
+
+model RequirementComment {
+  id            String   @id @default(uuid())
+  requirementId String
+  projectId     String
+  content       String
+  authorId      String?
+  authorName    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  requirement   Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  @@index([requirementId])
+  @@index([projectId])
+}
+
+model RequirementAttachment {
+  id            String   @id @default(uuid())
+  requirementId String
+  projectId     String
+  fileName      String
+  fileUrl       String
+  fileSize      Int?
+  mimeType      String?
+  uploadedBy    String?
+  uploadedByName String?
+  createdAt     DateTime @default(now())
+
+  requirement   Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  @@index([requirementId])
+  @@index([projectId])
 }
 
 model SystemFunction {
@@ -135,6 +174,8 @@ model TraceLink {
   linkType     String
   confidence   Float?
   isAuto       Boolean  @default(false)
+  isSuspect    Boolean  @default(false)
+  lastChecked  DateTime?
   createdAt    DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -199,8 +240,88 @@ model ChangeRequest {
   requestedBy       String?
   reviewedBy        String?
   reviewComments    String?
+  risk              String?  // 'low' | 'medium' | 'high' | 'critical'
+  effort            String?  // 'low' | 'medium' | 'high'
+  justification     String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model SavedView {
+  id            String   @id @default(uuid())
+  projectId     String
+  userId        String?
+  name          String
+  type          String   @default("personal") // 'personal' | 'project' | 'organization'
+  filters       String?  // JSON string of filter criteria
+  columns       String?  // JSON string of column configuration
+  sortBy        String?
+  sortOrder     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([userId])
+}
+
+model RequirementVersion {
+  id            String   @id @default(uuid())
+  requirementId String
+  projectId     String
+  version       Int
+  title         String
+  description   String
+  priority      String
+  status        String
+  stage         String?
+  owner         String?
+  category      String?
+  source        String?
+  verificationMethod String?
+  acceptanceCriteria String?
+  tags          String[] @default([])
+  changedBy     String?
+  changedByName String?
+  changeReason  String?
+  snapshot      String?  // JSON string of full requirement data
+  createdAt     DateTime @default(now())
+
+  @@index([requirementId])
+  @@index([projectId])
+  @@index([version])
+}
+
+model Baseline {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  description String?
+  status      String   @default("active") // 'active' | 'locked' | 'archived'
+  createdBy   String?
+  createdByName String?
+  lockedAt    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items       BaselineItem[]
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model BaselineItem {
+  id          String   @id @default(uuid())
+  baselineId  String
+  requirementId String
+  snapshot    String   // JSON string of requirement data at baseline time
+  createdAt   DateTime @default(now())
+
+  baseline    Baseline @relation(fields: [baselineId], references: [id], onDelete: Cascade)
+
+  @@index([baselineId])
+  @@index([requirementId])
 }
