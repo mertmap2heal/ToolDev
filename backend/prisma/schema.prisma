@@ -264,6 +264,25 @@ model ChangeRequest {
   updatedAt         DateTime @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  attachments ChangeRequestAttachment[]
+}
+
+model ChangeRequestAttachment {
+  id                String   @id @default(uuid())
+  changeRequestId   String
+  projectId         String
+  fileName          String
+  fileUrl           String
+  fileSize          Int?
+  mimeType          String?
+  uploadedBy        String?
+  uploadedByName    String?
+  createdAt         DateTime @default(now())
+
+  changeRequest     ChangeRequest @relation(fields: [changeRequestId], references: [id], onDelete: Cascade)
+
+  @@index([changeRequestId])
+  @@index([projectId])
 }
 
 model SavedView {

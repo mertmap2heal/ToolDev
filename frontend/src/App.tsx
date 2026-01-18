@@ -22,10 +22,11 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* MBSE Models - Full page experience outside MainLayout */}
+        <Route path="projects/:projectId/mbse-models" element={<MBSEModelsPage />} />
         <Route path="/" element={<MainLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="projects/:projectId/stakeholder" element={<StakeholderPage />} />
-          <Route path="projects/:projectId/mbse-models" element={<MBSEModelsPage />} />
           <Route path="projects/:projectId/requirements" element={<RequirementsPage />} />
           <Route path="projects/:projectId/tasks" element={<TasksPage />} />
           <Route path="projects/:projectId/functions" element={<SystemFunctionsPage />} />

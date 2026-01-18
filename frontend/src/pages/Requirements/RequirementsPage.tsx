@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, Check, GripVertical, Grid3X3, Archive, Download, Upload } from 'lucide-react'
+import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, Check, GripVertical, Grid3X3, Archive, Download, Upload, GitBranch } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   DndContext,
@@ -27,6 +27,7 @@ import ImportWizard from '../../components/requirements/ImportWizard'
 import RequirementDiagram from '../../components/requirements/RequirementDiagram'
 import RequirementQualityPanel from '../../components/requirements/RequirementQualityPanel'
 import AllocationTable from '../../components/requirements/AllocationTable'
+import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
@@ -73,6 +74,8 @@ export default function RequirementsPage() {
   const [isDiagramOpen, setIsDiagramOpen] = useState(false)
   const [isAllocationTableOpen, setIsAllocationTableOpen] = useState(false)
   const [isQualityPanelOpen, setIsQualityPanelOpen] = useState(false)
+  const [isChangeRequestModalOpen, setIsChangeRequestModalOpen] = useState(false)
+  const [selectedRequirementForChangeRequest, setSelectedRequirementForChangeRequest] = useState<Requirement | null>(null)
   
   // Inline editing state
   const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null)
@@ -901,6 +904,17 @@ export default function RequirementsPage() {
               <button
                 onClick={(e) => {
                   e.stopPropagation()
+                  setSelectedRequirementForChangeRequest(req)
+                  setIsChangeRequestModalOpen(true)
+                }}
+                className="p-1.5 text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
+                title="Create change request"
+              >
+                <GitBranch size={16} />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
                   setEditingRequirement(req)
                 }}
                 className="p-1.5 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
@@ -1528,10 +1542,11 @@ export default function RequirementsPage() {
         />
       )}
 
-      {isDiagramOpen && (
+      {isDiagramOpen && projectId && (
         <RequirementDiagram
           requirements={requirements}
           traceLinks={traceLinks}
+          projectId={projectId}
           onClose={() => setIsDiagramOpen(false)}
         />
       )}
@@ -1547,6 +1562,22 @@ export default function RequirementsPage() {
         <RequirementQualityPanel
           projectId={projectId}
           onClose={() => setIsQualityPanelOpen(false)}
+        />
+      )}
+
+      {isChangeRequestModalOpen && projectId && selectedRequirementForChangeRequest && (
+        <CreateChangeRequestModal
+          isOpen={isChangeRequestModalOpen}
+          onClose={() => {
+            setIsChangeRequestModalOpen(false)
+            setSelectedRequirementForChangeRequest(null)
+          }}
+          projectId={projectId}
+          sourceType="requirement"
+          sourceId={selectedRequirementForChangeRequest.id}
+          sourceName={selectedRequirementForChangeRequest.title}
+          sourceTitle={selectedRequirementForChangeRequest.title}
+          sourceDescription={selectedRequirementForChangeRequest.description}
         />
       )}
     </div>

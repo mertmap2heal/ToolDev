@@ -1,27 +1,31 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, Search, Check } from 'lucide-react'
+import { X, Search, Check, Upload, File, Trash2 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { changeRequestService } from '../../services/changeRequest.service'
 import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
 import { parameterService } from '../../services/parameter.service'
-import type { CreateChangeRequestDto, SystemFunction, Issue, Parameter } from '../../../shared/types/engineering.types'
+import { requirementService } from '../../services/requirement.service'
+import type { CreateChangeRequestDto, SystemFunction, Issue, Parameter, Requirement } from '../../../shared/types/engineering.types'
 
 interface CreateChangeRequestModalProps {
   isOpen: boolean
   onClose: () => void
   projectId: string
-  sourceType?: 'function' | 'issue' | 'parameter'
+  sourceType?: 'function' | 'issue' | 'parameter' | 'requirement'
   sourceId?: string
   sourceName?: string
+  sourceTitle?: string
+  sourceDescription?: string
 }
 
 type SourceItem = {
   id: string
-  type: 'function' | 'issue' | 'parameter'
+  type: 'function' | 'issue' | 'parameter' | 'requirement'
   name: string
   description?: string
   functionId?: string
+  requirementId?: string
 }
 
 export default function CreateChangeRequestModal({
@@ -31,14 +35,19 @@ export default function CreateChangeRequestModal({
   sourceType: initialSourceType,
   sourceId: initialSourceId,
   sourceName: initialSourceName,
+  sourceTitle: initialSourceTitle,
+  sourceDescription: initialSourceDescription,
 }: CreateChangeRequestModalProps) {
   const [formData, setFormData] = useState<CreateChangeRequestDto>({
-    title: '',
-    description: '',
+    title: initialSourceTitle || '',
+    description: initialSourceDescription || '',
     sourceType: initialSourceType || 'function',
     sourceId: initialSourceId || '',
     priority: 'medium',
     requestedBy: '',
+    risk: undefined,
+    effort: undefined,
+    justification: '',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [sourceSearchQuery, setSourceSearchQuery] = useState('')
@@ -52,10 +61,13 @@ export default function CreateChangeRequestModal({
         }
       : null
   )
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [uploadingFiles, setUploadingFiles] = useState(false)
   const sourceDropdownRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
 
-  // Fetch functions, issues, and parameters for source selection
+  // Fetch functions, issues, parameters, and requirements for source selection
   const { data: functionsData } = useQuery({
     queryKey: ['functions', projectId],
     queryFn: () => functionService.getFunctions(projectId),
@@ -74,9 +86,16 @@ export default function CreateChangeRequestModal({
     enabled: isOpen && !initialSourceType,
   })
 
+  const { data: requirementsData } = useQuery({
+    queryKey: ['requirements', projectId],
+    queryFn: () => requirementService.getRequirements(projectId),
+    enabled: isOpen && !initialSourceType,
+  })
+
   const functions = functionsData?.success ? functionsData.data || [] : []
   const issues = issuesData?.success ? issuesData.data || [] : []
   const parameters = parametersData?.success ? parametersData.data || [] : []
+  const requirements = requirementsData?.success ? requirementsData.data || [] : []
 
   // Combine all sources into a unified list
   const allSources: SourceItem[] = [
@@ -99,6 +118,13 @@ export default function CreateChangeRequestModal({
       name: param.name,
       description: param.description,
     })),
+    ...requirements.map((req) => ({
+      id: req.id,
+      type: 'requirement' as const,
+      name: req.title,
+      description: req.description,
+      requirementId: req.requirementId,
+    })),
   ]
 
   // Filter sources based on search
@@ -107,12 +133,14 @@ export default function CreateChangeRequestModal({
     const name = source.name || ''
     const description = source.description || ''
     const functionId = source.functionId || ''
+    const requirementId = source.requirementId || ''
     const typeLabel = source.type
 
     return (
       name.toLowerCase().includes(searchLower) ||
       description?.toLowerCase().includes(searchLower) ||
       functionId.toLowerCase().includes(searchLower) ||
+      requirementId.toLowerCase().includes(searchLower) ||
       typeLabel.includes(searchLower)
     )
   })
@@ -133,19 +161,23 @@ export default function CreateChangeRequestModal({
 
   useEffect(() => {
     if (isOpen) {
-      if (initialSourceType && initialSourceId && initialSourceName) {
+      if (initialSourceType && initialSourceId && (initialSourceName || initialSourceTitle)) {
         setSelectedSource({
           id: initialSourceId,
           type: initialSourceType,
-          name: initialSourceName,
+          name: initialSourceName || initialSourceTitle || '',
+          requirementId: initialSourceType === 'requirement' ? initialSourceId : undefined,
         })
         setFormData({
-          title: '',
-          description: '',
+          title: initialSourceTitle || '',
+          description: initialSourceDescription || '',
           sourceType: initialSourceType,
           sourceId: initialSourceId,
           priority: 'medium',
           requestedBy: '',
+          risk: undefined,
+          effort: undefined,
+          justification: '',
         })
       } else {
         setSelectedSource(null)
@@ -156,13 +188,18 @@ export default function CreateChangeRequestModal({
           sourceId: '',
           priority: 'medium',
           requestedBy: '',
+          risk: undefined,
+          effort: undefined,
+          justification: '',
         })
       }
       setErrors({})
       setSourceSearchQuery('')
       setShowSourceDropdown(false)
+      setSelectedFiles([])
+      setUploadingFiles(false)
     }
-  }, [isOpen, initialSourceType, initialSourceId, initialSourceName])
+  }, [isOpen, initialSourceType, initialSourceId, initialSourceName, initialSourceTitle, initialSourceDescription])
 
   const handleSourceSelect = (source: SourceItem) => {
     setSelectedSource(source)
@@ -184,7 +221,23 @@ export default function CreateChangeRequestModal({
 
   const createChangeRequestMutation = useMutation({
     mutationFn: (data: CreateChangeRequestDto) => changeRequestService.createChangeRequest(projectId, data),
-    onSuccess: () => {
+    onSuccess: async (response) => {
+      if (response.success && response.data && selectedFiles.length > 0) {
+        // Upload files after change request is created
+        setUploadingFiles(true)
+        try {
+          await Promise.all(
+            selectedFiles.map((file) =>
+              changeRequestService.uploadAttachment(projectId, response.data.id, file)
+            )
+          )
+        } catch (error) {
+          console.error('Error uploading files:', error)
+          // Don't fail the whole operation if file upload fails
+        } finally {
+          setUploadingFiles(false)
+        }
+      }
       queryClient.invalidateQueries({ queryKey: ['change-requests', projectId] })
       onClose()
     },
@@ -215,10 +268,19 @@ export default function CreateChangeRequestModal({
       return
     }
 
-    createChangeRequestMutation.mutate(formData)
+    // Clean up optional fields - convert empty strings to undefined
+    const submitData: CreateChangeRequestDto = {
+      ...formData,
+      requestedBy: formData.requestedBy?.trim() || undefined,
+      risk: formData.risk || undefined,
+      effort: formData.effort || undefined,
+      justification: formData.justification?.trim() || undefined,
+    }
+
+    createChangeRequestMutation.mutate(submitData)
   }
 
-  const handleChange = (field: keyof CreateChangeRequestDto, value: string) => {
+  const handleChange = (field: keyof CreateChangeRequestDto, value: string | undefined) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
     if (errors[field]) {
       setErrors((prev) => {
@@ -227,6 +289,26 @@ export default function CreateChangeRequestModal({
         return newErrors
       })
     }
+  }
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    setSelectedFiles((prev) => [...prev, ...files])
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
   }
 
   if (!isOpen) return null
@@ -244,167 +326,328 @@ export default function CreateChangeRequestModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* Source Selection */}
-          {initialSourceType && initialSourceId ? (
-            <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Source
-              </label>
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                <span className="font-medium capitalize">{initialSourceType}:</span> {initialSourceName || initialSourceId}
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Change Request Details Section */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2">
+              Change Request Details
+            </h3>
+            
+            {/* Source Selection */}
+            {initialSourceType && initialSourceId ? (
+              <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Source
+                </label>
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  <span className="font-medium capitalize">{initialSourceType}:</span> {initialSourceName || initialSourceId}
+                </div>
               </div>
-            </div>
-          ) : (
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Link Source <span className="text-red-500">*</span>
+                </label>
+                <div className="relative" ref={sourceDropdownRef}>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {selectedSource && (
+                      <span
+                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
+                          selectedSource.type === 'function'
+                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+                            : selectedSource.type === 'issue'
+                            ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400'
+                            : selectedSource.type === 'requirement'
+                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400'
+                            : 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                        }`}
+                      >
+                        {selectedSource.type.charAt(0).toUpperCase() + selectedSource.type.slice(1)}: {selectedSource.name}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedSource(null)
+                            setFormData((prev) => ({ ...prev, sourceId: '', sourceType: 'function' }))
+                          }}
+                          className="ml-1 hover:opacity-70"
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      placeholder="Search functions, issues, parameters, or requirements..."
+                      value={sourceSearchQuery}
+                      onChange={(e) => {
+                        setSourceSearchQuery(e.target.value)
+                        setShowSourceDropdown(true)
+                      }}
+                      onFocus={() => setShowSourceDropdown(true)}
+                      className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
+                        errors.sourceId ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                      }`}
+                    />
+                    {showSourceDropdown && filteredSources.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {filteredSources.map((source) => (
+                          <button
+                            key={`${source.type}-${source.id}`}
+                            type="button"
+                            onClick={() => handleSourceSelect(source)}
+                            className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                          >
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                source.type === 'function'
+                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+                                  : source.type === 'issue'
+                                  ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400'
+                                  : source.type === 'requirement'
+                                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400'
+                                  : 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                              }`}
+                            >
+                              {source.type.charAt(0).toUpperCase() + source.type.slice(1)}
+                            </span>
+                            <span className="flex-1">
+                              <span className="font-medium">{source.name}</span>
+                              {(source.requirementId || source.functionId) && (
+                                <span className="text-xs text-gray-500 dark:text-gray-400 ml-2 font-mono">
+                                  {source.requirementId || source.functionId}
+                                </span>
+                              )}
+                              {source.description && (
+                                <span className="text-xs text-gray-500 dark:text-gray-400 ml-2 truncate block">
+                                  {source.description}
+                                </span>
+                              )}
+                            </span>
+                            {selectedSource?.id === source.id && selectedSource?.type === source.type && (
+                              <Check size={16} className="text-blue-600 dark:text-blue-400" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {errors.sourceId && <p className="mt-1 text-sm text-red-500">{errors.sourceId}</p>}
+                </div>
+              </div>
+            )}
+
+            {/* Title */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Link Source <span className="text-red-500">*</span>
+                Title <span className="text-red-500">*</span>
               </label>
-              <div className="relative" ref={sourceDropdownRef}>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {selectedSource && (
-                    <span
-                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
-                        selectedSource.type === 'function'
-                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
-                          : selectedSource.type === 'issue'
-                          ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400'
-                          : 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-                      }`}
+              <input
+                type="text"
+                value={formData.title}
+                onChange={(e) => handleChange('title', e.target.value)}
+                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
+                  errors.title ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                }`}
+                placeholder="Brief summary of the change request"
+              />
+              {errors.title && <p className="mt-1 text-sm text-red-500">{errors.title}</p>}
+            </div>
+          </div>
+
+          {/* Change Description Section */}
+          <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              Change Description
+            </h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                What Change is Requested <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => handleChange('description', e.target.value)}
+                rows={5}
+                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none ${
+                  errors.description ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                }`}
+                placeholder="Describe in detail what change is being requested and why it is needed. Include current state, proposed change, reason for change, and relevant context."
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Clearly explain what needs to change and the reason for this change request. Describe both the current state and the proposed change.
+              </p>
+              {errors.description && <p className="mt-1 text-sm text-red-500">{errors.description}</p>}
+            </div>
+          </div>
+
+          {/* Business Justification Section */}
+          <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              Business Justification
+            </h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Business Justification / Rationale
+              </label>
+              <textarea
+                value={formData.justification || ''}
+                onChange={(e) => handleChange('justification', e.target.value)}
+                rows={4}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                placeholder="Provide additional business justification, impact analysis, and rationale. Include business value, benefits, stakeholder impact, cost-benefit considerations, and supporting information."
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Explain the business value, benefits, and any additional context for why this change is necessary. This supplements the change description above.
+              </p>
+            </div>
+          </div>
+
+          {/* Assessment & Priority Section */}
+          <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              Assessment & Priority
+            </h3>
+            
+            {/* Priority */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Priority
+              </label>
+              <select
+                value={formData.priority}
+                onChange={(e) => handleChange('priority', e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+            </div>
+
+            {/* Risk Assessment */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Risk Assessment
+              </label>
+              <select
+                value={formData.risk || ''}
+                onChange={(e) => handleChange('risk', e.target.value || undefined)}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="">Select risk level (optional)</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Assess the risk level associated with implementing this change
+              </p>
+            </div>
+
+            {/* Effort Estimation */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Effort Estimation
+              </label>
+              <select
+                value={formData.effort || ''}
+                onChange={(e) => handleChange('effort', e.target.value || undefined)}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="">Select effort level (optional)</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Estimate the effort required to implement this change
+              </p>
+            </div>
+
+            {/* Requested By */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Requested By
+              </label>
+              <input
+                type="text"
+                value={formData.requestedBy || ''}
+                onChange={(e) => handleChange('requestedBy', e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder="Enter requester name (optional)"
+              />
+            </div>
+          </div>
+
+          {/* Document Attachments Section */}
+          <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              Document Attachments
+            </h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Attach Documents
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  id="file-upload"
+                  accept=".pdf,.doc,.docx,.txt,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif"
+                />
+                <label
+                  htmlFor="file-upload"
+                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer transition-colors"
+                >
+                  <Upload size={16} />
+                  <span className="text-sm">Select Files</span>
+                </label>
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  PDF, DOC, XLS, PPT, Images (max 10MB per file)
+                </span>
+              </div>
+              
+              {selectedFiles.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {selectedFiles.map((file, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
                     >
-                      {selectedSource.type.charAt(0).toUpperCase() + selectedSource.type.slice(1)}: {selectedSource.name}
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <File size={16} className="text-gray-500 dark:text-gray-400 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {file.name}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {formatFileSize(file.size)}
+                          </p>
+                        </div>
+                      </div>
                       <button
                         type="button"
-                        onClick={() => {
-                          setSelectedSource(null)
-                          setFormData((prev) => ({ ...prev, sourceId: '', sourceType: 'function' }))
-                        }}
-                        className="ml-1 hover:opacity-70"
+                        onClick={() => handleRemoveFile(index)}
+                        className="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex-shrink-0"
+                        title="Remove file"
                       >
-                        <X size={12} />
+                        <Trash2 size={16} />
                       </button>
-                    </span>
-                  )}
-                </div>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                  <input
-                    type="text"
-                    placeholder="Search functions, issues, or parameters..."
-                    value={sourceSearchQuery}
-                    onChange={(e) => {
-                      setSourceSearchQuery(e.target.value)
-                      setShowSourceDropdown(true)
-                    }}
-                    onFocus={() => setShowSourceDropdown(true)}
-                    className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
-                      errors.sourceId ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                    }`}
-                  />
-                  {showSourceDropdown && filteredSources.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {filteredSources.map((source) => (
-                        <button
-                          key={`${source.type}-${source.id}`}
-                          type="button"
-                          onClick={() => handleSourceSelect(source)}
-                          className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                        >
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                              source.type === 'function'
-                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
-                                : source.type === 'issue'
-                                ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400'
-                                : 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-                            }`}
-                          >
-                            {source.type.charAt(0).toUpperCase() + source.type.slice(1)}
-                          </span>
-                          <span className="flex-1">
-                            <span className="font-medium">{source.name}</span>
-                            {source.description && (
-                              <span className="text-xs text-gray-500 dark:text-gray-400 ml-2 truncate">
-                                {source.description}
-                              </span>
-                            )}
-                          </span>
-                          {selectedSource?.id === source.id && selectedSource?.type === source.type && (
-                            <Check size={16} className="text-blue-600 dark:text-blue-400" />
-                          )}
-                        </button>
-                      ))}
                     </div>
-                  )}
+                  ))}
                 </div>
-                {errors.sourceId && <p className="mt-1 text-sm text-red-500">{errors.sourceId}</p>}
-              </div>
+              )}
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Attach supporting documents, specifications, diagrams, or other relevant files to this change request.
+              </p>
             </div>
-          )}
-
-          {/* Title */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Title <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={formData.title}
-              onChange={(e) => handleChange('title', e.target.value)}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
-                errors.title ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-              }`}
-              placeholder="Enter change request title"
-            />
-            {errors.title && <p className="mt-1 text-sm text-red-500">{errors.title}</p>}
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Description <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => handleChange('description', e.target.value)}
-              rows={4}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none ${
-                errors.description ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-              }`}
-              placeholder="Describe the change request in detail..."
-            />
-            {errors.description && <p className="mt-1 text-sm text-red-500">{errors.description}</p>}
-          </div>
-
-          {/* Priority */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Priority
-            </label>
-            <select
-              value={formData.priority}
-              onChange={(e) => handleChange('priority', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="critical">Critical</option>
-            </select>
-          </div>
-
-          {/* Requested By */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Requested By
-            </label>
-            <input
-              type="text"
-              value={formData.requestedBy || ''}
-              onChange={(e) => handleChange('requestedBy', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              placeholder="Enter requester name (optional)"
-            />
           </div>
 
           {/* Error Message */}
@@ -426,10 +669,22 @@ export default function CreateChangeRequestModal({
             </button>
             <button
               type="submit"
-              disabled={createChangeRequestMutation.isPending}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={createChangeRequestMutation.isPending || uploadingFiles}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {createChangeRequestMutation.isPending ? 'Creating...' : 'Create Change Request'}
+              {uploadingFiles ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Uploading files...</span>
+                </>
+              ) : createChangeRequestMutation.isPending ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Creating...</span>
+                </>
+              ) : (
+                'Create Change Request'
+              )}
             </button>
           </div>
         </form>

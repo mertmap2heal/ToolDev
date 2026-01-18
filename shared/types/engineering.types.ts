@@ -277,6 +277,19 @@ export interface UpdateParameterDto {
   unit?: string
 }
 
+export interface ChangeRequestAttachment {
+  id: string
+  changeRequestId: string
+  projectId: string
+  fileName: string
+  fileUrl: string
+  fileSize?: number
+  mimeType?: string
+  uploadedBy?: string
+  uploadedByName?: string
+  createdAt: string
+}
+
 export interface ChangeRequest {
   id: string
   projectId: string
@@ -294,6 +307,7 @@ export interface ChangeRequest {
   justification?: string
   createdAt: string
   updatedAt: string
+  attachments?: ChangeRequestAttachment[]
 }
 
 export interface CreateChangeRequestDto {
@@ -303,6 +317,9 @@ export interface CreateChangeRequestDto {
   sourceId: string
   priority: 'low' | 'medium' | 'high' | 'critical'
   requestedBy?: string
+  risk?: 'low' | 'medium' | 'high' | 'critical'
+  effort?: 'low' | 'medium' | 'high'
+  justification?: string
 }
 
 export interface CreateRequirementDto {
