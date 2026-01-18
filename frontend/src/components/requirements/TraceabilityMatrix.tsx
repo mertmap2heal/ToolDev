@@ -388,26 +388,28 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
             <span className="text-gray-500 dark:text-gray-400">Suspect Links:</span>{' '}
             <span className="font-semibold text-yellow-600 dark:text-yellow-400">{stats.suspectLinks}</span>
           </div>
-          <div className="text-sm">
-            <span className="text-gray-500 dark:text-gray-400">Source Coverage:</span>{' '}
-            <span className={clsx(
-              'font-semibold',
-              stats.sourceCoverage >= 80 ? 'text-green-600' : stats.sourceCoverage >= 50 ? 'text-yellow-600' : 'text-red-600'
-            )}>
-              {stats.sourceCoverage}% ({stats.sourcesWithLinks}/{requirements.length})
-            </span>
-          </div>
-          <div className="text-sm">
-            <span className="text-gray-500 dark:text-gray-400">
-              {matrixType === 'requirements-functions' ? 'Func' : 'Target'} Coverage:
-            </span>{' '}
-            <span className={clsx(
-              'font-semibold',
-              stats.targetCoverage >= 80 ? 'text-green-600' : stats.targetCoverage >= 50 ? 'text-yellow-600' : 'text-red-600'
-            )}>
-              {stats.targetCoverage}% ({stats.targetsWithLinks}/{matrixType === 'requirements-functions' ? functions.length : requirements.length})
-            </span>
-          </div>
+          {matrixType === 'requirements-functions' && (
+            <>
+              <div className="text-sm">
+                <span className="text-gray-500 dark:text-gray-400">Source Coverage:</span>{' '}
+                <span className={clsx(
+                  'font-semibold',
+                  stats.sourceCoverage >= 80 ? 'text-green-600' : stats.sourceCoverage >= 50 ? 'text-yellow-600' : 'text-red-600'
+                )}>
+                  {stats.sourceCoverage}% ({stats.sourcesWithLinks}/{requirements.length})
+                </span>
+              </div>
+              <div className="text-sm">
+                <span className="text-gray-500 dark:text-gray-400">Func Coverage:</span>{' '}
+                <span className={clsx(
+                  'font-semibold',
+                  stats.targetCoverage >= 80 ? 'text-green-600' : stats.targetCoverage >= 50 ? 'text-yellow-600' : 'text-red-600'
+                )}>
+                  {stats.targetCoverage}% ({stats.targetsWithLinks}/{functions.length})
+                </span>
+              </div>
+            </>
+          )}
           <div className="flex-1" />
           <div className="flex items-center gap-2">
             <select

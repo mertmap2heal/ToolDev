@@ -28,7 +28,7 @@ export default function RequirementQualityPanel({ projectId, onClose }: Requirem
   const { data: qualityChecks = [], isLoading } = useQuery({
     queryKey: ['requirement-quality', projectId],
     queryFn: async () => {
-      const response = await apiClient.get<RequirementQualityCheck[]>(`/api/v1/requirement-validation/${projectId}`)
+      const response = await apiClient.get<RequirementQualityCheck[]>(`/requirement-validation/${projectId}`)
       return response.success && response.data ? response.data : []
     },
     enabled: !!projectId,

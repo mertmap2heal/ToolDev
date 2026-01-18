@@ -120,7 +120,7 @@ export default function RequirementsPage() {
       const response = await traceabilityService.getTraceLinks(projectId)
       return response.success && response.data ? response.data : []
     },
-    enabled: !!projectId && isDiagramOpen,
+    enabled: !!projectId,
   })
 
   // Fetch issues for linking

@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import ReactFlow, {
   Node,
   Edge,
@@ -35,6 +35,60 @@ export default function RequirementDiagram({
 }: RequirementDiagramProps) {
   const [filterType, setFilterType] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
+
+  // Helper functions for styling (using function declarations for proper hoisting)
+  function getTypeColor(type?: string) {
+    switch (type) {
+      case 'functional':
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+      case 'performance':
+        return 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400'
+      case 'interface':
+        return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-400'
+      case 'design_constraint':
+        return 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400'
+      case 'safety':
+        return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+      case 'security':
+        return 'bg-pink-100 text-pink-800 dark:bg-pink-900/20 dark:text-pink-400'
+      case 'usability':
+        return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+      default:
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+    }
+  }
+
+  function getTypeBgColor(type?: string) {
+    switch (type) {
+      case 'functional':
+        return '#dbeafe'
+      case 'performance':
+        return '#e9d5ff'
+      case 'interface':
+        return '#cffafe'
+      case 'design_constraint':
+        return '#fed7aa'
+      case 'safety':
+        return '#fee2e2'
+      case 'security':
+        return '#fce7f3'
+      case 'usability':
+        return '#dcfce7'
+      default:
+        return '#ffffff'
+    }
+  }
+
+  function getStatusColor(status: string) {
+    if (status.includes('approved') || status.includes('complete')) return '#10b981'
+    if (status.includes('pending') || status.includes('draft')) return '#f59e0b'
+    if (status.includes('rejected')) return '#ef4444'
+    return '#6b7280'
+  }
+
+  function formatType(type: string) {
+    return type.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+  }
 
   // Build nodes and edges from requirements and trace links
   const { initialNodes, initialEdges } = useMemo(() => {
@@ -178,63 +232,10 @@ export default function RequirementDiagram({
   )
 
   // Update nodes/edges when filters change
-  useMemo(() => {
+  useEffect(() => {
     setNodes(initialNodes)
     setEdges(initialEdges)
   }, [initialNodes, initialEdges, setNodes, setEdges])
-
-  const getTypeColor = (type?: string) => {
-    switch (type) {
-      case 'functional':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
-      case 'performance':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400'
-      case 'interface':
-        return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-400'
-      case 'design_constraint':
-        return 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400'
-      case 'safety':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
-      case 'security':
-        return 'bg-pink-100 text-pink-800 dark:bg-pink-900/20 dark:text-pink-400'
-      case 'usability':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-    }
-  }
-
-  const getTypeBgColor = (type?: string) => {
-    switch (type) {
-      case 'functional':
-        return '#dbeafe'
-      case 'performance':
-        return '#e9d5ff'
-      case 'interface':
-        return '#cffafe'
-      case 'design_constraint':
-        return '#fed7aa'
-      case 'safety':
-        return '#fee2e2'
-      case 'security':
-        return '#fce7f3'
-      case 'usability':
-        return '#dcfce7'
-      default:
-        return '#ffffff'
-    }
-  }
-
-  const getStatusColor = (status: string) => {
-    if (status.includes('approved') || status.includes('complete')) return '#10b981'
-    if (status.includes('pending') || status.includes('draft')) return '#f59e0b'
-    if (status.includes('rejected')) return '#ef4444'
-    return '#6b7280'
-  }
-
-  const formatType = (type: string) => {
-    return type.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-  }
 
   const uniqueTypes = useMemo(
     () => Array.from(new Set(requirements.map((r) => r.requirementType).filter(Boolean))),
