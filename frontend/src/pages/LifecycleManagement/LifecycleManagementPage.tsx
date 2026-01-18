@@ -1440,26 +1440,27 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
                 }
 
                 return (
-                  <div className="bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900/50 dark:via-gray-800/30 dark:to-gray-900/50 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-8 shadow-lg">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                        <PlayCircle size={18} />
-                        Interactive Flow Builder
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-6">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-medium text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                        <PlayCircle size={16} />
+                        Lifecycle Flow
                       </h4>
                       <div className="flex items-center gap-2">
                         {connectingFrom && (
-                          <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
-                            Click another box to create connection
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
+                            Click another step to connect
                           </span>
                         )}
                       </div>
                     </div>
                     
+                    {/* Clean canvas */}
                     <div 
-                      className="relative flow-container min-h-[300px] overflow-x-auto overflow-y-auto px-4"
+                      className="relative flow-container min-h-[200px] overflow-x-auto overflow-y-auto px-4 rounded border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50"
                       style={{ 
-                        paddingTop: '120px', // Increased padding to accommodate multiple backward arrows
-                        paddingBottom: '120px' // Increased padding to accommodate multiple forward skip arrows
+                        paddingTop: '80px',
+                        paddingBottom: '80px'
                       }}
                       onMouseMove={handleMouseMove}
                     >
@@ -1812,6 +1813,31 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
                           const status = statuses.find(s => s.id === step.statusId)
                           const isConnecting = connectingFrom === step.id
                           
+                          // Determine chevron clip-path based on position
+                          const isFirst = index === 0
+                          const isLast = index === sortedSteps.length - 1
+                          const chevronDepth = 20 // The depth of the arrow point/notch in pixels
+                          
+                          // Clip-path definitions for chevron shapes
+                          // First step: flat left, arrow right
+                          // Middle steps: notched left, arrow right
+                          // Last step: notched left, flat right
+                          const getClipPath = () => {
+                            if (isFirst && isLast) {
+                              // Single step: flat left, flat right (rectangle)
+                              return 'polygon(0 0, 100% 0, 100% 100%, 0 100%)'
+                            } else if (isFirst) {
+                              // First step: flat left, arrow right
+                              return `polygon(0 0, calc(100% - ${chevronDepth}px) 0, 100% 50%, calc(100% - ${chevronDepth}px) 100%, 0 100%)`
+                            } else if (isLast) {
+                              // Last step: notched left, flat right
+                              return `polygon(0 0, 100% 0, 100% 100%, 0 100%, ${chevronDepth}px 50%)`
+                            } else {
+                              // Middle steps: notched left, arrow right
+                              return `polygon(0 0, calc(100% - ${chevronDepth}px) 0, 100% 50%, calc(100% - ${chevronDepth}px) 100%, 0 100%, ${chevronDepth}px 50%)`
+                            }
+                          }
+                          
                           return (
                             <div
                               key={step.id}
@@ -1822,42 +1848,37 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
                               className={clsx(
                                 'relative z-10 transition-all duration-200',
                                 !step.statusId && 'opacity-50',
-                                step.statusId && 'cursor-pointer',
-                                isConnecting && 'ring-4 ring-blue-400 ring-offset-2'
+                                step.statusId && 'cursor-pointer'
                               )}
+                              style={{
+                                // Negative margin to overlap chevrons for connected appearance
+                                marginLeft: index > 0 ? `-${chevronDepth / 2}px` : '0'
+                              }}
                             >
+                              {/* Chevron shape container - muted professional style */}
                               <div
                                 className={clsx(
-                                  'w-[160px] px-5 py-4 rounded-xl shadow-xl border-2 transition-all duration-200',
-                                  'bg-white dark:bg-gray-800',
-                                  index === 0
-                                    ? 'border-green-500 text-gray-900 dark:text-white shadow-green-500/20'
-                                    : index === sortedSteps.length - 1
-                                    ? 'border-red-500 text-gray-900 dark:text-white shadow-red-500/20'
-                                    : 'border-blue-500 text-gray-900 dark:text-white shadow-blue-500/20',
-                                  !step.statusId && 'border-gray-400',
-                                  'hover:shadow-2xl'
+                                  'w-[160px] px-4 py-3 shadow-sm transition-colors duration-200',
+                                  'bg-slate-600 dark:bg-slate-700',
+                                  !step.statusId && 'bg-slate-400 dark:bg-slate-500',
+                                  isConnecting && 'ring-2 ring-slate-400 ring-offset-1',
+                                  // Subtle border accents for first/last steps
+                                  index === 0 && 'border-l-4 border-l-emerald-500',
+                                  index === sortedSteps.length - 1 && 'border-r-4 border-r-rose-500'
                                 )}
+                                style={{
+                                  clipPath: getClipPath(),
+                                  paddingLeft: isFirst ? '1rem' : `calc(1rem + ${chevronDepth / 2}px)`,
+                                  paddingRight: isLast ? '1rem' : `calc(1rem + ${chevronDepth / 2}px)`
+                                }}
                               >
-                                <div className="flex items-center justify-between mb-2">
-                                  <div className="text-xs font-bold opacity-90 uppercase tracking-wide">
-                                    Step {index + 1}
-                                  </div>
-                                  {index === 0 && (
-                                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                                  )}
-                                  {index === sortedSteps.length - 1 && (
-                                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                                  )}
+                                {/* Simplified content: step number + status name */}
+                                <div className="flex items-center gap-2">
+                                  <span className="text-lg font-bold text-white/90">{index + 1}</span>
+                                  <span className="text-sm font-medium text-white truncate">
+                                    {status?.name || 'Select Status'}
+                                  </span>
                                 </div>
-                                <div className="text-base font-bold break-words leading-tight mb-1">
-                                  {status?.name || 'Select Status'}
-                                </div>
-                                {status?.description && (
-                                  <div className="text-xs opacity-80 mt-2 line-clamp-2 break-words leading-relaxed">
-                                    {status.description}
-                                  </div>
-                                )}
                               </div>
                             </div>
                           )
@@ -1866,32 +1887,23 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
                       
                     </div>
                     
-                    {/* Instructions */}
-                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
-                        <strong>How to use:</strong> Click on a status box to start a connection, then click on another box to create the connection. Click on a connection line to delete it.
+                    {/* Simplified legend */}
+                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Click steps to create connections
                       </p>
-                      <div className="flex flex-wrap gap-4 text-xs mt-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 bg-green-500 rounded"></div>
-                          <span className="text-gray-600 dark:text-gray-400">Start</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 bg-blue-500 rounded"></div>
-                          <span className="text-gray-600 dark:text-gray-400">Middle</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 bg-red-500 rounded"></div>
-                          <span className="text-gray-600 dark:text-gray-400">End</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-0.5 bg-blue-500"></div>
-                          <span className="text-gray-600 dark:text-gray-400">Forward</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-0.5 bg-orange-500 border-dashed border-t-2"></div>
-                          <span className="text-gray-600 dark:text-gray-400">Backward</span>
-                        </div>
+                      <div className="flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500">
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                          Start
+                        </span>
+                        <span>→</span>
+                        <span>Steps</span>
+                        <span>→</span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                          End
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1927,6 +1939,24 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
                   </div>
                   {formData.steps.map((step, index) => {
                     const status = statuses.find(s => s.id === step.statusId)
+                    const isFirstStep = index === 0
+                    const isLastStep = index === formData.steps.length - 1
+                    const isSingleStep = formData.steps.length === 1
+                    
+                    // Chevron clip-path for step list indicators
+                    const getStepListClipPath = () => {
+                      const depth = 8 // Smaller depth for the mini chevrons
+                      if (isSingleStep) {
+                        return 'polygon(0 0, 100% 0, 100% 100%, 0 100%)'
+                      } else if (isFirstStep) {
+                        return `polygon(0 0, calc(100% - ${depth}px) 0, 100% 50%, calc(100% - ${depth}px) 100%, 0 100%)`
+                      } else if (isLastStep) {
+                        return `polygon(0 0, 100% 0, 100% 100%, 0 100%, ${depth}px 50%)`
+                      } else {
+                        return `polygon(0 0, calc(100% - ${depth}px) 0, 100% 50%, calc(100% - ${depth}px) 100%, 0 100%, ${depth}px 50%)`
+                      }
+                    }
+                    
                     return (
                       <div
                         key={step.id}
@@ -1934,10 +1964,20 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
                       >
                         <div className="flex items-center gap-4">
                           <div className="flex flex-col items-center gap-2">
-                            <div className={clsx(
-                              'w-12 h-12 rounded-full flex items-center justify-center text-sm font-semibold text-white',
-                              index === 0 ? 'bg-green-500' : index === formData.steps.length - 1 ? 'bg-red-500' : 'bg-blue-500'
-                            )}>
+                            {/* Muted chevron-shaped step indicator */}
+                            <div 
+                              className={clsx(
+                                'w-12 h-8 flex items-center justify-center text-sm font-semibold text-white',
+                                'bg-slate-600 dark:bg-slate-700',
+                                index === 0 && 'border-l-2 border-l-emerald-500',
+                                index === formData.steps.length - 1 && 'border-r-2 border-r-rose-500'
+                              )}
+                              style={{
+                                clipPath: getStepListClipPath(),
+                                paddingLeft: isFirstStep ? '0' : '4px',
+                                paddingRight: isLastStep ? '0' : '4px'
+                              }}
+                            >
                               {index + 1}
                             </div>
                             <div className="flex flex-col gap-1">
