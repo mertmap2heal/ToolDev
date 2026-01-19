@@ -1,33 +1,27 @@
-import { useState } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { 
-  FileText, 
   Box, 
   Layers, 
-  Activity, 
-  GitBranch, 
-  Circle, 
-  Users, 
-  Package, 
-  Calculator,
   ChevronLeft,
   ChevronRight,
-  Info,
-  Shield,
-  Zap,
-  BarChart3,
-  Download,
-  Edit3,
-  Table,
   ArrowLeft,
+  Sidebar,
+  PanelRight,
 } from 'lucide-react'
-import MBSEDiagramMenu, { DiagramType, DIAGRAM_INFO } from '../../components/mbse/MBSEDiagramMenu'
+import { useMBSEStore, useActiveTab } from '../../store/mbseStore'
+import { DiagramType, DIAGRAM_INFO } from '../../components/mbse/MBSEDiagramMenu'
+import ModelBrowser from '../../components/mbse/ModelBrowser'
+import DiagramTabs from '../../components/mbse/DiagramTabs'
+import PropertiesPanel from '../../components/mbse/PropertiesPanel'
+import OrganizedToolbar from '../../components/mbse/OrganizedToolbar'
 import {
   RequirementsDiagram,
   UseCaseDiagram,
   BlockDefinitionDiagram,
   InternalBlockDiagram,
   ParametricDiagram,
+  ParameterRequirementDiagram,
   ActivityDiagram,
   SequenceDiagram,
   StateMachineDiagram,
@@ -41,13 +35,23 @@ import clsx from 'clsx'
 
 /**
  * MBSEModelsPage provides a comprehensive MBSE modeling environment
- * with a menu of SysML/UML diagram types and a diagram canvas.
+ * with a three-panel layout: Model Browser, Tabbed Diagram Workspace, and Properties Panel.
+ * Follows industry-standard MBSE tool patterns (Cameo, Rhapsody, Enterprise Architect).
  */
 export default function MBSEModelsPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
-  const [selectedDiagram, setSelectedDiagram] = useState<DiagramType | null>('req')
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  
+  // Get store state and actions
+  const { 
+    panelVisibility, 
+    panelWidths,
+    openTab,
+    toggleModelBrowser,
+    togglePropertiesPanel,
+  } = useMBSEStore()
+  
+  const activeTab = useActiveTab()
   
   // Modal states for industrial compliance tools
   const [showValidation, setShowValidation] = useState(false)
@@ -57,24 +61,70 @@ export default function MBSEModelsPage() {
   const [showDiagramEditor, setShowDiagramEditor] = useState(false)
   const [showTraceabilityMatrix, setShowTraceabilityMatrix] = useState(false)
 
-  // Get selected diagram info
-  const selectedDiagramInfo = selectedDiagram 
-    ? DIAGRAM_INFO.find((d) => d.type === selectedDiagram)
-    : null
+  // Resizable panel states
+  const [isResizingLeft, setIsResizingLeft] = useState(false)
+  const [isResizingRight, setIsResizingRight] = useState(false)
+  const [leftPanelWidth, setLeftPanelWidth] = useState(panelWidths.modelBrowser)
+  const [rightPanelWidth, setRightPanelWidth] = useState(panelWidths.propertiesPanel)
 
-  // Render the selected diagram component
+  // Handle opening a diagram from the Model Browser
+  const handleOpenDiagram = useCallback((diagramType: DiagramType, diagramId: string, name: string) => {
+    openTab({
+      id: diagramId,
+      type: diagramType,
+      name: name,
+    })
+  }, [openTab])
+
+  // Handle opening tools from the Model Browser
+  const handleOpenTool = useCallback((toolId: string) => {
+    switch (toolId) {
+      case 'verification-coverage':
+        setShowVerificationCoverage(true)
+        break
+      case 'verification-matrix':
+        setShowVerificationCoverage(true)
+        break
+      case 'model-validation':
+        setShowValidation(true)
+        break
+      case 'traceability-matrix':
+        setShowTraceabilityMatrix(true)
+        break
+      case 'impact-analysis':
+        setShowImpactAnalysis(true)
+        break
+      case 'suspect-links':
+        setShowTraceabilityMatrix(true) // Uses traceability matrix with suspect filter
+        break
+      case 'coverage-reports':
+        setShowVerificationCoverage(true)
+        break
+      default:
+        console.warn('Unknown tool:', toolId)
+    }
+  }, [])
+
+  // Get the active diagram info
+  const activeDiagramInfo = useMemo(() => {
+    if (!activeTab) return null
+    return DIAGRAM_INFO.find((d) => d.type === activeTab.type) || null
+  }, [activeTab])
+
+  // Render the selected diagram component based on active tab
   const renderDiagram = () => {
-    if (!projectId || !selectedDiagram) {
+    if (!projectId || !activeTab) {
       return (
-        <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
+        <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-900">
           <Box size={64} className="mb-4 opacity-30" />
-          <p className="text-lg">Select a diagram type from the menu</p>
-          <p className="text-sm mt-2">Choose from SysML or UML diagram types to get started</p>
+          <p className="text-lg">No diagram open</p>
+          <p className="text-sm mt-2">Double-click a diagram in the Model Browser to open it</p>
+          <p className="text-xs mt-1 text-gray-400">or use the + button in the tabs bar</p>
         </div>
       )
     }
 
-    switch (selectedDiagram) {
+    switch (activeTab.type) {
       case 'req':
         return <RequirementsDiagram projectId={projectId} />
       case 'uc':
@@ -85,6 +135,8 @@ export default function MBSEModelsPage() {
         return <InternalBlockDiagram projectId={projectId} />
       case 'par':
         return <ParametricDiagram projectId={projectId} />
+      case 'par-req':
+        return <ParameterRequirementDiagram projectId={projectId} />
       case 'act':
         return <ActivityDiagram projectId={projectId} />
       case 'seq':
@@ -95,169 +147,209 @@ export default function MBSEModelsPage() {
         return <PackageDiagram projectId={projectId} />
       default:
         return (
-          <div className="flex flex-col items-center justify-center h-full text-gray-500">
+          <div className="flex flex-col items-center justify-center h-full text-gray-500 bg-gray-100 dark:bg-gray-900">
             <p className="text-lg">Diagram type not implemented yet</p>
           </div>
         )
     }
   }
 
+  // Handle panel resize
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (isResizingLeft) {
+      const newWidth = Math.max(200, Math.min(400, e.clientX))
+      setLeftPanelWidth(newWidth)
+    }
+    if (isResizingRight) {
+      const newWidth = Math.max(250, Math.min(450, window.innerWidth - e.clientX))
+      setRightPanelWidth(newWidth)
+    }
+  }, [isResizingLeft, isResizingRight])
+
+  const handleMouseUp = useCallback(() => {
+    setIsResizingLeft(false)
+    setIsResizingRight(false)
+  }, [])
+
   return (
-    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-950 overflow-hidden">
+    <div 
+      className="h-screen flex flex-col bg-gray-50 dark:bg-gray-950 overflow-hidden"
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+    >
       {/* Page Header */}
-      <div className="flex items-center justify-between px-6 py-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-        <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+        <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(`/projects/${projectId}/requirements`)}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            className="flex items-center gap-2 px-2.5 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             title="Back to Project"
           >
-            <ArrowLeft size={18} />
-            Back to Project
+            <ArrowLeft size={16} />
+            <span className="hidden sm:inline">Back</span>
           </button>
-          <div className="h-6 w-px bg-gray-300 dark:bg-gray-600" />
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-              <Layers className="text-blue-500" size={28} />
+          <div className="h-5 w-px bg-gray-300 dark:bg-gray-600" />
+          <div className="flex items-center gap-2">
+            <Layers className="text-blue-500" size={22} />
+            <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
               MBSE Models
             </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Model-Based Systems Engineering diagrams and visualizations
-            </p>
           </div>
         </div>
-        {selectedDiagramInfo && (
-          <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+        
+        {/* Current diagram indicator */}
+        {activeDiagramInfo && (
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-900/50 rounded-md">
             <div
-              className="p-2 rounded"
-              style={{ backgroundColor: selectedDiagramInfo.color + '20' }}
+              className="p-1.5 rounded"
+              style={{ backgroundColor: activeDiagramInfo.color + '20' }}
             >
               {(() => {
-                const Icon = selectedDiagramInfo.icon
-                return <Icon size={20} style={{ color: selectedDiagramInfo.color }} />
+                const Icon = activeDiagramInfo.icon
+                return <Icon size={16} style={{ color: activeDiagramInfo.color }} />
               })()}
             </div>
-            <div>
+            <div className="hidden md:block">
               <div className="text-sm font-medium text-gray-900 dark:text-white">
-                {selectedDiagramInfo.name}
+                {activeTab?.name}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400">
-                [{selectedDiagramInfo.type}]
+                {activeDiagramInfo.name}
               </div>
             </div>
           </div>
         )}
-      </div>
 
-      {/* Industrial Compliance Tools Toolbar */}
-      <div className="flex items-center gap-2 px-6 py-2 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
-        <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mr-2">
-          Analysis Tools:
-        </span>
-        <button
-          onClick={() => setShowValidation(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          title="Model Validation - Check for orphans, missing links, constraint violations"
-        >
-          <Shield size={14} className="text-blue-500" />
-          Validation
-        </button>
-        <button
-          onClick={() => setShowImpactAnalysis(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          title="Impact Analysis - Show downstream effects of changes"
-        >
-          <Zap size={14} className="text-amber-500" />
-          Impact Analysis
-        </button>
-        <button
-          onClick={() => setShowVerificationCoverage(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          title="Verification Coverage - Requirement to test matrix"
-        >
-          <BarChart3 size={14} className="text-green-500" />
-          Verification
-        </button>
-        <button
-          onClick={() => setShowTraceabilityMatrix(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          title="Enhanced Traceability Matrix - Bidirectional trace with verification status"
-        >
-          <Table size={14} className="text-purple-500" />
-          Traceability
-        </button>
-        <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2" />
-        <button
-          onClick={() => setShowDiagramEditor(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          title="Diagram Editor - Create and modify elements on canvas"
-        >
-          <Edit3 size={14} className="text-indigo-500" />
-          Editor
-        </button>
-        <button
-          onClick={() => setShowExporter(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          title="Export - ReqIF, XMI, SysML interchange formats"
-        >
-          <Download size={14} className="text-cyan-500" />
-          Export
-        </button>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar - Diagram Menu */}
-        <div
-          className={clsx(
-            'flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 overflow-hidden',
-            isSidebarCollapsed ? 'w-0' : 'w-80'
-          )}
-        >
-          <div className="h-full overflow-y-auto p-4">
-            <MBSEDiagramMenu
-              selectedDiagram={selectedDiagram}
-              onSelectDiagram={setSelectedDiagram}
-            />
-
-            {/* Info Panel */}
-            {selectedDiagramInfo && (
-              <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-                <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  <Info size={14} />
-                  About this diagram
-                </div>
-                <p className="text-xs text-gray-600 dark:text-gray-400">
-                  {selectedDiagramInfo.description}
-                </p>
-                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    <span className="font-medium">SysML Type:</span>{' '}
-                    <span className="font-mono">{selectedDiagramInfo.type}</span>
-                  </div>
-                </div>
-              </div>
+        {/* Panel toggles */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={toggleModelBrowser}
+            className={clsx(
+              'p-2 rounded-lg transition-colors',
+              panelVisibility.modelBrowser
+                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'
             )}
+            title={panelVisibility.modelBrowser ? 'Hide Model Browser' : 'Show Model Browser'}
+          >
+            <Sidebar size={18} />
+          </button>
+          <button
+            onClick={togglePropertiesPanel}
+            className={clsx(
+              'p-2 rounded-lg transition-colors',
+              panelVisibility.propertiesPanel
+                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'
+            )}
+            title={panelVisibility.propertiesPanel ? 'Hide Properties' : 'Show Properties'}
+          >
+            <PanelRight size={18} />
+          </button>
+        </div>
+      </div>
+
+      {/* Organized Toolbar */}
+      <OrganizedToolbar
+        onValidation={() => setShowValidation(true)}
+        onImpactAnalysis={() => setShowImpactAnalysis(true)}
+        onVerificationCoverage={() => setShowVerificationCoverage(true)}
+        onTraceabilityMatrix={() => setShowTraceabilityMatrix(true)}
+        onDiagramEditor={() => setShowDiagramEditor(true)}
+        onExporter={() => setShowExporter(true)}
+      />
+
+      {/* Main Content - Three Panel Layout */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Panel - Model Browser */}
+        {panelVisibility.modelBrowser && (
+          <>
+            <div
+              className="flex-shrink-0 border-r border-gray-200 dark:border-gray-700 overflow-hidden"
+              style={{ width: leftPanelWidth }}
+            >
+              {projectId && (
+                <ModelBrowser
+                  projectId={projectId}
+                  onOpenDiagram={handleOpenDiagram}
+                  onOpenTool={handleOpenTool}
+                  className="h-full"
+                />
+              )}
+            </div>
+            
+            {/* Left resize handle */}
+            <div
+              className="w-1 cursor-col-resize bg-transparent hover:bg-blue-500/30 active:bg-blue-500/50 transition-colors"
+              onMouseDown={() => setIsResizingLeft(true)}
+            />
+          </>
+        )}
+
+        {/* Left panel collapse button (when collapsed) */}
+        {!panelVisibility.modelBrowser && (
+          <button
+            onClick={toggleModelBrowser}
+            className="flex-shrink-0 w-6 flex items-center justify-center bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border-r border-gray-200 dark:border-gray-700 transition-colors"
+            title="Show Model Browser"
+          >
+            <ChevronRight size={16} className="text-gray-500" />
+          </button>
+        )}
+
+        {/* Center Panel - Diagram Workspace */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          {/* Diagram Tabs */}
+          <DiagramTabs
+            onNewDiagram={() => {
+              // Open the first diagram type as default
+              if (DIAGRAM_INFO.length > 0) {
+                const firstDiagram = DIAGRAM_INFO[0]
+                handleOpenDiagram(firstDiagram.type, `diagram-${firstDiagram.type}`, firstDiagram.name)
+              }
+            }}
+          />
+
+          {/* Diagram Canvas */}
+          <div className="flex-1 overflow-hidden">
+            {renderDiagram()}
           </div>
         </div>
 
-        {/* Toggle Sidebar Button */}
-        <button
-          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          className="flex-shrink-0 w-6 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 border-r border-gray-200 dark:border-gray-700 transition-colors"
-          title={isSidebarCollapsed ? 'Show menu' : 'Hide menu'}
-        >
-          {isSidebarCollapsed ? (
-            <ChevronRight size={16} className="text-gray-500" />
-          ) : (
+        {/* Right panel collapse button (when collapsed) */}
+        {!panelVisibility.propertiesPanel && (
+          <button
+            onClick={togglePropertiesPanel}
+            className="flex-shrink-0 w-6 flex items-center justify-center bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border-l border-gray-200 dark:border-gray-700 transition-colors"
+            title="Show Properties Panel"
+          >
             <ChevronLeft size={16} className="text-gray-500" />
-          )}
-        </button>
+          </button>
+        )}
 
-        {/* Diagram Canvas */}
-        <div className="flex-1 overflow-hidden bg-gray-100 dark:bg-gray-900">
-          {renderDiagram()}
-        </div>
+        {/* Right Panel - Properties Panel */}
+        {panelVisibility.propertiesPanel && (
+          <>
+            {/* Right resize handle */}
+            <div
+              className="w-1 cursor-col-resize bg-transparent hover:bg-blue-500/30 active:bg-blue-500/50 transition-colors"
+              onMouseDown={() => setIsResizingRight(true)}
+            />
+            
+            <div
+              className="flex-shrink-0 border-l border-gray-200 dark:border-gray-700 overflow-hidden"
+              style={{ width: rightPanelWidth }}
+            >
+              {projectId && (
+                <PropertiesPanel
+                  projectId={projectId}
+                  className="h-full"
+                />
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Industrial Compliance Modals */}

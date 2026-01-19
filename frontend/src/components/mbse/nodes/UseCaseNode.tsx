@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useCallback } from 'react'
 import { Handle, Position, NodeProps } from 'reactflow'
 import clsx from 'clsx'
 
@@ -10,6 +10,7 @@ interface UseCaseNodeData {
   complexity?: 'simple' | 'moderate' | 'complex'
   status?: string
   isSelected?: boolean
+  onContextMenu?: (e: React.MouseEvent, data: UseCaseNodeData) => void
 }
 
 /**
@@ -47,12 +48,21 @@ function UseCaseNode({ data, selected }: NodeProps<UseCaseNodeData>) {
 
   const borderColor = getPriorityColor(data.priority)
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (data.onContextMenu) {
+      data.onContextMenu(e, data)
+    }
+  }, [data])
+
   return (
     <div
       className={clsx(
-        'relative transition-shadow',
+        'relative transition-shadow cursor-pointer',
         selected && 'ring-2 ring-blue-500 ring-offset-4 rounded-full'
       )}
+      onContextMenu={handleContextMenu}
     >
       {/* Ellipse Shape */}
       <div

@@ -16,7 +16,7 @@ import ReactFlow, {
   ReactFlowProvider,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
-import { Filter, ChevronDown, ChevronUp } from 'lucide-react'
+import { Filter, ChevronDown, ChevronUp, LayoutGrid } from 'lucide-react'
 import { nodeTypes } from '../nodes'
 import DiagramExporter from '../shared/DiagramExporter'
 import DiagramLegend from '../shared/DiagramLegend'
@@ -28,6 +28,34 @@ import clsx from 'clsx'
 
 interface RequirementsDiagramProps {
   projectId: string
+}
+
+/**
+ * Requirement type configuration for visual grouping and coloring
+ */
+interface RequirementTypeConfig {
+  key: string
+  label: string
+  color: string
+  bgColor: string
+}
+
+const REQUIREMENT_TYPE_CONFIG: RequirementTypeConfig[] = [
+  { key: 'functional', label: 'Functional', color: '#3b82f6', bgColor: '#dbeafe' },
+  { key: 'performance', label: 'Performance', color: '#22c55e', bgColor: '#dcfce7' },
+  { key: 'interface', label: 'Interface', color: '#8b5cf6', bgColor: '#f3e8ff' },
+  { key: 'safety', label: 'Safety', color: '#ef4444', bgColor: '#fee2e2' },
+  { key: 'security', label: 'Security', color: '#ec4899', bgColor: '#fce7f3' },
+  { key: 'design_constraint', label: 'Constraint', color: '#f59e0b', bgColor: '#fef3c7' },
+  { key: 'usability', label: 'Usability', color: '#06b6d4', bgColor: '#cffafe' },
+]
+
+/**
+ * Get type color configuration
+ */
+const getTypeConfig = (type?: string): RequirementTypeConfig => {
+  const config = REQUIREMENT_TYPE_CONFIG.find((c) => c.key === type)
+  return config || { key: 'other', label: 'Other', color: '#6b7280', bgColor: '#f3f4f6' }
 }
 
 /**
@@ -44,6 +72,7 @@ function RequirementsDiagramContent({ projectId }: RequirementsDiagramProps) {
   const [showFilters, setShowFilters] = useState(false)
   const [showHierarchy, setShowHierarchy] = useState(true)
   const [showTraceLinks, setShowTraceLinks] = useState(true)
+  const [groupByType, setGroupByType] = useState(true)
 
   // Fetch requirements
   const { data: requirements = [], isLoading: loadingReqs } = useQuery({
@@ -104,33 +133,127 @@ function RequirementsDiagramContent({ projectId }: RequirementsDiagramProps) {
       return true
     })
 
-    // Build hierarchy tree
-    const buildTree = (reqs: Requirement[], parentId: string | null = null): Requirement[] => {
-      return reqs
-        .filter((r) => (parentId === null ? !r.parentId : r.parentId === parentId))
-        .map((req) => ({
-          ...req,
-          children: buildTree(reqs, req.id),
-        }))
-    }
-
-    const tree = buildTree(filteredReqs)
-
-    // Calculate positions
-    let yOffset = 0
-    const layoutTree = (reqs: Requirement[], x: number, parentY?: number) => {
-      reqs.forEach((req, index) => {
-        const y = parentY !== undefined ? parentY + (index * 200) : yOffset
-        yOffset = Math.max(yOffset, y + 200)
-        nodePositions.set(req.id, { x, y })
-
-        if (req.children && req.children.length > 0) {
-          layoutTree(req.children, x + 320, y)
-        }
+    if (groupByType) {
+      // Group requirements by type
+      const reqsByType = new Map<string, Requirement[]>()
+      filteredReqs.forEach((req) => {
+        const typeKey = req.requirementType || 'uncategorized'
+        const existing = reqsByType.get(typeKey) || []
+        existing.push(req)
+        reqsByType.set(typeKey, existing)
       })
-    }
 
-    layoutTree(tree, 50)
+      // Layout parameters
+      const groupPadding = 60
+      const nodeWidth = 280
+      const nodeHeight = 180
+      const nodeSpacingX = 40
+      const nodeSpacingY = 30
+      const nodesPerRow = 3
+      const groupSpacing = 80
+
+      let currentY = 50
+
+      // Add group nodes (swimlanes) and position requirement nodes
+      const typeOrder = [...REQUIREMENT_TYPE_CONFIG.map(c => c.key), 'uncategorized']
+      
+      typeOrder.forEach((typeKey) => {
+        const typeReqs = reqsByType.get(typeKey)
+        if (!typeReqs || typeReqs.length === 0) return
+
+        const typeConfig = getTypeConfig(typeKey)
+        
+        // Calculate group dimensions
+        const numRows = Math.ceil(typeReqs.length / nodesPerRow)
+        const groupWidth = nodesPerRow * (nodeWidth + nodeSpacingX) + groupPadding * 2 - nodeSpacingX
+        const groupHeight = numRows * (nodeHeight + nodeSpacingY) + groupPadding * 2 + 40 - nodeSpacingY
+
+        // Add group background node
+        nodes.push({
+          id: `group-${typeKey}`,
+          type: 'group',
+          position: { x: 50, y: currentY },
+          data: { label: typeConfig.label },
+          style: {
+            width: groupWidth,
+            height: groupHeight,
+            backgroundColor: typeConfig.bgColor + '40',
+            border: `2px dashed ${typeConfig.color}`,
+            borderRadius: '12px',
+            padding: '10px',
+          },
+          selectable: false,
+          draggable: false,
+        })
+
+        // Add group label node
+        nodes.push({
+          id: `group-label-${typeKey}`,
+          type: 'default',
+          position: { x: 60, y: currentY + 10 },
+          data: {
+            label: (
+              <div className="flex items-center gap-2">
+                <div 
+                  className="w-3 h-3 rounded-full" 
+                  style={{ backgroundColor: typeConfig.color }}
+                />
+                <span className="font-semibold text-sm" style={{ color: typeConfig.color }}>
+                  {typeConfig.label} ({typeReqs.length})
+                </span>
+              </div>
+            ),
+          },
+          style: {
+            background: 'transparent',
+            border: 'none',
+            padding: 0,
+            width: 'auto',
+          },
+          selectable: false,
+          draggable: false,
+        })
+
+        // Position requirements within group
+        typeReqs.forEach((req, index) => {
+          const row = Math.floor(index / nodesPerRow)
+          const col = index % nodesPerRow
+          const x = 50 + groupPadding + col * (nodeWidth + nodeSpacingX)
+          const y = currentY + groupPadding + 40 + row * (nodeHeight + nodeSpacingY)
+          nodePositions.set(req.id, { x, y })
+        })
+
+        currentY += groupHeight + groupSpacing
+      })
+
+    } else {
+      // Original hierarchical layout
+      const buildTree = (reqs: Requirement[], parentId: string | null = null): Requirement[] => {
+        return reqs
+          .filter((r) => (parentId === null ? !r.parentId : r.parentId === parentId))
+          .map((req) => ({
+            ...req,
+            children: buildTree(reqs, req.id),
+          }))
+      }
+
+      const tree = buildTree(filteredReqs)
+
+      let yOffset = 0
+      const layoutTree = (reqs: Requirement[], x: number, parentY?: number) => {
+        reqs.forEach((req, index) => {
+          const y = parentY !== undefined ? parentY + (index * 200) : yOffset
+          yOffset = Math.max(yOffset, y + 200)
+          nodePositions.set(req.id, { x, y })
+
+          if (req.children && req.children.length > 0) {
+            layoutTree(req.children, x + 320, y)
+          }
+        })
+      }
+
+      layoutTree(tree, 50)
+    }
 
     // Create requirement nodes
     filteredReqs.forEach((req) => {
@@ -153,7 +276,7 @@ function RequirementsDiagramContent({ projectId }: RequirementsDiagramProps) {
     })
 
     // Create parent-child edges
-    if (showHierarchy) {
+    if (showHierarchy && !groupByType) {
       filteredReqs.forEach((req) => {
         if (req.parentId && nodePositions.has(req.parentId)) {
           edges.push({
@@ -197,7 +320,7 @@ function RequirementsDiagramContent({ projectId }: RequirementsDiagramProps) {
     }
 
     return { initialNodes: nodes, initialEdges: edges }
-  }, [requirements, traceLinks, filterType, filterStatus, filterPriority, showHierarchy, showTraceLinks])
+  }, [requirements, traceLinks, filterType, filterStatus, filterPriority, showHierarchy, showTraceLinks, groupByType])
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
@@ -214,14 +337,40 @@ function RequirementsDiagramContent({ projectId }: RequirementsDiagramProps) {
 
   const isLoading = loadingReqs || loadingLinks
 
-  const legendItems = [
-    { label: 'Containment (hierarchy)', color: '#94a3b8', lineStyle: 'dashed' as const },
-    { label: 'Satisfies', color: '#3b82f6', lineStyle: 'solid' as const },
-    { label: 'Derives', color: '#f59e0b', lineStyle: 'solid' as const },
-    { label: 'Refines', color: '#06b6d4', lineStyle: 'solid' as const },
-    { label: 'Verifies', color: '#8b5cf6', lineStyle: 'solid' as const },
-    { label: 'Suspect Link', color: '#f59e0b', lineStyle: 'solid' as const },
-  ]
+  // Build legend items dynamically based on groupByType mode
+  const legendItems = useMemo(() => {
+    const items = []
+    
+    // Add type colors when grouping by type
+    if (groupByType) {
+      REQUIREMENT_TYPE_CONFIG.forEach((config) => {
+        items.push({
+          label: config.label,
+          color: config.color,
+          shape: 'rectangle' as const,
+        })
+      })
+      items.push({
+        label: 'Uncategorized',
+        color: '#6b7280',
+        shape: 'rectangle' as const,
+      })
+    } else {
+      // Add hierarchy line style when not grouping by type
+      items.push({ label: 'Containment (hierarchy)', color: '#94a3b8', lineStyle: 'dashed' as const })
+    }
+    
+    // Add trace link types
+    items.push(
+      { label: 'Satisfies', color: '#3b82f6', lineStyle: 'solid' as const },
+      { label: 'Derives', color: '#f59e0b', lineStyle: 'solid' as const },
+      { label: 'Refines', color: '#06b6d4', lineStyle: 'solid' as const },
+      { label: 'Verifies', color: '#8b5cf6', lineStyle: 'solid' as const },
+      { label: 'Suspect Link', color: '#f59e0b', lineStyle: 'solid' as const },
+    )
+    
+    return items
+  }, [groupByType])
 
   return (
     <div className="h-full flex flex-col">
@@ -253,6 +402,17 @@ function RequirementsDiagramContent({ projectId }: RequirementsDiagramProps) {
               className="w-4 h-4 text-blue-600 border-gray-300 rounded"
             />
             <span className="text-gray-600 dark:text-gray-400">Show Trace Links</span>
+          </label>
+          <div className="w-px h-5 bg-gray-300 dark:bg-gray-600" />
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={groupByType}
+              onChange={(e) => setGroupByType(e.target.checked)}
+              className="w-4 h-4 text-purple-600 border-gray-300 rounded"
+            />
+            <LayoutGrid size={14} className="text-purple-500" />
+            <span className="text-gray-600 dark:text-gray-400">Group by Type</span>
           </label>
         </div>
         <DiagramExporter targetRef={diagramRef} filename="requirements-diagram" />
@@ -330,7 +490,14 @@ function RequirementsDiagramContent({ projectId }: RequirementsDiagramProps) {
             <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
             <MiniMap
               nodeStrokeWidth={3}
-              nodeColor={() => '#3b82f6'}
+              nodeColor={(node) => {
+                // Skip group and label nodes
+                if (node.id.startsWith('group-')) return 'transparent'
+                // Color by requirement type
+                const reqType = node.data?.requirementType
+                const config = getTypeConfig(reqType)
+                return config.color
+              }}
             />
             <Panel position="top-right">
               <DiagramLegend items={legendItems} title="SysML req" collapsible defaultExpanded={false} />

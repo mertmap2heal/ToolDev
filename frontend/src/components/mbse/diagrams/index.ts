@@ -8,6 +8,7 @@ import UseCaseDiagram from './UseCaseDiagram'
 import BlockDefinitionDiagram from './BlockDefinitionDiagram'
 import InternalBlockDiagram from './InternalBlockDiagram'
 import ParametricDiagram from './ParametricDiagram'
+import ParameterRequirementDiagram from './ParameterRequirementDiagram'
 import ActivityDiagram from './ActivityDiagram'
 import SequenceDiagram from './SequenceDiagram'
 import StateMachineDiagram from './StateMachineDiagram'
@@ -19,6 +20,7 @@ export {
   BlockDefinitionDiagram,
   InternalBlockDiagram,
   ParametricDiagram,
+  ParameterRequirementDiagram,
   ActivityDiagram,
   SequenceDiagram,
   StateMachineDiagram,

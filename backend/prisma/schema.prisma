@@ -48,6 +48,7 @@ model Project {
   useCases      UseCase[]
   actors        Actor[]
   requirementTemplates RequirementTemplate[]
+  diagrams      Diagram[]
 }
 
 model ProjectMember {
@@ -437,4 +438,22 @@ model RequirementTemplate {
 
   @@index([projectId])
   @@index([isDefault])
+}
+
+model Diagram {
+  id                String   @id @default(uuid())
+  projectId         String
+  diagramType       String   // req, bdd, ibd, par, act, seq, stm, uc, pkg, par-req
+  name              String
+  description       String?
+  sourceElementId   String?  // ID of the element this diagram was created from
+  sourceElementType String?  // requirement, function, useCase, parameter
+  layout            Json?    // Store node positions, zoom, etc.
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([sourceElementId])
 }

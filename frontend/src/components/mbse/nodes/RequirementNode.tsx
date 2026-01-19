@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useCallback } from 'react'
 import { Handle, Position, NodeProps } from 'reactflow'
 import { FileText, AlertCircle, CheckCircle } from 'lucide-react'
 import clsx from 'clsx'
@@ -14,6 +14,7 @@ interface RequirementNodeData {
   verificationStatus?: string
   isSelected?: boolean
   onSelect?: (id: string) => void
+  onContextMenu?: (e: React.MouseEvent, data: RequirementNodeData) => void
 }
 
 /**
@@ -70,16 +71,25 @@ function RequirementNode({ data, selected }: NodeProps<RequirementNodeData>) {
 
   const colors = getTypeColor(data.requirementType)
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (data.onContextMenu) {
+      data.onContextMenu(e, data)
+    }
+  }, [data])
+
   return (
     <div
       className={clsx(
-        'min-w-[220px] rounded-lg shadow-md transition-shadow',
+        'min-w-[220px] rounded-lg shadow-md transition-shadow cursor-pointer',
         selected && 'ring-2 ring-blue-500 ring-offset-2'
       )}
       style={{
         backgroundColor: colors.bg,
         border: `2px solid ${colors.border}`,
       }}
+      onContextMenu={handleContextMenu}
     >
       {/* SysML Stereotype Header */}
       <div

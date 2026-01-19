@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useCallback } from 'react'
 import { Handle, Position, NodeProps } from 'reactflow'
 import clsx from 'clsx'
 
@@ -24,6 +24,7 @@ interface BlockNodeData {
   ports?: Array<{ name: string; direction: 'in' | 'out' | 'inout' }>
   isSelected?: boolean
   color?: string
+  onContextMenu?: (e: React.MouseEvent, data: BlockNodeData) => void
 }
 
 /**
@@ -33,13 +34,22 @@ interface BlockNodeData {
 function BlockNode({ data, selected }: NodeProps<BlockNodeData>) {
   const blockColor = data.color || '#14b8a6'
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (data.onContextMenu) {
+      data.onContextMenu(e, data)
+    }
+  }, [data])
+
   return (
     <div
       className={clsx(
-        'min-w-[200px] bg-white rounded shadow-md transition-shadow',
+        'min-w-[200px] bg-white rounded shadow-md transition-shadow cursor-pointer',
         selected && 'ring-2 ring-blue-500 ring-offset-2'
       )}
       style={{ border: `2px solid ${blockColor}` }}
+      onContextMenu={handleContextMenu}
     >
       {/* Stereotype Header */}
       <div

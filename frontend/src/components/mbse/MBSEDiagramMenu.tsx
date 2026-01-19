@@ -11,6 +11,7 @@ import {
   Calculator,
   ChevronRight,
   ChevronDown,
+  Link2,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -18,20 +19,21 @@ import clsx from 'clsx'
  * SysML/UML Diagram type definitions
  */
 export type DiagramType =
-  | 'req'    // Requirements Diagram
-  | 'bdd'    // Block Definition Diagram
-  | 'ibd'    // Internal Block Diagram
-  | 'par'    // Parametric Diagram
-  | 'act'    // Activity Diagram
-  | 'seq'    // Sequence Diagram
-  | 'stm'    // State Machine Diagram
-  | 'uc'     // Use Case Diagram
-  | 'pkg'    // Package Diagram
+  | 'req'      // Requirements Diagram
+  | 'bdd'      // Block Definition Diagram
+  | 'ibd'      // Internal Block Diagram
+  | 'par'      // Parametric Diagram
+  | 'par-req'  // Parameter-Requirement Diagram
+  | 'act'      // Activity Diagram
+  | 'seq'      // Sequence Diagram
+  | 'stm'      // State Machine Diagram
+  | 'uc'       // Use Case Diagram
+  | 'pkg'      // Package Diagram
 
 /**
- * Diagram category groupings
+ * Diagram category groupings following SysML taxonomy
  */
-type DiagramCategory = 'sysml' | 'behavior' | 'structure'
+type DiagramCategory = 'requirements' | 'structure' | 'behavior' | 'parametric'
 
 interface DiagramInfo {
   type: DiagramType
@@ -43,31 +45,40 @@ interface DiagramInfo {
 }
 
 /**
- * Complete diagram type information
+ * Complete diagram type information organized by SysML taxonomy
  */
 const DIAGRAM_INFO: DiagramInfo[] = [
-  // SysML Diagrams
+  // Requirements Diagrams
   {
     type: 'req',
     name: 'Requirements Diagram',
     description: 'Visualize requirements and their relationships',
-    category: 'sysml',
+    category: 'requirements',
     icon: FileText,
     color: '#3b82f6',
   },
+  // Structure Diagrams
   {
-    type: 'par',
-    name: 'Parametric Diagram',
-    description: 'Show constraint parameters and equations',
-    category: 'sysml',
-    icon: Calculator,
-    color: '#8b5cf6',
+    type: 'bdd',
+    name: 'Block Definition Diagram',
+    description: 'Define system blocks and their relationships',
+    category: 'structure',
+    icon: Box,
+    color: '#14b8a6',
+  },
+  {
+    type: 'ibd',
+    name: 'Internal Block Diagram',
+    description: 'Show internal structure with ports and flows',
+    category: 'structure',
+    icon: Layers,
+    color: '#a855f7',
   },
   {
     type: 'pkg',
     name: 'Package Diagram',
     description: 'Organize model elements into packages',
-    category: 'sysml',
+    category: 'structure',
     icon: Package,
     color: '#6b7280',
   },
@@ -104,22 +115,22 @@ const DIAGRAM_INFO: DiagramInfo[] = [
     icon: Users,
     color: '#ec4899',
   },
-  // Structure Diagrams
+  // Parametric Diagrams
   {
-    type: 'bdd',
-    name: 'Block Definition Diagram',
-    description: 'Define system blocks and their relationships',
-    category: 'structure',
-    icon: Box,
-    color: '#14b8a6',
+    type: 'par',
+    name: 'Parametric Diagram',
+    description: 'Show constraint parameters and equations',
+    category: 'parametric',
+    icon: Calculator,
+    color: '#8b5cf6',
   },
   {
-    type: 'ibd',
-    name: 'Internal Block Diagram',
-    description: 'Show internal structure with ports and flows',
-    category: 'structure',
-    icon: Layers,
-    color: '#a855f7',
+    type: 'par-req',
+    name: 'Parameter-Requirement Matrix',
+    description: 'Visualize relationships between parameters and requirements',
+    category: 'parametric',
+    icon: Link2,
+    color: '#0ea5e9',
   },
 ]
 
@@ -139,7 +150,7 @@ export default function MBSEDiagramMenu({
   className,
 }: MBSEDiagramMenuProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<DiagramCategory>>(
-    new Set(['sysml', 'behavior', 'structure'])
+    new Set(['requirements', 'structure', 'behavior', 'parametric'])
   )
 
   const toggleCategory = (category: DiagramCategory) => {
@@ -156,27 +167,31 @@ export default function MBSEDiagramMenu({
 
   const getCategoryLabel = (category: DiagramCategory): string => {
     switch (category) {
-      case 'sysml':
-        return 'SysML Diagrams'
-      case 'behavior':
-        return 'Behavior Diagrams'
+      case 'requirements':
+        return 'Requirements'
       case 'structure':
-        return 'Structure Diagrams'
+        return 'Structure'
+      case 'behavior':
+        return 'Behavior'
+      case 'parametric':
+        return 'Parametric'
     }
   }
 
   const getCategoryIcon = (category: DiagramCategory): React.ReactNode => {
     switch (category) {
-      case 'sysml':
+      case 'requirements':
         return <FileText size={16} className="text-blue-500" />
+      case 'structure':
+        return <Box size={16} className="text-teal-500" />
       case 'behavior':
         return <Activity size={16} className="text-green-500" />
-      case 'structure':
-        return <Box size={16} className="text-purple-500" />
+      case 'parametric':
+        return <Calculator size={16} className="text-purple-500" />
     }
   }
 
-  const categories: DiagramCategory[] = ['sysml', 'behavior', 'structure']
+  const categories: DiagramCategory[] = ['requirements', 'structure', 'behavior', 'parametric']
 
   return (
     <div className={clsx('bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden', className)}>
