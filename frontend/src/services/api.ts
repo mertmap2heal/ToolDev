@@ -30,10 +30,15 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => {
-        if (error.response?.status === 401) {
-          localStorage.removeItem('token')
-          // Don't redirect - just let the app handle it gracefully
-          console.log('Unauthorized - API call failed, but app will continue')
+        // Handle both 401 (Unauthorized - no token) and 403 (Forbidden - invalid/expired token)
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          const token = localStorage.getItem('token')
+          if (token) {
+            console.log('Token is invalid or expired, removing from storage')
+            localStorage.removeItem('token')
+            // Trigger re-authentication on next request
+            window.dispatchEvent(new CustomEvent('token-expired'))
+          }
         }
         return Promise.reject(error)
       }
