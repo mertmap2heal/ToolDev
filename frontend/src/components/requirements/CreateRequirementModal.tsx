@@ -62,6 +62,18 @@ export default function CreateRequirementModal({
   const [customType, setCustomType] = useState('')
   const [showAddType, setShowAddType] = useState(false)
   const [requirementTypes, setRequirementTypes] = useState<string[]>(defaultRequirementTypes)
+  const [customRequirementType, setCustomRequirementType] = useState('')
+  const [showAddRequirementType, setShowAddRequirementType] = useState(false)
+  const [availableRequirementTypes, setAvailableRequirementTypes] = useState<string[]>([
+    'functional',
+    'performance',
+    'interface',
+    'design_constraint',
+    'safety',
+    'security',
+    'usability',
+    'other',
+  ])
   const [customSource, setCustomSource] = useState('')
   const [showAddSource, setShowAddSource] = useState(false)
   const [sourceTypes, setSourceTypes] = useState<string[]>(sources)
@@ -248,6 +260,16 @@ export default function CreateRequirementModal({
       setFormData((prev) => ({ ...prev, category: customType.trim() }))
       setCustomType('')
       setShowAddType(false)
+    }
+  }
+
+  const handleAddRequirementType = () => {
+    if (customRequirementType.trim() && !availableRequirementTypes.includes(customRequirementType.trim())) {
+      const newType = customRequirementType.trim().toLowerCase().replace(/\s+/g, '_')
+      setAvailableRequirementTypes([...availableRequirementTypes, newType])
+      setFormData((prev) => ({ ...prev, requirementType: newType }))
+      setCustomRequirementType('')
+      setShowAddRequirementType(false)
     }
   }
 
@@ -627,21 +649,52 @@ export default function CreateRequirementModal({
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
                 Requirement Type
               </label>
-              <select
-                value={formData.requirementType || ''}
-                onChange={(e) => handleChange('requirementType', e.target.value || undefined)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value="">Select requirement type</option>
-                <option value="functional">Functional</option>
-                <option value="performance">Performance</option>
-                <option value="interface">Interface</option>
-                <option value="design_constraint">Design Constraint</option>
-                <option value="safety">Safety</option>
-                <option value="security">Security</option>
-                <option value="usability">Usability</option>
-                <option value="other">Other</option>
-              </select>
+              <div className="flex gap-2">
+                <select
+                  value={formData.requirementType || ''}
+                  onChange={(e) => handleChange('requirementType', e.target.value || undefined)}
+                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="">Select requirement type</option>
+                  {availableRequirementTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowAddRequirementType(!showAddRequirementType)}
+                  className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2"
+                >
+                  <Plus size={16} />
+                  <span>Add Type</span>
+                </button>
+              </div>
+              {showAddRequirementType && (
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="text"
+                    value={customRequirementType}
+                    onChange={(e) => setCustomRequirementType(e.target.value)}
+                    placeholder="Enter new requirement type"
+                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleAddRequirementType()
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddRequirementType}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                  >
+                    Add
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Requirement Level */}

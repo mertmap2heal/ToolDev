@@ -5,9 +5,46 @@ import { createVersionSnapshot } from './version.controller'
 
 const prisma = new PrismaClient()
 
-// Helper function to generate requirement ID
-async function generateRequirementId(projectId: string, category?: string): Promise<string> {
-  const prefix = category ? `REQ-${category.toUpperCase().substring(0, 4)}` : 'REQ'
+// Mapping from requirement types to ID prefixes
+// All prefixes include REQ- for consistency
+const REQUIREMENT_TYPE_PREFIXES: Record<string, string> = {
+  functional: 'REQ-FUNC',
+  performance: 'REQ-PERF',
+  interface: 'REQ-INTF',
+  design_constraint: 'REQ-DCON',
+  safety: 'REQ-SAFE',
+  security: 'REQ-SECU',
+  usability: 'REQ-USAB',
+  other: 'REQ',
+}
+
+// Helper function to generate requirement ID based on classification
+async function generateRequirementId(
+  projectId: string,
+  requirementType?: string,
+  category?: string
+): Promise<string> {
+  // Determine prefix based on requirementType (classification) first, then category as fallback
+  let prefix = 'REQ'
+  
+  if (requirementType) {
+    if (REQUIREMENT_TYPE_PREFIXES[requirementType]) {
+      // Use predefined prefix for known types
+      prefix = REQUIREMENT_TYPE_PREFIXES[requirementType]
+    } else {
+      // Handle custom requirementType values not in predefined mapping
+      // Convert to uppercase, remove non-letters, take first 3 letters
+      const customPrefix = requirementType
+        .toUpperCase()
+        .replace(/[^A-Z]/g, '')  // Remove non-letters first
+        .substring(0, 3)  // Take first 3 letters
+      prefix = `REQ-${customPrefix}`
+    }
+  } else if (category) {
+    // Fallback to category if requirementType not provided
+    const categoryPrefix = category.toUpperCase().replace(/[^A-Z]/g, '').substring(0, 3)
+    prefix = `REQ-${categoryPrefix}`
+  }
   
   // Find the highest number for this prefix
   // Fetch all requirements and filter in JavaScript since requirementId is nullable
@@ -20,17 +57,38 @@ async function generateRequirementId(projectId: string, category?: string): Prom
     },
   })
 
-  // Filter requirements that start with the prefix
+  // Filter requirements that start with the prefix followed by dash and number
+  // Format: "PREFIX-001", "PREFIX-002", etc.
+  // Also handle old format without REQ- prefix for transition compatibility
   const existingRequirements = allRequirements.filter(
-    (req) => req.requirementId && req.requirementId.startsWith(prefix)
+    (req) => {
+      if (!req.requirementId) return false
+      // Escape special regex characters in prefix
+      const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      // Match new format: "REQ-FUNC-001" or old format: "FUNC-001" (for transition)
+      // If prefix starts with "REQ-", also check for old format without "REQ-"
+      let prefixPattern: RegExp
+      if (prefix.startsWith('REQ-')) {
+        // Extract the suffix after "REQ-" (e.g., "FUNC" from "REQ-FUNC")
+        const suffix = prefix.substring(4) // Remove "REQ-"
+        const escapedSuffix = suffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        // Match both new format (REQ-FUNC-001) and old format (FUNC-001)
+        prefixPattern = new RegExp(`^(?:${escapedPrefix}|${escapedSuffix})-\\d+$`)
+      } else {
+        // For non-REQ prefixes (like just "REQ"), match exact format
+        prefixPattern = new RegExp(`^${escapedPrefix}-\\d+$`)
+      }
+      return prefixPattern.test(req.requirementId)
+    }
   )
 
   let maxNumber = 0
   for (const req of existingRequirements) {
     if (req.requirementId) {
-      const match = req.requirementId.match(/\d+$/)
+      // Extract number after the dash (e.g., "FUNC-001" -> 1)
+      const match = req.requirementId.match(/-(\d+)$/)
       if (match) {
-        const num = parseInt(match[0], 10)
+        const num = parseInt(match[1], 10)
         if (num > maxNumber) {
           maxNumber = num
         }
@@ -264,9 +322,10 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
     }
 
     // Generate requirement ID if not provided
+    // Uses requirementType (classification) as primary, category as fallback
     let finalRequirementId = providedRequirementId
     if (!finalRequirementId) {
-      finalRequirementId = await generateRequirementId(projectId, category)
+      finalRequirementId = await generateRequirementId(projectId, requirementType, category)
     }
 
     // Check if requirementId already exists in this project
@@ -443,19 +502,87 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Check if new requirementId already exists (if being changed)
-    if (newRequirementId && newRequirementId !== requirement.requirementId) {
+    // Check if requirementType (classification) is being changed
+    // Handle cases where requirement was unassigned (null/undefined) and is now being assigned
+    const currentType = requirement.requirementType || null
+    const newType = requirementType !== undefined ? (requirementType || null) : null
+    const classificationChanged = requirementType !== undefined && 
+                                  newType !== currentType
+    
+    // Determine the effective type for ID generation (use new type if provided, otherwise current)
+    const effectiveType = requirementType !== undefined ? requirementType : requirement.requirementType
+    const effectiveCategory = category !== undefined ? category : requirement.category
+    
+    console.log(`[Requirement ID Update] Debug - Current type: "${currentType}", New type: "${newType}", Classification changed: ${classificationChanged}, Current ID: "${requirement.requirementId}", New ID from request: "${newRequirementId}"`)
+
+    // Determine the final requirement ID
+    let finalRequirementId: string | undefined = undefined
+    
+    // Check if manual ID override was provided (explicitly set and different from current)
+    // If newRequirementId is the same as current, it's just the frontend sending the current value, not an override
+    const hasManualIdOverride = newRequirementId !== undefined && 
+                                 newRequirementId !== null && 
+                                 newRequirementId !== '' &&
+                                 newRequirementId !== requirement.requirementId
+    
+    // Check if current ID needs to be updated due to format change (for custom types with old 4-letter format)
+    let needsFormatUpdate = false
+    if (effectiveType && !REQUIREMENT_TYPE_PREFIXES[effectiveType] && requirement.requirementId) {
+      // This is a custom type - check if ID matches expected format
+      const expectedPrefix = `REQ-${effectiveType.toUpperCase().replace(/[^A-Z]/g, '').substring(0, 3)}`
+      // Extract prefix from current ID (format: REQ-XXXX-001 or REQ-XXX-001)
+      const idParts = requirement.requirementId.split('-')
+      if (idParts.length >= 2) {
+        const currentIdPrefix = `${idParts[0]}-${idParts[1]}`
+        // Check if prefix doesn't match expected format (e.g., old 4-letter vs new 3-letter)
+        // Also check if the middle part (the type code) has 4 characters instead of 3
+        const typeCode = idParts[1]
+        if (currentIdPrefix !== expectedPrefix || (typeCode && typeCode.length === 4)) {
+          needsFormatUpdate = true
+          console.log(`[Requirement ID Update] ID format mismatch detected. Current prefix: "${currentIdPrefix}", Expected: "${expectedPrefix}", Type code length: ${typeCode?.length}`)
+        }
+      }
+    }
+    
+    // If classification changed and no manual ID override provided, generate new ID
+    if (classificationChanged && !hasManualIdOverride) {
+      // Generate new ID based on the new classification
+      finalRequirementId = await generateRequirementId(
+        projectId, 
+        requirementType || undefined, 
+        category !== undefined ? category : requirement.category || undefined
+      )
+      console.log(`[Requirement ID Update] Classification changed from "${currentType}" to "${newType}". Generated new ID: ${finalRequirementId}`)
+    } else if (needsFormatUpdate && !hasManualIdOverride) {
+      // ID format needs updating (e.g., old 4-letter format to new 3-letter format)
+      finalRequirementId = await generateRequirementId(
+        projectId,
+        effectiveType || undefined,
+        effectiveCategory || undefined
+      )
+      console.log(`[Requirement ID Update] ID format updated from "${requirement.requirementId}" to "${finalRequirementId}"`)
+    } else if (hasManualIdOverride) {
+      // Manual ID override provided (different from current ID)
+      finalRequirementId = newRequirementId
+      console.log(`[Requirement ID Update] Manual ID override provided: ${finalRequirementId}`)
+    }
+
+    // Check if the final requirementId already exists (excluding current requirement)
+    if (finalRequirementId && finalRequirementId !== requirement.requirementId) {
       const existingRequirement = await prisma.requirement.findFirst({
         where: {
           projectId,
-          requirementId: newRequirementId,
+          requirementId: finalRequirementId,
+          NOT: {
+            id: requirement.id, // Exclude the current requirement
+          },
         },
       })
 
       if (existingRequirement) {
         return res.status(400).json({
           success: false,
-          error: `Requirement ID "${newRequirementId}" already exists in this project`,
+          error: `Requirement ID "${finalRequirementId}" already exists in this project`,
         })
       }
     }
@@ -475,29 +602,37 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       console.warn('Failed to create version snapshot:', versionError)
     }
 
+    // Build update data object, conditionally including requirementId only when it should be updated
+    const updateData: any = {
+      title,
+      description,
+      parentId: parentId !== undefined ? (parentId || null) : undefined,
+      priority,
+      status,
+      stage,
+      owner,
+      verificationMethod,
+      acceptanceCriteria,
+      source,
+      category,
+      relatedDocuments,
+      tags: tags !== undefined ? tags : undefined,
+      requirementType: requirementType !== undefined ? requirementType : undefined,
+      requirementLevel: requirementLevel !== undefined ? requirementLevel : undefined,
+      risk: risk !== undefined ? risk : undefined,
+      complexity: complexity !== undefined ? complexity : undefined,
+      rationale: rationale !== undefined ? rationale : undefined,
+    }
+    
+    // Only include requirementId in update if it was generated or manually provided
+    if (finalRequirementId !== undefined) {
+      updateData.requirementId = finalRequirementId
+      console.log(`[Requirement ID Update] Updating requirement ID from "${requirement.requirementId}" to "${finalRequirementId}"`)
+    }
+
     const updatedRequirement = await prisma.requirement.update({
       where: { id: requirement.id },
-      data: {
-        requirementId: newRequirementId,
-        title,
-        description,
-        parentId: parentId !== undefined ? (parentId || null) : undefined,
-        priority,
-        status,
-        stage,
-        owner,
-        verificationMethod,
-        acceptanceCriteria,
-        source,
-        category,
-        relatedDocuments,
-        tags: tags !== undefined ? tags : undefined,
-        requirementType: requirementType !== undefined ? requirementType : undefined,
-        requirementLevel: requirementLevel !== undefined ? requirementLevel : undefined,
-        risk: risk !== undefined ? risk : undefined,
-        complexity: complexity !== undefined ? complexity : undefined,
-        rationale: rationale !== undefined ? rationale : undefined,
-      },
+      data: updateData,
       include: {
         parent: {
           select: {
@@ -924,9 +1059,10 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
           }
 
           // Generate requirementId if not provided
+          // Uses requirementType (classification) as primary, category as fallback
           let requirementId = reqData.requirementId
           if (!requirementId) {
-            requirementId = await generateRequirementId(projectId, reqData.category)
+            requirementId = await generateRequirementId(projectId, reqData.requirementType, reqData.category)
           }
 
           // Create requirement

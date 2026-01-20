@@ -88,6 +88,9 @@ export default function RequirementsPage() {
   const [ownerFilter, setOwnerFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [requirementTypeFilter, setRequirementTypeFilter] = useState<string>('all')
+  
+  // Grouping by type
+  const [groupByType, setGroupByType] = useState<boolean>(false)
 
   const queryClient = useQueryClient()
 
@@ -569,6 +572,90 @@ export default function RequirementsPage() {
     return buildHierarchy(filteredRequirements)
   }, [filteredRequirements])
 
+  // Group requirements by type
+  const groupedRequirements = useMemo(() => {
+    if (!groupByType) {
+      return { groups: {}, orderedKeys: [] }
+    }
+
+    const groups: Record<string, Requirement[]> = {}
+    
+    // Group root requirements by type
+    hierarchyRequirements.forEach(req => {
+      const type = req.requirementType || 'unassigned'
+      if (!groups[type]) {
+        groups[type] = []
+      }
+      groups[type].push(req)
+    })
+
+    // Sort groups by type name
+    const sortedGroups: Record<string, Requirement[]> = {}
+    const predefinedTypes = ['functional', 'performance', 'interface', 'design_constraint', 'safety', 'security', 'usability', 'other']
+    
+    // First, add predefined types in order
+    predefinedTypes.forEach(type => {
+      if (groups[type]) {
+        sortedGroups[type] = groups[type]
+      }
+    })
+
+    // Then add 'unassigned' if it exists
+    if (groups['unassigned']) {
+      sortedGroups['unassigned'] = groups['unassigned']
+    }
+
+    // Finally, add all remaining custom types (sorted alphabetically for consistency)
+    const customTypes = Object.keys(groups)
+      .filter(type => !predefinedTypes.includes(type) && type !== 'unassigned')
+      .sort()
+    
+    customTypes.forEach(type => {
+      sortedGroups[type] = groups[type]
+    })
+
+    // Create an ordered array of type keys to maintain order when iterating
+    const orderedTypeKeys: string[] = []
+    
+    // Add predefined types in order
+    predefinedTypes.forEach(type => {
+      if (sortedGroups[type]) {
+        orderedTypeKeys.push(type)
+      }
+    })
+    
+    // Add custom types (before unassigned)
+    customTypes.forEach(type => {
+      if (sortedGroups[type]) {
+        orderedTypeKeys.push(type)
+      }
+    })
+    
+    // Add unassigned last
+    if (sortedGroups['unassigned']) {
+      orderedTypeKeys.push('unassigned')
+    }
+
+    // Return both the groups object and ordered keys array
+    return { groups: sortedGroups, orderedKeys: orderedTypeKeys }
+  }, [hierarchyRequirements, groupByType])
+
+  // Helper function to format requirement type name
+  const formatRequirementTypeName = (type: string): string => {
+    const typeNames: Record<string, string> = {
+      functional: 'Functional',
+      performance: 'Performance',
+      interface: 'Interface',
+      design_constraint: 'Design Constraint',
+      safety: 'Safety',
+      security: 'Security',
+      usability: 'Usability',
+      other: 'Other',
+      unassigned: 'Unassigned',
+    }
+    return typeNames[type] || type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, ' ')
+  }
+
   // Get unique values for filters (must be defined before renderRequirementRow uses them)
   const uniqueStatuses = useMemo(() => 
     Array.from(new Set(requirements.map((r) => r.status).filter(Boolean))),
@@ -608,6 +695,11 @@ export default function RequirementsPage() {
   }
 
   const getRequirementTypeColor = (type?: string) => {
+    if (!type) {
+      return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+    }
+
+    // Predefined types with specific colors
     switch (type) {
       case 'functional':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
@@ -625,9 +717,25 @@ export default function RequirementsPage() {
         return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
       case 'other':
         return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
     }
+
+    // For custom types, generate consistent color based on type name
+    const colorPalette = [
+      'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-400',
+      'bg-teal-100 text-teal-800 dark:bg-teal-900/20 dark:text-teal-400',
+      'bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-400',
+      'bg-rose-100 text-rose-800 dark:bg-rose-900/20 dark:text-rose-400',
+      'bg-violet-100 text-violet-800 dark:bg-violet-900/20 dark:text-violet-400',
+      'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400',
+      'bg-lime-100 text-lime-800 dark:bg-lime-900/20 dark:text-lime-400',
+      'bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/20 dark:text-fuchsia-400',
+      'bg-sky-100 text-sky-800 dark:bg-sky-900/20 dark:text-sky-400',
+      'bg-stone-100 text-stone-800 dark:bg-stone-900/20 dark:text-stone-400',
+    ]
+
+    // Simple hash function to get consistent color for the same type name
+    const hash = type.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+    return colorPalette[hash % colorPalette.length]
   }
 
   const formatRequirementType = (type?: string) => {
@@ -767,6 +875,18 @@ export default function RequirementsPage() {
                 )}
               </div>
             )}
+          </td>
+          {/* Description */}
+          <td className="px-4 py-3">
+            <div className="text-sm text-gray-600 dark:text-gray-400 max-w-md">
+              <p className="line-clamp-2" title={req.description}>
+                {req.description ? (
+                  <span dangerouslySetInnerHTML={{ __html: req.description.replace(/<[^>]*>/g, '').substring(0, 150) + (req.description.length > 150 ? '...' : '') }} />
+                ) : (
+                  <span className="text-gray-400">—</span>
+                )}
+              </p>
+            </div>
           </td>
           {/* Category - inline editable */}
           <td className="px-4 py-3">
@@ -1190,25 +1310,41 @@ export default function RequirementsPage() {
         </div>
       </div>
 
-      {/* Search */}
+      {/* Search and View Options */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-          <input
-            type="text"
-            placeholder="Search all fields (title, description, ID, category, owner, tags, criteria...)"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-            >
-              <X size={16} />
-            </button>
-          )}
+        <div className="flex items-center gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
+              placeholder="Search all fields (title, description, ID, category, owner, tags, criteria...)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+          {/* Group by Type Toggle */}
+          <button
+            onClick={() => setGroupByType(!groupByType)}
+            className={clsx(
+              "px-4 py-2 rounded-lg border transition-colors flex items-center gap-2 whitespace-nowrap",
+              groupByType
+                ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-600"
+                : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600"
+            )}
+            title="Group requirements by type"
+          >
+            <Grid3X3 size={18} />
+            <span className="text-sm font-medium">Group by Type</span>
+          </button>
         </div>
       </div>
 
@@ -1392,6 +1528,9 @@ export default function RequirementsPage() {
                   Title
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Description
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Category
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -1412,25 +1551,86 @@ export default function RequirementsPage() {
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={10} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                     Loading requirements...
                   </td>
                 </tr>
-              ) : hierarchyRequirements.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                    {requirements.length === 0
-                      ? 'No requirements found. Click "Create Requirement" to get started.'
-                      : 'No requirements match your search or filter criteria.'}
-                  </td>
-                </tr>
-              ) : (
-                hierarchyRequirements.map((req) => (
-                  <React.Fragment key={req.id}>
-                    {renderRequirementRow(req)}
-                  </React.Fragment>
-                ))
-              )}
+              ) : (() => {
+                if (groupByType) {
+                  const { groups, orderedKeys } = groupedRequirements
+                  const hasAnyRequirements = Object.keys(groups).length > 0 && 
+                    Object.values(groups).some(group => group.length > 0)
+                  
+                  if (!hasAnyRequirements) {
+                    return (
+                      <tr>
+                        <td colSpan={10} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                          {requirements.length === 0
+                            ? 'No requirements found. Click "Create Requirement" to get started.'
+                            : 'No requirements match your search or filter criteria.'}
+                        </td>
+                      </tr>
+                    )
+                  }
+
+                  // Use orderedKeys to maintain correct order (predefined -> unassigned -> custom)
+                  // Filter out null values in case some types have no requirements
+                  return orderedKeys
+                    .map((type) => {
+                      const typeRequirements = groups[type]
+                      if (!typeRequirements || typeRequirements.length === 0) return null
+                    
+                    // Count all requirements including children
+                    const countChildren = (r: Requirement): number => {
+                      return 1 + (r.children?.reduce((sum, child) => countChildren(child), 0) || 0)
+                    }
+                    const typeCount = typeRequirements.reduce((count, req) => count + countChildren(req), 0)
+
+                    return (
+                      <React.Fragment key={type}>
+                        {/* Section Header */}
+                        <tr className="bg-gray-100 dark:bg-gray-800 border-t-2 border-gray-300 dark:border-gray-600">
+                          <td colSpan={10} className="px-4 py-3">
+                            <div className="flex items-center justify-between">
+                              <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">
+                                {formatRequirementTypeName(type)} Requirements
+                              </h3>
+                              <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                                {typeCount} {typeCount === 1 ? 'requirement' : 'requirements'}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                        {/* Requirements in this group */}
+                        {typeRequirements.map((req) => (
+                          <React.Fragment key={req.id}>
+                            {renderRequirementRow(req)}
+                          </React.Fragment>
+                        ))}
+                      </React.Fragment>
+                    )
+                    })
+                    .filter((item) => item !== null)
+                } else {
+                  if (hierarchyRequirements.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={10} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                          {requirements.length === 0
+                            ? 'No requirements found. Click "Create Requirement" to get started.'
+                            : 'No requirements match your search or filter criteria.'}
+                        </td>
+                      </tr>
+                    )
+                  }
+                  
+                  return hierarchyRequirements.map((req) => (
+                    <React.Fragment key={req.id}>
+                      {renderRequirementRow(req)}
+                    </React.Fragment>
+                  ))
+                }
+              })()}
             </tbody>
             </SortableContext>
           </table>
