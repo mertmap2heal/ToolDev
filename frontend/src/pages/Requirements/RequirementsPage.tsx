@@ -11,6 +11,7 @@ import {
   useSensor,
   useSensors,
   closestCenter,
+  useDroppable,
 } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -50,7 +51,7 @@ interface ExpandedRow {
  */
 interface InlineEditState {
   requirementId: string
-  field: 'title' | 'priority' | 'status' | 'owner' | 'category'
+  field: 'title' | 'priority' | 'status' | 'owner'
   value: string
 }
 
@@ -84,7 +85,6 @@ export default function RequirementsPage() {
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
-  const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [ownerFilter, setOwnerFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [requirementTypeFilter, setRequirementTypeFilter] = useState<string>('all')
@@ -354,6 +354,23 @@ export default function RequirementsPage() {
     },
   })
 
+  // Update requirement type mutation for drag and drop between type sections
+  const updateRequirementTypeMutation = useMutation({
+    mutationFn: ({ requirementId, newType }: { requirementId: string; newType: string | null }) => {
+      if (!projectId) throw new Error('Project ID required')
+      // Convert 'unassigned' to null for the API
+      const requirementType = newType === 'unassigned' ? null : newType
+      return requirementService.updateRequirement(projectId, requirementId, { requirementType: requirementType || undefined })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+    },
+    onError: (error: any) => {
+      console.error('Update requirement type error:', error)
+      alert(error?.error || 'Failed to update requirement type')
+    },
+  })
+
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event
     const draggedReq = requirements.find((r) => r.id === active.id)
@@ -366,12 +383,31 @@ export default function RequirementsPage() {
     const { active, over } = event
     setActiveRequirement(null)
 
-    if (!over || active.id === over.id) return
+    if (!over) return
 
     const activeReq = requirements.find((r) => r.id === active.id)
-    const overReq = requirements.find((r) => r.id === over.id)
+    if (!activeReq) return
 
-    if (!activeReq || !overReq) return
+    // Check if dropped on a type section header (droppable type section)
+    if (typeof over.id === 'string' && over.id.startsWith('type-section-')) {
+      const newType = over.id.replace('type-section-', '')
+      const currentType = activeReq.requirementType || 'unassigned'
+      
+      // Only update if the type actually changed
+      if (newType !== currentType) {
+        updateRequirementTypeMutation.mutate({
+          requirementId: activeReq.id,
+          newType: newType === 'unassigned' ? null : newType,
+        })
+      }
+      return
+    }
+
+    // Original drag-and-drop logic for parent-child relationships
+    if (active.id === over.id) return
+
+    const overReq = requirements.find((r) => r.id === over.id)
+    if (!overReq) return
 
     // Prevent making a requirement its own descendant
     const isDescendant = (parentId: string | undefined, targetId: string): boolean => {
@@ -499,7 +535,6 @@ export default function RequirementsPage() {
           req.title,
           req.description,
           req.requirementId,
-          req.category,
           req.owner,
           req.source,
           req.acceptanceCriteria,
@@ -524,15 +559,6 @@ export default function RequirementsPage() {
         return false
       }
 
-      // Category filter
-      if (categoryFilter !== 'all') {
-        if (categoryFilter === 'unassigned' && req.category) {
-          return false
-        }
-        if (categoryFilter !== 'unassigned' && req.category !== categoryFilter) {
-          return false
-        }
-      }
 
       // Owner filter
       if (ownerFilter !== 'all') {
@@ -566,7 +592,7 @@ export default function RequirementsPage() {
 
       return true
     })
-  }, [requirements, searchQuery, statusFilter, priorityFilter, categoryFilter, ownerFilter, sourceFilter, requirementTypeFilter])
+  }, [requirements, searchQuery, statusFilter, priorityFilter, ownerFilter, sourceFilter, requirementTypeFilter])
 
   const hierarchyRequirements = useMemo(() => {
     return buildHierarchy(filteredRequirements)
@@ -640,6 +666,23 @@ export default function RequirementsPage() {
     return { groups: sortedGroups, orderedKeys: orderedTypeKeys }
   }, [hierarchyRequirements, groupByType])
 
+  // Component for droppable type section header
+  const TypeSectionDroppable = ({ type, children }: { type: string; children: React.ReactNode }) => {
+    const { setNodeRef, isOver } = useDroppable({
+      id: `type-section-${type}`,
+      data: {
+        type: 'type-section',
+        requirementType: type,
+      },
+    })
+
+    // Clone the children and add ref and className to the tr element
+    return React.cloneElement(children as React.ReactElement, {
+      ref: setNodeRef,
+      className: `${(children as React.ReactElement).props.className || ''} ${isOver ? 'bg-blue-50 dark:bg-blue-900/20 transition-colors' : ''}`,
+    })
+  }
+
   // Helper function to format requirement type name
   const formatRequirementTypeName = (type: string): string => {
     const typeNames: Record<string, string> = {
@@ -664,10 +707,6 @@ export default function RequirementsPage() {
   
   const uniqueRequirementTypes = useMemo(() =>
     Array.from(new Set(requirements.map((r) => r.requirementType).filter(Boolean))),
-    [requirements]
-  )
-  const uniqueCategories = useMemo(() => 
-    Array.from(new Set(requirements.map((r) => r.category).filter(Boolean))),
     [requirements]
   )
   const uniqueOwners = useMemo(() => 
@@ -887,39 +926,6 @@ export default function RequirementsPage() {
                 )}
               </p>
             </div>
-          </td>
-          {/* Category - inline editable */}
-          <td className="px-4 py-3">
-            {inlineEdit?.requirementId === req.id && inlineEdit.field === 'category' ? (
-              <select
-                value={inlineEdit.value}
-                onChange={(e) => {
-                  setInlineEdit({ ...inlineEdit, value: e.target.value })
-                  setTimeout(() => {
-                    inlineUpdateMutation.mutate({
-                      requirementId: req.id,
-                      updates: { category: e.target.value || undefined },
-                    })
-                  }, 0)
-                }}
-                onBlur={cancelInlineEdit}
-                autoFocus
-                className="px-2 py-1 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="">None</option>
-                {uniqueCategories.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            ) : (
-              <span
-                className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
-                onDoubleClick={() => startInlineEdit(req, 'category')}
-                title="Double-click to edit"
-              >
-                {req.category || '—'}
-              </span>
-            )}
           </td>
           {/* Priority - inline editable */}
           <td className="px-4 py-3">
@@ -1317,7 +1323,7 @@ export default function RequirementsPage() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
-              placeholder="Search all fields (title, description, ID, category, owner, tags, criteria...)"
+              placeholder="Search all fields (title, description, ID, requirement type, owner, tags, criteria...)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
@@ -1531,9 +1537,6 @@ export default function RequirementsPage() {
                   Description
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Category
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Priority
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -1551,7 +1554,7 @@ export default function RequirementsPage() {
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                     Loading requirements...
                   </td>
                 </tr>
@@ -1564,7 +1567,7 @@ export default function RequirementsPage() {
                   if (!hasAnyRequirements) {
                     return (
                       <tr>
-                        <td colSpan={10} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                        <td colSpan={9} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                           {requirements.length === 0
                             ? 'No requirements found. Click "Create Requirement" to get started.'
                             : 'No requirements match your search or filter criteria.'}
@@ -1588,19 +1591,21 @@ export default function RequirementsPage() {
 
                     return (
                       <React.Fragment key={type}>
-                        {/* Section Header */}
-                        <tr className="bg-gray-100 dark:bg-gray-800 border-t-2 border-gray-300 dark:border-gray-600">
-                          <td colSpan={10} className="px-4 py-3">
-                            <div className="flex items-center justify-between">
-                              <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">
-                                {formatRequirementTypeName(type)} Requirements
-                              </h3>
-                              <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-                                {typeCount} {typeCount === 1 ? 'requirement' : 'requirements'}
-                              </span>
-                            </div>
-                          </td>
-                        </tr>
+                        {/* Section Header - Droppable */}
+                        <TypeSectionDroppable type={type}>
+                          <tr className="bg-gray-100 dark:bg-gray-800 border-t-2 border-gray-300 dark:border-gray-600">
+                            <td colSpan={9} className="px-4 py-3">
+                              <div className="flex items-center justify-between">
+                                <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">
+                                  {formatRequirementTypeName(type)} Requirements
+                                </h3>
+                                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                                  {typeCount} {typeCount === 1 ? 'requirement' : 'requirements'}
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                        </TypeSectionDroppable>
                         {/* Requirements in this group */}
                         {typeRequirements.map((req) => (
                           <React.Fragment key={req.id}>
@@ -1615,7 +1620,7 @@ export default function RequirementsPage() {
                   if (hierarchyRequirements.length === 0) {
                     return (
                       <tr>
-                        <td colSpan={10} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                        <td colSpan={9} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                           {requirements.length === 0
                             ? 'No requirements found. Click "Create Requirement" to get started.'
                             : 'No requirements match your search or filter criteria.'}

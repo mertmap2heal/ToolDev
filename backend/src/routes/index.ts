@@ -20,6 +20,7 @@ import requirementValidationRoutes from './requirementValidation.routes'
 import templatesRoutes from './templates.routes'
 import reqifRoutes from './reqif.routes'
 import diagramsRoutes from './diagrams.routes'
+import requirementReviewsRoutes from './requirementReviews.routes'
 
 const router = Router()
 
@@ -44,5 +45,6 @@ router.use('/requirement-validation', requirementValidationRoutes)
 router.use('/templates', templatesRoutes)
 router.use('/reqif', reqifRoutes)
 router.use('/diagrams', diagramsRoutes)
+router.use('/projects', requirementReviewsRoutes)
 
 export default router

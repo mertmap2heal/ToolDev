@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { X, Plus } from 'lucide-react'
+import { X, Plus, Trash2 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { requirementService } from '../../services/requirement.service'
 import { projectService } from '../../services/project.service'
@@ -39,21 +39,10 @@ export default function EditRequirementModal({
 }: EditRequirementModalProps) {
   const [formData, setFormData] = useState<UpdateRequirementDto>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [customType, setCustomType] = useState('')
-  const [showAddType, setShowAddType] = useState(false)
-  const [requirementTypes, setRequirementTypes] = useState<string[]>(defaultRequirementTypes)
   const [customRequirementType, setCustomRequirementType] = useState('')
   const [showAddRequirementType, setShowAddRequirementType] = useState(false)
-  const [availableRequirementTypes, setAvailableRequirementTypes] = useState<string[]>([
-    'functional',
-    'performance',
-    'interface',
-    'design_constraint',
-    'safety',
-    'security',
-    'usability',
-    'other',
-  ])
+  const predefinedTypes = ['functional', 'performance', 'interface', 'design_constraint', 'safety', 'security', 'usability', 'other']
+  const [availableRequirementTypes, setAvailableRequirementTypes] = useState<string[]>(predefinedTypes)
   const [customSource, setCustomSource] = useState('')
   const [showAddSource, setShowAddSource] = useState(false)
   const [sourceTypes, setSourceTypes] = useState<string[]>(sources)
@@ -105,6 +94,22 @@ export default function EditRequirementModal({
     enabled: isOpen && !!projectId,
   })
 
+  // Fetch custom requirement types
+  const { data: customTypesData = [] } = useQuery({
+    queryKey: ['customRequirementTypes', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const response = await requirementService.getCustomRequirementTypes(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: isOpen && !!projectId,
+    onSuccess: (data) => {
+      // Merge predefined and custom types
+      const customTypeNames = data.map(t => t.typeName)
+      setAvailableRequirementTypes([...predefinedTypes, ...customTypeNames])
+    },
+  })
+
   useEffect(() => {
     if (requirement) {
       setFormData({
@@ -131,16 +136,10 @@ export default function EditRequirementModal({
         verificationMethod: requirement.verificationMethod,
         acceptanceCriteria: requirement.acceptanceCriteria,
         source: requirement.source,
-        category: requirement.category,
         relatedDocuments: requirement.relatedDocuments,
         tags: requirement.tags || [],
       })
       setErrors({})
-      
-      // Add current category to types if it's not in the list
-      if (requirement.category && !requirementTypes.includes(requirement.category)) {
-        setRequirementTypes([...requirementTypes, requirement.category])
-      }
       
       // Add current requirementType to available types if it's not in the predefined list
       if (requirement.requirementType && !availableRequirementTypes.includes(requirement.requirementType)) {
@@ -186,22 +185,58 @@ export default function EditRequirementModal({
     },
   })
 
-  const handleAddType = () => {
-    if (customType.trim() && !requirementTypes.includes(customType.trim())) {
-      setRequirementTypes([...requirementTypes, customType.trim()])
-      setFormData((prev) => ({ ...prev, category: customType.trim() }))
-      setCustomType('')
-      setShowAddType(false)
+  const addCustomTypeMutation = useMutation({
+    mutationFn: (typeName: string) => requirementService.addCustomRequirementType(projectId, typeName),
+    onSuccess: (response) => {
+      if (response.success && response.data) {
+        const newType = response.data.typeName
+        setAvailableRequirementTypes((prev) => {
+          if (!prev.includes(newType)) {
+            return [...prev, newType]
+          }
+          return prev
+        })
+        setFormData((prev) => ({ ...prev, requirementType: newType }))
+        setCustomRequirementType('')
+        setShowAddRequirementType(false)
+        queryClient.invalidateQueries({ queryKey: ['customRequirementTypes', projectId] })
+      }
+    },
+    onError: (error: any) => {
+      console.error('Add custom requirement type error:', error)
+      alert(error?.error || 'Failed to add custom requirement type')
+    },
+  })
+
+  const deleteCustomTypeMutation = useMutation({
+    mutationFn: (typeId: string) => requirementService.deleteCustomRequirementType(projectId, typeId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customRequirementTypes', projectId] })
+      // Refresh available types
+      queryClient.refetchQueries({ queryKey: ['customRequirementTypes', projectId] })
+    },
+    onError: (error: any) => {
+      console.error('Delete custom requirement type error:', error)
+      alert(error?.error || 'Failed to delete custom requirement type')
+    },
+  })
+
+  const handleAddRequirementType = () => {
+    if (customRequirementType.trim()) {
+      addCustomTypeMutation.mutate(customRequirementType.trim())
     }
   }
 
-  const handleAddRequirementType = () => {
-    if (customRequirementType.trim() && !availableRequirementTypes.includes(customRequirementType.trim())) {
-      const newType = customRequirementType.trim().toLowerCase().replace(/\s+/g, '_')
-      setAvailableRequirementTypes([...availableRequirementTypes, newType])
-      setFormData((prev) => ({ ...prev, requirementType: newType }))
-      setCustomRequirementType('')
-      setShowAddRequirementType(false)
+  const handleDeleteRequirementType = async (typeName: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!confirm(`Are you sure you want to delete the requirement type "${typeName}"?`)) {
+      return
+    }
+
+    // Find the type ID from the custom types
+    const customType = customTypesData.find(t => t.typeName === typeName)
+    if (customType) {
+      deleteCustomTypeMutation.mutate(customType.id)
     }
   }
 
@@ -267,7 +302,6 @@ export default function EditRequirementModal({
       owner: formData.owner?.trim() || undefined,
       // Don't trim acceptanceCriteria if it's HTML from RichTextEditor
       acceptanceCriteria: formData.acceptanceCriteria || undefined,
-      category: formData.category || undefined,
       relatedDocuments: formData.relatedDocuments && formData.relatedDocuments.length > 0 ? formData.relatedDocuments : undefined,
       // Explicitly include parentId - empty string means clear parent (backend converts to null)
       // undefined means don't change, string means set parent
@@ -419,53 +453,6 @@ export default function EditRequirementModal({
             </select>
           </div>
 
-          {/* Category/Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-              Category/Type
-            </label>
-            <div className="flex gap-2">
-              <select
-                value={formData.category || ''}
-                onChange={(e) => handleChange('category', e.target.value || undefined)}
-                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value="">Select a type</option>
-                {requirementTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => setShowAddType(!showAddType)}
-                className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2"
-              >
-                <Plus size={16} />
-                <span>Add Type</span>
-              </button>
-            </div>
-            {showAddType && (
-              <div className="mt-2 flex gap-2">
-                <input
-                  type="text"
-                  value={customType}
-                  onChange={(e) => setCustomType(e.target.value)}
-                  placeholder="Enter new type name"
-                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddType}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-                >
-                  Add
-                </button>
-              </div>
-            )}
-          </div>
-
           {/* Priority and Status */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -614,52 +601,75 @@ export default function EditRequirementModal({
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
                 Requirement Type
               </label>
-              <div className="flex gap-2">
-                <select
-                  value={formData.requirementType || ''}
-                  onChange={(e) => handleChange('requirementType', e.target.value || undefined)}
-                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="">Select requirement type</option>
-                  {availableRequirementTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => setShowAddRequirementType(!showAddRequirementType)}
-                  className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2"
-                >
-                  <Plus size={16} />
-                  <span>Add Type</span>
-                </button>
-              </div>
-              {showAddRequirementType && (
-                <div className="mt-2 flex gap-2">
-                  <input
-                    type="text"
-                    value={customRequirementType}
-                    onChange={(e) => setCustomRequirementType(e.target.value)}
-                    placeholder="Enter new requirement type"
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <select
+                    value={formData.requirementType || ''}
+                    onChange={(e) => handleChange('requirementType', e.target.value || undefined)}
                     className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        handleAddRequirementType()
-                      }
-                    }}
-                  />
+                  >
+                    <option value="">Select requirement type</option>
+                    {availableRequirementTypes.map((type) => (
+                      <option key={type} value={type}>
+                        {type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     type="button"
-                    onClick={handleAddRequirementType}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                    onClick={() => setShowAddRequirementType(!showAddRequirementType)}
+                    className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2"
                   >
-                    Add
+                    <Plus size={16} />
+                    <span>Add Type</span>
                   </button>
                 </div>
-              )}
+                {showAddRequirementType && (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={customRequirementType}
+                      onChange={(e) => setCustomRequirementType(e.target.value)}
+                      placeholder="Enter new requirement type"
+                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleAddRequirementType()
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddRequirementType}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                    >
+                      Add
+                    </button>
+                  </div>
+                )}
+                {/* Custom types with delete buttons */}
+                {customTypesData.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {customTypesData.map((customType) => (
+                      <div
+                        key={customType.id}
+                        className="flex items-center gap-1 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-sm"
+                      >
+                        <span>{customType.typeName.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteRequirementType(customType.typeName, e)}
+                          className="ml-1 p-0.5 hover:bg-blue-200 dark:hover:bg-blue-800 rounded"
+                          title="Delete requirement type"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Requirement Level */}

@@ -46,4 +46,17 @@ export const requirementService = {
   async bulkImportRequirements(projectId: string, data: BulkImportRequest): Promise<ApiResponse<BulkImportResult>> {
     return apiClient.post<BulkImportResult>(`/requirements/${projectId}/bulk-import`, data)
   },
+
+  // Custom Requirement Types
+  async getCustomRequirementTypes(projectId: string): Promise<ApiResponse<Array<{ id: string; typeName: string; createdAt: string }>>> {
+    return apiClient.get<Array<{ id: string; typeName: string; createdAt: string }>>(`/requirements/${projectId}/custom-types`)
+  },
+
+  async addCustomRequirementType(projectId: string, typeName: string): Promise<ApiResponse<{ id: string; typeName: string; createdAt: string }>> {
+    return apiClient.post<{ id: string; typeName: string; createdAt: string }>(`/requirements/${projectId}/custom-types`, { typeName })
+  },
+
+  async deleteCustomRequirementType(projectId: string, typeId: string): Promise<ApiResponse<void>> {
+    return apiClient.delete<void>(`/requirements/${projectId}/custom-types/${typeId}`)
+  },
 }

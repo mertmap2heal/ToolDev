@@ -21,10 +21,9 @@ const REQUIREMENT_TYPE_PREFIXES: Record<string, string> = {
 // Helper function to generate requirement ID based on classification
 async function generateRequirementId(
   projectId: string,
-  requirementType?: string,
-  category?: string
+  requirementType?: string
 ): Promise<string> {
-  // Determine prefix based on requirementType (classification) first, then category as fallback
+  // Determine prefix based on requirementType (classification)
   let prefix = 'REQ'
   
   if (requirementType) {
@@ -40,10 +39,6 @@ async function generateRequirementId(
         .substring(0, 3)  // Take first 3 letters
       prefix = `REQ-${customPrefix}`
     }
-  } else if (category) {
-    // Fallback to category if requirementType not provided
-    const categoryPrefix = category.toUpperCase().replace(/[^A-Z]/g, '').substring(0, 3)
-    prefix = `REQ-${categoryPrefix}`
   }
   
   // Find the highest number for this prefix
@@ -128,6 +123,105 @@ async function checkCircularReference(
   }
 
   return false
+}
+
+// Helper function to update requirementId references across the system
+// when a requirement's ID changes (e.g., when type changes)
+async function updateRequirementIdReferences(
+  projectId: string,
+  oldRequirementId: string,
+  newRequirementId: string,
+  requirementUuid: string
+) {
+  try {
+    // Update dependencies arrays in other requirements
+    const requirementsWithDeps = await prisma.requirement.findMany({
+      where: {
+        projectId,
+        dependencies: { has: oldRequirementId },
+      },
+    })
+    
+    for (const req of requirementsWithDeps) {
+      await prisma.requirement.update({
+        where: { id: req.id },
+        data: {
+          dependencies: req.dependencies.map(dep => 
+            dep === oldRequirementId ? newRequirementId : dep
+          ),
+        },
+      })
+    }
+    
+    // Update conflicts arrays
+    const requirementsWithConflicts = await prisma.requirement.findMany({
+      where: {
+        projectId,
+        conflicts: { has: oldRequirementId },
+      },
+    })
+    
+    for (const req of requirementsWithConflicts) {
+      await prisma.requirement.update({
+        where: { id: req.id },
+        data: {
+          conflicts: req.conflicts.map(conf => 
+            conf === oldRequirementId ? newRequirementId : conf
+          ),
+        },
+      })
+    }
+    
+    // Update UseCase relatedRequirementIds
+    const useCasesWithRefs = await prisma.useCase.findMany({
+      where: {
+        projectId,
+        relatedRequirementIds: { has: oldRequirementId },
+      },
+    })
+    
+    for (const useCase of useCasesWithRefs) {
+      await prisma.useCase.update({
+        where: { id: useCase.id },
+        data: {
+          relatedRequirementIds: useCase.relatedRequirementIds.map(id => 
+            id === oldRequirementId ? newRequirementId : id
+          ),
+        },
+      })
+    }
+    
+    // Update baseline snapshots (parse JSON, update, re-stringify)
+    const baselineItems = await prisma.baselineItem.findMany({
+      where: {
+        baseline: { projectId },
+      },
+      include: { baseline: true },
+    })
+    
+    for (const item of baselineItems) {
+      try {
+        const snapshot = JSON.parse(item.snapshot)
+        if (snapshot.requirementId === oldRequirementId) {
+          snapshot.requirementId = newRequirementId
+          await prisma.baselineItem.update({
+            where: { id: item.id },
+            data: {
+              snapshot: JSON.stringify(snapshot),
+            },
+          })
+        }
+      } catch (e) {
+        // Skip invalid JSON snapshots
+        console.warn(`Invalid snapshot JSON for baseline item ${item.id}:`, e)
+      }
+    }
+    
+    console.log(`[Requirement ID Update] Updated references from "${oldRequirementId}" to "${newRequirementId}"`)
+  } catch (error) {
+    // Log error but don't throw - we don't want to fail the main update if reference updates fail
+    console.error('Error updating requirement ID references:', error)
+  }
 }
 
 export const getRequirements = async (req: AuthRequest, res: Response) => {
@@ -325,7 +419,7 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
     // Uses requirementType (classification) as primary, category as fallback
     let finalRequirementId = providedRequirementId
     if (!finalRequirementId) {
-      finalRequirementId = await generateRequirementId(projectId, requirementType, category)
+      finalRequirementId = await generateRequirementId(projectId, requirementType)
     }
 
     // Check if requirementId already exists in this project
@@ -628,6 +722,16 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
     if (finalRequirementId !== undefined) {
       updateData.requirementId = finalRequirementId
       console.log(`[Requirement ID Update] Updating requirement ID from "${requirement.requirementId}" to "${finalRequirementId}"`)
+      
+      // Update all references to the old requirementId across the system
+      if (requirement.requirementId && finalRequirementId !== requirement.requirementId) {
+        await updateRequirementIdReferences(
+          projectId,
+          requirement.requirementId,
+          finalRequirementId,
+          requirement.id
+        )
+      }
     }
 
     const updatedRequirement = await prisma.requirement.update({
@@ -651,14 +755,24 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       },
     })
 
-    // Mark downstream trace links as suspect when content changes
+    // Mark downstream trace links as suspect when content changes or requirementId changes
     const contentChanged = title !== undefined || description !== undefined || acceptanceCriteria !== undefined
-    if (contentChanged) {
+    const requirementIdChanged = finalRequirementId !== undefined && finalRequirementId !== requirement.requirementId
+    
+    if (contentChanged || requirementIdChanged) {
       await prisma.traceLink.updateMany({
         where: {
           projectId,
-          sourceId: requirement.id,
-          sourceType: 'requirement',
+          OR: [
+            {
+              sourceId: requirement.id,
+              sourceType: 'requirement',
+            },
+            {
+              targetId: requirement.id,
+              targetType: 'requirement',
+            },
+          ],
         },
         data: {
           isSuspect: true,
@@ -1062,7 +1176,7 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
           // Uses requirementType (classification) as primary, category as fallback
           let requirementId = reqData.requirementId
           if (!requirementId) {
-            requirementId = await generateRequirementId(projectId, reqData.requirementType, reqData.category)
+            requirementId = await generateRequirementId(projectId, reqData.requirementType)
           }
 
           // Create requirement
@@ -1230,6 +1344,144 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
     })
   } catch (error: any) {
     console.error('Bulk import requirements error:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error',
+    })
+  }
+}
+
+// Migration endpoint to migrate existing category values to requirementType
+export const migrateCategoryToRequirementType = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+
+    // Find all requirements with category but no requirementType
+    const requirementsToMigrate = await prisma.requirement.findMany({
+      where: {
+        projectId,
+        category: { not: null },
+        requirementType: null,
+      },
+    })
+
+    let migratedCount = 0
+
+    // Migrate each requirement
+    for (const requirement of requirementsToMigrate) {
+      if (requirement.category) {
+        await prisma.requirement.update({
+          where: { id: requirement.id },
+          data: {
+            requirementType: requirement.category,
+            category: null, // Clear category after migration
+          },
+        })
+        migratedCount++
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `Successfully migrated ${migratedCount} requirements from category to requirementType`,
+      migratedCount,
+    })
+  } catch (error: any) {
+    console.error('Error migrating category to requirementType:', error)
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to migrate category to requirementType',
+      details: error.message,
+    })
+  }
+}
+
+// Get custom requirement types for a project
+export const getCustomRequirementTypes = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+
+    const customTypes = await prisma.customRequirementType.findMany({
+      where: { projectId },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    res.json({
+      success: true,
+      data: customTypes,
+    })
+  } catch (error: any) {
+    console.error('Error getting custom requirement types:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error',
+    })
+  }
+}
+
+// Add a custom requirement type
+export const addCustomRequirementType = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+    const { typeName } = req.body
+
+    if (!typeName || typeof typeName !== 'string' || typeName.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'typeName is required and must be a non-empty string',
+      })
+    }
+
+    const customType = await prisma.customRequirementType.create({
+      data: {
+        projectId,
+        typeName: typeName.trim(),
+      },
+    })
+
+    res.json({
+      success: true,
+      data: customType,
+    })
+  } catch (error: any) {
+    console.error('Error adding custom requirement type:', error)
+    if (error.code === 'P2002') {
+      return res.status(400).json({
+        success: false,
+        error: 'A custom requirement type with this name already exists for this project',
+      })
+    }
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error',
+    })
+  }
+}
+
+// Delete a custom requirement type
+export const deleteCustomRequirementType = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, typeId } = req.params
+
+    await prisma.customRequirementType.delete({
+      where: {
+        id: typeId,
+        projectId, // Ensure the type belongs to the project
+      },
+    })
+
+    res.json({
+      success: true,
+      message: 'Custom requirement type deleted successfully',
+    })
+  } catch (error: any) {
+    console.error('Error deleting custom requirement type:', error)
+    if (error.code === 'P2025') {
+      return res.status(404).json({
+        success: false,
+        error: 'Custom requirement type not found',
+      })
+    }
     res.status(500).json({
       success: false,
       error: error.message || 'Internal server error',

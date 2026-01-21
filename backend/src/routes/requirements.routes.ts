@@ -12,6 +12,10 @@ import {
   updateRequirementParent,
   bulkUpdateRequirements,
   bulkImportRequirements,
+  getCustomRequirementTypes,
+  addCustomRequirementType,
+  deleteCustomRequirementType,
+  migrateCategoryToRequirementType,
 } from '../controllers/requirement.controller'
 
 const router = Router()
@@ -30,5 +34,13 @@ router.post('/:projectId/bulk-import', bulkImportRequirements)
 
 router.post('/:projectId/:requirementId/comments', createRequirementComment)
 router.delete('/:projectId/comments/:commentId', deleteRequirementComment)
+
+// Custom Requirement Types
+router.get('/:projectId/custom-types', getCustomRequirementTypes)
+router.post('/:projectId/custom-types', addCustomRequirementType)
+router.delete('/:projectId/custom-types/:typeId', deleteCustomRequirementType)
+
+// Migration endpoint
+router.post('/:projectId/migrate-category-to-type', migrateCategoryToRequirementType)
 
 export default router
