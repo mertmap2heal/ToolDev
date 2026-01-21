@@ -12,7 +12,9 @@ import {
   GitBranch,
   ClipboardList,
   Archive,
-  Activity
+  Activity,
+  ClipboardCheck,
+  Shield
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -36,6 +38,8 @@ const navigationItems: NavigationItem[] = [
   { id: 'issues', label: 'Issues', icon: AlertCircle, route: 'issues' },
   { id: 'documentation', label: 'Documentation', icon: BookOpen, route: 'documentation' },
   { id: 'lifecycle-status', label: 'Lifecycle Status', icon: Activity, route: 'lifecycle-status' },
+  { id: 'test-plans', label: 'Test Plans', icon: ClipboardCheck, route: 'test-plans' },
+  { id: 'safety-analysis', label: 'Safety Analysis', icon: Shield, route: 'safety-analysis' },
   { id: 'archive', label: 'Archive', icon: Archive, route: 'archive' },
 ]
 

@@ -34,8 +34,10 @@ export interface Requirement {
   verificationStatus?: 'not_verified' | 'verified' | 'failed'
   verificationDate?: string
   verificationNotes?: string
+  reviewStatus?: 'draft' | 'under_review' | 'approved' | 'rejected'
   comments?: RequirementComment[]
   attachments?: RequirementAttachment[]
+  reviews?: RequirementReview[]
   createdAt: string
   updatedAt: string
 }
@@ -390,4 +392,63 @@ export interface BulkImportResult {
   updated: number
   skipped: number
   errors: Array<{ row: number; errors: string[] }>
+}
+
+// Review and Approval Types
+export type ReviewStatus = 'draft' | 'in_review' | 'approved' | 'rejected' | 'cancelled'
+export type ReviewerStatus = 'pending' | 'in_progress' | 'approved' | 'rejected' | 'deferred'
+export type ReviewType = 'initial' | 'change' | 'periodic' | 'final'
+
+export interface RequirementReview {
+  id: string
+  requirementId: string
+  projectId: string
+  reviewStatus: ReviewStatus
+  reviewType?: ReviewType
+  initiatedBy?: string
+  initiatedByName?: string
+  startedAt?: string
+  completedAt?: string
+  reviewNotes?: string
+  createdAt: string
+  updatedAt: string
+  reviewers?: RequirementReviewer[]
+  requirement?: {
+    id: string
+    requirementId?: string
+    title: string
+    description?: string
+  }
+}
+
+export interface RequirementReviewer {
+  id: string
+  reviewId: string
+  requirementId: string
+  projectId: string
+  reviewerId?: string
+  reviewerName?: string
+  reviewerEmail?: string
+  role?: 'reviewer' | 'approver' | 'observer'
+  status: ReviewerStatus
+  reviewComments?: string
+  reviewedAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateReviewDto {
+  reviewType?: ReviewType
+  reviewers: Array<{
+    reviewerId?: string
+    reviewerName?: string
+    reviewerEmail?: string
+    role?: 'reviewer' | 'approver' | 'observer'
+  }>
+  reviewNotes?: string
+}
+
+export interface UpdateReviewerDto {
+  status: ReviewerStatus
+  reviewComments?: string
 }

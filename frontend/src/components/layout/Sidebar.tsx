@@ -10,7 +10,8 @@ import {
   Sparkles,
   ChevronLeft,
   ChevronRight,
-  RefreshCw
+  RefreshCw,
+  Package
 } from 'lucide-react'
 import clsx from 'clsx'
 import { useAIGuideStore } from '../../store/aiGuideStore'
@@ -20,6 +21,7 @@ const menuItems = [
   { icon: Folder, label: 'Library', path: '/library' },
   { icon: Building2, label: 'Organization', path: '/organization' },
   { icon: Folder, label: 'Projects', path: '/projects' },
+  { icon: Package, label: 'Inventory Management', path: '/inventory' },
   { icon: ClipboardCheck, label: 'Audit', path: '/audit' },
   { icon: RefreshCw, label: 'Lifecycle Management', path: '/lifecycle' },
   { icon: Sparkles, label: 'AI Guide', path: '/ai-guide', isSpecial: true },

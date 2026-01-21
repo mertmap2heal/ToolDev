@@ -7,6 +7,8 @@ import { issueService } from '../../services/issue.service'
 import { changeRequestService } from '../../services/changeRequest.service'
 import ImpactAnalysis from './ImpactAnalysis'
 import RequirementVersionHistory from './RequirementVersionHistory'
+import RequirementReviewPanel from './RequirementReviewPanel'
+import ReviewStatusBadge from './ReviewStatusBadge'
 import type { Requirement, RequirementComment } from '../../../shared/types/engineering.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
@@ -28,7 +30,7 @@ export default function RequirementDetailDrawer({
   onEdit,
   onDelete,
 }: RequirementDetailDrawerProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'hierarchy' | 'links' | 'comments'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'hierarchy' | 'links' | 'comments' | 'reviews' | 'lifecycle-status'>('overview')
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview']))
   const [newComment, setNewComment] = useState('')
   const [isImpactAnalysisOpen, setIsImpactAnalysisOpen] = useState(false)
@@ -98,14 +100,14 @@ export default function RequirementDetailDrawer({
 
   const displayRequirement = fullRequirement || requirement
 
-  if (!isOpen || !displayRequirement) return null
-
-  const linkedFunctions = functions.filter((f) => f.sourceReqId === displayRequirement.id)
+  const linkedFunctions = functions.filter((f) => f.sourceReqId === (displayRequirement?.id || ''))
   const linkedIssues = issues.filter((issue) => {
+    if (!displayRequirement) return false
     return issue.title.toLowerCase().includes(displayRequirement.id.toLowerCase()) ||
            issue.description.toLowerCase().includes(displayRequirement.id.toLowerCase())
   })
   const linkedChangeRequests = changeRequests.filter((cr) => {
+    if (!displayRequirement) return false
     return cr.title.toLowerCase().includes(displayRequirement.id.toLowerCase()) ||
            cr.description.toLowerCase().includes(displayRequirement.id.toLowerCase())
   })
@@ -140,12 +142,14 @@ export default function RequirementDetailDrawer({
   return (
     <div
       className={clsx(
-        'fixed inset-y-0 right-0 w-full max-w-2xl bg-white dark:bg-gray-800 shadow-2xl transform transition-transform duration-300 ease-in-out z-50',
-        isOpen ? 'translate-x-0' : 'translate-x-full'
+        'h-full bg-white dark:bg-gray-800 shadow-2xl border-l border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out overflow-hidden',
+        isOpen && displayRequirement ? 'w-full max-w-2xl min-w-[32rem]' : 'w-0 min-w-0'
       )}
     >
+      {displayRequirement && (
+        <>
       {/* Header */}
-      <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between z-10">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between flex-shrink-0">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             <span className="font-mono text-sm text-gray-600 dark:text-gray-400">
@@ -154,6 +158,9 @@ export default function RequirementDetailDrawer({
             <span className={clsx('px-2 py-1 rounded-full text-xs font-medium', getPriorityColor(displayRequirement.priority))}>
               {displayRequirement.priority}
             </span>
+            {displayRequirement.reviewStatus && (
+              <ReviewStatusBadge status={displayRequirement.reviewStatus} size="sm" />
+            )}
           </div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">{displayRequirement.title}</h2>
         </div>
@@ -196,12 +203,14 @@ export default function RequirementDetailDrawer({
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 dark:border-gray-700 px-6">
+      <div className="border-b border-gray-200 dark:border-gray-700 px-6 flex-shrink-0">
         <div className="flex gap-4">
           {[
             { id: 'overview', label: 'Overview' },
             { id: 'hierarchy', label: 'Hierarchy' },
             { id: 'links', label: 'Links' },
+            { id: 'reviews', label: 'Reviews' },
+            { id: 'lifecycle-status', label: 'Lifecycle Status' },
             { id: 'comments', label: `Comments (${displayRequirement.comments?.length || 0})` },
           ].map((tab) => (
             <button
@@ -221,7 +230,7 @@ export default function RequirementDetailDrawer({
       </div>
 
       {/* Content */}
-      <div className="overflow-y-auto h-[calc(100vh-140px)] px-6 py-4">
+      <div className="overflow-y-auto flex-1 px-6 py-4">
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* Tags */}
@@ -247,7 +256,7 @@ export default function RequirementDetailDrawer({
             {/* Description */}
             <div>
               <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Description</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
+              <p className="text-base text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
                 {displayRequirement.description}
               </p>
             </div>
@@ -256,7 +265,7 @@ export default function RequirementDetailDrawer({
             {displayRequirement.acceptanceCriteria && (
               <div>
                 <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Acceptance Criteria</h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
+                <p className="text-base text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
                   {displayRequirement.acceptanceCriteria}
                 </p>
               </div>
@@ -441,6 +450,23 @@ export default function RequirementDetailDrawer({
           </div>
         )}
 
+        {activeTab === 'reviews' && (
+          <RequirementReviewPanel
+            projectId={projectId}
+            requirementId={displayRequirement.id}
+            requirementTitle={displayRequirement.title}
+          />
+        )}
+
+        {activeTab === 'lifecycle-status' && (
+          <div className="space-y-4">
+            <div className="p-6 bg-gray-50 dark:bg-gray-900 rounded-lg text-center">
+              <p className="text-gray-600 dark:text-gray-400">Lifecycle Status feature will be implemented here</p>
+              <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">This section is reserved for future implementation</p>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'comments' && (
           <div className="space-y-4">
             {/* Comment Form */}
@@ -519,6 +545,9 @@ export default function RequirementDetailDrawer({
           requirement={displayRequirement}
           onClose={() => setIsVersionHistoryOpen(false)}
         />
+      )}
+
+        </>
       )}
     </div>
   )

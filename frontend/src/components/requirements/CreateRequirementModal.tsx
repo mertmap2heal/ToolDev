@@ -6,7 +6,7 @@ import { projectService } from '../../services/project.service'
 import { templateService } from '../../services/template.service'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import { useLifecycleStore } from '../../store/lifecycleStore'
-import RichTextEditor from '../common/RichTextEditor'
+// import RichTextEditor from '../common/RichTextEditor' // Temporarily disabled - using textarea instead
 import type { CreateRequirementDto, Requirement } from '../../../shared/types/engineering.types'
 
 interface CreateRequirementModalProps {
@@ -131,6 +131,22 @@ export default function CreateRequirementModal({
       return response.success && response.data ? response.data : null
     },
     enabled: isOpen && !!projectId,
+  })
+
+  // Fetch custom requirement types
+  const { data: customTypesData = [] } = useQuery({
+    queryKey: ['customRequirementTypes', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const response = await requirementService.getCustomRequirementTypes(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: isOpen && !!projectId,
+    onSuccess: (data) => {
+      // Merge predefined and custom types
+      const customTypeNames = data.map(t => t.typeName)
+      setAvailableRequirementTypes([...predefinedTypes, ...customTypeNames])
+    },
   })
 
   useEffect(() => {
@@ -288,6 +304,8 @@ export default function CreateRequirementModal({
       return
     }
 
+    if (!customTypesData || customTypesData.length === 0) return
+    
     const customType = customTypesData.find(t => t.typeName === typeName)
     if (customType) {
       deleteCustomTypeMutation.mutate(customType.id)
@@ -352,8 +370,14 @@ export default function CreateRequirementModal({
   })
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 dark:bg-black dark:bg-opacity-70 flex items-center justify-center z-50" 
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto m-4"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between z-10">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -368,7 +392,7 @@ export default function CreateRequirementModal({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6" style={{ display: 'block' }}>
           {/* Template Selection */}
           {templates.length > 0 && (
             <div>
@@ -448,12 +472,16 @@ export default function CreateRequirementModal({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
               Description <span className="text-red-500">*</span>
             </label>
-            <RichTextEditor
-              content={formData.description}
-              onChange={(content) => handleChange('description', content)}
-              placeholder="Enter requirement description with formatting..."
-              minHeight="120px"
-              className={errors.description ? 'ring-2 ring-red-500 rounded-lg' : ''}
+            <textarea
+              value={formData.description || ''}
+              onChange={(e) => handleChange('description', e.target.value)}
+              placeholder="Enter requirement description..."
+              rows={6}
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                errors.description
+                  ? 'border-red-500'
+                  : 'border-gray-300 dark:border-gray-600'
+              } bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none`}
             />
             {errors.description && (
               <p className="mt-1 text-sm text-red-500">{errors.description}</p>
@@ -603,11 +631,12 @@ export default function CreateRequirementModal({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
               Acceptance Criteria
             </label>
-            <RichTextEditor
-              content={formData.acceptanceCriteria || ''}
-              onChange={(content) => handleChange('acceptanceCriteria', content)}
+            <textarea
+              value={formData.acceptanceCriteria || ''}
+              onChange={(e) => handleChange('acceptanceCriteria', e.target.value)}
               placeholder="Enter acceptance criteria..."
-              minHeight="100px"
+              rows={4}
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
             />
           </div>
 
@@ -670,7 +699,7 @@ export default function CreateRequirementModal({
                   </div>
                 )}
                 {/* Custom types with delete buttons */}
-                {customTypesData.length > 0 && (
+                {customTypesData && customTypesData.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {customTypesData.map((customType) => (
                       <div

@@ -1,20 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, Check, GripVertical, Grid3X3, Archive, Download, Upload, GitBranch } from 'lucide-react'
+import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, Check, Grid3X3, Archive, Download, Upload, GitBranch } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  closestCenter,
-  useDroppable,
-} from '@dnd-kit/core'
-import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
 import CreateRequirementModal from '../../components/requirements/CreateRequirementModal'
 import EditRequirementModal from '../../components/requirements/EditRequirementModal'
@@ -29,6 +16,7 @@ import RequirementDiagram from '../../components/requirements/RequirementDiagram
 import RequirementQualityPanel from '../../components/requirements/RequirementQualityPanel'
 import AllocationTable from '../../components/requirements/AllocationTable'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
+import ReviewStatusBadge from '../../components/requirements/ReviewStatusBadge'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
@@ -88,6 +76,7 @@ export default function RequirementsPage() {
   const [ownerFilter, setOwnerFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [requirementTypeFilter, setRequirementTypeFilter] = useState<string>('all')
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
   
   // Grouping by type
   const [groupByType, setGroupByType] = useState<boolean>(false)
@@ -328,110 +317,6 @@ export default function RequirementsPage() {
     }
   }
 
-  // Drag and drop state and handlers
-  const [activeRequirement, setActiveRequirement] = useState<Requirement | null>(null)
-  
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
-  )
-
-  // Update parent mutation for drag and drop
-  const updateParentMutation = useMutation({
-    mutationFn: ({ requirementId, newParentId }: { requirementId: string; newParentId: string | null }) => {
-      if (!projectId) throw new Error('Project ID required')
-      return requirementService.updateRequirementParent(projectId, requirementId, newParentId)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
-    },
-    onError: (error: any) => {
-      console.error('Update parent error:', error)
-      alert(error?.error || 'Failed to update requirement parent')
-    },
-  })
-
-  // Update requirement type mutation for drag and drop between type sections
-  const updateRequirementTypeMutation = useMutation({
-    mutationFn: ({ requirementId, newType }: { requirementId: string; newType: string | null }) => {
-      if (!projectId) throw new Error('Project ID required')
-      // Convert 'unassigned' to null for the API
-      const requirementType = newType === 'unassigned' ? null : newType
-      return requirementService.updateRequirement(projectId, requirementId, { requirementType: requirementType || undefined })
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
-    },
-    onError: (error: any) => {
-      console.error('Update requirement type error:', error)
-      alert(error?.error || 'Failed to update requirement type')
-    },
-  })
-
-  const handleDragStart = (event: DragStartEvent) => {
-    const { active } = event
-    const draggedReq = requirements.find((r) => r.id === active.id)
-    if (draggedReq) {
-      setActiveRequirement(draggedReq)
-    }
-  }
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-    setActiveRequirement(null)
-
-    if (!over) return
-
-    const activeReq = requirements.find((r) => r.id === active.id)
-    if (!activeReq) return
-
-    // Check if dropped on a type section header (droppable type section)
-    if (typeof over.id === 'string' && over.id.startsWith('type-section-')) {
-      const newType = over.id.replace('type-section-', '')
-      const currentType = activeReq.requirementType || 'unassigned'
-      
-      // Only update if the type actually changed
-      if (newType !== currentType) {
-        updateRequirementTypeMutation.mutate({
-          requirementId: activeReq.id,
-          newType: newType === 'unassigned' ? null : newType,
-        })
-      }
-      return
-    }
-
-    // Original drag-and-drop logic for parent-child relationships
-    if (active.id === over.id) return
-
-    const overReq = requirements.find((r) => r.id === over.id)
-    if (!overReq) return
-
-    // Prevent making a requirement its own descendant
-    const isDescendant = (parentId: string | undefined, targetId: string): boolean => {
-      if (!parentId) return false
-      if (parentId === targetId) return true
-      const parent = requirements.find((r) => r.id === parentId)
-      return parent ? isDescendant(parent.parentId, targetId) : false
-    }
-
-    if (isDescendant(overReq.id, activeReq.id)) {
-      alert('Cannot make a requirement a child of its own descendant')
-      return
-    }
-
-    // Set the dropped requirement as a child of the target
-    updateParentMutation.mutate({
-      requirementId: activeReq.id,
-      newParentId: overReq.id,
-    })
-  }
-
-  const handleDragCancel = () => {
-    setActiveRequirement(null)
-  }
 
   // Build hierarchy tree
   const buildHierarchy = (reqs: Requirement[]): Requirement[] => {
@@ -590,9 +475,19 @@ export default function RequirementsPage() {
         }
       }
 
+      // Category filter
+      if (categoryFilter !== 'all') {
+        if (categoryFilter === 'unassigned' && req.category) {
+          return false
+        }
+        if (categoryFilter !== 'unassigned' && req.category !== categoryFilter) {
+          return false
+        }
+      }
+
       return true
     })
-  }, [requirements, searchQuery, statusFilter, priorityFilter, ownerFilter, sourceFilter, requirementTypeFilter])
+  }, [requirements, searchQuery, statusFilter, priorityFilter, ownerFilter, sourceFilter, requirementTypeFilter, categoryFilter])
 
   const hierarchyRequirements = useMemo(() => {
     return buildHierarchy(filteredRequirements)
@@ -666,22 +561,6 @@ export default function RequirementsPage() {
     return { groups: sortedGroups, orderedKeys: orderedTypeKeys }
   }, [hierarchyRequirements, groupByType])
 
-  // Component for droppable type section header
-  const TypeSectionDroppable = ({ type, children }: { type: string; children: React.ReactNode }) => {
-    const { setNodeRef, isOver } = useDroppable({
-      id: `type-section-${type}`,
-      data: {
-        type: 'type-section',
-        requirementType: type,
-      },
-    })
-
-    // Clone the children and add ref and className to the tr element
-    return React.cloneElement(children as React.ReactElement, {
-      ref: setNodeRef,
-      className: `${(children as React.ReactElement).props.className || ''} ${isOver ? 'bg-blue-50 dark:bg-blue-900/20 transition-colors' : ''}`,
-    })
-  }
 
   // Helper function to format requirement type name
   const formatRequirementTypeName = (type: string): string => {
@@ -715,6 +594,10 @@ export default function RequirementsPage() {
   )
   const uniqueSources = useMemo(() => 
     Array.from(new Set(requirements.map((r) => r.source).filter(Boolean))),
+    [requirements]
+  )
+  const uniqueCategories = useMemo(() => 
+    Array.from(new Set(requirements.map((r) => r.category).filter(Boolean))),
     [requirements]
   )
 
@@ -782,46 +665,6 @@ export default function RequirementsPage() {
     return type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
   }
 
-  // Sortable row component for drag and drop
-  const SortableRow = ({ req, level, children }: { req: Requirement; level: number; children: React.ReactNode }) => {
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({ id: req.id })
-
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-    }
-
-    return (
-      <tr
-        ref={setNodeRef}
-        style={style}
-        className={clsx(
-          'hover:bg-gray-50 dark:hover:bg-gray-700/50 group',
-          level > 0 && 'bg-gray-50/50 dark:bg-gray-900/30',
-          isDragging && 'opacity-50 bg-blue-50 dark:bg-blue-900/20'
-        )}
-        {...attributes}
-      >
-        <td className="px-2 py-3 w-8">
-          <button
-            {...listeners}
-            className="p-1 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
-            title="Drag to change parent"
-          >
-            <GripVertical size={16} />
-          </button>
-        </td>
-        {children}
-      </tr>
-    )
-  }
 
   const renderRequirementRow = (req: Requirement, level: number = 0) => {
     const isExpanded = expandedRows.has(req.id)
@@ -831,7 +674,13 @@ export default function RequirementsPage() {
 
     return (
       <>
-        <SortableRow key={req.id} req={req} level={level}>
+        <tr
+          key={req.id}
+          className={clsx(
+            'hover:bg-gray-50 dark:hover:bg-gray-700/50 group',
+            level > 0 && 'bg-gray-50/50 dark:bg-gray-900/30'
+          )}
+        >
           <td className="px-4 py-3">
             <div className="flex items-center gap-2">
               <input
@@ -962,6 +811,7 @@ export default function RequirementsPage() {
           </td>
           {/* Status - inline editable */}
           <td className="px-4 py-3">
+            <div className="flex items-center gap-2">
             {inlineEdit?.requirementId === req.id && inlineEdit.field === 'status' ? (
               <select
                 value={inlineEdit.value}
@@ -991,6 +841,10 @@ export default function RequirementsPage() {
                 {req.status || 'draft'}
               </span>
             )}
+            {req.reviewStatus && (
+              <ReviewStatusBadge status={req.reviewStatus} size="sm" />
+            )}
+            </div>
           </td>
           {/* Owner - inline editable */}
           <td className="px-4 py-3">
@@ -1060,7 +914,7 @@ export default function RequirementsPage() {
               </button>
             </div>
           </td>
-        </SortableRow>
+        </tr>
         {isExpanded && rowData && (
           <>
             {/* Linked Functions */}
@@ -1197,8 +1051,10 @@ export default function RequirementsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <ProjectNavigation />
+    <div className="flex h-[calc(100vh-4rem)]">
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-y-auto space-y-6 pr-6">
+        <ProjectNavigation />
 
         <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Requirements</h2>
@@ -1500,19 +1356,9 @@ export default function RequirementsPage() {
       {/* Requirements Table */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            onDragCancel={handleDragCancel}
-          >
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
               <tr>
-                <th className="px-2 py-3 w-8" title="Drag to reorder">
-                  <GripVertical size={14} className="text-gray-400 mx-auto" />
-                </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-12">
                   <input
                     type="checkbox"
@@ -1550,11 +1396,10 @@ export default function RequirementsPage() {
                 </th>
               </tr>
             </thead>
-            <SortableContext items={filteredRequirements.map((r) => r.id)} strategy={verticalListSortingStrategy}>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                     Loading requirements...
                   </td>
                 </tr>
@@ -1567,7 +1412,7 @@ export default function RequirementsPage() {
                   if (!hasAnyRequirements) {
                     return (
                       <tr>
-                        <td colSpan={9} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                        <td colSpan={8} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                           {requirements.length === 0
                             ? 'No requirements found. Click "Create Requirement" to get started.'
                             : 'No requirements match your search or filter criteria.'}
@@ -1591,21 +1436,19 @@ export default function RequirementsPage() {
 
                     return (
                       <React.Fragment key={type}>
-                        {/* Section Header - Droppable */}
-                        <TypeSectionDroppable type={type}>
-                          <tr className="bg-gray-100 dark:bg-gray-800 border-t-2 border-gray-300 dark:border-gray-600">
-                            <td colSpan={9} className="px-4 py-3">
-                              <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">
-                                  {formatRequirementTypeName(type)} Requirements
-                                </h3>
-                                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-                                  {typeCount} {typeCount === 1 ? 'requirement' : 'requirements'}
-                                </span>
-                              </div>
-                            </td>
-                          </tr>
-                        </TypeSectionDroppable>
+                        {/* Section Header */}
+                        <tr className="bg-gray-100 dark:bg-gray-800 border-t-2 border-gray-300 dark:border-gray-600">
+                          <td colSpan={8} className="px-4 py-3">
+                            <div className="flex items-center justify-between">
+                              <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">
+                                {formatRequirementTypeName(type)} Requirements
+                              </h3>
+                              <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                                {typeCount} {typeCount === 1 ? 'requirement' : 'requirements'}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
                         {/* Requirements in this group */}
                         {typeRequirements.map((req) => (
                           <React.Fragment key={req.id}>
@@ -1620,7 +1463,7 @@ export default function RequirementsPage() {
                   if (hierarchyRequirements.length === 0) {
                     return (
                       <tr>
-                        <td colSpan={9} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                        <td colSpan={8} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                           {requirements.length === 0
                             ? 'No requirements found. Click "Create Requirement" to get started.'
                             : 'No requirements match your search or filter criteria.'}
@@ -1637,29 +1480,11 @@ export default function RequirementsPage() {
                 }
               })()}
             </tbody>
-            </SortableContext>
           </table>
-          {/* Drag Overlay */}
-          <DragOverlay>
-            {activeRequirement ? (
-              <div className="bg-white dark:bg-gray-800 border-2 border-blue-500 rounded-lg shadow-lg p-3 opacity-90">
-                <div className="flex items-center gap-2">
-                  <GripVertical size={16} className="text-gray-400" />
-                  <span className="font-mono text-sm text-gray-600 dark:text-gray-400">
-                    {activeRequirement.requirementId || activeRequirement.id.substring(0, 8)}
-                  </span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {activeRequirement.title}
-                  </span>
-                </div>
-              </div>
-            ) : null}
-          </DragOverlay>
-          </DndContext>
         </div>
       </div>
 
-      {/* Modals */}
+      {/* Modals - Render outside scrollable container */}
       {isCreateModalOpen && projectId && (
         <CreateRequirementModal
           isOpen={isCreateModalOpen}
@@ -1690,23 +1515,6 @@ export default function RequirementsPage() {
           onConfirm={handleConfirmDelete}
           onCancel={() => setDeleteConfirmation(null)}
           isDeleting={deleteRequirementMutation.isPending}
-        />
-      )}
-
-      {detailRequirement && projectId && (
-        <RequirementDetailDrawer
-          isOpen={!!detailRequirement}
-          requirement={detailRequirement}
-          projectId={projectId}
-          onClose={() => setDetailRequirement(null)}
-          onEdit={(req) => {
-            setDetailRequirement(null)
-            setEditingRequirement(req)
-          }}
-          onDelete={(req) => {
-            setDetailRequirement(null)
-            setDeleteConfirmation(req)
-          }}
         />
       )}
 
@@ -1785,6 +1593,23 @@ export default function RequirementsPage() {
           sourceDescription={selectedRequirementForChangeRequest.description}
         />
       )}
+      </div>
+
+      {/* Drawer - Side by side with main content */}
+      <RequirementDetailDrawer
+        isOpen={!!detailRequirement}
+        requirement={detailRequirement}
+        projectId={projectId || ''}
+        onClose={() => setDetailRequirement(null)}
+        onEdit={(req) => {
+          setDetailRequirement(null)
+          setEditingRequirement(req)
+        }}
+        onDelete={(req) => {
+          setDetailRequirement(null)
+          setDeleteConfirmation(req)
+        }}
+      />
     </div>
   )
 }
