@@ -1124,7 +1124,7 @@ export default function RequirementsPage() {
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
             title="Import Requirements"
           >
-            <Upload size={16} />
+            <Download size={16} />
             <span className="text-sm">Import</span>
           </button>
           <button
@@ -1132,7 +1132,7 @@ export default function RequirementsPage() {
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
             title="Export Requirements"
           >
-            <Download size={16} />
+            <Upload size={16} />
             <span className="text-sm">Export</span>
           </button>
           <button
