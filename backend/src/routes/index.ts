@@ -21,6 +21,19 @@ import templatesRoutes from './templates.routes'
 import reqifRoutes from './reqif.routes'
 import diagramsRoutes from './diagrams.routes'
 import requirementReviewsRoutes from './requirementReviews.routes'
+import itemsRoutes from './items.routes'
+import warehousesRoutes from './warehouses.routes'
+import uomsRoutes from './uoms.routes'
+import purchasingRoutes from './purchasing.routes'
+import salesRoutes from './sales.routes'
+import tasksRoutes from './tasks.routes'
+import boardRoutes from './board.routes'
+import tagsRoutes from './tags.routes'
+import attachmentsRoutes from './attachments.routes'
+import relationsRoutes from './relations.routes'
+import savedViewsRoutes from './savedViews.routes'
+import automationRoutes from './automation.routes'
+import importExportRoutes from './importExport.routes'
 
 const router = Router()
 
@@ -46,5 +59,18 @@ router.use('/templates', templatesRoutes)
 router.use('/reqif', reqifRoutes)
 router.use('/diagrams', diagramsRoutes)
 router.use('/projects', requirementReviewsRoutes)
+router.use('/inventory/items', itemsRoutes)
+router.use('/inventory/warehouses', warehousesRoutes)
+router.use('/inventory/uoms', uomsRoutes)
+router.use('/inventory', purchasingRoutes)
+router.use('/inventory', salesRoutes)
+router.use('/tasks', tasksRoutes)
+router.use('/board', boardRoutes)
+router.use('/tags', tagsRoutes)
+router.use('/attachments', attachmentsRoutes)
+router.use('/relations', relationsRoutes)
+router.use('/saved-views', savedViewsRoutes)
+router.use('/automation', automationRoutes)
+router.use('/csv', importExportRoutes)
 
 export default router

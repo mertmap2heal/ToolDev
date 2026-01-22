@@ -1,69 +1,82 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Search, X, Filter, ChevronDown, ChevronUp } from 'lucide-react'
+import { List, LayoutGrid, Calendar } from 'lucide-react'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
+import TaskListView from '../../components/tasks/TaskListView'
+import TaskBoardView from '../../components/tasks/TaskBoardView'
+import TaskCalendarView from '../../components/tasks/TaskCalendarView'
+import TaskDetailDrawer from '../../components/tasks/TaskDetailDrawer'
+import CSVImportExport from '../../components/tasks/CSVImportExport'
+import type { Task } from '../../../shared/types/task.types'
+
+type ViewType = 'list' | 'board' | 'calendar'
 
 export default function TasksPage() {
-  const { projectId } = useParams<{ projectId: string }>()
-  const [searchQuery, setSearchQuery] = useState('')
-  const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
+  const { projectId } = useParams<{ projectId?: string }>()
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [viewType, setViewType] = useState<ViewType>('list')
 
   return (
     <div className="space-y-6">
       <ProjectNavigation />
-      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Tasks</h2>
-
-      {/* Search */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-          <input
-            type="text"
-            placeholder="Search tasks..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          />
-          {searchQuery && (
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Tasks</h2>
+        <div className="flex items-center gap-3">
+          <CSVImportExport projectId={projectId} />
+          <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
             <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              onClick={() => setViewType('list')}
+              className={`px-3 py-1.5 rounded flex items-center gap-2 text-sm font-medium transition-colors ${
+                viewType === 'list'
+                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-300'
+              }`}
             >
-              <X size={16} />
+              <List size={16} />
+              List
             </button>
-          )}
+            <button
+              onClick={() => setViewType('board')}
+              className={`px-3 py-1.5 rounded flex items-center gap-2 text-sm font-medium transition-colors ${
+                viewType === 'board'
+                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-300'
+              }`}
+            >
+              <LayoutGrid size={16} />
+              Board
+            </button>
+            <button
+              onClick={() => setViewType('calendar')}
+              className={`px-3 py-1.5 rounded flex items-center gap-2 text-sm font-medium transition-colors ${
+                viewType === 'calendar'
+                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-300'
+              }`}
+            >
+              <Calendar size={16} />
+              Calendar
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-        <button
-          onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
-          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <Filter size={18} className="text-gray-600 dark:text-gray-400" />
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Filters</span>
-          </div>
-          {isFiltersExpanded ? (
-            <ChevronUp size={18} className="text-gray-600 dark:text-gray-400" />
-          ) : (
-            <ChevronDown size={18} className="text-gray-600 dark:text-gray-400" />
-          )}
-        </button>
-        {isFiltersExpanded && (
-          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Filter options will be available here.
-            </p>
-          </div>
-        )}
-      </div>
+      {viewType === 'list' ? (
+        <TaskListView onTaskSelect={setSelectedTask} />
+      ) : viewType === 'board' ? (
+        <TaskBoardView onTaskSelect={setSelectedTask} />
+      ) : (
+        <TaskCalendarView onTaskSelect={setSelectedTask} />
+      )}
 
-      {/* Placeholder Content */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-8 text-center">
-        <p className="text-gray-500 dark:text-gray-400">Tasks functionality will be implemented here.</p>
-      </div>
+      {selectedTask && (
+        <TaskDetailDrawer
+          task={selectedTask}
+          isOpen={!!selectedTask}
+          onClose={() => setSelectedTask(null)}
+          onUpdate={(updatedTask) => setSelectedTask(updatedTask)}
+        />
+      )}
     </div>
   )
 }

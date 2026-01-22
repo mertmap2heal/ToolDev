@@ -1,5 +1,5 @@
 import { BrowserRouter } from 'react-router-dom'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import MainLayout from './components/layout/MainLayout'
 import DashboardPage from './pages/Dashboard/DashboardPage'
 import RequirementsPage from './pages/Requirements/RequirementsPage'
@@ -17,6 +17,13 @@ import TasksPage from './pages/Tasks/TasksPage'
 import LifecycleManagementPage from './pages/LifecycleManagement/LifecycleManagementPage'
 import ArchivePage from './pages/Archive/ArchivePage'
 import LifecycleStatusPage from './pages/LifecycleStatus/LifecycleStatusPage'
+import ItemsPage from './pages/Inventory/Items/ItemsPage'
+import WarehousesPage from './pages/Inventory/Warehouses/WarehousesPage'
+import PurchasingPage from './pages/Inventory/Purchasing/PurchasingPage'
+import SalesPage from './pages/Inventory/Sales/SalesPage'
+import OperationsPage from './pages/Inventory/Operations/OperationsPage'
+import InventoryReportsPage from './pages/Inventory/Reports/ReportsPage'
+import InventoryDashboardPage from './pages/Inventory/Dashboard/DashboardPage'
 
 function App() {
   return (
@@ -40,6 +47,16 @@ function App() {
           <Route path="projects/:projectId/lifecycle-status" element={<LifecycleStatusPage />} />
           <Route path="projects/:projectId/archive" element={<ArchivePage />} />
           <Route path="lifecycle" element={<LifecycleManagementPage />} />
+          <Route path="inventory">
+            <Route index element={<Navigate to="/inventory/items" replace />} />
+            <Route path="items" element={<ItemsPage />} />
+            <Route path="warehouses" element={<WarehousesPage />} />
+            <Route path="purchasing" element={<PurchasingPage />} />
+            <Route path="sales" element={<SalesPage />} />
+            <Route path="operations" element={<OperationsPage />} />
+            <Route path="reports" element={<InventoryReportsPage />} />
+            <Route path="dashboard" element={<InventoryDashboardPage />} />
+          </Route>
         </Route>
       </Routes>
     </BrowserRouter>

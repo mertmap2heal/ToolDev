@@ -54,27 +54,36 @@ class ApiClient {
     }
   }
 
-  async post<T>(url: string, data?: any): Promise<ApiResponse<T>> {
+  async post<T>(url: string, data?: any, headers?: Record<string, string>): Promise<ApiResponse<T>> {
     try {
-      const response = await this.client.post<ApiResponse<T>>(url, data)
+      const response = await this.client.post<ApiResponse<T>>(url, data, { headers })
       return response.data
     } catch (error) {
       return this.handleError(error)
     }
   }
 
-  async put<T>(url: string, data?: any): Promise<ApiResponse<T>> {
+  async put<T>(url: string, data?: any, headers?: Record<string, string>): Promise<ApiResponse<T>> {
     try {
-      const response = await this.client.put<ApiResponse<T>>(url, data)
+      const response = await this.client.put<ApiResponse<T>>(url, data, { headers })
       return response.data
     } catch (error) {
       return this.handleError(error)
     }
   }
 
-  async delete<T>(url: string): Promise<ApiResponse<T>> {
+  async patch<T>(url: string, data?: any, headers?: Record<string, string>): Promise<ApiResponse<T>> {
     try {
-      const response = await this.client.delete<ApiResponse<T>>(url)
+      const response = await this.client.patch<ApiResponse<T>>(url, data, { headers })
+      return response.data
+    } catch (error) {
+      return this.handleError(error)
+    }
+  }
+
+  async delete<T>(url: string, headers?: Record<string, string>): Promise<ApiResponse<T>> {
+    try {
+      const response = await this.client.delete<ApiResponse<T>>(url, { headers })
       return response.data
     } catch (error) {
       return this.handleError(error)

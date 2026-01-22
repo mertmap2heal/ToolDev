@@ -95,13 +95,16 @@ export default function Sidebar() {
                 )
               }
               
+              // Special handling for Inventory Management - link to items page
+              const inventoryPath = item.path === '/inventory' ? '/inventory/items' : item.path
+              
               return (
                 <Link
                   key={item.path}
-                  to={item.path}
+                  to={inventoryPath}
                   className={clsx(
                     'flex items-center gap-3 p-3 rounded-lg mb-1 transition-colors',
-                    isActive
+                    isActive || (item.path === '/inventory' && location.pathname.startsWith('/inventory'))
                       ? 'bg-gray-800 text-white'
                       : 'text-gray-400 hover:bg-gray-800 hover:text-white'
                   )}

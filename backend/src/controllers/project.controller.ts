@@ -6,13 +6,21 @@ const prisma = new PrismaClient()
 
 export const createProject = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.userId!
+    // Admin view: Use userId from token if available, otherwise use first user or a default
+    const userId = req.userId || (await prisma.user.findFirst({ select: { id: true } }))?.id || ''
     const { name, description, domain, companyName, deadline } = req.body
 
     if (!name || !domain) {
       return res.status(400).json({
         success: false,
         error: 'Name and domain are required',
+      })
+    }
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'No user available. Please create a user first.',
       })
     }
 
@@ -56,21 +64,8 @@ export const createProject = async (req: AuthRequest, res: Response) => {
 
 export const getProjects = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.userId!
-
+    // Admin view: Show all projects regardless of user
     const projects = await prisma.project.findMany({
-      where: {
-        OR: [
-          { userId },
-          {
-            teamMembers: {
-              some: {
-                userId,
-              },
-            },
-          },
-        ],
-      },
       include: {
         teamMembers: {
           include: {
@@ -105,23 +100,11 @@ export const getProjects = async (req: AuthRequest, res: Response) => {
 
 export const getProject = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.userId!
     const { id } = req.params
 
-    const project = await prisma.project.findFirst({
-      where: {
-        id,
-        OR: [
-          { userId },
-          {
-            teamMembers: {
-              some: {
-                userId,
-              },
-            },
-          },
-        ],
-      },
+    // Admin view: Show any project by ID
+    const project = await prisma.project.findUnique({
+      where: { id },
       include: {
         teamMembers: {
           include: {
@@ -164,15 +147,12 @@ export const getProject = async (req: AuthRequest, res: Response) => {
 
 export const updateProject = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.userId!
     const { id } = req.params
     const { name, description, domain, companyName, progress, status, deadline } = req.body
 
-    const project = await prisma.project.findFirst({
-      where: {
-        id,
-        userId,
-      },
+    // Admin view: Allow updating any project
+    const project = await prisma.project.findUnique({
+      where: { id },
     })
 
     if (!project) {
@@ -224,14 +204,11 @@ export const updateProject = async (req: AuthRequest, res: Response) => {
 
 export const deleteProject = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.userId!
     const { id } = req.params
 
-    const project = await prisma.project.findFirst({
-      where: {
-        id,
-        userId,
-      },
+    // Admin view: Allow deleting any project
+    const project = await prisma.project.findUnique({
+      where: { id },
     })
 
     if (!project) {
