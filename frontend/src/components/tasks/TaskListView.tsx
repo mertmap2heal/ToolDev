@@ -10,10 +10,12 @@ import { format } from 'date-fns'
 
 interface TaskListViewProps {
   onTaskSelect?: (task: Task) => void
+  projectId?: string
 }
 
-export default function TaskListView({ onTaskSelect }: TaskListViewProps) {
-  const { projectId } = useParams<{ projectId?: string }>()
+export default function TaskListView({ onTaskSelect, projectId: propProjectId }: TaskListViewProps) {
+  const { projectId: paramProjectId } = useParams<{ projectId?: string }>()
+  const projectId = propProjectId || paramProjectId
   const [searchQuery, setSearchQuery] = useState('')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [filters, setFilters] = useState<ListTasksFilters>({

@@ -1,15 +1,19 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
-import * as templateController from '../controllers/template.controller'
 
 const router = Router()
 
 router.use(authenticateToken)
 
-router.get('/:projectId', templateController.getTemplates)
-router.get('/:projectId/:templateId', templateController.getTemplate)
-router.post('/:projectId', templateController.createTemplate)
-router.put('/:projectId/:templateId', templateController.updateTemplate)
-router.delete('/:projectId/:templateId', templateController.deleteTemplate)
+// Placeholder routes for requirement templates
+// TODO: Implement requirement template functionality
+
+router.get('/', async (req, res) => {
+  res.json({
+    success: true,
+    data: [],
+    message: 'Requirement templates functionality coming soon',
+  })
+})
 
 export default router

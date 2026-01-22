@@ -34,6 +34,9 @@ import relationsRoutes from './relations.routes'
 import savedViewsRoutes from './savedViews.routes'
 import automationRoutes from './automation.routes'
 import importExportRoutes from './importExport.routes'
+import timeTrackingRoutes from './timeTracking.routes'
+import taskTemplateRoutes from './taskTemplates.routes'
+import taskAnalyticsRoutes from './taskAnalytics.routes'
 
 const router = Router()
 
@@ -72,5 +75,8 @@ router.use('/relations', relationsRoutes)
 router.use('/saved-views', savedViewsRoutes)
 router.use('/automation', automationRoutes)
 router.use('/csv', importExportRoutes)
+router.use('/time-tracking', timeTrackingRoutes)
+router.use('/task-templates', taskTemplateRoutes)
+router.use('/task-analytics', taskAnalyticsRoutes)
 
 export default router

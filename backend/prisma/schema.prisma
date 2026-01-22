@@ -54,6 +54,7 @@ model Project {
   tasks                  Task[]
   taskSavedViews         TaskSavedView[]
   boardColumns           BoardColumn[]
+  taskTemplates          TaskTemplate[]
 }
 
 model ProjectMember {
@@ -1286,6 +1287,7 @@ model Task {
   blocked         Boolean    @default(false)
   blockedReason   String?
   parentTaskId    String?
+  assignedToUserId String?
   sortOrder       Float      @default(0)
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
@@ -1303,12 +1305,14 @@ model Task {
   recurrenceRule RecurrenceRule?
   recurrenceInstances RecurrenceInstance[]
   activityFeed  ActivityFeed[]
+  timeLogs      TimeLog[]
 
   @@index([projectId])
   @@index([status])
   @@index([priority])
   @@index([dueDate])
   @@index([parentTaskId])
+  @@index([assignedToUserId])
   @@index([projectId, status])
   @@index([projectId, dueDate])
 }
@@ -1576,4 +1580,46 @@ model TaskNotification {
 
   @@index([isRead])
   @@index([createdAt])
+}
+
+// Time Tracking
+model TimeLog {
+  id              String   @id @default(uuid())
+  taskId          String
+  userId          String
+  durationMinutes Int
+  description     String?
+  loggedAt        DateTime @default(now())
+  billable        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([userId])
+  @@index([loggedAt])
+}
+
+// Task Templates
+model TaskTemplate {
+  id              String   @id @default(uuid())
+  name            String
+  description     String?
+  title           String
+  descriptionRich String?
+  status          String?
+  priority        String?
+  estimateMinutes Int?
+  tags            String[] // JSON array stored as String[]
+  checklistItems  Json?    // Array of checklist items
+  projectId       String?
+  isGlobal        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([isGlobal])
 }

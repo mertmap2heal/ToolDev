@@ -13,6 +13,7 @@ import { format } from 'date-fns'
 
 interface TaskBoardViewProps {
   onTaskSelect?: (task: Task) => void
+  projectId?: string
 }
 
 interface TaskCardProps {
@@ -73,8 +74,9 @@ function TaskCard({ task, onSelect }: TaskCardProps) {
   )
 }
 
-export default function TaskBoardView({ onTaskSelect }: TaskBoardViewProps) {
-  const { projectId } = useParams<{ projectId?: string }>()
+export default function TaskBoardView({ onTaskSelect, projectId: propProjectId }: TaskBoardViewProps) {
+  const { projectId: paramProjectId } = useParams<{ projectId?: string }>()
+  const projectId = propProjectId || paramProjectId
   const [activeId, setActiveId] = useState<string | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [createModalStatus, setCreateModalStatus] = useState<TaskStatus>('BACKLOG')

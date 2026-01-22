@@ -14,6 +14,14 @@ import IssuesPage from './pages/Issues/IssuesPage'
 import ParametersPage from './pages/Parameters/ParametersPage'
 import ChangeRequestsPage from './pages/ChangeRequests/ChangeRequestsPage'
 import TasksPage from './pages/Tasks/TasksPage'
+import TasksDashboardPage from './pages/Tasks/Dashboard/TasksDashboardPage'
+import MyTasksPage from './pages/Tasks/MyTasks/MyTasksPage'
+import TasksReportsPage from './pages/Tasks/Reports/TasksReportsPage'
+import TaskTemplatesPage from './pages/Tasks/Templates/TaskTemplatesPage'
+import TaskWorkflowsPage from './pages/Tasks/Workflows/TaskWorkflowsPage'
+import TimeTrackingPage from './pages/Tasks/TimeTracking/TimeTrackingPage'
+import TaskNotificationsPage from './pages/Tasks/Notifications/TaskNotificationsPage'
+import TaskSettingsPage from './pages/Tasks/Settings/TaskSettingsPage'
 import LifecycleManagementPage from './pages/LifecycleManagement/LifecycleManagementPage'
 import ArchivePage from './pages/Archive/ArchivePage'
 import LifecycleStatusPage from './pages/LifecycleStatus/LifecycleStatusPage'
@@ -36,6 +44,19 @@ function App() {
           <Route path="projects/:projectId/stakeholder" element={<StakeholderPage />} />
           <Route path="projects/:projectId/requirements" element={<RequirementsPage />} />
           <Route path="projects/:projectId/tasks" element={<TasksPage />} />
+          <Route path="tasks">
+            <Route index element={<TasksDashboardPage />} />
+            <Route path="my-tasks" element={<MyTasksPage />} />
+            <Route path="all" element={<TasksPage />} />
+            <Route path="board" element={<TasksPage />} />
+            <Route path="calendar" element={<TasksPage />} />
+            <Route path="reports" element={<TasksReportsPage />} />
+            <Route path="templates" element={<TaskTemplatesPage />} />
+            <Route path="workflows" element={<TaskWorkflowsPage />} />
+            <Route path="time-tracking" element={<TimeTrackingPage />} />
+            <Route path="notifications" element={<TaskNotificationsPage />} />
+            <Route path="settings" element={<TaskSettingsPage />} />
+          </Route>
           <Route path="projects/:projectId/functions" element={<SystemFunctionsPage />} />
           <Route path="projects/:projectId/parameters" element={<ParametersPage />} />
           <Route path="projects/:projectId/change-requests" element={<ChangeRequestsPage />} />
