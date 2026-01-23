@@ -33,20 +33,21 @@ export const createProject = async (req: AuthRequest, res: Response) => {
         deadline: deadline ? new Date(deadline) : null,
         userId,
       },
-      include: {
-        teamMembers: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                avatarUrl: true,
-              },
-            },
-          },
-        },
-      },
+      // Temporarily removed teamMembers include due to Prisma client sync issue
+      // include: {
+      //   teamMembers: {
+      //     include: {
+      //       user: {
+      //         select: {
+      //           id: true,
+      //           name: true,
+      //           email: true,
+      //           avatarUrl: true,
+      //         },
+      //       },
+      //     },
+      //   },
+      // },
     })
 
     res.status(201).json({
@@ -65,21 +66,22 @@ export const createProject = async (req: AuthRequest, res: Response) => {
 export const getProjects = async (req: AuthRequest, res: Response) => {
   try {
     // Admin view: Show all projects regardless of user
+    // Temporarily removed teamMembers include due to Prisma client sync issue
     const projects = await prisma.project.findMany({
-      include: {
-        teamMembers: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                avatarUrl: true,
-              },
-            },
-          },
-        },
-      },
+      // include: {
+      //   teamMembers: {
+      //     include: {
+      //       user: {
+      //         select: {
+      //           id: true,
+      //           name: true,
+      //           email: true,
+      //           avatarUrl: true,
+      //         },
+      //       },
+      //     },
+      //   },
+      // },
       orderBy: {
         updatedAt: 'desc',
       },
@@ -106,18 +108,19 @@ export const getProject = async (req: AuthRequest, res: Response) => {
     const project = await prisma.project.findUnique({
       where: { id },
       include: {
-        teamMembers: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                avatarUrl: true,
-              },
-            },
-          },
-        },
+        // Temporarily removed teamMembers include due to Prisma client sync issue
+        // teamMembers: {
+        //   include: {
+        //     user: {
+        //       select: {
+        //         id: true,
+        //         name: true,
+        //         email: true,
+        //         avatarUrl: true,
+        //       },
+        //     },
+        //   },
+        // },
         requirements: true,
         functions: true,
         architectures: true,
@@ -173,20 +176,21 @@ export const updateProject = async (req: AuthRequest, res: Response) => {
         status,
         deadline: deadline ? new Date(deadline) : undefined,
       },
-      include: {
-        teamMembers: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                avatarUrl: true,
-              },
-            },
-          },
-        },
-      },
+      // Temporarily removed teamMembers include due to Prisma client sync issue
+      // include: {
+      //   teamMembers: {
+      //     include: {
+      //       user: {
+      //         select: {
+      //           id: true,
+      //           name: true,
+      //           email: true,
+      //           avatarUrl: true,
+      //         },
+      //       },
+      //     },
+      //   },
+      // },
     })
 
     res.json({
