@@ -58,7 +58,12 @@ export default function ProjectNavigation() {
 
   const handleNavigation = (route: string) => {
     if (projectId) {
-      navigate(`/projects/${projectId}/${route}`)
+      // Redirect tasks to unified task management module with project filter
+      if (route === 'tasks') {
+        navigate(`/tasks/all?projectId=${projectId}`)
+      } else {
+        navigate(`/projects/${projectId}/${route}`)
+      }
     }
   }
 

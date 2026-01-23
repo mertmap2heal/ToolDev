@@ -811,7 +811,6 @@ export default function RequirementsPage() {
           </td>
           {/* Status - inline editable */}
           <td className="px-4 py-3">
-            <div className="flex items-center gap-2">
             {inlineEdit?.requirementId === req.id && inlineEdit.field === 'status' ? (
               <select
                 value={inlineEdit.value}
@@ -832,6 +831,8 @@ export default function RequirementsPage() {
                   <option key={status} value={status}>{status}</option>
                 ))}
               </select>
+            ) : req.reviewStatus ? (
+              <ReviewStatusBadge status={req.reviewStatus} size="sm" />
             ) : (
               <span
                 className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
@@ -841,10 +842,6 @@ export default function RequirementsPage() {
                 {req.status || 'draft'}
               </span>
             )}
-            {req.reviewStatus && (
-              <ReviewStatusBadge status={req.reviewStatus} size="sm" />
-            )}
-            </div>
           </td>
           {/* Owner - inline editable */}
           <td className="px-4 py-3">

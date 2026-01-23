@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { X, Calendar, Clock, Flag, AlertCircle } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { X, Calendar, Clock, Flag, AlertCircle, ChevronDown } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { taskService } from '../../services/task.service'
 import TagPicker from './TagPicker'
@@ -19,6 +19,10 @@ interface TaskDetailDrawerProps {
 
 export default function TaskDetailDrawer({ task, isOpen, onClose, onUpdate }: TaskDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'subtasks' | 'dependencies' | 'attachments' | 'comments' | 'activity'>('overview')
+  const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false)
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
+  const priorityDropdownRef = useRef<HTMLDivElement>(null)
+  const statusDropdownRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
   const updateTaskMutation = useMutation({
@@ -63,6 +67,72 @@ export default function TaskDetailDrawer({ task, isOpen, onClose, onUpdate }: Ta
     }
   }
 
+  const getPriorityOptionColor = (priority: TaskPriority) => {
+    // Use neutral background with colored text for better visibility in dropdown
+    switch (priority) {
+      case 'CRITICAL':
+        return 'bg-white dark:bg-gray-800 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 border-l-2 border-red-500'
+      case 'HIGH':
+        return 'bg-white dark:bg-gray-800 text-orange-700 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 border-l-2 border-orange-500'
+      case 'MEDIUM':
+        return 'bg-white dark:bg-gray-800 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 border-l-2 border-yellow-500'
+      case 'LOW':
+        return 'bg-white dark:bg-gray-800 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 border-l-2 border-blue-500'
+      default:
+        return 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+    }
+  }
+
+  const getStatusOptionColor = (status: TaskStatus) => {
+    // Use neutral background with colored text for better visibility in dropdown
+    switch (status) {
+      case 'BACKLOG':
+        return 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+      case 'TODO':
+        return 'bg-white dark:bg-gray-800 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 border-l-2 border-blue-500'
+      case 'IN_PROGRESS':
+        return 'bg-white dark:bg-gray-800 text-yellow-700 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 border-l-2 border-yellow-500'
+      case 'IN_REVIEW':
+        return 'bg-white dark:bg-gray-800 text-purple-700 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 border-l-2 border-purple-500'
+      case 'DONE':
+        return 'bg-white dark:bg-gray-800 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 border-l-2 border-green-500'
+      default:
+        return 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+    }
+  }
+
+  const priorityOptions: { value: TaskPriority; label: string }[] = [
+    { value: 'LOW', label: 'Low' },
+    { value: 'MEDIUM', label: 'Medium' },
+    { value: 'HIGH', label: 'High' },
+    { value: 'CRITICAL', label: 'Critical' },
+  ]
+
+  const statusOptions: { value: TaskStatus; label: string }[] = [
+    { value: 'BACKLOG', label: 'Backlog' },
+    { value: 'TODO', label: 'Todo' },
+    { value: 'IN_PROGRESS', label: 'In Progress' },
+    { value: 'IN_REVIEW', label: 'In Review' },
+    { value: 'DONE', label: 'Done' },
+  ]
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (priorityDropdownRef.current && !priorityDropdownRef.current.contains(event.target as Node)) {
+        setPriorityDropdownOpen(false)
+      }
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
+        setStatusDropdownOpen(false)
+      }
+    }
+
+    if (priorityDropdownOpen || statusDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [priorityDropdownOpen, statusDropdownOpen])
+
   if (!isOpen) return null
 
   return (
@@ -105,40 +175,75 @@ export default function TaskDetailDrawer({ task, isOpen, onClose, onUpdate }: Ta
             <div className="space-y-6">
               {/* Status and Priority */}
               <div className="grid grid-cols-2 gap-4">
-                <div>
+                <div className="relative" ref={statusDropdownRef}>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Status
                   </label>
-                  <select
-                    value={task.status}
-                    onChange={(e) =>
-                      updateTaskMutation.mutate({ status: e.target.value as TaskStatus })
-                    }
-                    className={`w-full px-4 py-2 rounded-lg border-0 focus:outline-none focus:ring-2 focus:ring-blue-500 ${getStatusColor(task.status)}`}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatusDropdownOpen(!statusDropdownOpen)
+                      setPriorityDropdownOpen(false)
+                    }}
+                    className={`w-full px-4 py-2 rounded-lg border-0 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-between ${getStatusColor(task.status)}`}
                   >
-                    <option value="BACKLOG">Backlog</option>
-                    <option value="TODO">Todo</option>
-                    <option value="IN_PROGRESS">In Progress</option>
-                    <option value="IN_REVIEW">In Review</option>
-                    <option value="DONE">Done</option>
-                  </select>
+                    <span>{statusOptions.find((opt) => opt.value === task.status)?.label || task.status}</span>
+                    <ChevronDown size={16} className="ml-2" />
+                  </button>
+                  {statusDropdownOpen && (
+                    <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
+                      {statusOptions.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => {
+                            updateTaskMutation.mutate({ status: option.value })
+                            setStatusDropdownOpen(false)
+                          }}
+                          className={`w-full px-4 py-2 text-left ${getStatusOptionColor(option.value)} ${
+                            task.status === option.value ? 'font-semibold' : ''
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div>
+                <div className="relative" ref={priorityDropdownRef}>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Priority
                   </label>
-                  <select
-                    value={task.priority}
-                    onChange={(e) =>
-                      updateTaskMutation.mutate({ priority: e.target.value as TaskPriority })
-                    }
-                    className={`w-full px-4 py-2 rounded-lg border-0 focus:outline-none focus:ring-2 focus:ring-blue-500 ${getPriorityColor(task.priority)}`}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPriorityDropdownOpen(!priorityDropdownOpen)
+                      setStatusDropdownOpen(false)
+                    }}
+                    className={`w-full px-4 py-2 rounded-lg border-0 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-between ${getPriorityColor(task.priority)}`}
                   >
-                    <option value="LOW">Low</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="HIGH">High</option>
-                    <option value="CRITICAL">Critical</option>
-                  </select>
+                    <span>{priorityOptions.find((opt) => opt.value === task.priority)?.label || task.priority}</span>
+                    <ChevronDown size={16} className="ml-2" />
+                  </button>
+                  {priorityDropdownOpen && (
+                    <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden">
+                      {priorityOptions.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => {
+                            updateTaskMutation.mutate({ priority: option.value })
+                            setPriorityDropdownOpen(false)
+                          }}
+                          className={`w-full px-4 py-2 text-left ${getPriorityOptionColor(option.value)} ${
+                            task.priority === option.value ? 'font-semibold' : ''
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

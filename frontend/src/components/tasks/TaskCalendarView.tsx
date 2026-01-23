@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { taskService } from '../../services/task.service'
@@ -8,10 +7,10 @@ import type { Task } from '../../../shared/types/task.types'
 
 interface TaskCalendarViewProps {
   onTaskSelect?: (task: Task) => void
+  projectId?: string
 }
 
-export default function TaskCalendarView({ onTaskSelect }: TaskCalendarViewProps) {
-  const { projectId } = useParams<{ projectId?: string }>()
+export default function TaskCalendarView({ onTaskSelect, projectId: propProjectId }: TaskCalendarViewProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const queryClient = useQueryClient()
 
@@ -19,10 +18,10 @@ export default function TaskCalendarView({ onTaskSelect }: TaskCalendarViewProps
   const monthEnd = endOfMonth(currentMonth)
 
   const { data: calendarData, isLoading } = useQuery({
-    queryKey: ['calendar-tasks', projectId, monthStart.toISOString(), monthEnd.toISOString()],
+    queryKey: ['calendar-tasks', propProjectId, monthStart.toISOString(), monthEnd.toISOString()],
     queryFn: async () => {
       const response = await taskService.getCalendarTasks({
-        projectId: projectId || undefined,
+        projectId: propProjectId || undefined,
         startDate: monthStart.toISOString(),
         endDate: monthEnd.toISOString(),
       })
