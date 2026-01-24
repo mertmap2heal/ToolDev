@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { X, ChevronDown, Edit2, CheckCircle, XCircle, FileText, Download } from 'lucide-react'
+import { X, ChevronDown, Edit2, CheckCircle, XCircle, FileText, Download, AlertCircle } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
 import type { Component, Interface } from './ComponentFormSection'
@@ -16,6 +16,7 @@ import ReactFlow, {
   NodeTypes,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
+import { useDrawIO, getDrawIOUrl, extractXml, EMPTY_DIAGRAM } from './useDrawIO'
 
 interface TestSetupDetailDrawerProps {
   setup: any
@@ -61,6 +62,91 @@ const nodeTypes: NodeTypes = {
   interface: InterfaceNode,
 }
 
+// Separate component for diagram tab to use the hook properly
+function DiagramTab({
+  isDrawioFormat,
+  diagramXml,
+  nodes,
+  edges,
+  nodeTypes,
+}: {
+  isDrawioFormat: boolean
+  diagramXml: string
+  nodes: Node[]
+  edges: Edge[]
+  nodeTypes: NodeTypes
+}) {
+  // Use custom draw.io hook for read-only viewing
+  const {
+    iframeRef,
+    isReady,
+    error: drawioError,
+  } = useDrawIO({
+    initialXml: diagramXml || EMPTY_DIAGRAM,
+    readOnly: true,
+  })
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Diagram</h3>
+      
+      {/* Error Banner */}
+      {drawioError && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded flex items-center gap-2">
+          <AlertCircle size={16} />
+          <span>{drawioError}</span>
+        </div>
+      )}
+
+      {isDrawioFormat ? (
+        diagramXml ? (
+          <div className="h-[600px] border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden relative">
+            <iframe
+              ref={iframeRef}
+              src={getDrawIOUrl({ readOnly: true, noSaveBtn: true, noExitBtn: true })}
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+              }}
+              title="Draw.io Diagram Viewer"
+            />
+            {/* Loading indicator */}
+            {!isReady && (
+              <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-gray-800 bg-opacity-75">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Loading diagram...</span>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-gray-500 dark:text-gray-400 text-center py-8">No diagram data</p>
+        )
+      ) : nodes.length === 0 && edges.length === 0 ? (
+        <p className="text-gray-500 dark:text-gray-400 text-center py-8">No diagram data</p>
+      ) : (
+        <div className="h-[600px] border border-gray-200 dark:border-gray-700 rounded-lg">
+          <ReactFlowProvider>
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={nodeTypes}
+              fitView
+              fitViewOptions={{ padding: 0.2 }}
+              className="bg-gray-50 dark:bg-gray-900"
+            >
+              <Controls />
+              <Background variant="dots" gap={12} size={1} />
+            </ReactFlow>
+          </ReactFlowProvider>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectId }: TestSetupDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'components' | 'interfaces' | 'diagram' | 'photos'>(
     'overview'
@@ -89,13 +175,48 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
 
   const [nodes, setNodes] = useNodesState(setupDetails?.diagramData?.nodes || [])
   const [edges, setEdges] = useEdgesState(setupDetails?.diagramData?.edges || [])
+  const [diagramXml, setDiagramXml] = useState<string>('')
+  const [isDrawioFormat, setIsDrawioFormat] = useState(false)
+
+  // Helper to check if diagram data is draw.io format
+  const checkDiagramFormat = (diagramData: any) => {
+    if (!diagramData) {
+      setIsDrawioFormat(false)
+      return
+    }
+
+    // Check if it's draw.io XML format
+    if (typeof diagramData === 'string' && diagramData.includes('<mxfile')) {
+      setIsDrawioFormat(true)
+      setDiagramXml(diagramData)
+      return
+    }
+
+    if (diagramData.xml && typeof diagramData.xml === 'string' && diagramData.xml.includes('<mxfile')) {
+      setIsDrawioFormat(true)
+      setDiagramXml(diagramData.xml)
+      return
+    }
+
+    if (diagramData.format === 'drawio' || diagramData.xml) {
+      setIsDrawioFormat(true)
+      setDiagramXml(diagramData.xml || '')
+      return
+    }
+
+    // Otherwise it's ReactFlow format
+    setIsDrawioFormat(false)
+  }
 
   useEffect(() => {
     if (setupDetails?.diagramData) {
-      setNodes(setupDetails.diagramData.nodes || [])
-      setEdges(setupDetails.diagramData.edges || [])
+      checkDiagramFormat(setupDetails.diagramData)
+      if (!isDrawioFormat) {
+        setNodes(setupDetails.diagramData.nodes || [])
+        setEdges(setupDetails.diagramData.edges || [])
+      }
     }
-  }, [setupDetails, setNodes, setEdges])
+  }, [setupDetails, setNodes, setEdges, isDrawioFormat])
 
   const updateSetupMutation = useMutation({
     mutationFn: (data: any) => verificationService.updateSetup(projectId, setup.id, data),
@@ -444,28 +565,13 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
           )}
 
           {activeTab === 'diagram' && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Diagram</h3>
-              {nodes.length === 0 && edges.length === 0 ? (
-                <p className="text-gray-500 dark:text-gray-400 text-center py-8">No diagram data</p>
-              ) : (
-                <div className="h-[600px] border border-gray-200 dark:border-gray-700 rounded-lg">
-                  <ReactFlowProvider>
-                    <ReactFlow
-                      nodes={nodes}
-                      edges={edges}
-                      nodeTypes={nodeTypes}
-                      fitView
-                      fitViewOptions={{ padding: 0.2 }}
-                      className="bg-gray-50 dark:bg-gray-900"
-                    >
-                      <Controls />
-                      <Background variant="dots" gap={12} size={1} />
-                    </ReactFlow>
-                  </ReactFlowProvider>
-                </div>
-              )}
-            </div>
+            <DiagramTab
+              isDrawioFormat={isDrawioFormat}
+              diagramXml={diagramXml}
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={nodeTypes}
+            />
           )}
 
           {activeTab === 'photos' && (
