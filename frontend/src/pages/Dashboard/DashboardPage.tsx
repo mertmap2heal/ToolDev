@@ -18,20 +18,18 @@ export default function DashboardPage() {
   const { setProjects, projects } = useProjectStore()
   const queryClient = useQueryClient()
 
-  const { data: projectsData, isLoading, error } = useQuery({
+  const { data: projectsData, isLoading, error, refetch } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
-      try {
-        const response = await projectService.getProjects()
-        if (response.success && response.data) {
-          setProjects(response.data)
-          return response.data
-        }
-        return []
-      } catch (err) {
-        console.error('Error fetching projects:', err)
-        return []
+      const response = await projectService.getProjects()
+      if (!response.success) {
+        const msg = response.error || 'Failed to load projects'
+        console.error('Error fetching projects:', msg)
+        throw new Error(msg)
       }
+      const list = response.data ?? []
+      setProjects(list)
+      return list
     },
     retry: false,
   })
@@ -172,8 +170,19 @@ export default function DashboardPage() {
             Loading projects...
           </div>
         ) : error ? (
-          <div className="p-8 text-left text-red-600 dark:text-red-400">
-            Error loading projects. Please check your connection.
+          <div className="p-8 text-left">
+            <p className="text-red-600 dark:text-red-400 mb-2">
+              {error instanceof Error ? error.message : 'Error loading projects.'}
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Check that the backend is running, the database is connected, and you are logged in.
+            </p>
+            <button
+              onClick={() => refetch()}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+            >
+              Retry
+            </button>
           </div>
         ) : displayedProjects.length === 0 ? (
           <div className="p-8 text-left text-gray-500 dark:text-gray-400">

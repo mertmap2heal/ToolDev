@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { ChevronDown, ChevronRight, Plus, AlertCircle, Trash2, Edit2, Filter, ChevronUp, FileText } from 'lucide-react'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
+import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import CreateFunctionModal from '../../components/functions/CreateFunctionModal'
 import DeleteFunctionModal from '../../components/functions/DeleteFunctionModal'
 import RaiseIssueModal from '../../components/functions/RaiseIssueModal'
@@ -338,6 +339,7 @@ export default function SystemFunctionsPage() {
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Functions</h2>
         <div className="flex items-center gap-3">
+          {projectId && <SafetyLinkPanel variant="impact" count={2} />}
           {selectedFunctions.size > 0 && (
             <button
               onClick={() => setIsRaiseIssueModalOpen(true)}

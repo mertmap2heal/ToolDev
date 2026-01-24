@@ -25,6 +25,22 @@ import TaskSettingsPage from './pages/Tasks/Settings/TaskSettingsPage'
 import LifecycleManagementPage from './pages/LifecycleManagement/LifecycleManagementPage'
 import ArchivePage from './pages/Archive/ArchivePage'
 import LifecycleStatusPage from './pages/LifecycleStatus/LifecycleStatusPage'
+import SafetyLayoutPage from './pages/Safety/SafetyLayoutPage'
+import SafetyOverviewPage from './pages/Safety/SafetyOverviewPage'
+import HazardsPage from './pages/Safety/HazardsPage'
+import SafetyAnalysesLandingPage from './pages/Safety/SafetyAnalysesLandingPage'
+import AnalysisListPage from './pages/Safety/AnalysisListPage'
+import CreateAnalysisWizardPage from './pages/Safety/CreateAnalysisWizardPage'
+import EditAnalysisWizardPage from './pages/Safety/EditAnalysisWizardPage'
+import FTAVisualPage from './pages/Safety/FTAVisualPage'
+import TraceabilityPage from './pages/Safety/TraceabilityPage'
+import ImpactAssessmentPage from './pages/Safety/ImpactAssessmentPage'
+import LibrariesPage from './pages/Safety/LibrariesPage'
+import ReviewsPage from './pages/Safety/ReviewsPage'
+import AuditLogPage from './pages/Safety/AuditLogPage'
+import ExportsPage from './pages/Safety/ExportsPage'
+import SafetySettingsPage from './pages/Safety/SafetySettingsPage'
+import MarkovPage from './pages/Safety/MarkovPage'
 import ItemsPage from './pages/Inventory/Items/ItemsPage'
 import WarehousesPage from './pages/Inventory/Warehouses/WarehousesPage'
 import PurchasingPage from './pages/Inventory/Purchasing/PurchasingPage'
@@ -67,6 +83,24 @@ function App() {
           <Route path="projects/:projectId/documentation" element={<DocumentationPage />} />
           <Route path="projects/:projectId/lifecycle-status" element={<LifecycleStatusPage />} />
           <Route path="projects/:projectId/archive" element={<ArchivePage />} />
+          <Route path="projects/:projectId/safety-analysis" element={<SafetyLayoutPage />}>
+            <Route index element={<Navigate to="overview" replace />} />
+            <Route path="overview" element={<SafetyOverviewPage />} />
+            <Route path="hazards" element={<HazardsPage />} />
+            <Route path="analyses" element={<SafetyAnalysesLandingPage />} />
+            <Route path="analyses/:method" element={<AnalysisListPage />} />
+            <Route path="analyses/:method/new" element={<CreateAnalysisWizardPage />} />
+            <Route path="analyses/:method/:id" element={<EditAnalysisWizardPage />} />
+            <Route path="visual-analysis" element={<FTAVisualPage />} />
+            <Route path="markov" element={<MarkovPage />} />
+            <Route path="traceability" element={<TraceabilityPage />} />
+            <Route path="impact-assessment" element={<ImpactAssessmentPage />} />
+            <Route path="libraries" element={<LibrariesPage />} />
+            <Route path="reviews" element={<ReviewsPage />} />
+            <Route path="audit-log" element={<AuditLogPage />} />
+            <Route path="exports" element={<ExportsPage />} />
+            <Route path="settings" element={<SafetySettingsPage />} />
+          </Route>
           <Route path="lifecycle" element={<LifecycleManagementPage />} />
           <Route path="inventory">
             <Route index element={<Navigate to="/inventory/items" replace />} />

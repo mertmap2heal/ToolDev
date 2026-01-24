@@ -17,6 +17,7 @@ import RequirementQualityPanel from '../../components/requirements/RequirementQu
 import AllocationTable from '../../components/requirements/AllocationTable'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import ReviewStatusBadge from '../../components/requirements/ReviewStatusBadge'
+import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
@@ -1132,6 +1133,7 @@ export default function RequirementsPage() {
             <Upload size={16} />
             <span className="text-sm">Export</span>
           </button>
+          {projectId && <SafetyLinkPanel variant="linked" count={3} />}
           <button
             onClick={() => setIsDiagramOpen(true)}
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"

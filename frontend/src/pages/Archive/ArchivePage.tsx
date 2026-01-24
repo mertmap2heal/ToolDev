@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Search, Filter, ChevronDown, ChevronUp, Archive } from 'lucide-react'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
+import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 
 export default function ArchivePage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -17,6 +18,7 @@ export default function ArchivePage() {
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Archive</h2>
+            {projectId && <SafetyLinkPanel variant="archived" ctaOnly />}
           </div>
 
           {/* Search Bar */}

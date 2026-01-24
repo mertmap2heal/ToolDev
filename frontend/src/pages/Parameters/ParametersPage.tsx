@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { Search, X, Trash2, Edit2, Plus, Filter, ChevronDown, ChevronUp, FileText } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
+import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import { parameterService } from '../../services/parameter.service'
 import DeleteConfirmationModal from '../../components/projects/DeleteConfirmationModal'
 import EditParameterModal from '../../components/parameters/EditParameterModal'
@@ -123,13 +124,16 @@ export default function ParametersPage() {
 
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Parameters</h2>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
-        >
-          <Plus size={16} />
-          <span>Create a new parameter</span>
-        </button>
+        <div className="flex items-center gap-3">
+          {projectId && <SafetyLinkPanel variant="relevance" count={1} />}
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+          >
+            <Plus size={16} />
+            <span>Create a new parameter</span>
+          </button>
+        </div>
       </div>
 
       {/* Search */}

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Search, X, Filter, ChevronDown, ChevronUp, FileText, ExternalLink, Plus } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
+import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import { changeRequestService } from '../../services/changeRequest.service'
 import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
@@ -171,13 +172,16 @@ export default function ChangeRequestsPage() {
       <ProjectNavigation />
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Change Requests</h2>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
-        >
-          <Plus size={16} />
-          <span>Create a new change request</span>
-        </button>
+        <div className="flex items-center gap-3">
+          {projectId && <SafetyLinkPanel variant="impact-status" badge="Pending" />}
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+          >
+            <Plus size={16} />
+            <span>Create a new change request</span>
+          </button>
+        </div>
       </div>
 
       {/* Search */}

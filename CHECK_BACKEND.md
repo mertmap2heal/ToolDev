@@ -47,13 +47,29 @@ If you get an error that port 5000 is already in use:
 - Update `frontend/src/services/api.ts` to use the new port
 
 ### Database Connection Error
-If you see database connection errors:
-- Make sure Docker is running
-- Make sure the PostgreSQL container is running:
-  ```powershell
-  docker ps
-  ```
-- Check `backend/.env` has the correct `DATABASE_URL`
+If you see database connection errors or **can't see projects you created**:
+
+1. **Check DB connectivity** (backend must be running):
+   ```powershell
+   curl http://localhost:5000/api/health/db
+   ```
+   - `{"ok":true,"projectCount":N}` = DB connected; `N` projects in DB.
+   - `{"ok":false,"error":"..."}` or 503 = DB connection failed.
+
+2. **List projects and users** in the database:
+   ```powershell
+   cd backend
+   npm run check-db
+   ```
+   This lists users, all projects, and which user owns each project.
+
+3. **Ensure PostgreSQL is running**:
+   ```powershell
+   docker ps
+   ```
+   If using Docker Compose: `docker compose up -d` (from project root).
+
+4. Check `backend/.env` has the correct `DATABASE_URL` (e.g. `postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool`).
 
 ### Missing Dependencies
 If you get module errors:
