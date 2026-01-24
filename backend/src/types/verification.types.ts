@@ -164,6 +164,7 @@ export enum LinkedEntityType {
   METHOD = 'METHOD',
   REVIEW = 'REVIEW',
   NONCONFORMITY = 'NONCONFORMITY',
+  TEST_RESULT = 'TEST_RESULT',
 }
 
 export enum ReviewEntityType {
@@ -256,6 +257,36 @@ export interface VerTestPlan {
   status: TestPlanStatus
   createdAt: Date
   updatedAt: Date
+}
+
+export interface VerTestResult {
+  id: string
+  projectId: string
+  title: string
+  description?: string | null
+  storageRef: string
+  fileName: string
+  fileSize?: number | null
+  mimeType?: string | null
+  checksum?: string | null
+  resultStatus: ResultStatus
+  executedAt?: Date | null
+  executedByUserId?: string | null
+  executedByName?: string | null
+  testEnvironment?: string | null
+  linkedSetupId?: string | null
+  notes?: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface VerTestResultLink {
+  id: string
+  testResultId: string
+  linkedEntityType: 'TEST_CASE' | 'TEST_PLAN'
+  linkedEntityId: string
+  relation: EvidenceRelation
+  createdAt: Date
 }
 
 export interface VerTestPlanCase {
@@ -518,6 +549,29 @@ export interface CreateBaselineDto {
   baselineType: BaselineType
 }
 
+export interface CreateTestResultDto {
+  title: string
+  description?: string
+  fileName: string
+  fileData: string // Base64 encoded file data
+  mimeType?: string
+  resultStatus?: ResultStatus
+  executedAt?: Date
+  executedByUserId?: string
+  executedByName?: string
+  testEnvironment?: string
+  linkedSetupId?: string
+  notes?: string
+  linkedTestCaseIds?: string[] // Optional: link to test cases on creation
+  linkedTestPlanId?: string // Optional: link to test plan on creation
+}
+
+export interface LinkTestResultDto {
+  linkedEntityType: 'TEST_CASE' | 'TEST_PLAN'
+  linkedEntityId: string
+  relation?: EvidenceRelation
+}
+
 export interface UpdateSettingsDto {
   allowedMocCodes?: number[]
   mocRulesByCriticality?: any
@@ -567,10 +621,12 @@ export interface OverviewMetrics {
   testPlans: {
     total: number
     byStatus: Record<string, number>
+    withTestResults: number
   }
   testCases: {
     total: number
     byStatus: Record<string, number>
+    withTestResults: number
   }
   /** @deprecated Test runs functionality has been removed */
   testRuns?: {

@@ -13,6 +13,7 @@ import * as baselineController from '../controllers/verification/baseline.contro
 import * as settingsController from '../controllers/verification/settings.controller'
 import * as overviewController from '../controllers/verification/overview.controller'
 import * as customOptionController from '../controllers/verification/customOption.controller'
+import * as testResultController from '../controllers/verification/testResult.controller'
 import { reportService } from '../services/verification/report.service'
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
@@ -60,6 +61,9 @@ router.post('/test-cases/:projectId/:id/approve', testCaseController.approveTest
 router.post('/test-cases/:projectId/:id/version', testCaseController.createTestCaseVersion)
 router.post('/test-cases/:projectId/:id/link-setup', testCaseController.linkSetup)
 router.post('/test-cases/:projectId/:id/unlink-setup', testCaseController.unlinkSetup)
+router.get('/test-cases/:projectId/:id/verification-links', testCaseController.getVerificationLinks)
+router.post('/test-cases/:projectId/:id/verification-links', testCaseController.linkVerificationElement)
+router.delete('/test-cases/:projectId/:id/verification-links/:linkId', testCaseController.unlinkVerificationElement)
 
 // E) Test Plans
 router.get('/test-plans/:projectId', testPlanController.getTestPlans)
@@ -71,6 +75,9 @@ router.post('/test-plans/:projectId/:id/remove-case', testPlanController.removeC
 router.post('/test-plans/:projectId/:id/reorder-cases', testPlanController.reorderCases)
 router.post('/test-plans/:projectId/:id/approve', testPlanController.approveTestPlan)
 router.post('/test-plans/:projectId/:id/close', testPlanController.closeTestPlan)
+router.get('/test-plans/:projectId/:id/verification-links', testPlanController.getVerificationLinks)
+router.post('/test-plans/:projectId/:id/verification-links', testPlanController.linkVerificationElement)
+router.delete('/test-plans/:projectId/:id/verification-links/:linkId', testPlanController.unlinkVerificationElement)
 
 // F) Evidence
 router.get('/evidence/:projectId', evidenceController.getEvidence)
@@ -113,6 +120,16 @@ router.post('/settings/:projectId/validate', settingsController.validateSettings
 
 // M) Overview
 router.get('/overview/:projectId', overviewController.getOverview)
+
+// N) Test Results
+router.get('/test-results/:projectId', testResultController.getTestResults)
+router.post('/test-results/:projectId', testResultController.createTestResult)
+router.get('/test-results/:projectId/:id', testResultController.getTestResult)
+router.patch('/test-results/:projectId/:id', testResultController.updateTestResult)
+router.delete('/test-results/:projectId/:id', testResultController.deleteTestResult)
+router.post('/test-results/:projectId/:id/link', testResultController.linkTestResult)
+router.post('/test-results/:projectId/:id/unlink', testResultController.unlinkTestResult)
+router.get('/test-results/:projectId/:id/download', testResultController.downloadTestResult)
 
 // Reports
 router.get('/reports/test-case/:projectId/:id', async (req: AuthRequest, res: Response) => {

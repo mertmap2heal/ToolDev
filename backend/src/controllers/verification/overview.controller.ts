@@ -8,14 +8,23 @@ const prisma = new PrismaClient()
 export const getOverview = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
-    const [testPlans, testCases, nonconformities, mocSummary] = await Promise.all([
-      prisma.verTestPlan.findMany({ where: { projectId }, select: { status: true } }),
-      prisma.verTestCase.findMany({ where: { projectId }, select: { status: true } }),
+    const [testPlans, testCases, nonconformities, mocSummary, testResultLinks] = await Promise.all([
+      prisma.verTestPlan.findMany({ where: { projectId }, select: { status: true, id: true } }),
+      prisma.verTestCase.findMany({ where: { projectId }, select: { status: true, id: true } }),
       prisma.verNonconformity.findMany({
         where: { projectId },
         select: { severity: true, status: true },
       }),
       coverageService.getMocSummary(projectId),
+      prisma.verTestResultLink.findMany({
+        where: {
+          testResult: { projectId },
+        },
+        select: {
+          linkedEntityType: true,
+          linkedEntityId: true,
+        },
+      }),
     ])
     // Count by status
     const plansByStatus: Record<string, number> = {}
@@ -34,14 +43,29 @@ export const getOverview = async (req: AuthRequest, res: Response) => {
         openNCs++
       }
     })
+    
+    // Count test plans and test cases with linked test results
+    const planIdsWithResults = new Set(
+      testResultLinks
+        .filter((link) => link.linkedEntityType === 'TEST_PLAN')
+        .map((link) => link.linkedEntityId)
+    )
+    const caseIdsWithResults = new Set(
+      testResultLinks
+        .filter((link) => link.linkedEntityType === 'TEST_CASE')
+        .map((link) => link.linkedEntityId)
+    )
+    
     const overview = {
       testPlans: {
         total: testPlans.length,
         byStatus: plansByStatus,
+        withTestResults: planIdsWithResults.size,
       },
       testCases: {
         total: testCases.length,
         byStatus: casesByStatus,
+        withTestResults: caseIdsWithResults.size,
       },
       coverage: {
         byMoc: mocSummary.byMoc,

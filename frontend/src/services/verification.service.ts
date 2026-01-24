@@ -164,4 +164,85 @@ export const verificationService = {
       fileData
     )
   },
+
+  // Test Results
+  async getTestResults(projectId: string): Promise<ApiResponse<any[]>> {
+    return apiClient.get(`/verification/test-results/${projectId}`)
+  },
+
+  async createTestResult(projectId: string, data: any): Promise<ApiResponse<any>> {
+    return apiClient.post(`/verification/test-results/${projectId}`, data)
+  },
+
+  async getTestResult(projectId: string, id: string): Promise<ApiResponse<any>> {
+    return apiClient.get(`/verification/test-results/${projectId}/${id}`)
+  },
+
+  async updateTestResult(projectId: string, id: string, data: any): Promise<ApiResponse<any>> {
+    return apiClient.patch(`/verification/test-results/${projectId}/${id}`, data)
+  },
+
+  async deleteTestResult(projectId: string, id: string): Promise<ApiResponse<any>> {
+    return apiClient.delete(`/verification/test-results/${projectId}/${id}`)
+  },
+
+  async linkTestResult(projectId: string, id: string, data: any): Promise<ApiResponse<any>> {
+    return apiClient.post(`/verification/test-results/${projectId}/${id}/link`, data)
+  },
+
+  async unlinkTestResult(projectId: string, id: string, data: any): Promise<ApiResponse<any>> {
+    return apiClient.post(`/verification/test-results/${projectId}/${id}/unlink`, data)
+  },
+
+  async downloadTestResult(projectId: string, id: string): Promise<Blob> {
+    const response = await fetch(`${apiClient.baseURL}/verification/test-results/${projectId}/${id}/download`, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+    })
+    if (!response.ok) throw new Error('Download failed')
+    return response.blob()
+  },
+
+  // Test Case Verification Links
+  async getTestCaseVerificationLinks(projectId: string, testCaseId: string): Promise<ApiResponse<any[]>> {
+    return apiClient.get(`/verification/test-cases/${projectId}/${testCaseId}/verification-links`)
+  },
+
+  async linkTestCaseVerificationElement(
+    projectId: string,
+    testCaseId: string,
+    targetType: 'requirement' | 'function',
+    targetId: string
+  ): Promise<ApiResponse<any>> {
+    return apiClient.post(`/verification/test-cases/${projectId}/${testCaseId}/verification-links`, {
+      targetType,
+      targetId,
+    })
+  },
+
+  async unlinkTestCaseVerificationElement(projectId: string, testCaseId: string, linkId: string): Promise<ApiResponse<void>> {
+    return apiClient.delete(`/verification/test-cases/${projectId}/${testCaseId}/verification-links/${linkId}`)
+  },
+
+  // Test Plan Verification Links
+  async getTestPlanVerificationLinks(projectId: string, testPlanId: string): Promise<ApiResponse<any[]>> {
+    return apiClient.get(`/verification/test-plans/${projectId}/${testPlanId}/verification-links`)
+  },
+
+  async linkTestPlanVerificationElement(
+    projectId: string,
+    testPlanId: string,
+    targetType: 'requirement' | 'function',
+    targetId: string
+  ): Promise<ApiResponse<any>> {
+    return apiClient.post(`/verification/test-plans/${projectId}/${testPlanId}/verification-links`, {
+      targetType,
+      targetId,
+    })
+  },
+
+  async unlinkTestPlanVerificationElement(projectId: string, testPlanId: string, linkId: string): Promise<ApiResponse<void>> {
+    return apiClient.delete(`/verification/test-plans/${projectId}/${testPlanId}/verification-links/${linkId}`)
+  },
 }

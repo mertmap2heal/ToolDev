@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
-import { X, ChevronDown } from 'lucide-react'
+import { X, ChevronDown, Link2, Download, Search, Check } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
+import { requirementService } from '../../services/requirement.service'
+import { functionService } from '../../services/function.service'
 
 interface TestCaseDetailDrawerProps {
   testCase: any
@@ -475,8 +477,386 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
               </p>
             )}
           </div>
+
+          {/* Verifies Elements */}
+          {!isEditing && (
+            <VerifiesElementsSection testCaseId={currentCase?.id} projectId={projectId} />
+          )}
+
+          {/* Linked Test Results */}
+          {!isEditing && (
+            <LinkedTestResultsSection testCaseId={currentCase?.id} projectId={projectId} />
+          )}
         </div>
       </div>
+    </div>
+  )
+}
+
+function VerifiesElementsSection({ testCaseId, projectId }: { testCaseId?: string; projectId: string }) {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showDropdown, setShowDropdown] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const queryClient = useQueryClient()
+
+  // Fetch verification links
+  const { data: verificationLinks = [] } = useQuery({
+    queryKey: ['test-case-verification-links', projectId, testCaseId],
+    queryFn: async () => {
+      if (!testCaseId) return []
+      const response = await verificationService.getTestCaseVerificationLinks(projectId, testCaseId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!testCaseId,
+  })
+
+  // Fetch requirements and functions
+  const { data: requirements = [] } = useQuery({
+    queryKey: ['requirements', projectId],
+    queryFn: async () => {
+      const response = await requirementService.getRequirements(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId,
+  })
+
+  const { data: functions = [] } = useQuery({
+    queryKey: ['functions', projectId],
+    queryFn: async () => {
+      const response = await functionService.getFunctions(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId,
+  })
+
+  // Combine and filter elements
+  const allElements = [
+    ...requirements.map((req: any) => ({
+      id: req.id,
+      type: 'requirement' as const,
+      identifier: req.requirementId || '',
+      name: req.title,
+      description: req.description,
+    })),
+    ...functions.map((func: any) => ({
+      id: func.id,
+      type: 'function' as const,
+      identifier: func.functionId || '',
+      name: func.name,
+      description: func.description,
+    })),
+  ]
+
+  // Get already linked element IDs
+  const linkedElementIds = new Set(verificationLinks.map((link: any) => link.targetId))
+
+  // Filter elements based on search and exclude already linked
+  const filteredElements = allElements.filter((element) => {
+    if (linkedElementIds.has(element.id)) return false
+    if (!searchQuery.trim()) return true
+    const query = searchQuery.toLowerCase()
+    return (
+      element.identifier?.toLowerCase().includes(query) ||
+      element.name?.toLowerCase().includes(query) ||
+      element.description?.toLowerCase().includes(query)
+    )
+  })
+
+  const linkMutation = useMutation({
+    mutationFn: ({ targetType, targetId }: { targetType: 'requirement' | 'function'; targetId: string }) =>
+      verificationService.linkTestCaseVerificationElement(projectId, testCaseId!, targetType, targetId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['test-case-verification-links', projectId, testCaseId] })
+      setSearchQuery('')
+      setShowDropdown(false)
+    },
+  })
+
+  const unlinkMutation = useMutation({
+    mutationFn: (linkId: string) =>
+      verificationService.unlinkTestCaseVerificationElement(projectId, testCaseId!, linkId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['test-case-verification-links', projectId, testCaseId] })
+    },
+  })
+
+  // Click outside handler
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false)
+      }
+    }
+
+    if (showDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showDropdown])
+
+  // Get linked elements with their details
+  const linkedElements = verificationLinks.map((link: any) => {
+    const element = link.targetElement
+    if (!element) return null
+    return {
+      linkId: link.id,
+      type: link.targetType,
+      identifier: element.requirementId || element.functionId || '',
+      name: element.title || element.name,
+    }
+  }).filter(Boolean)
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        Verifies Elements
+      </label>
+
+      {/* Searchable Dropdown */}
+      <div className="relative mb-3" ref={dropdownRef}>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+          <input
+            type="text"
+            placeholder="Search requirements or functions..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value)
+              setShowDropdown(true)
+            }}
+            onFocus={() => setShowDropdown(true)}
+            className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('')
+                setShowDropdown(false)
+              }}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+
+        {/* Dropdown */}
+        {showDropdown && (
+          <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+            {filteredElements.length === 0 ? (
+              <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">
+                No elements found
+              </div>
+            ) : (
+              filteredElements.map((element) => (
+                <button
+                  key={element.id}
+                  type="button"
+                  onClick={() => {
+                    linkMutation.mutate({
+                      targetType: element.type,
+                      targetId: element.id,
+                    })
+                  }}
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                  disabled={linkMutation.isPending}
+                >
+                  <span
+                    className={`px-2 py-0.5 rounded text-xs font-medium ${
+                      element.type === 'requirement'
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+                        : 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                    }`}
+                  >
+                    {element.type === 'requirement' ? 'Requirement' : 'Function'}
+                  </span>
+                  <span className="flex-1 text-sm text-gray-900 dark:text-white">
+                    {element.identifier && (
+                      <span className="font-mono text-xs text-gray-500 dark:text-gray-400 mr-2">
+                        {element.identifier}
+                      </span>
+                    )}
+                    {element.name}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Linked Elements */}
+      {linkedElements.length > 0 ? (
+        <div className="space-y-2">
+          {linkedElements.map((element: any) => (
+            <div
+              key={element.linkId}
+              className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-700 rounded-lg"
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className={`px-2 py-0.5 rounded text-xs font-medium ${
+                    element.type === 'requirement'
+                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+                      : 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                  }`}
+                >
+                  {element.type === 'requirement' ? 'Requirement' : 'Function'}
+                </span>
+                <span className="text-sm text-gray-900 dark:text-white">
+                  {element.identifier && (
+                    <span className="font-mono text-xs text-gray-500 dark:text-gray-400 mr-2">
+                      {element.identifier}
+                    </span>
+                  )}
+                  {element.name}
+                </span>
+              </div>
+              <button
+                onClick={() => unlinkMutation.mutate(element.linkId)}
+                className="text-red-600 dark:text-red-400 hover:text-red-800"
+                title="Unlink"
+                disabled={unlinkMutation.isPending}
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-gray-500 dark:text-gray-400">No elements linked</p>
+      )}
+
+      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+        Link this test case to requirements or functions it verifies
+      </p>
+    </div>
+  )
+}
+
+function LinkedTestResultsSection({ testCaseId, projectId }: { testCaseId?: string; projectId: string }) {
+  const queryClient = useQueryClient()
+
+  // Fetch test results linked to this test case
+  const { data: allTestResults = [] } = useQuery({
+    queryKey: ['test-results', projectId],
+    queryFn: async () => {
+      const response = await verificationService.getTestResults(projectId)
+      return response.success && response.data ? response.data : []
+    },
+  })
+
+  const linkedResults = allTestResults.filter((result: any) =>
+    result.links?.some((link: any) => link.linkedEntityType === 'TEST_CASE' && link.linkedEntityId === testCaseId)
+  )
+
+  const linkMutation = useMutation({
+    mutationFn: (data: any) => {
+      const result = allTestResults.find((r: any) => r.id === data.testResultId)
+      if (!result) throw new Error('Test result not found')
+      return verificationService.linkTestResult(projectId, data.testResultId, {
+        linkedEntityType: 'TEST_CASE',
+        linkedEntityId: testCaseId!,
+        relation: 'PRIMARY',
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['test-results', projectId] })
+    },
+  })
+
+  const unlinkMutation = useMutation({
+    mutationFn: (testResultId: string) =>
+      verificationService.unlinkTestResult(projectId, testResultId, {
+        linkedEntityType: 'TEST_CASE',
+        linkedEntityId: testCaseId!,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['test-results', projectId] })
+    },
+  })
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'PASS':
+        return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+      case 'FAIL':
+        return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+      case 'BLOCKED':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
+      default:
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+    }
+  }
+
+  const availableResults = allTestResults.filter(
+    (result: any) =>
+      !result.links?.some((link: any) => link.linkedEntityType === 'TEST_CASE' && link.linkedEntityId === testCaseId)
+  )
+
+  if (!testCaseId) return null
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          Linked Test Results
+        </label>
+        {availableResults.length > 0 && (
+          <select
+            onChange={(e) => {
+              if (e.target.value) {
+                linkMutation.mutate({ testResultId: e.target.value })
+                e.target.value = ''
+              }
+            }}
+            className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            defaultValue=""
+          >
+            <option value="">Link Test Result...</option>
+            {availableResults.map((result: any) => (
+              <option key={result.id} value={result.id}>
+                {result.title}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      {linkedResults.length > 0 ? (
+        <div className="space-y-2">
+          {linkedResults.map((result: any) => (
+            <div
+              key={result.id}
+              className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+            >
+              <div className="flex items-center gap-3 flex-1">
+                <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(result.resultStatus || 'NOT_RUN')}`}>
+                  {result.resultStatus === 'NOT_RUN' ? 'Not Run' :
+                   result.resultStatus === 'PASS' ? 'Pass' :
+                   result.resultStatus === 'FAIL' ? 'Fail' :
+                   result.resultStatus === 'BLOCKED' ? 'Blocked' :
+                   result.resultStatus === 'SKIPPED' ? 'Skipped' :
+                   result.resultStatus || 'Not Run'}
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{result.title}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{result.fileName}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => unlinkMutation.mutate(result.id)}
+                className="text-red-600 dark:text-red-400 hover:text-red-800 text-sm"
+                title="Unlink"
+              >
+                Unlink
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-gray-500 dark:text-gray-400">No test results linked</p>
+      )}
     </div>
   )
 }

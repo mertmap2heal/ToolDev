@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client'
 import { auditService } from '../../services/verification/audit.service'
 import { statusTransitionService } from '../../services/verification/statusTransition.service'
 import { verificationService } from '../../services/verification/verification.service'
+import { traceabilityService } from '../../services/traceability.service'
 import { AuditAction, TestPlanStatus } from '../../types/verification.types'
 
 const prisma = new PrismaClient()
@@ -16,7 +17,49 @@ export const getTestPlans = async (req: AuthRequest, res: Response) => {
       include: { planCases: { include: { testCase: true } } },
       orderBy: { createdAt: 'desc' },
     })
-    res.json({ success: true, data: plans })
+    
+    // Get all test result links for test plans in this project
+    const planIds = plans.map((p) => p.id)
+    const testResultLinks = await prisma.verTestResultLink.findMany({
+      where: {
+        linkedEntityType: 'TEST_PLAN',
+        linkedEntityId: { in: planIds },
+      },
+      include: {
+        testResult: {
+          select: {
+            resultStatus: true,
+          },
+        },
+      },
+    })
+    
+    // Group links by plan ID and aggregate status counts
+    const linksByPlanId = new Map<string, any[]>()
+    testResultLinks.forEach((link) => {
+      if (!linksByPlanId.has(link.linkedEntityId)) {
+        linksByPlanId.set(link.linkedEntityId, [])
+      }
+      linksByPlanId.get(link.linkedEntityId)!.push(link)
+    })
+    
+    // Add test results metadata to each plan
+    const plansWithResults = plans.map((plan) => {
+      const links = linksByPlanId.get(plan.id) || []
+      const statusSummary: Record<string, number> = {}
+      links.forEach((link) => {
+        const status = link.testResult?.resultStatus || 'NOT_RUN'
+        statusSummary[status] = (statusSummary[status] || 0) + 1
+      })
+      
+      return {
+        ...plan,
+        linkedTestResultsCount: links.length,
+        linkedTestResultsStatusSummary: statusSummary,
+      }
+    })
+    
+    res.json({ success: true, data: plansWithResults })
   } catch (error: any) {
     console.error('Get test plans error:', error)
     res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
@@ -226,6 +269,156 @@ export const closeTestPlan = async (req: AuthRequest, res: Response) => {
     res.json({ success: true, data: updated })
   } catch (error: any) {
     console.error('Close test plan error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+}
+
+export const getVerificationLinks = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id } = req.params
+    const testPlan = await prisma.verTestPlan.findFirst({ where: { id, projectId } })
+    if (!testPlan) return res.status(404).json({ success: false, error: 'Test plan not found' })
+    
+    // Get all trace links where this test plan is the source and linkType is "verifies"
+    const links = await prisma.traceLink.findMany({
+      where: {
+        projectId,
+        sourceType: 'test_plan',
+        sourceId: id,
+        linkType: 'verifies',
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+    
+    // Fetch the linked requirements and functions
+    const linkedElements = await Promise.all(
+      links.map(async (link) => {
+        if (link.targetType === 'requirement') {
+          const requirement = await prisma.requirement.findFirst({
+            where: { id: link.targetId, projectId },
+            select: { id: true, requirementId: true, title: true, description: true },
+          })
+          return requirement ? { ...link, targetElement: requirement } : null
+        } else if (link.targetType === 'function') {
+          const function_ = await prisma.systemFunction.findFirst({
+            where: { id: link.targetId, projectId },
+            select: { id: true, functionId: true, name: true, description: true },
+          })
+          return function_ ? { ...link, targetElement: function_ } : null
+        }
+        return null
+      })
+    )
+    
+    const validLinks = linkedElements.filter((link) => link !== null)
+    res.json({ success: true, data: validLinks })
+  } catch (error: any) {
+    console.error('Get verification links error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+}
+
+export const linkVerificationElement = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id } = req.params
+    const { targetType, targetId } = req.body
+    
+    if (!targetType || !targetId) {
+      return res.status(400).json({ success: false, error: 'targetType and targetId are required' })
+    }
+    
+    if (targetType !== 'requirement' && targetType !== 'function') {
+      return res.status(400).json({ success: false, error: 'targetType must be "requirement" or "function"' })
+    }
+    
+    const testPlan = await prisma.verTestPlan.findFirst({ where: { id, projectId } })
+    if (!testPlan) return res.status(404).json({ success: false, error: 'Test plan not found' })
+    
+    // Verify target element exists
+    if (targetType === 'requirement') {
+      const requirement = await prisma.requirement.findFirst({ where: { id: targetId, projectId } })
+      if (!requirement) return res.status(404).json({ success: false, error: 'Requirement not found' })
+    } else if (targetType === 'function') {
+      const function_ = await prisma.systemFunction.findFirst({ where: { id: targetId, projectId } })
+      if (!function_) return res.status(404).json({ success: false, error: 'Function not found' })
+    }
+    
+    // Check if link already exists
+    const existingLink = await prisma.traceLink.findFirst({
+      where: {
+        projectId,
+        sourceType: 'test_plan',
+        sourceId: id,
+        targetType,
+        targetId,
+        linkType: 'verifies',
+      },
+    })
+    
+    if (existingLink) {
+      return res.status(400).json({ success: false, error: 'Link already exists' })
+    }
+    
+    // Create trace link
+    const link = await traceabilityService.createTraceLink(
+      projectId,
+      'test_plan',
+      id,
+      targetType,
+      targetId,
+      'verifies'
+    )
+    
+    await auditService.logEvent({
+      projectId,
+      entityType: 'TEST_PLAN',
+      entityId: id,
+      action: AuditAction.UPDATE,
+      newValue: { verificationLink: link },
+      performedByUserId: req.userId,
+    })
+    
+    res.json({ success: true, data: link })
+  } catch (error: any) {
+    console.error('Link verification element error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+}
+
+export const unlinkVerificationElement = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id, linkId } = req.params
+    
+    const testPlan = await prisma.verTestPlan.findFirst({ where: { id, projectId } })
+    if (!testPlan) return res.status(404).json({ success: false, error: 'Test plan not found' })
+    
+    // Verify the link belongs to this test plan
+    const link = await prisma.traceLink.findFirst({
+      where: {
+        id: linkId,
+        projectId,
+        sourceType: 'test_plan',
+        sourceId: id,
+        linkType: 'verifies',
+      },
+    })
+    
+    if (!link) return res.status(404).json({ success: false, error: 'Verification link not found' })
+    
+    await traceabilityService.deleteTraceLink(projectId, linkId)
+    
+    await auditService.logEvent({
+      projectId,
+      entityType: 'TEST_PLAN',
+      entityId: id,
+      action: AuditAction.UPDATE,
+      oldValue: { verificationLink: link },
+      performedByUserId: req.userId,
+    })
+    
+    res.json({ success: true, message: 'Verification link removed' })
+  } catch (error: any) {
+    console.error('Unlink verification element error:', error)
     res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
   }
 }

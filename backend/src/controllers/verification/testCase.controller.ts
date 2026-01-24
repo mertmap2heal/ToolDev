@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client'
 import { auditService } from '../../services/verification/audit.service'
 import { statusTransitionService } from '../../services/verification/statusTransition.service'
 import { verificationService } from '../../services/verification/verification.service'
+import { traceabilityService } from '../../services/traceability.service'
 import { AuditAction, TestCaseStatus } from '../../types/verification.types'
 
 const prisma = new PrismaClient()
@@ -16,7 +17,49 @@ export const getTestCases = async (req: AuthRequest, res: Response) => {
       include: { moc: true, method: true },
       orderBy: { createdAt: 'desc' },
     })
-    res.json({ success: true, data: testCases })
+    
+    // Get all test result links for test cases in this project
+    const testCaseIds = testCases.map((tc) => tc.id)
+    const testResultLinks = await prisma.verTestResultLink.findMany({
+      where: {
+        linkedEntityType: 'TEST_CASE',
+        linkedEntityId: { in: testCaseIds },
+      },
+      include: {
+        testResult: {
+          select: {
+            resultStatus: true,
+          },
+        },
+      },
+    })
+    
+    // Group links by test case ID and aggregate status counts
+    const linksByCaseId = new Map<string, any[]>()
+    testResultLinks.forEach((link) => {
+      if (!linksByCaseId.has(link.linkedEntityId)) {
+        linksByCaseId.set(link.linkedEntityId, [])
+      }
+      linksByCaseId.get(link.linkedEntityId)!.push(link)
+    })
+    
+    // Add test results metadata to each test case
+    const testCasesWithResults = testCases.map((testCase) => {
+      const links = linksByCaseId.get(testCase.id) || []
+      const statusSummary: Record<string, number> = {}
+      links.forEach((link) => {
+        const status = link.testResult?.resultStatus || 'NOT_RUN'
+        statusSummary[status] = (statusSummary[status] || 0) + 1
+      })
+      
+      return {
+        ...testCase,
+        linkedTestResultsCount: links.length,
+        linkedTestResultsStatusSummary: statusSummary,
+      }
+    })
+    
+    res.json({ success: true, data: testCasesWithResults })
   } catch (error: any) {
     console.error('Get test cases error:', error)
     res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
@@ -254,6 +297,156 @@ export const unlinkSetup = async (req: AuthRequest, res: Response) => {
     res.json({ success: true, message: 'Setup unlinked' })
   } catch (error: any) {
     console.error('Unlink setup error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+}
+
+export const getVerificationLinks = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id } = req.params
+    const testCase = await prisma.verTestCase.findFirst({ where: { id, projectId } })
+    if (!testCase) return res.status(404).json({ success: false, error: 'Test case not found' })
+    
+    // Get all trace links where this test case is the source and linkType is "verifies"
+    const links = await prisma.traceLink.findMany({
+      where: {
+        projectId,
+        sourceType: 'test_case',
+        sourceId: id,
+        linkType: 'verifies',
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+    
+    // Fetch the linked requirements and functions
+    const linkedElements = await Promise.all(
+      links.map(async (link) => {
+        if (link.targetType === 'requirement') {
+          const requirement = await prisma.requirement.findFirst({
+            where: { id: link.targetId, projectId },
+            select: { id: true, requirementId: true, title: true, description: true },
+          })
+          return requirement ? { ...link, targetElement: requirement } : null
+        } else if (link.targetType === 'function') {
+          const function_ = await prisma.systemFunction.findFirst({
+            where: { id: link.targetId, projectId },
+            select: { id: true, functionId: true, name: true, description: true },
+          })
+          return function_ ? { ...link, targetElement: function_ } : null
+        }
+        return null
+      })
+    )
+    
+    const validLinks = linkedElements.filter((link) => link !== null)
+    res.json({ success: true, data: validLinks })
+  } catch (error: any) {
+    console.error('Get verification links error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+}
+
+export const linkVerificationElement = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id } = req.params
+    const { targetType, targetId } = req.body
+    
+    if (!targetType || !targetId) {
+      return res.status(400).json({ success: false, error: 'targetType and targetId are required' })
+    }
+    
+    if (targetType !== 'requirement' && targetType !== 'function') {
+      return res.status(400).json({ success: false, error: 'targetType must be "requirement" or "function"' })
+    }
+    
+    const testCase = await prisma.verTestCase.findFirst({ where: { id, projectId } })
+    if (!testCase) return res.status(404).json({ success: false, error: 'Test case not found' })
+    
+    // Verify target element exists
+    if (targetType === 'requirement') {
+      const requirement = await prisma.requirement.findFirst({ where: { id: targetId, projectId } })
+      if (!requirement) return res.status(404).json({ success: false, error: 'Requirement not found' })
+    } else if (targetType === 'function') {
+      const function_ = await prisma.systemFunction.findFirst({ where: { id: targetId, projectId } })
+      if (!function_) return res.status(404).json({ success: false, error: 'Function not found' })
+    }
+    
+    // Check if link already exists
+    const existingLink = await prisma.traceLink.findFirst({
+      where: {
+        projectId,
+        sourceType: 'test_case',
+        sourceId: id,
+        targetType,
+        targetId,
+        linkType: 'verifies',
+      },
+    })
+    
+    if (existingLink) {
+      return res.status(400).json({ success: false, error: 'Link already exists' })
+    }
+    
+    // Create trace link
+    const link = await traceabilityService.createTraceLink(
+      projectId,
+      'test_case',
+      id,
+      targetType,
+      targetId,
+      'verifies'
+    )
+    
+    await auditService.logEvent({
+      projectId,
+      entityType: 'TEST_CASE',
+      entityId: id,
+      action: AuditAction.UPDATE,
+      newValue: { verificationLink: link },
+      performedByUserId: req.userId,
+    })
+    
+    res.json({ success: true, data: link })
+  } catch (error: any) {
+    console.error('Link verification element error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+}
+
+export const unlinkVerificationElement = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id, linkId } = req.params
+    
+    const testCase = await prisma.verTestCase.findFirst({ where: { id, projectId } })
+    if (!testCase) return res.status(404).json({ success: false, error: 'Test case not found' })
+    
+    // Verify the link belongs to this test case
+    const link = await prisma.traceLink.findFirst({
+      where: {
+        id: linkId,
+        projectId,
+        sourceType: 'test_case',
+        sourceId: id,
+        linkType: 'verifies',
+      },
+    })
+    
+    if (!link) return res.status(404).json({ success: false, error: 'Verification link not found' })
+    
+    await traceabilityService.deleteTraceLink(projectId, linkId)
+    
+    await auditService.logEvent({
+      projectId,
+      entityType: 'TEST_CASE',
+      entityId: id,
+      action: AuditAction.UPDATE,
+      oldValue: { verificationLink: link },
+      performedByUserId: req.userId,
+    })
+    
+    res.json({ success: true, message: 'Verification link removed' })
+  } catch (error: any) {
+    console.error('Unlink verification element error:', error)
     res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
   }
 }

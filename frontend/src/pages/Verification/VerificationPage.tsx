@@ -22,20 +22,49 @@ import { verificationService } from '../../services/verification.service'
 import CreateTestPlanModal from '../../components/verification/CreateTestPlanModal'
 import CreateTestCaseModal from '../../components/verification/CreateTestCaseModal'
 import CreateTestSetupModal from '../../components/verification/CreateTestSetupModal'
+import CreateTestResultModal from '../../components/verification/CreateTestResultModal'
 import TestPlanDetailDrawer from '../../components/verification/TestPlanDetailDrawer'
 import TestCaseDetailDrawer from '../../components/verification/TestCaseDetailDrawer'
 import TestSetupDetailDrawer from '../../components/verification/TestSetupDetailDrawer'
+import TestResultDetailDrawer from '../../components/verification/TestResultDetailDrawer'
+
+// Helper function to format test results status summary
+const formatTestResultsSummary = (statusSummary: Record<string, number> | undefined): string => {
+  if (!statusSummary || Object.keys(statusSummary).length === 0) {
+    return ''
+  }
+  
+  const statusLabels: Record<string, string> = {
+    PASS: 'Pass',
+    FAIL: 'Fail',
+    BLOCKED: 'Blocked',
+    SKIPPED: 'Skipped',
+    NOT_RUN: 'Not Run',
+  }
+  
+  const total = Object.values(statusSummary).reduce((sum, count) => sum + count, 0)
+  if (total === 0) return ''
+  
+  const nonZeroStatuses = Object.entries(statusSummary)
+    .filter(([_, count]) => count > 0)
+    .map(([status, count]) => `${count} ${statusLabels[status] || status}`)
+  
+  if (nonZeroStatuses.length === 0) return ''
+  
+  return `${total} result${total !== 1 ? 's' : ''} (${nonZeroStatuses.join(', ')})`
+}
 
 export default function VerificationPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [searchQuery, setSearchQuery] = useState('')
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'plans' | 'cases' | 'setups'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'plans' | 'cases' | 'setups' | 'results'>('overview')
   
   // Modal states
   const [isCreatePlanOpen, setIsCreatePlanOpen] = useState(false)
   const [isCreateCaseOpen, setIsCreateCaseOpen] = useState(false)
   const [isCreateSetupOpen, setIsCreateSetupOpen] = useState(false)
+  const [isCreateResultOpen, setIsCreateResultOpen] = useState(false)
   
   // Drawer states
   const [selectedPlan, setSelectedPlan] = useState<any>(null)
@@ -44,6 +73,8 @@ export default function VerificationPage() {
   const [isCaseDrawerOpen, setIsCaseDrawerOpen] = useState(false)
   const [selectedSetup, setSelectedSetup] = useState<any>(null)
   const [isSetupDrawerOpen, setIsSetupDrawerOpen] = useState(false)
+  const [selectedResult, setSelectedResult] = useState<any>(null)
+  const [isResultDrawerOpen, setIsResultDrawerOpen] = useState(false)
 
   // Fetch overview data
   const { data: overview, isLoading: loadingOverview } = useQuery({
@@ -89,21 +120,38 @@ export default function VerificationPage() {
     enabled: !!projectId && activeTab === 'setups',
   })
 
+  // Fetch test results
+  const { data: testResults = [], isLoading: loadingResults } = useQuery({
+    queryKey: ['test-results', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const response = await verificationService.getTestResults(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId && activeTab === 'results',
+  })
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'APPROVED':
       case 'READY':
       case 'COMPLETED':
+      case 'PASS':
         return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
       case 'IN_PROGRESS':
       case 'REVIEWED':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
       case 'DRAFT':
       case 'PLANNED':
+      case 'NOT_RUN':
+      case 'SKIPPED':
         return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
       case 'FAILED':
       case 'ABORTED':
+      case 'FAIL':
         return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+      case 'BLOCKED':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
     }
@@ -123,6 +171,12 @@ export default function VerificationPage() {
     setup.name?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
+  const filteredResults = testResults.filter((result: any) =>
+    result.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    result.fileName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    result.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
   return (
     <div className="space-y-6">
       <ProjectNavigation />
@@ -139,6 +193,7 @@ export default function VerificationPage() {
             { id: 'plans', label: 'Test Plans', icon: FileText },
             { id: 'cases', label: 'Test Cases', icon: CheckCircle },
             { id: 'setups', label: 'Test Setups', icon: Settings },
+            { id: 'results', label: 'Test Results', icon: CheckCircle },
           ].map((tab) => {
             const Icon = tab.icon
             return (
@@ -200,6 +255,11 @@ export default function VerificationPage() {
                   <div className="text-xs text-gray-500 mt-1">
                     {overview.testPlans?.byStatus?.APPROVED || 0} approved
                   </div>
+                  {overview.testPlans?.withTestResults !== undefined && (
+                    <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                      {overview.testPlans.withTestResults} with test results
+                    </div>
+                  )}
                 </div>
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                   <div className="text-sm text-gray-500 dark:text-gray-400">Test Cases</div>
@@ -209,6 +269,11 @@ export default function VerificationPage() {
                   <div className="text-xs text-gray-500 mt-1">
                     {overview.testCases?.byStatus?.READY || 0} ready
                   </div>
+                  {overview.testCases?.withTestResults !== undefined && (
+                    <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                      {overview.testCases.withTestResults} with test results
+                    </div>
+                  )}
                 </div>
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                   <div className="text-sm text-gray-500 dark:text-gray-400">Coverage</div>
@@ -288,6 +353,11 @@ export default function VerificationPage() {
                       <div className="text-sm text-gray-500">
                         {plan.planCases?.length || 0} test cases
                       </div>
+                      {plan.linkedTestResultsCount > 0 && (
+                        <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                          {formatTestResultsSummary(plan.linkedTestResultsStatusSummary)}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -342,6 +412,11 @@ export default function VerificationPage() {
                     </div>
                     <div className="text-right">
                       <div className="text-sm text-gray-500">v{case_.version}</div>
+                      {case_.linkedTestResultsCount > 0 && (
+                        <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                          {formatTestResultsSummary(case_.linkedTestResultsStatusSummary)}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -413,6 +488,72 @@ export default function VerificationPage() {
         </div>
       )}
 
+      {activeTab === 'results' && (
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <button
+              onClick={() => setIsCreateResultOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+            >
+              <Plus size={16} />
+              Create Test Result
+            </button>
+          </div>
+          {loadingResults ? (
+            <div className="flex items-center justify-center p-12">
+              <RefreshCw className="animate-spin text-gray-400" size={24} />
+            </div>
+          ) : filteredResults.length > 0 ? (
+            <div className="space-y-2">
+              {filteredResults.map((result: any) => (
+                <div
+                  key={result.id}
+                  onClick={() => {
+                    setSelectedResult(result)
+                    setIsResultDrawerOpen(true)
+                  }}
+                  className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(result.resultStatus || 'NOT_RUN')}`}>
+                          {result.resultStatus === 'NOT_RUN' ? 'Not Run' :
+                           result.resultStatus === 'PASS' ? 'Pass' :
+                           result.resultStatus === 'FAIL' ? 'Fail' :
+                           result.resultStatus === 'BLOCKED' ? 'Blocked' :
+                           result.resultStatus === 'SKIPPED' ? 'Skipped' :
+                           result.resultStatus || 'Not Run'}
+                        </span>
+                        {result.executedAt && (
+                          <span className="text-sm text-gray-500 dark:text-gray-400">
+                            {new Date(result.executedAt).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mt-1">{result.title}</h3>
+                      {result.description && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{result.description}</p>
+                      )}
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{result.fileName}</p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-gray-500">
+                        {result.links?.length || 0} link{result.links?.length !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center">
+              <p className="text-gray-600 dark:text-gray-400">No test results found</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Modals */}
       {projectId && (
         <>
@@ -429,6 +570,11 @@ export default function VerificationPage() {
           <CreateTestSetupModal
             isOpen={isCreateSetupOpen}
             onClose={() => setIsCreateSetupOpen(false)}
+            projectId={projectId}
+          />
+          <CreateTestResultModal
+            isOpen={isCreateResultOpen}
+            onClose={() => setIsCreateResultOpen(false)}
             projectId={projectId}
           />
         </>
@@ -461,6 +607,15 @@ export default function VerificationPage() {
             onClose={() => {
               setIsSetupDrawerOpen(false)
               setSelectedSetup(null)
+            }}
+            projectId={projectId}
+          />
+          <TestResultDetailDrawer
+            testResult={selectedResult}
+            isOpen={isResultDrawerOpen}
+            onClose={() => {
+              setIsResultDrawerOpen(false)
+              setSelectedResult(null)
             }}
             projectId={projectId}
           />

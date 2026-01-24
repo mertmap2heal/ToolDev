@@ -51,6 +51,7 @@ model Project {
   diagrams               Diagram[]
   customRequirementTypes CustomRequirementType[]
   items                  Item[]
+  verTestResults         VerTestResult[]
   tasks                  Task[]
   taskSavedViews         TaskSavedView[]
   boardColumns           BoardColumn[]
@@ -1700,6 +1701,7 @@ model VerTestSetup {
 
   project        Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   testCaseSetups VerTestCaseSetup[]
+  testResults    VerTestResult[]
 
   @@index([projectId])
   @@index([status])
@@ -1877,6 +1879,52 @@ model VerEvidenceLink {
   evidence VerEvidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
 
   @@index([evidenceId])
+  @@index([linkedEntityType, linkedEntityId])
+}
+
+// Test Results
+model VerTestResult {
+  id               String   @id @default(uuid())
+  projectId        String
+  title            String
+  description      String?   @db.Text
+  storageRef       String // Path/URL to actual file
+  fileName         String
+  fileSize         Int? // Size in bytes
+  mimeType         String?
+  checksum         String? // File checksum for integrity
+  resultStatus     String   @default("NOT_RUN") // NOT_RUN, PASS, FAIL, BLOCKED, SKIPPED
+  executedAt       DateTime?
+  executedByUserId String?
+  executedByName   String?
+  testEnvironment  String?   @db.Text
+  linkedSetupId    String?
+  notes            String?   @db.Text
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  project    Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  setup      VerTestSetup?      @relation(fields: [linkedSetupId], references: [id], onDelete: SetNull)
+  links      VerTestResultLink[]
+
+  @@index([projectId])
+  @@index([resultStatus])
+  @@index([executedAt])
+  @@index([linkedSetupId])
+}
+
+// Test Result Linking (to Test Cases and Test Plans)
+model VerTestResultLink {
+  id               String   @id @default(uuid())
+  testResultId     String
+  linkedEntityType String // TEST_CASE or TEST_PLAN
+  linkedEntityId   String
+  relation         String   @default("PRIMARY") // PRIMARY, SUPPORTING
+  createdAt        DateTime @default(now())
+
+  testResult VerTestResult @relation(fields: [testResultId], references: [id], onDelete: Cascade)
+
+  @@index([testResultId])
   @@index([linkedEntityType, linkedEntityId])
 }
 
