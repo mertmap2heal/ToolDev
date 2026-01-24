@@ -15,6 +15,7 @@ import {
   BarChart3,
   RefreshCw,
   Settings,
+  Upload,
 } from 'lucide-react'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
@@ -27,6 +28,7 @@ import TestPlanDetailDrawer from '../../components/verification/TestPlanDetailDr
 import TestCaseDetailDrawer from '../../components/verification/TestCaseDetailDrawer'
 import TestSetupDetailDrawer from '../../components/verification/TestSetupDetailDrawer'
 import TestResultDetailDrawer from '../../components/verification/TestResultDetailDrawer'
+import ListExporter from '../../components/verification/ListExporter'
 
 // Helper function to format test results status summary
 const formatTestResultsSummary = (statusSummary: Record<string, number> | undefined): string => {
@@ -75,6 +77,10 @@ export default function VerificationPage() {
   const [isSetupDrawerOpen, setIsSetupDrawerOpen] = useState(false)
   const [selectedResult, setSelectedResult] = useState<any>(null)
   const [isResultDrawerOpen, setIsResultDrawerOpen] = useState(false)
+  
+  // Export modal states
+  const [showTestCasesExport, setShowTestCasesExport] = useState(false)
+  const [showTestPlansExport, setShowTestPlansExport] = useState(false)
 
   // Fetch overview data
   const { data: overview, isLoading: loadingOverview } = useQuery({
@@ -312,7 +318,15 @@ export default function VerificationPage() {
 
       {activeTab === 'plans' && (
         <div className="space-y-4">
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setShowTestPlansExport(true)}
+              disabled={testPlans.length === 0}
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Upload size={16} />
+              Export
+            </button>
             <button
               onClick={() => setIsCreatePlanOpen(true)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
@@ -373,7 +387,15 @@ export default function VerificationPage() {
 
       {activeTab === 'cases' && (
         <div className="space-y-4">
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setShowTestCasesExport(true)}
+              disabled={testCases.length === 0}
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Upload size={16} />
+              Export
+            </button>
             <button
               onClick={() => setIsCreateCaseOpen(true)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
@@ -617,6 +639,26 @@ export default function VerificationPage() {
               setIsResultDrawerOpen(false)
               setSelectedResult(null)
             }}
+            projectId={projectId}
+          />
+        </>
+      )}
+
+      {/* Export Modals */}
+      {projectId && (
+        <>
+          <ListExporter
+            isOpen={showTestCasesExport}
+            onClose={() => setShowTestCasesExport(false)}
+            exportType="test-cases"
+            items={testCases}
+            projectId={projectId}
+          />
+          <ListExporter
+            isOpen={showTestPlansExport}
+            onClose={() => setShowTestPlansExport(false)}
+            exportType="test-plans"
+            items={testPlans}
             projectId={projectId}
           />
         </>

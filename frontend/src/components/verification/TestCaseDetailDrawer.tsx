@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
+import ReportExporter from './ReportExporter'
 
 interface TestCaseDetailDrawerProps {
   testCase: any
@@ -25,6 +26,7 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
     linkedMethodId: '',
   })
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
+  const [showExportModal, setShowExportModal] = useState(false)
   const statusDropdownRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
@@ -56,6 +58,16 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
       return response.success && response.data ? response.data : []
     },
     enabled: isOpen && !!projectId,
+  })
+
+  // Fetch report data when export modal opens
+  const { data: reportData } = useQuery({
+    queryKey: ['test-case-report', projectId, testCase?.id],
+    queryFn: async () => {
+      const response = await verificationService.getTestCaseReport(projectId, testCase.id)
+      return response.success ? response.data : null
+    },
+    enabled: showExportModal && !!testCase?.id,
   })
 
   const updateCaseMutation = useMutation({
@@ -237,6 +249,13 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
                   className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
                 >
                   Edit
+                </button>
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  title="Export Report"
+                >
+                  <Download size={18} className="text-gray-600 dark:text-gray-400" />
                 </button>
               </>
             )}
@@ -489,6 +508,17 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
           )}
         </div>
       </div>
+
+      {/* Export Modal */}
+      {showExportModal && reportData && (
+        <ReportExporter
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          reportType="test-case"
+          reportData={reportData}
+          entityName={`${currentCase?.key || ''} - ${currentCase?.title || ''}`}
+        />
+      )}
     </div>
   )
 }

@@ -245,4 +245,13 @@ export const verificationService = {
   async unlinkTestPlanVerificationElement(projectId: string, testPlanId: string, linkId: string): Promise<ApiResponse<void>> {
     return apiClient.delete(`/verification/test-plans/${projectId}/${testPlanId}/verification-links/${linkId}`)
   },
+
+  // Reports
+  async getTestCaseReport(projectId: string, testCaseId: string): Promise<ApiResponse<any>> {
+    return apiClient.get(`/verification/reports/test-case/${projectId}/${testCaseId}`)
+  },
+
+  async getTestPlanReport(projectId: string, testPlanId: string): Promise<ApiResponse<any>> {
+    return apiClient.get(`/verification/reports/test-plan/${projectId}/${testPlanId}`)
+  },
 }

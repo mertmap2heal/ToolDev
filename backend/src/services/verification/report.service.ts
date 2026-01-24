@@ -60,6 +60,49 @@ export const reportService = {
       take: 50,
     })
 
+    // Get linked test results
+    const testResultLinks = await prisma.verTestResultLink.findMany({
+      where: {
+        linkedEntityType: 'TEST_CASE',
+        linkedEntityId: testCaseId,
+      },
+      include: {
+        testResult: {
+          include: { setup: true },
+        },
+      },
+    })
+
+    // Get verification links (requirements/functions this test case verifies)
+    const verificationLinks = await prisma.traceLink.findMany({
+      where: {
+        projectId,
+        sourceType: 'test_case',
+        sourceId: testCaseId,
+        linkType: 'verifies',
+      },
+    })
+
+    // Fetch the linked requirements and functions details
+    const linkedElements = await Promise.all(
+      verificationLinks.map(async (link) => {
+        if (link.targetType === 'requirement') {
+          const requirement = await prisma.requirement.findFirst({
+            where: { id: link.targetId, projectId },
+            select: { id: true, requirementId: true, title: true },
+          })
+          return requirement ? { type: 'requirement', id: requirement.requirementId || requirement.id, name: requirement.title } : null
+        } else if (link.targetType === 'function') {
+          const func = await prisma.systemFunction.findFirst({
+            where: { id: link.targetId, projectId },
+            select: { id: true, functionId: true, name: true },
+          })
+          return func ? { type: 'function', id: func.functionId || func.id, name: func.name } : null
+        }
+        return null
+      })
+    )
+
     return {
       metadata: {
         projectId,
@@ -109,6 +152,19 @@ export const reportService = {
         title: link.evidence.title,
         relation: link.relation,
       })),
+      testResults: testResultLinks.map((link) => ({
+        id: link.testResult.id,
+        title: link.testResult.title,
+        fileName: link.testResult.fileName,
+        resultStatus: link.testResult.resultStatus,
+        executedAt: link.testResult.executedAt,
+        executedByName: link.testResult.executedByName,
+        testEnvironment: link.testResult.testEnvironment,
+        notes: link.testResult.notes,
+        relation: link.relation,
+        setup: link.testResult.setup ? { name: link.testResult.setup.name } : null,
+      })),
+      verifiesElements: linkedElements.filter(Boolean),
       auditTrail: auditTrail.map((event) => ({
         action: event.action,
         performedBy: event.performedByUserId,
@@ -169,6 +225,49 @@ export const reportService = {
       }
     }
 
+    // Get linked test results
+    const testResultLinks = await prisma.verTestResultLink.findMany({
+      where: {
+        linkedEntityType: 'TEST_PLAN',
+        linkedEntityId: planId,
+      },
+      include: {
+        testResult: {
+          include: { setup: true },
+        },
+      },
+    })
+
+    // Get verification links (requirements/functions this test plan verifies)
+    const verificationLinks = await prisma.traceLink.findMany({
+      where: {
+        projectId,
+        sourceType: 'test_plan',
+        sourceId: planId,
+        linkType: 'verifies',
+      },
+    })
+
+    // Fetch the linked requirements and functions details
+    const linkedElements = await Promise.all(
+      verificationLinks.map(async (link) => {
+        if (link.targetType === 'requirement') {
+          const requirement = await prisma.requirement.findFirst({
+            where: { id: link.targetId, projectId },
+            select: { id: true, requirementId: true, title: true },
+          })
+          return requirement ? { type: 'requirement', id: requirement.requirementId || requirement.id, name: requirement.title } : null
+        } else if (link.targetType === 'function') {
+          const func = await prisma.systemFunction.findFirst({
+            where: { id: link.targetId, projectId },
+            select: { id: true, functionId: true, name: true },
+          })
+          return func ? { type: 'function', id: func.functionId || func.id, name: func.name } : null
+        }
+        return null
+      })
+    )
+
     return {
       metadata: {
         projectId,
@@ -211,6 +310,19 @@ export const reportService = {
             }
           : null,
       })),
+      testResults: testResultLinks.map((link) => ({
+        id: link.testResult.id,
+        title: link.testResult.title,
+        fileName: link.testResult.fileName,
+        resultStatus: link.testResult.resultStatus,
+        executedAt: link.testResult.executedAt,
+        executedByName: link.testResult.executedByName,
+        testEnvironment: link.testResult.testEnvironment,
+        notes: link.testResult.notes,
+        relation: link.relation,
+        setup: link.testResult.setup ? { name: link.testResult.setup.name } : null,
+      })),
+      verifiesElements: linkedElements.filter(Boolean),
     }
   },
 

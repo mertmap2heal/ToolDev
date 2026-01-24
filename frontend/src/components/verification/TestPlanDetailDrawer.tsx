@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
-import { X, ChevronDown, Plus, Trash2, GripVertical, Search } from 'lucide-react'
+import { X, ChevronDown, Plus, Trash2, GripVertical, Search, Download } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import CustomDropdown from './CustomDropdown'
+import ReportExporter from './ReportExporter'
 
 interface TestPlanDetailDrawerProps {
   plan: any
@@ -25,6 +26,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
     phase: plan?.phase || '',
   })
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
+  const [showExportModal, setShowExportModal] = useState(false)
   const statusDropdownRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
@@ -47,6 +49,16 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
       return response.success && response.data ? response.data : []
     },
     enabled: isOpen && activeTab === 'cases',
+  })
+
+  // Fetch report data when export modal opens
+  const { data: reportData } = useQuery({
+    queryKey: ['test-plan-report', projectId, plan?.id],
+    queryFn: async () => {
+      const response = await verificationService.getTestPlanReport(projectId, plan.id)
+      return response.success ? response.data : null
+    },
+    enabled: showExportModal && !!plan?.id,
   })
 
   const updatePlanMutation = useMutation({
@@ -203,6 +215,13 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
                   className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
                 >
                   Edit
+                </button>
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  title="Export Report"
+                >
+                  <Download size={18} className="text-gray-600 dark:text-gray-400" />
                 </button>
               </>
             )}
@@ -458,6 +477,17 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
           )}
         </div>
       </div>
+
+      {/* Export Modal */}
+      {showExportModal && reportData && (
+        <ReportExporter
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          reportType="test-plan"
+          reportData={reportData}
+          entityName={`${currentPlan?.key || ''} - ${currentPlan?.name || ''}`}
+        />
+      )}
     </div>
   )
 }
