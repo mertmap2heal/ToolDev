@@ -55,6 +55,18 @@ model Project {
   taskSavedViews         TaskSavedView[]
   boardColumns           BoardColumn[]
   taskTemplates          TaskTemplate[]
+  verMethods             VerMethod[]
+  verTestSetups          VerTestSetup[]
+  verTestCases           VerTestCase[]
+  verTestPlans           VerTestPlan[]
+  verTestRuns            VerTestRun[]
+  verEvidence            VerEvidence[]
+  verReviews             VerReview[]
+  verNonconformities     VerNonconformity[]
+  verBaselines           VerBaseline[]
+  verSettings            VerSettings?
+  verAuditEvents         VerAuditEvent[]
+  verCustomOptions       VerCustomOption[]
 }
 
 model ProjectMember {
@@ -538,7 +550,7 @@ model ItemCategory {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  parent   ItemCategory? @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  parent   ItemCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children ItemCategory[] @relation("CategoryHierarchy")
   items    Item[]
 
@@ -553,45 +565,45 @@ model Uom {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  items        Item[]
+  items         Item[]
   ledgerEntries InventoryLedger[]
-  poLines      PurchaseOrderLine[]
-  soLines      SalesOrderLine[]
+  poLines       PurchaseOrderLine[]
+  soLines       SalesOrderLine[]
 
   @@index([code])
 }
 
 model Item {
-  id              String   @id @default(uuid())
-  sku             String   @unique
-  name            String
-  description     String?
-  trackingPolicy  String   @default("NONE") // NONE | LOT | SERIAL
-  uomId           String
-  categoryId      String?
-  projectId       String? // Optional project association for hybrid scope
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(uuid())
+  sku            String   @unique
+  name           String
+  description    String?
+  trackingPolicy String   @default("NONE") // NONE | LOT | SERIAL
+  uomId          String
+  categoryId     String?
+  projectId      String? // Optional project association for hybrid scope
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  uom                Uom                    @relation(fields: [uomId], references: [id])
-  category           ItemCategory?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  project            Project?               @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  barcodes           BarcodeDefinition[]
-  lots               Lot[]
-  serialNumbers      SerialNumber[]
-  balances           InventoryBalance[]
-  ledgerEntries      InventoryLedger[]
-  locationSettings   ItemLocationSetting[]
-  reservations       Reservation[]
-  poLines            PurchaseOrderLine[]
-  receiptLines       GoodsReceiptLine[]
-  soLines            SalesOrderLine[]
-  shipmentLines      ShipmentLine[]
-  transferLines      TransferLine[]
-  adjustmentLines    AdjustmentLine[]
-  cycleCountLines    CycleCountLine[]
-  costLayers         InventoryCostLayer[]
+  uom              Uom                   @relation(fields: [uomId], references: [id])
+  category         ItemCategory?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  project          Project?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  barcodes         BarcodeDefinition[]
+  lots             Lot[]
+  serialNumbers    SerialNumber[]
+  balances         InventoryBalance[]
+  ledgerEntries    InventoryLedger[]
+  locationSettings ItemLocationSetting[]
+  reservations     Reservation[]
+  poLines          PurchaseOrderLine[]
+  receiptLines     GoodsReceiptLine[]
+  soLines          SalesOrderLine[]
+  shipmentLines    ShipmentLine[]
+  transferLines    TransferLine[]
+  adjustmentLines  AdjustmentLine[]
+  cycleCountLines  CycleCountLine[]
+  costLayers       InventoryCostLayer[]
 
   @@index([sku])
   @@index([projectId])
@@ -644,50 +656,50 @@ model Customer {
 }
 
 model Warehouse {
-  id          String     @id @default(uuid())
-  name        String
-  code        String     @unique
-  address     String?
-  city        String?
-  state       String?
-  zipCode     String?
-  country     String?
-  isActive    Boolean    @default(true)
-  negativeStockPolicy String @default("STRICT") // STRICT | ALLOW_WITH_WARNING
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id                  String   @id @default(uuid())
+  name                String
+  code                String   @unique
+  address             String?
+  city                String?
+  state               String?
+  zipCode             String?
+  country             String?
+  isActive            Boolean  @default(true)
+  negativeStockPolicy String   @default("STRICT") // STRICT | ALLOW_WITH_WARNING
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  locations     Location[]
-  transferFrom  TransferOrder[] @relation("TransferFromWarehouse")
-  transferTo    TransferOrder[] @relation("TransferToWarehouse")
-  cycleCounts    CycleCount[]
+  locations    Location[]
+  transferFrom TransferOrder[] @relation("TransferFromWarehouse")
+  transferTo   TransferOrder[] @relation("TransferToWarehouse")
+  cycleCounts  CycleCount[]
 
   @@index([code])
   @@index([isActive])
 }
 
 model Location {
-  id              String   @id @default(uuid())
-  warehouseId     String
-  code            String
-  name            String?
+  id               String   @id @default(uuid())
+  warehouseId      String
+  code             String
+  name             String?
   parentLocationId String?
-  locationType    String? // BIN | ZONE | AISLE | RACK | SHELF
-  pickingPriority Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  locationType     String? // BIN | ZONE | AISLE | RACK | SHELF
+  pickingPriority  Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  warehouse       Warehouse        @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
-  parent          Location?        @relation("LocationHierarchy", fields: [parentLocationId], references: [id], onDelete: SetNull)
-  children        Location[]       @relation("LocationHierarchy")
+  warehouse       Warehouse             @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  parent          Location?             @relation("LocationHierarchy", fields: [parentLocationId], references: [id], onDelete: SetNull)
+  children        Location[]            @relation("LocationHierarchy")
   balances        InventoryBalance[]
   itemSettings    ItemLocationSetting[]
-  ledgerFrom      InventoryLedger[] @relation("LedgerFromLocation")
-  ledgerTo        InventoryLedger[] @relation("LedgerToLocation")
+  ledgerFrom      InventoryLedger[]     @relation("LedgerFromLocation")
+  ledgerTo        InventoryLedger[]     @relation("LedgerToLocation")
   receiptLines    GoodsReceiptLine[]
   shipmentLines   ShipmentLine[]
-  transferFrom    TransferLine[]    @relation("TransferFromLocation")
-  transferTo      TransferLine[]    @relation("TransferToLocation")
+  transferFrom    TransferLine[]        @relation("TransferFromLocation")
+  transferTo      TransferLine[]        @relation("TransferToLocation")
   adjustmentLines AdjustmentLine[]
   cycleCountLines CycleCountLine[]
   serialNumbers   SerialNumber[]
@@ -701,16 +713,16 @@ model Location {
 }
 
 model ItemLocationSetting {
-  id            String   @id @default(uuid())
-  itemId        String
-  locationId    String
-  reorderPoint  Decimal? @default(0)
-  minQty        Decimal? @default(0)
-  maxQty        Decimal?
-  safetyStock   Decimal? @default(0)
-  leadTimeDays  Int?     @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(uuid())
+  itemId       String
+  locationId   String
+  reorderPoint Decimal? @default(0)
+  minQty       Decimal? @default(0)
+  maxQty       Decimal?
+  safetyStock  Decimal? @default(0)
+  leadTimeDays Int?     @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   item     Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
   location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
@@ -721,13 +733,13 @@ model ItemLocationSetting {
 }
 
 model BarcodeDefinition {
-  id            String   @id @default(uuid())
-  itemId        String
-  barcodeValue  String
-  barcodeType   String   @default("CODE128") // CODE128 | EAN13 | QR | GS1_FUTURE
-  isPrimary     Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(uuid())
+  itemId       String
+  barcodeValue String
+  barcodeType  String   @default("CODE128") // CODE128 | EAN13 | QR | GS1_FUTURE
+  isPrimary    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
@@ -738,16 +750,16 @@ model BarcodeDefinition {
 
 // Traceability
 model Lot {
-  id             String   @id @default(uuid())
-  itemId         String
-  lotCode        String
+  id              String    @id @default(uuid())
+  itemId          String
+  lotCode         String
   manufactureDate DateTime?
-  expiryDate     DateTime?
-  notes          String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  expiryDate      DateTime?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  item            Item                  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  item            Item                    @relation(fields: [itemId], references: [id], onDelete: Cascade)
   ledgerEntries   InventoryLedger[]
   receiptLines    GoodsReceiptLine[]
   shipmentLines   ShipmentLine[]
@@ -764,23 +776,23 @@ model Lot {
 }
 
 model SerialNumber {
-  id               String   @id @default(uuid())
-  itemId           String
-  serialCode       String
-  status           String   @default("in_stock") // in_stock | allocated | shipped | scrapped
+  id                String   @id @default(uuid())
+  itemId            String
+  serialCode        String
+  status            String   @default("in_stock") // in_stock | allocated | shipped | scrapped
   currentLocationId String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  item            Item                  @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  location       Location?             @relation(fields: [currentLocationId], references: [id], onDelete: SetNull)
-  ledgerEntries  InventoryLedger[]
-  receiptLines   GoodsReceiptLine[]
+  item            Item                    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  location        Location?               @relation(fields: [currentLocationId], references: [id], onDelete: SetNull)
+  ledgerEntries   InventoryLedger[]
+  receiptLines    GoodsReceiptLine[]
   shipmentLines   ShipmentLine[]
-  transferLines  TransferLine[]
+  transferLines   TransferLine[]
   adjustmentLines AdjustmentLine[]
   cycleCountLines CycleCountLine[]
-  allocations    ReservationAllocation[]
+  allocations     ReservationAllocation[]
 
   @@unique([itemId, serialCode])
   @@index([itemId])
@@ -791,13 +803,13 @@ model SerialNumber {
 
 // Inventory State
 model InventoryBalance {
-  id            String   @id @default(uuid())
-  itemId        String
-  locationId    String
-  qtyOnHand     Decimal  @default(0)
-  qtyReserved   Decimal  @default(0)
-  qtyAvailable  Decimal  @default(0) // Computed: qtyOnHand - qtyReserved
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(uuid())
+  itemId       String
+  locationId   String
+  qtyOnHand    Decimal  @default(0)
+  qtyReserved  Decimal  @default(0)
+  qtyAvailable Decimal  @default(0) // Computed: qtyOnHand - qtyReserved
+  updatedAt    DateTime @updatedAt
 
   item     Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
   location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
@@ -808,29 +820,29 @@ model InventoryBalance {
 }
 
 model InventoryLedger {
-  id            String   @id @default(uuid())
-  occurredAt    DateTime @default(now())
-  eventType     String // RECEIPT_POSTED | SHIPMENT_POSTED | TRANSFER_POSTED | ADJUSTMENT_POSTED | RESERVATION_CREATED | RESERVATION_RELEASED
-  referenceType String? // PURCHASE_ORDER | SALES_ORDER | TRANSFER_ORDER | ADJUSTMENT | CYCLE_COUNT | RESERVATION
-  referenceId   String?
-  itemId        String
+  id             String   @id @default(uuid())
+  occurredAt     DateTime @default(now())
+  eventType      String // RECEIPT_POSTED | SHIPMENT_POSTED | TRANSFER_POSTED | ADJUSTMENT_POSTED | RESERVATION_CREATED | RESERVATION_RELEASED
+  referenceType  String? // PURCHASE_ORDER | SALES_ORDER | TRANSFER_ORDER | ADJUSTMENT | CYCLE_COUNT | RESERVATION
+  referenceId    String?
+  itemId         String
   fromLocationId String?
-  toLocationId  String?
-  qtyDelta      Decimal
-  uomId         String
-  lotId         String?
-  serialId      String?
-  unitCost      Decimal?
-  metadataJson  String? // JSON string for additional data
-  idempotencyKey String? @unique
-  createdAt     DateTime @default(now())
+  toLocationId   String?
+  qtyDelta       Decimal
+  uomId          String
+  lotId          String?
+  serialId       String?
+  unitCost       Decimal?
+  metadataJson   String? // JSON string for additional data
+  idempotencyKey String?  @unique
+  createdAt      DateTime @default(now())
 
-  item         Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  fromLocation Location? @relation("LedgerFromLocation", fields: [fromLocationId], references: [id], onDelete: SetNull)
-  toLocation   Location? @relation("LedgerToLocation", fields: [toLocationId], references: [id], onDelete: SetNull)
-  lot          Lot?      @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  item         Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  fromLocation Location?     @relation("LedgerFromLocation", fields: [fromLocationId], references: [id], onDelete: SetNull)
+  toLocation   Location?     @relation("LedgerToLocation", fields: [toLocationId], references: [id], onDelete: SetNull)
+  lot          Lot?          @relation(fields: [lotId], references: [id], onDelete: SetNull)
   serial       SerialNumber? @relation(fields: [serialId], references: [id], onDelete: SetNull)
-  uom          Uom       @relation(fields: [uomId], references: [id])
+  uom          Uom           @relation(fields: [uomId], references: [id])
 
   @@index([itemId, occurredAt])
   @@index([fromLocationId, occurredAt])
@@ -853,8 +865,8 @@ model Reservation {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  item       Item                  @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  location   Location?             @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  item        Item                    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  location    Location?               @relation(fields: [locationId], references: [id], onDelete: SetNull)
   allocations ReservationAllocation[]
 
   @@index([itemId])
@@ -871,8 +883,8 @@ model ReservationAllocation {
   qty           Decimal
   createdAt     DateTime @default(now())
 
-  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
-  lot         Lot?        @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  reservation Reservation   @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  lot         Lot?          @relation(fields: [lotId], references: [id], onDelete: SetNull)
   serial      SerialNumber? @relation(fields: [serialId], references: [id], onDelete: SetNull)
 
   @@index([reservationId])
@@ -882,15 +894,15 @@ model ReservationAllocation {
 
 // Documents - Purchasing
 model PurchaseOrder {
-  id          String   @id @default(uuid())
-  number      String   @unique
-  supplierId  String
-  status      String   @default("Draft") // Draft | Approved | Sent | PartiallyReceived | Received | Closed | Cancelled
-  orderedAt   DateTime @default(now())
-  expectedAt  DateTime?
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String    @id @default(uuid())
+  number     String    @unique
+  supplierId String
+  status     String    @default("Draft") // Draft | Approved | Sent | PartiallyReceived | Received | Closed | Cancelled
+  orderedAt  DateTime  @default(now())
+  expectedAt DateTime?
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   supplier Supplier            @relation(fields: [supplierId], references: [id])
   lines    PurchaseOrderLine[]
@@ -902,22 +914,22 @@ model PurchaseOrder {
 }
 
 model PurchaseOrderLine {
-  id                String   @id @default(uuid())
-  purchaseOrderId   String
-  itemId            String
-  qtyOrdered        Decimal
-  qtyReceived       Decimal  @default(0)
-  unitPrice         Decimal
-  uomId             String
-  locationId        String
+  id                   String   @id @default(uuid())
+  purchaseOrderId      String
+  itemId               String
+  qtyOrdered           Decimal
+  qtyReceived          Decimal  @default(0)
+  unitPrice            Decimal
+  uomId                String
+  locationId           String
   trackingRequirements String? // JSON string for LOT/SERIAL requirements
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-  item          Item         @relation(fields: [itemId], references: [id])
-  uom           Uom          @relation(fields: [uomId], references: [id])
-  location      Location     @relation(fields: [locationId], references: [id])
+  purchaseOrder PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  item          Item               @relation(fields: [itemId], references: [id])
+  uom           Uom                @relation(fields: [uomId], references: [id])
+  location      Location           @relation(fields: [locationId], references: [id])
   receiptLines  GoodsReceiptLine[]
 
   @@index([purchaseOrderId])
@@ -935,7 +947,7 @@ model GoodsReceipt {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  purchaseOrder PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
   lines         GoodsReceiptLine[]
 
   @@index([number])
@@ -945,24 +957,24 @@ model GoodsReceipt {
 }
 
 model GoodsReceiptLine {
-  id              String   @id @default(uuid())
-  goodsReceiptId  String
-  poLineId        String?
-  itemId          String
-  qtyReceived     Decimal
-  locationId      String
-  lotId           String?
+  id             String   @id @default(uuid())
+  goodsReceiptId String
+  poLineId       String?
+  itemId         String
+  qtyReceived    Decimal
+  locationId     String
+  lotId          String?
   serialId       String?
-  unitCost        Decimal?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  unitCost       Decimal?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  goodsReceipt GoodsReceipt @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  goodsReceipt GoodsReceipt       @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
   poLine       PurchaseOrderLine? @relation(fields: [poLineId], references: [id], onDelete: SetNull)
-  item         Item              @relation(fields: [itemId], references: [id])
-  location     Location          @relation(fields: [locationId], references: [id])
-  lot          Lot?              @relation(fields: [lotId], references: [id], onDelete: SetNull)
-  serial       SerialNumber?     @relation(fields: [serialId], references: [id], onDelete: SetNull)
+  item         Item               @relation(fields: [itemId], references: [id])
+  location     Location           @relation(fields: [locationId], references: [id])
+  lot          Lot?               @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  serial       SerialNumber?      @relation(fields: [serialId], references: [id], onDelete: SetNull)
 
   @@index([goodsReceiptId])
   @@index([itemId])
@@ -972,18 +984,18 @@ model GoodsReceiptLine {
 
 // Documents - Sales
 model SalesOrder {
-  id          String   @id @default(uuid())
-  number      String   @unique
-  customerId  String
-  status      String   @default("Draft") // Draft | Approved | Allocated | PartiallyShipped | Shipped | Closed | Cancelled
-  orderedAt   DateTime @default(now())
-  requiredAt  DateTime?
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String    @id @default(uuid())
+  number     String    @unique
+  customerId String
+  status     String    @default("Draft") // Draft | Approved | Allocated | PartiallyShipped | Shipped | Closed | Cancelled
+  orderedAt  DateTime  @default(now())
+  requiredAt DateTime?
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
-  customer Customer         @relation(fields: [customerId], references: [id])
-  lines    SalesOrderLine[]
+  customer  Customer         @relation(fields: [customerId], references: [id])
+  lines     SalesOrderLine[]
   shipments Shipment[]
 
   @@index([number])
@@ -992,38 +1004,38 @@ model SalesOrder {
 }
 
 model SalesOrderLine {
-  id            String   @id @default(uuid())
-  salesOrderId  String
-  itemId        String
-  qtyOrdered    Decimal
-  qtyAllocated  Decimal  @default(0)
-  qtyShipped    Decimal  @default(0)
-  unitPrice     Decimal
-  uomId         String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(uuid())
+  salesOrderId String
+  itemId       String
+  qtyOrdered   Decimal
+  qtyAllocated Decimal  @default(0)
+  qtyShipped   Decimal  @default(0)
+  unitPrice    Decimal
+  uomId        String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  salesOrder SalesOrder    @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
-  item       Item          @relation(fields: [itemId], references: [id])
-  uom       Uom           @relation(fields: [uomId], references: [id])
-  shipments ShipmentLine[]
+  salesOrder SalesOrder     @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  item       Item           @relation(fields: [itemId], references: [id])
+  uom        Uom            @relation(fields: [uomId], references: [id])
+  shipments  ShipmentLine[]
 
   @@index([salesOrderId])
   @@index([itemId])
 }
 
 model Shipment {
-  id              String   @id @default(uuid())
-  number          String   @unique
+  id             String    @id @default(uuid())
+  number         String    @unique
   salesOrderId   String
-  status          String   @default("Draft") // Draft | Picked | Packed | Posted | Cancelled
-  shippedAt       DateTime?
-  notes           String?
-  idempotencyKey  String?  @unique
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  status         String    @default("Draft") // Draft | Picked | Packed | Posted | Cancelled
+  shippedAt      DateTime?
+  notes          String?
+  idempotencyKey String?   @unique
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  salesOrder SalesOrder    @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  salesOrder SalesOrder     @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
   lines      ShipmentLine[]
 
   @@index([number])
@@ -1033,18 +1045,18 @@ model Shipment {
 }
 
 model ShipmentLine {
-  id            String   @id @default(uuid())
-  shipmentId    String
-  soLineId      String
-  itemId        String
-  qtyShipped    Decimal
+  id             String   @id @default(uuid())
+  shipmentId     String
+  soLineId       String
+  itemId         String
+  qtyShipped     Decimal
   fromLocationId String
-  lotId         String?
-  serialId     String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  lotId          String?
+  serialId       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  shipment     Shipment      @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipment     Shipment       @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
   soLine       SalesOrderLine @relation(fields: [soLineId], references: [id], onDelete: Cascade)
   item         Item           @relation(fields: [itemId], references: [id])
   fromLocation Location       @relation(fields: [fromLocationId], references: [id])
@@ -1069,8 +1081,8 @@ model TransferOrder {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  fromWarehouse Warehouse @relation("TransferFromWarehouse", fields: [fromWarehouseId], references: [id])
-  toWarehouse   Warehouse @relation("TransferToWarehouse", fields: [toWarehouseId], references: [id])
+  fromWarehouse Warehouse      @relation("TransferFromWarehouse", fields: [fromWarehouseId], references: [id])
+  toWarehouse   Warehouse      @relation("TransferToWarehouse", fields: [toWarehouseId], references: [id])
   lines         TransferLine[]
 
   @@index([number])
@@ -1085,10 +1097,10 @@ model TransferLine {
   transferOrderId String
   itemId          String
   qty             Decimal
-  fromLocationId String
-  toLocationId   String
+  fromLocationId  String
+  toLocationId    String
   lotId           String?
-  serialId       String?
+  serialId        String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1105,14 +1117,14 @@ model TransferLine {
 
 // Documents - Adjustments
 model StockAdjustment {
-  id              String   @id @default(uuid())
-  number          String   @unique
-  status          String   @default("Draft") // Draft | Submitted | Approved | Posted | Cancelled
-  reasonCode      String
-  notes           String?
-  idempotencyKey  String?  @unique
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(uuid())
+  number         String   @unique
+  status         String   @default("Draft") // Draft | Submitted | Approved | Posted | Cancelled
+  reasonCode     String
+  notes          String?
+  idempotencyKey String?  @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   lines AdjustmentLine[]
 
@@ -1122,16 +1134,16 @@ model StockAdjustment {
 }
 
 model AdjustmentLine {
-  id              String   @id @default(uuid())
+  id                String   @id @default(uuid())
   stockAdjustmentId String
-  itemId          String
-  locationId      String
-  qtyDelta        Decimal // Positive for increase, negative for decrease
-  lotId           String?
-  serialId       String?
-  unitCost        Decimal?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  itemId            String
+  locationId        String
+  qtyDelta          Decimal // Positive for increase, negative for decrease
+  lotId             String?
+  serialId          String?
+  unitCost          Decimal?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   stockAdjustment StockAdjustment @relation(fields: [stockAdjustmentId], references: [id], onDelete: Cascade)
   item            Item            @relation(fields: [itemId], references: [id])
@@ -1145,16 +1157,16 @@ model AdjustmentLine {
 
 // Documents - Cycle Counts
 model CycleCount {
-  id            String   @id @default(uuid())
-  number        String   @unique
-  status        String   @default("Planned") // Planned | Counting | Review | Approved | Posted | Cancelled
-  warehouseId   String
-  locationScope String? // ALL | SPECIFIC_LOCATIONS (JSON array of location IDs)
-  scheduledAt   DateTime?
-  notes         String?
-  idempotencyKey String? @unique
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String    @id @default(uuid())
+  number         String    @unique
+  status         String    @default("Planned") // Planned | Counting | Review | Approved | Posted | Cancelled
+  warehouseId    String
+  locationScope  String? // ALL | SPECIFIC_LOCATIONS (JSON array of location IDs)
+  scheduledAt    DateTime?
+  notes          String?
+  idempotencyKey String?   @unique
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   warehouse Warehouse        @relation(fields: [warehouseId], references: [id])
   lines     CycleCountLine[]
@@ -1166,17 +1178,17 @@ model CycleCount {
 }
 
 model CycleCountLine {
-  id            String   @id @default(uuid())
-  cycleCountId  String
-  itemId        String
-  locationId    String
-  expectedQty   Decimal
-  countedQty    Decimal
-  varianceQty    Decimal // Computed: countedQty - expectedQty
-  lotId         String?
-  serialId      String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(uuid())
+  cycleCountId String
+  itemId       String
+  locationId   String
+  expectedQty  Decimal
+  countedQty   Decimal
+  varianceQty  Decimal // Computed: countedQty - expectedQty
+  lotId        String?
+  serialId     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   cycleCount CycleCount    @relation(fields: [cycleCountId], references: [id], onDelete: Cascade)
   item       Item          @relation(fields: [itemId], references: [id])
@@ -1190,16 +1202,16 @@ model CycleCountLine {
 
 // FIFO Cost Layers
 model InventoryCostLayer {
-  id            String   @id @default(uuid())
-  itemId        String
-  locationId    String
-  lotId         String?
-  qty           Decimal
-  unitCost      Decimal
-  receivedAt    DateTime @default(now())
-  consumedQty   Decimal  @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id          String   @id @default(uuid())
+  itemId      String
+  locationId  String
+  lotId       String?
+  qty         Decimal
+  unitCost    Decimal
+  receivedAt  DateTime @default(now())
+  consumedQty Decimal  @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   item     Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
   location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
@@ -1211,42 +1223,42 @@ model InventoryCostLayer {
 
 // Support Tables
 model InventoryAttachment {
-  id          String   @id @default(uuid())
-  entityType  String // PURCHASE_ORDER | SALES_ORDER | TRANSFER_ORDER | ADJUSTMENT | CYCLE_COUNT | ITEM
-  entityId    String
-  fileName    String
-  fileUrl     String
-  fileSize    Int?
-  mimeType    String?
-  uploadedAt  DateTime @default(now())
+  id         String   @id @default(uuid())
+  entityType String // PURCHASE_ORDER | SALES_ORDER | TRANSFER_ORDER | ADJUSTMENT | CYCLE_COUNT | ITEM
+  entityId   String
+  fileName   String
+  fileUrl    String
+  fileSize   Int?
+  mimeType   String?
+  uploadedAt DateTime @default(now())
 
   @@index([entityType, entityId])
 }
 
 model InventoryComment {
-  id          String   @id @default(uuid())
-  entityType  String
-  entityId    String
-  body        String
-  authorId    String?
-  authorName  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(uuid())
+  entityType String
+  entityId   String
+  body       String
+  authorId   String?
+  authorName String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([entityType, entityId])
   @@index([createdAt])
 }
 
 model InventoryApproval {
-  id            String   @id @default(uuid())
-  entityType    String
-  entityId      String
-  status        String   @default("Pending") // Pending | Approved | Rejected
-  requestedAt   DateTime @default(now())
-  decidedAt     DateTime?
-  decisionNote  String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String    @id @default(uuid())
+  entityType   String
+  entityId     String
+  status       String    @default("Pending") // Pending | Approved | Rejected
+  requestedAt  DateTime  @default(now())
+  decidedAt    DateTime?
+  decisionNote String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@index([entityType, entityId])
   @@index([status])
@@ -1275,37 +1287,37 @@ model InventoryAuditLog {
 
 // Core Tasks
 model Task {
-  id              String    @id @default(uuid())
-  projectId       String?
-  title           String
-  descriptionRich String?    @default("")
-  status          String     @default("BACKLOG") // BACKLOG | TODO | IN_PROGRESS | IN_REVIEW | DONE
-  priority        String     @default("MEDIUM") // LOW | MEDIUM | HIGH | CRITICAL
-  startDate       DateTime?
-  dueDate         DateTime?
-  estimateMinutes Int?
-  blocked         Boolean    @default(false)
-  blockedReason   String?
-  parentTaskId    String?
+  id               String    @id @default(uuid())
+  projectId        String?
+  title            String
+  descriptionRich  String?   @default("")
+  status           String    @default("BACKLOG") // BACKLOG | TODO | IN_PROGRESS | IN_REVIEW | DONE
+  priority         String    @default("MEDIUM") // LOW | MEDIUM | HIGH | CRITICAL
+  startDate        DateTime?
+  dueDate          DateTime?
+  estimateMinutes  Int?
+  blocked          Boolean   @default(false)
+  blockedReason    String?
+  parentTaskId     String?
   assignedToUserId String?
-  sortOrder       Float      @default(0)
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  sortOrder        Float     @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  project       Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  parent        Task?             @relation("TaskHierarchy", fields: [parentTaskId], references: [id], onDelete: SetNull)
-  children      Task[]            @relation("TaskHierarchy")
-  tags          TaskTagLink[]
-  checklists    Checklist[]
-  comments      TaskComment[]
-  attachments   TaskAttachment[]
-  links         TaskLink[]
-  relationsFrom TaskRelation[]    @relation("FromTask")
-  relationsTo   TaskRelation[]    @relation("ToTask")
-  recurrenceRule RecurrenceRule?
+  project             Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  parent              Task?                @relation("TaskHierarchy", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  children            Task[]               @relation("TaskHierarchy")
+  tags                TaskTagLink[]
+  checklists          Checklist[]
+  comments            TaskComment[]
+  attachments         TaskAttachment[]
+  links               TaskLink[]
+  relationsFrom       TaskRelation[]       @relation("FromTask")
+  relationsTo         TaskRelation[]       @relation("ToTask")
+  recurrenceRule      RecurrenceRule?
   recurrenceInstances RecurrenceInstance[]
-  activityFeed  ActivityFeed[]
-  timeLogs      TimeLog[]
+  activityFeed        ActivityFeed[]
+  timeLogs            TimeLog[]
 
   @@index([projectId])
   @@index([status])
@@ -1333,8 +1345,8 @@ model TaskTagLink {
   taskId String
   tagId  String
 
-  task Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  tag  TaskTag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  task Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tag  TaskTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([taskId, tagId])
   @@index([taskId])
@@ -1349,19 +1361,19 @@ model Checklist {
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
 
-  task   Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  items  ChecklistItem[]
+  task  Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  items ChecklistItem[]
 
   @@index([taskId])
 }
 
 model ChecklistItem {
-  id         String   @id @default(uuid())
+  id          String   @id @default(uuid())
   checklistId String
-  content    String
-  isDone     Boolean  @default(false)
-  sortOrder  Int      @default(0)
-  createdAt  DateTime @default(now())
+  content     String
+  isDone      Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
 
   checklist Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
 
@@ -1370,23 +1382,23 @@ model ChecklistItem {
 
 // Comments & Mentions
 model TaskComment {
-  id              String   @id @default(uuid())
-  taskId          String
-  bodyRich        String
-  authorId        String?
-  authorName      String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id         String   @id @default(uuid())
+  taskId     String
+  bodyRich   String
+  authorId   String?
+  authorName String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  task      Task              @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  mentions  CommentMention[]
+  task     Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  mentions CommentMention[]
 
   @@index([taskId])
   @@index([createdAt])
 }
 
 model CommentMention {
-  id                  String   @id @default(uuid())
+  id                  String @id @default(uuid())
   commentId           String
   mentionedIdentifier String
 
@@ -1397,14 +1409,14 @@ model CommentMention {
 
 // Attachments & Links
 model TaskAttachment {
-  id          String   @id @default(uuid())
-  taskId      String
-  fileName    String
-  storageKey  String
-  fileUrl     String
-  sizeBytes   Int?
-  mimeType    String?
-  createdAt   DateTime @default(now())
+  id         String   @id @default(uuid())
+  taskId     String
+  fileName   String
+  storageKey String
+  fileUrl    String
+  sizeBytes  Int?
+  mimeType   String?
+  createdAt  DateTime @default(now())
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
@@ -1425,11 +1437,11 @@ model TaskLink {
 
 // Dependencies
 model TaskRelation {
-  id            String   @id @default(uuid())
-  fromTaskId    String
-  toTaskId      String
-  relationType  String // BLOCKS | BLOCKED_BY | RELATES | DUPLICATES | PARENT | CHILD
-  createdAt     DateTime @default(now())
+  id           String   @id @default(uuid())
+  fromTaskId   String
+  toTaskId     String
+  relationType String // BLOCKS | BLOCKED_BY | RELATES | DUPLICATES | PARENT | CHILD
+  createdAt    DateTime @default(now())
 
   fromTask Task @relation("FromTask", fields: [fromTaskId], references: [id], onDelete: Cascade)
   toTask   Task @relation("ToTask", fields: [toTaskId], references: [id], onDelete: Cascade)
@@ -1448,8 +1460,8 @@ model RecurrenceRule {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  task       Task                @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  instances  RecurrenceInstance[]
+  task      Task                 @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  instances RecurrenceInstance[]
 
   @@index([taskId])
 }
@@ -1470,17 +1482,17 @@ model RecurrenceInstance {
 
 // Views & Preferences
 model TaskSavedView {
-  id        String   @id @default(uuid())
-  projectId String?
-  userId    String?
-  name      String
-  viewType  String   // LIST | BOARD | CALENDAR | TIMELINE
-  queryJson String?  // JSON string of filter criteria
+  id          String   @id @default(uuid())
+  projectId   String?
+  userId      String?
+  name        String
+  viewType    String // LIST | BOARD | CALENDAR | TIMELINE
+  queryJson   String? // JSON string of filter criteria
   columnsJson String? // JSON string of column configuration
-  sortJson  String?  // JSON string of sort configuration
-  groupJson String?  // JSON string of group-by configuration
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  sortJson    String? // JSON string of sort configuration
+  groupJson   String? // JSON string of group-by configuration
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
@@ -1509,9 +1521,9 @@ model AutomationRule {
   id             String   @id @default(uuid())
   name           String
   isActive       Boolean  @default(true)
-  triggerType    String   // task_created | status_changed | due_date_changed | comment_added | tag_added
-  conditionsJson String   // JSON string of condition tree
-  actionsJson    String   // JSON string of action list
+  triggerType    String // task_created | status_changed | due_date_changed | comment_added | tag_added
+  conditionsJson String // JSON string of condition tree
+  actionsJson    String // JSON string of action list
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -1525,9 +1537,9 @@ model AutomationRun {
   id            String   @id @default(uuid())
   ruleId        String
   triggeredAt   DateTime @default(now())
-  status        String   // SUCCESS | FAILED | SKIPPED
-  inputJson     String?  // JSON string of trigger context
-  outputJson    String?  // JSON string of execution result
+  status        String // SUCCESS | FAILED | SKIPPED
+  inputJson     String? // JSON string of trigger context
+  outputJson    String? // JSON string of execution result
   correlationId String?
 
   rule AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
@@ -1542,9 +1554,9 @@ model TaskAuditLog {
   id            String   @id @default(uuid())
   entityType    String   @default("TASK")
   entityId      String
-  action        String   // CREATE | UPDATE | DELETE | STATUS_CHANGE | etc.
-  beforeJson    String?  // JSON string snapshot
-  afterJson     String?  // JSON string snapshot
+  action        String // CREATE | UPDATE | DELETE | STATUS_CHANGE | etc.
+  beforeJson    String? // JSON string snapshot
+  afterJson     String? // JSON string snapshot
   occurredAt    DateTime @default(now())
   correlationId String?
   userId        String?
@@ -1558,8 +1570,8 @@ model TaskAuditLog {
 model ActivityFeed {
   id            String   @id @default(uuid())
   taskId        String?
-  eventType     String   // task_created | status_changed | comment_added | etc.
-  payloadJson   String   // JSON string of event data
+  eventType     String // task_created | status_changed | comment_added | etc.
+  payloadJson   String // JSON string of event data
   occurredAt    DateTime @default(now())
   correlationId String?
 
@@ -1572,11 +1584,11 @@ model ActivityFeed {
 
 // Notifications (Placeholder)
 model TaskNotification {
-  id         String   @id @default(uuid())
-  type       String
+  id          String   @id @default(uuid())
+  type        String
   payloadJson String
-  isRead     Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
 
   @@index([isRead])
   @@index([createdAt])
@@ -1612,7 +1624,7 @@ model TaskTemplate {
   priority        String?
   estimateMinutes Int?
   tags            String[] // JSON array stored as String[]
-  checklistItems  Json?    // Array of checklist items
+  checklistItems  Json? // Array of checklist items
   projectId       String?
   isGlobal        Boolean  @default(false)
   createdAt       DateTime @default(now())
@@ -1622,4 +1634,402 @@ model TaskTemplate {
 
   @@index([projectId])
   @@index([isGlobal])
+}
+
+// ============================================
+// VERIFICATION MODULE MODELS
+// ============================================
+
+// Means of Compliance Catalog
+model VerMoc {
+  code                         Int      @id // 0-8, primary key
+  name                         String
+  description                  String?
+  requiresJustification        Boolean  @default(false)
+  defaultRequiredEvidenceTypes Json? // JSON array of evidence types
+  isActive                     Boolean  @default(true)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  methods   VerMethod[]
+  testCases VerTestCase[]
+
+  @@index([isActive])
+}
+
+// Verification Methods
+model VerMethod {
+  id                    String   @id @default(uuid())
+  projectId             String
+  name                  String
+  methodType            String // TEST, ANALYSIS, INSPECTION, REVIEW, SIMULATION, DEMONSTRATION
+  description           String?
+  linkedMocCode         Int?
+  applicablePhases      Json? // JSON array of phases
+  requiredEvidenceTypes Json? // JSON array of evidence types
+  ownerUserId           String?
+  status                String   @default("DRAFT") // DRAFT, REVIEWED, APPROVED, DEPRECATED
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  moc       VerMoc?       @relation(fields: [linkedMocCode], references: [code], onDelete: SetNull)
+  testCases VerTestCase[]
+
+  @@index([projectId])
+  @@index([linkedMocCode])
+  @@index([status])
+}
+
+// Test Setup Library
+model VerTestSetup {
+  id                String   @id @default(uuid())
+  projectId         String
+  name              String
+  description       String?
+  environmentType   String // BENCH, HIL, SIL, GROUND, FLIGHT, OTHER
+  components        Json? // JSON array of equipment, sensors, DUT, etc.
+  interfaces        Json? // JSON array of ports, buses, connectors
+  diagramData       Json? // Structured diagram (nodes/edges)
+  diagramExportPath String? // Path to exported diagram file
+  photos            Json? // JSON array of photo metadata
+  version           String   @default("1.0")
+  status            String   @default("DRAFT") // DRAFT, APPROVED, DEPRECATED
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  project        Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testCaseSetups VerTestCaseSetup[]
+
+  @@index([projectId])
+  @@index([status])
+}
+
+// Test Case Definitions
+model VerTestCase {
+  id               String   @id @default(uuid())
+  projectId        String
+  key              String // Unique key like "TC-UAV-001"
+  title            String
+  objective        String?
+  preconditions    String?  @db.Text
+  steps            Json? // JSON array of ordered steps
+  expectedResults  Json? // JSON array of expected results
+  passFailCriteria String?  @db.Text
+  linkedMocCode    Int?
+  linkedMethodId   String?
+  ownerUserId      String?
+  status           String   @default("DRAFT") // DRAFT, REVIEWED, APPROVED, READY
+  version          String   @default("1.0")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  project        Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  moc            VerMoc?            @relation(fields: [linkedMocCode], references: [code], onDelete: SetNull)
+  method         VerMethod?         @relation(fields: [linkedMethodId], references: [id], onDelete: SetNull)
+  testCaseSetups VerTestCaseSetup[]
+  planCases      VerTestPlanCase[]
+  runResults     VerTestRunResult[]
+  reverifyTasks  VerReverifyTask[]
+
+  @@unique([projectId, key])
+  @@index([projectId])
+  @@index([linkedMocCode])
+  @@index([linkedMethodId])
+  @@index([status])
+}
+
+// Join table: Test Case ↔ Setup
+model VerTestCaseSetup {
+  id         String   @id @default(uuid())
+  testCaseId String
+  setupId    String
+  createdAt  DateTime @default(now())
+
+  testCase VerTestCase  @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  setup    VerTestSetup @relation(fields: [setupId], references: [id], onDelete: Cascade)
+
+  @@unique([testCaseId, setupId])
+  @@index([testCaseId])
+  @@index([setupId])
+}
+
+// Test Plan Container
+model VerTestPlan {
+  id            String   @id @default(uuid())
+  projectId     String
+  key           String // Unique key like "TP-UAV-001"
+  name          String
+  description   String?
+  scope         String?  @db.Text
+  entryCriteria String?  @db.Text
+  exitCriteria  String?  @db.Text
+  phase         String? // SRR, PDR, CDR, TRR, QUALIFICATION, CERTIFICATION, OTHER
+  ownerUserId   String?
+  status        String   @default("DRAFT") // DRAFT, REVIEWED, APPROVED, ACTIVE, CLOSED
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  planCases VerTestPlanCase[]
+  testRuns  VerTestRun[]
+
+  @@unique([projectId, key])
+  @@index([projectId])
+  @@index([status])
+}
+
+// Join table: Test Plan ↔ Test Cases
+model VerTestPlanCase {
+  id          String   @id @default(uuid())
+  testPlanId  String
+  testCaseId  String
+  orderIndex  Int      @default(0)
+  isMandatory Boolean  @default(true)
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  testPlan VerTestPlan @relation(fields: [testPlanId], references: [id], onDelete: Cascade)
+  testCase VerTestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([testPlanId, testCaseId])
+  @@index([testPlanId])
+  @@index([testCaseId])
+}
+
+// Test Run Execution Instance
+model VerTestRun {
+  id               String    @id @default(uuid())
+  projectId        String
+  testPlanId       String?
+  runName          String
+  runNumber        Int?
+  executedByUserId String?
+  executionContext Json? // JSON: build version, config, tool versions
+  startedAt        DateTime?
+  endedAt          DateTime?
+  status           String    @default("PLANNED") // PLANNED, IN_PROGRESS, COMPLETED, ABORTED
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  project  Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testPlan VerTestPlan?       @relation(fields: [testPlanId], references: [id], onDelete: SetNull)
+  results  VerTestRunResult[]
+
+  @@index([projectId])
+  @@index([testPlanId])
+  @@index([status])
+}
+
+// Test Run Result (per test case execution)
+model VerTestRunResult {
+  id                      String    @id @default(uuid())
+  testRunId               String
+  testCaseId              String
+  testCaseVersionSnapshot Json // Immutable snapshot of test case at execution
+  setupVersionSnapshot    Json? // Immutable snapshot of setup used
+  resultStatus            String    @default("NOT_RUN") // NOT_RUN, PASS, FAIL, BLOCKED, SKIPPED
+  actualResults           Json? // JSON or text
+  notes                   String?   @db.Text
+  executedAt              DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  testRun         VerTestRun         @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  testCase        VerTestCase        @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  nonconformities VerNonconformity[]
+
+  @@unique([testRunId, testCaseId])
+  @@index([testRunId])
+  @@index([testCaseId])
+  @@index([resultStatus])
+}
+
+// Evidence Repository
+model VerEvidence {
+  id              String   @id @default(uuid())
+  projectId       String
+  evidenceType    String // TEST_REPORT, ANALYSIS_REPORT, CHECKLIST, LOG, IMAGE, SIM_OUTPUT, OTHER
+  title           String
+  description     String?
+  storageRef      String // Path/URL/ID to actual file
+  checksum        String? // File checksum for integrity
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  links   VerEvidenceLink[]
+
+  @@index([projectId])
+  @@index([evidenceType])
+}
+
+// Polymorphic Evidence Linking
+model VerEvidenceLink {
+  id               String   @id @default(uuid())
+  evidenceId       String
+  linkedEntityType String // TEST_RUN, TEST_RUN_RESULT, TEST_CASE, TEST_SETUP, METHOD, REVIEW, NONCONFORMITY
+  linkedEntityId   String
+  relation         String   @default("PRIMARY") // PRIMARY, SUPPORTING
+  createdAt        DateTime @default(now())
+
+  evidence VerEvidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  @@index([evidenceId])
+  @@index([linkedEntityType, linkedEntityId])
+}
+
+// Formal Reviews
+model VerReview {
+  id              String    @id @default(uuid())
+  projectId       String
+  reviewType      String // TRR, QSR, CERT_REVIEW, OTHER
+  title           String
+  description     String?
+  datePlanned     DateTime
+  dateHeld        DateTime?
+  status          String    @default("PLANNED") // PLANNED, IN_PROGRESS, CLOSED
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  project Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items   VerReviewItem[]
+
+  @@index([projectId])
+  @@index([status])
+}
+
+// Review Items
+model VerReviewItem {
+  id                String    @id @default(uuid())
+  reviewId          String
+  entityType        String // REQUIREMENT, TEST_CASE, TEST_PLAN, TEST_RUN, METHOD, SETUP, EVIDENCE
+  entityId          String
+  findingSeverity   String? // NONE, MINOR, MAJOR
+  findingText       String?   @db.Text
+  actionOwnerUserId String?
+  dueDate           DateTime?
+  status            String    @default("OPEN") // OPEN, RESOLVED, CLOSED
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  review VerReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@index([reviewId])
+  @@index([entityType, entityId])
+  @@index([status])
+}
+
+// Nonconformities
+model VerNonconformity {
+  id                    String   @id @default(uuid())
+  projectId             String
+  title                 String
+  description           String?  @db.Text
+  sourceTestRunResultId String?
+  severity              String   @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  status                String   @default("OPEN") // OPEN, INVESTIGATING, FIXED, REVERIFY_REQUIRED, CLOSED
+  createdByUserId       String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  project       Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceResult  VerTestRunResult? @relation(fields: [sourceTestRunResultId], references: [id], onDelete: SetNull)
+  reverifyTasks VerReverifyTask[]
+
+  @@index([projectId])
+  @@index([sourceTestRunResultId])
+  @@index([status])
+  @@index([severity])
+}
+
+// Re-verification Tasks
+model VerReverifyTask {
+  id                 String    @id @default(uuid())
+  nonconformityId    String
+  testCaseId         String
+  requiredRunContext Json? // JSON: required context for re-verification
+  status             String    @default("PENDING") // PENDING, COMPLETED
+  completedAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  nonconformity VerNonconformity @relation(fields: [nonconformityId], references: [id], onDelete: Cascade)
+  testCase      VerTestCase      @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+
+  @@index([nonconformityId])
+  @@index([testCaseId])
+  @@index([status])
+}
+
+// Configuration Baselines
+model VerBaseline {
+  id              String   @id @default(uuid())
+  projectId       String
+  name            String
+  description     String?
+  baselineType    String // MILESTONE, CERTIFICATION, INTERNAL
+  snapshot        Json // JSON: stores IDs + versions of ver artifacts
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([baselineType])
+}
+
+// Project-level Settings
+model VerSettings {
+  id                    String   @id @default(uuid())
+  projectId             String   @unique
+  allowedMocCodes       Json? // JSON array of allowed MoC codes
+  mocRulesByCriticality Json? // JSON: rules by requirement criticality
+  lifecycleRules        Json? // JSON: allowed transitions per entity
+  namingRules           Json? // JSON: naming conventions
+  permissionsMap        Json? // JSON: permission mappings
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+// Custom Dropdown Options
+model VerCustomOption {
+  id         String   @id @default(uuid())
+  projectId  String
+  optionType String // ENVIRONMENT_TYPE, COMPONENT_TYPE, INTERFACE_TYPE
+  value      String
+  isSystem   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, optionType, value])
+  @@index([projectId, optionType])
+}
+
+// Audit Trail
+model VerAuditEvent {
+  id                String   @id @default(uuid())
+  projectId         String
+  entityType        String // Entity type (TEST_CASE, TEST_PLAN, etc.)
+  entityId          String
+  action            String // CREATE, UPDATE, DELETE, STATUS_CHANGE, LINK_EVIDENCE, UNLINK_EVIDENCE, APPROVE, DEPRECATE, CLOSE
+  oldValue          Json? // JSON snapshot of old state
+  newValue          Json? // JSON snapshot of new state
+  performedByUserId String?
+  performedAt       DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([entityType, entityId])
+  @@index([performedAt])
+  @@index([action])
 }

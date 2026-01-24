@@ -57,6 +57,7 @@ function App() {
         <Route path="projects/:projectId/mbse-models" element={<MBSEModelsPage />} />
         <Route path="/" element={<MainLayout />}>
           <Route index element={<DashboardPage />} />
+          <Route path="projects" element={<Navigate to="/" replace />} />
           <Route path="projects/:projectId/stakeholder" element={<StakeholderPage />} />
           <Route path="projects/:projectId/requirements" element={<RequirementsPage />} />
           <Route path="projects/:projectId/tasks" element={<TasksPage />} />
