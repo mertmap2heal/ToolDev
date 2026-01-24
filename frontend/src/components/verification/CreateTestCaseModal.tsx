@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { X, Plus, Trash2, GripVertical, ChevronUp, ChevronDown, Upload, File } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
+import CustomSectionEditor from './CustomSectionEditor'
 
 interface CreateTestCaseModalProps {
   isOpen: boolean
@@ -48,7 +49,9 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
     'setups',
     'owner',
     'attachments',
+    'custom-sections',
   ])
+  const [customSections, setCustomSections] = useState<Array<{ id: string; title: string; content: string; orderIndex: number }>>([])
   const [draggedSection, setDraggedSection] = useState<string | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -139,6 +142,21 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
           }
         }
 
+        // Create custom sections
+        if (customSections.length > 0) {
+          for (let i = 0; i < customSections.length; i++) {
+            try {
+              await verificationService.createCustomSection(projectId, testCaseId, {
+                title: customSections[i].title,
+                content: customSections[i].content,
+                orderIndex: i,
+              })
+            } catch (error) {
+              console.error('Failed to create custom section:', error)
+            }
+          }
+        }
+
         queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
         queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
         onClose()
@@ -178,6 +196,7 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
     setCriteria([])
     setAttachments([])
     setSelectedSetups([])
+    setCustomSections([])
     setErrors({})
   }
 
@@ -851,6 +870,80 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
                 ))}
               </div>
             )}
+          </div>
+        )
+
+      case 'custom-sections':
+        return (
+          <div key={sectionId} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Custom Sections
+              </label>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => moveSection(index, 'up')}
+                  disabled={index === 0}
+                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
+                >
+                  <ChevronUp size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveSection(index, 'down')}
+                  disabled={index === sectionOrder.length - 1}
+                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
+                >
+                  <ChevronDown size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {customSections.map((section, idx) => (
+                <CustomSectionEditor
+                  key={section.id}
+                  section={section}
+                  projectId={projectId}
+                  onUpdate={(updated) => {
+                    const newSections = [...customSections]
+                    newSections[idx] = { ...newSections[idx], ...updated }
+                    setCustomSections(newSections)
+                  }}
+                  onDelete={() => {
+                    setCustomSections(customSections.filter((_, i) => i !== idx))
+                  }}
+                  onImageUpload={async (file) => {
+                    // For temporary sections (not yet created), use base64
+                    // Images will be uploaded when section is created
+                    return new Promise((resolve, reject) => {
+                      const reader = new FileReader()
+                      reader.onload = () => resolve(reader.result as string)
+                      reader.onerror = reject
+                      reader.readAsDataURL(file)
+                    })
+                  }}
+                />
+              ))}
+
+              <button
+                type="button"
+                onClick={() => {
+                  const newSection = {
+                    id: `temp-${Date.now()}`,
+                    title: '',
+                    content: '',
+                    orderIndex: customSections.length,
+                  }
+                  setCustomSections([...customSections, newSection])
+                }}
+                className="w-full px-4 py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400 hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center justify-center gap-2"
+              >
+                <Plus size={16} />
+                Add Custom Section
+              </button>
+            </div>
           </div>
         )
 

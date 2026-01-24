@@ -3,6 +3,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import Underline from '@tiptap/extension-underline'
 import Link from '@tiptap/extension-link'
+import Image from '@tiptap/extension-image'
 // Table extension uses named export
 import { Table } from '@tiptap/extension-table'
 // Table sub-extensions can use default imports
@@ -26,9 +27,10 @@ import {
   Heading2,
   Heading3,
   Minus,
+  Image as ImageIcon,
 } from 'lucide-react'
 import clsx from 'clsx'
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 
 interface RichTextEditorProps {
   content: string
@@ -37,6 +39,7 @@ interface RichTextEditorProps {
   className?: string
   minHeight?: string
   editable?: boolean
+  onImageUpload?: (file: File) => Promise<string> // Returns image URL
 }
 
 /**
@@ -50,7 +53,9 @@ export default function RichTextEditor({
   className,
   minHeight = '150px',
   editable = true,
+  onImageUpload,
 }: RichTextEditorProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -85,6 +90,13 @@ export default function RichTextEditor({
       TableCell.configure({
         HTMLAttributes: {
           class: 'border border-gray-300 dark:border-gray-600 px-2 py-1',
+        },
+      }),
+      Image.configure({
+        inline: true,
+        allowBase64: true,
+        HTMLAttributes: {
+          class: 'max-w-full h-auto rounded',
         },
       }),
     ],
@@ -129,6 +141,43 @@ export default function RichTextEditor({
     if (!editor) return
     editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
   }, [editor])
+
+  const handleImageUpload = useCallback(async (file: File) => {
+    if (!editor || !onImageUpload) return
+
+    try {
+      // Show loading state or placeholder
+      const placeholderUrl = URL.createObjectURL(file)
+      editor.chain().focus().setImage({ src: placeholderUrl }).run()
+
+      // Upload image and get URL
+      const imageUrl = await onImageUpload(file)
+
+      // Replace placeholder with actual URL
+      const currentContent = editor.getHTML()
+      const updatedContent = currentContent.replace(placeholderUrl, imageUrl)
+      editor.commands.setContent(updatedContent)
+    } catch (error) {
+      console.error('Image upload failed:', error)
+      // Remove placeholder image on error
+      editor.chain().focus().deleteSelection().run()
+    }
+  }, [editor, onImageUpload])
+
+  const triggerImageUpload = useCallback(() => {
+    fileInputRef.current?.click()
+  }, [])
+
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file && file.type.startsWith('image/')) {
+      handleImageUpload(file)
+    }
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }, [handleImageUpload])
 
   if (!editor) {
     return null
@@ -256,7 +305,7 @@ export default function RichTextEditor({
             </ToolbarButton>
           </div>
 
-          {/* Link & Table */}
+          {/* Link, Table & Image */}
           <div className="flex items-center gap-0.5">
             <ToolbarButton
               onClick={setLink}
@@ -271,6 +320,23 @@ export default function RichTextEditor({
             >
               <TableIcon size={16} />
             </ToolbarButton>
+            {onImageUpload && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <ToolbarButton
+                  onClick={triggerImageUpload}
+                  title="Insert Image"
+                >
+                  <ImageIcon size={16} />
+                </ToolbarButton>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -392,6 +458,15 @@ export default function RichTextEditor({
         }
         .dark .ProseMirror .selectedCell {
           background-color: #1e3a5f;
+        }
+        .ProseMirror img {
+          max-width: 100%;
+          height: auto;
+          border-radius: 0.25rem;
+          margin: 0.5em 0;
+        }
+        .ProseMirror img.ProseMirror-selectednode {
+          outline: 2px solid #3b82f6;
         }
       `}</style>
     </div>

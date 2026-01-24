@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
-import { X, ChevronDown, Link2, Download, Search, Check } from 'lucide-react'
+import { X, ChevronDown, Link2, Download, Search, Check, Plus } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import ReportExporter from './ReportExporter'
+import CustomSectionEditor from './CustomSectionEditor'
+import clsx from 'clsx'
 
 interface TestCaseDetailDrawerProps {
   testCase: any
@@ -70,6 +72,17 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
     enabled: showExportModal && !!testCase?.id,
   })
 
+  // Fetch custom sections
+  const { data: customSections = [], refetch: refetchCustomSections } = useQuery({
+    queryKey: ['custom-sections', projectId, testCase?.id],
+    queryFn: async () => {
+      if (!testCase?.id) return []
+      const response = await verificationService.getCustomSections(projectId, testCase.id)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: isOpen && !!testCase?.id,
+  })
+
   const updateCaseMutation = useMutation({
     mutationFn: (data: any) => verificationService.updateTestCase(projectId, testCase.id, data),
     onSuccess: () => {
@@ -93,6 +106,28 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['test-case', projectId, testCase.id] })
       queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
+    },
+  })
+
+  const createCustomSectionMutation = useMutation({
+    mutationFn: (data: any) => verificationService.createCustomSection(projectId, testCase.id, data),
+    onSuccess: () => {
+      refetchCustomSections()
+    },
+  })
+
+  const updateCustomSectionMutation = useMutation({
+    mutationFn: ({ sectionId, data }: { sectionId: string; data: any }) =>
+      verificationService.updateCustomSection(projectId, sectionId, data),
+    onSuccess: () => {
+      refetchCustomSections()
+    },
+  })
+
+  const deleteCustomSectionMutation = useMutation({
+    mutationFn: (sectionId: string) => verificationService.deleteCustomSection(projectId, sectionId),
+    onSuccess: () => {
+      refetchCustomSections()
     },
   })
 
@@ -196,12 +231,15 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
     updateCaseMutation.mutate(submitData)
   }
 
-  if (!isOpen || !testCase) return null
+  if (!testCase) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-end">
-      <div className="absolute inset-0 bg-black bg-opacity-50" onClick={onClose} />
-      <div className="relative bg-white dark:bg-gray-800 w-full max-w-2xl h-full overflow-y-auto shadow-xl">
+    <div
+      className={clsx(
+        'h-full bg-white dark:bg-gray-800 shadow-2xl border-l border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out overflow-hidden',
+        isOpen && testCase ? 'w-full max-w-2xl min-w-[32rem]' : 'w-0 min-w-0'
+      )}
+    >
         {/* Header */}
         <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
           <div className="flex-1">
@@ -304,8 +342,9 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
           </div>
         </div>
 
-        {/* Content */}
-        <div className="p-6 space-y-6">
+        {/* Scrollable Content */}
+        <div className="overflow-y-auto flex-1">
+          <div className="p-6 space-y-6">
           {/* Status */}
           <div className="relative" ref={statusDropdownRef}>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -506,8 +545,69 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
           {!isEditing && (
             <LinkedTestResultsSection testCaseId={currentCase?.id} projectId={projectId} />
           )}
+
+          {/* Custom Sections */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Custom Sections
+              </label>
+              {!isEditing && (
+                <button
+                  onClick={() => {
+                    if (testCase?.id) {
+                      createCustomSectionMutation.mutate({
+                        title: 'New Section',
+                        content: '',
+                        orderIndex: customSections.length,
+                      })
+                    }
+                  }}
+                  disabled={createCustomSectionMutation.isPending || !testCase?.id}
+                  className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  <Plus size={16} />
+                  Add Section
+                </button>
+              )}
+            </div>
+
+            {customSections.length > 0 ? (
+              <div className="space-y-4">
+                {customSections.map((section: any) => (
+                  <CustomSectionEditor
+                    key={section.id}
+                    section={section}
+                    projectId={projectId}
+                    testCaseId={testCase?.id}
+                    sectionId={section.id}
+                    isReadOnly={false}
+                    onUpdate={(updated) => {
+                      if (section.id && !section.id.startsWith('temp-')) {
+                        updateCustomSectionMutation.mutate({
+                          sectionId: section.id,
+                          data: updated,
+                        })
+                      }
+                    }}
+                    onDelete={
+                      section.id && !section.id.startsWith('temp-')
+                        ? () => {
+                            deleteCustomSectionMutation.mutate(section.id)
+                          }
+                        : undefined
+                    }
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                No custom sections. Click "Add Section" to create one.
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+        </div>
 
       {/* Export Modal */}
       {showExportModal && reportData && (

@@ -184,12 +184,14 @@ export default function VerificationPage() {
   )
 
   return (
-    <div className="space-y-6">
-      <ProjectNavigation />
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Verification</h2>
-        {projectId && <SafetyLinkPanel variant="evidence" count={2} />}
-      </div>
+    <div className="flex h-[calc(100vh-4rem)]">
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-y-auto space-y-6 pr-6">
+        <ProjectNavigation />
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Verification</h2>
+          {projectId && <SafetyLinkPanel variant="evidence" count={2} />}
+        </div>
 
       {/* Tabs */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
@@ -576,33 +578,54 @@ export default function VerificationPage() {
         </div>
       )}
 
-      {/* Modals */}
-      {projectId && (
-        <>
-          <CreateTestPlanModal
-            isOpen={isCreatePlanOpen}
-            onClose={() => setIsCreatePlanOpen(false)}
-            projectId={projectId}
-          />
-          <CreateTestCaseModal
-            isOpen={isCreateCaseOpen}
-            onClose={() => setIsCreateCaseOpen(false)}
-            projectId={projectId}
-          />
-          <CreateTestSetupModal
-            isOpen={isCreateSetupOpen}
-            onClose={() => setIsCreateSetupOpen(false)}
-            projectId={projectId}
-          />
-          <CreateTestResultModal
-            isOpen={isCreateResultOpen}
-            onClose={() => setIsCreateResultOpen(false)}
-            projectId={projectId}
-          />
-        </>
-      )}
+        {/* Modals */}
+        {projectId && (
+          <>
+            <CreateTestPlanModal
+              isOpen={isCreatePlanOpen}
+              onClose={() => setIsCreatePlanOpen(false)}
+              projectId={projectId}
+            />
+            <CreateTestCaseModal
+              isOpen={isCreateCaseOpen}
+              onClose={() => setIsCreateCaseOpen(false)}
+              projectId={projectId}
+            />
+            <CreateTestSetupModal
+              isOpen={isCreateSetupOpen}
+              onClose={() => setIsCreateSetupOpen(false)}
+              projectId={projectId}
+            />
+            <CreateTestResultModal
+              isOpen={isCreateResultOpen}
+              onClose={() => setIsCreateResultOpen(false)}
+              projectId={projectId}
+            />
+          </>
+        )}
 
-      {/* Drawers */}
+        {/* Export Modals */}
+        {projectId && (
+          <>
+            <ListExporter
+              isOpen={showTestCasesExport}
+              onClose={() => setShowTestCasesExport(false)}
+              exportType="test-cases"
+              items={testCases}
+              projectId={projectId}
+            />
+            <ListExporter
+              isOpen={showTestPlansExport}
+              onClose={() => setShowTestPlansExport(false)}
+              exportType="test-plans"
+              items={testPlans}
+              projectId={projectId}
+            />
+          </>
+        )}
+      </div>
+
+      {/* Drawers - Side by side */}
       {projectId && (
         <>
           <TestPlanDetailDrawer
@@ -639,26 +662,6 @@ export default function VerificationPage() {
               setIsResultDrawerOpen(false)
               setSelectedResult(null)
             }}
-            projectId={projectId}
-          />
-        </>
-      )}
-
-      {/* Export Modals */}
-      {projectId && (
-        <>
-          <ListExporter
-            isOpen={showTestCasesExport}
-            onClose={() => setShowTestCasesExport(false)}
-            exportType="test-cases"
-            items={testCases}
-            projectId={projectId}
-          />
-          <ListExporter
-            isOpen={showTestPlansExport}
-            onClose={() => setShowTestPlansExport(false)}
-            exportType="test-plans"
-            items={testPlans}
             projectId={projectId}
           />
         </>

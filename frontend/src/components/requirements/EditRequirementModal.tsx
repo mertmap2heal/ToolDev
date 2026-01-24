@@ -593,7 +593,7 @@ export default function EditRequirementModal({
           {/* MBSE/UML Fields */}
           <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
-              MBSE/UML Classification
+              Classification
             </h3>
             
             {/* Requirement Type */}

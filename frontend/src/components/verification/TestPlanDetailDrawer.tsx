@@ -6,6 +6,7 @@ import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import CustomDropdown from './CustomDropdown'
 import ReportExporter from './ReportExporter'
+import clsx from 'clsx'
 
 interface TestPlanDetailDrawerProps {
   plan: any
@@ -163,12 +164,15 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
     updatePlanMutation.mutate(editData)
   }
 
-  if (!isOpen || !plan) return null
+  if (!plan) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-end">
-      <div className="absolute inset-0 bg-black bg-opacity-50" onClick={onClose} />
-      <div className="relative bg-white dark:bg-gray-800 w-full max-w-2xl h-full overflow-y-auto shadow-xl">
+    <div
+      className={clsx(
+        'h-full bg-white dark:bg-gray-800 shadow-2xl border-l border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out overflow-hidden',
+        isOpen && plan ? 'w-full max-w-2xl min-w-[32rem]' : 'w-0 min-w-0'
+      )}
+    >
         {/* Header */}
         <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
           <div className="flex-1">
@@ -280,8 +284,9 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
           </div>
         </div>
 
-        {/* Content */}
-        <div className="p-6">
+        {/* Scrollable Content */}
+        <div className="overflow-y-auto flex-1">
+          <div className="p-6">
           {activeTab === 'overview' && (
             <div className="space-y-6">
               {/* Status */}
@@ -476,7 +481,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
             </div>
           )}
         </div>
-      </div>
+        </div>
 
       {/* Export Modal */}
       {showExportModal && reportData && (

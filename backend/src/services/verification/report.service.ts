@@ -103,6 +103,20 @@ export const reportService = {
       })
     )
 
+    // Get custom sections
+    const customSections = await prisma.verTestCaseCustomSection.findMany({
+      where: {
+        testCaseId,
+        projectId,
+      },
+      orderBy: {
+        orderIndex: 'asc',
+      },
+      include: {
+        images: true,
+      },
+    })
+
     return {
       metadata: {
         projectId,
@@ -165,6 +179,17 @@ export const reportService = {
         setup: link.testResult.setup ? { name: link.testResult.setup.name } : null,
       })),
       verifiesElements: linkedElements.filter(Boolean),
+      customSections: customSections.map((section) => ({
+        id: section.id,
+        title: section.title,
+        content: section.content,
+        orderIndex: section.orderIndex,
+        images: section.images.map((img) => ({
+          fileName: img.fileName,
+          fileUrl: img.fileUrl,
+          mimeType: img.mimeType,
+        })),
+      })),
       auditTrail: auditTrail.map((event) => ({
         action: event.action,
         performedBy: event.performedByUserId,

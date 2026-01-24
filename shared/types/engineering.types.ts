@@ -34,6 +34,12 @@ export interface Requirement {
   verificationStatus?: 'not_verified' | 'verified' | 'failed'
   verificationDate?: string
   verificationNotes?: string
+  linkedMocCode?: number
+  moc?: {
+    code: number
+    name: string
+    description?: string
+  }
   reviewStatus?: 'draft' | 'under_review' | 'approved' | 'rejected'
   comments?: RequirementComment[]
   attachments?: RequirementAttachment[]
@@ -345,6 +351,7 @@ export interface CreateRequirementDto {
   complexity?: ComplexityLevel
   rationale?: string
   assumptions?: string
+  linkedMocCode?: string
   dependencies?: string[]
   conflicts?: string[]
   stakeholders?: string[]

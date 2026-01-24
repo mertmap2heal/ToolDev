@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { requirementService } from '../../services/requirement.service'
 import { projectService } from '../../services/project.service'
 import { templateService } from '../../services/template.service'
+import { verificationService } from '../../services/verification.service'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import { useLifecycleStore } from '../../store/lifecycleStore'
 // import RichTextEditor from '../common/RichTextEditor' // Temporarily disabled - using textarea instead
@@ -55,6 +56,7 @@ export default function CreateRequirementModal({
     risk: undefined,
     complexity: undefined,
     rationale: undefined,
+    linkedMocCode: '',
   })
   const [tagInput, setTagInput] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -149,6 +151,16 @@ export default function CreateRequirementModal({
     },
   })
 
+  // Fetch MOCs
+  const { data: mocs = [] } = useQuery({
+    queryKey: ['mocs'],
+    queryFn: async () => {
+      const response = await verificationService.getMocs()
+      return response.success && response.data ? response.data : []
+    },
+    enabled: isOpen,
+  })
+
   useEffect(() => {
     if (parentRequirement) {
       setFormData((prev) => ({ ...prev, parentId: parentRequirement.id }))
@@ -228,6 +240,7 @@ export default function CreateRequirementModal({
       verificationStatus: undefined,
       verificationDate: undefined,
       verificationNotes: undefined,
+      linkedMocCode: '',
     })
     setErrors({})
     setCustomType('')
@@ -330,6 +343,9 @@ export default function CreateRequirementModal({
     }
     if (!formData.description.trim()) {
       newErrors.description = 'Description is required'
+    }
+    if (!formData.linkedMocCode) {
+      newErrors.linkedMocCode = 'Means of Compliance (MoC) is required'
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -607,6 +623,32 @@ export default function CreateRequirementModal({
             </div>
           </div>
 
+          {/* Means of Compliance (MoC) */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+              Means of Compliance (MoC) <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={formData.linkedMocCode || ''}
+              onChange={(e) => handleChange('linkedMocCode', e.target.value)}
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
+                errors.linkedMocCode
+                  ? 'border-red-500 dark:border-red-500'
+                  : 'border-gray-300 dark:border-gray-600'
+              }`}
+            >
+              <option value="">Select MoC (required)</option>
+              {mocs.map((moc: any) => (
+                <option key={moc.code} value={moc.code}>
+                  {moc.code}: {moc.name} - {moc.description}
+                </option>
+              ))}
+            </select>
+            {errors.linkedMocCode && (
+              <p className="mt-1 text-sm text-red-500">{errors.linkedMocCode}</p>
+            )}
+          </div>
+
           {/* Verification Method */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
@@ -643,7 +685,7 @@ export default function CreateRequirementModal({
           {/* MBSE/UML Fields */}
           <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
-              MBSE/UML Classification
+              Classification
             </h3>
             
             {/* Requirement Type */}

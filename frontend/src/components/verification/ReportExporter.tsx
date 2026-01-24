@@ -274,6 +274,39 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           headStyles: { fillColor: [147, 51, 234] },
           margin: { left: 14 },
         })
+
+        yPos = (doc as any).lastAutoTable.finalY + 10
+      }
+
+      // Custom Sections
+      if (reportData.customSections && reportData.customSections.length > 0) {
+        for (const section of reportData.customSections) {
+          if (yPos > 250) {
+            doc.addPage()
+            yPos = 20
+          }
+
+          doc.setFontSize(14)
+          doc.setFont('helvetica', 'bold')
+          doc.text(section.title || 'Custom Section', 14, yPos)
+          yPos += 8
+
+          // Convert HTML to plain text for PDF (simple strip tags approach)
+          const textContent = section.content
+            .replace(/<[^>]*>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+
+          if (textContent) {
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(10)
+            yPos = addText(textContent, 14, yPos, pageWidth - 28)
+            yPos += 8
+          }
+
+          // Note: Images in custom sections would need additional handling
+          // For now, we'll just include the text content
+        }
       }
     } else {
       // Test Plan Report
@@ -502,6 +535,19 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
             el.name || '',
           ])
         })
+        rows.push([])
+      }
+
+      // Custom Sections
+      if (reportData.customSections && reportData.customSections.length > 0) {
+        rows.push(['Custom Sections'])
+        reportData.customSections.forEach((section: any) => {
+          rows.push([`Section: ${section.title || 'Untitled'}`])
+          // Strip HTML tags for CSV
+          const textContent = section.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+          rows.push(['Content', textContent || ''])
+          rows.push([])
+        })
       }
     } else {
       const tp = reportData.testPlan
@@ -579,6 +625,19 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
             el.id || '',
             el.name || '',
           ])
+        })
+        rows.push([])
+      }
+
+      // Custom Sections
+      if (reportData.customSections && reportData.customSections.length > 0) {
+        rows.push(['Custom Sections'])
+        reportData.customSections.forEach((section: any) => {
+          rows.push([`Section: ${section.title || 'Untitled'}`])
+          // Strip HTML tags for CSV
+          const textContent = section.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+          rows.push(['Content', textContent || ''])
+          rows.push([])
         })
       }
     }
@@ -728,6 +787,20 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           el.name || 'N/A',
         ])
         children.push(createTable(['Type', 'ID', 'Name'], verifiesRows))
+        children.push(createParagraph(''))
+      }
+
+      // Custom Sections
+      if (reportData.customSections && reportData.customSections.length > 0) {
+        for (const section of reportData.customSections) {
+          children.push(createParagraph(section.title || 'Custom Section', { heading: HeadingLevel.HEADING_2, size: 28 }))
+          // Convert HTML to plain text for Word
+          const textContent = section.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+          if (textContent) {
+            children.push(createParagraph(textContent))
+          }
+          children.push(createParagraph(''))
+        }
       }
     } else {
       const tp = reportData.testPlan
@@ -795,6 +868,20 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           el.name || 'N/A',
         ])
         children.push(createTable(['Type', 'ID', 'Name'], verifiesRows))
+        children.push(createParagraph(''))
+      }
+
+      // Custom Sections
+      if (reportData.customSections && reportData.customSections.length > 0) {
+        for (const section of reportData.customSections) {
+          children.push(createParagraph(section.title || 'Custom Section', { heading: HeadingLevel.HEADING_2, size: 28 }))
+          // Convert HTML to plain text for Word
+          const textContent = section.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+          if (textContent) {
+            children.push(createParagraph(textContent))
+          }
+          children.push(createParagraph(''))
+        }
       }
     }
 
@@ -911,6 +998,9 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
               )}
               {reportData.verifiesElements?.length > 0 && (
                 <li>• {reportData.verifiesElements.length} verified element(s)</li>
+              )}
+              {reportData.customSections?.length > 0 && (
+                <li>• {reportData.customSections.length} custom section(s)</li>
               )}
             </ul>
           </div>

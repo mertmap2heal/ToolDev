@@ -399,6 +399,7 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
       risk,
       complexity,
       rationale,
+      linkedMocCode,
     } = req.body
 
     if (!title) {
@@ -479,6 +480,7 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
         risk: risk || null,
         complexity: complexity || null,
         rationale: rationale || null,
+        linkedMocCode: linkedMocCode ? parseInt(linkedMocCode, 10) : null,
       },
       include: {
         parent: {
@@ -488,6 +490,7 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
             title: true,
           },
         },
+        moc: true,
       },
     })
 
@@ -545,6 +548,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       verificationStatus,
       verificationDate,
       verificationNotes,
+      linkedMocCode,
     } = req.body
 
     // Find the requirement
@@ -716,6 +720,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       risk: risk !== undefined ? risk : undefined,
       complexity: complexity !== undefined ? complexity : undefined,
       rationale: rationale !== undefined ? rationale : undefined,
+      linkedMocCode: linkedMocCode !== undefined ? (linkedMocCode ? parseInt(linkedMocCode, 10) : null) : undefined,
     }
     
     // Only include requirementId in update if it was generated or manually provided
@@ -752,6 +757,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
             title: true,
           },
         },
+        moc: true,
       },
     })
 
@@ -1025,6 +1031,7 @@ export const updateRequirementParent = async (req: AuthRequest, res: Response) =
             title: true,
           },
         },
+        moc: true,
       },
     })
 

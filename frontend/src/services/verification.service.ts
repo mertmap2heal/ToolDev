@@ -254,4 +254,37 @@ export const verificationService = {
   async getTestPlanReport(projectId: string, testPlanId: string): Promise<ApiResponse<any>> {
     return apiClient.get(`/verification/reports/test-plan/${projectId}/${testPlanId}`)
   },
+
+  // Custom Sections
+  async getCustomSections(projectId: string, testCaseId: string): Promise<ApiResponse<any[]>> {
+    return apiClient.get(`/verification/test-cases/${projectId}/${testCaseId}/custom-sections`)
+  },
+
+  async createCustomSection(projectId: string, testCaseId: string, data: any): Promise<ApiResponse<any>> {
+    return apiClient.post(`/verification/test-cases/${projectId}/${testCaseId}/custom-sections`, data)
+  },
+
+  async updateCustomSection(projectId: string, sectionId: string, data: any): Promise<ApiResponse<any>> {
+    return apiClient.patch(`/verification/test-cases/${projectId}/${sectionId}/custom-sections`, data)
+  },
+
+  async deleteCustomSection(projectId: string, sectionId: string): Promise<ApiResponse<void>> {
+    return apiClient.delete(`/verification/test-cases/${projectId}/${sectionId}/custom-sections`)
+  },
+
+  async reorderCustomSections(projectId: string, testCaseId: string, sectionIds: string[]): Promise<ApiResponse<void>> {
+    return apiClient.post(`/verification/test-cases/${projectId}/${testCaseId}/custom-sections/reorder`, { sectionIds })
+  },
+
+  async uploadCustomSectionImage(
+    projectId: string,
+    sectionId: string,
+    fileData: { fileName: string; fileData: string; mimeType?: string }
+  ): Promise<ApiResponse<any>> {
+    return apiClient.post(`/verification/test-cases/${projectId}/${sectionId}/custom-sections/images`, fileData)
+  },
+
+  async deleteCustomSectionImage(projectId: string, imageId: string): Promise<ApiResponse<void>> {
+    return apiClient.delete(`/verification/test-cases/${projectId}/${imageId}/custom-sections/images`)
+  },
 }

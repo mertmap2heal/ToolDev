@@ -644,3 +644,40 @@ export interface OverviewMetrics {
     open: number
   }
 }
+
+// Custom Sections
+export interface CreateCustomSectionDto {
+  title: string
+  content: string
+  orderIndex?: number
+}
+
+export interface UpdateCustomSectionDto {
+  title?: string
+  content?: string
+  orderIndex?: number
+}
+
+export interface CustomSection {
+  id: string
+  testCaseId: string
+  projectId: string
+  title: string
+  content: string
+  orderIndex: number
+  createdAt: string
+  updatedAt: string
+  images?: CustomSectionImage[]
+}
+
+export interface CustomSectionImage {
+  id: string
+  sectionId: string
+  projectId: string
+  fileName: string
+  fileUrl: string
+  storageKey: string
+  fileSize: number
+  mimeType?: string
+  uploadedAt: string
+}

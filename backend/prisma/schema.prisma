@@ -67,6 +67,7 @@ model Project {
   verBaselines           VerBaseline[]
   verSettings            VerSettings?
   verAuditEvents         VerAuditEvent[]
+  verTestCaseCustomSections VerTestCaseCustomSection[]
   verCustomOptions       VerCustomOption[]
 }
 
@@ -113,6 +114,7 @@ model Requirement {
   verificationStatus String? // not_verified, verified, failed
   verificationDate   DateTime?
   verificationNotes  String?
+  linkedMocCode      Int?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -122,10 +124,12 @@ model Requirement {
   comments    RequirementComment[]
   attachments RequirementAttachment[]
   reviews     RequirementReview[]
+  moc         VerMoc?                 @relation(fields: [linkedMocCode], references: [code], onDelete: SetNull)
 
   @@unique([projectId, requirementId])
   @@index([projectId])
   @@index([parentId])
+  @@index([linkedMocCode])
 }
 
 model RequirementComment {
@@ -1652,8 +1656,9 @@ model VerMoc {
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
 
-  methods   VerMethod[]
-  testCases VerTestCase[]
+  methods      VerMethod[]
+  testCases    VerTestCase[]
+  requirements Requirement[]
 
   @@index([isActive])
 }
@@ -1733,6 +1738,7 @@ model VerTestCase {
   planCases      VerTestPlanCase[]
   runResults     VerTestRunResult[]
   reverifyTasks  VerReverifyTask[]
+  customSections VerTestCaseCustomSection[]
 
   @@unique([projectId, key])
   @@index([projectId])
@@ -2080,4 +2086,43 @@ model VerAuditEvent {
   @@index([entityType, entityId])
   @@index([performedAt])
   @@index([action])
+}
+
+// Custom Sections for Test Cases
+model VerTestCaseCustomSection {
+  id          String   @id @default(uuid())
+  testCaseId  String
+  projectId   String
+  title       String
+  content     String   @db.Text // HTML content from rich text editor
+  orderIndex  Int      @default(0) // For ordering sections
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  testCase    VerTestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  images      VerTestCaseSectionImage[]
+
+  @@index([testCaseId])
+  @@index([projectId])
+  @@index([orderIndex])
+}
+
+// Images for Custom Sections
+model VerTestCaseSectionImage {
+  id          String   @id @default(uuid())
+  sectionId   String
+  projectId   String
+  fileName    String
+  fileUrl     String   // Server URL path
+  storageKey  String   // Filesystem storage key
+  fileSize    Int      // Bytes
+  mimeType    String?
+  uploadedAt  DateTime @default(now())
+
+  section     VerTestCaseCustomSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  project     Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([sectionId])
+  @@index([projectId])
 }

@@ -14,6 +14,7 @@ import * as settingsController from '../controllers/verification/settings.contro
 import * as overviewController from '../controllers/verification/overview.controller'
 import * as customOptionController from '../controllers/verification/customOption.controller'
 import * as testResultController from '../controllers/verification/testResult.controller'
+import * as customSectionController from '../controllers/verification/customSection.controller'
 import { reportService } from '../services/verification/report.service'
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
@@ -64,6 +65,17 @@ router.post('/test-cases/:projectId/:id/unlink-setup', testCaseController.unlink
 router.get('/test-cases/:projectId/:id/verification-links', testCaseController.getVerificationLinks)
 router.post('/test-cases/:projectId/:id/verification-links', testCaseController.linkVerificationElement)
 router.delete('/test-cases/:projectId/:id/verification-links/:linkId', testCaseController.unlinkVerificationElement)
+
+// Custom Sections
+router.get('/test-cases/:projectId/:testCaseId/custom-sections', customSectionController.getCustomSections)
+router.post('/test-cases/:projectId/:testCaseId/custom-sections', customSectionController.createCustomSection)
+router.patch('/test-cases/:projectId/:sectionId/custom-sections', customSectionController.updateCustomSection)
+router.delete('/test-cases/:projectId/:sectionId/custom-sections', customSectionController.deleteCustomSection)
+router.post('/test-cases/:projectId/:testCaseId/custom-sections/reorder', customSectionController.reorderSections)
+
+// Section Images
+router.post('/test-cases/:projectId/:sectionId/custom-sections/images', customSectionController.uploadImage)
+router.delete('/test-cases/:projectId/:imageId/custom-sections/images', customSectionController.deleteImage)
 
 // E) Test Plans
 router.get('/test-plans/:projectId', testPlanController.getTestPlans)

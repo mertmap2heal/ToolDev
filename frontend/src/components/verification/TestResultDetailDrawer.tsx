@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { X, Download, Trash2, Edit2, Link2, Unlink } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
+import clsx from 'clsx'
 
 interface TestResultDetailDrawerProps {
   testResult: any
@@ -195,7 +196,7 @@ export default function TestResultDetailDrawer({
     })
   }
 
-  if (!isOpen || !currentResult) return null
+  if (!currentResult) return null
 
   // Initialize edit data when result changes
   if (isEditing && !editData.title && currentResult) {
@@ -215,9 +216,10 @@ export default function TestResultDetailDrawer({
 
   return (
     <div
-      className={`fixed right-0 top-0 h-full w-full md:w-2/3 lg:w-1/2 bg-white dark:bg-gray-800 shadow-xl z-50 transition-transform duration-300 ${
-        isOpen ? 'translate-x-0' : 'translate-x-full'
-      }`}
+      className={clsx(
+        'h-full bg-white dark:bg-gray-800 shadow-2xl border-l border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out overflow-hidden',
+        isOpen && currentResult ? 'w-full max-w-2xl min-w-[32rem]' : 'w-0 min-w-0'
+      )}
     >
       <div className="flex flex-col h-full">
         {/* Header */}
