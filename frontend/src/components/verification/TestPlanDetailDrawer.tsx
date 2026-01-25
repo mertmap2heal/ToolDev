@@ -25,6 +25,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
     entryCriteria: plan?.entryCriteria || '',
     exitCriteria: plan?.exitCriteria || '',
     phase: plan?.phase || '',
+    ownerUserId: plan?.ownerUserId || '',
   })
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
@@ -143,6 +144,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
         entryCriteria: currentPlan.entryCriteria || '',
         exitCriteria: currentPlan.exitCriteria || '',
         phase: currentPlan.phase || '',
+        ownerUserId: currentPlan.ownerUserId || '',
       })
     }
   }, [currentPlan])
@@ -241,6 +243,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
                       entryCriteria: currentPlan?.entryCriteria || '',
                       exitCriteria: currentPlan?.exitCriteria || '',
                       phase: currentPlan?.phase || '',
+                      ownerUserId: currentPlan?.ownerUserId || '',
                     })
                   }}
                   className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
@@ -406,6 +409,24 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
                   />
                 ) : (
                   <p className="text-gray-900 dark:text-white">{currentPlan?.phase || 'No phase specified'}</p>
+                )}
+              </div>
+
+              {/* Owner User ID */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Owner User ID
+                </label>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={editData.ownerUserId}
+                    onChange={(e) => setEditData({ ...editData, ownerUserId: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="Enter owner user ID (optional)"
+                  />
+                ) : (
+                  <p className="text-gray-900 dark:text-white">{currentPlan?.ownerUserId || '—'}</p>
                 )}
               </div>
 

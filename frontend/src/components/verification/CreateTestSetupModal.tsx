@@ -24,7 +24,6 @@ export default function CreateTestSetupModal({ isOpen, onClose, projectId }: Cre
   const [components, setComponents] = useState<Component[]>([])
   const [interfaces, setInterfaces] = useState<Interface[]>([])
   const [diagramData, setDiagramData] = useState<any>(null)
-  const [photos, setPhotos] = useState<any[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const queryClient = useQueryClient()
@@ -68,7 +67,6 @@ export default function CreateTestSetupModal({ isOpen, onClose, projectId }: Cre
     setComponents([])
     setInterfaces([])
     setDiagramData(null)
-    setPhotos([])
     setErrors({})
   }
 
@@ -89,15 +87,13 @@ export default function CreateTestSetupModal({ isOpen, onClose, projectId }: Cre
     setStep('editor')
   }
 
-  const handleEditorSave = (editorData: { diagramData: any; photos: any[] }) => {
+  const handleEditorSave = (editorData: { diagramData: any }) => {
     setDiagramData(editorData.diagramData)
-    setPhotos(editorData.photos)
     handleSubmit(editorData)
   }
 
-  const handleSubmit = (editorData?: { diagramData: any; photos: any[] }) => {
+  const handleSubmit = (editorData?: { diagramData: any }) => {
     const finalDiagramData = editorData?.diagramData || diagramData
-    const finalPhotos = editorData?.photos || photos
 
     const submitData: any = {
       name: formData.name.trim(),
@@ -107,7 +103,6 @@ export default function CreateTestSetupModal({ isOpen, onClose, projectId }: Cre
       components: components.length > 0 ? components : undefined,
       interfaces: interfaces.length > 0 ? interfaces : undefined,
       diagramData: finalDiagramData || undefined,
-      photos: finalPhotos.length > 0 ? finalPhotos : undefined,
     }
 
     createSetupMutation.mutate(submitData)
@@ -140,7 +135,6 @@ export default function CreateTestSetupModal({ isOpen, onClose, projectId }: Cre
           interfaces,
         }}
         initialDiagramData={diagramData}
-        initialPhotos={photos}
       />
     )
   }

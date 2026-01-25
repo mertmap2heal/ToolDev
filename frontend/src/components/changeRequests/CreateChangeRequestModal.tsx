@@ -12,7 +12,7 @@ interface CreateChangeRequestModalProps {
   isOpen: boolean
   onClose: () => void
   projectId: string
-  sourceType?: 'function' | 'issue' | 'parameter' | 'requirement'
+  sourceType?: 'function' | 'issue' | 'parameter' | 'requirement' | 'test-plan' | 'test-case' | 'test-setup' | 'test-result'
   sourceId?: string
   sourceName?: string
   sourceTitle?: string
@@ -21,7 +21,7 @@ interface CreateChangeRequestModalProps {
 
 type SourceItem = {
   id: string
-  type: 'function' | 'issue' | 'parameter' | 'requirement'
+  type: 'function' | 'issue' | 'parameter' | 'requirement' | 'test-plan' | 'test-case' | 'test-setup' | 'test-result'
   name: string
   description?: string
   functionId?: string

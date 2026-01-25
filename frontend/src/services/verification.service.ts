@@ -60,6 +60,10 @@ export const verificationService = {
     return apiClient.patch(`/verification/setups/${projectId}/${id}`, data)
   },
 
+  async deleteSetup(projectId: string, id: string): Promise<ApiResponse<any>> {
+    return apiClient.delete(`/verification/setups/${projectId}/${id}`)
+  },
+
   async approveSetup(projectId: string, id: string): Promise<ApiResponse<any>> {
     return apiClient.post(`/verification/setups/${projectId}/${id}/approve`)
   },
@@ -78,8 +82,16 @@ export const verificationService = {
     return apiClient.patch(`/verification/test-plans/${projectId}/${id}`, data)
   },
 
+  async deleteTestPlan(projectId: string, id: string): Promise<ApiResponse<any>> {
+    return apiClient.delete(`/verification/test-plans/${projectId}/${id}`)
+  },
+
   async updateTestCase(projectId: string, id: string, data: any): Promise<ApiResponse<any>> {
     return apiClient.patch(`/verification/test-cases/${projectId}/${id}`, data)
+  },
+
+  async deleteTestCase(projectId: string, id: string): Promise<ApiResponse<any>> {
+    return apiClient.delete(`/verification/test-cases/${projectId}/${id}`)
   },
 
   // Approval methods

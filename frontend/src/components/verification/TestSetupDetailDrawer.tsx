@@ -3,6 +3,8 @@ import { X, ChevronDown, Edit2, CheckCircle, XCircle, FileText, Download, AlertC
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
 import type { Component, Interface } from './ComponentFormSection'
+import ComponentFormSection from './ComponentFormSection'
+import InterfaceFormSection from './InterfaceFormSection'
 import CustomDropdown from './CustomDropdown'
 import clsx from 'clsx'
 import ReactFlow, {
@@ -148,7 +150,7 @@ function DiagramTab({
 }
 
 export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectId }: TestSetupDetailDrawerProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'components' | 'interfaces' | 'diagram' | 'photos'>(
+  const [activeTab, setActiveTab] = useState<'overview' | 'components' | 'interfaces' | 'diagram'>(
     'overview'
   )
   const [isEditing, setIsEditing] = useState(false)
@@ -158,6 +160,8 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
     environmentType: '',
     version: '',
   })
+  const [editComponents, setEditComponents] = useState<Component[]>([])
+  const [editInterfaces, setEditInterfaces] = useState<Interface[]>([])
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
   const statusDropdownRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
@@ -266,7 +270,6 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
   const currentSetup = setupDetails || setup
   const components = (currentSetup?.components as Component[]) || []
   const interfaces = (currentSetup?.interfaces as Interface[]) || []
-  const photos = (currentSetup?.photos as any[]) || []
 
   useEffect(() => {
     if (currentSetup) {
@@ -276,6 +279,8 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
         environmentType: currentSetup.environmentType || '',
         version: currentSetup.version || '1.0',
       })
+      setEditComponents((currentSetup.components as Component[]) || [])
+      setEditInterfaces((currentSetup.interfaces as Interface[]) || [])
     }
   }, [currentSetup])
 
@@ -293,7 +298,12 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
   }, [statusDropdownOpen])
 
   const handleSave = () => {
-    updateSetupMutation.mutate(editData)
+    const submitData = {
+      ...editData,
+      components: editComponents,
+      interfaces: editInterfaces,
+    }
+    updateSetupMutation.mutate(submitData)
   }
 
   if (!setup) return null
@@ -370,6 +380,8 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
                       environmentType: currentSetup?.environmentType || '',
                       version: currentSetup?.version || '1.0',
                     })
+                    setEditComponents((currentSetup?.components as Component[]) || [])
+                    setEditInterfaces((currentSetup?.interfaces as Interface[]) || [])
                   }}
                   className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
                 >
@@ -393,7 +405,7 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
         {/* Tabs */}
         <div className="border-b border-gray-200 dark:border-gray-700 px-6">
           <div className="flex gap-4">
-            {(['overview', 'components', 'interfaces', 'diagram', 'photos'] as const).map((tab) => (
+            {(['overview', 'components', 'interfaces', 'diagram'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -476,90 +488,111 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
 
           {activeTab === 'components' && (
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Components ({components.length})
-              </h3>
-              {components.length === 0 ? (
-                <p className="text-gray-500 dark:text-gray-400 text-center py-8">No components defined</p>
+              {isEditing ? (
+                <ComponentFormSection
+                  components={editComponents}
+                  onChange={setEditComponents}
+                  projectId={projectId}
+                  setupId={setup?.id}
+                />
               ) : (
-                <div className="space-y-3">
-                  {components.map((component: any, idx: number) => (
-                    <div
-                      key={idx}
-                      className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-700/50"
-                    >
-                      <div className="font-semibold text-gray-900 dark:text-white">{component.name}</div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Type: {component.type}</div>
-                      {component.manufacturer && (
-                        <div className="text-sm text-gray-600 dark:text-gray-400">
-                          Manufacturer: {component.manufacturer}
+                <>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Components ({components.length})
+                  </h3>
+                  {components.length === 0 ? (
+                    <p className="text-gray-500 dark:text-gray-400 text-center py-8">No components defined</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {components.map((component: any, idx: number) => (
+                        <div
+                          key={idx}
+                          className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-700/50"
+                        >
+                          <div className="font-semibold text-gray-900 dark:text-white">{component.name}</div>
+                          <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Type: {component.type}</div>
+                          {component.manufacturer && (
+                            <div className="text-sm text-gray-600 dark:text-gray-400">
+                              Manufacturer: {component.manufacturer}
+                            </div>
+                          )}
+                          {component.model && (
+                            <div className="text-sm text-gray-600 dark:text-gray-400">Model: {component.model}</div>
+                          )}
+                          {component.specifications && (
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                              {component.specifications}
+                            </div>
+                          )}
+                          {component.manual && (
+                            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                              <div className="flex items-center gap-2">
+                                <FileText size={16} className="text-gray-600 dark:text-gray-400" />
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                  Manual:
+                                </span>
+                                <a
+                                  href={component.manual.fileUrl}
+                                  download={component.manual.fileName}
+                                  className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                                >
+                                  <Download size={14} />
+                                  {component.manual.fileName}
+                                </a>
+                                {component.manual.fileSize && (
+                                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                                    ({(component.manual.fileSize / 1024).toFixed(1)} KB)
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      )}
-                      {component.model && (
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Model: {component.model}</div>
-                      )}
-                      {component.specifications && (
-                        <div className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                          {component.specifications}
-                        </div>
-                      )}
-                      {component.manual && (
-                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
-                          <div className="flex items-center gap-2">
-                            <FileText size={16} className="text-gray-600 dark:text-gray-400" />
-                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                              Manual:
-                            </span>
-                            <a
-                              href={component.manual.fileUrl}
-                              download={component.manual.fileName}
-                              className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                            >
-                              <Download size={14} />
-                              {component.manual.fileName}
-                            </a>
-                            {component.manual.fileSize && (
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                ({(component.manual.fileSize / 1024).toFixed(1)} KB)
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )}
             </div>
           )}
 
           {activeTab === 'interfaces' && (
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Interfaces ({interfaces.length})
-              </h3>
-              {interfaces.length === 0 ? (
-                <p className="text-gray-500 dark:text-gray-400 text-center py-8">No interfaces defined</p>
+              {isEditing ? (
+                <InterfaceFormSection
+                  interfaces={editInterfaces}
+                  onChange={setEditInterfaces}
+                  projectId={projectId}
+                />
               ) : (
-                <div className="space-y-3">
-                  {interfaces.map((interface_: any, idx: number) => (
-                    <div
-                      key={idx}
-                      className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-700/50"
-                    >
-                      <div className="font-semibold text-gray-900 dark:text-white">{interface_.name}</div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Type: {interface_.type}</div>
-                      {interface_.protocol && (
-                        <div className="text-sm text-gray-600 dark:text-gray-400">
-                          Protocol: {interface_.protocol}
+                <>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Interfaces ({interfaces.length})
+                  </h3>
+                  {interfaces.length === 0 ? (
+                    <p className="text-gray-500 dark:text-gray-400 text-center py-8">No interfaces defined</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {interfaces.map((interface_: any, idx: number) => (
+                        <div
+                          key={idx}
+                          className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-700/50"
+                        >
+                          <div className="font-semibold text-gray-900 dark:text-white">{interface_.name}</div>
+                          <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Type: {interface_.type}</div>
+                          {interface_.protocol && (
+                            <div className="text-sm text-gray-600 dark:text-gray-400">
+                              Protocol: {interface_.protocol}
+                            </div>
+                          )}
+                          {interface_.description && (
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mt-2">{interface_.description}</div>
+                          )}
                         </div>
-                      )}
-                      {interface_.description && (
-                        <div className="text-sm text-gray-600 dark:text-gray-400 mt-2">{interface_.description}</div>
-                      )}
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -572,40 +605,6 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
               edges={edges}
               nodeTypes={nodeTypes}
             />
-          )}
-
-          {activeTab === 'photos' && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Photos ({photos.length})</h3>
-              {photos.length === 0 ? (
-                <p className="text-gray-500 dark:text-gray-400 text-center py-8">No photos uploaded</p>
-              ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {photos.map((photo: any, idx: number) => (
-                    <div
-                      key={idx}
-                      className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
-                    >
-                      <img
-                        src={photo.fileUrl || photo.url}
-                        alt={photo.fileName || photo.name}
-                        className="w-full h-48 object-cover"
-                      />
-                      <div className="p-2 bg-gray-50 dark:bg-gray-700/50">
-                        <div className="text-xs font-medium text-gray-900 dark:text-white truncate">
-                          {photo.fileName || photo.name}
-                        </div>
-                        {photo.fileSize && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {(photo.fileSize / 1024).toFixed(1)} KB
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           )}
         </div>
         </div>

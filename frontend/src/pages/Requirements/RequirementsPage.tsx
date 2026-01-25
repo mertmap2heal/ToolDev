@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, Check, Grid3X3, Archive, Download, Upload, GitBranch } from 'lucide-react'
+import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
 import CreateRequirementModal from '../../components/requirements/CreateRequirementModal'
@@ -81,6 +81,98 @@ export default function RequirementsPage() {
   
   // Grouping by type
   const [groupByType, setGroupByType] = useState<boolean>(false)
+
+  // Column definitions for requirements
+  type ColumnKey = string
+  type ColumnConfig = {
+    key: ColumnKey
+    label: string
+    defaultVisible: boolean
+  }
+
+  const REQUIREMENT_COLUMNS: ColumnConfig[] = [
+    { key: 'requirementId', label: 'Requirement ID', defaultVisible: true },
+    { key: 'title', label: 'Title', defaultVisible: true },
+    { key: 'description', label: 'Description', defaultVisible: true },
+    { key: 'priority', label: 'Priority', defaultVisible: true },
+    { key: 'status', label: 'Status', defaultVisible: true },
+    { key: 'owner', label: 'Owner', defaultVisible: true },
+    { key: 'category', label: 'Category', defaultVisible: false },
+    { key: 'source', label: 'Source', defaultVisible: false },
+    { key: 'requirementType', label: 'Type', defaultVisible: false },
+    { key: 'verificationMethod', label: 'Verification Method', defaultVisible: false },
+    { key: 'acceptanceCriteria', label: 'Acceptance Criteria', defaultVisible: false },
+    { key: 'stage', label: 'Stage', defaultVisible: false },
+    { key: 'createdAt', label: 'Created', defaultVisible: false },
+    { key: 'updatedAt', label: 'Updated', defaultVisible: false },
+  ]
+
+  // Helper to get default visible columns
+  const getDefaultVisibleColumns = (columns: ColumnConfig[]): Set<ColumnKey> => {
+    return new Set(columns.filter(col => col.defaultVisible).map(col => col.key))
+  }
+
+  // Helper to load column preferences from localStorage
+  const loadColumnPreferences = (): Set<ColumnKey> => {
+    try {
+      const stored = localStorage.getItem('requirements-columns')
+      if (stored) {
+        const parsed = JSON.parse(stored) as ColumnKey[]
+        return new Set(parsed)
+      }
+    } catch (e) {
+      console.error('Failed to load column preferences:', e)
+    }
+    return getDefaultVisibleColumns(REQUIREMENT_COLUMNS)
+  }
+
+  // Helper to save column preferences to localStorage
+  const saveColumnPreferences = (visibleColumns: Set<ColumnKey>) => {
+    try {
+      localStorage.setItem('requirements-columns', JSON.stringify(Array.from(visibleColumns)))
+    } catch (e) {
+      console.error('Failed to save column preferences:', e)
+    }
+  }
+
+  // Column visibility state
+  const [requirementColumns, setRequirementColumns] = useState<Set<ColumnKey>>(() => 
+    loadColumnPreferences()
+  )
+
+  // Column selector dropdown state
+  const [columnSelectorOpen, setColumnSelectorOpen] = useState<boolean>(false)
+  const columnSelectorRef = useRef<HTMLDivElement>(null)
+
+  // Close column selector when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (columnSelectorRef.current && !columnSelectorRef.current.contains(event.target as Node)) {
+        setColumnSelectorOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Column selector handlers
+  const toggleColumn = (columnKey: ColumnKey) => {
+    const newSet = new Set(requirementColumns)
+    
+    if (newSet.has(columnKey)) {
+      newSet.delete(columnKey)
+    } else {
+      newSet.add(columnKey)
+    }
+
+    setRequirementColumns(newSet)
+    saveColumnPreferences(newSet)
+  }
+
+  // Calculate total column count (checkbox + visible columns + actions)
+  const getTotalColumnCount = () => {
+    return 1 + requirementColumns.size + 1 // checkbox + visible columns + actions
+  }
 
   const queryClient = useQueryClient()
 
@@ -703,35 +795,38 @@ export default function RequirementsPage() {
               />
             </div>
           </td>
-          <td className="px-4 py-3">
-            <div className="flex items-center gap-2" style={{ paddingLeft: `${level * 24}px` }}>
-              {hasChildren ? (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleRow(req.id)
-                  }}
-                  className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+          {requirementColumns.has('requirementId') && (
+            <td className="px-4 py-3">
+              <div className="flex items-center gap-2" style={{ paddingLeft: `${level * 24}px` }}>
+                {hasChildren ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleRow(req.id)
+                    }}
+                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                  >
+                    {isExpanded ? (
+                      <ChevronDown size={16} className="text-gray-600 dark:text-gray-400" />
+                    ) : (
+                      <ChevronRight size={16} className="text-gray-600 dark:text-gray-400" />
+                    )}
+                  </button>
+                ) : (
+                  <div className="w-6" />
+                )}
+                <span
+                  className="font-mono text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                  onClick={() => setDetailRequirement(req)}
                 >
-                  {isExpanded ? (
-                    <ChevronDown size={16} className="text-gray-600 dark:text-gray-400" />
-                  ) : (
-                    <ChevronRight size={16} className="text-gray-600 dark:text-gray-400" />
-                  )}
-                </button>
-              ) : (
-                <div className="w-6" />
-              )}
-              <span
-                className="font-mono text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
-                onClick={() => setDetailRequirement(req)}
-              >
-                {req.requirementId || req.id.substring(0, 8)}
-              </span>
-            </div>
-          </td>
+                  {req.requirementId || req.id.substring(0, 8)}
+                </span>
+              </div>
+            </td>
+          )}
           {/* Title - inline editable */}
-          <td className="px-4 py-3">
+          {requirementColumns.has('title') && (
+            <td className="px-4 py-3">
             {inlineEdit?.requirementId === req.id && inlineEdit.field === 'title' ? (
               <div className="flex items-center gap-1">
                 <input
@@ -765,8 +860,10 @@ export default function RequirementsPage() {
               </div>
             )}
           </td>
+          )}
           {/* Description */}
-          <td className="px-4 py-3">
+          {requirementColumns.has('description') && (
+            <td className="px-4 py-3">
             <div className="text-sm text-gray-600 dark:text-gray-400 max-w-md">
               <p className="line-clamp-2" title={req.description}>
                 {req.description ? (
@@ -777,8 +874,10 @@ export default function RequirementsPage() {
               </p>
             </div>
           </td>
+          )}
           {/* Priority - inline editable */}
-          <td className="px-4 py-3">
+          {requirementColumns.has('priority') && (
+            <td className="px-4 py-3">
             {inlineEdit?.requirementId === req.id && inlineEdit.field === 'priority' ? (
               <select
                 value={inlineEdit.value}
@@ -810,8 +909,10 @@ export default function RequirementsPage() {
               </span>
             )}
           </td>
+          )}
           {/* Status - inline editable */}
-          <td className="px-4 py-3">
+          {requirementColumns.has('status') && (
+            <td className="px-4 py-3">
             {inlineEdit?.requirementId === req.id && inlineEdit.field === 'status' ? (
               <select
                 value={inlineEdit.value}
@@ -844,8 +945,10 @@ export default function RequirementsPage() {
               </span>
             )}
           </td>
+          )}
           {/* Owner - inline editable */}
-          <td className="px-4 py-3">
+          {requirementColumns.has('owner') && (
+            <td className="px-4 py-3">
             {inlineEdit?.requirementId === req.id && inlineEdit.field === 'owner' ? (
               <select
                 value={inlineEdit.value}
@@ -877,6 +980,58 @@ export default function RequirementsPage() {
               </span>
             )}
           </td>
+          )}
+          {requirementColumns.has('category') && (
+            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+              {req.category || '—'}
+            </td>
+          )}
+          {requirementColumns.has('source') && (
+            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+              {req.source || '—'}
+            </td>
+          )}
+          {requirementColumns.has('requirementType') && (
+            <td className="px-4 py-3">
+              {req.requirementType && (
+                <span className={clsx('px-2 py-0.5 text-xs font-medium rounded-full', getRequirementTypeColor(req.requirementType))}>
+                  {formatRequirementType(req.requirementType)}
+                </span>
+              )}
+              {!req.requirementType && <span className="text-gray-400">—</span>}
+            </td>
+          )}
+          {requirementColumns.has('verificationMethod') && (
+            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+              {req.verificationMethod || '—'}
+            </td>
+          )}
+          {requirementColumns.has('acceptanceCriteria') && (
+            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-md">
+              <p className="line-clamp-2" title={req.acceptanceCriteria}>
+                {req.acceptanceCriteria ? (
+                  <span dangerouslySetInnerHTML={{ __html: req.acceptanceCriteria.replace(/<[^>]*>/g, '').substring(0, 100) + (req.acceptanceCriteria.length > 100 ? '...' : '') }} />
+                ) : (
+                  <span className="text-gray-400">—</span>
+                )}
+              </p>
+            </td>
+          )}
+          {requirementColumns.has('stage') && (
+            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+              {req.stage || '—'}
+            </td>
+          )}
+          {requirementColumns.has('createdAt') && (
+            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+              {req.createdAt ? format(new Date(req.createdAt), 'MMM d, yyyy') : '—'}
+            </td>
+          )}
+          {requirementColumns.has('updatedAt') && (
+            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+              {req.updatedAt ? format(new Date(req.updatedAt), 'MMM d, yyyy') : '—'}
+            </td>
+          )}
           <td className="px-4 py-3">
             <div className="flex items-center gap-2">
               <button
@@ -918,7 +1073,7 @@ export default function RequirementsPage() {
             {/* Linked Functions */}
             {rowData.linkedFunctions.length > 0 && (
               <tr>
-                  <td colSpan={9} className="px-4 py-2 bg-blue-50/50 dark:bg-blue-900/10">
+                  <td colSpan={getTotalColumnCount()} className="px-4 py-2 bg-blue-50/50 dark:bg-blue-900/10">
                   <div className="pl-8">
                     <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-2 flex items-center gap-2">
                       <Settings size={14} />
@@ -967,7 +1122,7 @@ export default function RequirementsPage() {
             {/* Linked Change Requests */}
             {rowData.linkedChangeRequests.length > 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-2 bg-purple-50/50 dark:bg-purple-900/10">
+                <td colSpan={getTotalColumnCount()} className="px-4 py-2 bg-purple-50/50 dark:bg-purple-900/10">
                   <div className="pl-8">
                     <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-2 flex items-center gap-2">
                       <FileText size={14} />
@@ -989,7 +1144,7 @@ export default function RequirementsPage() {
             )}
             {/* Description */}
             <tr>
-              <td colSpan={9} className="px-4 py-3 bg-gray-50 dark:bg-gray-900/50">
+              <td colSpan={getTotalColumnCount()} className="px-4 py-3 bg-gray-50 dark:bg-gray-900/50">
                 <div className="pl-8">
                   <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description</p>
                   <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
@@ -1133,6 +1288,49 @@ export default function RequirementsPage() {
             <Upload size={16} />
             <span className="text-sm">Export</span>
           </button>
+          <div className="relative" ref={columnSelectorRef}>
+            <button
+              onClick={() => setColumnSelectorOpen(!columnSelectorOpen)}
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+              title="Customize Columns"
+            >
+              <Columns size={16} />
+              <span className="text-sm">Columns</span>
+            </button>
+            {columnSelectorOpen && (
+              <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Select Columns</h3>
+                  <button
+                    onClick={() => setColumnSelectorOpen(false)}
+                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {REQUIREMENT_COLUMNS.map((col) => (
+                    <label
+                      key={col.key}
+                      className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded cursor-pointer"
+                    >
+                      <button
+                        onClick={() => toggleColumn(col.key)}
+                        className="text-gray-600 dark:text-gray-400"
+                      >
+                        {requirementColumns.has(col.key) ? (
+                          <CheckSquare size={18} className="text-blue-600" />
+                        ) : (
+                          <Square size={18} />
+                        )}
+                      </button>
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{col.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
           {projectId && <SafetyLinkPanel variant="linked" count={3} />}
           <button
             onClick={() => setIsDiagramOpen(true)}
@@ -1372,24 +1570,76 @@ export default function RequirementsPage() {
                     className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                   />
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Requirement ID
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Title
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Description
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Priority
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Owner
-                </th>
+                {requirementColumns.has('requirementId') && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Requirement ID
+                  </th>
+                )}
+                {requirementColumns.has('title') && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Title
+                  </th>
+                )}
+                {requirementColumns.has('description') && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Description
+                  </th>
+                )}
+                {requirementColumns.has('priority') && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Priority
+                  </th>
+                )}
+                {requirementColumns.has('status') && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Status
+                  </th>
+                )}
+                {requirementColumns.has('owner') && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Owner
+                  </th>
+                )}
+                {requirementColumns.has('category') && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Category
+                  </th>
+                )}
+                {requirementColumns.has('source') && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Source
+                  </th>
+                )}
+                {requirementColumns.has('requirementType') && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Type
+                  </th>
+                )}
+                {requirementColumns.has('verificationMethod') && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Verification Method
+                  </th>
+                )}
+                {requirementColumns.has('acceptanceCriteria') && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Acceptance Criteria
+                  </th>
+                )}
+                {requirementColumns.has('stage') && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Stage
+                  </th>
+                )}
+                {requirementColumns.has('createdAt') && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Created
+                  </th>
+                )}
+                {requirementColumns.has('updatedAt') && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Updated
+                  </th>
+                )}
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-24">
                   Actions
                 </th>
@@ -1398,7 +1648,7 @@ export default function RequirementsPage() {
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={getTotalColumnCount()} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                     Loading requirements...
                   </td>
                 </tr>
@@ -1411,7 +1661,7 @@ export default function RequirementsPage() {
                   if (!hasAnyRequirements) {
                     return (
                       <tr>
-                        <td colSpan={8} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                        <td colSpan={getTotalColumnCount()} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                           {requirements.length === 0
                             ? 'No requirements found. Click "Create Requirement" to get started.'
                             : 'No requirements match your search or filter criteria.'}
@@ -1437,7 +1687,7 @@ export default function RequirementsPage() {
                       <React.Fragment key={type}>
                         {/* Section Header */}
                         <tr className="bg-gray-100 dark:bg-gray-800 border-t-2 border-gray-300 dark:border-gray-600">
-                          <td colSpan={8} className="px-4 py-3">
+                          <td colSpan={getTotalColumnCount()} className="px-4 py-3">
                             <div className="flex items-center justify-between">
                               <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">
                                 {formatRequirementTypeName(type)} Requirements
@@ -1462,7 +1712,7 @@ export default function RequirementsPage() {
                   if (hierarchyRequirements.length === 0) {
                     return (
                       <tr>
-                        <td colSpan={8} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                        <td colSpan={getTotalColumnCount()} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                           {requirements.length === 0
                             ? 'No requirements found. Click "Create Requirement" to get started.'
                             : 'No requirements match your search or filter criteria.'}

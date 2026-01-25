@@ -450,3 +450,56 @@ export const unlinkVerificationElement = async (req: AuthRequest, res: Response)
     res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
   }
 }
+
+export const deleteTestCase = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id } = req.params
+
+    const testCase = await prisma.verTestCase.findFirst({
+      where: { id, projectId },
+    })
+
+    if (!testCase) {
+      return res.status(404).json({ success: false, error: 'Test case not found' })
+    }
+
+    // Delete verification links (trace links)
+    const traceLinks = await prisma.traceLink.findMany({
+      where: {
+        projectId,
+        sourceType: 'test_case',
+        sourceId: id,
+      },
+    })
+    for (const link of traceLinks) {
+      await traceabilityService.deleteTraceLink(projectId, link.id)
+    }
+
+    // Delete test result links
+    await prisma.verTestResultLink.deleteMany({
+      where: {
+        linkedEntityType: 'TEST_CASE',
+        linkedEntityId: id,
+      },
+    })
+
+    // Delete test case (customSections and testCaseSetups will cascade delete automatically)
+    await prisma.verTestCase.delete({
+      where: { id },
+    })
+
+    await auditService.logEvent({
+      projectId,
+      entityType: 'TEST_CASE',
+      entityId: id,
+      action: AuditAction.DELETE,
+      oldValue: testCase,
+      performedByUserId: req.userId,
+    })
+
+    res.json({ success: true, message: 'Test case deleted' })
+  } catch (error: any) {
+    console.error('Delete test case error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+}

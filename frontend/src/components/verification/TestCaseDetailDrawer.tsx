@@ -26,7 +26,9 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
     passFailCriteria: '',
     linkedMocCode: '',
     linkedMethodId: '',
+    ownerUserId: '',
   })
+  const [selectedSetups, setSelectedSetups] = useState<string[]>([])
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
   const statusDropdownRef = useRef<HTMLDivElement>(null)
@@ -62,6 +64,16 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
     enabled: isOpen && !!projectId,
   })
 
+  // Fetch all available setups
+  const { data: setups = [] } = useQuery({
+    queryKey: ['setups', projectId],
+    queryFn: async () => {
+      const response = await verificationService.getSetups(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: isOpen && !!projectId,
+  })
+
   // Fetch report data when export modal opens
   const { data: reportData } = useQuery({
     queryKey: ['test-case-report', projectId, testCase?.id],
@@ -89,7 +101,6 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
       queryClient.invalidateQueries({ queryKey: ['test-case', projectId, testCase.id] })
       queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
       queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
-      setIsEditing(false)
     },
   })
 
@@ -129,6 +140,14 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
     onSuccess: () => {
       refetchCustomSections()
     },
+  })
+
+  const linkSetupMutation = useMutation({
+    mutationFn: (setupId: string) => verificationService.linkSetup(projectId, testCase.id, setupId),
+  })
+
+  const unlinkSetupMutation = useMutation({
+    mutationFn: (setupId: string) => verificationService.unlinkSetup(projectId, testCase.id, setupId),
   })
 
   const getStatusColor = (status: string) => {
@@ -172,7 +191,12 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
         passFailCriteria: currentCase.passFailCriteria || '',
         linkedMocCode: currentCase.linkedMocCode?.toString() || '',
         linkedMethodId: currentCase.linkedMethodId || '',
+        ownerUserId: currentCase.ownerUserId || '',
       })
+
+      // Initialize selectedSetups from currentCase.testCaseSetups
+      const currentSetupIds = currentCase.testCaseSetups?.map((link: any) => link.setupId) || []
+      setSelectedSetups(currentSetupIds)
     }
   }, [currentCase])
 
@@ -189,12 +213,13 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
     }
   }, [statusDropdownOpen])
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const submitData: any = {
       title: editData.title.trim(),
       objective: editData.objective?.trim() || undefined,
       preconditions: editData.preconditions?.trim() || undefined,
       passFailCriteria: editData.passFailCriteria?.trim() || undefined,
+      ownerUserId: editData.ownerUserId?.trim() || undefined,
     }
 
     // Parse steps and expectedResults
@@ -228,7 +253,41 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
       submitData.linkedMethodId = null
     }
 
-    updateCaseMutation.mutate(submitData)
+    try {
+      // Update test case
+      await updateCaseMutation.mutateAsync(submitData)
+
+      // Get currently linked setup IDs
+      const currentSetupIds = currentCase?.testCaseSetups?.map((link: any) => link.setupId) || []
+
+      // Link new setups
+      const setupsToLink = selectedSetups.filter(id => !currentSetupIds.includes(id))
+      for (const setupId of setupsToLink) {
+        try {
+          await linkSetupMutation.mutateAsync(setupId)
+        } catch (error) {
+          console.error('Failed to link setup:', error)
+        }
+      }
+
+      // Unlink removed setups
+      const setupsToUnlink = currentSetupIds.filter((id: string) => !selectedSetups.includes(id))
+      for (const setupId of setupsToUnlink) {
+        try {
+          await unlinkSetupMutation.mutateAsync(setupId)
+        } catch (error) {
+          console.error('Failed to unlink setup:', error)
+        }
+      }
+
+      // Invalidate queries to refresh data (updateCaseMutation already invalidates, but we do it again after setup changes)
+      queryClient.invalidateQueries({ queryKey: ['test-case', projectId, testCase.id] })
+      queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
+      setIsEditing(false)
+    } catch (error) {
+      console.error('Failed to save test case:', error)
+    }
   }
 
   if (!testCase) return null
@@ -318,7 +377,11 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
                       passFailCriteria: currentCase?.passFailCriteria || '',
                       linkedMocCode: currentCase?.linkedMocCode?.toString() || '',
                       linkedMethodId: currentCase?.linkedMethodId || '',
+                      ownerUserId: currentCase?.ownerUserId || '',
                     })
+                    // Reset selectedSetups from currentCase.testCaseSetups
+                    const currentSetupIds = currentCase?.testCaseSetups?.map((link: any) => link.setupId) || []
+                    setSelectedSetups(currentSetupIds)
                   }}
                   className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"
                 >
@@ -533,6 +596,86 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
               <p className="text-gray-900 dark:text-white">
                 {currentCase?.method ? `${currentCase.method.name} (${currentCase.method.methodType})` : 'No method linked'}
               </p>
+            )}
+          </div>
+
+          {/* Owner User ID */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Owner User ID
+            </label>
+            {isEditing ? (
+              <input
+                type="text"
+                value={editData.ownerUserId}
+                onChange={(e) => setEditData({ ...editData, ownerUserId: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder="Enter owner user ID (optional)"
+              />
+            ) : (
+              <p className="text-gray-900 dark:text-white">{currentCase?.ownerUserId || '—'}</p>
+            )}
+          </div>
+
+          {/* Test Setups */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Test Setups
+            </label>
+            {isEditing ? (
+              <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-lg p-3">
+                {setups.length === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">No test setups available</p>
+                ) : (
+                  setups.map((setup: any) => (
+                    <div key={setup.id} className="flex items-center gap-2 p-2 border border-gray-200 dark:border-gray-600 rounded-lg">
+                      <input
+                        type="checkbox"
+                        checked={selectedSetups.includes(setup.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedSetups([...selectedSetups, setup.id])
+                          } else {
+                            setSelectedSetups(selectedSetups.filter((id) => id !== setup.id))
+                          }
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">{setup.name}</div>
+                        {setup.description && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400">{setup.description}</div>
+                        )}
+                        {setup.environmentType && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Type: {setup.environmentType}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {currentCase?.testCaseSetups && currentCase.testCaseSetups.length > 0 ? (
+                  currentCase.testCaseSetups.map((link: any) => (
+                    <div key={link.id} className="p-2 border border-gray-200 dark:border-gray-600 rounded-lg">
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">{link.setup?.name}</div>
+                      {link.setup?.description && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{link.setup.description}</div>
+                      )}
+                      {link.setup?.environmentType && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Type: {link.setup.environmentType}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">No test setups linked</p>
+                )}
+              </div>
             )}
           </div>
 

@@ -299,3 +299,44 @@ export const uploadComponentManual = async (req: AuthRequest, res: Response) => 
     })
   }
 }
+
+export const deleteSetup = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id } = req.params
+
+    const setup = await prisma.verTestSetup.findFirst({
+      where: { id, projectId },
+    })
+
+    if (!setup) {
+      return res.status(404).json({ success: false, error: 'Test setup not found' })
+    }
+
+    // Delete test result links
+    await prisma.verTestResultLink.deleteMany({
+      where: {
+        linkedEntityType: 'TEST_SETUP',
+        linkedEntityId: id,
+      },
+    })
+
+    // Delete test setup (testCaseSetups will cascade delete automatically)
+    await prisma.verTestSetup.delete({
+      where: { id },
+    })
+
+    await auditService.logEvent({
+      projectId,
+      entityType: 'SETUP',
+      entityId: id,
+      action: AuditAction.DELETE,
+      oldValue: setup,
+      performedByUserId: req.userId,
+    })
+
+    res.json({ success: true, message: 'Test setup deleted' })
+  } catch (error: any) {
+    console.error('Delete test setup error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+}

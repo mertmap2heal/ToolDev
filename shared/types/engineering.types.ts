@@ -321,7 +321,7 @@ export interface ChangeRequest {
 export interface CreateChangeRequestDto {
   title: string
   description: string
-  sourceType: 'function' | 'issue' | 'parameter' | 'requirement'
+  sourceType: 'function' | 'issue' | 'parameter' | 'requirement' | 'test-plan' | 'test-case' | 'test-setup' | 'test-result'
   sourceId: string
   priority: 'low' | 'medium' | 'high' | 'critical'
   requestedBy?: string
