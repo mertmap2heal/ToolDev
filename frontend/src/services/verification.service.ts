@@ -299,4 +299,72 @@ export const verificationService = {
   async deleteCustomSectionImage(projectId: string, imageId: string): Promise<ApiResponse<void>> {
     return apiClient.delete(`/verification/test-cases/${projectId}/${imageId}/custom-sections/images`)
   },
+
+  // Templates
+  async getTemplates(
+    projectId: string,
+    opts?: { type?: 'TEST_CASE' | 'TEST_PLAN'; includeArchived?: boolean }
+  ): Promise<ApiResponse<any[]>> {
+    const params = new URLSearchParams()
+    if (opts?.type) params.set('type', opts.type)
+    if (opts?.includeArchived) params.set('includeArchived', 'true')
+    const qs = params.toString()
+    return apiClient.get(`/verification/templates/${projectId}${qs ? `?${qs}` : ''}`)
+  },
+
+  async getTemplate(projectId: string, id: string): Promise<ApiResponse<any>> {
+    return apiClient.get(`/verification/templates/${projectId}/${id}`)
+  },
+
+  async createTemplate(
+    projectId: string,
+    data: { type: 'TEST_CASE' | 'TEST_PLAN'; name: string }
+  ): Promise<ApiResponse<any>> {
+    return apiClient.post(`/verification/templates/${projectId}`, data)
+  },
+
+  async updateTemplate(
+    projectId: string,
+    id: string,
+    data: { name?: string; contentJson?: any }
+  ): Promise<ApiResponse<any>> {
+    return apiClient.patch(`/verification/templates/${projectId}/${id}`, data)
+  },
+
+  async publishTemplate(projectId: string, id: string): Promise<ApiResponse<any>> {
+    return apiClient.post(`/verification/templates/${projectId}/${id}/publish`)
+  },
+
+  async duplicateTemplate(projectId: string, id: string): Promise<ApiResponse<any>> {
+    return apiClient.post(`/verification/templates/${projectId}/${id}/duplicate`)
+  },
+
+  async archiveTemplate(projectId: string, id: string): Promise<ApiResponse<any>> {
+    return apiClient.post(`/verification/templates/${projectId}/${id}/archive`)
+  },
+
+  async deleteTemplate(projectId: string, id: string): Promise<ApiResponse<void>> {
+    return apiClient.delete(`/verification/templates/${projectId}/${id}`)
+  },
+
+  async exportWithTemplate(
+    projectId: string,
+    payload: { entityType: 'TEST_CASE' | 'TEST_PLAN'; entityId: string; templateId: string }
+  ): Promise<Blob> {
+    const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'
+    const url = `${base}/verification/export-with-template/${projectId}`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error((err as any).error || 'Export failed')
+    }
+    return res.blob()
+  },
 }

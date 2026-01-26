@@ -68,7 +68,9 @@ model Project {
   verSettings            VerSettings?
   verAuditEvents         VerAuditEvent[]
   verTestCaseCustomSections VerTestCaseCustomSection[]
+  verTestCaseSectionImages  VerTestCaseSectionImage[]
   verCustomOptions       VerCustomOption[]
+  verTemplates          VerTemplate[]
 }
 
 model ProjectMember {
@@ -2066,6 +2068,40 @@ model VerCustomOption {
 
   @@unique([projectId, optionType, value])
   @@index([projectId, optionType])
+}
+
+// Verification Templates (Test Case / Test Plan)
+model VerTemplate {
+  id          String    @id @default(uuid())
+  projectId   String
+  type        String    // TEST_CASE | TEST_PLAN
+  name        String
+  status      String    @default("DRAFT") // DRAFT | PUBLISHED | ARCHIVED
+  version     Int       @default(1)
+  contentJson Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  project  Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions VerTemplateVersion[]
+
+  @@index([projectId])
+  @@index([projectId, type])
+  @@index([status])
+}
+
+model VerTemplateVersion {
+  id          String   @id @default(uuid())
+  templateId  String
+  version     Int
+  contentJson Json
+  createdAt   DateTime @default(now())
+
+  template VerTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, version])
+  @@index([templateId])
 }
 
 // Audit Trail

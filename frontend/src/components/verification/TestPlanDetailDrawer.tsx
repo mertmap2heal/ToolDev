@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
-import { X, ChevronDown, Plus, Trash2, GripVertical, Search, Download } from 'lucide-react'
+import { X, ChevronDown, Plus, Trash2, GripVertical, Search, Download, FileCode } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import CustomDropdown from './CustomDropdown'
 import ReportExporter from './ReportExporter'
+import ExportWithTemplateModal from './ExportWithTemplateModal'
+import VerificationLifecycle from './VerificationLifecycle'
 import clsx from 'clsx'
 
 interface TestPlanDetailDrawerProps {
@@ -29,6 +31,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
   })
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
+  const [showExportTemplateModal, setShowExportTemplateModal] = useState(false)
   const statusDropdownRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
@@ -176,11 +179,11 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
       )}
     >
         {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <span className="font-mono text-sm text-gray-500">{currentPlan?.key}</span>
-              <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(currentPlan?.status || 'DRAFT')}`}>
+              <span className="font-mono text-sm text-gray-600 dark:text-gray-400">{currentPlan?.key}</span>
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(currentPlan?.status || 'DRAFT')}`}>
                 {currentPlan?.status || 'DRAFT'}
               </span>
             </div>
@@ -200,11 +203,29 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
               <>
                 {currentPlan?.status === 'APPROVED' && (
                   <button
+                    onClick={() => updatePlanMutation.mutate({ status: 'ACTIVE' })}
+                    disabled={updatePlanMutation.isPending}
+                    className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Activate
+                  </button>
+                )}
+                {currentPlan?.status === 'ACTIVE' && (
+                  <button
                     onClick={() => closePlanMutation.mutate()}
                     disabled={closePlanMutation.isPending}
                     className="px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors disabled:opacity-50"
                   >
                     Close Plan
+                  </button>
+                )}
+                {currentPlan?.status === 'DRAFT' && (
+                  <button
+                    onClick={() => updatePlanMutation.mutate({ status: 'REVIEWED' })}
+                    disabled={updatePlanMutation.isPending}
+                    className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Submit for review
                   </button>
                 )}
                 {currentPlan?.status === 'REVIEWED' && (
@@ -228,6 +249,13 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
                   title="Export Report"
                 >
                   <Download size={18} className="text-gray-600 dark:text-gray-400" />
+                </button>
+                <button
+                  onClick={() => setShowExportTemplateModal(true)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  title="Export using template…"
+                >
+                  <FileCode size={18} className="text-gray-600 dark:text-gray-400" />
                 </button>
               </>
             )}
@@ -261,21 +289,21 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
             )}
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
-              <X size={20} />
+              <X size={20} className="text-gray-600 dark:text-gray-400" />
             </button>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-200 dark:border-gray-700 px-6">
+        <div className="border-b border-gray-200 dark:border-gray-700 px-6 flex-shrink-0">
           <div className="flex gap-4">
             {(['overview', 'cases', 'activity'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab
                     ? 'border-blue-600 text-blue-600 dark:text-blue-400'
                     : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
@@ -288,8 +316,8 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
         </div>
 
         {/* Scrollable Content */}
-        <div className="overflow-y-auto flex-1">
-          <div className="p-6">
+        <div className="overflow-y-auto flex-1 px-6 py-4">
+          <div>
           {activeTab === 'overview' && (
             <div className="space-y-6">
               {/* Status */}
@@ -324,6 +352,25 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* Lifecycle */}
+              <div className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                <VerificationLifecycle
+                  entityType="TEST_PLAN"
+                  currentStatus={currentPlan?.status || 'DRAFT'}
+                  onTransition={(newStatus) => {
+                    if (newStatus === 'REVIEWED' || newStatus === 'DRAFT' || newStatus === 'ACTIVE')
+                      updatePlanMutation.mutate({ status: newStatus })
+                    else if (newStatus === 'APPROVED') approvePlanMutation.mutate()
+                    else if (newStatus === 'CLOSED') closePlanMutation.mutate()
+                  }}
+                  isTransitioning={
+                    updatePlanMutation.isPending ||
+                    approvePlanMutation.isPending ||
+                    closePlanMutation.isPending
+                  }
+                />
               </div>
 
               {/* Description */}
@@ -511,6 +558,18 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
           onClose={() => setShowExportModal(false)}
           reportType="test-plan"
           reportData={reportData}
+          entityName={`${currentPlan?.key || ''} - ${currentPlan?.name || ''}`}
+        />
+      )}
+
+      {/* Export using template modal */}
+      {showExportTemplateModal && projectId && plan?.id && (
+        <ExportWithTemplateModal
+          isOpen={true}
+          onClose={() => setShowExportTemplateModal(false)}
+          projectId={projectId}
+          entityType="TEST_PLAN"
+          entityId={plan.id}
           entityName={`${currentPlan?.key || ''} - ${currentPlan?.name || ''}`}
         />
       )}

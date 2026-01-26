@@ -15,7 +15,9 @@ import * as overviewController from '../controllers/verification/overview.contro
 import * as customOptionController from '../controllers/verification/customOption.controller'
 import * as testResultController from '../controllers/verification/testResult.controller'
 import * as customSectionController from '../controllers/verification/customSection.controller'
+import * as templateController from '../controllers/verification/template.controller'
 import { reportService } from '../services/verification/report.service'
+import { exportTemplateService } from '../services/verification/exportTemplate.service'
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 
@@ -136,6 +138,16 @@ router.post('/settings/:projectId/validate', settingsController.validateSettings
 // M) Overview
 router.get('/overview/:projectId', overviewController.getOverview)
 
+// O) Templates
+router.get('/templates/:projectId', templateController.listTemplates)
+router.post('/templates/:projectId', templateController.createTemplate)
+router.get('/templates/:projectId/:id', templateController.getTemplate)
+router.patch('/templates/:projectId/:id', templateController.updateTemplate)
+router.post('/templates/:projectId/:id/publish', templateController.publishTemplate)
+router.post('/templates/:projectId/:id/duplicate', templateController.duplicateTemplate)
+router.post('/templates/:projectId/:id/archive', templateController.archiveTemplate)
+router.delete('/templates/:projectId/:id', templateController.deleteTemplate)
+
 // N) Test Results
 router.get('/test-results/:projectId', testResultController.getTestResults)
 router.post('/test-results/:projectId', testResultController.createTestResult)
@@ -176,6 +188,53 @@ router.get('/reports/compliance-matrix/:projectId', async (req: AuthRequest, res
     res.json({ success: true, data: report })
   } catch (error: any) {
     console.error('Generate compliance matrix error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+})
+
+// Export with template (DOCX)
+router.post('/export-with-template/:projectId', async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+    const { entityType, entityId, templateId } = req.body as {
+      entityType?: 'TEST_CASE' | 'TEST_PLAN'
+      entityId?: string
+      templateId?: string
+    }
+    if (!entityType || !entityId || !templateId) {
+      return res.status(400).json({
+        success: false,
+        error: 'entityType, entityId, and templateId are required',
+      })
+    }
+    if (entityType !== 'TEST_CASE' && entityType !== 'TEST_PLAN') {
+      return res.status(400).json({
+        success: false,
+        error: 'entityType must be TEST_CASE or TEST_PLAN',
+      })
+    }
+    const buffer = await exportTemplateService.exportWithTemplate(
+      projectId,
+      entityType,
+      entityId,
+      templateId
+    )
+    const name = entityType === 'TEST_CASE' ? 'TestCase' : 'TestPlan'
+    res
+      .setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      )
+      .setHeader('Content-Disposition', `attachment; filename="${name}-export.docx"`)
+      .send(buffer)
+  } catch (error: any) {
+    console.error('Export with template error:', error)
+    if (error?.message === 'Template not found' || error?.message === 'Project not found') {
+      return res.status(404).json({ success: false, error: error.message })
+    }
+    if (error?.message?.includes('does not match')) {
+      return res.status(400).json({ success: false, error: error.message })
+    }
     res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
   }
 })

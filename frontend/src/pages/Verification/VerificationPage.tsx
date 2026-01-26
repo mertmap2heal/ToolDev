@@ -1,20 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Search,
   X,
-  Filter,
-  ChevronDown,
-  ChevronUp,
   Plus,
-  CheckCircle,
-  Clock,
   AlertCircle,
-  FileText,
-  BarChart3,
   RefreshCw,
-  Settings,
   Upload,
   Edit2,
   Trash2,
@@ -22,19 +14,16 @@ import {
   Columns,
   CheckSquare,
   Square,
+  FileCode,
 } from 'lucide-react'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
-import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import { verificationService } from '../../services/verification.service'
 import CreateTestPlanModal from '../../components/verification/CreateTestPlanModal'
 import CreateTestCaseModal from '../../components/verification/CreateTestCaseModal'
 import CreateTestSetupModal from '../../components/verification/CreateTestSetupModal'
 import CreateTestResultModal from '../../components/verification/CreateTestResultModal'
-import TestPlanDetailDrawer from '../../components/verification/TestPlanDetailDrawer'
-import TestCaseDetailDrawer from '../../components/verification/TestCaseDetailDrawer'
-import TestSetupDetailDrawer from '../../components/verification/TestSetupDetailDrawer'
-import TestResultDetailDrawer from '../../components/verification/TestResultDetailDrawer'
 import ListExporter from '../../components/verification/ListExporter'
+import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
+import ExportWithTemplateModal from '../../components/verification/ExportWithTemplateModal'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 
 // Helper function to format test results status summary
@@ -152,9 +141,12 @@ const saveColumnPreferences = (entityType: string, visibleColumns: Set<ColumnKey
 
 export default function VerificationPage() {
   const { projectId } = useParams<{ projectId: string }>()
+  const [searchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab') || 'overview'
+  const activeTab = (['overview', 'plans', 'cases', 'setups', 'results'].includes(tabParam)
+    ? tabParam
+    : 'overview') as 'overview' | 'plans' | 'cases' | 'setups' | 'results'
   const [searchQuery, setSearchQuery] = useState('')
-  const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'plans' | 'cases' | 'setups' | 'results'>('overview')
   
   // Modal states
   const [isCreatePlanOpen, setIsCreatePlanOpen] = useState(false)
@@ -162,16 +154,8 @@ export default function VerificationPage() {
   const [isCreateSetupOpen, setIsCreateSetupOpen] = useState(false)
   const [isCreateResultOpen, setIsCreateResultOpen] = useState(false)
   
-  // Drawer states
-  const [selectedPlan, setSelectedPlan] = useState<any>(null)
-  const [isPlanDrawerOpen, setIsPlanDrawerOpen] = useState(false)
-  const [selectedCase, setSelectedCase] = useState<any>(null)
-  const [isCaseDrawerOpen, setIsCaseDrawerOpen] = useState(false)
-  const [selectedSetup, setSelectedSetup] = useState<any>(null)
-  const [isSetupDrawerOpen, setIsSetupDrawerOpen] = useState(false)
-  const [selectedResult, setSelectedResult] = useState<any>(null)
-  const [isResultDrawerOpen, setIsResultDrawerOpen] = useState(false)
-  
+  const drawer = useVerificationDrawer()
+
   // Export modal states
   const [showTestCasesExport, setShowTestCasesExport] = useState(false)
   const [showTestPlansExport, setShowTestPlansExport] = useState(false)
@@ -189,6 +173,14 @@ export default function VerificationPage() {
     sourceType?: 'test-plan' | 'test-case' | 'test-setup' | 'test-result'
     sourceId?: string
     sourceName?: string
+  }>({ isOpen: false })
+
+  // Export with template modal (list view)
+  const [exportTemplateModal, setExportTemplateModal] = useState<{
+    isOpen: boolean
+    entityType?: 'TEST_CASE' | 'TEST_PLAN'
+    entityId?: string
+    entityName?: string
   }>({ isOpen: false })
 
   // Column visibility state
@@ -256,24 +248,6 @@ export default function VerificationPage() {
 
     setters[entityType](newSet)
     saveColumnPreferences(storageKeys[entityType], newSet)
-  }
-
-  const getColumnConfig = (entityType: 'plans' | 'cases' | 'setups' | 'results'): ColumnConfig[] => {
-    switch (entityType) {
-      case 'plans': return TEST_PLAN_COLUMNS
-      case 'cases': return TEST_CASE_COLUMNS
-      case 'setups': return TEST_SETUP_COLUMNS
-      case 'results': return TEST_RESULT_COLUMNS
-    }
-  }
-
-  const getVisibleColumns = (entityType: 'plans' | 'cases' | 'setups' | 'results'): Set<ColumnKey> => {
-    switch (entityType) {
-      case 'plans': return planColumns
-      case 'cases': return caseColumns
-      case 'setups': return setupColumns
-      case 'results': return resultColumns
-    }
   }
 
   // Fetch overview data
@@ -434,44 +408,7 @@ export default function VerificationPage() {
   )
 
   return (
-    <div className="flex h-[calc(100vh-4rem)]">
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto space-y-6 pr-6">
-        <ProjectNavigation />
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Verification</h2>
-          {projectId && <SafetyLinkPanel variant="evidence" count={2} />}
-        </div>
-
-      {/* Tabs */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-        <div className="flex border-b border-gray-200 dark:border-gray-700">
-          {[
-            { id: 'overview', label: 'Overview', icon: BarChart3 },
-            { id: 'plans', label: 'Test Plans', icon: FileText },
-            { id: 'cases', label: 'Test Cases', icon: CheckCircle },
-            { id: 'setups', label: 'Test Setups', icon: Settings },
-            { id: 'results', label: 'Test Results', icon: CheckCircle },
-          ].map((tab) => {
-            const Icon = tab.icon
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                }`}
-              >
-                <Icon size={16} />
-                {tab.label}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
+    <div className="flex-1 min-h-0 overflow-y-auto space-y-6">
       {/* Search */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
         <div className="relative">
@@ -672,10 +609,7 @@ export default function VerificationPage() {
                   {filteredPlans.map((plan: any) => (
                     <tr
                       key={plan.id}
-                      onClick={() => {
-                        setSelectedPlan(plan)
-                        setIsPlanDrawerOpen(true)
-                      }}
+                      onClick={() => drawer.openPlan(plan)}
                       className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer group"
                     >
                       {planColumns.has('key') && (
@@ -753,8 +687,22 @@ export default function VerificationPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
-                              setSelectedPlan(plan)
-                              setIsPlanDrawerOpen(true)
+                              setExportTemplateModal({
+                                isOpen: true,
+                                entityType: 'TEST_PLAN',
+                                entityId: plan.id,
+                                entityName: plan.name,
+                              })
+                            }}
+                            className="p-1.5 text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
+                            title="Export using template…"
+                          >
+                            <FileCode size={16} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              drawer.openPlan(plan)
                             }}
                             className="p-1.5 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                             title="Edit"
@@ -893,10 +841,7 @@ export default function VerificationPage() {
                   {filteredCases.map((case_: any) => (
                     <tr
                       key={case_.id}
-                      onClick={() => {
-                        setSelectedCase(case_)
-                        setIsCaseDrawerOpen(true)
-                      }}
+                      onClick={() => drawer.openCase(case_)}
                       className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer group"
                     >
                       {caseColumns.has('key') && (
@@ -984,8 +929,22 @@ export default function VerificationPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
-                              setSelectedCase(case_)
-                              setIsCaseDrawerOpen(true)
+                              setExportTemplateModal({
+                                isOpen: true,
+                                entityType: 'TEST_CASE',
+                                entityId: case_.id,
+                                entityName: case_.title,
+                              })
+                            }}
+                            className="p-1.5 text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
+                            title="Export using template…"
+                          >
+                            <FileCode size={16} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              drawer.openCase(case_)
                             }}
                             className="p-1.5 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                             title="Edit"
@@ -1110,10 +1069,7 @@ export default function VerificationPage() {
                   {filteredSetups.map((setup: any) => (
                     <tr
                       key={setup.id}
-                      onClick={() => {
-                        setSelectedSetup(setup)
-                        setIsSetupDrawerOpen(true)
-                      }}
+                      onClick={() => drawer.openSetup(setup)}
                       className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer group"
                     >
                       {setupColumns.has('name') && (
@@ -1181,8 +1137,7 @@ export default function VerificationPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
-                              setSelectedSetup(setup)
-                              setIsSetupDrawerOpen(true)
+                              drawer.openSetup(setup)
                             }}
                             className="p-1.5 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                             title="Edit"
@@ -1307,10 +1262,7 @@ export default function VerificationPage() {
                   {filteredResults.map((result: any) => (
                     <tr
                       key={result.id}
-                      onClick={() => {
-                        setSelectedResult(result)
-                        setIsResultDrawerOpen(true)
-                      }}
+                      onClick={() => drawer.openResult(result)}
                       className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer group"
                     >
                       {resultColumns.has('title') && (
@@ -1383,8 +1335,7 @@ export default function VerificationPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
-                              setSelectedResult(result)
-                              setIsResultDrawerOpen(true)
+                              drawer.openResult(result)
                             }}
                             className="p-1.5 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                             title="Edit"
@@ -1505,49 +1456,22 @@ export default function VerificationPage() {
             sourceName={changeRequestModal.sourceName}
           />
         )}
-      </div>
 
-      {/* Drawers - Side by side */}
-      {projectId && (
-        <>
-          <TestPlanDetailDrawer
-            plan={selectedPlan}
-            isOpen={isPlanDrawerOpen}
-            onClose={() => {
-              setIsPlanDrawerOpen(false)
-              setSelectedPlan(null)
-            }}
-            projectId={projectId}
-          />
-          <TestCaseDetailDrawer
-            testCase={selectedCase}
-            isOpen={isCaseDrawerOpen}
-            onClose={() => {
-              setIsCaseDrawerOpen(false)
-              setSelectedCase(null)
-            }}
-            projectId={projectId}
-          />
-          <TestSetupDetailDrawer
-            setup={selectedSetup}
-            isOpen={isSetupDrawerOpen}
-            onClose={() => {
-              setIsSetupDrawerOpen(false)
-              setSelectedSetup(null)
-            }}
-            projectId={projectId}
-          />
-          <TestResultDetailDrawer
-            testResult={selectedResult}
-            isOpen={isResultDrawerOpen}
-            onClose={() => {
-              setIsResultDrawerOpen(false)
-              setSelectedResult(null)
-            }}
-            projectId={projectId}
-          />
-        </>
-      )}
+        {/* Export with template modal (list view) */}
+        {projectId &&
+          exportTemplateModal.isOpen &&
+          exportTemplateModal.entityType &&
+          exportTemplateModal.entityId &&
+          exportTemplateModal.entityName && (
+            <ExportWithTemplateModal
+              isOpen={true}
+              onClose={() => setExportTemplateModal({ isOpen: false })}
+              projectId={projectId}
+              entityType={exportTemplateModal.entityType}
+              entityId={exportTemplateModal.entityId}
+              entityName={exportTemplateModal.entityName}
+            />
+          )}
     </div>
   )
 }

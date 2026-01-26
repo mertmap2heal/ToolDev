@@ -5,7 +5,10 @@ import DashboardPage from './pages/Dashboard/DashboardPage'
 import RequirementsPage from './pages/Requirements/RequirementsPage'
 import SystemFunctionsPage from './pages/SystemFunctions/SystemFunctionsPage'
 import ArchitecturePage from './pages/Architecture/ArchitecturePage'
+import VerificationLayoutPage from './pages/Verification/VerificationLayoutPage'
 import VerificationPage from './pages/Verification/VerificationPage'
+import TemplatesLandingPage from './pages/Verification/TemplatesLandingPage'
+import TemplateEditorPage from './pages/Verification/TemplateEditorPage'
 import DocumentationPage from './pages/Documentation/DocumentationPage'
 import StakeholderPage from './pages/Stakeholder/StakeholderPage'
 import MBSEModelsPage from './pages/MBSEModels/MBSEModelsPage'
@@ -79,7 +82,11 @@ function App() {
           <Route path="projects/:projectId/change-requests" element={<ChangeRequestsPage />} />
           <Route path="projects/:projectId/architecture" element={<ArchitecturePage />} />
           <Route path="projects/:projectId/reports" element={<ReportsPage />} />
-          <Route path="projects/:projectId/verification" element={<VerificationPage />} />
+          <Route path="projects/:projectId/verification" element={<VerificationLayoutPage />}>
+            <Route index element={<VerificationPage />} />
+            <Route path="templates" element={<TemplatesLandingPage />} />
+            <Route path="templates/:templateId" element={<TemplateEditorPage />} />
+          </Route>
           <Route path="projects/:projectId/issues" element={<IssuesPage />} />
           <Route path="projects/:projectId/documentation" element={<DocumentationPage />} />
           <Route path="projects/:projectId/lifecycle-status" element={<LifecycleStatusPage />} />

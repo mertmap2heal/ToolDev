@@ -6,6 +6,7 @@ import type { Component, Interface } from './ComponentFormSection'
 import ComponentFormSection from './ComponentFormSection'
 import InterfaceFormSection from './InterfaceFormSection'
 import CustomDropdown from './CustomDropdown'
+import VerificationLifecycle from './VerificationLifecycle'
 import clsx from 'clsx'
 import ReactFlow, {
   Node,
@@ -312,18 +313,18 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
     <div
       className={clsx(
         'h-full bg-white dark:bg-gray-800 shadow-2xl border-l border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out overflow-hidden',
-        isOpen && setup ? 'w-full max-w-4xl min-w-[32rem]' : 'w-0 min-w-0'
+        isOpen && setup ? 'w-full max-w-2xl min-w-[32rem]' : 'w-0 min-w-0'
       )}
     >
         {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(currentSetup?.status || 'DRAFT')}`}>
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(currentSetup?.status || 'DRAFT')}`}>
                 {currentSetup?.status || 'DRAFT'}
               </span>
               {currentSetup?.environmentType && (
-                <span className="text-sm text-gray-500 dark:text-gray-400">{currentSetup.environmentType}</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">{currentSetup.environmentType}</span>
               )}
             </div>
             {isEditing ? (
@@ -396,20 +397,23 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
                 </button>
               </>
             )}
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-              <X size={20} />
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <X size={20} className="text-gray-600 dark:text-gray-400" />
             </button>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-200 dark:border-gray-700 px-6">
+        <div className="border-b border-gray-200 dark:border-gray-700 px-6 flex-shrink-0">
           <div className="flex gap-4">
             {(['overview', 'components', 'interfaces', 'diagram'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab
                     ? 'border-blue-600 text-blue-600 dark:text-blue-400'
                     : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
@@ -422,8 +426,8 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
         </div>
 
         {/* Scrollable Content */}
-        <div className="overflow-y-auto flex-1">
-          <div className="p-6">
+        <div className="overflow-y-auto flex-1 px-6 py-4">
+          <div>
           {activeTab === 'overview' && (
             <div className="space-y-6">
               {/* Status */}
@@ -432,6 +436,21 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
                 <div className={`px-4 py-2 rounded-lg ${getStatusColor(currentSetup?.status || 'DRAFT')}`}>
                   {statusOptions.find((opt) => opt.value === currentSetup?.status)?.label || currentSetup?.status}
                 </div>
+              </div>
+
+              {/* Lifecycle */}
+              <div className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                <VerificationLifecycle
+                  entityType="SETUP"
+                  currentStatus={currentSetup?.status || 'DRAFT'}
+                  onTransition={(newStatus) => {
+                    if (newStatus === 'APPROVED') approveSetupMutation.mutate()
+                    else if (newStatus === 'DEPRECATED') deprecateSetupMutation.mutate()
+                  }}
+                  isTransitioning={
+                    approveSetupMutation.isPending || deprecateSetupMutation.isPending
+                  }
+                />
               </div>
 
               {/* Description */}

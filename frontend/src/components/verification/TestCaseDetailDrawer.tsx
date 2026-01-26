@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
-import { X, ChevronDown, Link2, Download, Search, Check, Plus } from 'lucide-react'
+import { X, ChevronDown, Link2, Download, Search, Check, Plus, FileCode } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import ReportExporter from './ReportExporter'
+import ExportWithTemplateModal from './ExportWithTemplateModal'
 import CustomSectionEditor from './CustomSectionEditor'
+import VerificationLifecycle from './VerificationLifecycle'
 import clsx from 'clsx'
 
 interface TestCaseDetailDrawerProps {
@@ -31,6 +33,7 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
   const [selectedSetups, setSelectedSetups] = useState<string[]>([])
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
+  const [showExportTemplateModal, setShowExportTemplateModal] = useState(false)
   const statusDropdownRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
@@ -300,14 +303,14 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
       )}
     >
         {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <span className="font-mono text-sm text-gray-500">{currentCase?.key}</span>
-              <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(currentCase?.status || 'DRAFT')}`}>
+              <span className="font-mono text-sm text-gray-600 dark:text-gray-400">{currentCase?.key}</span>
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(currentCase?.status || 'DRAFT')}`}>
                 {currentCase?.status || 'DRAFT'}
               </span>
-              <span className="text-xs text-gray-500">v{currentCase?.version || '1.0'}</span>
+              <span className="text-xs text-gray-600 dark:text-gray-400">v{currentCase?.version || '1.0'}</span>
             </div>
             {isEditing ? (
               <input
@@ -354,6 +357,13 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
                 >
                   <Download size={18} className="text-gray-600 dark:text-gray-400" />
                 </button>
+                <button
+                  onClick={() => setShowExportTemplateModal(true)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  title="Export using template…"
+                >
+                  <FileCode size={18} className="text-gray-600 dark:text-gray-400" />
+                </button>
               </>
             )}
             {isEditing && (
@@ -398,16 +408,16 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
             )}
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
-              <X size={20} />
+              <X size={20} className="text-gray-600 dark:text-gray-400" />
             </button>
           </div>
         </div>
 
         {/* Scrollable Content */}
-        <div className="overflow-y-auto flex-1">
-          <div className="p-6 space-y-6">
+        <div className="overflow-y-auto flex-1 px-6 py-4">
+          <div className="space-y-6">
           {/* Status */}
           <div className="relative" ref={statusDropdownRef}>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -440,6 +450,22 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Lifecycle */}
+          <div className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+            <VerificationLifecycle
+              entityType="TEST_CASE"
+              currentStatus={currentCase?.status || 'DRAFT'}
+              onTransition={(newStatus) => {
+                if (newStatus === 'REVIEWED') reviewCaseMutation.mutate()
+                else if (newStatus === 'APPROVED') approveCaseMutation.mutate()
+                else updateCaseMutation.mutate({ status: newStatus })
+              }}
+              isTransitioning={
+                reviewCaseMutation.isPending || approveCaseMutation.isPending || updateCaseMutation.isPending
+              }
+            />
           </div>
 
           {/* Objective */}
@@ -759,6 +785,18 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
           onClose={() => setShowExportModal(false)}
           reportType="test-case"
           reportData={reportData}
+          entityName={`${currentCase?.key || ''} - ${currentCase?.title || ''}`}
+        />
+      )}
+
+      {/* Export using template modal */}
+      {showExportTemplateModal && projectId && testCase?.id && (
+        <ExportWithTemplateModal
+          isOpen={true}
+          onClose={() => setShowExportTemplateModal(false)}
+          projectId={projectId}
+          entityType="TEST_CASE"
+          entityId={testCase.id}
           entityName={`${currentCase?.key || ''} - ${currentCase?.title || ''}`}
         />
       )}
