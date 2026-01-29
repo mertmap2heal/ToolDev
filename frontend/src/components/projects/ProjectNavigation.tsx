@@ -13,9 +13,13 @@ import {
   ClipboardList,
   Archive,
   Activity,
-  ClipboardCheck,
   Shield,
-  ShieldCheck
+  ShieldCheck,
+  Award,
+  CheckCircle,
+  AlertTriangle,
+  Network,
+  Layers,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -39,7 +43,11 @@ const navigationItems: NavigationItem[] = [
   { id: 'issues', label: 'Issues', icon: AlertCircle, route: 'issues' },
   { id: 'documentation', label: 'Documentation', icon: BookOpen, route: 'documentation' },
   { id: 'lifecycle-status', label: 'Lifecycle Status', icon: Activity, route: 'lifecycle-status' },
-  { id: 'test-plans', label: 'Test Plans', icon: ClipboardCheck, route: 'test-plans' },
+  { id: 'certification', label: 'Certification', icon: Award, route: 'certification' },
+  { id: 'validation', label: 'Validation', icon: CheckCircle, route: 'validation' },
+  { id: 'risk-management', label: 'Risk Management', icon: AlertTriangle, route: 'risk-management' },
+  { id: 'interface-management', label: 'Interface Management', icon: Network, route: 'interface-management' },
+  { id: 'configuration-management', label: 'Configuration Management', icon: Layers, route: 'configuration-management' },
   { id: 'safety-analysis', label: 'Safety Analysis', icon: Shield, route: 'safety-analysis' },
   { id: 'compliance-check', label: 'Compliance Check', icon: ShieldCheck, route: 'compliance-check' },
   { id: 'archive', label: 'Archive', icon: Archive, route: 'archive' },

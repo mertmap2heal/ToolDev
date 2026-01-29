@@ -34,7 +34,7 @@ const TRACEABILITY_PANELS: { id: string; label: string; module: string; path: st
   { id: 'param', label: 'Parameters', module: 'Parameters', path: 'parameters', icon: Sliders },
   { id: 'iface', label: 'Interfaces', module: 'Interfaces', path: '#', icon: Network },
   { id: 'ver', label: 'Verification Items', module: 'Verification', path: 'verification', icon: CheckCircle2 },
-  { id: 'test', label: 'Test Plans', module: 'Test Plans', path: 'test-plans', icon: ClipboardCheck },
+  { id: 'test', label: 'Test Plans', module: 'Test Plans', path: 'verification', icon: ClipboardCheck },
   { id: 'cr', label: 'Change Requests', module: 'Change Requests', path: 'change-requests', icon: GitBranch },
   { id: 'iss', label: 'Issues', module: 'Issues', path: 'issues', icon: AlertCircle },
   { id: 'lc', label: 'Lifecycle Phase', module: 'Lifecycle Status', path: 'lifecycle-status', icon: Activity },

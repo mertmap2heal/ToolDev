@@ -27,6 +27,11 @@ import TaskNotificationsPage from './pages/Tasks/Notifications/TaskNotifications
 import TaskSettingsPage from './pages/Tasks/Settings/TaskSettingsPage'
 import LifecycleManagementPage from './pages/LifecycleManagement/LifecycleManagementPage'
 import ComplianceCheckPage from './pages/ComplianceCheck/ComplianceCheckPage'
+import CertificationPage from './pages/Certification/CertificationPage'
+import ValidationPage from './pages/Validation/ValidationPage'
+import RiskManagementPage from './pages/RiskManagement/RiskManagementPage'
+import InterfaceManagementPage from './pages/InterfaceManagement/InterfaceManagementPage'
+import ConfigurationManagementPage from './pages/ConfigurationManagement/ConfigurationManagementPage'
 import ArchivePage from './pages/Archive/ArchivePage'
 import LifecycleStatusPage from './pages/LifecycleStatus/LifecycleStatusPage'
 import SafetyLayoutPage from './pages/Safety/SafetyLayoutPage'
@@ -91,6 +96,11 @@ function App() {
           <Route path="projects/:projectId/issues" element={<IssuesPage />} />
           <Route path="projects/:projectId/documentation" element={<DocumentationPage />} />
           <Route path="projects/:projectId/lifecycle-status" element={<LifecycleStatusPage />} />
+          <Route path="projects/:projectId/certification" element={<CertificationPage />} />
+          <Route path="projects/:projectId/validation" element={<ValidationPage />} />
+          <Route path="projects/:projectId/risk-management" element={<RiskManagementPage />} />
+          <Route path="projects/:projectId/interface-management" element={<InterfaceManagementPage />} />
+          <Route path="projects/:projectId/configuration-management" element={<ConfigurationManagementPage />} />
           <Route path="projects/:projectId/archive" element={<ArchivePage />} />
           <Route path="projects/:projectId/compliance-check" element={<ComplianceCheckPage />} />
           <Route path="projects/:projectId/safety-analysis" element={<SafetyLayoutPage />}>
