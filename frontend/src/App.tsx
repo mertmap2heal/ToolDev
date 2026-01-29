@@ -26,6 +26,7 @@ import TimeTrackingPage from './pages/Tasks/TimeTracking/TimeTrackingPage'
 import TaskNotificationsPage from './pages/Tasks/Notifications/TaskNotificationsPage'
 import TaskSettingsPage from './pages/Tasks/Settings/TaskSettingsPage'
 import LifecycleManagementPage from './pages/LifecycleManagement/LifecycleManagementPage'
+import ComplianceCheckPage from './pages/ComplianceCheck/ComplianceCheckPage'
 import ArchivePage from './pages/Archive/ArchivePage'
 import LifecycleStatusPage from './pages/LifecycleStatus/LifecycleStatusPage'
 import SafetyLayoutPage from './pages/Safety/SafetyLayoutPage'
@@ -91,6 +92,7 @@ function App() {
           <Route path="projects/:projectId/documentation" element={<DocumentationPage />} />
           <Route path="projects/:projectId/lifecycle-status" element={<LifecycleStatusPage />} />
           <Route path="projects/:projectId/archive" element={<ArchivePage />} />
+          <Route path="projects/:projectId/compliance-check" element={<ComplianceCheckPage />} />
           <Route path="projects/:projectId/safety-analysis" element={<SafetyLayoutPage />}>
             <Route index element={<Navigate to="overview" replace />} />
             <Route path="overview" element={<SafetyOverviewPage />} />

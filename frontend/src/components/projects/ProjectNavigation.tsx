@@ -14,7 +14,8 @@ import {
   Archive,
   Activity,
   ClipboardCheck,
-  Shield
+  Shield,
+  ShieldCheck
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -40,6 +41,7 @@ const navigationItems: NavigationItem[] = [
   { id: 'lifecycle-status', label: 'Lifecycle Status', icon: Activity, route: 'lifecycle-status' },
   { id: 'test-plans', label: 'Test Plans', icon: ClipboardCheck, route: 'test-plans' },
   { id: 'safety-analysis', label: 'Safety Analysis', icon: Shield, route: 'safety-analysis' },
+  { id: 'compliance-check', label: 'Compliance Check', icon: ShieldCheck, route: 'compliance-check' },
   { id: 'archive', label: 'Archive', icon: Archive, route: 'archive' },
 ]
 
