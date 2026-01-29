@@ -71,6 +71,9 @@ model Project {
   verTestCaseSectionImages  VerTestCaseSectionImage[]
   verCustomOptions       VerCustomOption[]
   verTemplates          VerTemplate[]
+  complianceRules       ComplianceRule[]
+  complianceCheckRuns   ComplianceCheckRun[]
+  complianceFindings    ComplianceFinding[]
 }
 
 model ProjectMember {
@@ -2161,4 +2164,57 @@ model VerTestCaseSectionImage {
 
   @@index([sectionId])
   @@index([projectId])
+}
+
+// Compliance Check – standards/rules and check runs
+model ComplianceRule {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  standard    String   // e.g. DO-178C, ISO 29148
+  description String?
+  checkType   String   // e.g. requirement_has_acceptance_criteria, requirement_has_owner
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project  Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  findings ComplianceFinding[]
+
+  @@index([projectId])
+}
+
+model ComplianceCheckRun {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String?
+  status    String   @default("completed") // running | completed | failed
+  ruleIds   String[] @default([])          // rule IDs included in this run
+  createdAt DateTime @default(now())
+
+  project  Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  findings ComplianceFinding[]
+
+  @@index([projectId])
+  @@index([createdAt])
+}
+
+model ComplianceFinding {
+  id        String   @id @default(uuid())
+  projectId String
+  runId     String
+  ruleId    String
+  status    String   // pass | fail
+  entityType String  // requirement | function | parameter
+  entityId   String?
+  message   String?
+  createdAt DateTime @default(now())
+
+  project Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  run     ComplianceCheckRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  rule    ComplianceRule    @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([runId])
+  @@index([ruleId])
 }

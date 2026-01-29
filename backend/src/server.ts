@@ -53,6 +53,7 @@ app.get('/api/v1', (req, res) => {
       functions: '/api/v1/functions',
       parameters: '/api/v1/parameters',
       issues: '/api/v1/issues',
+      compliance: '/api/v1/compliance',
       requirements: '/api/v1/requirements',
       workflow: '/api/v1/workflow',
     },
