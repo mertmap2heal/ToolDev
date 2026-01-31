@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import authRoutes from './auth.routes'
 import projectRoutes from './projects.routes'
+import componentsRoutes from './components.routes'
 import workflowRoutes from './workflow.routes'
 import requirementsRoutes from './requirements.routes'
 import functionsRoutes from './functions.routes'
@@ -42,6 +43,8 @@ import complianceRoutes from './compliance.routes'
 const router = Router()
 
 router.use('/auth', authRoutes)
+// Mount components (PBS) before project so /projects/:projectId/components is matched
+router.use('/projects', componentsRoutes)
 router.use('/projects', projectRoutes)
 router.use('/workflow', workflowRoutes)
 router.use('/requirements', requirementsRoutes)

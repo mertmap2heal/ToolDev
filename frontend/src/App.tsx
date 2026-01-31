@@ -11,6 +11,9 @@ import TemplatesLandingPage from './pages/Verification/TemplatesLandingPage'
 import TemplateEditorPage from './pages/Verification/TemplateEditorPage'
 import DocumentationPage from './pages/Documentation/DocumentationPage'
 import StakeholderPage from './pages/Stakeholder/StakeholderPage'
+import PBSLayoutPage from './pages/PBS/PBSLayoutPage'
+import PBSMainPage from './pages/PBS/PBSMainPage'
+import ProjectLayout from './components/layout/ProjectLayout'
 import MBSEModelsPage from './pages/MBSEModels/MBSEModelsPage'
 import ReportsPage from './pages/Reports/ReportsPage'
 import IssuesPage from './pages/Issues/IssuesPage'
@@ -68,6 +71,11 @@ function App() {
           <Route index element={<DashboardPage />} />
           <Route path="projects" element={<Navigate to="/" replace />} />
           <Route path="projects/:projectId/stakeholder" element={<StakeholderPage />} />
+          <Route path="projects/:projectId/product-breakdown-structure" element={<PBSLayoutPage />}>
+            <Route element={<ProjectLayout />}>
+              <Route index element={<PBSMainPage />} />
+            </Route>
+          </Route>
           <Route path="projects/:projectId/requirements" element={<RequirementsPage />} />
           <Route path="projects/:projectId/tasks" element={<TasksPage />} />
           <Route path="tasks">

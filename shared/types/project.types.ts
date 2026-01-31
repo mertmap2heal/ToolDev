@@ -48,3 +48,36 @@ export interface UpdateProjectDto {
   status?: 'active' | 'completed' | 'archived'
   deadline?: string
 }
+
+// PBS (Product Breakdown Structure) / Component types
+export interface Component {
+  id: string
+  projectId: string
+  parentId: string | null
+  name: string
+  description?: string | null
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+  isRoot?: boolean
+  children?: ComponentTreeNode[]
+}
+
+export interface ComponentTreeNode extends Component {
+  children?: ComponentTreeNode[]
+}
+
+export interface CreateComponentDto {
+  projectId?: string
+  parentId?: string | null
+  name: string
+  description?: string | null
+  sortOrder?: number
+}
+
+export interface UpdateComponentDto {
+  name?: string
+  description?: string | null
+  parentId?: string | null
+  sortOrder?: number
+}

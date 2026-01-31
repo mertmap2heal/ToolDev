@@ -20,6 +20,7 @@ import {
   AlertTriangle,
   Network,
   Layers,
+  FolderTree,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -32,6 +33,7 @@ interface NavigationItem {
 
 const navigationItems: NavigationItem[] = [
   { id: 'stakeholder', label: 'Stakeholder', icon: Users, route: 'stakeholder' },
+  { id: 'product-breakdown-structure', label: 'Product Breakdown Structure', icon: FolderTree, route: 'product-breakdown-structure' },
   { id: 'mbse-models', label: 'MBSE Models', icon: Boxes, route: 'mbse-models' },
   { id: 'requirements', label: 'Requirements', icon: FileCheck, route: 'requirements' },
   { id: 'tasks', label: 'Tasks', icon: ClipboardList, route: 'tasks' },
