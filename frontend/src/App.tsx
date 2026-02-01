@@ -12,6 +12,7 @@ import VerificationPage from './pages/Verification/VerificationPage'
 import TemplatesLandingPage from './pages/Verification/TemplatesLandingPage'
 import TemplateEditorPage from './pages/Verification/TemplateEditorPage'
 import DocumentationPage from './pages/Documentation/DocumentationPage'
+import ProjectLandingPage from './pages/ProjectLanding/ProjectLandingPage'
 import StakeholderPage from './pages/Stakeholder/StakeholderPage'
 import PBSPage from './modules/pbs/PBSPage'
 import MBSEModelsPage from './pages/MBSEModels/MBSEModelsPage'
@@ -74,6 +75,7 @@ function App() {
           <Route element={<MainLayout />}>
             <Route index element={<DashboardPage />} />
             <Route path="projects" element={<Navigate to="/" replace />} />
+            <Route path="projects/:projectId" element={<ProjectLandingPage />} />
             <Route path="projects/:projectId/stakeholder" element={<StakeholderPage />} />
             <Route path="projects/:projectId/product-breakdown-structure" element={<PBSPage />} />
             <Route path="projects/:projectId/requirements" element={<RequirementsPage />} />

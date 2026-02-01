@@ -55,7 +55,7 @@ export default function ProjectGrid({ projects, searchQuery, filterValue, sortVa
       {filteredProjects.map((project) => (
         <div
           key={project.id}
-          onClick={() => navigate(`/projects/${project.id}/requirements`)}
+          onClick={() => navigate(`/projects/${project.id}`)}
           className="cursor-pointer"
         >
           <ProjectCard project={project} />

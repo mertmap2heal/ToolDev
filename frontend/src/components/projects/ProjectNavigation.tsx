@@ -90,11 +90,9 @@ export default function ProjectNavigation() {
 
   const currentSection = getCurrentSectionFromPath(location.pathname)
 
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
-    const current = getCurrentSectionFromPath(location.pathname)
-    const group = navigationGroups.find((g) => g.items.some((i) => i.route === current))
-    return new Set(group ? [group.title] : [navigationGroups[0].title])
-  })
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() =>
+    new Set(navigationGroups.map((g) => g.title))
+  )
 
   useEffect(() => {
     if (currentSection) {
@@ -155,37 +153,19 @@ export default function ProjectNavigation() {
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 p-2 border-t border-gray-200 dark:border-gray-700">
                 {group.items.map((item) => {
                   const Icon = item.icon
-                  const isActive = currentSection === item.route
 
                   return (
                     <button
                       key={item.id}
                       type="button"
                       onClick={() => handleNavigation(item.route)}
-                      className={clsx(
-                        'flex flex-col items-center justify-center p-2.5 rounded-lg border transition-all duration-200 min-h-[72px]',
-                        isActive
-                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md'
-                          : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-md cursor-pointer'
-                      )}
+                      className="flex flex-col items-center justify-center p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-md cursor-pointer transition-all duration-200 min-h-[72px]"
                     >
                       <Icon
                         size={18}
-                        className={clsx(
-                          'mb-1.5',
-                          isActive
-                            ? 'text-blue-600 dark:text-blue-400'
-                            : 'text-gray-600 dark:text-gray-400'
-                        )}
+                        className="mb-1.5 text-gray-600 dark:text-gray-400"
                       />
-                      <span
-                        className={clsx(
-                          'text-xs font-medium text-center leading-tight',
-                          isActive
-                            ? 'text-blue-700 dark:text-blue-300'
-                            : 'text-gray-700 dark:text-gray-300'
-                        )}
-                      >
+                      <span className="text-xs font-medium text-center leading-tight text-gray-700 dark:text-gray-300">
                         {item.label}
                       </span>
                     </button>
