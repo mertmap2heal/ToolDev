@@ -163,6 +163,31 @@ export const getCurrentUser = async (req: Request, res: Response) => {
   }
 }
 
+/** List users (id, name, email) for invite dropdowns. Requires authentication. */
+export const getUsers = async (_req: Request, res: Response) => {
+  try {
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+      orderBy: { name: 'asc' },
+    })
+
+    res.json({
+      success: true,
+      data: users,
+    })
+  } catch (error) {
+    console.error('Get users error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    })
+  }
+}
+
 function generateToken(userId: string): string {
   const secret = process.env.JWT_SECRET
   const expiresIn = process.env.JWT_EXPIRES_IN || '7d'

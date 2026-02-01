@@ -4,10 +4,23 @@ import Sidebar from './Sidebar'
 import Header from './Header'
 import AIGuideChat from '../ai-guide/AIGuideChat'
 import { useAIGuideStore } from '../../store/aiGuideStore'
+import { authService } from '../../services/auth.service'
+import { useAuthStore } from '../../store/authStore'
 
 export default function MainLayout() {
   const { isOpen } = useAIGuideStore()
   const navigate = useNavigate()
+  const { user, setUser } = useAuthStore()
+
+  useEffect(() => {
+    if (authService.getToken() && !user) {
+      authService.getCurrentUser().then((res) => {
+        if (res.success && res.data) {
+          setUser(res.data)
+        }
+      })
+    }
+  }, [user, setUser])
 
   useEffect(() => {
     const handleTokenExpired = () => {

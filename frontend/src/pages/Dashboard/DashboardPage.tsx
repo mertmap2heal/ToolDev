@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { Search, Filter, MoreVertical, Play, Trash2, Settings2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Search, Filter, MoreVertical, Play, Trash2, Settings2, ChevronDown, ChevronUp, Users } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import ProjectGrid from '../../components/projects/ProjectGrid'
 import CreateProjectButton from '../../components/projects/CreateProjectButton'
 import DeleteConfirmationModal from '../../components/projects/DeleteConfirmationModal'
+import ProjectTeamModal from '../../components/projects/ProjectTeamModal'
 import { projectService } from '../../services/project.service'
 import { useProjectStore } from '../../store/projectStore'
+import type { Project } from '../../../shared/types/project.types'
 
 export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -14,6 +16,7 @@ export default function DashboardPage() {
   const [showRunningOnly, setShowRunningOnly] = useState(false)
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null)
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string; name: string } | null>(null)
+  const [teamModalProject, setTeamModalProject] = useState<Project | null>(null)
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
   const { setProjects, projects } = useProjectStore()
   const queryClient = useQueryClient()
@@ -267,6 +270,13 @@ export default function DashboardPage() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => setTeamModalProject(project)}
+                              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                              title="Manage team"
+                            >
+                              <Users size={16} className="text-gray-600 dark:text-gray-400" />
+                            </button>
                             <button className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
                               <Settings2 size={16} className="text-gray-600 dark:text-gray-400" />
                             </button>
@@ -308,6 +318,11 @@ export default function DashboardPage() {
         onConfirm={handleConfirmDelete}
         onCancel={handleCancelDelete}
         isDeleting={deleteProjectMutation.isPending}
+      />
+      <ProjectTeamModal
+        project={teamModalProject}
+        onClose={() => setTeamModalProject(null)}
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ['projects'] })}
       />
     </div>
   )

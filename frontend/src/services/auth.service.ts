@@ -64,4 +64,8 @@ export const authService = {
   getToken(): string | null {
     return getStoredToken()
   },
+
+  async getUsers(): Promise<ApiResponse<Pick<User, 'id' | 'name' | 'email'>[]>> {
+    return apiClient.get<Pick<User, 'id' | 'name' | 'email'>[]>('/auth/users')
+  },
 }
