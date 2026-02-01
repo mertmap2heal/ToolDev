@@ -16,7 +16,7 @@ class ApiClient {
 
     this.client.interceptors.request.use(
       (config) => {
-        const token = localStorage.getItem('token')
+        const token = localStorage.getItem('token') ?? sessionStorage.getItem('token')
         if (token) {
           config.headers.Authorization = `Bearer ${token}`
         }
@@ -32,11 +32,11 @@ class ApiClient {
       (error: AxiosError) => {
         // Handle both 401 (Unauthorized - no token) and 403 (Forbidden - invalid/expired token)
         if (error.response?.status === 401 || error.response?.status === 403) {
-          const token = localStorage.getItem('token')
+          const token = localStorage.getItem('token') ?? sessionStorage.getItem('token')
           if (token) {
             console.log('Token is invalid or expired, removing from storage')
             localStorage.removeItem('token')
-            // Trigger re-authentication on next request
+            sessionStorage.removeItem('token')
             window.dispatchEvent(new CustomEvent('token-expired'))
           }
         }

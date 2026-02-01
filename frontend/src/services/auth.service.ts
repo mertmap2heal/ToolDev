@@ -19,11 +19,27 @@ interface AuthResponse {
   token: string
 }
 
+const TOKEN_KEY = 'token'
+
+function getStoredToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY)
+}
+
+function setStoredToken(token: string, remember: boolean): void {
+  if (remember) {
+    localStorage.setItem(TOKEN_KEY, token)
+    sessionStorage.removeItem(TOKEN_KEY)
+  } else {
+    sessionStorage.setItem(TOKEN_KEY, token)
+    localStorage.removeItem(TOKEN_KEY)
+  }
+}
+
 export const authService = {
-  async login(data: LoginDto): Promise<ApiResponse<AuthResponse>> {
+  async login(data: LoginDto, remember = true): Promise<ApiResponse<AuthResponse>> {
     const response = await apiClient.post<AuthResponse>('/auth/login', data)
     if (response.success && response.data) {
-      localStorage.setItem('token', response.data.token)
+      setStoredToken(response.data.token, remember)
     }
     return response
   },
@@ -31,7 +47,7 @@ export const authService = {
   async register(data: RegisterDto): Promise<ApiResponse<AuthResponse>> {
     const response = await apiClient.post<AuthResponse>('/auth/register', data)
     if (response.success && response.data) {
-      localStorage.setItem('token', response.data.token)
+      setStoredToken(response.data.token, true)
     }
     return response
   },
@@ -41,10 +57,11 @@ export const authService = {
   },
 
   logout(): void {
-    localStorage.removeItem('token')
+    localStorage.removeItem(TOKEN_KEY)
+    sessionStorage.removeItem(TOKEN_KEY)
   },
 
   getToken(): string | null {
-    return localStorage.getItem('token')
+    return getStoredToken()
   },
 }
