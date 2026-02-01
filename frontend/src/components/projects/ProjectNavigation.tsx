@@ -3,7 +3,6 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import {
   Users,
   Boxes,
-  FileText,
   CheckCircle2,
   AlertCircle,
   FileCheck,
@@ -73,7 +72,6 @@ const navigationGroups: NavigationGroup[] = [
       { id: 'risk-management', label: 'Risk Management', icon: AlertTriangle, route: 'risk-management' },
       { id: 'compliance-check', label: 'Compliance Check', icon: ShieldCheck, route: 'compliance-check' },
       { id: 'certification', label: 'Certification', icon: Award, route: 'certification' },
-      { id: 'reports', label: 'Reports', icon: FileText, route: 'reports' },
     ],
   },
 ]
