@@ -58,9 +58,31 @@ export const createProject = async (req: AuthRequest, res: Response) => {
 
 export const getProjects = async (req: AuthRequest, res: Response) => {
   try {
+    const currentUserId = req.userId
+    if (!currentUserId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+      })
+    }
+
     const projects = await prisma.project.findMany({
+      where: {
+        OR: [
+          { userId: currentUserId },
+          {
+            teamMembers: {
+              some: {
+                userId: currentUserId,
+                status: 'accepted',
+              },
+            },
+          },
+        ],
+      },
       include: {
         teamMembers: {
+          where: { status: 'accepted' },
           include: {
             user: {
               select: {
@@ -94,8 +116,15 @@ export const getProjects = async (req: AuthRequest, res: Response) => {
 export const getProject = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
+    const currentUserId = req.userId
 
-    // Admin view: Show any project by ID
+    if (!currentUserId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+      })
+    }
+
     const project = await prisma.project.findUnique({
       where: { id },
       include: {
@@ -119,6 +148,18 @@ export const getProject = async (req: AuthRequest, res: Response) => {
     })
 
     if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+      })
+    }
+
+    const canAccess =
+      project.userId === currentUserId ||
+      project.teamMembers.some(
+        (m) => m.userId === currentUserId && (m as { status?: string }).status === 'accepted'
+      )
+    if (!canAccess) {
       return res.status(404).json({
         success: false,
         error: 'Project not found',
@@ -287,6 +328,7 @@ export const getProjectMembers = async (req: AuthRequest, res: Response) => {
             projectId,
             userId: project.userId,
             role: 'owner',
+            status: 'accepted',
             joinedAt: project.createdAt,
             user: ownerUser,
           },
@@ -376,23 +418,40 @@ export const addProjectMember = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    const member = await prisma.projectMember.create({
-      data: {
-        projectId,
-        userId: inviteUserId,
-        role,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            avatarUrl: true,
+    const inviter = await prisma.user.findUnique({
+      where: { id: currentUserId },
+      select: { name: true },
+    })
+
+    const [member] = await prisma.$transaction([
+      prisma.projectMember.create({
+        data: {
+          projectId,
+          userId: inviteUserId,
+          role,
+          status: 'pending',
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              avatarUrl: true,
+            },
           },
         },
-      },
-    })
+      }),
+      prisma.notification.create({
+        data: {
+          userId: inviteUserId,
+          type: 'project_invitation',
+          title: 'Project invitation',
+          message: `${inviter?.name || 'Someone'} invited you to the project "${project.name}".`,
+          projectId,
+        },
+      }),
+    ])
 
     res.status(201).json({
       success: true,
@@ -470,6 +529,129 @@ export const removeProjectMember = async (req: AuthRequest, res: Response) => {
     })
   } catch (error) {
     console.error('Remove project member error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    })
+  }
+}
+
+export const acceptProjectInvitation = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id: projectId } = req.params
+    const currentUserId = req.userId
+
+    if (!currentUserId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+      })
+    }
+
+    const member = await prisma.projectMember.findUnique({
+      where: {
+        projectId_userId: { projectId, userId: currentUserId },
+      },
+    })
+
+    if (!member) {
+      return res.status(404).json({
+        success: false,
+        error: 'Invitation not found',
+      })
+    }
+
+    if (member.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invitation was already accepted or declined',
+      })
+    }
+
+    await prisma.$transaction([
+      prisma.projectMember.update({
+        where: {
+          projectId_userId: { projectId, userId: currentUserId },
+        },
+        data: { status: 'accepted' },
+      }),
+      prisma.notification.updateMany({
+        where: {
+          userId: currentUserId,
+          projectId,
+          type: 'project_invitation',
+        },
+        data: { read: true },
+      }),
+    ])
+
+    res.json({
+      success: true,
+      message: 'Invitation accepted',
+    })
+  } catch (error) {
+    console.error('Accept project invitation error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    })
+  }
+}
+
+export const declineProjectInvitation = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id: projectId } = req.params
+    const currentUserId = req.userId
+
+    if (!currentUserId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+      })
+    }
+
+    const member = await prisma.projectMember.findUnique({
+      where: {
+        projectId_userId: { projectId, userId: currentUserId },
+      },
+    })
+
+    if (!member) {
+      return res.status(404).json({
+        success: false,
+        error: 'Invitation not found',
+      })
+    }
+
+    if (member.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invitation was already accepted or declined',
+      })
+    }
+
+    await prisma.$transaction([
+      prisma.projectMember.delete({
+        where: {
+          projectId_userId: { projectId, userId: currentUserId },
+        },
+      }),
+      prisma.notification.updateMany({
+        where: {
+          userId: currentUserId,
+          projectId,
+          type: 'project_invitation',
+        },
+        data: { read: true },
+      }),
+    ])
+
+    res.json({
+      success: true,
+      message: 'Invitation declined',
+    })
+  } catch (error) {
+    console.error('Decline project invitation error:', error)
     res.status(500).json({
       success: false,
       error: 'Internal server error',

@@ -8,6 +8,8 @@ import {
   getProjectMembers,
   addProjectMember,
   removeProjectMember,
+  acceptProjectInvitation,
+  declineProjectInvitation,
 } from '../controllers/project.controller'
 import { authenticateToken } from '../middleware/auth.middleware'
 
@@ -23,5 +25,7 @@ router.delete('/:id', deleteProject)
 router.get('/:id/members', getProjectMembers)
 router.post('/:id/members', addProjectMember)
 router.delete('/:id/members/:userId', removeProjectMember)
+router.post('/:id/invitations/accept', acceptProjectInvitation)
+router.post('/:id/invitations/decline', declineProjectInvitation)
 
 export default router

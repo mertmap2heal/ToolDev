@@ -43,4 +43,12 @@ export const projectService = {
   async removeProjectMember(projectId: string, userId: string): Promise<ApiResponse<void>> {
     return apiClient.delete<void>(`/projects/${projectId}/members/${userId}`)
   },
+
+  async acceptInvitation(projectId: string): Promise<ApiResponse<{ message: string }>> {
+    return apiClient.post<{ message: string }>(`/projects/${projectId}/invitations/accept`, {})
+  },
+
+  async declineInvitation(projectId: string): Promise<ApiResponse<{ message: string }>> {
+    return apiClient.post<{ message: string }>(`/projects/${projectId}/invitations/decline`, {})
+  },
 }

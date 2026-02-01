@@ -1,26 +1,80 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Bell, Search, HelpCircle, Settings, Grid, GraduationCap, LogOut } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Bell, Search, HelpCircle, Settings, Grid, GraduationCap, LogOut, Loader2 } from 'lucide-react'
 import Logo from '../Logo'
 import Breadcrumbs from './Breadcrumbs'
 import { authService } from '../../services/auth.service'
 import { useAuthStore } from '../../store/authStore'
+import { notificationService } from '../../services/notification.service'
+import { projectService } from '../../services/project.service'
+import type { Notification } from '../../../shared/types/project.types'
 
 export default function Header() {
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [bellOpen, setBellOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const bellRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { user, logout } = useAuthStore()
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [notificationsLoading, setNotificationsLoading] = useState(false)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setDropdownOpen(false)
       }
+      if (bellRef.current && !bellRef.current.contains(event.target as Node)) {
+        setBellOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  useEffect(() => {
+    if (bellOpen) {
+      setNotificationsLoading(true)
+      notificationService.getNotifications().then((res) => {
+        if (res.success && res.data) setNotifications(res.data)
+        setNotificationsLoading(false)
+      })
+    }
+  }, [bellOpen])
+
+  const unreadCount = notifications.filter((n) => !n.read).length
+
+  const handleAcceptInvitation = async (notification: Notification) => {
+    if (!notification.projectId) return
+    setActionLoading(notification.id)
+    try {
+      const res = await projectService.acceptInvitation(notification.projectId)
+      if (res.success) {
+        await notificationService.markAsRead(notification.id)
+        setNotifications((prev) => prev.filter((n) => n.id !== notification.id))
+        queryClient.invalidateQueries({ queryKey: ['projects'] })
+        setBellOpen(false)
+        navigate('/')
+      }
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleDeclineInvitation = async (notification: Notification) => {
+    if (!notification.projectId) return
+    setActionLoading(notification.id)
+    try {
+      await projectService.declineInvitation(notification.projectId)
+      await notificationService.markAsRead(notification.id)
+      setNotifications((prev) => prev.filter((n) => n.id !== notification.id))
+    } finally {
+      setActionLoading(null)
+    }
+  }
 
   const handleLogout = () => {
     authService.logout()
@@ -59,10 +113,68 @@ export default function Header() {
           <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg relative">
             <HelpCircle size={18} className="text-gray-600 dark:text-gray-400" />
           </button>
-          <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg relative">
-            <Bell size={18} className="text-gray-600 dark:text-gray-400" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-          </button>
+          <div className="relative" ref={bellRef}>
+            <button
+              onClick={() => setBellOpen(!bellOpen)}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg relative"
+              aria-expanded={bellOpen}
+              aria-label="Notifications"
+            >
+              <Bell size={18} className="text-gray-600 dark:text-gray-400" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-medium bg-red-500 text-white rounded-full">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </button>
+            {bellOpen && (
+              <div className="absolute right-0 mt-2 w-96 max-h-[80vh] overflow-y-auto py-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+                <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                  <h3 className="font-semibold text-gray-900 dark:text-white">Notifications</h3>
+                </div>
+                {notificationsLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 size={24} className="animate-spin text-gray-400" />
+                  </div>
+                ) : notifications.length === 0 ? (
+                  <p className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400">No notifications</p>
+                ) : (
+                  <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {notifications.map((n) => (
+                      <li
+                        key={n.id}
+                        className={`px-4 py-3 ${!n.read ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}
+                      >
+                        <p className="font-medium text-sm text-gray-900 dark:text-white">{n.title}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{n.message}</p>
+                        {n.type === 'project_invitation' && n.projectId && (
+                          <div className="flex gap-2 mt-2">
+                            <button
+                              onClick={() => handleAcceptInvitation(n)}
+                              disabled={actionLoading === n.id}
+                              className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+                            >
+                              {actionLoading === n.id ? (
+                                <Loader2 size={12} className="animate-spin" />
+                              ) : null}
+                              Accept
+                            </button>
+                            <button
+                              onClick={() => handleDeclineInvitation(n)}
+                              disabled={actionLoading === n.id}
+                              className="px-3 py-1.5 text-xs font-medium border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
           <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg">
             <GraduationCap size={18} className="text-gray-600 dark:text-gray-400" />
           </button>

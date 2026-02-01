@@ -27,8 +27,20 @@ export interface ProjectMember {
   projectId: string
   userId: string
   role: 'owner' | 'member' | 'viewer'
+  status?: 'pending' | 'accepted'
   joinedAt: string
   user?: User
+}
+
+export interface Notification {
+  id: string
+  userId: string
+  type: string
+  title: string
+  message: string
+  projectId: string | null
+  read: boolean
+  createdAt: string
 }
 
 export interface CreateProjectDto {

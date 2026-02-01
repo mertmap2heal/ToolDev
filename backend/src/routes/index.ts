@@ -39,10 +39,12 @@ import timeTrackingRoutes from './timeTracking.routes'
 import taskTemplateRoutes from './taskTemplates.routes'
 import taskAnalyticsRoutes from './taskAnalytics.routes'
 import complianceRoutes from './compliance.routes'
+import notificationsRoutes from './notifications.routes'
 
 const router = Router()
 
 router.use('/auth', authRoutes)
+router.use('/notifications', notificationsRoutes)
 // Mount components (PBS) before project so /projects/:projectId/components is matched
 router.use('/projects', componentsRoutes)
 router.use('/projects', projectRoutes)
