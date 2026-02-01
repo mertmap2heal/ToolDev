@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { Bell, User as UserIcon, Search, HelpCircle, Settings, Grid, GraduationCap } from 'lucide-react'
 import Logo from '../Logo'
 import Breadcrumbs from './Breadcrumbs'
@@ -7,10 +8,10 @@ export default function Header() {
     <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
       <div className="px-6 py-3">
         <div className="flex items-center justify-between">
-          {/* Left: Logo/Branding */}
-          <div className="flex items-center gap-4">
+          {/* Left: Logo/Branding - click navigates to main menu */}
+          <Link to="/" className="flex items-center gap-4 hover:opacity-90 transition-opacity">
             <Logo size="md" showText={true} />
-          </div>
+          </Link>
 
         {/* Center: Search */}
         <div className="flex-1 max-w-md mx-8">
