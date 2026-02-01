@@ -1,6 +1,8 @@
 import { BrowserRouter } from 'react-router-dom'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import MainLayout from './components/layout/MainLayout'
+import ProtectedRoute from './components/ProtectedRoute'
+import LoginPage from './pages/Login/LoginPage'
 import DashboardPage from './pages/Dashboard/DashboardPage'
 import RequirementsPage from './pages/Requirements/RequirementsPage'
 import SystemFunctionsPage from './pages/SystemFunctions/SystemFunctionsPage'
@@ -63,16 +65,20 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Login - public route */}
+        <Route path="/login" element={<LoginPage />} />
         {/* MBSE Models - Full page experience outside MainLayout */}
         <Route path="projects/:projectId/mbse-models" element={<MBSEModelsPage />} />
-        <Route path="/" element={<MainLayout />}>
-          <Route index element={<DashboardPage />} />
-          <Route path="projects" element={<Navigate to="/" replace />} />
-          <Route path="projects/:projectId/stakeholder" element={<StakeholderPage />} />
-          <Route path="projects/:projectId/product-breakdown-structure" element={<PBSPage />} />
-          <Route path="projects/:projectId/requirements" element={<RequirementsPage />} />
-          <Route path="projects/:projectId/tasks" element={<TasksPage />} />
-          <Route path="tasks">
+        {/* Protected routes - require authentication */}
+        <Route path="/" element={<ProtectedRoute />}>
+          <Route element={<MainLayout />}>
+            <Route index element={<DashboardPage />} />
+            <Route path="projects" element={<Navigate to="/" replace />} />
+            <Route path="projects/:projectId/stakeholder" element={<StakeholderPage />} />
+            <Route path="projects/:projectId/product-breakdown-structure" element={<PBSPage />} />
+            <Route path="projects/:projectId/requirements" element={<RequirementsPage />} />
+            <Route path="projects/:projectId/tasks" element={<TasksPage />} />
+            <Route path="tasks">
             <Route index element={<TasksDashboardPage />} />
             <Route path="my-tasks" element={<MyTasksPage />} />
             <Route path="all" element={<TasksPage />} />
@@ -83,29 +89,29 @@ function App() {
             <Route path="workflows" element={<TaskWorkflowsPage />} />
             <Route path="time-tracking" element={<TimeTrackingPage />} />
             <Route path="notifications" element={<TaskNotificationsPage />} />
-            <Route path="settings" element={<TaskSettingsPage />} />
-          </Route>
-          <Route path="projects/:projectId/functions" element={<SystemFunctionsPage />} />
-          <Route path="projects/:projectId/parameters" element={<ParametersPage />} />
-          <Route path="projects/:projectId/change-requests" element={<ChangeRequestsPage />} />
-          <Route path="projects/:projectId/architecture" element={<ArchitecturePage />} />
-          <Route path="projects/:projectId/reports" element={<ReportsPage />} />
-          <Route path="projects/:projectId/verification" element={<VerificationLayoutPage />}>
+              <Route path="settings" element={<TaskSettingsPage />} />
+            </Route>
+              <Route path="projects/:projectId/functions" element={<SystemFunctionsPage />} />
+            <Route path="projects/:projectId/parameters" element={<ParametersPage />} />
+            <Route path="projects/:projectId/change-requests" element={<ChangeRequestsPage />} />
+            <Route path="projects/:projectId/architecture" element={<ArchitecturePage />} />
+            <Route path="projects/:projectId/reports" element={<ReportsPage />} />
+            <Route path="projects/:projectId/verification" element={<VerificationLayoutPage />}>
             <Route index element={<VerificationPage />} />
             <Route path="templates" element={<TemplatesLandingPage />} />
-            <Route path="templates/:templateId" element={<TemplateEditorPage />} />
-          </Route>
-          <Route path="projects/:projectId/issues" element={<IssuesPage />} />
-          <Route path="projects/:projectId/documentation" element={<DocumentationPage />} />
-          <Route path="projects/:projectId/lifecycle-status" element={<LifecycleStatusPage />} />
-          <Route path="projects/:projectId/certification" element={<CertificationPage />} />
-          <Route path="projects/:projectId/validation" element={<ValidationPage />} />
-          <Route path="projects/:projectId/risk-management" element={<RiskManagementPage />} />
-          <Route path="projects/:projectId/interface-management" element={<InterfaceManagementPage />} />
-          <Route path="projects/:projectId/configuration-management" element={<ConfigurationManagementPage />} />
-          <Route path="projects/:projectId/archive" element={<ArchivePage />} />
-          <Route path="projects/:projectId/compliance-check" element={<ComplianceCheckPage />} />
-          <Route path="projects/:projectId/safety-analysis" element={<SafetyLayoutPage />}>
+              <Route path="templates/:templateId" element={<TemplateEditorPage />} />
+            </Route>
+              <Route path="projects/:projectId/issues" element={<IssuesPage />} />
+            <Route path="projects/:projectId/documentation" element={<DocumentationPage />} />
+            <Route path="projects/:projectId/lifecycle-status" element={<LifecycleStatusPage />} />
+            <Route path="projects/:projectId/certification" element={<CertificationPage />} />
+            <Route path="projects/:projectId/validation" element={<ValidationPage />} />
+            <Route path="projects/:projectId/risk-management" element={<RiskManagementPage />} />
+            <Route path="projects/:projectId/interface-management" element={<InterfaceManagementPage />} />
+            <Route path="projects/:projectId/configuration-management" element={<ConfigurationManagementPage />} />
+            <Route path="projects/:projectId/archive" element={<ArchivePage />} />
+            <Route path="projects/:projectId/compliance-check" element={<ComplianceCheckPage />} />
+            <Route path="projects/:projectId/safety-analysis" element={<SafetyLayoutPage />}>
             <Route index element={<Navigate to="overview" replace />} />
             <Route path="overview" element={<SafetyOverviewPage />} />
             <Route path="hazards" element={<HazardsPage />} />
@@ -121,10 +127,10 @@ function App() {
             <Route path="reviews" element={<ReviewsPage />} />
             <Route path="audit-log" element={<AuditLogPage />} />
             <Route path="exports" element={<ExportsPage />} />
-            <Route path="settings" element={<SafetySettingsPage />} />
-          </Route>
-          <Route path="lifecycle" element={<LifecycleManagementPage />} />
-          <Route path="inventory">
+              <Route path="settings" element={<SafetySettingsPage />} />
+            </Route>
+            <Route path="lifecycle" element={<LifecycleManagementPage />} />
+            <Route path="inventory">
             <Route index element={<Navigate to="/inventory/items" replace />} />
             <Route path="items" element={<ItemsPage />} />
             <Route path="warehouses" element={<WarehousesPage />} />
@@ -132,7 +138,8 @@ function App() {
             <Route path="sales" element={<SalesPage />} />
             <Route path="operations" element={<OperationsPage />} />
             <Route path="reports" element={<InventoryReportsPage />} />
-            <Route path="dashboard" element={<InventoryDashboardPage />} />
+              <Route path="dashboard" element={<InventoryDashboardPage />} />
+            </Route>
           </Route>
         </Route>
       </Routes>
