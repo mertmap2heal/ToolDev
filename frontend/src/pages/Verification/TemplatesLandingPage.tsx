@@ -7,10 +7,12 @@ import {
   Plus,
   Edit2,
   Copy,
+  Download,
   Upload,
   Archive,
   Trash2,
   RefreshCw,
+  MoreVertical,
 } from 'lucide-react'
 import { verificationService } from '../../services/verification.service'
 import clsx from 'clsx'
@@ -25,6 +27,8 @@ export default function TemplatesLandingPage() {
   const [search, setSearch] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null)
+  const [kebabId, setKebabId] = useState<string | null>(null)
+  const [exportPlaceholder, setExportPlaceholder] = useState(false)
 
   const { data: list = [], isLoading } = useQuery({
     queryKey: ['verification-templates', projectId, section, showArchived],
@@ -204,34 +208,40 @@ export default function TemplatesLandingPage() {
         ) : (
           <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-900">
+              <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    ID
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Name
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Type
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Version
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                    Updated
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Last Updated
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {filtered.map((t: any) => (
+                {filtered.map((t: any, index) => (
                   <tr
                     key={t.id}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                   >
+                    <td className="px-4 py-3 font-mono text-sm text-gray-600 dark:text-gray-400">
+                      {t.type === 'TEST_CASE' ? 'TCT' : 'TPT'}-{String(index + 1).padStart(3, '0')}
+                    </td>
                     <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">
                       {t.name}
                     </td>
@@ -241,7 +251,7 @@ export default function TemplatesLandingPage() {
                     <td className="px-4 py-3">
                       <span
                         className={clsx(
-                          'px-2 py-1 rounded text-xs font-medium',
+                          'px-2 py-1 rounded-full text-xs font-medium',
                           getStatusColor(t.status || 'DRAFT')
                         )}
                       >
@@ -256,13 +266,23 @@ export default function TemplatesLandingPage() {
                         ? new Date(t.updatedAt).toLocaleDateString()
                         : '—'}
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => {
+                            const tab = t.type === 'TEST_PLAN' ? 'plans' : 'cases'
+                            navigate(`/projects/${projectId}/verification?tab=${tab}&useTemplateId=${t.id}`)
+                          }}
+                          className="p-2 text-gray-600 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                          title="Use"
+                        >
+                          <Plus size={16} />
+                        </button>
                         <button
                           onClick={() =>
                             navigate(`/projects/${projectId}/verification/templates/${t.id}`)
                           }
-                          className="p-1.5 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                          className="p-2 text-gray-600 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
                           title="Edit"
                         >
                           <Edit2 size={16} />
@@ -270,38 +290,64 @@ export default function TemplatesLandingPage() {
                         <button
                           onClick={() => duplicateMutation.mutate(t.id)}
                           disabled={duplicateMutation.isPending}
-                          className="p-1.5 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                          className="p-2 text-gray-600 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
                           title="Duplicate"
                         >
                           <Copy size={16} />
                         </button>
-                        {t.status === 'DRAFT' && (
-                          <button
-                            onClick={() => publishMutation.mutate(t.id)}
-                            disabled={publishMutation.isPending}
-                            className="p-1.5 text-green-600 hover:text-green-700 dark:text-green-400"
-                            title="Publish"
-                          >
-                            <Upload size={16} />
-                          </button>
-                        )}
-                        {t.status !== 'ARCHIVED' && (
-                          <button
-                            onClick={() => archiveMutation.mutate(t.id)}
-                            disabled={archiveMutation.isPending}
-                            className="p-1.5 text-amber-600 hover:text-amber-700 dark:text-amber-400"
-                            title="Archive"
-                          >
-                            <Archive size={16} />
-                          </button>
-                        )}
                         <button
-                          onClick={() => setDeleteConfirm({ id: t.id, name: t.name })}
-                          className="p-1.5 text-red-600 hover:text-red-700 dark:text-red-400"
-                          title="Delete"
+                          onClick={() => setExportPlaceholder(true)}
+                          className="p-2 text-gray-600 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                          title="Export (placeholder)"
                         >
-                          <Trash2 size={16} />
+                          <Download size={16} />
                         </button>
+                        <div className="relative inline-block">
+                          <button
+                            onClick={() => setKebabId(kebabId === t.id ? null : t.id)}
+                            className="p-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                            title="More"
+                          >
+                            <MoreVertical size={16} />
+                          </button>
+                          {kebabId === t.id && (
+                            <div className="absolute right-0 top-full mt-1 py-1 w-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-10">
+                              {t.status === 'DRAFT' && (
+                                <button
+                                  onClick={() => {
+                                    publishMutation.mutate(t.id)
+                                    setKebabId(null)
+                                  }}
+                                  disabled={publishMutation.isPending}
+                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
+                                >
+                                  Publish
+                                </button>
+                              )}
+                              {t.status !== 'ARCHIVED' && (
+                                <button
+                                  onClick={() => {
+                                    archiveMutation.mutate(t.id)
+                                    setKebabId(null)
+                                  }}
+                                  disabled={archiveMutation.isPending}
+                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
+                                >
+                                  Archive
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  setDeleteConfirm({ id: t.id, name: t.name })
+                                  setKebabId(null)
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -336,6 +382,31 @@ export default function TemplatesLandingPage() {
                 Delete
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {exportPlaceholder && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => setExportPlaceholder(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Planned Feature</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              Export template will be implemented in a future release.
+            </p>
+            <button
+              onClick={() => setExportPlaceholder(false)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+            >
+              OK
+            </button>
           </div>
         </div>
       )}

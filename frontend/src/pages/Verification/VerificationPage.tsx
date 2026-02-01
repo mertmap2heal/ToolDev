@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Search,
@@ -141,11 +141,13 @@ const saveColumnPreferences = (entityType: string, visibleColumns: Set<ColumnKey
 
 export default function VerificationPage() {
   const { projectId } = useParams<{ projectId: string }>()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const tabParam = searchParams.get('tab') || 'overview'
   const activeTab = (['overview', 'plans', 'cases', 'setups', 'results'].includes(tabParam)
     ? tabParam
     : 'overview') as 'overview' | 'plans' | 'cases' | 'setups' | 'results'
+  const useTemplateId = searchParams.get('useTemplateId')
   const [searchQuery, setSearchQuery] = useState('')
   
   // Modal states
@@ -155,6 +157,18 @@ export default function VerificationPage() {
   const [isCreateResultOpen, setIsCreateResultOpen] = useState(false)
   
   const drawer = useVerificationDrawer()
+
+  // Open create modal when navigating from Templates "Use" (useTemplateId in URL)
+  useEffect(() => {
+    if (!useTemplateId || !projectId) return
+    if (activeTab === 'plans') {
+      setIsCreatePlanOpen(true)
+      navigate(`/projects/${projectId}/verification?tab=plans`, { replace: true })
+    } else if (activeTab === 'cases') {
+      setIsCreateCaseOpen(true)
+      navigate(`/projects/${projectId}/verification?tab=cases`, { replace: true })
+    }
+  }, [useTemplateId, activeTab, projectId, navigate])
 
   // Export modal states
   const [showTestCasesExport, setShowTestCasesExport] = useState(false)
