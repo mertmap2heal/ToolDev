@@ -9,12 +9,20 @@ import {
   ChevronsUpDown,
   X,
   Filter,
+  Box,
+  Layers,
+  Settings,
+  Package,
+  Cpu,
+  FileText,
+  type LucideIcon,
 } from 'lucide-react'
 import clsx from 'clsx'
 import type { PBSNode } from './types'
 import { PBS_TYPES, PBS_STATUSES } from './types'
 import type { TreeNode } from './treeUtils'
 import { buildTree, filterTree, isDescendant } from './treeUtils'
+import { useDebounce } from './useDebounce'
 
 // Highlight matching text in a string
 function HighlightedText({ text, query }: { text: string; query: string }) {
@@ -66,6 +74,24 @@ const TYPE_BADGE_CLASS: Record<string, string> = {
   Document: 'bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-200',
 }
 
+const TYPE_ICON_CLASS: Record<string, string> = {
+  System: 'text-blue-600 dark:text-blue-400',
+  Subsystem: 'text-indigo-600 dark:text-indigo-400',
+  Assembly: 'text-amber-600 dark:text-amber-400',
+  Part: 'text-gray-600 dark:text-gray-400',
+  Software: 'text-green-600 dark:text-green-400',
+  Document: 'text-purple-600 dark:text-purple-400',
+}
+
+const TYPE_ICONS: Record<string, LucideIcon> = {
+  System: Box,
+  Subsystem: Layers,
+  Assembly: Settings,
+  Part: Package,
+  Software: Cpu,
+  Document: FileText,
+}
+
 const STATUS_DOT_CLASS: Record<string, string> = {
   Draft: 'bg-gray-400',
   'In Work': 'bg-yellow-500',
@@ -115,6 +141,11 @@ function TreeNodeRow({
   onEditCancel,
   dropPosition,
   isDragging,
+  isFocused,
+  ariaLevel,
+  ariaSetSize,
+  ariaPosInSet,
+  onTreeKeyDown,
 }: {
   node: TreeNode
   level: number
@@ -137,6 +168,11 @@ function TreeNodeRow({
   onEditCancel: () => void
   dropPosition: DropPosition | null
   isDragging: boolean
+  isFocused: boolean
+  ariaLevel: number
+  ariaSetSize: number
+  ariaPosInSet: number
+  onTreeKeyDown?: (e: React.KeyboardEvent) => void
 }) {
   const rowRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -149,17 +185,29 @@ function TreeNodeRow({
     }
   }, [isEditing])
 
+  // Move focus to this row when it becomes the focused tree item
+  useEffect(() => {
+    if (isFocused && rowRef.current && !isEditing) {
+      rowRef.current.focus()
+      rowRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  }, [isFocused, isEditing])
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        onEditSave()
-      } else if (e.key === 'Escape') {
-        e.preventDefault()
-        onEditCancel()
+      if (isEditing) {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          onEditSave()
+        } else if (e.key === 'Escape') {
+          e.preventDefault()
+          onEditCancel()
+        }
+        return
       }
+      onTreeKeyDown?.(e)
     },
-    [onEditSave, onEditCancel]
+    [isEditing, onEditSave, onEditCancel, onTreeKeyDown]
   )
 
   return (
@@ -167,8 +215,17 @@ function TreeNodeRow({
       {dropPosition === 'before' && <InsertionLine level={level} />}
       <div
         ref={rowRef}
+        role="treeitem"
+        tabIndex={isFocused ? 0 : -1}
+        aria-expanded={hasChildren ? isExpanded : undefined}
+        aria-selected={isSelected}
+        aria-level={ariaLevel}
+        aria-setsize={ariaSetSize}
+        aria-posinset={ariaPosInSet}
+        aria-label={node.name || 'Unnamed component'}
         className={clsx(
-          'flex items-center gap-1 py-1.5 px-2 rounded cursor-pointer transition-colors group border',
+          'flex items-center gap-1 py-1.5 px-2 rounded cursor-pointer transition-colors group border outline-none',
+          'focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1',
           isSelected && 'bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700',
           !isSelected && 'border-transparent hover:bg-gray-100 dark:hover:bg-gray-800',
           dropPosition === 'inside' && 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20',
@@ -180,6 +237,7 @@ function TreeNodeRow({
           e.stopPropagation()
           onDoubleClick()
         }}
+        onKeyDown={handleKeyDown}
         onContextMenu={onContextMenu}
         draggable={!isEditing}
         onDragStart={onDragStart}
@@ -189,11 +247,13 @@ function TreeNodeRow({
       >
         <button
           type="button"
+          aria-expanded={hasChildren ? isExpanded : undefined}
+          aria-label={isExpanded ? 'Collapse' : 'Expand'}
           onClick={(e) => {
             e.stopPropagation()
             onToggle()
           }}
-          className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+          className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
           {hasChildren ? (
             isExpanded ? (
@@ -212,6 +272,11 @@ function TreeNodeRow({
           )}
           title={node.status}
         />
+        {(() => {
+          const IconComponent = TYPE_ICONS[node.type] ?? Box
+          const iconClass = TYPE_ICON_CLASS[node.type] ?? 'text-gray-500'
+          return <IconComponent size={14} className={clsx('flex-shrink-0', iconClass)} title={node.type} />
+        })()}
         {isEditing ? (
           <input
             ref={inputRef}
@@ -273,12 +338,152 @@ export default function PBSTree({
   const pendingExpandIdRef = useRef<string | null>(null)
 
   const tree = useMemo(() => buildTree(nodes), [nodes])
+  const debouncedSearchQuery = useDebounce(searchQuery, 300)
   const filteredTree = useMemo(
-    () => filterTree(tree, { query: searchQuery, type: filterType, status: filterStatus }),
-    [tree, searchQuery, filterType, filterStatus]
+    () => filterTree(tree, { query: debouncedSearchQuery, type: filterType, status: filterStatus }),
+    [tree, debouncedSearchQuery, filterType, filterStatus]
   )
 
+  const flatListWithAria = useMemo(() => {
+    const out: { node: TreeNode; level: number; setSize: number; posInSet: number }[] = []
+    function walk(nodes: TreeNode[], level: number) {
+      nodes.forEach((n, i) => {
+        out.push({ node: n, level, setSize: nodes.length, posInSet: i + 1 })
+        if (n.children.length > 0 && expandedIds.has(n.id)) walk(n.children, level + 1)
+      })
+    }
+    walk(filteredTree, 0)
+    return out
+  }, [filteredTree, expandedIds])
+
+  const flatList = flatListWithAria
+  const focusableNodeIds = useMemo(() => flatList.map((x) => x.node.id), [flatList])
+  const useVirtualization = flatList.length >= 500
+  const ROW_HEIGHT = 40
+  const VIRTUAL_OVERSCAN = 5
+
+  const [scrollTop, setScrollTop] = useState(0)
+  const [containerHeight, setContainerHeight] = useState(400)
+  const resizeObserverRef = useRef<ResizeObserver | null>(null)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const onScroll = () => setScrollTop(el.scrollTop)
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    setContainerHeight(el.clientHeight)
+    resizeObserverRef.current = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (entry) setContainerHeight(entry.contentRect.height)
+    })
+    resizeObserverRef.current.observe(el)
+    return () => {
+      resizeObserverRef.current?.disconnect()
+      resizeObserverRef.current = null
+    }
+  }, [])
+
+  const virtualRange = useMemo(() => {
+    if (!useVirtualization) return { start: 0, end: flatList.length }
+    const start = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - VIRTUAL_OVERSCAN)
+    const visibleCount = Math.ceil(containerHeight / ROW_HEIGHT) + VIRTUAL_OVERSCAN * 2
+    const end = Math.min(flatList.length, start + visibleCount)
+    return { start, end }
+  }, [useVirtualization, scrollTop, containerHeight, flatList.length])
+
   const hasActiveFilters = searchQuery || filterType || filterStatus
+
+  const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null)
+  const focusedIndex = focusableNodeIds.indexOf(focusedNodeId ?? '')
+  const effectiveFocusedId = focusedIndex >= 0 ? focusableNodeIds[focusedIndex] ?? null : (focusableNodeIds[0] ?? null)
+
+  useEffect(() => {
+    if (selectedId && focusableNodeIds.includes(selectedId)) setFocusedNodeId(selectedId)
+  }, [selectedId, focusableNodeIds])
+
+  useEffect(() => {
+    if (effectiveFocusedId && !focusableNodeIds.includes(effectiveFocusedId)) {
+      setFocusedNodeId(focusableNodeIds[0] ?? null)
+    }
+  }, [focusableNodeIds, effectiveFocusedId])
+
+  const toggleExpand = useCallback((id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const findNodeInTree = useCallback((tree: TreeNode[], id: string): TreeNode | undefined => {
+    for (const n of tree) {
+      if (n.id === id) return n
+      const found = findNodeInTree(n.children, id)
+      if (found) return found
+    }
+    return undefined
+  }, [])
+
+  const handleTreeKeyDown = useCallback(
+    (nodeId: string, e: React.KeyboardEvent) => {
+      const idx = focusableNodeIds.indexOf(nodeId)
+      if (idx < 0) return
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault()
+          if (idx < focusableNodeIds.length - 1) setFocusedNodeId(focusableNodeIds[idx + 1] ?? null)
+          break
+        case 'ArrowUp':
+          e.preventDefault()
+          if (idx > 0) setFocusedNodeId(focusableNodeIds[idx - 1] ?? null)
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          {
+            const node = findNodeInTree(filteredTree, nodeId)
+            if (node?.children.length) {
+              if (expandedIds.has(nodeId)) setFocusedNodeId(node.children[0]?.id ?? null)
+              else toggleExpand(nodeId)
+            }
+          }
+          break
+        case 'ArrowLeft':
+          e.preventDefault()
+          {
+            const node = findNodeInTree(filteredTree, nodeId)
+            if (node && expandedIds.has(nodeId) && node.children.length > 0) {
+              toggleExpand(nodeId)
+            } else if (idx > 0) {
+              setFocusedNodeId(focusableNodeIds[idx - 1] ?? null)
+            }
+          }
+          break
+        case 'Home':
+          e.preventDefault()
+          if (focusableNodeIds.length > 0) setFocusedNodeId(focusableNodeIds[0] ?? null)
+          break
+        case 'End':
+          e.preventDefault()
+          if (focusableNodeIds.length > 0) setFocusedNodeId(focusableNodeIds[focusableNodeIds.length - 1] ?? null)
+          break
+        case 'Enter':
+        case ' ':
+          e.preventDefault()
+          onSelect(nodeId)
+          break
+        default:
+          break
+      }
+    },
+    [focusableNodeIds, filteredTree, expandedIds, findNodeInTree, toggleExpand, onSelect]
+  )
 
   const clearAllFilters = useCallback(() => {
     setSearchQuery('')
@@ -310,15 +515,6 @@ export default function PBSTree({
     return () => {
       if (autoExpandTimerRef.current) clearTimeout(autoExpandTimerRef.current)
     }
-  }, [])
-
-  const toggleExpand = useCallback((id: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
   }, [])
 
   const expandAll = useCallback(() => {
@@ -515,11 +711,12 @@ export default function PBSTree({
   }, [])
 
   const renderNode = useCallback(
-    (node: TreeNode, level: number): React.ReactNode => {
+    (node: TreeNode, level: number, setSize: number, posInSet: number): React.ReactNode => {
       const isExpanded = expandedIds.has(node.id)
       const isSelected = selectedId === node.id
       const isDragging = dragNodeId === node.id
       const hasChildren = node.children.length > 0
+      const isFocused = effectiveFocusedId === node.id
 
       const nodeDropPosition =
         dropTarget?.nodeId === node.id ? dropTarget.position : null
@@ -548,10 +745,17 @@ export default function PBSTree({
             onEditCancel={handleEditCancel}
             dropPosition={nodeDropPosition}
             isDragging={isDragging}
+            isFocused={isFocused}
+            ariaLevel={level + 1}
+            ariaSetSize={setSize}
+            ariaPosInSet={posInSet}
+            onTreeKeyDown={(e) => handleTreeKeyDown(node.id, e)}
           />
           {hasChildren && isExpanded && (
-            <div>
-              {node.children.map((child) => renderNode(child, level + 1))}
+            <div role="group">
+              {node.children.map((child, i) =>
+                renderNode(child, level + 1, node.children.length, i + 1)
+              )}
             </div>
           )}
           {/* Show insertion line after this node if it's the drop target "after" and expanded */}
@@ -569,6 +773,7 @@ export default function PBSTree({
       searchQuery,
       editingNodeId,
       editValue,
+      effectiveFocusedId,
       toggleExpand,
       onSelect,
       startEditing,
@@ -580,6 +785,7 @@ export default function PBSTree({
       handleEditChange,
       handleEditSave,
       handleEditCancel,
+      handleTreeKeyDown,
     ]
   )
 
@@ -596,16 +802,16 @@ export default function PBSTree({
               <button
                 type="button"
                 onClick={expandAll}
-                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
-                title="Expand all"
+                aria-label="Expand all"
+                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 <ChevronsUpDown size={16} />
               </button>
               <button
                 type="button"
                 onClick={collapseAll}
-                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
-                title="Collapse all"
+                aria-label="Collapse all"
+                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 <ChevronsDownUp size={16} />
               </button>
@@ -620,8 +826,9 @@ export default function PBSTree({
               placeholder="Search by name, PBS ID, or tags..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search components by name, PBS ID, or tags"
               className={clsx(
-                'w-full pl-8 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+                'w-full pl-8 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus-visible:ring-2 focus-visible:ring-blue-500',
                 searchQuery ? 'pr-8' : 'pr-3'
               )}
             />
@@ -639,13 +846,14 @@ export default function PBSTree({
           <button
             type="button"
             onClick={() => setShowFilters((v) => !v)}
+            aria-label="Toggle type and status filters"
+            aria-expanded={showFilters}
             className={clsx(
-              'p-2 rounded-lg border transition-colors',
+              'p-2 rounded-lg border transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
               showFilters || filterType || filterStatus
                 ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400'
                 : 'border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
             )}
-            title="Filters"
           >
             <Filter size={16} />
           </button>
@@ -677,9 +885,9 @@ export default function PBSTree({
         {hasActiveFilters && (
           <div className="flex items-center justify-between mt-2 text-xs text-gray-500 dark:text-gray-400">
             <span>
-              {filteredTree.length === 0
+              {flatList.length === 0
                 ? 'No matches'
-                : `${filteredTree.length} match${filteredTree.length === 1 ? '' : 'es'}`}
+                : `${flatList.length} match${flatList.length === 1 ? '' : 'es'}`}
             </span>
             <button
               type="button"
@@ -694,6 +902,8 @@ export default function PBSTree({
       <div
         ref={containerRef}
         className="flex-1 overflow-y-auto p-2"
+        role="tree"
+        aria-label="Product structure"
         onDragOver={handleRootDragOver}
         onDrop={handleRootDrop}
         onDragEnd={handleDragEnd}
@@ -704,15 +914,38 @@ export default function PBSTree({
             <button
               type="button"
               onClick={onAddRoot}
-              className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+              aria-label="Add your first component"
+              className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
             >
               <Plus size={16} />
               Add your first component
             </button>
           </div>
+        ) : useVirtualization ? (
+          <div
+            style={{ height: flatList.length * ROW_HEIGHT, position: 'relative', minHeight: 1 }}
+          >
+            {flatList.slice(virtualRange.start, virtualRange.end).map((item, idx) => (
+              <div
+                key={item.node.id}
+                style={{
+                  position: 'absolute',
+                  top: (virtualRange.start + idx) * ROW_HEIGHT,
+                  left: 0,
+                  right: 0,
+                  height: ROW_HEIGHT,
+                  overflow: 'hidden',
+                }}
+              >
+                {renderNode(item.node, item.level, item.setSize, item.posInSet)}
+              </div>
+            ))}
+          </div>
         ) : (
           <>
-            {filteredTree.map((node) => renderNode(node, 0))}
+            {filteredTree.map((node, i) =>
+              renderNode(node, 0, filteredTree.length, i + 1)
+            )}
             {rootDropTarget && dragNodeId && (
               <div className="py-2 px-2 rounded border-2 border-dashed border-blue-500 bg-blue-50 dark:bg-blue-900/20 mt-1 text-xs text-blue-700 dark:text-blue-300">
                 Drop here to add as root

@@ -2,6 +2,8 @@
  * PBS module utilities — ID and code generation.
  */
 
+import type { PBSNode } from './types'
+
 export function generateId(): string {
   return typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID()
@@ -30,4 +32,26 @@ export function generatePbsCode(
 
 export function nowISO(): string {
   return new Date().toISOString()
+}
+
+/** Create the single top-level PBS node for a project (project name as root). */
+export function createProjectRootNode(projectName: string): PBSNode {
+  const now = nowISO()
+  return {
+    id: generateId(),
+    parentId: null,
+    name: projectName || 'Project',
+    pbsCode: 'PBS-001',
+    type: 'System',
+    status: 'Draft',
+    description: '',
+    tags: [],
+    attributes: [],
+    relationships: [],
+    attachments: [],
+    orderIndex: 0,
+    revision: 1,
+    createdAt: now,
+    updatedAt: now,
+  }
 }

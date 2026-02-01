@@ -103,3 +103,16 @@ export function flattenTree(tree: TreeNode[]): PBSNode[] {
   walk(tree)
   return out
 }
+
+/** Flatten tree to list of (node, level) for virtualization. */
+export function flattenTreeWithLevel(tree: TreeNode[], level = 0): { node: TreeNode; level: number }[] {
+  const out: { node: TreeNode; level: number }[] = []
+  function walk(nodes: TreeNode[], l: number) {
+    nodes.forEach((n) => {
+      out.push({ node: n, level: l })
+      walk(n.children, l + 1)
+    })
+  }
+  walk(tree, level)
+  return out
+}

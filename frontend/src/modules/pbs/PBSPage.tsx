@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
+import { projectService } from '../../services/project.service'
 import {
   Plus,
   Download,
@@ -16,11 +18,11 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import type { PBSNode, PBSChangeLogEntry, SaveStatus } from './types'
-import { loadPBS, savePBS } from './storage'
+import { loadPBSAsync, savePBSAsync, estimatePBSStorageBytes, getStorageQuota } from './storage'
 import { nowISO } from './utils'
 import { getNodePath } from './treeUtils'
 import { createPBSHandlers, addChangeLogEntry } from './handlers'
-import { PBS_TEMPLATES, generateNodesFromTemplate } from './templates'
+import { createProjectRootNode } from './utils'
 import PBSTree from './PBSTree'
 import PBSNodeEditor from './PBSNodeEditor'
 import PBSStats from './PBSStats'
@@ -42,7 +44,61 @@ export default function PBSPage() {
   const [renameNodeId, setRenameNodeId] = useState(null as string | null)
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [printViewOpen, setPrintViewOpen] = useState(false)
+  const [storageQuotaWarning, setStorageQuotaWarning] = useState<string | null>(null)
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Resizable left panel (persist per project)
+  const PANEL_WIDTH_KEY = `pbs::panel-width::${projectId ?? 'default'}`
+  const PANEL_MIN = 240
+  const PANEL_MAX = 600
+  const PANEL_DEFAULT = 320
+  const [leftPanelWidth, setLeftPanelWidth] = useState(PANEL_DEFAULT)
+
+  useEffect(() => {
+    try {
+      const key = `pbs::panel-width::${projectId ?? 'default'}`
+      const stored = localStorage.getItem(key)
+      if (stored) {
+        const w = parseInt(stored, 10)
+        if (!Number.isNaN(w) && w >= PANEL_MIN && w <= PANEL_MAX) setLeftPanelWidth(w)
+      }
+    } catch {
+      // ignore
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PANEL_WIDTH_KEY, String(leftPanelWidth))
+    } catch {
+      // ignore
+    }
+  }, [leftPanelWidth, PANEL_WIDTH_KEY])
+
+  const resizeContainerRef = useRef<HTMLDivElement>(null)
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      const container = resizeContainerRef.current
+      const onMove = (moveEvent: MouseEvent) => {
+        const left = container?.getBoundingClientRect().left ?? 0
+        const rawWidth = moveEvent.clientX - left
+        const newWidth = Math.min(PANEL_MAX, Math.max(PANEL_MIN, rawWidth))
+        setLeftPanelWidth(newWidth)
+      }
+      const onUp = () => {
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+      }
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
+    },
+    [PANEL_MIN, PANEL_MAX]
+  )
 
   // Undo/Redo history
   const [history, setHistory] = useState<{ past: PBSNode[][]; future: PBSNode[][] }>({
@@ -54,17 +110,104 @@ export default function PBSPage() {
 
   const projectKey = projectId ?? 'default'
 
+  const { data: projectData, isLoading: projectLoading } = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: async () => {
+      if (!projectId) return null
+      const response = await projectService.getProject(projectId)
+      return response.success && response.data ? response.data : null
+    },
+    enabled: !!projectId,
+  })
+  const projectDisplayName =
+    (projectData?.name != null && String(projectData.name).trim() !== '')
+      ? String(projectData.name).trim()
+      : (projectId ?? 'Project')
+  const projectReady = !projectId || !projectLoading
+
+  const pbsLoadReturnedEmptyRef = useRef(false)
+
   useEffect(() => {
-    const data = loadPBS(projectId)
-    setNodes(data.nodes)
-    setChangeLog(data.changeLog)
+    let cancelled = false
+    loadPBSAsync(projectId).then((data) => {
+      if (!cancelled) {
+        if (data.nodes.length > 0) {
+          setNodes(data.nodes)
+          setChangeLog(data.changeLog)
+          pbsLoadReturnedEmptyRef.current = false
+        } else {
+          setNodes([])
+          setChangeLog([])
+          pbsLoadReturnedEmptyRef.current = true
+        }
+      }
+    })
+    return () => { cancelled = true }
   }, [projectId])
+
+  useEffect(() => {
+    if (nodes.length !== 0 || !projectReady || !pbsLoadReturnedEmptyRef.current) return
+    pbsLoadReturnedEmptyRef.current = false
+    const root = createProjectRootNode(projectDisplayName)
+    setNodes([root])
+    setChangeLog([
+      {
+        id: crypto.randomUUID?.() ?? `cl-${Date.now()}`,
+        nodeId: root.id,
+        action: 'created',
+        timestamp: nowISO(),
+        details: 'Project root created',
+      },
+    ])
+    setSaveStatus('unsaved')
+  }, [projectId, projectData, projectLoading, nodes.length, projectDisplayName, projectReady])
+
+  // Sync root node name when it's empty and we have project name from API (same source as dashboard at /)
+  useEffect(() => {
+    if (nodes.length === 0 || !projectDisplayName) return
+    const root = nodes.find((n) => n.parentId === null)
+    if (!root) return
+    const currentName = root.name == null ? '' : String(root.name).trim()
+    if (currentName !== '') return
+    const updated = nodes.map((n) =>
+      n.id === root.id ? { ...n, name: projectDisplayName, updatedAt: nowISO() } : n
+    )
+    setNodes(updated)
+    setSaveStatus('unsaved')
+  }, [projectDisplayName, nodes])
 
   const persist = useCallback(() => {
     setSaveStatus('saving')
-    savePBS(projectId, { nodes, changeLog })
-    setSaveStatus('saved')
+    savePBSAsync(projectId, { nodes, changeLog })
+      .then(() => setSaveStatus('saved'))
+      .catch(() => setSaveStatus('unsaved'))
   }, [projectId, nodes, changeLog])
+
+  // Storage quota warning (run after persist and when data size changes)
+  useEffect(() => {
+    let cancelled = false
+    const check = async () => {
+      const quota = await getStorageQuota()
+      const pbsBytes = estimatePBSStorageBytes(projectId)
+      if (cancelled) return
+      if (!quota || quota.quota <= 0) {
+        setStorageQuotaWarning(null)
+        return
+      }
+      const ratio = quota.usage / quota.quota
+      if (ratio >= 0.95) {
+        setStorageQuotaWarning('Storage is almost full. Consider removing attachments or old projects.')
+      } else if (ratio >= 0.8) {
+        setStorageQuotaWarning('Storage is getting full. Consider exporting or cleaning up data.')
+      } else if (pbsBytes >= 4 * 1024 * 1024) {
+        setStorageQuotaWarning('This project uses a lot of storage. Large attachments are stored locally.')
+      } else {
+        setStorageQuotaWarning(null)
+      }
+    }
+    check()
+    return () => { cancelled = true }
+  }, [projectId, nodes, changeLog, saveStatus])
 
   useEffect(() => {
     if (saveStatus === 'unsaved') {
@@ -248,26 +391,6 @@ export default function PBSPage() {
       markUnsaved()
       setSelectedId(null)
       setImportModalOpen(false)
-    },
-    [markUnsaved]
-  )
-
-  const applyTemplate = useCallback(
-    (templateId: string) => {
-      const templateNodes = generateNodesFromTemplate(templateId)
-      if (templateNodes.length === 0) return
-      setNodes(templateNodes)
-      setChangeLog([
-        {
-          id: crypto.randomUUID(),
-          nodeId: templateNodes[0].id,
-          action: 'created',
-          timestamp: nowISO(),
-          details: `Created from template`,
-        },
-      ])
-      markUnsaved()
-      setSelectedId(templateNodes[0].id)
     },
     [markUnsaved]
   )
@@ -458,8 +581,22 @@ export default function PBSPage() {
       {/* Validation Warnings */}
       <PBSValidation nodes={nodes} onSelectNode={setSelectedId} />
 
-      <div className="flex gap-4 min-h-[500px]" style={{ height: 'calc(100vh - 280px)' }}>
-        <div className="w-80 shrink-0 flex flex-col gap-2">
+      {storageQuotaWarning && (
+        <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-sm">
+          <AlertCircle size={16} />
+          {storageQuotaWarning}
+        </div>
+      )}
+
+      <div
+        ref={resizeContainerRef}
+        className="flex min-h-[500px] gap-0"
+        style={{ height: 'calc(100vh - 280px)' }}
+      >
+        <div
+          className="shrink-0 flex flex-col gap-2"
+          style={{ width: leftPanelWidth }}
+        >
           <PBSTree
             nodes={nodes}
             selectedId={selectedId}
@@ -475,50 +612,46 @@ export default function PBSPage() {
           />
           <PBSStats nodes={nodes} />
         </div>
+        <div
+          role="separator"
+          aria-label="Resize tree panel"
+          onMouseDown={handleResizeStart}
+          className="shrink-0 w-2 cursor-col-resize flex items-center justify-center group hover:bg-blue-100 dark:hover:bg-gray-700 transition-colors"
+        >
+          <div className="w-0.5 h-8 bg-gray-300 dark:bg-gray-600 rounded-full group-hover:bg-blue-500 dark:group-hover:bg-blue-400 transition-colors" />
+        </div>
         <div className="flex-1 min-w-0 flex flex-col rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
           {nodes.length === 0 ? (
-            // Empty state with templates
+            // Empty state (e.g. user deleted all nodes) — restore project root
             <div className="flex-1 flex flex-col items-center justify-center p-8 overflow-y-auto">
               <FolderTree size={56} className="text-gray-300 dark:text-gray-600 mb-6" />
               <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                Start your Product Breakdown Structure
+                Product structure is empty
               </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-8 max-w-md text-center">
-                Choose a template to get started quickly, or create your first component from scratch.
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 max-w-md text-center">
+                Add the project root to get started. Children will appear under it.
               </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full max-w-3xl mb-8">
-                {PBS_TEMPLATES.map((template) => (
-                  <button
-                    key={template.id}
-                    type="button"
-                    onClick={() => applyTemplate(template.id)}
-                    className="flex flex-col items-start p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:border-blue-500 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors text-left group"
-                  >
-                    <span className="text-2xl mb-2">{template.icon}</span>
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                      {template.name}
-                    </span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {template.description}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex items-center gap-4">
-                <div className="h-px w-16 bg-gray-200 dark:bg-gray-700" />
-                <span className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide">or</span>
-                <div className="h-px w-16 bg-gray-200 dark:bg-gray-700" />
-              </div>
-
               <button
                 type="button"
-                onClick={handlers.addRoot}
-                className="mt-6 inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-sm font-medium"
+                onClick={() => {
+                  const root = createProjectRootNode(projectDisplayName)
+                  setNodes([root])
+                  setChangeLog([
+                    {
+                      id: crypto.randomUUID?.() ?? `cl-${Date.now()}`,
+                      nodeId: root.id,
+                      action: 'created',
+                      timestamp: nowISO(),
+                      details: 'Project root created',
+                    },
+                  ])
+                  markUnsaved()
+                  setSelectedId(root.id)
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >
                 <Plus size={16} />
-                Start from scratch
+                Add project root ({projectDisplayName})
               </button>
             </div>
           ) : !selectedNode ? (
@@ -566,7 +699,7 @@ export default function PBSPage() {
         isOpen={printViewOpen}
         nodes={nodes}
         changeLog={changeLog}
-        projectName={projectKey}
+        projectName={projectDisplayName}
         onClose={() => setPrintViewOpen(false)}
       />
     </div>

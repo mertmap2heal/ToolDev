@@ -1,11 +1,14 @@
 /**
  * PBS persistence — localStorage only, project-scoped.
- * No backend interaction. Keys: pbs::<projectId> or pbs::default.
+ * Supports versioning for migration, optional gzip compression for large data,
+ * and no new external dependencies.
  */
 
 import type { PBSNode, PBSChangeLogEntry } from './types'
 
 const KEY_PREFIX = 'pbs::'
+const STORAGE_VERSION = 2
+const COMPRESSION_THRESHOLD_BYTES = 50 * 1024 // 50 KB — use gzip above this
 
 function storageKey(projectId: string | undefined): string {
   return projectId ? `${KEY_PREFIX}${projectId}` : `${KEY_PREFIX}default`
@@ -16,12 +19,18 @@ export interface PBSData {
   changeLog: PBSChangeLogEntry[]
 }
 
+interface StoredPayload {
+  version?: number
+  nodes: PBSNode[]
+  changeLog: PBSChangeLogEntry[]
+}
+
 const DEFAULT_DATA: PBSData = {
   nodes: [],
   changeLog: [],
 }
 
-// Normalize node to ensure all fields exist (backward compatibility)
+// Normalize node to ensure all fields exist (backward compatibility / migration)
 function normalizeNode(node: Partial<PBSNode>): PBSNode {
   return {
     id: node.id ?? '',
@@ -42,30 +51,128 @@ function normalizeNode(node: Partial<PBSNode>): PBSNode {
   }
 }
 
+function migrateAndNormalize(parsed: StoredPayload): PBSData {
+  const version = parsed.version ?? 1
+  const nodes = Array.isArray(parsed.nodes)
+    ? parsed.nodes.map(normalizeNode)
+    : DEFAULT_DATA.nodes
+  const changeLog = Array.isArray(parsed.changeLog) ? parsed.changeLog : DEFAULT_DATA.changeLog
+  return { nodes, changeLog }
+}
+
+function parsePayload(raw: string): PBSData {
+  const parsed = JSON.parse(raw) as StoredPayload
+  return migrateAndNormalize(parsed)
+}
+
+// Compression Streams API (built-in in modern browsers)
+const canCompress = typeof CompressionStream !== 'undefined'
+const canDecompress = typeof DecompressionStream !== 'undefined'
+
+async function gzipEncode(str: string): Promise<string> {
+  const blob = new Blob([str], { type: 'application/json' })
+  const stream = blob.stream().pipeThrough(new CompressionStream('gzip'))
+  const buf = await new Response(stream).arrayBuffer()
+  const bytes = new Uint8Array(buf)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+  return btoa(binary)
+}
+
+async function gzipDecode(base64: string): Promise<string> {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))
+  return await new Response(stream).text()
+}
+
+/** Load PBS data (sync). Handles plain JSON and version migration. Compressed data must be loaded via loadPBSAsync. */
 export function loadPBS(projectId: string | undefined): PBSData {
   try {
     const key = storageKey(projectId)
     const raw = localStorage.getItem(key)
     if (!raw) return { ...DEFAULT_DATA }
-    const parsed = JSON.parse(raw) as PBSData
-    // Normalize nodes to ensure backward compatibility with old data
-    const nodes = Array.isArray(parsed.nodes)
-      ? parsed.nodes.map(normalizeNode)
-      : DEFAULT_DATA.nodes
-    return {
-      nodes,
-      changeLog: Array.isArray(parsed.changeLog) ? parsed.changeLog : DEFAULT_DATA.changeLog,
+    if (raw.startsWith('z:')) {
+      // Compressed — cannot decode sync; return default and let async load handle it
+      return { ...DEFAULT_DATA }
     }
+    return parsePayload(raw)
   } catch {
     return { ...DEFAULT_DATA }
   }
 }
 
+/** Load PBS data (async). Supports compressed storage. Prefer this when initializing the page. */
+export async function loadPBSAsync(projectId: string | undefined): Promise<PBSData> {
+  try {
+    const key = storageKey(projectId)
+    const raw = localStorage.getItem(key)
+    if (!raw) return { ...DEFAULT_DATA }
+    if (raw.startsWith('z:') && canDecompress) {
+      const decoded = await gzipDecode(raw.slice(2))
+      return parsePayload(decoded)
+    }
+    if (raw.startsWith('z:')) return { ...DEFAULT_DATA }
+    return parsePayload(raw)
+  } catch {
+    return { ...DEFAULT_DATA }
+  }
+}
+
+/** Save PBS data (sync). Uses plain JSON. For large data use savePBSAsync to enable compression. */
 export function savePBS(projectId: string | undefined, data: PBSData): void {
   try {
     const key = storageKey(projectId)
-    localStorage.setItem(key, JSON.stringify(data))
+    const payload: StoredPayload = { version: STORAGE_VERSION, nodes: data.nodes, changeLog: data.changeLog }
+    const json = JSON.stringify(payload)
+    localStorage.setItem(key, json)
   } catch {
     // ignore
   }
+}
+
+/** Save PBS data (async). Compresses when payload exceeds COMPRESSION_THRESHOLD_BYTES. */
+export async function savePBSAsync(projectId: string | undefined, data: PBSData): Promise<void> {
+  try {
+    const key = storageKey(projectId)
+    const payload: StoredPayload = { version: STORAGE_VERSION, nodes: data.nodes, changeLog: data.changeLog }
+    const json = JSON.stringify(payload)
+    const byteLength = new Blob([json]).size
+
+    if (byteLength >= COMPRESSION_THRESHOLD_BYTES && canCompress) {
+      const encoded = await gzipEncode(json)
+      localStorage.setItem(key, 'z:' + encoded)
+    } else {
+      localStorage.setItem(key, json)
+    }
+  } catch {
+    // ignore
+  }
+}
+
+/** Approximate bytes used by the current PBS key (for quota warning). */
+export function estimatePBSStorageBytes(projectId: string | undefined): number {
+  try {
+    const key = storageKey(projectId)
+    const raw = localStorage.getItem(key)
+    return raw ? new Blob([raw]).size : 0
+  } catch {
+    return 0
+  }
+}
+
+/** Check if Storage API quota is available and return usage/quota in bytes; otherwise null. */
+export async function getStorageQuota(): Promise<{ usage: number; quota: number } | null> {
+  try {
+    if (navigator.storage && typeof navigator.storage.estimate === 'function') {
+      const est = await navigator.storage.estimate()
+      const usage = typeof est.usage === 'number' ? est.usage : 0
+      const quota = typeof est.quota === 'number' ? est.quota : 0
+      return { usage, quota }
+    }
+  } catch {
+    // ignore
+  }
+  return null
 }
