@@ -41,9 +41,13 @@ export default function Breadcrumbs({ items }: BreadcrumbsProps) {
       const projectName = projectData?.name || 'Project'
       breadcrumbs.push({ label: projectName })
       
-      // Add current page
+      // Add current page (kebab-case to title case, e.g. configuration-management -> Configuration Management)
       if (pathSegments[2]) {
-        const pageName = pathSegments[2].charAt(0).toUpperCase() + pathSegments[2].slice(1)
+        const slug = pathSegments[2]
+        const pageName = slug
+          .split('-')
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(' ')
         breadcrumbs.push({ label: pageName })
       }
     }
