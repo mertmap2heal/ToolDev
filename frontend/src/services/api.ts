@@ -54,6 +54,18 @@ class ApiClient {
     }
   }
 
+  /** For export endpoints that return a file (blob). Returns the Blob or throws. */
+  async getBlob(url: string): Promise<Blob> {
+    const response = await this.client.get(url, { responseType: 'blob' })
+    return response.data as Blob
+  }
+
+  /** POST that returns a blob (e.g. ZIP bundle). */
+  async postBlob(url: string, data?: unknown): Promise<Blob> {
+    const response = await this.client.post(url, data, { responseType: 'blob' })
+    return response.data as Blob
+  }
+
   async post<T>(url: string, data?: any, headers?: Record<string, string>): Promise<ApiResponse<T>> {
     try {
       const response = await this.client.post<ApiResponse<T>>(url, data, { headers })

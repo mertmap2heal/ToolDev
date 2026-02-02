@@ -76,6 +76,22 @@ model Project {
   complianceCheckRuns   ComplianceCheckRun[]
   complianceFindings    ComplianceFinding[]
   components            Component[]
+  certContext           CertContext?
+  certBaselines         CertBaseline[]
+  certReleases          CertRelease[]
+  certObjectives        CertObjective[]
+  certComplianceMatrixRows CertComplianceMatrixRow[]
+  certFindings          CertFinding[]
+  certReviewLogEntries  CertReviewLogEntry[]
+  certActivityLogEntries CertActivityLogEntry[]
+  certReadinessGates    CertReadinessGate[]
+  certPackages          CertPackage[]
+  certCorrespondences   CertCorrespondence[]
+  certMeetings          CertMeeting[]
+  certPlan              CertPlan?
+  certMilestones        CertMilestone[]
+  certChecklists        CertChecklist[]
+  certSignOffs          CertSignOff[]
 }
 
 model Component {
@@ -168,6 +184,7 @@ model Requirement {
   attachments RequirementAttachment[]
   reviews     RequirementReview[]
   moc         VerMoc?                 @relation(fields: [linkedMocCode], references: [code], onDelete: SetNull)
+  certObjectiveLinks CertObjectiveRequirementLink[]
 
   @@unique([projectId, requirementId])
   @@index([projectId])
@@ -2253,6 +2270,340 @@ model ComplianceFinding {
   rule    ComplianceRule    @relation(fields: [ruleId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
-  @@index([runId])
-  @@index([ruleId])
+  @@index([createdAt])
+}
+
+// ----- Certification module -----
+model CertContext {
+  id                   String   @id @default(uuid())
+  projectId            String   @unique
+  authority            String   @default("EASA") // EASA | FAA | Military | Customer
+  certBasis            String   @default("CS-25") // CS-25 | CS-23 | SC-VTOL | MIL-STD | Custom
+  standards            String[] @default(["ARP4754A", "DO-178C"]) // JSON array
+  selectedBaselineId   String?
+  selectedReleaseId    String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model CertBaseline {
+  id        String   @id @default(uuid())
+  projectId String
+  baselineId String  // e.g. BL-2026-03-PDR
+  name      String
+  status    String   @default("Draft")
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, baselineId])
+  @@index([projectId])
+}
+
+model CertRelease {
+  id         String   @id @default(uuid())
+  projectId  String
+  releaseId  String   // e.g. REL-2026.04
+  name       String
+  status     String   @default("Draft")
+  createdAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, releaseId])
+  @@index([projectId])
+}
+
+model CertObjective {
+  id                   String   @id @default(uuid())
+  projectId            String
+  objId                String   // e.g. OBJ-CS25-1309-01
+  regRef               String
+  title                String
+  moc                  String   // Test | Analysis | Inspection | Similarity | Simulation | Review
+  status               String   @default("Open") // Open | Partial | Complete | Blocked
+  criticality           String   @default("Medium") // Low | Medium | High
+  linkedEvidenceCount  Int      @default(0)
+  linkedCiCount        Int      @default(0)
+  notes                String   @default("")
+  reviewed             Boolean  @default(false)
+  safetyObjectiveRef   String?  // Optional link to safety objective / FHA item (e.g. ID or ref)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  project          Project                        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requirementLinks CertObjectiveRequirementLink[]
+
+  @@unique([projectId, objId])
+  @@index([projectId])
+  @@index([regRef])
+}
+
+model CertObjectiveRequirementLink {
+  id              String   @id @default(uuid())
+  certObjectiveId String
+  requirementId   String
+  createdAt       DateTime @default(now())
+
+  certObjective CertObjective @relation(fields: [certObjectiveId], references: [id], onDelete: Cascade)
+  requirement   Requirement   @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  @@unique([certObjectiveId, requirementId])
+  @@index([certObjectiveId])
+  @@index([requirementId])
+}
+
+model CertComplianceMatrixRow {
+  id              String   @id @default(uuid())
+  projectId       String
+  regRef          String
+  objectiveCount  Int      @default(0)
+  mocMix          Json     // { Test?: number, Analysis?: number, ... }
+  statusSummary   Json     // { complete, partial, open, blocked }
+  evidenceCount   Int      @default(0)
+  lastUpdated    DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, regRef])
+  @@index([projectId])
+}
+
+model CertFinding {
+  id               String   @id @default(uuid())
+  projectId        String
+  findingId        String   // e.g. FND-001
+  title            String
+  severity         String   @default("Minor") // Minor | Major | Observation
+  status           String   @default("Open") // Open | InProgress | Closed | Deferred
+  linkedRegRef     String?
+  linkedObjectives String[] @default([])
+  linkedEvidence   String[] @default([])
+  assignedTo       String
+  dueDate          DateTime
+  notes            String   @default("")
+  safetyRelated    Boolean  @default(false) // Tag for safety-related findings
+  safetyNcrRef     String?  // Optional ref to safety NCR / hazard
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, findingId])
+  @@index([projectId])
+  @@index([status])
+}
+
+model CertReviewLogEntry {
+  id              String   @id @default(uuid())
+  projectId       String
+  reviewId        String   // e.g. REV-001
+  date            DateTime @default(now())
+  reviewType      String   // Internal | Authority | Customer
+  scopeSummary    String   @default("")
+  findingsRaised  Int      @default(0)
+  findingsClosed  Int      @default(0)
+  notes           String   @default("")
+  status          String   @default("Draft") // Draft | Closed
+  createdAt       DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, reviewId])
+  @@index([projectId])
+}
+
+model CertActivityLogEntry {
+  id        String   @id @default(uuid())
+  projectId String
+  action    String
+  details   String
+  actor     String?
+  timestamp DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([timestamp])
+}
+
+model CertReadinessGate {
+  id        String   @id @default(uuid())
+  projectId String
+  gateId    String   // e.g. gate-1
+  label     String
+  passed    Boolean  @default(false)
+  reason    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, gateId])
+  @@index([projectId])
+}
+
+model CertPackage {
+  id                  String   @id @default(uuid())
+  projectId           String
+  packageType         String   @default("Authority submission")
+  scopeBaseline       String?
+  scopeRelease        String?
+  includedRegulations String[] @default([])
+  status              String   @default("Draft")
+  createdAt           DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model CertCorrespondence {
+  id                  String   @id @default(uuid())
+  projectId           String
+  date                DateTime @default(now())
+  type                String   // Letter | Email | Meeting
+  authority           String   @default("")
+  subject             String   @default("")
+  summary             String   @default("")
+  attachmentRefs      String[] @default([])
+  relatedFindingIds   String[] @default([])
+  relatedObjectiveIds String[] @default([])
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([authority])
+  @@index([date])
+}
+
+model CertMeeting {
+  id         String   @id @default(uuid())
+  projectId String
+  date      DateTime @default(now())
+  type      String   // TCB | TC | Internal
+  attendees String[] @default([])
+  summary   String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actionItems  CertActionItem[]
+
+  @@index([projectId])
+  @@index([date])
+}
+
+model CertActionItem {
+  id                 String    @id @default(uuid())
+  projectId          String
+  meetingId         String
+  owner              String    @default("")
+  dueDate            DateTime
+  status             String    @default("Open") // Open | Closed
+  description        String    @default("")
+  linkedFindingId    String?
+  linkedObjectiveId  String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  meeting CertMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([meetingId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model CertPlan {
+  id                    String   @id @default(uuid())
+  projectId             String   @unique
+  version               String   @default("1.0")
+  scopeSummary          String   @default("")
+  complianceStrategyJson String?  // JSON: reg -> strategy summary
+  approvalStatus        String   @default("Draft") // Draft | UnderReview | Approved
+  lastUpdated           DateTime @updatedAt
+  createdAt             DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model CertMilestone {
+  id                String    @id @default(uuid())
+  projectId         String
+  name              String
+  date              DateTime
+  type              String    // PDR | CDR | TRR | TC submission | etc.
+  status            String    @default("Planned") // Planned | Completed | Deferred
+  relatedReviewId   String?
+  relatedPackageId  String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([date])
+}
+
+model CertChecklist {
+  id         String   @id @default(uuid())
+  projectId  String
+  name       String
+  phase      String   // PDR | CDR | TRR | etc.
+  baselineId String?
+  releaseId  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  project  Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items    CertChecklistItem[]
+  signOffs CertSignOff[]
+
+  @@index([projectId])
+  @@index([phase])
+}
+
+model CertChecklistItem {
+  id          String   @id @default(uuid())
+  checklistId String
+  description String  @default("")
+  required    Boolean @default(true)
+  status      String  @default("Open") // Open | Complete
+  sortOrder   Int     @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  checklist CertChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+
+  @@index([checklistId])
+}
+
+model CertSignOff {
+  id          String   @id @default(uuid())
+  projectId   String
+  checklistId String?
+  milestoneId String?
+  role        String   @default("")
+  person      String   @default("")
+  signedAt    DateTime?
+  status      String   @default("Pending") // Pending | Signed | Delegated
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  checklist CertChecklist? @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([checklistId])
+  @@index([milestoneId])
 }

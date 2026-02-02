@@ -39,6 +39,7 @@ import timeTrackingRoutes from './timeTracking.routes'
 import taskTemplateRoutes from './taskTemplates.routes'
 import taskAnalyticsRoutes from './taskAnalytics.routes'
 import complianceRoutes from './compliance.routes'
+import certificationRoutes from './certification.routes'
 import notificationsRoutes from './notifications.routes'
 
 const router = Router()
@@ -85,5 +86,6 @@ router.use('/time-tracking', timeTrackingRoutes)
 router.use('/task-templates', taskTemplateRoutes)
 router.use('/task-analytics', taskAnalyticsRoutes)
 router.use('/compliance', complianceRoutes)
+router.use('/certification', certificationRoutes)
 
 export default router
