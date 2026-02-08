@@ -160,4 +160,9 @@ export const authService = {
   async sendInvite(userId: string): Promise<ApiResponse<{ message: string }>> {
     return apiClient.post<{ message: string }>(`/auth/users/${userId}/send-invite`, {})
   },
+
+  /** Change own password (e.g. after first login with temp password). */
+  async changeMyPassword(newPassword: string): Promise<ApiResponse<{ message: string }>> {
+    return apiClient.patch<{ message: string }>('/auth/me/password', { newPassword })
+  },
 }

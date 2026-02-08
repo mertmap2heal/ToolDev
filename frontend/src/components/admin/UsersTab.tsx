@@ -226,6 +226,7 @@ export default function UsersTab() {
             queryClient.invalidateQueries({ queryKey: ['admin', 'authUsers'] })
             queryClient.invalidateQueries({ queryKey: ['admin', 'projects'] })
           }}
+          onRefetchUsers={() => queryClient.invalidateQueries({ queryKey: ['admin', 'authUsers'] })}
         />
       )}
 

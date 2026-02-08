@@ -8,16 +8,17 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(uuid())
-  email        String    @unique
-  inviteEmail  String?   @unique
-  name         String
-  company      String?
-  avatarUrl    String?
-  password     String
-  lastLoginAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                           String    @id @default(uuid())
+  email                        String    @unique
+  inviteEmail                  String?   @unique
+  name                         String
+  company                      String?
+  avatarUrl                    String?
+  password                     String
+  lastLoginAt                  DateTime?
+  mustChangePasswordOnFirstLogin Boolean @default(false)
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
 
   projects         ProjectMember[]
   notifications    Notification[]

@@ -11,9 +11,11 @@ interface UserEditDrawerProps {
   user: AdminUser
   onClose: () => void
   onSaved: () => void
+  /** Call to refresh the user list without closing the drawer (e.g. after saving only the email). */
+  onRefetchUsers?: () => void
 }
 
-export default function UserEditDrawer({ user, onClose, onSaved }: UserEditDrawerProps) {
+export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers }: UserEditDrawerProps) {
   const [status, setStatus] = useState<AdminUser['status']>(user.status)
   const [inviteEmail, setInviteEmail] = useState<string>(user.inviteEmail ?? '')
   const [projects, setProjects] = useState<string[]>(user.projects)
@@ -71,6 +73,7 @@ export default function UserEditDrawer({ user, onClose, onSaved }: UserEditDrawe
       const res = await authService.updateUserInviteEmail(user.id, value)
       if (res.success) {
         setInviteMessage(value ? 'Email saved.' : 'Email cleared.')
+        onRefetchUsers?.()
       } else {
         setInviteMessage(res.error ?? 'Failed to save email.')
       }

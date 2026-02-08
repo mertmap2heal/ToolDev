@@ -3,6 +3,7 @@ import { Outlet, useNavigate } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
 import AIGuideChat from '../ai-guide/AIGuideChat'
+import ForceChangePasswordModal from '../auth/ForceChangePasswordModal'
 import { useAIGuideStore } from '../../store/aiGuideStore'
 import { authService } from '../../services/auth.service'
 import { useAuthStore } from '../../store/authStore'
@@ -11,6 +12,14 @@ export default function MainLayout() {
   const { isOpen } = useAIGuideStore()
   const navigate = useNavigate()
   const { user, setUser } = useAuthStore()
+
+  const handleForceChangePasswordSuccess = () => {
+    authService.getCurrentUser().then((res) => {
+      if (res.success && res.data) {
+        setUser(res.data)
+      }
+    })
+  }
 
   useEffect(() => {
     if (authService.getToken() && !user) {
@@ -36,6 +45,9 @@ export default function MainLayout() {
   
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
+      {user?.mustChangePassword && (
+        <ForceChangePasswordModal onSuccess={handleForceChangePasswordSuccess} />
+      )}
       <Sidebar />
       <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${isOpen ? '' : ''}`}>
         <Header />

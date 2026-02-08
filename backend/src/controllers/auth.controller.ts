@@ -137,6 +137,7 @@ export const login = async (req: Request, res: Response) => {
     const token = generateToken(user.id)
     const isAdmin = await resolveIsAdmin(user.email)
 
+    const mustChange = (user as { mustChangePasswordOnFirstLogin?: boolean }).mustChangePasswordOnFirstLogin ?? false
     res.json({
       success: true,
       data: {
@@ -148,15 +149,17 @@ export const login = async (req: Request, res: Response) => {
           avatarUrl: user.avatarUrl,
           createdAt: user.createdAt,
           isAdmin,
+          mustChangePassword: mustChange,
         },
         token,
       },
     })
   } catch (error) {
-    console.error('Login error:', error)
+    const err = error as Error
+    console.error('Login error:', err)
     res.status(500).json({
       success: false,
-      error: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
     })
   }
 }
@@ -181,6 +184,7 @@ export const getCurrentUser = async (req: Request, res: Response) => {
         company: true,
         avatarUrl: true,
         createdAt: true,
+        mustChangePasswordOnFirstLogin: true,
       },
     })
 
@@ -197,15 +201,58 @@ export const getCurrentUser = async (req: Request, res: Response) => {
     })
 
     const isAdmin = await resolveIsAdmin(user.email)
+    const mustChange = user.mustChangePasswordOnFirstLogin ?? false
+    const { mustChangePasswordOnFirstLogin: _omit, ...rest } = user
     res.json({
       success: true,
-      data: { ...user, isAdmin },
+      data: { ...rest, isAdmin, mustChangePassword: mustChange },
     })
   } catch (error) {
-    console.error('Get current user error:', error)
+    const err = error as Error
+    console.error('Get current user error:', err)
     res.status(500).json({
       success: false,
-      error: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
+    })
+  }
+}
+
+/** Authenticated user: change own password (e.g. after first login with temp password). */
+export const changeMyPassword = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+
+    const { newPassword } = req.body
+    if (!newPassword || typeof newPassword !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'newPassword is required',
+      })
+    }
+    const trimmed = newPassword.trim()
+    if (trimmed.length < 8) {
+      return res.status(400).json({
+        success: false,
+        error: 'Password must be at least 8 characters',
+      })
+    }
+
+    const hashedPassword = await bcrypt.hash(trimmed, 10)
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword, mustChangePasswordOnFirstLogin: false },
+    })
+
+    res.json({ success: true, message: 'Password updated' })
+  } catch (error) {
+    const err = error as Error
+    console.error('Change my password error:', err)
+    res.status(500).json({
+      success: false,
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
     })
   }
 }
@@ -339,9 +386,17 @@ export const updateUserInviteEmail = async (req: AuthRequest, res: Response) => 
     })
 
     res.json({ success: true, message: 'Invite email updated' })
-  } catch (error) {
+  } catch (error: unknown) {
+    const err = error as { code?: string; meta?: { target?: string[] }; message?: string }
     console.error('Update invite email error:', error)
-    res.status(500).json({ success: false, error: 'Internal server error' })
+    if (err.code === 'P2002' && err.meta?.target?.includes('inviteEmail')) {
+      res.status(400).json({ success: false, error: 'This invite email is already used by another user.' })
+      return
+    }
+    res.status(500).json({
+      success: false,
+      error: process.env.NODE_ENV === 'development' ? (err.message ?? 'Internal server error') : 'Internal server error',
+    })
   }
 }
 
@@ -379,7 +434,7 @@ export const sendUserInvite = async (req: AuthRequest, res: Response) => {
     const hashedPassword = await bcrypt.hash(tempPassword, 10)
     await prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword },
+      data: { password: hashedPassword, mustChangePasswordOnFirstLogin: true },
     })
 
     try {
