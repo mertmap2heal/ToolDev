@@ -5,6 +5,10 @@ export interface User {
   company?: string
   avatarUrl?: string
   createdAt: string
+  /** ISO date string of last successful login. */
+  lastLoginAt?: string
+  /** True if user can access Admin Panel. Set by backend (e.g. env ADMIN_EMAILS or DB). */
+  isAdmin?: boolean
 }
 
 export interface Project {

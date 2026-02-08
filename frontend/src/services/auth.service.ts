@@ -65,7 +65,12 @@ export const authService = {
     return getStoredToken()
   },
 
-  async getUsers(): Promise<ApiResponse<Pick<User, 'id' | 'name' | 'email'>[]>> {
-    return apiClient.get<Pick<User, 'id' | 'name' | 'email'>[]>('/auth/users')
+  async getUsers(): Promise<ApiResponse<Pick<User, 'id' | 'name' | 'email' | 'lastLoginAt'>[]>> {
+    return apiClient.get<Pick<User, 'id' | 'name' | 'email' | 'lastLoginAt'>[]>('/auth/users')
+  },
+
+  /** Admin only: set a new password for a user. */
+  async resetUserPassword(userId: string, newPassword: string): Promise<ApiResponse<{ message: string }>> {
+    return apiClient.put<{ message: string }>(`/auth/users/${userId}/password`, { newPassword })
   },
 }

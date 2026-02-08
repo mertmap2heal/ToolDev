@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { Bell, Search, HelpCircle, Settings, Grid, GraduationCap, LogOut, Loader2 } from 'lucide-react'
+import { Bell, Search, HelpCircle, Settings, Grid, GraduationCap, LogOut, Loader2, Shield } from 'lucide-react'
 import Logo from '../Logo'
 import Breadcrumbs from './Breadcrumbs'
 import { authService } from '../../services/auth.service'
@@ -195,6 +195,21 @@ export default function Header() {
             </button>
             {dropdownOpen && (
               <div className="absolute right-0 mt-2 w-48 py-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+                {user?.isAdmin && (
+                  <>
+                    <button
+                      onClick={() => {
+                        navigate('/admin')
+                        setDropdownOpen(false)
+                      }}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-left"
+                    >
+                      <Shield size={16} />
+                      Admin Panel
+                    </button>
+                    <hr className="border-gray-200 dark:border-gray-700 my-1" />
+                  </>
+                )}
                 <button
                   onClick={handleLogout}
                   className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"

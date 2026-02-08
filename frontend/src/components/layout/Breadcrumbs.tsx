@@ -36,6 +36,11 @@ export default function Breadcrumbs({ items }: BreadcrumbsProps) {
       { label: 'Home', path: '/' }
     ]
 
+    if (pathSegments[0] === 'admin') {
+      breadcrumbs.push({ label: 'Admin' })
+      return breadcrumbs
+    }
+
     if (pathSegments[0] === 'projects' && projectId) {
       // Add project name if available
       const projectName = projectData?.name || 'Project'

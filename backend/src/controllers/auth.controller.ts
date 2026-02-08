@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { PrismaClient } from '@prisma/client'
+import type { AuthRequest } from '../middleware/auth.middleware'
 
 const prisma = new PrismaClient()
 
@@ -47,11 +48,12 @@ export const register = async (req: Request, res: Response) => {
     })
 
     const token = generateToken(user.id)
+    const isAdmin = await resolveIsAdmin(user.email)
 
     res.status(201).json({
       success: true,
       data: {
-        user,
+        user: { ...user, isAdmin },
         token,
       },
     })
@@ -95,7 +97,13 @@ export const login = async (req: Request, res: Response) => {
       })
     }
 
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    })
+
     const token = generateToken(user.id)
+    const isAdmin = await resolveIsAdmin(user.email)
 
     res.json({
       success: true,
@@ -107,6 +115,7 @@ export const login = async (req: Request, res: Response) => {
           company: user.company,
           avatarUrl: user.avatarUrl,
           createdAt: user.createdAt,
+          isAdmin,
         },
         token,
       },
@@ -150,9 +159,15 @@ export const getCurrentUser = async (req: Request, res: Response) => {
       })
     }
 
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    })
+
+    const isAdmin = await resolveIsAdmin(user.email)
     res.json({
       success: true,
-      data: user,
+      data: { ...user, isAdmin },
     })
   } catch (error) {
     console.error('Get current user error:', error)
@@ -163,7 +178,69 @@ export const getCurrentUser = async (req: Request, res: Response) => {
   }
 }
 
-/** List users (id, name, email) for invite dropdowns. Requires authentication. */
+/** Admin only: set a new password for a user. */
+export const resetUserPassword = async (req: AuthRequest, res: Response) => {
+  try {
+    const currentUserId = req.userId
+    if (!currentUserId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+
+    const currentUser = await prisma.user.findUnique({
+      where: { id: currentUserId },
+      select: { email: true },
+    })
+    if (!currentUser) {
+      return res.status(401).json({ success: false, error: 'User not found' })
+    }
+
+    const isAdmin = await resolveIsAdmin(currentUser.email)
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, error: 'Admin access required' })
+    }
+
+    const { userId } = req.params
+    const { newPassword } = req.body
+
+    if (!userId || !newPassword || typeof newPassword !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'userId and newPassword are required',
+      })
+    }
+
+    const trimmed = newPassword.trim()
+    if (trimmed.length < 8) {
+      return res.status(400).json({
+        success: false,
+        error: 'Password must be at least 8 characters',
+      })
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: userId },
+    })
+    if (!targetUser) {
+      return res.status(404).json({ success: false, error: 'User not found' })
+    }
+
+    const hashedPassword = await bcrypt.hash(trimmed, 10)
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    })
+
+    res.json({ success: true, message: 'Password updated' })
+  } catch (error) {
+    console.error('Reset password error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    })
+  }
+}
+
+/** List users (id, name, email, lastLoginAt) for invite dropdowns and admin. Requires authentication. */
 export const getUsers = async (_req: Request, res: Response) => {
   try {
     const users = await prisma.user.findMany({
@@ -171,13 +248,21 @@ export const getUsers = async (_req: Request, res: Response) => {
         id: true,
         name: true,
         email: true,
+        lastLoginAt: true,
       },
       orderBy: { name: 'asc' },
     })
 
+    const data = users.map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      lastLoginAt: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
+    }))
+
     res.json({
       success: true,
-      data: users,
+      data,
     })
   } catch (error) {
     console.error('Get users error:', error)
@@ -186,6 +271,21 @@ export const getUsers = async (_req: Request, res: Response) => {
       error: 'Internal server error',
     })
   }
+}
+
+/** Derive admin flag: comma-separated ADMIN_EMAILS env, or first user in DB (by createdAt). */
+async function resolveIsAdmin(email: string | null): Promise<boolean> {
+  if (!email) return false
+  const list = process.env.ADMIN_EMAILS
+  if (list) {
+    const emails = list.split(',').map((e) => e.trim().toLowerCase())
+    return emails.includes(email.toLowerCase())
+  }
+  const first = await prisma.user.findFirst({
+    orderBy: { createdAt: 'asc' },
+    select: { email: true },
+  })
+  return first?.email?.toLowerCase() === email.toLowerCase()
 }
 
 function generateToken(userId: string): string {

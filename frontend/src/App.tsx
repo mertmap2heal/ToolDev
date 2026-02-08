@@ -62,6 +62,8 @@ import SalesPage from './pages/Inventory/Sales/SalesPage'
 import OperationsPage from './pages/Inventory/Operations/OperationsPage'
 import InventoryReportsPage from './pages/Inventory/Reports/ReportsPage'
 import InventoryDashboardPage from './pages/Inventory/Dashboard/DashboardPage'
+import AdminRouteGuard from './components/admin/AdminRouteGuard'
+import AdminPage from './pages/Admin/AdminPage'
 
 function App() {
   return (
@@ -134,6 +136,9 @@ function App() {
               <Route path="settings" element={<SafetySettingsPage />} />
             </Route>
             <Route path="lifecycle" element={<LifecycleManagementPage />} />
+            <Route path="admin" element={<AdminRouteGuard />}>
+              <Route index element={<AdminPage />} />
+            </Route>
             <Route path="inventory">
             <Route index element={<Navigate to="/inventory/items" replace />} />
             <Route path="items" element={<ItemsPage />} />
