@@ -21,6 +21,7 @@ export default function UserEditDrawer({ user, onClose, onSaved }: UserEditDrawe
   const [authorities, setAuthorities] = useState<string[]>(user.authorities)
   const [permissions, setPermissions] = useState(user.permissions ?? {})
   const [saving, setSaving] = useState(false)
+  const [savingEmail, setSavingEmail] = useState(false)
   const [inviteSending, setInviteSending] = useState(false)
   const [inviteMessage, setInviteMessage] = useState<string | null>(null)
 
@@ -62,13 +63,40 @@ export default function UserEditDrawer({ user, onClose, onSaved }: UserEditDrawe
     )
   }
 
+  const handleSaveEmail = async () => {
+    setInviteMessage(null)
+    setSavingEmail(true)
+    try {
+      const value = inviteEmail.trim() || null
+      const res = await authService.updateUserInviteEmail(user.id, value)
+      if (res.success) {
+        setInviteMessage(value ? 'Email saved.' : 'Email cleared.')
+      } else {
+        setInviteMessage(res.error ?? 'Failed to save email.')
+      }
+    } finally {
+      setSavingEmail(false)
+    }
+  }
+
   const handleSendInvite = async () => {
     setInviteSending(true)
     setInviteMessage(null)
     try {
+      const emailValue = inviteEmail.trim()
+      if (!emailValue) {
+        setInviteMessage('Enter an email above first.')
+        return
+      }
+      const inviteRes = await authService.updateUserInviteEmail(user.id, emailValue)
+      if (!inviteRes.success) {
+        setInviteMessage(inviteRes.error ?? 'Failed to update email.')
+        return
+      }
       const res = await authService.sendInvite(user.id)
       if (res.success && res.data?.message) {
         setInviteMessage(res.data.message)
+        onSaved()
       } else {
         setInviteMessage(res.error ?? 'Failed to send invite.')
       }
@@ -158,7 +186,15 @@ export default function UserEditDrawer({ user, onClose, onSaved }: UserEditDrawe
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleSaveEmail}
+                  disabled={savingEmail}
+                  className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                >
+                  {savingEmail ? 'Saving...' : 'Save email'}
+                </button>
                 <button
                   type="button"
                   onClick={handleSendInvite}
