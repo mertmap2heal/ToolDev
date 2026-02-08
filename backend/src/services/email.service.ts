@@ -1,17 +1,21 @@
 import nodemailer from 'nodemailer'
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT ?? '587', 10),
-  secure: process.env.SMTP_SECURE === 'true',
-  auth:
-    process.env.SMTP_USER && process.env.SMTP_PASS
-      ? {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        }
-      : undefined,
-})
+const host = (process.env.SMTP_HOST ?? '').trim()
+const user = (process.env.SMTP_USER ?? '').trim()
+const pass = (process.env.SMTP_PASS ?? '').trim().replace(/^["']|["']$/g, '')
+
+const transporter =
+  host.toLowerCase() === 'smtp.gmail.com' && user && pass
+    ? nodemailer.createTransport({
+        service: 'gmail',
+        auth: { user, pass },
+      })
+    : nodemailer.createTransport({
+        host: host || undefined,
+        port: parseInt(process.env.SMTP_PORT ?? '587', 10),
+        secure: process.env.SMTP_SECURE === 'true',
+        auth: user && pass ? { user, pass } : undefined,
+      })
 
 const APP_URL = process.env.APP_URL ?? 'http://localhost:3000'
 const FROM_NAME = process.env.INVITE_FROM_NAME ?? 'Engineering Tool'
@@ -59,7 +63,7 @@ This is an automated message; please do not reply.
 `.trim()
 
   await transporter.sendMail({
-    from: FROM_NAME.includes('@') ? FROM_NAME : `"${FROM_NAME}" <${process.env.SMTP_USER ?? 'noreply@localhost'}>`,
+    from: FROM_NAME.includes('@') ? FROM_NAME : `"${FROM_NAME}" <${user || 'noreply@localhost'}>`,
     to,
     subject: 'Your Engineering Tool account',
     text,

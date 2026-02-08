@@ -388,11 +388,15 @@ export const sendUserInvite = async (req: AuthRequest, res: Response) => {
         userName: user.email,
         tempPassword,
       })
-    } catch (sendError) {
+    } catch (sendError: unknown) {
+      const errMessage = sendError instanceof Error ? sendError.message : String(sendError)
       console.error('Send invite email error:', sendError)
+      const isDev = process.env.NODE_ENV !== 'production'
       res.status(503).json({
         success: false,
-        error: 'Failed to send invite email. Check SMTP configuration (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS).',
+        error: isDev
+          ? `Failed to send invite email: ${errMessage}`
+          : 'Failed to send invite email. Check SMTP configuration (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS).',
       })
       return
     }
