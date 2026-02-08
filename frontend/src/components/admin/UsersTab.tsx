@@ -4,35 +4,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as adminService from '../../services/admin.service'
 import { authService } from '../../services/auth.service'
 import type { AdminUser } from '../../types/admin.types'
-import { emptyPermissionMap } from '../../types/admin.types'
 import UserTable from './UserTable'
 import UserCreateModal from './UserCreateModal'
 import CreateUserCredentialsModal from './CreateUserCredentialsModal'
 import UserEditDrawer from './UserEditDrawer'
 import ResetPasswordModal from './ResetPasswordModal'
-
-/** Map backend auth user (id, name, email, lastLoginAt) to AdminUser for display in Admin panel. */
-function mapAuthUserToAdminUser(u: {
-  id: string
-  name: string
-  email: string
-  lastLoginAt?: string | null
-  last_login_at?: string | null
-}): AdminUser {
-  const lastLoginAt = u.lastLoginAt ?? u.last_login_at ?? undefined
-  return {
-    id: u.id,
-    username: u.email,
-    name: u.name,
-    status: 'active',
-    projects: [],
-    roles: [],
-    authorities: [],
-    permissions: emptyPermissionMap(),
-    lastLoginAt: lastLoginAt ?? undefined,
-    createdAt: '',
-  }
-}
 
 export default function UsersTab() {
   const queryClient = useQueryClient()
@@ -56,21 +32,7 @@ export default function UsersTab() {
     refetch: refetchUsers,
   } = useQuery({
     queryKey: ['admin', 'authUsers'],
-    queryFn: async (): Promise<AdminUser[]> => {
-      const res = await authService.getUsers()
-      if (res.success && Array.isArray(res.data)) {
-        return res.data.map((u) =>
-          mapAuthUserToAdminUser({
-            id: u.id,
-            name: u.name ?? '',
-            email: u.email,
-            lastLoginAt: u.lastLoginAt ?? undefined,
-            last_login_at: (u as { last_login_at?: string | null }).last_login_at,
-          })
-        )
-      }
-      throw new Error(res.error || 'Failed to load users')
-    },
+    queryFn: () => authService.getUsersAsAdminUsers(),
   })
   const users: AdminUser[] = authUsersResponse ?? []
 

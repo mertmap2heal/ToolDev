@@ -1,6 +1,40 @@
 import { apiClient } from './api'
 import type { User } from '../../../shared/types/project.types'
 import type { ApiResponse } from '../../../shared/types/api.types'
+import type { AdminUser, PermissionMap } from '../types/admin.types'
+import { emptyPermissionMap } from '../types/admin.types'
+
+const ADMIN_PROFILES_KEY = 'adminUserProfiles'
+
+/** Stored per-user overrides (roles, projects, etc.) so they persist across sessions. */
+export type StoredAdminProfile = Partial<Pick<AdminUser, 'roles' | 'projects' | 'status' | 'authorities' | 'permissions'>>
+
+function getStoredAdminProfiles(): Record<string, StoredAdminProfile> {
+  try {
+    const raw = localStorage.getItem(ADMIN_PROFILES_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
+/** Persist admin profile overrides for a user (roles, projects, status, etc.). */
+export function setStoredAdminProfile(userId: string, profile: StoredAdminProfile): void {
+  const all = getStoredAdminProfiles()
+  all[userId] = profile
+  localStorage.setItem(ADMIN_PROFILES_KEY, JSON.stringify(all))
+}
+
+/** Read current stored profile for a user (for merging). */
+export function getStoredAdminProfile(userId: string): StoredAdminProfile {
+  return getStoredAdminProfiles()[userId] ?? {}
+}
+
+/** Update only the roles array for a user, preserving other stored fields. */
+export function updateStoredAdminProfileRoles(userId: string, newRoles: string[]): void {
+  const current = getStoredAdminProfile(userId)
+  setStoredAdminProfile(userId, { ...current, roles: newRoles })
+}
 
 interface LoginDto {
   email: string
@@ -67,6 +101,39 @@ export const authService = {
 
   async getUsers(): Promise<ApiResponse<Pick<User, 'id' | 'name' | 'email' | 'lastLoginAt'>[]>> {
     return apiClient.get<Pick<User, 'id' | 'name' | 'email' | 'lastLoginAt'>[]>('/auth/users')
+  },
+
+  /** Admin: fetch real users from API and map to AdminUser[] (shared by Users tab and Roles tab). Merges stored profile overrides (roles, projects, etc.) from localStorage. */
+  async getUsersAsAdminUsers(): Promise<AdminUser[]> {
+    const res = await apiClient.get<Pick<User, 'id' | 'name' | 'email' | 'lastLoginAt'>[]>('/auth/users')
+    if (!res.success || !Array.isArray(res.data)) {
+      throw new Error(res.error || 'Failed to load users')
+    }
+    const stored = getStoredAdminProfiles()
+    return res.data.map((u) => {
+      const base: AdminUser = {
+        id: u.id,
+        username: u.email,
+        name: u.name ?? '',
+        status: 'active',
+        projects: [],
+        roles: [],
+        authorities: [],
+        permissions: emptyPermissionMap(),
+        lastLoginAt: u.lastLoginAt ?? (u as { last_login_at?: string | null }).last_login_at ?? undefined,
+        createdAt: '',
+      }
+      const overrides = stored[u.id]
+      if (!overrides) return base
+      return {
+        ...base,
+        ...(overrides.roles !== undefined && { roles: overrides.roles }),
+        ...(overrides.projects !== undefined && { projects: overrides.projects }),
+        ...(overrides.status !== undefined && { status: overrides.status }),
+        ...(overrides.authorities !== undefined && { authorities: overrides.authorities }),
+        ...(overrides.permissions !== undefined && { permissions: overrides.permissions as PermissionMap }),
+      }
+    })
   },
 
   /** Admin only: set a new password for a user. */

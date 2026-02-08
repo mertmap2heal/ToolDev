@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Shield, Plus } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as adminService from '../../services/admin.service'
+import { authService, updateStoredAdminProfileRoles } from '../../services/auth.service'
 import type { Role } from '../../types/admin.types'
 import RoleEditorModal from './RoleEditorModal'
 
@@ -14,25 +15,60 @@ export default function RolesTab() {
     queryFn: () => adminService.getRoles(),
   })
 
-  const { data: users = [] } = useQuery({
-    queryKey: ['admin', 'users'],
-    queryFn: () => adminService.getUsers(),
+  const {
+    data: users = [],
+    isError: usersError,
+    error: usersErrorMessage,
+    refetch: refetchUsers,
+  } = useQuery({
+    queryKey: ['admin', 'authUsers'],
+    queryFn: () => authService.getUsersAsAdminUsers(),
   })
 
   const usersByRole = (roleId: string) =>
     users.filter((u) => u.roles.includes(roleId)).map((u) => u.username)
 
-  const handleSave = async (name: string, defaultPermissions: Role['defaultPermissions']) => {
+  const handleSave = async (
+    name: string,
+    defaultPermissions: Role['defaultPermissions'],
+    selectedUserIds?: string[]
+  ) => {
     if (editorRole === 'new') {
       await adminService.createRole(name, defaultPermissions)
     } else if (editorRole && editorRole.id) {
       await adminService.updateRole(editorRole.id, { name, defaultPermissions })
+      if (selectedUserIds !== undefined) {
+        for (const u of users) {
+          const newRoles = u.roles.filter((r) => r !== editorRole.id)
+          if (selectedUserIds.includes(u.id)) newRoles.push(editorRole.id)
+          updateStoredAdminProfileRoles(u.id, newRoles)
+        }
+      }
     }
     queryClient.invalidateQueries({ queryKey: ['admin', 'roles'] })
+    queryClient.invalidateQueries({ queryKey: ['admin', 'authUsers'] })
   }
 
   return (
     <div className="space-y-4">
+      {usersError && (
+        <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4 flex items-center justify-between gap-4">
+          <p className="text-sm text-red-700 dark:text-red-300">
+            {usersErrorMessage instanceof Error
+              ? usersErrorMessage.message
+              : 'Failed to load users from server.'}
+            {' '}
+            Make sure you are logged in and the backend is running.
+          </p>
+          <button
+            type="button"
+            onClick={() => refetchUsers()}
+            className="shrink-0 px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30"
+          >
+            Retry
+          </button>
+        </div>
+      )}
       <div className="flex justify-end">
         <button
           type="button"
@@ -90,6 +126,7 @@ export default function RolesTab() {
       {editorRole && (
         <RoleEditorModal
           role={editorRole === 'new' ? null : editorRole}
+          users={users}
           onClose={() => setEditorRole(null)}
           onSave={handleSave}
         />

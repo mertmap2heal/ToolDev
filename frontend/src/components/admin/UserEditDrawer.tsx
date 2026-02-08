@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import * as adminService from '../../services/admin.service'
+import { setStoredAdminProfile } from '../../services/auth.service'
 import type { AdminUser } from '../../types/admin.types'
 import PermissionMatrix from './PermissionMatrix'
 
@@ -59,6 +60,13 @@ export default function UserEditDrawer({ user, onClose, onSaved }: UserEditDrawe
   const handleSave = async () => {
     setSaving(true)
     try {
+      setStoredAdminProfile(user.id, {
+        roles,
+        projects,
+        status,
+        authorities,
+        permissions,
+      })
       await adminService.updateUser(user.id, {
         status,
         projects,

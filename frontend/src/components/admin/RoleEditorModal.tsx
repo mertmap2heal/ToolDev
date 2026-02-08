@@ -1,30 +1,43 @@
 import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
-import type { Role } from '../../types/admin.types'
+import type { AdminUser, Role } from '../../types/admin.types'
 import type { PermissionMap } from '../../types/admin.types'
 import PermissionMatrix from './PermissionMatrix'
 
 interface RoleEditorModalProps {
   role: Role | null
+  users: AdminUser[]
   onClose: () => void
-  onSave: (name: string, defaultPermissions: PermissionMap) => Promise<void>
+  onSave: (name: string, defaultPermissions: PermissionMap, selectedUserIds?: string[]) => Promise<void>
 }
 
-export default function RoleEditorModal({ role, onClose, onSave }: RoleEditorModalProps) {
+export default function RoleEditorModal({ role, users, onClose, onSave }: RoleEditorModalProps) {
   const [name, setName] = useState(role?.name ?? '')
   const [permissions, setPermissions] = useState<PermissionMap>(role?.defaultPermissions ?? {})
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     setName(role?.name ?? '')
     setPermissions(role?.defaultPermissions ?? {})
-  }, [role])
+    if (role) {
+      setSelectedUserIds(users.filter((u) => u.roles.includes(role.id)).map((u) => u.id))
+    } else {
+      setSelectedUserIds([])
+    }
+  }, [role, users])
+
+  const toggleUser = (userId: string) => {
+    setSelectedUserIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    )
+  }
 
   const handleSubmit = async () => {
     if (!name.trim()) return
     setSaving(true)
     try {
-      await onSave(name.trim(), permissions)
+      await onSave(name.trim(), permissions, role ? selectedUserIds : undefined)
       onClose()
     } finally {
       setSaving(false)
@@ -65,6 +78,36 @@ export default function RoleEditorModal({ role, onClose, onSave }: RoleEditorMod
             </label>
             <PermissionMatrix value={permissions} onChange={setPermissions} />
           </div>
+          {role && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Users with this role
+              </label>
+              <div className="flex flex-col gap-1 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-lg p-2 bg-gray-50 dark:bg-gray-900/50">
+                {users.length === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 py-2">No users available.</p>
+                ) : (
+                  users.map((u) => (
+                    <label
+                      key={u.id}
+                      className="inline-flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700/50 cursor-pointer text-gray-900 dark:text-white"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedUserIds.includes(u.id)}
+                        onChange={() => toggleUser(u.id)}
+                        className="rounded text-blue-600"
+                      />
+                      <span className="text-sm font-medium">{u.username}</span>
+                      {u.name && (
+                        <span className="text-sm text-gray-500 dark:text-gray-400">({u.name})</span>
+                      )}
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
           <button
