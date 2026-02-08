@@ -94,8 +94,9 @@ export default function UserEditDrawer({ user, onClose, onSaved }: UserEditDrawe
         return
       }
       const res = await authService.sendInvite(user.id)
-      if (res.success && res.data?.message) {
-        setInviteMessage(res.data.message)
+      const successMessage = res.data?.message ?? (res as { message?: string }).message
+      if (res.success && successMessage) {
+        setInviteMessage(successMessage)
         onSaved()
       } else {
         setInviteMessage(res.error ?? 'Failed to send invite.')

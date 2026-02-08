@@ -93,8 +93,9 @@ export default function UsersTab() {
 
   const handleSendInvite = async (user: AdminUser) => {
     const res = await authService.sendInvite(user.id)
-    if (res.success && res.data?.message) {
-      setToastMessage(res.data.message)
+    const successMessage = res.data?.message ?? (res as { message?: string }).message
+    if (res.success && successMessage) {
+      setToastMessage(successMessage)
     } else {
       setToastMessage(res.error ?? 'Failed to send invite.')
     }
