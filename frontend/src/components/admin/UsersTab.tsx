@@ -34,16 +34,25 @@ export default function UsersTab() {
     queryKey: ['admin', 'authUsers'],
     queryFn: () => authService.getUsersAsAdminUsers(),
   })
-  const users: AdminUser[] = authUsersResponse ?? []
-
-  const { data: roles = [] } = useQuery({
-    queryKey: ['admin', 'roles'],
-    queryFn: () => adminService.getRoles(),
-  })
+  const rawUsers: AdminUser[] = authUsersResponse ?? []
 
   const { data: projects = [] } = useQuery({
     queryKey: ['admin', 'projects'],
     queryFn: () => adminService.getProjects(),
+  })
+
+  const users = useMemo(
+    () =>
+      rawUsers.map((u) => ({
+        ...u,
+        projects: projects.filter((p) => p.members.includes(u.id)).map((p) => p.id),
+      })),
+    [rawUsers, projects]
+  )
+
+  const { data: roles = [] } = useQuery({
+    queryKey: ['admin', 'roles'],
+    queryFn: () => adminService.getRoles(),
   })
 
   const roleNames = useMemo(
@@ -203,6 +212,7 @@ export default function UsersTab() {
           onSaved={() => {
             setEditUser(null)
             queryClient.invalidateQueries({ queryKey: ['admin', 'authUsers'] })
+            queryClient.invalidateQueries({ queryKey: ['admin', 'projects'] })
           }}
         />
       )}

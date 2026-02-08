@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { FolderOpen, Plus } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as adminService from '../../services/admin.service'
+import { authService } from '../../services/auth.service'
+import { projectService } from '../../services/project.service'
 import type { AdminProject } from '../../types/admin.types'
 import ProjectEditorModal from './ProjectEditorModal'
 
@@ -9,22 +11,76 @@ export default function ProjectsTab() {
   const queryClient = useQueryClient()
   const [editorProject, setEditorProject] = useState<AdminProject | null | 'new'>(null)
 
-  const { data: projects = [], isLoading } = useQuery({
+  const {
+    data: projects = [],
+    isLoading,
+    isError: projectsError,
+    error: projectsErrorMessage,
+    refetch: refetchProjects,
+  } = useQuery({
     queryKey: ['admin', 'projects'],
     queryFn: () => adminService.getProjects(),
   })
 
+  const { data: users = [] } = useQuery({
+    queryKey: ['admin', 'authUsers'],
+    queryFn: () => authService.getUsersAsAdminUsers(),
+  })
+
+  const userNames = useMemo(
+    () => Object.fromEntries(users.map((u) => [u.id, u.name || u.username])),
+    [users]
+  )
+
   const handleSave = async (name: string, members: string[]) => {
     if (editorProject === 'new') {
-      await adminService.createProject(name, members)
+      const created = await adminService.createProject(name, members)
+      for (const userId of members) {
+        const res = await projectService.addProjectMember(created.id, userId, 'member')
+        if (!res.success) throw new Error(res.error || 'Failed to add member')
+      }
     } else if (editorProject?.id) {
-      await adminService.updateProject(editorProject.id, { name, members })
+      if (name.trim() !== editorProject.name) {
+        await adminService.updateProject(editorProject.id, { name })
+      }
+      const previousIds = new Set(editorProject.members)
+      const nextIds = new Set(members)
+      for (const userId of nextIds) {
+        if (!previousIds.has(userId)) {
+          const res = await projectService.addProjectMember(editorProject.id, userId, 'member')
+          if (!res.success) throw new Error(res.error || 'Failed to add member')
+        }
+      }
+      for (const userId of previousIds) {
+        if (!nextIds.has(userId)) {
+          const res = await projectService.removeProjectMember(editorProject.id, userId)
+          if (!res.success) throw new Error(res.error || 'Failed to remove member')
+        }
+      }
     }
     queryClient.invalidateQueries({ queryKey: ['admin', 'projects'] })
   }
 
   return (
     <div className="space-y-4">
+      {projectsError && (
+        <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4 flex items-center justify-between gap-4">
+          <p className="text-sm text-red-700 dark:text-red-300">
+            {projectsErrorMessage instanceof Error
+              ? projectsErrorMessage.message
+              : 'Failed to load projects from server.'}
+            {' '}
+            Make sure you are logged in and the backend is running.
+          </p>
+          <button
+            type="button"
+            onClick={() => refetchProjects()}
+            className="shrink-0 px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30"
+          >
+            Retry
+          </button>
+        </div>
+      )}
       <div className="flex justify-end">
         <button
           type="button"
@@ -60,7 +116,12 @@ export default function ProjectsTab() {
                     </span>
                   </td>
                   <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
-                    {project.members.length} member(s)
+                    {project.members.length === 0
+                      ? '—'
+                      : project.members
+                          .map((id) => userNames[id] || id)
+                          .filter(Boolean)
+                          .join(', ')}
                   </td>
                   <td className="py-3 px-4">
                     <button
@@ -80,6 +141,7 @@ export default function ProjectsTab() {
       {editorProject && (
         <ProjectEditorModal
           project={editorProject === 'new' ? null : editorProject}
+          users={users}
           onClose={() => setEditorProject(null)}
           onSave={handleSave}
         />

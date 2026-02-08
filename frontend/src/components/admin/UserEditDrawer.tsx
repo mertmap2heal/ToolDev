@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import * as adminService from '../../services/admin.service'
 import { setStoredAdminProfile } from '../../services/auth.service'
+import { projectService } from '../../services/project.service'
 import type { AdminUser } from '../../types/admin.types'
 import PermissionMatrix from './PermissionMatrix'
 
@@ -60,6 +61,20 @@ export default function UserEditDrawer({ user, onClose, onSaved }: UserEditDrawe
   const handleSave = async () => {
     setSaving(true)
     try {
+      const previousProjectIds = new Set(user.projects)
+      const nextProjectIds = new Set(projects)
+      for (const projectId of nextProjectIds) {
+        if (!previousProjectIds.has(projectId)) {
+          const res = await projectService.addProjectMember(projectId, user.id, 'member')
+          if (!res.success) throw new Error(res.error || 'Failed to add to project')
+        }
+      }
+      for (const projectId of previousProjectIds) {
+        if (!nextProjectIds.has(projectId)) {
+          const res = await projectService.removeProjectMember(projectId, user.id)
+          if (!res.success) throw new Error(res.error || 'Failed to remove from project')
+        }
+      }
       setStoredAdminProfile(user.id, {
         roles,
         projects,

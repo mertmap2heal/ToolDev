@@ -1,8 +1,8 @@
 /**
  * Admin service — user/role/project/authority management.
- * TODO: replace with API calls when backend admin endpoints exist.
  */
 
+import { projectService } from './project.service'
 import type {
   AdminUser,
   Role,
@@ -215,32 +215,68 @@ export async function updateRole(
   return roles[idx]
 }
 
-// --- Projects (admin view) ---
+// --- Projects (admin view): real projects from API ---
 export async function getProjects(): Promise<AdminProject[]> {
-  // TODO: replace with API or sync from projectService
-  return [...projects]
+  const res = await projectService.getProjects()
+  if (!res.success || !Array.isArray(res.data)) {
+    throw new Error(res.error || 'Failed to load projects')
+  }
+  return res.data.map((p) => ({
+    id: p.id,
+    name: p.name,
+    members: p.teamMembers?.map((m) => m.userId) ?? [],
+  }))
 }
 
 export async function getProject(id: string): Promise<AdminProject | null> {
-  return projects.find((p) => p.id === id) ?? null
+  const res = await projectService.getProject(id)
+  if (!res.success || !res.data) return null
+  const p = res.data
+  return {
+    id: p.id,
+    name: p.name,
+    members: p.teamMembers?.map((m) => m.userId) ?? [],
+  }
+}
+
+function slugFromName(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '') || 'project'
 }
 
 export async function createProject(name: string, members: string[] = []): Promise<AdminProject> {
-  // TODO: replace with API
-  const project: AdminProject = { id: uuid(), name, members }
-  projects.push(project)
-  return project
+  const res = await projectService.createProject({
+    name: name.trim(),
+    domain: slugFromName(name),
+  })
+  if (!res.success || !res.data) {
+    throw new Error(res.error || 'Failed to create project')
+  }
+  const p = res.data
+  return {
+    id: p.id,
+    name: p.name,
+    members: p.teamMembers?.map((m) => m.userId) ?? [],
+  }
 }
 
 export async function updateProject(
   id: string,
   updates: Partial<Pick<AdminProject, 'name' | 'members'>>
 ): Promise<AdminProject | null> {
-  // TODO: replace with API
-  const idx = projects.findIndex((p) => p.id === id)
-  if (idx === -1) return null
-  projects[idx] = { ...projects[idx], ...updates }
-  return projects[idx]
+  const res = await projectService.updateProject(id, {
+    ...(updates.name !== undefined && { name: updates.name }),
+  })
+  if (!res.success || !res.data) return null
+  const p = res.data
+  return {
+    id: p.id,
+    name: p.name,
+    members: updates.members ?? p.teamMembers?.map((m) => m.userId) ?? [],
+  }
 }
 
 // --- Authorities ---

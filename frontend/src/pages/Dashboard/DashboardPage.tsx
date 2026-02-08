@@ -35,6 +35,8 @@ export default function DashboardPage() {
       return list
     },
     retry: false,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   })
 
   const deleteProjectMutation = useMutation({

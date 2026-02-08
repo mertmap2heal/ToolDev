@@ -82,7 +82,7 @@ export const getProjects = async (req: AuthRequest, res: Response) => {
       },
       include: {
         teamMembers: {
-          where: { status: 'accepted' },
+          where: { status: { in: ['accepted', 'pending'] } },
           include: {
             user: {
               select: {
@@ -284,6 +284,25 @@ async function requireProjectOwner(projectId: string, userId: string): Promise<b
   return member?.role === 'owner'
 }
 
+/** Derive admin flag: ADMIN_EMAILS env or first user in DB (by createdAt). */
+async function isAdmin(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  })
+  if (!user?.email) return false
+  const list = process.env.ADMIN_EMAILS
+  if (list) {
+    const emails = list.split(',').map((e) => e.trim().toLowerCase())
+    return emails.includes(user.email.toLowerCase())
+  }
+  const first = await prisma.user.findFirst({
+    orderBy: { createdAt: 'asc' },
+    select: { email: true },
+  })
+  return first?.email?.toLowerCase() === user.email.toLowerCase()
+}
+
 export const getProjectMembers = async (req: AuthRequest, res: Response) => {
   try {
     const { id: projectId } = req.params
@@ -375,7 +394,8 @@ export const addProjectMember = async (req: AuthRequest, res: Response) => {
     }
 
     const isOwner = await requireProjectOwner(projectId, currentUserId)
-    if (!isOwner) {
+    const isAdminUser = await isAdmin(currentUserId)
+    if (!isOwner && !isAdminUser) {
       return res.status(403).json({
         success: false,
         error: 'Only the project owner can invite members',
@@ -402,6 +422,33 @@ export const addProjectMember = async (req: AuthRequest, res: Response) => {
       },
     })
     if (existing) {
+      if (existing.status === 'pending') {
+        await prisma.projectMember.update({
+          where: {
+            projectId_userId: { projectId, userId: inviteUserId },
+          },
+          data: { status: 'accepted' },
+        })
+        const updated = await prisma.projectMember.findUnique({
+          where: {
+            projectId_userId: { projectId, userId: inviteUserId },
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        })
+        return res.status(200).json({
+          success: true,
+          data: updated,
+        })
+      }
       return res.status(400).json({
         success: false,
         error: 'User is already a member of this project',
@@ -429,7 +476,7 @@ export const addProjectMember = async (req: AuthRequest, res: Response) => {
           projectId,
           userId: inviteUserId,
           role,
-          status: 'pending',
+          status: 'accepted',
         },
         include: {
           user: {
@@ -490,7 +537,8 @@ export const removeProjectMember = async (req: AuthRequest, res: Response) => {
     }
 
     const isOwner = await requireProjectOwner(projectId, currentUserId)
-    if (!isOwner) {
+    const isAdminUser = await isAdmin(currentUserId)
+    if (!isOwner && !isAdminUser) {
       return res.status(403).json({
         success: false,
         error: 'Only the project owner can remove members',
