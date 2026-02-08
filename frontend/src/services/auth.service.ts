@@ -99,13 +99,19 @@ export const authService = {
     return getStoredToken()
   },
 
-  async getUsers(): Promise<ApiResponse<Pick<User, 'id' | 'name' | 'email' | 'lastLoginAt'>[]>> {
-    return apiClient.get<Pick<User, 'id' | 'name' | 'email' | 'lastLoginAt'>[]>('/auth/users')
+  async getUsers(): Promise<
+    ApiResponse<(Pick<User, 'id' | 'name' | 'email' | 'lastLoginAt'> & { inviteEmail?: string | null })[]>
+  > {
+    return apiClient.get<
+      (Pick<User, 'id' | 'name' | 'email' | 'lastLoginAt'> & { inviteEmail?: string | null })[]
+    >('/auth/users')
   },
 
   /** Admin: fetch real users from API and map to AdminUser[] (shared by Users tab and Roles tab). Merges stored profile overrides (roles, projects, etc.) from localStorage. */
   async getUsersAsAdminUsers(): Promise<AdminUser[]> {
-    const res = await apiClient.get<Pick<User, 'id' | 'name' | 'email' | 'lastLoginAt'>[]>('/auth/users')
+    const res = await apiClient.get<
+      (Pick<User, 'id' | 'name' | 'email' | 'lastLoginAt'> & { inviteEmail?: string | null })[]
+    >('/auth/users')
     if (!res.success || !Array.isArray(res.data)) {
       throw new Error(res.error || 'Failed to load users')
     }
@@ -115,6 +121,7 @@ export const authService = {
         id: u.id,
         username: u.email,
         name: u.name ?? '',
+        inviteEmail: u.inviteEmail ?? undefined,
         status: 'active',
         projects: [],
         roles: [],
@@ -139,5 +146,18 @@ export const authService = {
   /** Admin only: set a new password for a user. */
   async resetUserPassword(userId: string, newPassword: string): Promise<ApiResponse<{ message: string }>> {
     return apiClient.put<{ message: string }>(`/auth/users/${userId}/password`, { newPassword })
+  },
+
+  /** Admin only: update a user's invite email. */
+  async updateUserInviteEmail(
+    userId: string,
+    inviteEmail: string | null
+  ): Promise<ApiResponse<{ message: string }>> {
+    return apiClient.patch<{ message: string }>(`/auth/users/${userId}`, { inviteEmail })
+  },
+
+  /** Admin only: send invite email with app URL and temporary password. */
+  async sendInvite(userId: string): Promise<ApiResponse<{ message: string }>> {
+    return apiClient.post<{ message: string }>(`/auth/users/${userId}/send-invite`, {})
   },
 }

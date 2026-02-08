@@ -1,10 +1,42 @@
 import { Request, Response } from 'express'
+import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { PrismaClient } from '@prisma/client'
 import type { AuthRequest } from '../middleware/auth.middleware'
+import { sendInviteEmail } from '../services/email.service'
 
 const prisma = new PrismaClient()
+
+async function requireAdmin(req: AuthRequest, res: Response): Promise<{ email: string } | null> {
+  const currentUserId = req.userId
+  if (!currentUserId) {
+    res.status(401).json({ success: false, error: 'Unauthorized' })
+    return null
+  }
+  const currentUser = await prisma.user.findUnique({
+    where: { id: currentUserId },
+    select: { email: true },
+  })
+  if (!currentUser) {
+    res.status(401).json({ success: false, error: 'User not found' })
+    return null
+  }
+  const isAdmin = await resolveIsAdmin(currentUser.email)
+  if (!isAdmin) {
+    res.status(403).json({ success: false, error: 'Admin access required' })
+    return null
+  }
+  return currentUser
+}
+
+function randomTempPassword(length = 14): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
+  const bytes = crypto.randomBytes(length)
+  let s = ''
+  for (let i = 0; i < length; i++) s += chars[bytes[i]! % chars.length]
+  return s
+}
 
 export const register = async (req: Request, res: Response) => {
   try {
@@ -240,7 +272,7 @@ export const resetUserPassword = async (req: AuthRequest, res: Response) => {
   }
 }
 
-/** List users (id, name, email, lastLoginAt) for invite dropdowns and admin. Requires authentication. */
+/** List users (id, name, email, inviteEmail, lastLoginAt) for invite dropdowns and admin. Requires authentication. */
 export const getUsers = async (_req: Request, res: Response) => {
   try {
     const users = await prisma.user.findMany({
@@ -248,6 +280,7 @@ export const getUsers = async (_req: Request, res: Response) => {
         id: true,
         name: true,
         email: true,
+        inviteEmail: true,
         lastLoginAt: true,
       },
       orderBy: { name: 'asc' },
@@ -257,6 +290,7 @@ export const getUsers = async (_req: Request, res: Response) => {
       id: u.id,
       name: u.name,
       email: u.email,
+      inviteEmail: u.inviteEmail ?? null,
       lastLoginAt: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
     }))
 
@@ -270,6 +304,103 @@ export const getUsers = async (_req: Request, res: Response) => {
       success: false,
       error: 'Internal server error',
     })
+  }
+}
+
+/** Admin only: update a user's invite email. */
+export const updateUserInviteEmail = async (req: AuthRequest, res: Response) => {
+  try {
+    const admin = await requireAdmin(req, res)
+    if (!admin) return
+
+    const { userId } = req.params
+    const { inviteEmail } = req.body
+
+    if (!userId) {
+      res.status(400).json({ success: false, error: 'userId is required' })
+      return
+    }
+
+    const value = inviteEmail === undefined ? undefined : (inviteEmail === null || inviteEmail === '' ? null : String(inviteEmail).trim() || null)
+    if (value !== undefined && value !== null && !value.includes('@')) {
+      res.status(400).json({ success: false, error: 'Invalid email format' })
+      return
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } })
+    if (!user) {
+      res.status(404).json({ success: false, error: 'User not found' })
+      return
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: value === undefined ? {} : { inviteEmail: value },
+    })
+
+    res.json({ success: true, message: 'Invite email updated' })
+  } catch (error) {
+    console.error('Update invite email error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+}
+
+/** Admin only: send invite email with app URL and temporary password. */
+export const sendUserInvite = async (req: AuthRequest, res: Response) => {
+  try {
+    const admin = await requireAdmin(req, res)
+    if (!admin) return
+
+    const { userId } = req.params
+    if (!userId) {
+      res.status(400).json({ success: false, error: 'userId is required' })
+      return
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, inviteEmail: true, name: true },
+    })
+    if (!user) {
+      res.status(404).json({ success: false, error: 'User not found' })
+      return
+    }
+
+    const recipient = user.inviteEmail ?? user.email
+    if (!recipient || !recipient.includes('@')) {
+      res.status(400).json({
+        success: false,
+        error: 'User has no email set. Add an invite email first.',
+      })
+      return
+    }
+
+    const tempPassword = randomTempPassword(14)
+    const hashedPassword = await bcrypt.hash(tempPassword, 10)
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    })
+
+    try {
+      await sendInviteEmail({
+        to: recipient,
+        userName: user.email,
+        tempPassword,
+      })
+    } catch (sendError) {
+      console.error('Send invite email error:', sendError)
+      res.status(503).json({
+        success: false,
+        error: 'Failed to send invite email. Check SMTP configuration (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS).',
+      })
+      return
+    }
+
+    res.json({ success: true, message: `Invite sent to ${recipient}` })
+  } catch (error) {
+    console.error('Send invite error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
   }
 }
 

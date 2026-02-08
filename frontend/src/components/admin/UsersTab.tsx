@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Search, UserPlus } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as adminService from '../../services/admin.service'
@@ -23,6 +23,7 @@ export default function UsersTab() {
   } | null>(null)
   const [editUser, setEditUser] = useState<AdminUser | null>(null)
   const [resetPasswordUser, setResetPasswordUser] = useState<AdminUser | null>(null)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   const {
     data: authUsersResponse,
@@ -86,15 +87,25 @@ export default function UsersTab() {
     return list
   }, [users, search, filterRole, filterProject, filterStatus])
 
-  const handleToggleStatus = async (user: AdminUser) => {
-    const nextStatus = user.status === 'active' ? 'disabled' : 'active'
-    await adminService.updateUser(user.id, { status: nextStatus })
-    queryClient.invalidateQueries({ queryKey: ['admin', 'authUsers'] })
-  }
-
   const handleResetPassword = (user: AdminUser) => {
     setResetPasswordUser(user)
   }
+
+  const handleSendInvite = async (user: AdminUser) => {
+    const res = await authService.sendInvite(user.id)
+    if (res.success && res.data?.message) {
+      setToastMessage(res.data.message)
+    } else {
+      setToastMessage(res.error ?? 'Failed to send invite.')
+    }
+    queryClient.invalidateQueries({ queryKey: ['admin', 'authUsers'] })
+  }
+
+  useEffect(() => {
+    if (!toastMessage) return
+    const t = setTimeout(() => setToastMessage(null), 4000)
+    return () => clearTimeout(t)
+  }, [toastMessage])
 
   return (
     <div className="space-y-4">
@@ -182,7 +193,7 @@ export default function UsersTab() {
           projectNames={projectNames}
           onEdit={setEditUser}
           onResetPassword={handleResetPassword}
-          onToggleStatus={handleToggleStatus}
+          onSendInvite={handleSendInvite}
         />
       )}
 
@@ -221,8 +232,20 @@ export default function UsersTab() {
         <ResetPasswordModal
           user={resetPasswordUser}
           onClose={() => setResetPasswordUser(null)}
-          onSuccess={() => setResetPasswordUser(null)}
+          onSuccess={() => {
+            setResetPasswordUser(null)
+            queryClient.invalidateQueries({ queryKey: ['admin', 'authUsers'] })
+          }}
         />
+      )}
+
+      {toastMessage && (
+        <div
+          className="fixed bottom-4 right-4 z-[100] px-4 py-3 rounded-lg shadow-lg bg-gray-900 dark:bg-gray-700 text-white text-sm"
+          role="alert"
+        >
+          {toastMessage}
+        </div>
       )}
     </div>
   )

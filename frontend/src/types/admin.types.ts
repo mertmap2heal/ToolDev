@@ -1,19 +1,39 @@
 /**
- * Admin panel types — user/role/authority management and permissions.
- * Structure supports global permissions and future per-project overrides.
+ * Admin module types: users, roles, projects, authorities, permissions.
  */
 
-/** Permission group id (key in PermissionMap) */
-export type PermissionGroupId =
-  | 'requirements'
-  | 'verification'
-  | 'documentation'
-  | 'riskManagement'
-  | 'changeRequests'
-  | 'configurationManagement'
-  | 'admin'
+export type UserStatus = 'active' | 'disabled'
 
-/** Actions per group (spec-aligned) */
+export interface AdminUser {
+  id: string
+  username: string
+  /** Display name (e.g. from backend auth user). */
+  name?: string
+  /** Invite/contact email (for invite emails; may differ from username). */
+  inviteEmail?: string | null
+  status: UserStatus
+  projects: string[]
+  roles: string[]
+  authorities: string[]
+  permissions: PermissionMap
+  lastLoginAt?: string
+  createdAt: string
+  mustChangePasswordOnFirstLogin?: boolean
+}
+
+// --- Permissions (matrix of module -> action -> boolean) ---
+export type PermissionMap = Partial<{
+  requirements: Record<string, boolean>
+  verification: Record<string, boolean>
+  documentation: Record<string, boolean>
+  riskManagement: Record<string, boolean>
+  changeRequests: Record<string, boolean>
+  configurationManagement: Record<string, boolean>
+  admin: Record<string, boolean>
+}>
+
+export type PermissionGroupId = keyof NonNullable<PermissionMap>
+
 export const PERMISSION_GROUPS: Record<
   PermissionGroupId,
   { label: string; actions: string[] }
@@ -48,50 +68,34 @@ export const PERMISSION_GROUPS: Record<
   },
 }
 
-/** Map: group -> set of enabled action keys */
-export type PermissionMap = Partial<
-  Record<PermissionGroupId, Record<string, boolean>>
->
-
-/** Returns a new PermissionMap with all actions set to false. */
 export function emptyPermissionMap(): PermissionMap {
   const map: PermissionMap = {}
-  for (const g of Object.keys(PERMISSION_GROUPS) as PermissionGroupId[]) {
+  ;(Object.keys(PERMISSION_GROUPS) as PermissionGroupId[]).forEach((g) => {
     const actions = PERMISSION_GROUPS[g].actions
-    map[g] = Object.fromEntries(actions.map((a) => [a, false]))
-  }
+    const groupMap: Record<string, boolean> = {}
+    actions.forEach((a) => {
+      groupMap[a] = false
+    })
+    map[g] = groupMap
+  })
   return map
 }
 
-export type UserStatus = 'active' | 'disabled'
-
-export interface AdminUser {
-  id: string
-  username: string
-  /** Display name (e.g. from backend auth user). */
-  name?: string
-  status: UserStatus
-  projects: string[]
-  roles: string[]
-  authorities: string[]
-  permissions: PermissionMap
-  lastLoginAt?: string
-  createdAt: string
-  mustChangePasswordOnFirstLogin?: boolean
-}
-
+// --- Roles ---
 export interface Role {
   id: string
   name: string
   defaultPermissions: PermissionMap
 }
 
+// --- Admin project (id, name, member ids) ---
 export interface AdminProject {
   id: string
   name: string
   members: string[]
 }
 
+// --- Authority (permission template) ---
 export interface Authority {
   id: string
   name: string
@@ -100,6 +104,7 @@ export interface Authority {
   deprecated?: boolean
 }
 
+// --- Audit log ---
 export interface AuditLogEntry {
   id: string
   timestamp: string
@@ -109,6 +114,7 @@ export interface AuditLogEntry {
   summary: string
 }
 
+// --- Create user ---
 export interface CreateUserInput {
   projects?: string[]
   roles?: string[]

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import * as adminService from '../../services/admin.service'
-import { setStoredAdminProfile } from '../../services/auth.service'
+import { authService, setStoredAdminProfile } from '../../services/auth.service'
 import { projectService } from '../../services/project.service'
 import type { AdminUser } from '../../types/admin.types'
 import PermissionMatrix from './PermissionMatrix'
@@ -15,14 +15,18 @@ interface UserEditDrawerProps {
 
 export default function UserEditDrawer({ user, onClose, onSaved }: UserEditDrawerProps) {
   const [status, setStatus] = useState<AdminUser['status']>(user.status)
+  const [inviteEmail, setInviteEmail] = useState<string>(user.inviteEmail ?? '')
   const [projects, setProjects] = useState<string[]>(user.projects)
   const [roles, setRoles] = useState<string[]>(user.roles)
   const [authorities, setAuthorities] = useState<string[]>(user.authorities)
   const [permissions, setPermissions] = useState(user.permissions ?? {})
   const [saving, setSaving] = useState(false)
+  const [inviteSending, setInviteSending] = useState(false)
+  const [inviteMessage, setInviteMessage] = useState<string | null>(null)
 
   useEffect(() => {
     setStatus(user.status)
+    setInviteEmail(user.inviteEmail ?? '')
     setProjects([...user.projects])
     setRoles([...user.roles])
     setAuthorities([...user.authorities])
@@ -58,9 +62,28 @@ export default function UserEditDrawer({ user, onClose, onSaved }: UserEditDrawe
     )
   }
 
+  const handleSendInvite = async () => {
+    setInviteSending(true)
+    setInviteMessage(null)
+    try {
+      const res = await authService.sendInvite(user.id)
+      if (res.success && res.data?.message) {
+        setInviteMessage(res.data.message)
+      } else {
+        setInviteMessage(res.error ?? 'Failed to send invite.')
+      }
+    } finally {
+      setInviteSending(false)
+    }
+  }
+
   const handleSave = async () => {
     setSaving(true)
     try {
+      const inviteEmailValue = inviteEmail.trim() || null
+      const inviteRes = await authService.updateUserInviteEmail(user.id, inviteEmailValue)
+      if (!inviteRes.success) throw new Error(inviteRes.error || 'Failed to update email')
+
       const previousProjectIds = new Set(user.projects)
       const nextProjectIds = new Set(projects)
       for (const projectId of nextProjectIds) {
@@ -124,6 +147,29 @@ export default function UserEditDrawer({ user, onClose, onSaved }: UserEditDrawe
               <div>
                 <label className="block text-xs text-gray-500 dark:text-gray-400">Username</label>
                 <p className="text-sm font-mono text-gray-900 dark:text-white">{user.username}</p>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Email (for invite)</label>
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="user@example.com"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSendInvite}
+                  disabled={inviteSending}
+                  className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                >
+                  {inviteSending ? 'Sending...' : 'Send invite'}
+                </button>
+                {inviteMessage && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">{inviteMessage}</span>
+                )}
               </div>
               <div>
                 <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Status</label>
@@ -206,15 +252,6 @@ export default function UserEditDrawer({ user, onClose, onSaved }: UserEditDrawe
               Permissions (explicit overrides)
             </h3>
             <PermissionMatrix value={permissions} onChange={setPermissions} />
-          </section>
-          <section>
-            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-              Effective permissions
-            </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Derived from assigned roles and authorities, with explicit overrides above applied.
-              TODO: show merged read-only matrix when backend supports computed permissions.
-            </p>
           </section>
         </div>
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">

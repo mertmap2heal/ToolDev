@@ -6,7 +6,7 @@ interface UserTableProps {
   projectNames: Record<string, string>
   onEdit: (user: AdminUser) => void
   onResetPassword: (user: AdminUser) => void
-  onToggleStatus: (user: AdminUser) => void
+  onSendInvite: (user: AdminUser) => void
 }
 
 function formatDate(iso: string | undefined): string {
@@ -27,7 +27,7 @@ export default function UserTable({
   projectNames,
   onEdit,
   onResetPassword,
-  onToggleStatus,
+  onSendInvite,
 }: UserTableProps) {
   if (users.length === 0) {
     return (
@@ -42,7 +42,8 @@ export default function UserTable({
       <table className="w-full text-sm text-left text-gray-700 dark:text-gray-300">
         <thead>
           <tr className="border-b border-gray-200 dark:border-gray-700">
-            <th className="py-3 px-4 font-medium text-gray-900 dark:text-white">Username (email)</th>
+            <th className="py-3 px-4 font-medium text-gray-900 dark:text-white">Username</th>
+            <th className="py-3 px-4 font-medium text-gray-900 dark:text-white">Email</th>
             <th className="py-3 px-4 font-medium text-gray-900 dark:text-white">Name</th>
             <th className="py-3 px-4 font-medium text-gray-900 dark:text-white">Roles</th>
             <th className="py-3 px-4 font-medium text-gray-900 dark:text-white">Projects</th>
@@ -58,7 +59,10 @@ export default function UserTable({
               className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30"
             >
               <td className="py-3 px-4 font-medium text-gray-900 dark:text-white">
-                {user.username}
+                {user.username ?? '—'}
+              </td>
+              <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
+                {user.inviteEmail ?? (user.username?.includes('@') ? user.username : null) ?? '—'}
               </td>
               <td className="py-3 px-4 text-gray-600 dark:text-gray-400">
                 {user.name ?? '—'}
@@ -105,10 +109,10 @@ export default function UserTable({
                   </button>
                   <button
                     type="button"
-                    onClick={() => onToggleStatus(user)}
+                    onClick={() => onSendInvite(user)}
                     className="text-gray-600 dark:text-gray-400 hover:underline text-sm"
                   >
-                    {user.status === 'active' ? 'Disable' : 'Enable'}
+                    Send invite
                   </button>
                 </div>
               </td>
