@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { PrismaClient } from '@prisma/client'
 import type { AuthRequest } from '../middleware/auth.middleware'
-import { sendInviteEmail } from '../services/email.service'
+import { sendInviteEmail, sendForgotPasswordEmail } from '../services/email.service'
 
 const prisma = new PrismaClient()
 
@@ -161,6 +161,54 @@ export const login = async (req: Request, res: Response) => {
       success: false,
       error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
     })
+  }
+}
+
+const FORGOT_PASSWORD_MESSAGE =
+  'If an account exists for this login, you will receive an email with a temporary password.'
+
+export const forgotPassword = async (req: Request, res: Response) => {
+  try {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim() : ''
+    if (!email) {
+      return res.status(200).json({ success: true, message: FORGOT_PASSWORD_MESSAGE })
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, inviteEmail: true },
+    })
+
+    if (!user) {
+      return res.status(200).json({ success: true, message: FORGOT_PASSWORD_MESSAGE })
+    }
+
+    const recipient = user.inviteEmail ?? user.email
+    if (!recipient || !recipient.includes('@')) {
+      return res.status(200).json({ success: true, message: FORGOT_PASSWORD_MESSAGE })
+    }
+
+    const tempPassword = randomTempPassword(14)
+    const hashedPassword = await bcrypt.hash(tempPassword, 10)
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword, mustChangePasswordOnFirstLogin: true },
+    })
+
+    try {
+      await sendForgotPasswordEmail({
+        to: recipient,
+        userName: user.email,
+        tempPassword,
+      })
+    } catch (sendError) {
+      console.error('Forgot password email error:', sendError)
+    }
+
+    return res.status(200).json({ success: true, message: FORGOT_PASSWORD_MESSAGE })
+  } catch (error) {
+    console.error('Forgot password error:', error)
+    return res.status(200).json({ success: true, message: FORGOT_PASSWORD_MESSAGE })
   }
 }
 

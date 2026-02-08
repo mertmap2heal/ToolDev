@@ -165,4 +165,11 @@ export const authService = {
   async changeMyPassword(newPassword: string): Promise<ApiResponse<{ message: string }>> {
     return apiClient.patch<{ message: string }>('/auth/me/password', { newPassword })
   },
+
+  /** Request password reset: sends temporary password to user's email if account exists. */
+  async requestPasswordReset(loginIdentifier: string): Promise<ApiResponse<{ message: string }>> {
+    return apiClient.post<{ message: string }>('/auth/forgot-password', {
+      email: loginIdentifier.trim(),
+    })
+  },
 }

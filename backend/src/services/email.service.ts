@@ -70,3 +70,54 @@ This is an automated message; please do not reply.
     html,
   })
 }
+
+export interface SendForgotPasswordEmailParams {
+  to: string
+  userName: string
+  tempPassword: string
+}
+
+export async function sendForgotPasswordEmail({
+  to,
+  userName,
+  tempPassword,
+}: SendForgotPasswordEmailParams): Promise<void> {
+  const text = `
+You requested a password reset for the Engineering Tool.
+
+Log in with this temporary password, then set a new password:
+- URL: ${APP_URL}
+- Username (login): ${userName}
+- Temporary password: ${tempPassword}
+
+Please log in and change your password after first login.
+
+This is an automated message; please do not reply.
+`.trim()
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Password reset</title></head>
+<body style="font-family: sans-serif; line-height: 1.5; color: #333;">
+  <p>You requested a password reset for the Engineering Tool.</p>
+  <p>Log in with this temporary password, then set a new password:</p>
+  <ul>
+    <li><strong>URL:</strong> <a href="${APP_URL}">${APP_URL}</a></li>
+    <li><strong>Username (login):</strong> ${userName}</li>
+    <li><strong>Temporary password:</strong> <code style="background:#f0f0f0;padding:2px 6px;">${tempPassword}</code></li>
+  </ul>
+  <p>Please log in and change your password after first login.</p>
+  <p style="color:#666;font-size:0.9em;">This is an automated message; please do not reply.</p>
+</body>
+</html>
+`.trim()
+
+  await transporter.sendMail({
+    from: FROM_NAME.includes('@') ? FROM_NAME : `"${FROM_NAME}" <${user || 'noreply@localhost'}>`,
+    to,
+    subject: 'Password reset - Engineering Tool',
+    text,
+    html,
+  })
+}

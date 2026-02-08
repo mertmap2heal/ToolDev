@@ -2,6 +2,7 @@ import { Router } from 'express'
 import {
   register,
   login,
+  forgotPassword,
   getCurrentUser,
   changeMyPassword,
   getUsers,
@@ -15,6 +16,7 @@ const router = Router()
 
 router.post('/register', register)
 router.post('/login', login)
+router.post('/forgot-password', forgotPassword)
 router.get('/me', authenticateToken, getCurrentUser)
 router.patch('/me/password', authenticateToken, changeMyPassword)
 router.get('/users', authenticateToken, getUsers)

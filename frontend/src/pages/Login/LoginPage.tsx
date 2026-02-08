@@ -16,6 +16,10 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<{ username?: string; password?: string }>({})
   const [isLoading, setIsLoading] = useState(false)
+  const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false)
+  const [forgotPasswordLogin, setForgotPasswordLogin] = useState('')
+  const [forgotPasswordSubmitting, setForgotPasswordSubmitting] = useState(false)
+  const [forgotPasswordSuccessMessage, setForgotPasswordSuccessMessage] = useState<string | null>(null)
   const navigate = useNavigate()
   const { setUser } = useAuthStore()
   const errorRef = useRef<HTMLDivElement>(null)
@@ -93,10 +97,40 @@ export default function LoginPage() {
     }
   }
 
-  const handleForgotPassword = (e: React.MouseEvent) => {
+  const handleForgotPasswordClick = (e: React.MouseEvent) => {
     e.preventDefault()
-    setError('Please contact your administrator to reset your password.')
-    errorRef.current?.focus()
+    setForgotPasswordSuccessMessage(null)
+    setForgotPasswordLogin(username.trim())
+    setShowForgotPasswordModal(true)
+  }
+
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const value = forgotPasswordLogin.trim()
+    if (!value) return
+    setForgotPasswordSubmitting(true)
+    try {
+      const res = await authService.requestPasswordReset(value)
+      if (res.success && res.data?.message) {
+        setForgotPasswordSuccessMessage(res.data.message)
+      } else {
+        setForgotPasswordSuccessMessage(
+          'If an account exists for that login, you will receive an email with a temporary password. Use it to log in, then set a new password.'
+        )
+      }
+    } catch {
+      setForgotPasswordSuccessMessage(
+        'If an account exists for that login, you will receive an email with a temporary password. Use it to log in, then set a new password.'
+      )
+    } finally {
+      setForgotPasswordSubmitting(false)
+    }
+  }
+
+  const closeForgotPasswordModal = () => {
+    setShowForgotPasswordModal(false)
+    setForgotPasswordLogin('')
+    setForgotPasswordSuccessMessage(null)
   }
 
   if (token) {
@@ -202,7 +236,7 @@ export default function LoginPage() {
                 </label>
                 <button
                   type="button"
-                  onClick={handleForgotPassword}
+                  onClick={handleForgotPasswordClick}
                   className="text-sm text-blue-600 dark:text-blue-400 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
                 >
                   Forgot password?
@@ -249,6 +283,79 @@ export default function LoginPage() {
           </form>
         </div>
       </div>
+
+      {showForgotPasswordModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl w-full max-w-md p-8">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Reset password
+            </h2>
+            {forgotPasswordSuccessMessage ? (
+              <>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                  {forgotPasswordSuccessMessage}
+                </p>
+                <button
+                  type="button"
+                  onClick={closeForgotPasswordModal}
+                  className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Back to login
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                  Enter the username or email you use to log in. We&apos;ll send you a temporary
+                  password.
+                </p>
+                <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
+                  <div>
+                    <label
+                      htmlFor="forgot-password-login"
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                    >
+                      Username or email
+                    </label>
+                    <input
+                      id="forgot-password-login"
+                      type="text"
+                      value={forgotPasswordLogin}
+                      onChange={(e) => setForgotPasswordLogin(e.target.value)}
+                      autoComplete="username"
+                      className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter your login"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={closeForgotPasswordModal}
+                      className="flex-1 py-2.5 px-4 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium rounded-lg transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Back to login
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={forgotPasswordSubmitting || !forgotPasswordLogin.trim()}
+                      className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center justify-center gap-2"
+                    >
+                      {forgotPasswordSubmitting ? (
+                        <>
+                          <Loader2 size={18} className="animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        'Send temporary password'
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
