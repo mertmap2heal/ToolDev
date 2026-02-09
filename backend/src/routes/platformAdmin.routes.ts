@@ -11,19 +11,74 @@ router.use((req, res, next) => {
   requireSuperiorAdmin(req as AuthRequest, res, next).catch(next)
 })
 
-/** GET /platform-admin/companies - distinct company names from projects */
+const UNNAMED_KEY = '__null__'
+
+function toCompanyKey(value: string | null): string {
+  if (value == null || value === '') return UNNAMED_KEY
+  return value
+}
+
+function fromCompanyKey(key: string): string | null {
+  if (key === UNNAMED_KEY) return null
+  return key
+}
+
+/** GET /platform-admin/companies - companies (including unnamed) with users and project count */
 router.get('/companies', async (_req: AuthRequest, res: Response) => {
   try {
-    const projects = await prisma.project.findMany({
-      where: { companyName: { not: null } },
-      select: { companyName: true },
-      distinct: ['companyName'],
+    const [userRows, projectRows] = await Promise.all([
+      prisma.user.findMany({ select: { company: true } }),
+      prisma.project.findMany({ select: { companyName: true } }),
+    ])
+    const companyKeys = new Set<string>()
+    for (const r of userRows) {
+      companyKeys.add(toCompanyKey(r.company))
+    }
+    for (const r of projectRows) {
+      companyKeys.add(toCompanyKey(r.companyName))
+    }
+
+    const keys = Array.from(companyKeys).sort((a, b) => {
+      if (a === UNNAMED_KEY) return -1
+      if (b === UNNAMED_KEY) return 1
+      return a.localeCompare(b)
     })
-    const companies = projects
-      .map((p) => p.companyName)
-      .filter((n): n is string => n != null && n !== '')
-      .sort((a, b) => a.localeCompare(b))
-    res.json({ success: true, data: companies })
+
+    const data: { key: string | null; displayName: string; users: { id: string; email: string; name: string }[]; projectCount: number }[] = []
+
+    for (const key of keys) {
+      const rawKey = fromCompanyKey(key)
+      const displayName = rawKey == null ? '(No name)' : rawKey
+
+      const [users, projectCount] = await Promise.all([
+        prisma.user.findMany({
+          where: {
+            ...(rawKey == null
+              ? { OR: [{ company: null }, { company: '' }] }
+              : { company: rawKey }),
+            OR: [
+              { role: null },
+              { role: { not: 'SUPERIOR_ADMIN' } },
+            ],
+          },
+          select: { id: true, email: true, name: true },
+        }),
+        prisma.project.count({
+          where: rawKey == null
+            ? { OR: [{ companyName: null }, { companyName: '' }] }
+            : { companyName: rawKey },
+        }),
+      ])
+
+      data.push({
+        key: rawKey,
+        displayName,
+        users: users.map((u) => ({ id: u.id, email: u.email, name: u.name })),
+        projectCount,
+      })
+    }
+
+    res.json({ success: true, data })
   } catch (error) {
     console.error('Platform admin companies error:', error)
     res.status(500).json({ success: false, error: 'Internal server error' })
