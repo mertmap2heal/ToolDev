@@ -38,6 +38,36 @@ function randomTempPassword(length = 14): string {
   return s
 }
 
+const COMPANY_KEY_NULL = '__null__'
+function toCompanyKey(value: string | null | undefined): string {
+  if (value == null || value === '') return COMPANY_KEY_NULL
+  return String(value)
+}
+
+/** Check company user limit; returns error message or null if allowed */
+async function checkCompanyUserLimit(company: string | null | undefined): Promise<string | null> {
+  const companyKey = toCompanyKey(company)
+  const limitRow = await prisma.companyLimit.findUnique({
+    where: { companyKey },
+    select: { maxUsers: true },
+  })
+  const maxUsers = limitRow?.maxUsers
+  if (maxUsers == null) return null
+  const rawKey = companyKey === COMPANY_KEY_NULL ? null : companyKey
+  const currentCount = await prisma.user.count({
+    where: {
+      ...(rawKey == null
+        ? { OR: [{ company: null }, { company: '' }] }
+        : { company: rawKey }),
+      OR: [{ role: null }, { role: { not: 'SUPERIOR_ADMIN' } }],
+    },
+  })
+  if (currentCount >= maxUsers) {
+    return `Company user limit reached (max ${maxUsers} users).`
+  }
+  return null
+}
+
 export const register = async (req: Request, res: Response) => {
   try {
     const { email, password, name, company } = req.body
@@ -47,6 +77,11 @@ export const register = async (req: Request, res: Response) => {
         success: false,
         error: 'Email, password, and name are required',
       })
+    }
+
+    const limitError = await checkCompanyUserLimit(company)
+    if (limitError) {
+      return res.status(403).json({ success: false, error: limitError })
     }
 
     const existingUser = await prisma.user.findUnique({
