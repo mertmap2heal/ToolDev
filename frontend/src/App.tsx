@@ -64,6 +64,12 @@ import InventoryReportsPage from './pages/Inventory/Reports/ReportsPage'
 import InventoryDashboardPage from './pages/Inventory/Dashboard/DashboardPage'
 import AdminRouteGuard from './components/admin/AdminRouteGuard'
 import AdminPage from './pages/Admin/AdminPage'
+import PlatformAdminRouteGuard from './components/platform-admin/PlatformAdminRouteGuard'
+import PlatformAdminLayout from './components/platform-admin/PlatformAdminLayout'
+import PlatformAdminPage from './pages/PlatformAdmin/PlatformAdminPage'
+import CompaniesPage from './pages/PlatformAdmin/CompaniesPage'
+import CompanyLimitsPage from './pages/PlatformAdmin/CompanyLimitsPage'
+import AuditLogsPage from './pages/PlatformAdmin/AuditLogsPage'
 
 function App() {
   return (
@@ -75,6 +81,15 @@ function App() {
         <Route path="projects/:projectId/mbse-models" element={<MBSEModelsPage />} />
         {/* Protected routes - require authentication */}
         <Route path="/" element={<ProtectedRoute />}>
+          {/* Platform Admin - dedicated layout, no MainLayout sidebar */}
+          <Route path="platform-admin" element={<PlatformAdminRouteGuard />}>
+            <Route element={<PlatformAdminLayout />}>
+              <Route index element={<PlatformAdminPage />} />
+              <Route path="companies" element={<CompaniesPage />} />
+              <Route path="limits" element={<CompanyLimitsPage />} />
+              <Route path="audit-logs" element={<AuditLogsPage />} />
+            </Route>
+          </Route>
           <Route element={<MainLayout />}>
             <Route index element={<DashboardPage />} />
             <Route path="projects" element={<Navigate to="/" replace />} />

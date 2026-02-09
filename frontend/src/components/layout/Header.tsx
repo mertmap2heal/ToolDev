@@ -195,6 +195,21 @@ export default function Header() {
             </button>
             {dropdownOpen && (
               <div className="absolute right-0 mt-2 w-48 py-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+                {(user?.role === 'SUPERIOR_ADMIN' || user?.isSuperiorAdmin) && (
+                  <>
+                    <button
+                      onClick={() => {
+                        navigate('/platform-admin')
+                        setDropdownOpen(false)
+                      }}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-left"
+                    >
+                      <Shield size={16} />
+                      Platform Admin
+                    </button>
+                    <hr className="border-gray-200 dark:border-gray-700 my-1" />
+                  </>
+                )}
                 {user?.isAdmin && (
                   <>
                     <button

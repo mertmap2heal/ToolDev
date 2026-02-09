@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest'
 import { statusTransitionService } from '../../services/verification/statusTransition.service'
 import { TestCaseStatus, TestPlanStatus, EntityStatus } from '../../types/verification.types'
 

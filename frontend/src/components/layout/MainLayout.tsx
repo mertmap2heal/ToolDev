@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Outlet, useNavigate } from 'react-router-dom'
+import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
 import AIGuideChat from '../ai-guide/AIGuideChat'
@@ -7,11 +7,21 @@ import ForceChangePasswordModal from '../auth/ForceChangePasswordModal'
 import { useAIGuideStore } from '../../store/aiGuideStore'
 import { authService } from '../../services/auth.service'
 import { useAuthStore } from '../../store/authStore'
+import { usePlatformAdminStore } from '../../store/platformAdminStore'
 
 export default function MainLayout() {
   const { isOpen } = useAIGuideStore()
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, setUser } = useAuthStore()
+  const { activeCompanyName } = usePlatformAdminStore()
+
+  const isSuperiorAdmin = user?.role === 'SUPERIOR_ADMIN' || user?.isSuperiorAdmin === true
+  useEffect(() => {
+    if (user && isSuperiorAdmin && !activeCompanyName) {
+      navigate('/platform-admin', { replace: true })
+    }
+  }, [user, isSuperiorAdmin, activeCompanyName, navigate])
 
   const handleForceChangePasswordSuccess = () => {
     authService.getCurrentUser().then((res) => {

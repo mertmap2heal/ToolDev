@@ -78,7 +78,11 @@ export default function LoginPage() {
 
       if (response.success && response.data) {
         setUser(response.data.user)
-        navigate('/', { replace: true })
+        if (response.data.user.role === 'SUPERIOR_ADMIN' || response.data.user.isSuperiorAdmin) {
+          navigate('/platform-admin', { replace: true })
+        } else {
+          navigate('/', { replace: true })
+        }
       } else {
         const res = response as { error?: string; statusCode?: number }
         const message = getUserFriendlyError(res.error, res.statusCode)

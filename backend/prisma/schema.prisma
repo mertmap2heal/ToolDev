@@ -15,6 +15,7 @@ model User {
   company                      String?
   avatarUrl                    String?
   password                     String
+  role                         String?   // e.g. SUPERIOR_ADMIN; null = normal user
   lastLoginAt                  DateTime?
   mustChangePasswordOnFirstLogin Boolean @default(false)
   createdAt                    DateTime  @default(now())

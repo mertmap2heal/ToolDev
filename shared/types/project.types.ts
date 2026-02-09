@@ -9,6 +9,10 @@ export interface User {
   lastLoginAt?: string
   /** True if user can access Admin Panel. Set by backend (e.g. env ADMIN_EMAILS or DB). */
   isAdmin?: boolean
+  /** Platform-level role, e.g. SUPERIOR_ADMIN. Null/undefined = normal user. */
+  role?: string | null
+  /** True when user has role SUPERIOR_ADMIN (platform owner). */
+  isSuperiorAdmin?: boolean
   /** True when user must change password (e.g. after first login with temp invite password). */
   mustChangePassword?: boolean
 }

@@ -1,5 +1,8 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
 
 export interface AuthRequest extends Request {
   userId?: string
@@ -32,4 +35,24 @@ export const authenticateToken = (
     }
     next()
   })
+}
+
+/** Requires authenticated user with role SUPERIOR_ADMIN. Use after authenticateToken. */
+export const requireSuperiorAdmin = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  const userId = req.userId
+  if (!userId) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' })
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true },
+  })
+  if (!user || user.role !== 'SUPERIOR_ADMIN') {
+    return res.status(403).json({ success: false, error: 'Platform admin access required' })
+  }
+  next()
 }

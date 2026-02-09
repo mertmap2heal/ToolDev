@@ -8,6 +8,14 @@ const USERS = [
   { email: 'christian.mandle', name: 'Christian Mandle', password: 'mandle1998' },
 ]
 
+/** Superior Admin (Platform Owner) - same login, redirects to /platform-admin */
+const SUPERIOR_ADMIN = {
+  email: 'admin',
+  name: 'Platform Admin',
+  password: 'password',
+  role: 'SUPERIOR_ADMIN' as const,
+}
+
 /**
  * Seed default users for development/login
  * Run with: npm run seed:users
@@ -27,6 +35,19 @@ async function seedUsers() {
       })
       console.log(`User seeded: ${user.email} (${user.name})`)
     }
+
+    const adminHash = await bcrypt.hash(SUPERIOR_ADMIN.password, 10)
+    const adminUser = await prisma.user.upsert({
+      where: { email: SUPERIOR_ADMIN.email },
+      update: { password: adminHash, name: SUPERIOR_ADMIN.name, role: SUPERIOR_ADMIN.role },
+      create: {
+        email: SUPERIOR_ADMIN.email,
+        name: SUPERIOR_ADMIN.name,
+        password: adminHash,
+        role: SUPERIOR_ADMIN.role,
+      },
+    })
+    console.log(`Superior Admin seeded: ${adminUser.email} (${adminUser.name})`)
   } catch (error) {
     console.error('Error seeding users:', error)
     throw error

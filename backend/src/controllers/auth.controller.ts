@@ -76,16 +76,19 @@ export const register = async (req: Request, res: Response) => {
         company: true,
         avatarUrl: true,
         createdAt: true,
+        role: true,
       },
     })
 
     const token = generateToken(user.id)
     const isAdmin = await resolveIsAdmin(user.email)
+    const role = user.role ?? null
+    const isSuperiorAdmin = role === 'SUPERIOR_ADMIN'
 
     res.status(201).json({
       success: true,
       data: {
-        user: { ...user, isAdmin },
+        user: { ...user, isAdmin, role, isSuperiorAdmin },
         token,
       },
     })
@@ -136,6 +139,8 @@ export const login = async (req: Request, res: Response) => {
 
     const token = generateToken(user.id)
     const isAdmin = await resolveIsAdmin(user.email)
+    const role = (user as { role?: string | null }).role ?? null
+    const isSuperiorAdmin = role === 'SUPERIOR_ADMIN'
 
     const mustChange = (user as { mustChangePasswordOnFirstLogin?: boolean }).mustChangePasswordOnFirstLogin ?? false
     res.json({
@@ -149,6 +154,8 @@ export const login = async (req: Request, res: Response) => {
           avatarUrl: user.avatarUrl,
           createdAt: user.createdAt,
           isAdmin,
+          role,
+          isSuperiorAdmin,
           mustChangePassword: mustChange,
         },
         token,
@@ -233,6 +240,7 @@ export const getCurrentUser = async (req: Request, res: Response) => {
         avatarUrl: true,
         createdAt: true,
         mustChangePasswordOnFirstLogin: true,
+        role: true,
       },
     })
 
@@ -250,10 +258,11 @@ export const getCurrentUser = async (req: Request, res: Response) => {
 
     const isAdmin = await resolveIsAdmin(user.email)
     const mustChange = user.mustChangePasswordOnFirstLogin ?? false
+    const isSuperiorAdmin = user.role === 'SUPERIOR_ADMIN'
     const { mustChangePasswordOnFirstLogin: _omit, ...rest } = user
     res.json({
       success: true,
-      data: { ...rest, isAdmin, mustChangePassword: mustChange },
+      data: { ...rest, isAdmin, isSuperiorAdmin, mustChangePassword: mustChange },
     })
   } catch (error) {
     const err = error as Error
