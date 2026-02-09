@@ -178,7 +178,8 @@ export default function ExportBuilder({ requirements, projectName, projectId, on
       
       // Use fetch directly for blob response
       const token = localStorage.getItem('token')
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}${url}`, {
+      const apiBase = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api/v1' : 'http://localhost:5000/api/v1')
+      const response = await fetch(`${apiBase}${url}`, {
         headers: {
           Authorization: token ? `Bearer ${token}` : '',
         },

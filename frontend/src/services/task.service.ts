@@ -298,7 +298,8 @@ export const taskService = {
     filters?: any
     columns?: string[]
   }): Promise<Blob> {
-    const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'}/csv/export`, {
+    const apiBase = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api/v1' : 'http://localhost:5000/api/v1')
+    const response = await fetch(`${apiBase}/csv/export`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

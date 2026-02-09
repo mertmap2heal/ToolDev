@@ -1,7 +1,8 @@
 import axios, { AxiosInstance, AxiosError } from 'axios'
 import type { ApiResponse } from '../../../shared/types/api.types'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1'
+// In dev, use relative URL so Vite proxy forwards /api to backend (avoids CORS and localhost vs 127.0.0.1 issues)
+const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api/v1' : 'http://localhost:5000/api/v1')
 
 class ApiClient {
   private client: AxiosInstance

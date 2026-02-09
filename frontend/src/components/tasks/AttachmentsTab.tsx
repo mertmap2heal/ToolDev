@@ -110,7 +110,7 @@ export default function AttachmentsTab({ taskId }: AttachmentsTabProps) {
               </div>
               <div className="flex items-center gap-2">
                 <a
-                  href={attachment.fileUrl.startsWith('data:') ? attachment.fileUrl : `http://localhost:5000${attachment.fileUrl}`}
+                  href={attachment.fileUrl.startsWith('data:') ? attachment.fileUrl : (import.meta.env.DEV ? attachment.fileUrl : `http://localhost:5000${attachment.fileUrl}`)}
                   download={attachment.fileName}
                   className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                   title="Download"

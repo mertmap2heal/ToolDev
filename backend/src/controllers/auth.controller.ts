@@ -258,9 +258,12 @@ export const getCurrentUser = async (req: Request, res: Response) => {
   } catch (error) {
     const err = error as Error
     console.error('Get current user error:', err)
+    const message = err.message?.includes('reach database server') || err.message?.includes('localhost:5432')
+      ? 'Database unavailable. Start PostgreSQL (e.g. docker-compose up -d).'
+      : (process.env.NODE_ENV === 'development' ? err.message : 'Internal server error')
     res.status(500).json({
       success: false,
-      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
+      error: message,
     })
   }
 }
