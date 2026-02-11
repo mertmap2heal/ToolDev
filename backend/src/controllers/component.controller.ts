@@ -468,13 +468,19 @@ async function checkIsDescendant(componentId: string, targetId: string): Promise
 }
 
 /**
- * Helper function to reassign component children from one component to another.
- * (Artifact tables can be added here when componentId is added to requirements, functions, etc.)
+ * Helper function to reassign component artifacts from one component to another.
+ * Moves child components and any associated requirements.
  */
 async function reassignArtifacts(fromComponentId: string, toComponentId: string): Promise<void> {
   await prisma.component.updateMany({
     where: { parentId: fromComponentId },
     data: { parentId: toComponentId },
+  })
+
+  // Reassign requirements from the deleted component to the target component
+  await prisma.requirement.updateMany({
+    where: { componentId: fromComponentId },
+    data: { componentId: toComponentId },
   })
 }
 
@@ -508,4 +514,100 @@ export const ensureRootComponent = async (projectId: string): Promise<string> =>
   }
 
   return rootComponent.id
+}
+
+/**
+ * Sync PBS nodes from localStorage into the component table.
+ * Accepts an array of PBS nodes and upserts them as components,
+ * preserving the hierarchy via parentId.
+ */
+export const syncPBSToComponents = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+    const { nodes } = req.body // PBSNode[] from localStorage
+
+    if (!Array.isArray(nodes)) {
+      return res.status(400).json({
+        success: false,
+        error: 'nodes array is required',
+      })
+    }
+
+    // Verify project exists
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+    })
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+      })
+    }
+
+    // Get existing components for this project
+    const existingComponents = await prisma.component.findMany({
+      where: { projectId },
+    })
+    const existingIds = new Set(existingComponents.map((c) => c.id))
+
+    // Process nodes: create or update each one
+    for (const node of nodes) {
+      const data = {
+        projectId,
+        parentId: node.parentId || null,
+        name: node.name || 'Unnamed',
+        description: node.description || null,
+        sortOrder: node.orderIndex ?? 0,
+      }
+
+      if (existingIds.has(node.id)) {
+        // Update existing component
+        await prisma.component.update({
+          where: { id: node.id },
+          data: {
+            name: data.name,
+            description: data.description,
+            parentId: data.parentId,
+            sortOrder: data.sortOrder,
+          },
+        })
+      } else {
+        // Create new component with the same ID as the PBS node
+        await prisma.component.create({
+          data: {
+            id: node.id,
+            ...data,
+          },
+        })
+      }
+    }
+
+    // Return the updated tree
+    const components = await prisma.component.findMany({
+      where: { projectId },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    })
+
+    const buildTree = (parentId: string | null): any[] => {
+      return components
+        .filter((c) => c.parentId === parentId)
+        .map((c) => ({
+          ...c,
+          isRoot: c.parentId === null,
+          children: buildTree(c.id),
+        }))
+    }
+
+    res.json({
+      success: true,
+      data: buildTree(null),
+    })
+  } catch (error) {
+    console.error('Sync PBS to components error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    })
+  }
 }

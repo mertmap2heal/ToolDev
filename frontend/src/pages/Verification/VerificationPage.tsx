@@ -31,7 +31,7 @@ const formatTestResultsSummary = (statusSummary: Record<string, number> | undefi
   if (!statusSummary || Object.keys(statusSummary).length === 0) {
     return ''
   }
-  
+
   const statusLabels: Record<string, string> = {
     PASS: 'Pass',
     FAIL: 'Fail',
@@ -39,16 +39,16 @@ const formatTestResultsSummary = (statusSummary: Record<string, number> | undefi
     SKIPPED: 'Skipped',
     NOT_RUN: 'Not Run',
   }
-  
+
   const total = Object.values(statusSummary).reduce((sum, count) => sum + count, 0)
   if (total === 0) return ''
-  
+
   const nonZeroStatuses = Object.entries(statusSummary)
     .filter(([_, count]) => count > 0)
     .map(([status, count]) => `${count} ${statusLabels[status] || status}`)
-  
+
   if (nonZeroStatuses.length === 0) return ''
-  
+
   return `${total} result${total !== 1 ? 's' : ''} (${nonZeroStatuses.join(', ')})`
 }
 
@@ -151,13 +151,13 @@ export default function VerificationPage() {
     : 'overview') as 'overview' | 'plans' | 'cases' | 'setups' | 'results'
   const useTemplateId = searchParams.get('useTemplateId')
   const [searchQuery, setSearchQuery] = useState('')
-  
+
   // Modal states
   const [isCreatePlanOpen, setIsCreatePlanOpen] = useState(false)
   const [isCreateCaseOpen, setIsCreateCaseOpen] = useState(false)
   const [isCreateSetupOpen, setIsCreateSetupOpen] = useState(false)
   const [isCreateResultOpen, setIsCreateResultOpen] = useState(false)
-  
+
   const drawer = useVerificationDrawer()
 
   // Open create modal when navigating from Templates "Use" (useTemplateId in URL)
@@ -200,16 +200,16 @@ export default function VerificationPage() {
   }>({ isOpen: false })
 
   // Column visibility state
-  const [planColumns, setPlanColumns] = useState<Set<ColumnKey>>(() => 
+  const [planColumns, setPlanColumns] = useState<Set<ColumnKey>>(() =>
     loadColumnPreferences('test-plans', TEST_PLAN_COLUMNS)
   )
-  const [caseColumns, setCaseColumns] = useState<Set<ColumnKey>>(() => 
+  const [caseColumns, setCaseColumns] = useState<Set<ColumnKey>>(() =>
     loadColumnPreferences('test-cases', TEST_CASE_COLUMNS)
   )
-  const [setupColumns, setSetupColumns] = useState<Set<ColumnKey>>(() => 
+  const [setupColumns, setSetupColumns] = useState<Set<ColumnKey>>(() =>
     loadColumnPreferences('test-setups', TEST_SETUP_COLUMNS)
   )
-  const [resultColumns, setResultColumns] = useState<Set<ColumnKey>>(() => 
+  const [resultColumns, setResultColumns] = useState<Set<ColumnKey>>(() =>
     loadColumnPreferences('test-results', TEST_RESULT_COLUMNS)
   )
 
@@ -255,7 +255,7 @@ export default function VerificationPage() {
 
     const currentSet = columnSets[entityType]
     const newSet = new Set(currentSet)
-    
+
     if (newSet.has(columnKey)) {
       newSet.delete(columnKey)
     } else {
@@ -555,7 +555,7 @@ export default function VerificationPage() {
               </div>
 
               {/* Nonconformities */}
-              {overview.nonconformities && overview.nonconformities.total > 0 && (
+              {overview.nonconformities && (overview.nonconformities.total ?? 0) > 0 && (
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -1352,11 +1352,11 @@ export default function VerificationPage() {
                         <td className="px-4 py-3">
                           <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(result.resultStatus || 'NOT_RUN')}`}>
                             {result.resultStatus === 'NOT_RUN' ? 'Not Run' :
-                             result.resultStatus === 'PASS' ? 'Pass' :
-                             result.resultStatus === 'FAIL' ? 'Fail' :
-                             result.resultStatus === 'BLOCKED' ? 'Blocked' :
-                             result.resultStatus === 'SKIPPED' ? 'Skipped' :
-                             result.resultStatus || 'Not Run'}
+                              result.resultStatus === 'PASS' ? 'Pass' :
+                                result.resultStatus === 'FAIL' ? 'Fail' :
+                                  result.resultStatus === 'BLOCKED' ? 'Blocked' :
+                                    result.resultStatus === 'SKIPPED' ? 'Skipped' :
+                                      result.resultStatus || 'Not Run'}
                           </span>
                         </td>
                       )}
@@ -1442,111 +1442,111 @@ export default function VerificationPage() {
         </div>
       )}
 
-        {/* Modals */}
-        {projectId && (
-          <>
-            <CreateTestPlanModal
-              isOpen={isCreatePlanOpen}
-              onClose={() => setIsCreatePlanOpen(false)}
-              projectId={projectId}
-            />
-            <CreateTestCaseModal
-              isOpen={isCreateCaseOpen}
-              onClose={() => setIsCreateCaseOpen(false)}
-              projectId={projectId}
-            />
-            <CreateTestSetupModal
-              isOpen={isCreateSetupOpen}
-              onClose={() => setIsCreateSetupOpen(false)}
-              projectId={projectId}
-            />
-            <CreateTestResultModal
-              isOpen={isCreateResultOpen}
-              onClose={() => setIsCreateResultOpen(false)}
-              projectId={projectId}
-            />
-          </>
-        )}
+      {/* Modals */}
+      {projectId && (
+        <>
+          <CreateTestPlanModal
+            isOpen={isCreatePlanOpen}
+            onClose={() => setIsCreatePlanOpen(false)}
+            projectId={projectId}
+          />
+          <CreateTestCaseModal
+            isOpen={isCreateCaseOpen}
+            onClose={() => setIsCreateCaseOpen(false)}
+            projectId={projectId}
+          />
+          <CreateTestSetupModal
+            isOpen={isCreateSetupOpen}
+            onClose={() => setIsCreateSetupOpen(false)}
+            projectId={projectId}
+          />
+          <CreateTestResultModal
+            isOpen={isCreateResultOpen}
+            onClose={() => setIsCreateResultOpen(false)}
+            projectId={projectId}
+          />
+        </>
+      )}
 
-        {/* Export Modals */}
-        {projectId && (
-          <>
-            <ListExporter
-              isOpen={showTestCasesExport}
-              onClose={() => setShowTestCasesExport(false)}
-              exportType="test-cases"
-              items={testCases}
-              projectId={projectId}
-            />
-            <ListExporter
-              isOpen={showTestPlansExport}
-              onClose={() => setShowTestPlansExport(false)}
-              exportType="test-plans"
-              items={testPlans}
-              projectId={projectId}
-            />
-          </>
-        )}
+      {/* Export Modals */}
+      {projectId && (
+        <>
+          <ListExporter
+            isOpen={showTestCasesExport}
+            onClose={() => setShowTestCasesExport(false)}
+            exportType="test-cases"
+            items={testCases}
+            projectId={projectId}
+          />
+          <ListExporter
+            isOpen={showTestPlansExport}
+            onClose={() => setShowTestPlansExport(false)}
+            exportType="test-plans"
+            items={testPlans}
+            projectId={projectId}
+          />
+        </>
+      )}
 
-        {/* Delete Confirmation Modal */}
-        {deleteConfirmation && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Confirm Delete</h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Are you sure you want to delete <strong>{deleteConfirmation.name}</strong>? This action cannot be undone.
-              </p>
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setDeleteConfirmation(null)}
-                  className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDelete}
-                  disabled={
-                    (deleteConfirmation.type === 'test-plan' && deleteTestPlanMutation.isPending) ||
-                    (deleteConfirmation.type === 'test-case' && deleteTestCaseMutation.isPending) ||
-                    (deleteConfirmation.type === 'test-setup' && deleteSetupMutation.isPending) ||
-                    (deleteConfirmation.type === 'test-result' && deleteTestResultMutation.isPending)
-                  }
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Delete
-                </button>
-              </div>
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Confirm Delete</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              Are you sure you want to delete <strong>{deleteConfirmation.name}</strong>? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteConfirmation(null)}
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={
+                  (deleteConfirmation.type === 'test-plan' && deleteTestPlanMutation.isPending) ||
+                  (deleteConfirmation.type === 'test-case' && deleteTestCaseMutation.isPending) ||
+                  (deleteConfirmation.type === 'test-setup' && deleteSetupMutation.isPending) ||
+                  (deleteConfirmation.type === 'test-result' && deleteTestResultMutation.isPending)
+                }
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Delete
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Change Request Modal */}
-        {projectId && (
-          <CreateChangeRequestModal
-            isOpen={changeRequestModal.isOpen}
-            onClose={() => setChangeRequestModal({ isOpen: false })}
+      {/* Change Request Modal */}
+      {projectId && (
+        <CreateChangeRequestModal
+          isOpen={changeRequestModal.isOpen}
+          onClose={() => setChangeRequestModal({ isOpen: false })}
+          projectId={projectId}
+          sourceType={changeRequestModal.sourceType}
+          sourceId={changeRequestModal.sourceId}
+          sourceName={changeRequestModal.sourceName}
+        />
+      )}
+
+      {/* Export with template modal (list view) */}
+      {projectId &&
+        exportTemplateModal.isOpen &&
+        exportTemplateModal.entityType &&
+        exportTemplateModal.entityId &&
+        exportTemplateModal.entityName && (
+          <ExportWithTemplateModal
+            isOpen={true}
+            onClose={() => setExportTemplateModal({ isOpen: false })}
             projectId={projectId}
-            sourceType={changeRequestModal.sourceType}
-            sourceId={changeRequestModal.sourceId}
-            sourceName={changeRequestModal.sourceName}
+            entityType={exportTemplateModal.entityType}
+            entityId={exportTemplateModal.entityId}
+            entityName={exportTemplateModal.entityName}
           />
         )}
-
-        {/* Export with template modal (list view) */}
-        {projectId &&
-          exportTemplateModal.isOpen &&
-          exportTemplateModal.entityType &&
-          exportTemplateModal.entityId &&
-          exportTemplateModal.entityName && (
-            <ExportWithTemplateModal
-              isOpen={true}
-              onClose={() => setExportTemplateModal({ isOpen: false })}
-              projectId={projectId}
-              entityType={exportTemplateModal.entityType}
-              entityId={exportTemplateModal.entityId}
-              entityName={exportTemplateModal.entityName}
-            />
-          )}
     </div>
   )
 }

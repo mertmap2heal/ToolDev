@@ -45,7 +45,7 @@ async function generateRequirementId(
 ): Promise<string> {
   // Determine prefix based on requirementType (classification)
   let prefix = 'REQ'
-  
+
   if (requirementType) {
     if (REQUIREMENT_TYPE_PREFIXES[requirementType]) {
       // Use predefined prefix for known types
@@ -60,7 +60,7 @@ async function generateRequirementId(
       prefix = `REQ-${customPrefix}`
     }
   }
-  
+
   // Find the highest number for this prefix
   // Fetch all requirements and filter in JavaScript since requirementId is nullable
   const allRequirements = await prisma.requirement.findMany({
@@ -161,18 +161,18 @@ async function updateRequirementIdReferences(
         dependencies: { has: oldRequirementId },
       },
     })
-    
+
     for (const req of requirementsWithDeps) {
       await prisma.requirement.update({
         where: { id: req.id },
         data: {
-          dependencies: req.dependencies.map(dep => 
+          dependencies: req.dependencies.map(dep =>
             dep === oldRequirementId ? newRequirementId : dep
           ),
         },
       })
     }
-    
+
     // Update conflicts arrays
     const requirementsWithConflicts = await prisma.requirement.findMany({
       where: {
@@ -180,18 +180,18 @@ async function updateRequirementIdReferences(
         conflicts: { has: oldRequirementId },
       },
     })
-    
+
     for (const req of requirementsWithConflicts) {
       await prisma.requirement.update({
         where: { id: req.id },
         data: {
-          conflicts: req.conflicts.map(conf => 
+          conflicts: req.conflicts.map(conf =>
             conf === oldRequirementId ? newRequirementId : conf
           ),
         },
       })
     }
-    
+
     // Update UseCase relatedRequirementIds
     const useCasesWithRefs = await prisma.useCase.findMany({
       where: {
@@ -199,18 +199,18 @@ async function updateRequirementIdReferences(
         relatedRequirementIds: { has: oldRequirementId },
       },
     })
-    
+
     for (const useCase of useCasesWithRefs) {
       await prisma.useCase.update({
         where: { id: useCase.id },
         data: {
-          relatedRequirementIds: useCase.relatedRequirementIds.map(id => 
+          relatedRequirementIds: useCase.relatedRequirementIds.map(id =>
             id === oldRequirementId ? newRequirementId : id
           ),
         },
       })
     }
-    
+
     // Update baseline snapshots (parse JSON, update, re-stringify)
     const baselineItems = await prisma.baselineItem.findMany({
       where: {
@@ -218,7 +218,7 @@ async function updateRequirementIdReferences(
       },
       include: { baseline: true },
     })
-    
+
     for (const item of baselineItems) {
       try {
         const snapshot = JSON.parse(item.snapshot)
@@ -236,7 +236,7 @@ async function updateRequirementIdReferences(
         console.warn(`Invalid snapshot JSON for baseline item ${item.id}:`, e)
       }
     }
-    
+
     console.log(`[Requirement ID Update] Updated references from "${oldRequirementId}" to "${newRequirementId}"`)
   } catch (error) {
     // Log error but don't throw - we don't want to fail the main update if reference updates fail
@@ -265,6 +265,12 @@ export const getRequirements = async (req: AuthRequest, res: Response) => {
             title: true,
             priority: true,
             status: true,
+          },
+        },
+        component: {
+          select: {
+            id: true,
+            name: true,
           },
         },
         comments: {
@@ -452,6 +458,7 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
       linkedMocCode,
       lifecycleId,
       statusId,
+      componentId,
     } = req.body
 
     if (!title) {
@@ -533,6 +540,7 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
         complexity: complexity || null,
         rationale: rationale || null,
         linkedMocCode: linkedMocCode ? parseInt(linkedMocCode, 10) : null,
+        componentId: componentId || null,
       },
       include: {
         parent: {
@@ -561,7 +569,7 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
     })
   } catch (error: any) {
     console.error('Create requirement error:', error)
-    
+
     let errorMessage = 'Internal server error'
     if (error?.message) {
       errorMessage = error.message
@@ -571,7 +579,7 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
         errorMessage = 'Invalid project or parent requirement ID'
       }
     }
-    
+
     res.status(500).json({
       success: false,
       error: errorMessage,
@@ -612,6 +620,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       linkedMocCode,
       lifecycleId,
       statusId,
+      componentId,
     } = req.body
 
     // Find the requirement
@@ -667,25 +676,25 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
     // Handle cases where requirement was unassigned (null/undefined) and is now being assigned
     const currentType = requirement.requirementType || null
     const newType = requirementType !== undefined ? (requirementType || null) : null
-    const classificationChanged = requirementType !== undefined && 
-                                  newType !== currentType
-    
+    const classificationChanged = requirementType !== undefined &&
+      newType !== currentType
+
     // Determine the effective type for ID generation (use new type if provided, otherwise current)
     const effectiveType = requirementType !== undefined ? requirementType : requirement.requirementType
     const effectiveCategory = category !== undefined ? category : requirement.category
-    
+
     console.log(`[Requirement ID Update] Debug - Current type: "${currentType}", New type: "${newType}", Classification changed: ${classificationChanged}, Current ID: "${requirement.requirementId}", New ID from request: "${newRequirementId}"`)
 
     // Determine the final requirement ID
     let finalRequirementId: string | undefined = undefined
-    
+
     // Check if manual ID override was provided (explicitly set and different from current)
     // If newRequirementId is the same as current, it's just the frontend sending the current value, not an override
-    const hasManualIdOverride = newRequirementId !== undefined && 
-                                 newRequirementId !== null && 
-                                 newRequirementId !== '' &&
-                                 newRequirementId !== requirement.requirementId
-    
+    const hasManualIdOverride = newRequirementId !== undefined &&
+      newRequirementId !== null &&
+      newRequirementId !== '' &&
+      newRequirementId !== requirement.requirementId
+
     // Check if current ID needs to be updated due to format change (for custom types with old 4-letter format)
     let needsFormatUpdate = false
     if (effectiveType && !REQUIREMENT_TYPE_PREFIXES[effectiveType] && requirement.requirementId) {
@@ -704,13 +713,13 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
         }
       }
     }
-    
+
     // If classification changed and no manual ID override provided, generate new ID
     if (classificationChanged && !hasManualIdOverride) {
       // Generate new ID based on the new classification
       finalRequirementId = await generateRequirementId(
-        projectId, 
-        requirementType || undefined, 
+        projectId,
+        requirementType || undefined,
         category !== undefined ? category : requirement.category || undefined
       )
       console.log(`[Requirement ID Update] Classification changed from "${currentType}" to "${newType}". Generated new ID: ${finalRequirementId}`)
@@ -786,6 +795,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       linkedMocCode: linkedMocCode !== undefined ? (linkedMocCode ? parseInt(linkedMocCode, 10) : null) : undefined,
       lifecycleId: lifecycleId !== undefined ? lifecycleId : undefined,
       statusId: statusId !== undefined ? statusId : undefined,
+      componentId: componentId !== undefined ? (componentId || null) : undefined,
     }
 
     // When statusId changes: validate lifecycle gates, set statusChangedAt/statusChangedBy
@@ -822,7 +832,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
     if (finalRequirementId !== undefined) {
       updateData.requirementId = finalRequirementId
       console.log(`[Requirement ID Update] Updating requirement ID from "${requirement.requirementId}" to "${finalRequirementId}"`)
-      
+
       // Update all references to the old requirementId across the system
       if (requirement.requirementId && finalRequirementId !== requirement.requirementId) {
         await updateRequirementIdReferences(
@@ -923,7 +933,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
     })
   } catch (error: any) {
     console.error('Update requirement error:', error)
-    
+
     let errorMessage = 'Internal server error'
     if (error?.message) {
       errorMessage = error.message
@@ -931,7 +941,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
         errorMessage = 'Requirement ID already exists'
       }
     }
-    
+
     res.status(500).json({
       success: false,
       error: errorMessage,
@@ -1623,6 +1633,73 @@ export const deleteCustomRequirementType = async (req: AuthRequest, res: Respons
     res.status(500).json({
       success: false,
       error: error.message || 'Internal server error',
+    })
+  }
+}
+
+/**
+ * Update the component assignment for a requirement (drag-and-drop)
+ */
+export const updateRequirementComponent = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, requirementId } = req.params
+    const { componentId } = req.body
+
+    const requirement = await prisma.requirement.findFirst({
+      where: {
+        projectId,
+        id: requirementId,
+      },
+    })
+
+    if (!requirement) {
+      return res.status(404).json({
+        success: false,
+        error: 'Requirement not found',
+      })
+    }
+
+    // If componentId is provided, verify it exists in the same project
+    if (componentId) {
+      const component = await prisma.component.findFirst({
+        where: {
+          id: componentId,
+          projectId,
+        },
+      })
+
+      if (!component) {
+        return res.status(400).json({
+          success: false,
+          error: 'Component not found in this project',
+        })
+      }
+    }
+
+    const updated = await prisma.requirement.update({
+      where: { id: requirementId },
+      data: {
+        componentId: componentId || null,
+      },
+      include: {
+        component: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    })
+
+    res.json({
+      success: true,
+      data: updated,
+    })
+  } catch (error) {
+    console.error('Update requirement component error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
     })
   }
 }

@@ -43,9 +43,16 @@ export const componentService = {
    * @param reassignTo Optional component ID to reassign children/artifacts to
    */
   async deleteComponent(projectId: string, componentId: string, reassignTo?: string): Promise<ApiResponse<void>> {
-    const url = reassignTo 
+    const url = reassignTo
       ? `/projects/${projectId}/components/${componentId}?reassignTo=${reassignTo}`
       : `/projects/${projectId}/components/${componentId}`
     return apiClient.delete<void>(url)
+  },
+
+  /**
+   * Sync PBS nodes from localStorage to the component table
+   */
+  async syncPBSToComponents(projectId: string, nodes: any[]): Promise<ApiResponse<ComponentTreeNode[]>> {
+    return apiClient.post<ComponentTreeNode[]>(`/projects/${projectId}/components/sync-pbs`, { nodes })
   },
 }

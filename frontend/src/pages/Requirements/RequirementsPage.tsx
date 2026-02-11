@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react'
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square } from 'lucide-react'
+import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
 import CreateRequirementModal from '../../components/requirements/CreateRequirementModal'
@@ -15,6 +15,7 @@ import ImportWizard from '../../components/requirements/ImportWizard'
 import RequirementDiagram from '../../components/requirements/RequirementDiagram'
 import RequirementQualityPanel from '../../components/requirements/RequirementQualityPanel'
 import AllocationTable from '../../components/requirements/AllocationTable'
+import RequirementsPBSTree from '../../components/requirements/RequirementsPBSTree'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import ReviewStatusBadge from '../../components/requirements/ReviewStatusBadge'
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
@@ -76,11 +77,11 @@ export default function RequirementsPage() {
   const [selectedRequirementForChangeRequest, setSelectedRequirementForChangeRequest] = useState<Requirement | null>(null)
   const [suspectLinksForCR, setSuspectLinksForCR] = useState<{ sourceType: string; sourceId: string; targetType: string; targetId: string }[] | null>(null)
   const [changeStatusAnchor, setChangeStatusAnchor] = useState<{ requirement: Requirement; el: HTMLElement } | null>(null)
-  
+
   // Inline editing state
   const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null)
   const inlineInputRef = useRef<HTMLInputElement>(null)
-  
+
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
@@ -88,9 +89,17 @@ export default function RequirementsPage() {
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [requirementTypeFilter, setRequirementTypeFilter] = useState<string>('all')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
-  
+
   // Grouping by type
   const [groupByType, setGroupByType] = useState<boolean>(false)
+
+  // PBS Tree panel state
+  const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null)
+  const [isPBSPanelOpen, setIsPBSPanelOpen] = useState<boolean>(true)
+  const [pbsPanelWidth, setPbsPanelWidth] = useState<number>(280)
+  const pbsResizing = useRef(false)
+  const pbsStartX = useRef(0)
+  const pbsStartWidth = useRef(0)
 
   // Column definitions for requirements
   type ColumnKey = string
@@ -146,7 +155,7 @@ export default function RequirementsPage() {
   }
 
   // Column visibility state
-  const [requirementColumns, setRequirementColumns] = useState<Set<ColumnKey>>(() => 
+  const [requirementColumns, setRequirementColumns] = useState<Set<ColumnKey>>(() =>
     loadColumnPreferences()
   )
 
@@ -168,7 +177,7 @@ export default function RequirementsPage() {
   // Column selector handlers
   const toggleColumn = (columnKey: ColumnKey) => {
     const newSet = new Set(requirementColumns)
-    
+
     if (newSet.has(columnKey)) {
       newSet.delete(columnKey)
     } else {
@@ -415,11 +424,11 @@ export default function RequirementsPage() {
   // Handle saving inline edit
   const saveInlineEdit = () => {
     if (!inlineEdit) return
-    
+
     const updates: UpdateRequirementDto = {
       [inlineEdit.field]: inlineEdit.value || undefined,
     }
-    
+
     inlineUpdateMutation.mutate({
       requirementId: inlineEdit.requirementId,
       updates,
@@ -487,7 +496,7 @@ export default function RequirementsPage() {
       .filter((issue) => {
         // This would need to be enhanced with actual traceability links
         return issue.title.toLowerCase().includes(requirementId.toLowerCase()) ||
-               issue.description.toLowerCase().includes(requirementId.toLowerCase())
+          issue.description.toLowerCase().includes(requirementId.toLowerCase())
       })
       .map((issue) => ({
         id: issue.id,
@@ -499,7 +508,7 @@ export default function RequirementsPage() {
       .filter((cr) => {
         // This would need to be enhanced with actual traceability links
         return cr.title.toLowerCase().includes(requirementId.toLowerCase()) ||
-               cr.description.toLowerCase().includes(requirementId.toLowerCase())
+          cr.description.toLowerCase().includes(requirementId.toLowerCase())
       })
       .map((cr) => ({
         id: cr.id,
@@ -512,14 +521,14 @@ export default function RequirementsPage() {
     // Get linked items (LINKAGE_V1)
     const linkedItems = LINKAGE_V1
       ? (links as any[])
-          .filter((l: any) => l.sourceType === 'requirement' && l.sourceId === requirementId)
-          .map((l: any) => ({
-            id: l.id,
-            targetType: l.targetType,
-            targetId: l.targetId,
-            label: l.targetLabel ?? `${l.targetType}:${l.targetId}`,
-            linkType: l.linkType,
-          }))
+        .filter((l: any) => l.sourceType === 'requirement' && l.sourceId === requirementId)
+        .map((l: any) => ({
+          id: l.id,
+          targetType: l.targetType,
+          targetId: l.targetId,
+          label: l.targetLabel ?? `${l.targetType}:${l.targetId}`,
+          linkType: l.linkType,
+        }))
       : []
 
     return {
@@ -627,9 +636,16 @@ export default function RequirementsPage() {
         }
       }
 
+      // Component filter (PBS tree selection)
+      if (selectedComponentId !== null) {
+        if (req.componentId !== selectedComponentId) {
+          return false
+        }
+      }
+
       return true
     })
-  }, [requirements, searchQuery, statusFilter, priorityFilter, ownerFilter, sourceFilter, requirementTypeFilter, categoryFilter])
+  }, [requirements, searchQuery, statusFilter, priorityFilter, ownerFilter, sourceFilter, requirementTypeFilter, categoryFilter, selectedComponentId])
 
   const hierarchyRequirements = useMemo(() => {
     return buildHierarchy(filteredRequirements)
@@ -642,7 +658,7 @@ export default function RequirementsPage() {
     }
 
     const groups: Record<string, Requirement[]> = {}
-    
+
     // Group root requirements by type
     hierarchyRequirements.forEach(req => {
       const type = req.requirementType || 'unassigned'
@@ -655,7 +671,7 @@ export default function RequirementsPage() {
     // Sort groups by type name
     const sortedGroups: Record<string, Requirement[]> = {}
     const predefinedTypes = ['functional', 'performance', 'interface', 'design_constraint', 'safety', 'security', 'usability', 'other']
-    
+
     // First, add predefined types in order
     predefinedTypes.forEach(type => {
       if (groups[type]) {
@@ -672,28 +688,28 @@ export default function RequirementsPage() {
     const customTypes = Object.keys(groups)
       .filter(type => !predefinedTypes.includes(type) && type !== 'unassigned')
       .sort()
-    
+
     customTypes.forEach(type => {
       sortedGroups[type] = groups[type]
     })
 
     // Create an ordered array of type keys to maintain order when iterating
     const orderedTypeKeys: string[] = []
-    
+
     // Add predefined types in order
     predefinedTypes.forEach(type => {
       if (sortedGroups[type]) {
         orderedTypeKeys.push(type)
       }
     })
-    
+
     // Add custom types (before unassigned)
     customTypes.forEach(type => {
       if (sortedGroups[type]) {
         orderedTypeKeys.push(type)
       }
     })
-    
+
     // Add unassigned last
     if (sortedGroups['unassigned']) {
       orderedTypeKeys.push('unassigned')
@@ -721,24 +737,24 @@ export default function RequirementsPage() {
   }
 
   // Get unique values for filters (must be defined before renderRequirementRow uses them)
-  const uniqueStatuses = useMemo(() => 
+  const uniqueStatuses = useMemo(() =>
     Array.from(new Set(requirements.map((r) => r.status).filter(Boolean))),
     [requirements]
   )
-  
+
   const uniqueRequirementTypes = useMemo(() =>
     Array.from(new Set(requirements.map((r) => r.requirementType).filter(Boolean))),
     [requirements]
   )
-  const uniqueOwners = useMemo(() => 
+  const uniqueOwners = useMemo(() =>
     Array.from(new Set(requirements.map((r) => r.owner).filter(Boolean))),
     [requirements]
   )
-  const uniqueSources = useMemo(() => 
+  const uniqueSources = useMemo(() =>
     Array.from(new Set(requirements.map((r) => r.source).filter(Boolean))),
     [requirements]
   )
-  const uniqueCategories = useMemo(() => 
+  const uniqueCategories = useMemo(() =>
     Array.from(new Set(requirements.map((r) => r.category).filter(Boolean))),
     [requirements]
   )
@@ -883,177 +899,177 @@ export default function RequirementsPage() {
           {/* Title - inline editable */}
           {requirementColumns.has('title') && (
             <td className="px-4 py-3">
-            {inlineEdit?.requirementId === req.id && inlineEdit.field === 'title' ? (
-              <div className="flex items-center gap-1">
-                <input
-                  ref={inlineInputRef}
-                  type="text"
-                  value={inlineEdit.value}
-                  onChange={(e) => setInlineEdit({ ...inlineEdit, value: e.target.value })}
-                  onKeyDown={handleInlineKeyDown}
-                  onBlur={saveInlineEdit}
-                  className="flex-1 px-2 py-1 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span
-                  className="font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
-                  onClick={() => setDetailRequirement(req)}
-                  onDoubleClick={(e) => {
-                    e.stopPropagation()
-                    startInlineEdit(req, 'title')
-                  }}
-                  title="Double-click to edit"
-                >
-                  {req.title}
-                </span>
-                {req.requirementType && (
-                  <span className={clsx('px-2 py-0.5 text-xs font-medium rounded-full', getRequirementTypeColor(req.requirementType))}>
-                    {formatRequirementType(req.requirementType)}
+              {inlineEdit?.requirementId === req.id && inlineEdit.field === 'title' ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    ref={inlineInputRef}
+                    type="text"
+                    value={inlineEdit.value}
+                    onChange={(e) => setInlineEdit({ ...inlineEdit, value: e.target.value })}
+                    onKeyDown={handleInlineKeyDown}
+                    onBlur={saveInlineEdit}
+                    className="flex-1 px-2 py-1 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span
+                    className="font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
+                    onClick={() => setDetailRequirement(req)}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation()
+                      startInlineEdit(req, 'title')
+                    }}
+                    title="Double-click to edit"
+                  >
+                    {req.title}
                   </span>
-                )}
-              </div>
-            )}
-          </td>
+                  {req.requirementType && (
+                    <span className={clsx('px-2 py-0.5 text-xs font-medium rounded-full', getRequirementTypeColor(req.requirementType))}>
+                      {formatRequirementType(req.requirementType)}
+                    </span>
+                  )}
+                </div>
+              )}
+            </td>
           )}
           {/* Description */}
           {requirementColumns.has('description') && (
             <td className="px-4 py-3">
-            <div className="text-sm text-gray-600 dark:text-gray-400 max-w-md">
-              <p className="line-clamp-2" title={req.description}>
-                {req.description ? (
-                  <span dangerouslySetInnerHTML={{ __html: req.description.replace(/<[^>]*>/g, '').substring(0, 150) + (req.description.length > 150 ? '...' : '') }} />
-                ) : (
-                  <span className="text-gray-400">—</span>
-                )}
-              </p>
-            </div>
-          </td>
+              <div className="text-sm text-gray-600 dark:text-gray-400 max-w-md">
+                <p className="line-clamp-2" title={req.description}>
+                  {req.description ? (
+                    <span dangerouslySetInnerHTML={{ __html: req.description.replace(/<[^>]*>/g, '').substring(0, 150) + (req.description.length > 150 ? '...' : '') }} />
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  )}
+                </p>
+              </div>
+            </td>
           )}
           {/* Priority - inline editable */}
           {requirementColumns.has('priority') && (
             <td className="px-4 py-3">
-            {inlineEdit?.requirementId === req.id && inlineEdit.field === 'priority' ? (
-              <select
-                value={inlineEdit.value}
-                onChange={(e) => {
-                  setInlineEdit({ ...inlineEdit, value: e.target.value })
-                  setTimeout(() => {
-                    inlineUpdateMutation.mutate({
-                      requirementId: req.id,
-                      updates: { priority: e.target.value as any },
-                    })
-                  }, 0)
-                }}
-                onBlur={cancelInlineEdit}
-                autoFocus
-                className="px-2 py-1 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
-              </select>
-            ) : (
-              <span
-                className={clsx('px-2 py-1 rounded-full text-xs font-medium cursor-pointer', getPriorityColor(req.priority))}
-                onDoubleClick={() => startInlineEdit(req, 'priority')}
-                title="Double-click to edit"
-              >
-                {req.priority}
-              </span>
-            )}
-          </td>
+              {inlineEdit?.requirementId === req.id && inlineEdit.field === 'priority' ? (
+                <select
+                  value={inlineEdit.value}
+                  onChange={(e) => {
+                    setInlineEdit({ ...inlineEdit, value: e.target.value })
+                    setTimeout(() => {
+                      inlineUpdateMutation.mutate({
+                        requirementId: req.id,
+                        updates: { priority: e.target.value as any },
+                      })
+                    }, 0)
+                  }}
+                  onBlur={cancelInlineEdit}
+                  autoFocus
+                  className="px-2 py-1 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              ) : (
+                <span
+                  className={clsx('px-2 py-1 rounded-full text-xs font-medium cursor-pointer', getPriorityColor(req.priority))}
+                  onDoubleClick={() => startInlineEdit(req, 'priority')}
+                  title="Double-click to edit"
+                >
+                  {req.priority}
+                </span>
+              )}
+            </td>
           )}
           {/* Status - pill when LIFECYCLE_V1, Change Status popover; else inline editable */}
           {requirementColumns.has('status') && (
             <td className="px-4 py-3">
-            {LIFECYCLE_V1 ? (
-              <div className="flex items-center gap-1">
+              {LIFECYCLE_V1 ? (
+                <div className="flex items-center gap-1">
+                  <span
+                    className={clsx('px-2 py-1 rounded-full text-xs font-medium', getStatusColorForRequirement(req))}
+                  >
+                    {req.status || 'draft'}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setChangeStatusAnchor({ requirement: req, el: e.currentTarget })
+                    }}
+                    className="p-0.5 text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 rounded"
+                    title="Change status"
+                  >
+                    <ChevronDown size={14} />
+                  </button>
+                </div>
+              ) : inlineEdit?.requirementId === req.id && inlineEdit.field === 'status' ? (
+                <select
+                  value={inlineEdit.value}
+                  onChange={(e) => {
+                    setInlineEdit({ ...inlineEdit, value: e.target.value })
+                    setTimeout(() => {
+                      inlineUpdateMutation.mutate({
+                        requirementId: req.id,
+                        updates: { status: e.target.value },
+                      })
+                    }, 0)
+                  }}
+                  onBlur={cancelInlineEdit}
+                  autoFocus
+                  className="px-2 py-1 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  {uniqueStatuses.map((status) => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+              ) : req.reviewStatus ? (
+                <ReviewStatusBadge status={req.reviewStatus} size="sm" />
+              ) : (
                 <span
-                  className={clsx('px-2 py-1 rounded-full text-xs font-medium', getStatusColorForRequirement(req))}
+                  className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                  onDoubleClick={() => startInlineEdit(req, 'status')}
+                  title="Double-click to edit"
                 >
                   {req.status || 'draft'}
                 </span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setChangeStatusAnchor({ requirement: req, el: e.currentTarget })
-                  }}
-                  className="p-0.5 text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 rounded"
-                  title="Change status"
-                >
-                  <ChevronDown size={14} />
-                </button>
-              </div>
-            ) : inlineEdit?.requirementId === req.id && inlineEdit.field === 'status' ? (
-              <select
-                value={inlineEdit.value}
-                onChange={(e) => {
-                  setInlineEdit({ ...inlineEdit, value: e.target.value })
-                  setTimeout(() => {
-                    inlineUpdateMutation.mutate({
-                      requirementId: req.id,
-                      updates: { status: e.target.value },
-                    })
-                  }, 0)
-                }}
-                onBlur={cancelInlineEdit}
-                autoFocus
-                className="px-2 py-1 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                {uniqueStatuses.map((status) => (
-                  <option key={status} value={status}>{status}</option>
-                ))}
-              </select>
-            ) : req.reviewStatus ? (
-              <ReviewStatusBadge status={req.reviewStatus} size="sm" />
-            ) : (
-              <span
-                className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
-                onDoubleClick={() => startInlineEdit(req, 'status')}
-                title="Double-click to edit"
-              >
-                {req.status || 'draft'}
-              </span>
-            )}
-          </td>
+              )}
+            </td>
           )}
           {/* Owner - inline editable */}
           {requirementColumns.has('owner') && (
             <td className="px-4 py-3">
-            {inlineEdit?.requirementId === req.id && inlineEdit.field === 'owner' ? (
-              <select
-                value={inlineEdit.value}
-                onChange={(e) => {
-                  setInlineEdit({ ...inlineEdit, value: e.target.value })
-                  setTimeout(() => {
-                    inlineUpdateMutation.mutate({
-                      requirementId: req.id,
-                      updates: { owner: e.target.value || undefined },
-                    })
-                  }, 0)
-                }}
-                onBlur={cancelInlineEdit}
-                autoFocus
-                className="px-2 py-1 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="">Unassigned</option>
-                {uniqueOwners.map((owner) => (
-                  <option key={owner} value={owner}>{owner}</option>
-                ))}
-              </select>
-            ) : (
-              <span
-                className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
-                onDoubleClick={() => startInlineEdit(req, 'owner')}
-                title="Double-click to edit"
-              >
-                {req.owner || '—'}
-              </span>
-            )}
-          </td>
+              {inlineEdit?.requirementId === req.id && inlineEdit.field === 'owner' ? (
+                <select
+                  value={inlineEdit.value}
+                  onChange={(e) => {
+                    setInlineEdit({ ...inlineEdit, value: e.target.value })
+                    setTimeout(() => {
+                      inlineUpdateMutation.mutate({
+                        requirementId: req.id,
+                        updates: { owner: e.target.value || undefined },
+                      })
+                    }, 0)
+                  }}
+                  onBlur={cancelInlineEdit}
+                  autoFocus
+                  className="px-2 py-1 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">Unassigned</option>
+                  {uniqueOwners.map((owner) => (
+                    <option key={owner} value={owner}>{owner}</option>
+                  ))}
+                </select>
+              ) : (
+                <span
+                  className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                  onDoubleClick={() => startInlineEdit(req, 'owner')}
+                  title="Double-click to edit"
+                >
+                  {req.owner || '—'}
+                </span>
+              )}
+            </td>
           )}
           {requirementColumns.has('category') && (
             <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
@@ -1176,7 +1192,7 @@ export default function RequirementsPage() {
             )}
             {!LINKAGE_V1 && rowData.linkedFunctions.length > 0 && (
               <tr>
-                  <td colSpan={getTotalColumnCount()} className="px-4 py-2 bg-blue-50/50 dark:bg-blue-900/10">
+                <td colSpan={getTotalColumnCount()} className="px-4 py-2 bg-blue-50/50 dark:bg-blue-900/10">
                   <div className="pl-8">
                     <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-2 flex items-center gap-2">
                       <Settings size={14} />
@@ -1202,7 +1218,7 @@ export default function RequirementsPage() {
             {/* Linked Issues */}
             {rowData.linkedIssues.length > 0 && (
               <tr>
-                  <td colSpan={8} className="px-4 py-2 bg-yellow-50/50 dark:bg-yellow-900/10">
+                <td colSpan={8} className="px-4 py-2 bg-yellow-50/50 dark:bg-yellow-900/10">
                   <div className="pl-8">
                     <p className="text-xs font-medium text-yellow-600 dark:text-yellow-400 mb-2 flex items-center gap-2">
                       <AlertCircle size={14} />
@@ -1306,702 +1322,767 @@ export default function RequirementsPage() {
     }
   }
 
-  return (
-    <div className="flex h-[calc(100vh-4rem)]">
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto space-y-6 pr-6">
-        <ProjectNavigation />
+  // PBS panel resize handler
+  const handlePBSResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    pbsResizing.current = true
+    pbsStartX.current = e.clientX
+    pbsStartWidth.current = pbsPanelWidth
 
-        {isBaselineView && (
-          <div className="px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center gap-2">
-            <Archive size={20} className="text-amber-600 dark:text-amber-400" />
-            <span className="font-medium text-amber-800 dark:text-amber-200">
-              Viewing baseline{baseline ? `: ${baseline.name}` : ''}. Editing is disabled.
-            </span>
-          </div>
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!pbsResizing.current) return
+      const delta = e.clientX - pbsStartX.current
+      const newWidth = Math.max(200, Math.min(500, pbsStartWidth.current + delta))
+      setPbsPanelWidth(newWidth)
+    }
+
+    const handleMouseUp = () => {
+      pbsResizing.current = false
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }, [pbsPanelWidth])
+
+  return (
+    <div className="h-[calc(100vh-4rem)] flex flex-col">
+      <div className="flex-shrink-0 pr-6">
+        <ProjectNavigation />
+      </div>
+      <div className="flex flex-1 min-h-0">
+        {/* PBS Tree Panel */}
+        {isPBSPanelOpen && projectId && (
+          <>
+            <div style={{ width: pbsPanelWidth, minWidth: 200 }} className="flex-shrink-0 h-full">
+              <RequirementsPBSTree
+                projectId={projectId}
+                requirements={requirements}
+                selectedComponentId={selectedComponentId}
+                onComponentSelect={setSelectedComponentId}
+              />
+            </div>
+            {/* Resize handle */}
+            <div
+              className="w-1 cursor-col-resize hover:bg-blue-400 active:bg-blue-500 transition-colors flex-shrink-0"
+              onMouseDown={handlePBSResizeStart}
+            />
+          </>
         )}
 
-        <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Requirements</h2>
-        <div className="flex items-center gap-2">
-          {selectedRequirements.size > 0 && (
-            <div className="flex items-center gap-2 mr-4">
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                {selectedRequirements.size} selected
+        {/* Main Content Area */}
+        <div className="flex-1 overflow-y-auto space-y-6 pr-6">
+
+          {isBaselineView && (
+            <div className="px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center gap-2">
+              <Archive size={20} className="text-amber-600 dark:text-amber-400" />
+              <span className="font-medium text-amber-800 dark:text-amber-200">
+                Viewing baseline{baseline ? `: ${baseline.name}` : ''}. Editing is disabled.
               </span>
-              <select
-                onChange={(e) => {
-                  const action = e.target.value
-                  if (action && action !== 'bulk-action') {
-                    const requirementIds = Array.from(selectedRequirements)
-                    if (action === 'create-change-request') {
-                      if (window.confirm(`Create change request(s) for ${requirementIds.length} selected requirement(s)?`)) {
-                        bulkCreateChangeRequestsMutation.mutate(requirementIds)
-                      }
-                    } else if (action === 'create-issue') {
-                      if (window.confirm(`Create issue(s) for ${requirementIds.length} selected requirement(s)?`)) {
-                        bulkCreateIssuesMutation.mutate(requirementIds)
-                      }
-                    } else if (action === 'bulk-delete') {
-                      if (window.confirm(`Are you sure you want to delete ${requirementIds.length} requirement(s)? This action cannot be undone.`)) {
-                        bulkDeleteMutation.mutate(requirementIds)
-                      }
-                    }
-                    e.target.value = 'bulk-action'
-                  }
-                }}
-                className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                defaultValue="bulk-action"
-              >
-                <option value="bulk-action">Bulk Actions...</option>
-                <option value="create-change-request">Create Change Request(s)</option>
-                <option value="create-issue">Create Issue(s)</option>
-                <option value="bulk-delete">Delete Selected</option>
-              </select>
             </div>
           )}
-          <button
-            onClick={() => setIsTraceMatrixOpen(true)}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-            title="Open Traceability Matrix"
-          >
-            <Grid3X3 size={16} />
-            <span className="text-sm">Matrix</span>
-          </button>
-          <button
-            onClick={() => setIsSuspectReviewOpen(true)}
-            className="px-3 py-2 border border-yellow-300 dark:border-yellow-600 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-900/30 flex items-center gap-2 transition-colors"
-            title="Review Suspect Links"
-          >
-            <AlertCircle size={16} />
-            <span className="text-sm">Suspect</span>
-          </button>
-          <button
-            onClick={() => setIsBaselineManagerOpen(true)}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-            title="Manage Baselines"
-          >
-            <Archive size={16} />
-            <span className="text-sm">Baselines</span>
-          </button>
-          <button
-            onClick={() => setIsImportOpen(true)}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-            title="Import Requirements"
-          >
-            <Download size={16} />
-            <span className="text-sm">Import</span>
-          </button>
-          <button
-            onClick={() => setIsExportOpen(true)}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-            title="Export Requirements"
-          >
-            <Upload size={16} />
-            <span className="text-sm">Export</span>
-          </button>
-          <div className="relative" ref={columnSelectorRef}>
-            <button
-              onClick={() => setColumnSelectorOpen(!columnSelectorOpen)}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-              title="Customize Columns"
-            >
-              <Columns size={16} />
-              <span className="text-sm">Columns</span>
-            </button>
-            {columnSelectorOpen && (
-              <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Select Columns</h3>
+
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsPBSPanelOpen(!isPBSPanelOpen)}
+                className="p-1.5 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                title={isPBSPanelOpen ? 'Hide PBS panel' : 'Show PBS panel'}
+              >
+                {isPBSPanelOpen ? <PanelLeftClose size={16} className="text-gray-500" /> : <PanelLeft size={16} className="text-gray-500" />}
+              </button>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Requirements</h2>
+              {selectedComponentId && (
+                <button
+                  onClick={() => setSelectedComponentId(null)}
+                  className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                >
+                  <X size={12} />
+                  Clear filter
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {selectedRequirements.size > 0 && (
+                <div className="flex items-center gap-2 mr-4">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    {selectedRequirements.size} selected
+                  </span>
+                  <select
+                    onChange={(e) => {
+                      const action = e.target.value
+                      if (action && action !== 'bulk-action') {
+                        const requirementIds = Array.from(selectedRequirements)
+                        if (action === 'create-change-request') {
+                          if (window.confirm(`Create change request(s) for ${requirementIds.length} selected requirement(s)?`)) {
+                            bulkCreateChangeRequestsMutation.mutate(requirementIds)
+                          }
+                        } else if (action === 'create-issue') {
+                          if (window.confirm(`Create issue(s) for ${requirementIds.length} selected requirement(s)?`)) {
+                            bulkCreateIssuesMutation.mutate(requirementIds)
+                          }
+                        } else if (action === 'bulk-delete') {
+                          if (window.confirm(`Are you sure you want to delete ${requirementIds.length} requirement(s)? This action cannot be undone.`)) {
+                            bulkDeleteMutation.mutate(requirementIds)
+                          }
+                        }
+                        e.target.value = 'bulk-action'
+                      }
+                    }}
+                    className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    defaultValue="bulk-action"
+                  >
+                    <option value="bulk-action">Bulk Actions...</option>
+                    <option value="create-change-request">Create Change Request(s)</option>
+                    <option value="create-issue">Create Issue(s)</option>
+                    <option value="bulk-delete">Delete Selected</option>
+                  </select>
+                </div>
+              )}
+              <button
+                onClick={() => setIsTraceMatrixOpen(true)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+                title="Open Traceability Matrix"
+              >
+                <Grid3X3 size={16} />
+                <span className="text-sm">Matrix</span>
+              </button>
+              <button
+                onClick={() => setIsSuspectReviewOpen(true)}
+                className="px-3 py-2 border border-yellow-300 dark:border-yellow-600 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-900/30 flex items-center gap-2 transition-colors"
+                title="Review Suspect Links"
+              >
+                <AlertCircle size={16} />
+                <span className="text-sm">Suspect</span>
+              </button>
+              <button
+                onClick={() => setIsBaselineManagerOpen(true)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+                title="Manage Baselines"
+              >
+                <Archive size={16} />
+                <span className="text-sm">Baselines</span>
+              </button>
+              <button
+                onClick={() => setIsImportOpen(true)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+                title="Import Requirements"
+              >
+                <Download size={16} />
+                <span className="text-sm">Import</span>
+              </button>
+              <button
+                onClick={() => setIsExportOpen(true)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+                title="Export Requirements"
+              >
+                <Upload size={16} />
+                <span className="text-sm">Export</span>
+              </button>
+              <div className="relative" ref={columnSelectorRef}>
+                <button
+                  onClick={() => setColumnSelectorOpen(!columnSelectorOpen)}
+                  className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+                  title="Customize Columns"
+                >
+                  <Columns size={16} />
+                  <span className="text-sm">Columns</span>
+                </button>
+                {columnSelectorOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Select Columns</h3>
+                      <button
+                        onClick={() => setColumnSelectorOpen(false)}
+                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {REQUIREMENT_COLUMNS.map((col) => (
+                        <label
+                          key={col.key}
+                          className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded cursor-pointer"
+                        >
+                          <button
+                            onClick={() => toggleColumn(col.key)}
+                            className="text-gray-600 dark:text-gray-400"
+                          >
+                            {requirementColumns.has(col.key) ? (
+                              <CheckSquare size={18} className="text-blue-600" />
+                            ) : (
+                              <Square size={18} />
+                            )}
+                          </button>
+                          <span className="text-sm text-gray-700 dark:text-gray-300">{col.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              {projectId && <SafetyLinkPanel variant="linked" count={3} />}
+              <button
+                onClick={() => setIsDiagramOpen(true)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+                title="View Requirement Diagram"
+              >
+                <FileText size={16} />
+                <span className="text-sm">Diagram</span>
+              </button>
+              <button
+                onClick={() => setIsAllocationTableOpen(true)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+                title="View Allocation Table"
+              >
+                <Grid3X3 size={16} />
+                <span className="text-sm">Allocation</span>
+              </button>
+              <button
+                onClick={() => setIsQualityPanelOpen(true)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+                title="Requirement Quality Analysis"
+              >
+                <AlertCircle size={16} />
+                <span className="text-sm">Quality</span>
+              </button>
+              <button
+                onClick={() => {
+                  setParentRequirement(null)
+                  setIsCreateModalOpen(true)
+                }}
+                disabled={isBaselineView}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-colors"
+              >
+                <Plus size={16} />
+                <span>Create Requirement</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Search and View Options */}
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+            <div className="flex items-center gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search all fields (title, description, ID, requirement type, owner, tags, criteria...)"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+                {searchQuery && (
                   <button
-                    onClick={() => setColumnSelectorOpen(false)}
-                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                   >
                     <X size={16} />
                   </button>
-                </div>
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {REQUIREMENT_COLUMNS.map((col) => (
-                    <label
-                      key={col.key}
-                      className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded cursor-pointer"
-                    >
-                      <button
-                        onClick={() => toggleColumn(col.key)}
-                        className="text-gray-600 dark:text-gray-400"
-                      >
-                        {requirementColumns.has(col.key) ? (
-                          <CheckSquare size={18} className="text-blue-600" />
-                        ) : (
-                          <Square size={18} />
-                        )}
-                      </button>
-                      <span className="text-sm text-gray-700 dark:text-gray-300">{col.label}</span>
-                    </label>
-                  ))}
-                </div>
+                )}
               </div>
-            )}
-          </div>
-          {projectId && <SafetyLinkPanel variant="linked" count={3} />}
-          <button
-            onClick={() => setIsDiagramOpen(true)}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-            title="View Requirement Diagram"
-          >
-            <FileText size={16} />
-            <span className="text-sm">Diagram</span>
-          </button>
-          <button
-            onClick={() => setIsAllocationTableOpen(true)}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-            title="View Allocation Table"
-          >
-            <Grid3X3 size={16} />
-            <span className="text-sm">Allocation</span>
-          </button>
-          <button
-            onClick={() => setIsQualityPanelOpen(true)}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-            title="Requirement Quality Analysis"
-          >
-            <AlertCircle size={16} />
-            <span className="text-sm">Quality</span>
-          </button>
-          <button
-            onClick={() => {
-              setParentRequirement(null)
-              setIsCreateModalOpen(true)
-            }}
-            disabled={isBaselineView}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-colors"
-          >
-            <Plus size={16} />
-            <span>Create Requirement</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Search and View Options */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder="Search all fields (title, description, ID, requirement type, owner, tags, criteria...)"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-            {searchQuery && (
+              {/* Group by Type Toggle */}
               <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                onClick={() => setGroupByType(!groupByType)}
+                className={clsx(
+                  "px-4 py-2 rounded-lg border transition-colors flex items-center gap-2 whitespace-nowrap",
+                  groupByType
+                    ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-600"
+                    : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600"
+                )}
+                title="Group requirements by type"
               >
-                <X size={16} />
+                <Grid3X3 size={18} />
+                <span className="text-sm font-medium">Group by Type</span>
               </button>
-            )}
-          </div>
-          {/* Group by Type Toggle */}
-          <button
-            onClick={() => setGroupByType(!groupByType)}
-            className={clsx(
-              "px-4 py-2 rounded-lg border transition-colors flex items-center gap-2 whitespace-nowrap",
-              groupByType
-                ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-600"
-                : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600"
-            )}
-            title="Group requirements by type"
-          >
-            <Grid3X3 size={18} />
-            <span className="text-sm font-medium">Group by Type</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-        <button
-          onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
-          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <Filter size={18} className="text-gray-600 dark:text-gray-400" />
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Filters</span>
-          </div>
-          {isFiltersExpanded ? (
-            <ChevronUp size={18} className="text-gray-600 dark:text-gray-400" />
-          ) : (
-            <ChevronDown size={18} className="text-gray-600 dark:text-gray-400" />
-          )}
-        </button>
-        {isFiltersExpanded && (
-          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-              {/* Status Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                  Status
-                </label>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="all">All Statuses</option>
-                  {uniqueStatuses.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Priority Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                  Priority
-                </label>
-                <select
-                  value={priorityFilter}
-                  onChange={(e) => setPriorityFilter(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="all">All Priorities</option>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="critical">Critical</option>
-                </select>
-              </div>
-
-              {/* Category Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                  Category
-                </label>
-                <select
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="all">All Categories</option>
-                  <option value="unassigned">Unassigned</option>
-                  {uniqueCategories.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Owner Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                  Owner
-                </label>
-                <select
-                  value={ownerFilter}
-                  onChange={(e) => setOwnerFilter(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="all">All Owners</option>
-                  <option value="unassigned">Unassigned</option>
-                  {uniqueOwners.map((owner) => (
-                    <option key={owner} value={owner}>
-                      {owner}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Source Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                  Source
-                </label>
-                <select
-                  value={sourceFilter}
-                  onChange={(e) => setSourceFilter(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="all">All Sources</option>
-                  <option value="unassigned">Unassigned</option>
-                  {uniqueSources.map((source) => (
-                    <option key={source} value={source}>
-                      {source}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Requirement Type Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                  Requirement Type
-                </label>
-                <select
-                  value={requirementTypeFilter}
-                  onChange={(e) => setRequirementTypeFilter(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="all">All Types</option>
-                  <option value="unassigned">Unassigned</option>
-                  <option value="functional">Functional</option>
-                  <option value="performance">Performance</option>
-                  <option value="interface">Interface</option>
-                  <option value="design_constraint">Design Constraint</option>
-                  <option value="safety">Safety</option>
-                  <option value="security">Security</option>
-                  <option value="usability">Usability</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
             </div>
           </div>
-        )}
-      </div>
 
-      {/* Requirements Table */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-12">
-                  <input
-                    type="checkbox"
-                    checked={selectedRequirements.size > 0 && selectedRequirements.size === filteredRequirements.length}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedRequirements(new Set(filteredRequirements.map((r) => r.id)))
-                      } else {
-                        setSelectedRequirements(new Set())
+          {/* Filters */}
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
+              className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Filter size={18} className="text-gray-600 dark:text-gray-400" />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Filters</span>
+              </div>
+              {isFiltersExpanded ? (
+                <ChevronUp size={18} className="text-gray-600 dark:text-gray-400" />
+              ) : (
+                <ChevronDown size={18} className="text-gray-600 dark:text-gray-400" />
+              )}
+            </button>
+            {isFiltersExpanded && (
+              <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                  {/* Status Filter */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Status
+                    </label>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="all">All Statuses</option>
+                      {uniqueStatuses.map((status) => (
+                        <option key={status} value={status}>
+                          {status}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Priority Filter */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Priority
+                    </label>
+                    <select
+                      value={priorityFilter}
+                      onChange={(e) => setPriorityFilter(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="all">All Priorities</option>
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                      <option value="critical">Critical</option>
+                    </select>
+                  </div>
+
+                  {/* Category Filter */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Category
+                    </label>
+                    <select
+                      value={categoryFilter}
+                      onChange={(e) => setCategoryFilter(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="all">All Categories</option>
+                      <option value="unassigned">Unassigned</option>
+                      {uniqueCategories.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Owner Filter */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Owner
+                    </label>
+                    <select
+                      value={ownerFilter}
+                      onChange={(e) => setOwnerFilter(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="all">All Owners</option>
+                      <option value="unassigned">Unassigned</option>
+                      {uniqueOwners.map((owner) => (
+                        <option key={owner} value={owner}>
+                          {owner}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Source Filter */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Source
+                    </label>
+                    <select
+                      value={sourceFilter}
+                      onChange={(e) => setSourceFilter(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="all">All Sources</option>
+                      <option value="unassigned">Unassigned</option>
+                      {uniqueSources.map((source) => (
+                        <option key={source} value={source}>
+                          {source}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Requirement Type Filter */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Requirement Type
+                    </label>
+                    <select
+                      value={requirementTypeFilter}
+                      onChange={(e) => setRequirementTypeFilter(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="all">All Types</option>
+                      <option value="unassigned">Unassigned</option>
+                      <option value="functional">Functional</option>
+                      <option value="performance">Performance</option>
+                      <option value="interface">Interface</option>
+                      <option value="design_constraint">Design Constraint</option>
+                      <option value="safety">Safety</option>
+                      <option value="security">Security</option>
+                      <option value="usability">Usability</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Requirements Table */}
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-12">
+                      <input
+                        type="checkbox"
+                        checked={selectedRequirements.size > 0 && selectedRequirements.size === filteredRequirements.length}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedRequirements(new Set(filteredRequirements.map((r) => r.id)))
+                          } else {
+                            setSelectedRequirements(new Set())
+                          }
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                    </th>
+                    {requirementColumns.has('requirementId') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Requirement ID
+                      </th>
+                    )}
+                    {requirementColumns.has('title') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Title
+                      </th>
+                    )}
+                    {requirementColumns.has('description') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Description
+                      </th>
+                    )}
+                    {requirementColumns.has('priority') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Priority
+                      </th>
+                    )}
+                    {requirementColumns.has('status') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Status
+                      </th>
+                    )}
+                    {requirementColumns.has('owner') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Owner
+                      </th>
+                    )}
+                    {requirementColumns.has('category') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Category
+                      </th>
+                    )}
+                    {requirementColumns.has('source') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Source
+                      </th>
+                    )}
+                    {requirementColumns.has('requirementType') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Type
+                      </th>
+                    )}
+                    {requirementColumns.has('verificationMethod') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Verification Method
+                      </th>
+                    )}
+                    {requirementColumns.has('acceptanceCriteria') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Acceptance Criteria
+                      </th>
+                    )}
+                    {requirementColumns.has('stage') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Stage
+                      </th>
+                    )}
+                    {requirementColumns.has('createdAt') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Created
+                      </th>
+                    )}
+                    {requirementColumns.has('updatedAt') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Updated
+                      </th>
+                    )}
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-24">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={getTotalColumnCount()} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                        Loading requirements...
+                      </td>
+                    </tr>
+                  ) : (() => {
+                    if (groupByType) {
+                      const { groups, orderedKeys } = groupedRequirements
+                      const hasAnyRequirements = Object.keys(groups).length > 0 &&
+                        Object.values(groups).some(group => group.length > 0)
+
+                      if (!hasAnyRequirements) {
+                        return (
+                          <tr>
+                            <td colSpan={getTotalColumnCount()} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                              {requirements.length === 0
+                                ? 'No requirements found. Click "Create Requirement" to get started.'
+                                : 'No requirements match your search or filter criteria.'}
+                            </td>
+                          </tr>
+                        )
                       }
-                    }}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                </th>
-                {requirementColumns.has('requirementId') && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Requirement ID
-                  </th>
-                )}
-                {requirementColumns.has('title') && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Title
-                  </th>
-                )}
-                {requirementColumns.has('description') && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Description
-                  </th>
-                )}
-                {requirementColumns.has('priority') && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Priority
-                  </th>
-                )}
-                {requirementColumns.has('status') && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Status
-                  </th>
-                )}
-                {requirementColumns.has('owner') && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Owner
-                  </th>
-                )}
-                {requirementColumns.has('category') && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Category
-                  </th>
-                )}
-                {requirementColumns.has('source') && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Source
-                  </th>
-                )}
-                {requirementColumns.has('requirementType') && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Type
-                  </th>
-                )}
-                {requirementColumns.has('verificationMethod') && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Verification Method
-                  </th>
-                )}
-                {requirementColumns.has('acceptanceCriteria') && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Acceptance Criteria
-                  </th>
-                )}
-                {requirementColumns.has('stage') && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Stage
-                  </th>
-                )}
-                {requirementColumns.has('createdAt') && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Created
-                  </th>
-                )}
-                {requirementColumns.has('updatedAt') && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Updated
-                  </th>
-                )}
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-24">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={getTotalColumnCount()} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                    Loading requirements...
-                  </td>
-                </tr>
-              ) : (() => {
-                if (groupByType) {
-                  const { groups, orderedKeys } = groupedRequirements
-                  const hasAnyRequirements = Object.keys(groups).length > 0 && 
-                    Object.values(groups).some(group => group.length > 0)
-                  
-                  if (!hasAnyRequirements) {
-                    return (
-                      <tr>
-                        <td colSpan={getTotalColumnCount()} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                          {requirements.length === 0
-                            ? 'No requirements found. Click "Create Requirement" to get started.'
-                            : 'No requirements match your search or filter criteria.'}
-                        </td>
-                      </tr>
-                    )
-                  }
 
-                  // Use orderedKeys to maintain correct order (predefined -> unassigned -> custom)
-                  // Filter out null values in case some types have no requirements
-                  return orderedKeys
-                    .map((type) => {
-                      const typeRequirements = groups[type]
-                      if (!typeRequirements || typeRequirements.length === 0) return null
-                    
-                    // Count all requirements including children
-                    const countChildren = (r: Requirement): number => {
-                      return 1 + (r.children?.reduce((sum, child) => countChildren(child), 0) || 0)
+                      // Use orderedKeys to maintain correct order (predefined -> unassigned -> custom)
+                      // Filter out null values in case some types have no requirements
+                      return orderedKeys
+                        .map((type) => {
+                          const typeRequirements = groups[type]
+                          if (!typeRequirements || typeRequirements.length === 0) return null
+
+                          // Count all requirements including children
+                          const countChildren = (r: Requirement): number => {
+                            return 1 + (r.children?.reduce((sum, child) => countChildren(child), 0) || 0)
+                          }
+                          const typeCount = typeRequirements.reduce((count, req) => count + countChildren(req), 0)
+
+                          return (
+                            <React.Fragment key={type}>
+                              {/* Section Header */}
+                              <tr className="bg-gray-100 dark:bg-gray-800 border-t-2 border-gray-300 dark:border-gray-600">
+                                <td colSpan={getTotalColumnCount()} className="px-4 py-3">
+                                  <div className="flex items-center justify-between">
+                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">
+                                      {formatRequirementTypeName(type)} Requirements
+                                    </h3>
+                                    <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                                      {typeCount} {typeCount === 1 ? 'requirement' : 'requirements'}
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                              {/* Requirements in this group */}
+                              {typeRequirements.map((req) => (
+                                <React.Fragment key={req.id}>
+                                  {renderRequirementRow(req)}
+                                </React.Fragment>
+                              ))}
+                            </React.Fragment>
+                          )
+                        })
+                        .filter((item) => item !== null)
+                    } else {
+                      if (hierarchyRequirements.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={getTotalColumnCount()} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                              {requirements.length === 0
+                                ? 'No requirements found. Click "Create Requirement" to get started.'
+                                : 'No requirements match your search or filter criteria.'}
+                            </td>
+                          </tr>
+                        )
+                      }
+
+                      return hierarchyRequirements.map((req) => (
+                        <React.Fragment key={req.id}>
+                          {renderRequirementRow(req)}
+                        </React.Fragment>
+                      ))
                     }
-                    const typeCount = typeRequirements.reduce((count, req) => count + countChildren(req), 0)
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-                    return (
-                      <React.Fragment key={type}>
-                        {/* Section Header */}
-                        <tr className="bg-gray-100 dark:bg-gray-800 border-t-2 border-gray-300 dark:border-gray-600">
-                          <td colSpan={getTotalColumnCount()} className="px-4 py-3">
-                            <div className="flex items-center justify-between">
-                              <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">
-                                {formatRequirementTypeName(type)} Requirements
-                              </h3>
-                              <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-                                {typeCount} {typeCount === 1 ? 'requirement' : 'requirements'}
-                              </span>
-                            </div>
-                          </td>
-                        </tr>
-                        {/* Requirements in this group */}
-                        {typeRequirements.map((req) => (
-                          <React.Fragment key={req.id}>
-                            {renderRequirementRow(req)}
-                          </React.Fragment>
-                        ))}
-                      </React.Fragment>
-                    )
-                    })
-                    .filter((item) => item !== null)
-                } else {
-                  if (hierarchyRequirements.length === 0) {
-                    return (
-                      <tr>
-                        <td colSpan={getTotalColumnCount()} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                          {requirements.length === 0
-                            ? 'No requirements found. Click "Create Requirement" to get started.'
-                            : 'No requirements match your search or filter criteria.'}
-                        </td>
-                      </tr>
-                    )
-                  }
-                  
-                  return hierarchyRequirements.map((req) => (
-                    <React.Fragment key={req.id}>
-                      {renderRequirementRow(req)}
-                    </React.Fragment>
-                  ))
+          {/* Modals - Render outside scrollable container */}
+          {isCreateModalOpen && projectId && (
+            <CreateRequirementModal
+              isOpen={isCreateModalOpen}
+              onClose={() => {
+                setIsCreateModalOpen(false)
+                setParentRequirement(null)
+              }}
+              projectId={projectId}
+              parentRequirement={parentRequirement}
+            />
+          )}
+
+          {editingRequirement && projectId && (
+            <EditRequirementModal
+              isOpen={!!editingRequirement}
+              onClose={() => setEditingRequirement(null)}
+              projectId={projectId}
+              requirement={editingRequirement}
+            />
+          )}
+
+          {LIFECYCLE_V1 && changeStatusAnchor && projectId && (
+            <ChangeStatusPopover
+              requirement={changeStatusAnchor.requirement}
+              projectId={projectId}
+              anchorEl={changeStatusAnchor.el}
+              onClose={() => setChangeStatusAnchor(null)}
+            />
+          )}
+
+          {deleteConfirmation && (
+            <DeleteRequirementModal
+              isOpen={!!deleteConfirmation}
+              requirement={deleteConfirmation}
+              hasChildren={requirements.some((r) => r.parentId === deleteConfirmation.id)}
+              linkedFunctionsCount={LINKAGE_V1 ? undefined : functions.filter((f) => f.sourceReqId === deleteConfirmation.id).length}
+              linkedItemsCount={LINKAGE_V1 ? links.filter((l: any) => l.sourceType === 'requirement' && l.sourceId === deleteConfirmation.id).length : undefined}
+              onConfirm={handleConfirmDelete}
+              onCancel={() => setDeleteConfirmation(null)}
+              isDeleting={deleteRequirementMutation.isPending}
+            />
+          )}
+
+          {isTraceMatrixOpen && projectId && (
+            <TraceabilityMatrix
+              projectId={projectId}
+              onClose={() => setIsTraceMatrixOpen(false)}
+            />
+          )}
+
+          {isSuspectReviewOpen && projectId && (
+            <SuspectLinksReview
+              projectId={projectId}
+              onClose={() => setIsSuspectReviewOpen(false)}
+              onCreateChangeRequest={(impactedRefs) => {
+                setSuspectLinksForCR(impactedRefs)
+                setIsSuspectReviewOpen(false)
+                const firstReq = requirements.find((r) => r.id === impactedRefs[0]?.sourceId)
+                setSelectedRequirementForChangeRequest(firstReq || null)
+                setIsChangeRequestModalOpen(true)
+              }}
+            />
+          )}
+
+          {isBaselineManagerOpen && projectId && (
+            <BaselineManager
+              projectId={projectId}
+              onClose={() => setIsBaselineManagerOpen(false)}
+            />
+          )}
+
+          {isExportOpen && projectId && (
+            <ExportBuilder
+              requirements={filteredRequirements}
+              projectName={projectId}
+              projectId={projectId}
+              onClose={() => setIsExportOpen(false)}
+            />
+          )}
+
+          {isImportOpen && projectId && (
+            <ImportWizard
+              projectId={projectId}
+              onClose={() => setIsImportOpen(false)}
+            />
+          )}
+
+          {isDiagramOpen && projectId && (
+            <RequirementDiagram
+              requirements={requirements}
+              traceLinks={traceLinks}
+              projectId={projectId}
+              onClose={() => setIsDiagramOpen(false)}
+            />
+          )}
+
+          {isAllocationTableOpen && projectId && (
+            <AllocationTable
+              projectId={projectId}
+              onClose={() => setIsAllocationTableOpen(false)}
+            />
+          )}
+
+          {isQualityPanelOpen && projectId && (
+            <RequirementQualityPanel
+              projectId={projectId}
+              onClose={() => setIsQualityPanelOpen(false)}
+              onRequirementClick={(requirementId) => {
+                const req = requirements.find((r) => r.id === requirementId)
+                if (req) {
+                  setDetailRequirement(req)
+                  setIsQualityPanelOpen(false)
                 }
-              })()}
-            </tbody>
-          </table>
+              }}
+            />
+          )}
+
+          {isChangeRequestModalOpen && projectId && (
+            <CreateChangeRequestModal
+              isOpen={isChangeRequestModalOpen}
+              onClose={() => {
+                setIsChangeRequestModalOpen(false)
+                setSelectedRequirementForChangeRequest(null)
+                setSuspectLinksForCR(null)
+              }}
+              projectId={projectId}
+              sourceType={selectedRequirementForChangeRequest ? 'requirement' : undefined}
+              sourceId={selectedRequirementForChangeRequest?.id}
+              sourceName={selectedRequirementForChangeRequest?.title}
+              sourceTitle={selectedRequirementForChangeRequest ? (suspectLinksForCR ? `Suspect Links Review (${suspectLinksForCR.length} links)` : selectedRequirementForChangeRequest.title) : undefined}
+              sourceDescription={
+                suspectLinksForCR?.length
+                  ? `Created from Suspect Links Review. Impacted traceability: ${suspectLinksForCR.map((r) => `${r.sourceType}:${r.sourceId.substring(0, 8)} -> ${r.targetType}:${r.targetId.substring(0, 8)}`).join('; ')}`
+                  : selectedRequirementForChangeRequest?.description
+              }
+            />
+          )}
         </div>
+
+        {/* Drawer - Side by side with main content */}
+        <RequirementDetailDrawer
+          isOpen={!!detailRequirement}
+          requirement={detailRequirement}
+          projectId={projectId || ''}
+          baselineId={baselineId}
+          onClose={() => setDetailRequirement(null)}
+          onEdit={(req) => {
+            setDetailRequirement(null)
+            setEditingRequirement(req)
+          }}
+          onDelete={(req) => {
+            setDetailRequirement(null)
+            setDeleteConfirmation(req)
+          }}
+        />
       </div>
-
-      {/* Modals - Render outside scrollable container */}
-      {isCreateModalOpen && projectId && (
-        <CreateRequirementModal
-          isOpen={isCreateModalOpen}
-          onClose={() => {
-            setIsCreateModalOpen(false)
-            setParentRequirement(null)
-          }}
-          projectId={projectId}
-          parentRequirement={parentRequirement}
-        />
-      )}
-
-      {editingRequirement && projectId && (
-        <EditRequirementModal
-          isOpen={!!editingRequirement}
-          onClose={() => setEditingRequirement(null)}
-          projectId={projectId}
-          requirement={editingRequirement}
-        />
-      )}
-
-      {LIFECYCLE_V1 && changeStatusAnchor && projectId && (
-        <ChangeStatusPopover
-          requirement={changeStatusAnchor.requirement}
-          projectId={projectId}
-          anchorEl={changeStatusAnchor.el}
-          onClose={() => setChangeStatusAnchor(null)}
-        />
-      )}
-
-      {deleteConfirmation && (
-        <DeleteRequirementModal
-          isOpen={!!deleteConfirmation}
-          requirement={deleteConfirmation}
-          hasChildren={requirements.some((r) => r.parentId === deleteConfirmation.id)}
-          linkedFunctionsCount={LINKAGE_V1 ? undefined : functions.filter((f) => f.sourceReqId === deleteConfirmation.id).length}
-          linkedItemsCount={LINKAGE_V1 ? links.filter((l: any) => l.sourceType === 'requirement' && l.sourceId === deleteConfirmation.id).length : undefined}
-          onConfirm={handleConfirmDelete}
-          onCancel={() => setDeleteConfirmation(null)}
-          isDeleting={deleteRequirementMutation.isPending}
-        />
-      )}
-
-      {isTraceMatrixOpen && projectId && (
-        <TraceabilityMatrix
-          projectId={projectId}
-          onClose={() => setIsTraceMatrixOpen(false)}
-        />
-      )}
-
-      {isSuspectReviewOpen && projectId && (
-        <SuspectLinksReview
-          projectId={projectId}
-          onClose={() => setIsSuspectReviewOpen(false)}
-          onCreateChangeRequest={(impactedRefs) => {
-            setSuspectLinksForCR(impactedRefs)
-            setIsSuspectReviewOpen(false)
-            const firstReq = requirements.find((r) => r.id === impactedRefs[0]?.sourceId)
-            setSelectedRequirementForChangeRequest(firstReq || null)
-            setIsChangeRequestModalOpen(true)
-          }}
-        />
-      )}
-
-      {isBaselineManagerOpen && projectId && (
-        <BaselineManager
-          projectId={projectId}
-          onClose={() => setIsBaselineManagerOpen(false)}
-        />
-      )}
-
-      {isExportOpen && projectId && (
-        <ExportBuilder
-          requirements={filteredRequirements}
-          projectName={projectId}
-          projectId={projectId}
-          onClose={() => setIsExportOpen(false)}
-        />
-      )}
-
-      {isImportOpen && projectId && (
-        <ImportWizard
-          projectId={projectId}
-          onClose={() => setIsImportOpen(false)}
-        />
-      )}
-
-      {isDiagramOpen && projectId && (
-        <RequirementDiagram
-          requirements={requirements}
-          traceLinks={traceLinks}
-          projectId={projectId}
-          onClose={() => setIsDiagramOpen(false)}
-        />
-      )}
-
-      {isAllocationTableOpen && projectId && (
-        <AllocationTable
-          projectId={projectId}
-          onClose={() => setIsAllocationTableOpen(false)}
-        />
-      )}
-
-      {isQualityPanelOpen && projectId && (
-        <RequirementQualityPanel
-          projectId={projectId}
-          onClose={() => setIsQualityPanelOpen(false)}
-          onRequirementClick={(requirementId) => {
-            const req = requirements.find((r) => r.id === requirementId)
-            if (req) {
-              setDetailRequirement(req)
-              setIsQualityPanelOpen(false)
-            }
-          }}
-        />
-      )}
-
-      {isChangeRequestModalOpen && projectId && (
-        <CreateChangeRequestModal
-          isOpen={isChangeRequestModalOpen}
-          onClose={() => {
-            setIsChangeRequestModalOpen(false)
-            setSelectedRequirementForChangeRequest(null)
-            setSuspectLinksForCR(null)
-          }}
-          projectId={projectId}
-          sourceType={selectedRequirementForChangeRequest ? 'requirement' : undefined}
-          sourceId={selectedRequirementForChangeRequest?.id}
-          sourceName={selectedRequirementForChangeRequest?.title}
-          sourceTitle={selectedRequirementForChangeRequest ? (suspectLinksForCR ? `Suspect Links Review (${suspectLinksForCR.length} links)` : selectedRequirementForChangeRequest.title) : undefined}
-          sourceDescription={
-            suspectLinksForCR?.length
-              ? `Created from Suspect Links Review. Impacted traceability: ${suspectLinksForCR.map((r) => `${r.sourceType}:${r.sourceId.substring(0, 8)} -> ${r.targetType}:${r.targetId.substring(0, 8)}`).join('; ')}`
-              : selectedRequirementForChangeRequest?.description
-          }
-        />
-      )}
-      </div>
-
-      {/* Drawer - Side by side with main content */}
-      <RequirementDetailDrawer
-        isOpen={!!detailRequirement}
-        requirement={detailRequirement}
-        projectId={projectId || ''}
-        baselineId={baselineId}
-        onClose={() => setDetailRequirement(null)}
-        onEdit={(req) => {
-          setDetailRequirement(null)
-          setEditingRequirement(req)
-        }}
-        onDelete={(req) => {
-          setDetailRequirement(null)
-          setDeleteConfirmation(req)
-        }}
-      />
     </div>
   )
 }

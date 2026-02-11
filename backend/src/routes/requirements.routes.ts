@@ -17,6 +17,7 @@ import {
   addCustomRequirementType,
   deleteCustomRequirementType,
   migrateCategoryToRequirementType,
+  updateRequirementComponent,
 } from '../controllers/requirement.controller'
 
 const router = Router()
@@ -44,5 +45,8 @@ router.delete('/:projectId/custom-types/:typeId', deleteCustomRequirementType)
 
 // Migration endpoint
 router.post('/:projectId/migrate-category-to-type', migrateCategoryToRequirementType)
+
+// Component assignment (drag-and-drop)
+router.patch('/:projectId/:requirementId/component', updateRequirementComponent)
 
 export default router

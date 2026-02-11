@@ -3,6 +3,7 @@ import { X, Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { requirementService } from '../../services/requirement.service'
 import { projectService } from '../../services/project.service'
+import { componentService } from '../../services/component.service'
 import { templateService } from '../../services/template.service'
 import { verificationService } from '../../services/verification.service'
 import { linkService } from '../../services/link.service'
@@ -16,6 +17,7 @@ import { interfaceAdapter } from '../../linkage/adapters/interfaceAdapter'
 import { hazardAdapter } from '../../linkage/adapters/hazardAdapter'
 import { riskAdapter } from '../../linkage/adapters/riskAdapter'
 import type { CreateRequirementDto, Requirement, RequirementType } from 'shared/types/engineering.types'
+import type { ComponentTreeNode } from 'shared/types/project.types'
 
 interface Moc {
   code?: string | number
@@ -225,7 +227,7 @@ export default function CreateRequirementModal({
     )
 
     // Use the first lifecycle found (or most recent if multiple)
-    const requirementLifecycle = requirementLifecycles.length > 0 
+    const requirementLifecycle = requirementLifecycles.length > 0
       ? requirementLifecycles[requirementLifecycles.length - 1] // Use most recent
       : null
 
@@ -278,6 +280,29 @@ export default function CreateRequirementModal({
     },
     enabled: isOpen && !!projectId,
   })
+
+  // Fetch component tree for PBS assignment
+  const { data: componentTree = [] } = useQuery({
+    queryKey: ['components', projectId],
+    queryFn: async () => {
+      const response = await componentService.getComponentTree(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: isOpen && !!projectId,
+  })
+
+  // Flatten component tree for the dropdown
+  const flatComponents = useMemo(() => {
+    const result: { id: string; name: string; depth: number }[] = []
+    const flatten = (nodes: ComponentTreeNode[], depth: number) => {
+      for (const node of nodes) {
+        result.push({ id: node.id, name: node.name, depth })
+        if (node.children) flatten(node.children, depth + 1)
+      }
+    }
+    flatten(componentTree, 0)
+    return result
+  }, [componentTree])
 
   useEffect(() => {
     if (Array.isArray(customTypesData) && customTypesData.length > 0) {
@@ -351,7 +376,7 @@ export default function CreateRequirementModal({
     onError: (error: any) => {
       console.error('Create requirement error:', error)
       let errorMessage = 'Failed to create requirement.'
-      
+
       if (error?.error) {
         errorMessage = error.error
       } else if (error?.message) {
@@ -359,7 +384,7 @@ export default function CreateRequirementModal({
       } else if (error?.response?.data?.error) {
         errorMessage = error.response.data.error
       }
-      
+
       setErrors({ submit: errorMessage })
     },
   })
@@ -472,7 +497,7 @@ export default function CreateRequirementModal({
     }
 
     if (!customTypesData || customTypesData.length === 0) return
-    
+
     const customType = customTypesData.find(t => t.typeName === typeName)
     if (customType) {
       deleteCustomTypeMutation.mutate(customType.id)
@@ -615,11 +640,11 @@ export default function CreateRequirementModal({
   })
 
   return (
-    <div 
-      className="fixed inset-0 bg-black bg-opacity-50 dark:bg-black dark:bg-opacity-70 flex items-center justify-center z-50" 
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 dark:bg-black dark:bg-opacity-70 flex items-center justify-center z-50"
       onClick={onClose}
     >
-      <div 
+      <div
         className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto m-4"
         onClick={(e) => e.stopPropagation()}
       >
@@ -700,11 +725,10 @@ export default function CreateRequirementModal({
               type="text"
               value={formData.title}
               onChange={(e) => handleChange('title', e.target.value)}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.title
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.title
                   ? 'border-red-500'
                   : 'border-gray-300 dark:border-gray-600'
-              } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
+                } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
               placeholder="Enter requirement title"
             />
             {errors.title && (
@@ -722,11 +746,10 @@ export default function CreateRequirementModal({
               onChange={(e) => handleChange('description', e.target.value)}
               placeholder="Enter requirement description..."
               rows={6}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.description
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.description
                   ? 'border-red-500'
                   : 'border-gray-300 dark:border-gray-600'
-              } bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none`}
+                } bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none`}
             />
             {errors.description && (
               <p className="mt-1 text-sm text-red-500">{errors.description}</p>
@@ -750,6 +773,28 @@ export default function CreateRequirementModal({
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* PBS Component Assignment */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+              PBS Component
+            </label>
+            <select
+              value={formData.componentId || ''}
+              onChange={(e) => handleChange('componentId', e.target.value || undefined)}
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              <option value="">Unassigned</option>
+              {flatComponents.map((comp) => (
+                <option key={comp.id} value={comp.id}>
+                  {'\u00A0'.repeat(comp.depth * 3)}{comp.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
+              Assign this requirement to a PBS component
+            </p>
           </div>
 
           {/* Priority and Status */}
@@ -794,8 +839,8 @@ export default function CreateRequirementModal({
                 >
                   {statuses.length > 0
                     ? statuses.map((s) => (
-                        <option key={s.id} value={s.name}>{s.name}</option>
-                      ))
+                      <option key={s.id} value={s.name}>{s.name}</option>
+                    ))
                     : <option value={initialStatus}>{initialStatus}</option>}
                 </select>
               )}
@@ -884,11 +929,10 @@ export default function CreateRequirementModal({
             <select
               value={formData.linkedMocCode || ''}
               onChange={(e) => handleChange('linkedMocCode', e.target.value)}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
-                errors.linkedMocCode
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.linkedMocCode
                   ? 'border-red-500 dark:border-red-500'
                   : 'border-gray-300 dark:border-gray-600'
-              }`}
+                }`}
             >
               <option value="">Select MoC (required)</option>
               {mocs.map((moc: any) => (
@@ -913,9 +957,8 @@ export default function CreateRequirementModal({
             <select
               value={formData.verificationMethod || ''}
               onChange={(e) => handleChange('verificationMethod', e.target.value || undefined)}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
-                errors.verificationMethod ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-              }`}
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.verificationMethod ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                }`}
             >
               <option value="">Select verification method</option>
               {verificationMethods.map((method) => (
@@ -948,7 +991,7 @@ export default function CreateRequirementModal({
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
               Classification
             </h3>
-            
+
             {/* Requirement Type */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">

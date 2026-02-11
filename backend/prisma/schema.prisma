@@ -143,9 +143,10 @@ model Component {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent   Component? @relation("ComponentHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children Component[] @relation("ComponentHierarchy")
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent       Component?    @relation("ComponentHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Component[]   @relation("ComponentHierarchy")
+  requirements Requirement[]
 
   @@index([projectId])
   @@index([parentId])
@@ -189,6 +190,7 @@ model Requirement {
   title              String
   description        String
   parentId           String?
+  componentId        String?
   priority           String
   status             String
   reviewStatus       String?   @default("draft") // 'draft' | 'under_review' | 'approved' | 'rejected'
@@ -223,6 +225,7 @@ model Requirement {
   project     Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
   parent      Requirement?            @relation("RequirementHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children    Requirement[]           @relation("RequirementHierarchy")
+  component   Component?              @relation(fields: [componentId], references: [id], onDelete: SetNull)
   comments    RequirementComment[]
   attachments RequirementAttachment[]
   reviews     RequirementReview[]
@@ -232,6 +235,7 @@ model Requirement {
   @@unique([projectId, requirementId])
   @@index([projectId])
   @@index([parentId])
+  @@index([componentId])
   @@index([linkedMocCode])
 }
 

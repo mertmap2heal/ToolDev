@@ -6,6 +6,7 @@ import {
   createComponent,
   updateComponent,
   deleteComponent,
+  syncPBSToComponents,
 } from '../controllers/component.controller'
 import { authenticateToken } from '../middleware/auth.middleware'
 
@@ -37,5 +38,8 @@ router.put('/:projectId/components/:componentId', updateComponent)
 // DELETE /api/projects/:projectId/components/:componentId - Delete component
 // Query param: ?reassignTo=<componentId> to reassign children/artifacts
 router.delete('/:projectId/components/:componentId', deleteComponent)
+
+// POST /api/projects/:projectId/components/sync-pbs - Sync PBS localStorage to components
+router.post('/:projectId/components/sync-pbs', syncPBSToComponents)
 
 export default router

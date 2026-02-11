@@ -3,12 +3,14 @@ import { X, Plus, Trash2 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { requirementService } from '../../services/requirement.service'
 import { projectService } from '../../services/project.service'
+import { componentService } from '../../services/component.service'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import { useLifecycleStore } from '../../store/lifecycleStore'
 import { LIFECYCLE_V1 } from '../../config/featureFlags'
 import { lifecycleService } from '../../services/lifecycle.service'
 import RichTextEditor from '../common/RichTextEditor'
 import type { Requirement, UpdateRequirementDto, RequirementType } from 'shared/types/engineering.types'
+import type { ComponentTreeNode } from 'shared/types/project.types'
 
 interface EditRequirementModalProps {
   isOpen: boolean
@@ -129,6 +131,29 @@ export default function EditRequirementModal({
     enabled: isOpen && !!projectId,
   })
 
+  // Fetch component tree for assignment
+  const { data: componentTree = [] } = useQuery({
+    queryKey: ['components', projectId],
+    queryFn: async () => {
+      const response = await componentService.getComponentTree(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: isOpen && !!projectId,
+  })
+
+  // Flatten component tree for the dropdown
+  const flatComponents = useMemo(() => {
+    const result: { id: string; name: string; depth: number }[] = []
+    const flatten = (nodes: ComponentTreeNode[], depth: number) => {
+      for (const node of nodes) {
+        result.push({ id: node.id, name: node.name, depth })
+        if (node.children) flatten(node.children, depth + 1)
+      }
+    }
+    flatten(componentTree, 0)
+    return result
+  }, [componentTree])
+
   useEffect(() => {
     if (Array.isArray(customTypesData) && customTypesData.length > 0) {
       const customTypeNames = customTypesData.map((t: { typeName: string }) => t.typeName)
@@ -166,14 +191,15 @@ export default function EditRequirementModal({
         source: requirement.source,
         relatedDocuments: requirement.relatedDocuments,
         tags: requirement.tags || [],
+        componentId: requirement.componentId || undefined,
       })
       setErrors({})
-      
+
       // Add current requirementType to available types if it's not in the predefined list
       if (requirement.requirementType && !availableRequirementTypes.includes(requirement.requirementType)) {
         setAvailableRequirementTypes([...availableRequirementTypes, requirement.requirementType])
       }
-      
+
       // Add current source to source types if it's not in the list
       if (requirement.source && !sourceTypes.includes(requirement.source)) {
         setSourceTypes([...sourceTypes, requirement.source])
@@ -199,7 +225,7 @@ export default function EditRequirementModal({
     onError: (error: any) => {
       console.error('Update requirement mutation error:', error)
       let errorMessage = 'Failed to update requirement.'
-      
+
       if (error?.error) {
         errorMessage = error.error
       } else if (error?.message) {
@@ -207,7 +233,7 @@ export default function EditRequirementModal({
       } else if (error?.response?.data?.error) {
         errorMessage = error.response.data.error
       }
-      
+
       console.error('Error message to display:', errorMessage)
       setErrors({ submit: errorMessage })
     },
@@ -333,8 +359,8 @@ export default function EditRequirementModal({
       relatedDocuments: formData.relatedDocuments && formData.relatedDocuments.length > 0 ? formData.relatedDocuments : undefined,
       // Explicitly include parentId - empty string means clear parent (backend converts to null)
       // undefined means don't change, string means set parent
-      parentId: formData.parentId !== undefined 
-        ? (formData.parentId === '' ? '' : formData.parentId) 
+      parentId: formData.parentId !== undefined
+        ? (formData.parentId === '' ? '' : formData.parentId)
         : undefined,
       // Include all other fields that might have changed
       requirementId: formData.requirementId || undefined,
@@ -346,10 +372,11 @@ export default function EditRequirementModal({
       verificationMethod: formData.verificationMethod || undefined,
       source: formData.source || undefined,
       tags: formData.tags && formData.tags.length > 0 ? formData.tags : undefined,
+      componentId: formData.componentId || undefined,
     }
 
     console.log('Submitting requirement update:', requirement.id, submitData)
-    
+
     updateRequirementMutation.mutate(submitData, {
       onSuccess: (response) => {
         console.log('Update successful:', response)
@@ -429,11 +456,10 @@ export default function EditRequirementModal({
               type="text"
               value={formData.title || ''}
               onChange={(e) => handleChange('title', e.target.value)}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.title
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.title
                   ? 'border-red-500'
                   : 'border-gray-300 dark:border-gray-600'
-              } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
+                } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
               placeholder="Enter requirement title"
             />
             {errors.title && (
@@ -481,6 +507,28 @@ export default function EditRequirementModal({
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* PBS Component Assignment */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+              PBS Component
+            </label>
+            <select
+              value={formData.componentId || ''}
+              onChange={(e) => handleChange('componentId', e.target.value || undefined)}
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              <option value="">Unassigned</option>
+              {flatComponents.map((comp) => (
+                <option key={comp.id} value={comp.id}>
+                  {'\u00A0'.repeat(comp.depth * 3)}{comp.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
+              Assign this requirement to a PBS component
+            </p>
           </div>
 
           {/* Priority and Status */}
@@ -650,7 +698,7 @@ export default function EditRequirementModal({
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
               Classification
             </h3>
-            
+
             {/* Requirement Type */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">

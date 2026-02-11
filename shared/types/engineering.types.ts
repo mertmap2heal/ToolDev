@@ -10,6 +10,7 @@ export interface Requirement {
   title: string
   description: string
   parentId?: string
+  componentId?: string
   parent?: Requirement
   children?: Requirement[]
   priority: 'low' | 'medium' | 'high' | 'critical'
@@ -366,6 +367,7 @@ export interface CreateRequirementDto {
   title: string
   description: string
   parentId?: string
+  componentId?: string
   priority?: 'low' | 'medium' | 'high' | 'critical'
   status?: string
   stage?: string
@@ -400,6 +402,7 @@ export interface UpdateRequirementDto {
   statusId?: string
   description?: string
   parentId?: string | null
+  componentId?: string | null
   priority?: 'low' | 'medium' | 'high' | 'critical'
   status?: string
   stage?: string

@@ -45,7 +45,7 @@ export default function CompanyLimitsPage() {
   const handleSave = async (item: PlatformAdminLimitItem) => {
     const raw = getEditValue(item)
     const maxUsers = raw.trim() === '' ? null : parseInt(raw, 10)
-    if (raw.trim() !== '' && (Number.isNaN(maxUsers) || maxUsers < 0)) {
+    if (raw.trim() !== '' && (Number.isNaN(maxUsers) || maxUsers === null || maxUsers < 0)) {
       setError('Max users must be a non-negative number or empty for no limit.')
       return
     }

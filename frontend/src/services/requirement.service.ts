@@ -69,4 +69,7 @@ export const requirementService = {
   async deleteCustomRequirementType(projectId: string, typeId: string): Promise<ApiResponse<void>> {
     return apiClient.delete<void>(`/requirements/${projectId}/custom-types/${typeId}`)
   },
+
+  updateRequirementComponent: (projectId: string, requirementId: string, componentId: string | null): Promise<ApiResponse<{ success: boolean; data: any }>> =>
+    apiClient.patch<{ success: boolean; data: any }>(`/requirements/${projectId}/${requirementId}/component`, { componentId }),
 }

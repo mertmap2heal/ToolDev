@@ -1,0 +1,2 @@
+-- This migration was already applied but the file was missing.
+-- Placeholder to satisfy Prisma migration consistency check.
