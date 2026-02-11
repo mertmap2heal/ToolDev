@@ -70,6 +70,7 @@ import PlatformAdminPage from './pages/PlatformAdmin/PlatformAdminPage'
 import CompaniesPage from './pages/PlatformAdmin/CompaniesPage'
 import CompanyLimitsPage from './pages/PlatformAdmin/CompanyLimitsPage'
 import AuditLogsPage from './pages/PlatformAdmin/AuditLogsPage'
+import OrganizationPage from './pages/Organization/OrganizationPage'
 
 function App() {
   return (
@@ -92,6 +93,7 @@ function App() {
           </Route>
           <Route element={<MainLayout />}>
             <Route index element={<DashboardPage />} />
+            <Route path="organization" element={<OrganizationPage />} />
             <Route path="projects" element={<Navigate to="/" replace />} />
             <Route path="projects/:projectId" element={<ProjectLandingPage />} />
             <Route path="projects/:projectId/stakeholder" element={<StakeholderPage />} />

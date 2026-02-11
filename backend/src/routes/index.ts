@@ -42,10 +42,12 @@ import complianceRoutes from './compliance.routes'
 import certificationRoutes from './certification.routes'
 import notificationsRoutes from './notifications.routes'
 import platformAdminRoutes from './platformAdmin.routes'
+import organizationRoutes from './organization.routes'
 
 const router = Router()
 
 router.use('/auth', authRoutes)
+router.use('/organization', organizationRoutes)
 router.use('/platform-admin', platformAdminRoutes)
 router.use('/notifications', notificationsRoutes)
 // Mount components (PBS) before project so /projects/:projectId/components is matched

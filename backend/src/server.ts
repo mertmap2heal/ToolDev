@@ -8,6 +8,7 @@ import routes from './routes/index.js'
 
 dotenv.config()
 
+console.log('Server: loading Prisma and routes...')
 const prisma = new PrismaClient()
 
 const __filename = fileURLToPath(import.meta.url)
@@ -62,9 +63,20 @@ app.get('/api/v1', (req, res) => {
 
 app.use('/api/v1', routes)
 
+// Global error handler: return JSON 500 for any unhandled errors
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('Unhandled error:', err)
+  const message = process.env.NODE_ENV === 'production' ? 'Internal server error' : (err.message ?? 'Internal server error')
+  res.status(500).json({ success: false, error: message })
+})
+
 if (process.env.NODE_ENV !== 'test') {
+  console.log('Server: binding to port', PORT, '...')
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`)
+  }).on('error', (err: NodeJS.ErrnoException) => {
+    console.error('Server failed to listen:', err.message)
+    if (err.code === 'EADDRINUSE') console.error('Port', PORT, 'is already in use.')
   })
 }
 

@@ -38,3 +38,29 @@ export async function setCompanyLimit(
     maxUsers,
   })
 }
+
+export interface PlatformAdminOrganizationItem {
+  companyKey: string
+  name: string
+  displayName: string | null
+  description: string | null
+  contactEmail: string | null
+  userCount: number
+  projectCount: number
+  maxUsers: number | null
+}
+
+export async function getOrganizations(): Promise<ApiResponse<PlatformAdminOrganizationItem[]>> {
+  return apiClient.get<PlatformAdminOrganizationItem[]>('/platform-admin/organizations')
+}
+
+export async function updateOrganization(
+  companyKey: string,
+  data: { name?: string; displayName?: string | null; description?: string | null; contactEmail?: string | null }
+): Promise<ApiResponse<{ companyKey: string; name: string; displayName: string | null; description: string | null; contactEmail: string | null }>> {
+  const encoded = companyKey === '__null__' ? '__null__' : encodeURIComponent(companyKey)
+  return apiClient.put(
+    `/platform-admin/organizations/${encoded}`,
+    data
+  )
+}

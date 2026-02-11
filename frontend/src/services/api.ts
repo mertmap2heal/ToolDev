@@ -109,10 +109,24 @@ class ApiClient {
 
   private handleError(error: any): ApiResponse {
     if (error.response) {
+      const status = error.response.status
+      // Proxy returns 502/503 when backend is unreachable
+      if (status === 502 || status === 503) {
+        return {
+          success: false,
+          error: 'Backend unavailable. Make sure the backend is running (e.g. npm run dev in the backend folder).',
+          statusCode: status,
+        }
+      }
+      const data = error.response.data
+      const message =
+        (typeof data === 'object' && data !== null && (data.error ?? data.message)) ||
+        (typeof data === 'string' && data) ||
+        'An error occurred'
       return {
         success: false,
-        error: error.response.data?.error || error.response.data?.message || 'An error occurred',
-        statusCode: error.response.status,
+        error: String(message),
+        statusCode: status,
       }
     }
     

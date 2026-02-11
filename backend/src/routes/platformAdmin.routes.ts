@@ -157,6 +157,111 @@ router.put('/limits', async (req: AuthRequest, res: Response) => {
   }
 })
 
+/** GET /platform-admin/organizations - list organizations (with profile and stats) */
+router.get('/organizations', async (_req: AuthRequest, res: Response) => {
+  try {
+    const [userRows, projectRows, orgRows, limits] = await Promise.all([
+      prisma.user.findMany({ select: { company: true } }),
+      prisma.project.findMany({ select: { companyName: true } }),
+      prisma.organization.findMany({ select: { companyKey: true, name: true, displayName: true, description: true, contactEmail: true } }),
+      prisma.companyLimit.findMany({ select: { companyKey: true, maxUsers: true } }),
+    ])
+    const companyKeys = new Set<string>()
+    for (const r of userRows) companyKeys.add(toCompanyKey(r.company))
+    for (const r of projectRows) companyKeys.add(toCompanyKey(r.companyName))
+    const limitByKey = new Map(limits.map((l) => [l.companyKey, l.maxUsers]))
+    const orgByKey = new Map(orgRows.map((o) => [o.companyKey, o]))
+
+    const keys = Array.from(companyKeys).sort((a, b) => {
+      if (a === UNNAMED_KEY) return -1
+      if (b === UNNAMED_KEY) return 1
+      return a.localeCompare(b)
+    })
+
+    const data: {
+      companyKey: string
+      name: string
+      displayName: string | null
+      description: string | null
+      contactEmail: string | null
+      userCount: number
+      projectCount: number
+      maxUsers: number | null
+    }[] = []
+
+    for (const key of keys) {
+      const rawKey = fromCompanyKey(key)
+      const org = orgByKey.get(key)
+      const defaultDisplayName = rawKey == null ? '(No name)' : rawKey
+      const [userCount, projectCount] = await Promise.all([
+        prisma.user.count({
+          where: {
+            ...(rawKey == null
+              ? { OR: [{ company: null }, { company: '' }] }
+              : { company: rawKey }),
+            OR: [{ role: null }, { role: { not: 'SUPERIOR_ADMIN' } }],
+          },
+        }),
+        prisma.project.count({
+          where: rawKey == null
+            ? { OR: [{ companyName: null }, { companyName: '' }] }
+            : { companyName: rawKey },
+        }),
+      ])
+      data.push({
+        companyKey: key,
+        name: org?.name ?? rawKey ?? defaultDisplayName,
+        displayName: org?.displayName ?? defaultDisplayName,
+        description: org?.description ?? null,
+        contactEmail: org?.contactEmail ?? null,
+        userCount,
+        projectCount,
+        maxUsers: limitByKey.get(key) ?? null,
+      })
+    }
+
+    res.json({ success: true, data })
+  } catch (error) {
+    console.error('Platform admin organizations error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+/** PUT /platform-admin/organizations/:companyKey - upsert organization profile */
+router.put('/organizations/:companyKey', async (req: AuthRequest, res: Response) => {
+  try {
+    const companyKeyParam = req.params.companyKey
+    const companyKey = companyKeyParam === '' || companyKeyParam === 'null' ? UNNAMED_KEY : decodeURIComponent(companyKeyParam)
+    const { name, displayName, description, contactEmail } = req.body
+    const nameStr = name != null ? String(name).trim() : (companyKey === UNNAMED_KEY ? '(No name)' : companyKey)
+    const displayNameStr = displayName != null && displayName !== '' ? String(displayName).trim() : null
+    const descriptionStr = description != null && description !== '' ? String(description).trim() : null
+    const contactEmailStr = contactEmail != null && contactEmail !== '' ? String(contactEmail).trim() : null
+
+    const org = await prisma.organization.upsert({
+      where: { companyKey },
+      update: {
+        name: nameStr,
+        displayName: displayNameStr,
+        description: descriptionStr,
+        contactEmail: contactEmailStr,
+      },
+      create: {
+        companyKey,
+        name: nameStr,
+        displayName: displayNameStr,
+        description: descriptionStr,
+        contactEmail: contactEmailStr,
+      },
+      select: { companyKey: true, name: true, displayName: true, description: true, contactEmail: true },
+    })
+    res.json({ success: true, data: org })
+  } catch (error) {
+    console.error('Platform admin update organization error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
 /** GET /platform-admin/audit-logs - placeholder for global audit logs */
 router.get('/audit-logs', async (_req: AuthRequest, res: Response) => {
   try {

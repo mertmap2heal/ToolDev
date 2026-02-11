@@ -34,6 +34,18 @@ model CompanyLimit {
   updatedAt  DateTime @updatedAt
 }
 
+// Enterprise organization profile; one row per company (companyKey = name or __null__ for unnamed).
+model Organization {
+  id          String   @id @default(uuid())
+  companyKey  String   @unique
+  name        String
+  displayName String?
+  description String?
+  contactEmail String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model Project {
   id          String    @id @default(uuid())
   name        String

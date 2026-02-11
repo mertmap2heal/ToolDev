@@ -56,10 +56,12 @@ async function checkCompanyUserLimit(company: string | null | undefined): Promis
   const rawKey = companyKey === COMPANY_KEY_NULL ? null : companyKey
   const currentCount = await prisma.user.count({
     where: {
-      ...(rawKey == null
-        ? { OR: [{ company: null }, { company: '' }] }
-        : { company: rawKey }),
-      OR: [{ role: null }, { role: { not: 'SUPERIOR_ADMIN' } }],
+      AND: [
+        rawKey == null
+          ? { OR: [{ company: null }, { company: '' }] }
+          : { company: rawKey },
+        { OR: [{ role: null }, { role: { not: 'SUPERIOR_ADMIN' } }] },
+      ],
     },
   })
   if (currentCount >= maxUsers) {
@@ -302,9 +304,10 @@ export const getCurrentUser = async (req: Request, res: Response) => {
   } catch (error) {
     const err = error as Error
     console.error('Get current user error:', err)
+    const isProd = process.env.NODE_ENV === 'production'
     const message = err.message?.includes('reach database server') || err.message?.includes('localhost:5432')
       ? 'Database unavailable. Start PostgreSQL (e.g. docker-compose up -d).'
-      : (process.env.NODE_ENV === 'development' ? err.message : 'Internal server error')
+      : (isProd ? 'Internal server error' : (err.message ?? 'Internal server error'))
     res.status(500).json({
       success: false,
       error: message,
