@@ -56,3 +56,41 @@ export const requireSuperiorAdmin = async (
   }
   next()
 }
+
+/** Requires admin (ADMIN_EMAILS or first user). Use after authenticateToken. */
+export const requireAdmin = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  const userId = req.userId
+  if (!userId) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' })
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  })
+  if (!user) {
+    return res.status(401).json({ success: false, error: 'User not found' })
+  }
+  const isAdmin = await resolveIsAdmin(user.email)
+  if (!isAdmin) {
+    return res.status(403).json({ success: false, error: 'Admin access required' })
+  }
+  next()
+}
+
+async function resolveIsAdmin(email: string | null): Promise<boolean> {
+  if (!email) return false
+  const list = process.env.ADMIN_EMAILS
+  if (list) {
+    const emails = list.split(',').map((e) => e.trim().toLowerCase())
+    return emails.includes(email.toLowerCase())
+  }
+  const first = await prisma.user.findFirst({
+    orderBy: { createdAt: 'asc' },
+    select: { email: true },
+  })
+  return first?.email?.toLowerCase() === email.toLowerCase()
+}

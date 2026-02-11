@@ -143,6 +143,20 @@ export const authService = {
     })
   },
 
+  /** Admin only: create a new user with generated temporary password. Returns user + generatedPassword. */
+  async createAdminUser(data: {
+    email: string
+    name?: string
+    company?: string
+  }): Promise<
+    ApiResponse<{
+      user: { id: string; email: string; name: string; company?: string | null; createdAt: string }
+      generatedPassword: string
+    }>
+  > {
+    return apiClient.post('/auth/users', data)
+  },
+
   /** Admin only: set a new password for a user. */
   async resetUserPassword(userId: string, newPassword: string): Promise<ApiResponse<{ message: string }>> {
     return apiClient.put<{ message: string }>(`/auth/users/${userId}/password`, { newPassword })

@@ -43,10 +43,12 @@ import certificationRoutes from './certification.routes'
 import notificationsRoutes from './notifications.routes'
 import platformAdminRoutes from './platformAdmin.routes'
 import organizationRoutes from './organization.routes'
+import adminRoutes from './admin.routes'
 
 const router = Router()
 
 router.use('/auth', authRoutes)
+router.use('/admin', adminRoutes)
 router.use('/organization', organizationRoutes)
 router.use('/platform-admin', platformAdminRoutes)
 router.use('/notifications', notificationsRoutes)

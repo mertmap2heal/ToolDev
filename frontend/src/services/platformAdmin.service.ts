@@ -64,3 +64,66 @@ export async function updateOrganization(
     data
   )
 }
+
+export interface PlatformAuditEntry {
+  id: string
+  timestamp: string
+  actor: string
+  action: string
+  target: string
+  summary: string
+  source: string
+  companyKey: string | null
+  companyName: string | null
+}
+
+export interface PlatformAuditLogParams {
+  limit?: number
+  from?: string
+  to?: string
+  actor?: string
+  action?: string
+  target?: string
+  company?: string
+}
+
+export async function getAuditLogs(
+  params: PlatformAuditLogParams = {}
+): Promise<ApiResponse<PlatformAuditEntry[]>> {
+  const search = new URLSearchParams()
+  if (params.limit != null) search.set('limit', String(params.limit))
+  if (params.from) search.set('from', params.from)
+  if (params.to) search.set('to', params.to)
+  if (params.actor) search.set('actor', params.actor)
+  if (params.action) search.set('action', params.action)
+  if (params.target) search.set('target', params.target)
+  if (params.company) search.set('company', params.company)
+  const qs = search.toString()
+  return apiClient.get<PlatformAuditEntry[]>(`/platform-admin/audit-logs${qs ? `?${qs}` : ''}`)
+}
+
+export interface PlatformStats {
+  totalUsers: number
+  totalProjects: number
+  totalCompanies: number
+  companiesAtLimit: number
+  recentEvents: {
+    id: string
+    timestamp: string
+    action: string
+    entityType: string
+    companyName: string | null
+  }[]
+}
+
+export async function getPlatformStats(): Promise<ApiResponse<PlatformStats>> {
+  return apiClient.get<PlatformStats>('/platform-admin/stats')
+}
+
+export async function createCompany(data: {
+  companyKey: string
+  displayName?: string
+  maxUsers?: number | null
+}): Promise<ApiResponse<{ companyKey: string; displayName: string; maxUsers: number | null }>> {
+  return apiClient.post('/platform-admin/companies', data)
+}

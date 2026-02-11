@@ -25,6 +25,19 @@ model User {
   notifications    Notification[]
 }
 
+// Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
+model AdminRole {
+  id                 String   @id @default(uuid())
+  companyKey         String   @default("__default__") // __default__ = shared/default roles
+  name               String
+  defaultPermissions Json     // PermissionMap: { requirements: { view: true }, ... }
+  createdAt          DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([companyKey, name])
+  @@index([companyKey])
+}
+
 // Per-company user quota: max users (excluding SUPERIOR_ADMIN). companyKey = company name or __null__ for unnamed.
 model CompanyLimit {
   id         String   @id @default(uuid())

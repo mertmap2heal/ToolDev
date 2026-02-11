@@ -33,8 +33,16 @@ export interface Requirement {
     verificationStatus?: 'not_verified' | 'verified' | 'failed';
     verificationDate?: string;
     verificationNotes?: string;
+    linkedMocCode?: number;
+    moc?: {
+        code: number;
+        name: string;
+        description?: string;
+    };
+    reviewStatus?: 'draft' | 'under_review' | 'approved' | 'rejected';
     comments?: RequirementComment[];
     attachments?: RequirementAttachment[];
+    reviews?: RequirementReview[];
     createdAt: string;
     updatedAt: string;
 }
@@ -289,7 +297,7 @@ export interface ChangeRequest {
 export interface CreateChangeRequestDto {
     title: string;
     description: string;
-    sourceType: 'function' | 'issue' | 'parameter' | 'requirement';
+    sourceType: 'function' | 'issue' | 'parameter' | 'requirement' | 'test-plan' | 'test-case' | 'test-setup' | 'test-result';
     sourceId: string;
     priority: 'low' | 'medium' | 'high' | 'critical';
     requestedBy?: string;
@@ -318,6 +326,7 @@ export interface CreateRequirementDto {
     complexity?: ComplexityLevel;
     rationale?: string;
     assumptions?: string;
+    linkedMocCode?: string;
     dependencies?: string[];
     conflicts?: string[];
     stakeholders?: string[];
@@ -368,5 +377,58 @@ export interface BulkImportResult {
         row: number;
         errors: string[];
     }>;
+}
+export type ReviewStatus = 'draft' | 'in_review' | 'approved' | 'rejected' | 'cancelled';
+export type ReviewerStatus = 'pending' | 'in_progress' | 'approved' | 'rejected' | 'deferred';
+export type ReviewType = 'initial' | 'change' | 'periodic' | 'final';
+export interface RequirementReview {
+    id: string;
+    requirementId: string;
+    projectId: string;
+    reviewStatus: ReviewStatus;
+    reviewType?: ReviewType;
+    initiatedBy?: string;
+    initiatedByName?: string;
+    startedAt?: string;
+    completedAt?: string;
+    reviewNotes?: string;
+    createdAt: string;
+    updatedAt: string;
+    reviewers?: RequirementReviewer[];
+    requirement?: {
+        id: string;
+        requirementId?: string;
+        title: string;
+        description?: string;
+    };
+}
+export interface RequirementReviewer {
+    id: string;
+    reviewId: string;
+    requirementId: string;
+    projectId: string;
+    reviewerId?: string;
+    reviewerName?: string;
+    reviewerEmail?: string;
+    role?: 'reviewer' | 'approver' | 'observer';
+    status: ReviewerStatus;
+    reviewComments?: string;
+    reviewedAt?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+export interface CreateReviewDto {
+    reviewType?: ReviewType;
+    reviewers: Array<{
+        reviewerId?: string;
+        reviewerName?: string;
+        reviewerEmail?: string;
+        role?: 'reviewer' | 'approver' | 'observer';
+    }>;
+    reviewNotes?: string;
+}
+export interface UpdateReviewerDto {
+    status: ReviewerStatus;
+    reviewComments?: string;
 }
 //# sourceMappingURL=engineering.types.d.ts.map

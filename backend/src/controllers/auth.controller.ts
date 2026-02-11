@@ -417,6 +417,86 @@ export const resetUserPassword = async (req: AuthRequest, res: Response) => {
   }
 }
 
+/** Admin only: create a new user with generated temporary password. Body: { email, name?, company? } */
+export const createAdminUser = async (req: AuthRequest, res: Response) => {
+  try {
+    const admin = await requireAdmin(req, res)
+    if (!admin) return
+
+    const { email, name, company } = req.body
+
+    if (!email || typeof email !== 'string') {
+      res.status(400).json({ success: false, error: 'Email is required' })
+      return
+    }
+
+    const trimmedEmail = email.trim().toLowerCase()
+    if (!trimmedEmail.includes('@')) {
+      res.status(400).json({ success: false, error: 'Invalid email format' })
+      return
+    }
+
+    const limitError = await checkCompanyUserLimit(company)
+    if (limitError) {
+      res.status(403).json({ success: false, error: limitError })
+      return
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email: trimmedEmail },
+    })
+
+    if (existingUser) {
+      res.status(400).json({
+        success: false,
+        error: 'User with this email already exists',
+      })
+      return
+    }
+
+    const generatedPassword = randomTempPassword(14)
+    const hashedPassword = await bcrypt.hash(generatedPassword, 10)
+    const displayName = name && typeof name === 'string' ? name.trim() : trimmedEmail.split('@')[0] ?? 'User'
+
+    const user = await prisma.user.create({
+      data: {
+        email: trimmedEmail,
+        password: hashedPassword,
+        name: displayName,
+        company: company != null ? String(company).trim() || null : null,
+        mustChangePasswordOnFirstLogin: true,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        company: true,
+        createdAt: true,
+      },
+    })
+
+    res.status(201).json({
+      success: true,
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          company: user.company,
+          createdAt: user.createdAt.toISOString(),
+        },
+        generatedPassword,
+      },
+    })
+  } catch (error) {
+    console.error('Create admin user error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    })
+  }
+}
+
 /** List users (id, name, email, inviteEmail, lastLoginAt) for invite dropdowns and admin. Requires authentication. */
 export const getUsers = async (_req: Request, res: Response) => {
   try {

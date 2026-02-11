@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Loader2, Pencil } from 'lucide-react'
+import { Loader2, Pencil, Plus } from 'lucide-react'
 import {
   getOrganizations,
   updateOrganization,
+  createCompany,
   type PlatformAdminOrganizationItem,
 } from '../../services/platformAdmin.service'
 
@@ -126,11 +127,124 @@ function EditOrganizationModal({ item, onClose, onSaved }: EditModalProps) {
   )
 }
 
+function CreateCompanyModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [companyKey, setCompanyKey] = useState('')
+  const [displayName, setDisplayName] = useState('')
+  const [maxUsers, setMaxUsers] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const trimmed = companyKey.trim()
+    if (!trimmed) {
+      setError('Company key is required')
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await createCompany({
+        companyKey: trimmed,
+        displayName: displayName.trim() || undefined,
+        maxUsers: maxUsers.trim() === '' ? null : parseInt(maxUsers, 10),
+      })
+      if (res.success) {
+        onCreated()
+        onClose()
+      } else {
+        setError(res.error || 'Failed to create company')
+      }
+    } catch (err) {
+      setError((err as Error)?.message || 'Failed to create company')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md">
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Create company
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+            Provision a new tenant. Users can register with this company when signing up.
+          </p>
+        </div>
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          {error && (
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Company key (required)
+            </label>
+            <input
+              type="text"
+              value={companyKey}
+              onChange={(e) => setCompanyKey(e.target.value)}
+              placeholder="acme-corp"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+            />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Unique identifier; alphanumeric and hyphens only.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Display name (optional)
+            </label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Acme Corporation"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Max users (optional)
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={maxUsers}
+              onChange={(e) => setMaxUsers(e.target.value)}
+              placeholder="No limit"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+            />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !companyKey.trim()}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium flex items-center justify-center gap-2"
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : 'Create'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export default function CompaniesPage() {
   const [organizations, setOrganizations] = useState<PlatformAdminOrganizationItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState<PlatformAdminOrganizationItem | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
 
   const load = () => {
     setLoading(true)
@@ -163,6 +277,17 @@ export default function CompaniesPage() {
       <p className="text-gray-600 dark:text-gray-400 mb-6">
         Organization profiles (name, description, contact) and stats. Edit to set company information visible in the Organization menu.
       </p>
+
+      <div className="flex justify-end mb-4">
+        <button
+          type="button"
+          onClick={() => setCreateOpen(true)}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
+        >
+          <Plus size={16} />
+          Create company
+        </button>
+      </div>
 
       {loading && (
         <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 py-8">
@@ -263,6 +388,16 @@ export default function CompaniesPage() {
           item={editing}
           onClose={() => setEditing(null)}
           onSaved={load}
+        />
+      )}
+
+      {createOpen && (
+        <CreateCompanyModal
+          onClose={() => setCreateOpen(false)}
+          onCreated={() => {
+            setCreateOpen(false)
+            load()
+          }}
         />
       )}
     </div>

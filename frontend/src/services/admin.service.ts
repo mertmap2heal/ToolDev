@@ -2,6 +2,8 @@
  * Admin service — user/role/project/authority management.
  */
 
+import { apiClient } from './api'
+import { authService, setStoredAdminProfile } from './auth.service'
 import { projectService } from './project.service'
 import type {
   AdminUser,
@@ -15,12 +17,10 @@ import type {
 } from '../types/admin.types'
 import { emptyPermissionMap } from '../types/admin.types'
 
-// --- In-memory store (mock) ---
+// --- In-memory store (mock) - for authorities until backend supports ---
 let users: AdminUser[] = []
-let roles: Role[] = []
 let projects: AdminProject[] = []
 let authorities: Authority[] = []
-let auditLog: AuditLogEntry[] = []
 
 function uuid(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -30,63 +30,9 @@ function uuid(): string {
   })
 }
 
-function randomPassword(length = 16): string {
-  const chars =
-    'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%&*'
-  let s = ''
-  for (let i = 0; i < length; i++) {
-    s += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return s
-}
-
-function usernameFromInput(): string {
-  const n = users.length + 1
-  return `user.${n}`
-}
-
-// Seed initial mock data
+// Seed initial mock data for authorities and audit
 function seed() {
-  if (roles.length > 0) return
-  roles = [
-    {
-      id: 'role-1',
-      name: 'Viewer',
-      defaultPermissions: {
-        requirements: { view: true },
-        verification: { view: true },
-        documentation: { view: true },
-        riskManagement: { view: true },
-        changeRequests: { view: true },
-        configurationManagement: { view: true },
-      },
-    },
-    {
-      id: 'role-2',
-      name: 'Editor',
-      defaultPermissions: {
-        requirements: { view: true, create: true, edit: true, export: true },
-        verification: { view: true, create: true, edit: true, export: true },
-        documentation: { view: true, create: true, edit: true, export: true },
-        riskManagement: { view: true, create: true, edit: true, export: true },
-        changeRequests: { view: true, create: true, edit: true },
-        configurationManagement: { view: true, create: true, compare: true, export: true },
-      },
-    },
-    {
-      id: 'role-3',
-      name: 'Admin',
-      defaultPermissions: {
-        requirements: { view: true, create: true, edit: true, delete: true, export: true },
-        verification: { view: true, create: true, edit: true, execute: true, approve: true, export: true },
-        documentation: { view: true, create: true, edit: true, import: true, export: true, manageTemplates: true },
-        riskManagement: { view: true, create: true, edit: true, mitigate: true, approve: true, export: true },
-        changeRequests: { view: true, create: true, edit: true, approve: true, close: true },
-        configurationManagement: { view: true, create: true, baseline: true, compare: true, export: true },
-        admin: { manageUsers: true, manageRoles: true, manageProjects: true, auditLog: true },
-      },
-    },
-  ]
+  if (authorities.length > 0) return
   authorities = [
     {
       id: 'auth-1',
@@ -116,24 +62,6 @@ function seed() {
       createdAt: new Date().toISOString(),
     },
   ]
-  auditLog = [
-    {
-      id: 'audit-1',
-      timestamp: new Date(Date.now() - 86400000).toISOString(),
-      actor: 'admin.demo',
-      action: 'user.created',
-      target: 'user-1',
-      summary: 'User admin.demo created',
-    },
-    {
-      id: 'audit-2',
-      timestamp: new Date().toISOString(),
-      actor: 'system',
-      action: 'login',
-      target: 'admin.demo',
-      summary: 'User logged in',
-    },
-  ]
 }
 seed()
 
@@ -149,31 +77,41 @@ export async function getUser(id: string): Promise<AdminUser | null> {
 }
 
 export async function createUser(input: CreateUserInput): Promise<CreateUserResult> {
-  // TODO: replace with API
-  const username = usernameFromInput()
-  const generatedPassword = randomPassword()
-  const id = uuid()
-  const user: AdminUser = {
-    id,
-    username,
+  const res = await authService.createAdminUser({
+    email: input.email.trim(),
+    name: input.name?.trim() || undefined,
+    company: input.company?.trim() || undefined,
+  })
+  if (!res.success || !res.data) {
+    throw new Error(res.error ?? 'Failed to create user')
+  }
+  const { user: created, generatedPassword } = res.data
+  const adminUser: AdminUser = {
+    id: created.id,
+    username: created.email,
+    name: created.name,
     status: 'active',
     projects: input.projects ?? [],
     roles: input.roles ?? [],
     authorities: input.authorities ?? [],
     permissions: input.permissions ?? emptyPermissionMap(),
-    createdAt: new Date().toISOString(),
+    createdAt: created.createdAt,
     mustChangePasswordOnFirstLogin: true,
   }
-  users.push(user)
-  auditLog.push({
-    id: uuid(),
-    timestamp: new Date().toISOString(),
-    actor: 'admin',
-    action: 'user.created',
-    target: id,
-    summary: `User ${username} created`,
+  // Add to projects (if any)
+  for (const projectId of input.projects ?? []) {
+    const addRes = await projectService.addProjectMember(projectId, created.id, 'member')
+    if (!addRes.success) {
+      console.warn(`Failed to add user to project ${projectId}:`, addRes.error)
+    }
+  }
+  setStoredAdminProfile(created.id, {
+    roles: input.roles ?? [],
+    projects: input.projects ?? [],
+    authorities: input.authorities ?? [],
+    permissions: input.permissions,
   })
-  return { user, generatedPassword }
+  return { user: adminUser, generatedPassword }
 }
 
 export async function updateUser(
@@ -189,30 +127,50 @@ export async function updateUser(
 
 // --- Roles ---
 export async function getRoles(): Promise<Role[]> {
-  // TODO: replace with API
-  return [...roles]
+  const res = await apiClient.get<{ id: string; name: string; defaultPermissions: PermissionMap }[]>('/admin/roles')
+  if (!res.success || !Array.isArray(res.data)) {
+    throw new Error(res.error ?? 'Failed to load roles')
+  }
+  return res.data.map((r) => ({
+    id: r.id,
+    name: r.name,
+    defaultPermissions: (r.defaultPermissions ?? {}) as PermissionMap,
+  }))
 }
 
 export async function getRole(id: string): Promise<Role | null> {
+  const roles = await getRoles()
   return roles.find((r) => r.id === id) ?? null
 }
 
 export async function createRole(name: string, defaultPermissions: PermissionMap): Promise<Role> {
-  // TODO: replace with API
-  const role: Role = { id: uuid(), name, defaultPermissions }
-  roles.push(role)
-  return role
+  const res = await apiClient.post<{ id: string; name: string; defaultPermissions: PermissionMap }>('/admin/roles', {
+    name,
+    defaultPermissions,
+  })
+  if (!res.success || !res.data) {
+    throw new Error(res.error ?? 'Failed to create role')
+  }
+  return {
+    id: res.data.id,
+    name: res.data.name,
+    defaultPermissions: (res.data.defaultPermissions ?? {}) as PermissionMap,
+  }
 }
 
 export async function updateRole(
   id: string,
   updates: Partial<Pick<Role, 'name' | 'defaultPermissions'>>
 ): Promise<Role | null> {
-  // TODO: replace with API
-  const idx = roles.findIndex((r) => r.id === id)
-  if (idx === -1) return null
-  roles[idx] = { ...roles[idx], ...updates }
-  return roles[idx]
+  const res = await apiClient.put<{ id: string; name: string; defaultPermissions: PermissionMap }>(`/admin/roles/${id}`, updates)
+  if (!res.success || !res.data) {
+    throw new Error(res.error ?? 'Failed to update role')
+  }
+  return {
+    id: res.data.id,
+    name: res.data.name,
+    defaultPermissions: (res.data.defaultPermissions ?? {}) as PermissionMap,
+  }
 }
 
 // --- Projects (admin view): real projects from API ---
@@ -318,9 +276,30 @@ export async function updateAuthority(
 }
 
 // --- Audit log ---
-export async function getAuditLog(limit = 50): Promise<AuditLogEntry[]> {
-  // TODO: replace with API
-  return [...auditLog].reverse().slice(0, limit)
+export interface AuditLogParams {
+  limit?: number
+  from?: string
+  to?: string
+  actor?: string
+  action?: string
+  target?: string
+}
+
+export async function getAuditLog(params: AuditLogParams | number = 50): Promise<AuditLogEntry[]> {
+  const opts: AuditLogParams = typeof params === 'number' ? { limit: params } : params
+  const search = new URLSearchParams()
+  if (opts.limit != null) search.set('limit', String(opts.limit))
+  if (opts.from) search.set('from', opts.from)
+  if (opts.to) search.set('to', opts.to)
+  if (opts.actor) search.set('actor', opts.actor)
+  if (opts.action) search.set('action', opts.action)
+  if (opts.target) search.set('target', opts.target)
+  const qs = search.toString()
+  const res = await apiClient.get<AuditLogEntry[]>(`/admin/audit-log${qs ? `?${qs}` : ''}`)
+  if (!res.success || !Array.isArray(res.data)) {
+    throw new Error(res.error ?? 'Failed to load audit log')
+  }
+  return res.data
 }
 
 // --- Helpers (apply template to users/roles — placeholder) ---

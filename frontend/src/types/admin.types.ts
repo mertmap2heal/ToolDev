@@ -116,6 +116,9 @@ export interface AuditLogEntry {
 
 // --- Create user ---
 export interface CreateUserInput {
+  email: string
+  name?: string
+  company?: string
   projects?: string[]
   roles?: string[]
   authorities?: string[]

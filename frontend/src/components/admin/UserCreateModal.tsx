@@ -12,6 +12,8 @@ interface UserCreateModalProps {
 }
 
 export default function UserCreateModal({ onClose, onCreated }: UserCreateModalProps) {
+  const [email, setEmail] = useState('')
+  const [name, setName] = useState('')
   const [selectedProjects, setSelectedProjects] = useState<string[]>([])
   const [selectedRoles, setSelectedRoles] = useState<string[]>([])
   const [selectedAuthorities, setSelectedAuthorities] = useState<string[]>([])
@@ -48,9 +50,15 @@ export default function UserCreateModal({ onClose, onCreated }: UserCreateModalP
   }
 
   const handleSubmit = async () => {
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail || !trimmedEmail.includes('@')) {
+      return
+    }
     setSubmitting(true)
     try {
       const result = await adminService.createUser({
+        email: trimmedEmail,
+        name: name.trim() || undefined,
         projects: selectedProjects,
         roles: selectedRoles,
         authorities: selectedAuthorities,
@@ -78,6 +86,30 @@ export default function UserCreateModal({ onClose, onCreated }: UserCreateModalP
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+          <div>
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+              Email (required)
+            </h3>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="user@example.com"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+              Display name (optional)
+            </h3>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="John Doe"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
           <div>
             <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
               Projects
@@ -159,7 +191,7 @@ export default function UserCreateModal({ onClose, onCreated }: UserCreateModalP
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || !email.trim().includes('@')}
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg"
           >
             {submitting ? 'Creating...' : 'Create User'}
