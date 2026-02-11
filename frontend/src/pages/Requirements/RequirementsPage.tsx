@@ -1450,7 +1450,7 @@ export default function RequirementsPage() {
               </button>
               <button
                 onClick={() => setIsSuspectReviewOpen(true)}
-                className="px-3 py-2 border border-yellow-300 dark:border-yellow-600 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-900/30 flex items-center gap-2 transition-colors"
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
                 title="Review Suspect Links"
               >
                 <AlertCircle size={16} />
