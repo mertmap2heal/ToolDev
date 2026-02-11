@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Loader2, AlertCircle, X } from 'lucide-react'
-import Logo from '../../components/Logo'
+import AuthLayout from './AuthLayout'
+import LoginCard from './LoginCard'
+import SecurityNote from './SecurityNote'
+import CapsLockWarning from './CapsLockWarning'
 import { authService } from '../../services/auth.service'
 import { useAuthStore } from '../../store/authStore'
 
@@ -16,6 +19,7 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<{ username?: string; password?: string }>({})
   const [isLoading, setIsLoading] = useState(false)
+  const [capsLockOn, setCapsLockOn] = useState(false)
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false)
   const [forgotPasswordLogin, setForgotPasswordLogin] = useState('')
   const [forgotPasswordSubmitting, setForgotPasswordSubmitting] = useState(false)
@@ -148,19 +152,14 @@ export default function LoginPage() {
     )
   }
 
-  const hasError = !!error
   const usernameError = fieldErrors.username
   const passwordError = fieldErrors.password
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900">
-      <div className="w-full max-w-md">
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-8">
-          <div className="flex flex-col items-center mb-8">
-            <Logo size="xl" showText={false} />
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-5">
+    <AuthLayout>
+      <LoginCard>
+        <form onSubmit={handleSubmit} className="space-y-5">
+            <fieldset disabled={isLoading} className="space-y-5 border-none p-0 m-0 min-w-0">
             <div>
               <label
                 htmlFor="username"
@@ -181,7 +180,12 @@ export default function LoginPage() {
                 required
                 aria-invalid={!!usernameError}
                 aria-describedby={usernameError ? 'username-error' : undefined}
-                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:border-transparent transition-colors disabled:opacity-50"
+                disabled={isLoading}
+                className={`w-full px-4 py-2.5 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 ${
+                  usernameError
+                    ? 'border-red-500 dark:border-red-500'
+                    : 'border-gray-300 dark:border-gray-600'
+                }`}
                 placeholder="Enter your username"
               />
               {usernameError && (
@@ -207,18 +211,27 @@ export default function LoginPage() {
                     setPassword(e.target.value)
                     if (fieldErrors.password) setFieldErrors((prev) => ({ ...prev, password: undefined }))
                   }}
+                  onKeyDown={(e) => setCapsLockOn(e.getModifierState('CapsLock'))}
+                  onKeyUp={(e) => setCapsLockOn(e.getModifierState('CapsLock'))}
                   autoComplete="current-password"
                   required
                   aria-invalid={!!passwordError}
-                  aria-describedby={passwordError ? 'password-error' : undefined}
-                  className="w-full px-4 py-2.5 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:border-transparent transition-colors disabled:opacity-50"
+                  aria-describedby={[passwordError && 'password-error', capsLockOn && 'capslock-warning'].filter(Boolean).join(' ') || undefined}
+                  disabled={isLoading}
+                  className={`w-full px-4 py-2.5 pr-10 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 ${
+                    passwordError
+                      ? 'border-red-500 dark:border-red-500'
+                      : 'border-gray-300 dark:border-gray-600'
+                  }`}
                   placeholder="Enter your password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  disabled={isLoading}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-expanded={showPassword}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -228,6 +241,7 @@ export default function LoginPage() {
                   {passwordError}
                 </p>
               )}
+              <CapsLockWarning show={capsLockOn} />
               <div className="mt-1.5 flex items-center justify-between">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -248,13 +262,15 @@ export default function LoginPage() {
               </div>
             </div>
 
+            </fieldset>
+
             {error && (
               <div
                 ref={errorRef}
                 role="alert"
                 aria-live="assertive"
                 tabIndex={-1}
-                className="flex items-start gap-3 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                className="flex items-start gap-3 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border-l-4 border-l-red-500 text-red-700 dark:text-red-400 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
               >
                 <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
                 <span className="flex-1">{error}</span>
@@ -284,9 +300,25 @@ export default function LoginPage() {
                 'Sign in'
               )}
             </button>
+
+            <SecurityNote />
+
+            <div className="pt-4 flex justify-center gap-4 text-sm">
+              <a
+                href="#"
+                className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+              >
+                Privacy Policy
+              </a>
+              <a
+                href="#"
+                className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+              >
+                Terms of Use
+              </a>
+            </div>
           </form>
-        </div>
-      </div>
+      </LoginCard>
 
       {showForgotPasswordModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60">
@@ -360,6 +392,6 @@ export default function LoginPage() {
           </div>
         </div>
       )}
-    </div>
+    </AuthLayout>
   )
 }

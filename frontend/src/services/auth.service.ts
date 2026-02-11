@@ -158,8 +158,16 @@ export const authService = {
   },
 
   /** Admin only: set a new password for a user. */
-  async resetUserPassword(userId: string, newPassword: string): Promise<ApiResponse<{ message: string }>> {
-    return apiClient.put<{ message: string }>(`/auth/users/${userId}/password`, { newPassword })
+  async resetUserPassword(
+    userId: string,
+    newPassword: string,
+    options?: { forceChangeOnNextLogin?: boolean }
+  ): Promise<ApiResponse<{ message: string }>> {
+    const body: { newPassword: string; forceChangeOnNextLogin?: boolean } = { newPassword }
+    if (options?.forceChangeOnNextLogin !== undefined) {
+      body.forceChangeOnNextLogin = options.forceChangeOnNextLogin
+    }
+    return apiClient.put<{ message: string }>(`/auth/users/${userId}/password`, body)
   },
 
   /** Admin only: update a user's invite email. */

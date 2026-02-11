@@ -1,6 +1,8 @@
 import { Router, Response } from 'express'
+import bcrypt from 'bcryptjs'
 import { PrismaClient } from '@prisma/client'
 import { authenticateToken, requireSuperiorAdmin, type AuthRequest } from '../middleware/auth.middleware'
+import { checkCompanyUserLimit } from '../controllers/auth.controller'
 
 const router = Router()
 const prisma = new PrismaClient()
@@ -85,6 +87,68 @@ router.get('/stats', async (_req: AuthRequest, res: Response) => {
     })
   } catch (error) {
     console.error('Platform admin stats error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+/** POST /platform-admin/users - create user (superior admin). Body: { email, name, password, company?, makeCompanyAdmin? } */
+router.post('/users', async (req: AuthRequest, res: Response) => {
+  try {
+    const { email, name, password, company, makeCompanyAdmin } = req.body
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ success: false, error: 'Email is required' })
+    }
+    const trimmedEmail = email.trim().toLowerCase()
+    if (!trimmedEmail.includes('@')) {
+      return res.status(400).json({ success: false, error: 'Invalid email format' })
+    }
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({ success: false, error: 'Name is required' })
+    }
+    const displayName = (name.trim() || trimmedEmail.split('@')[0]) || 'User'
+    if (!password || typeof password !== 'string') {
+      return res.status(400).json({ success: false, error: 'Password is required' })
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ success: false, error: 'Password must be at least 8 characters' })
+    }
+    const limitError = await checkCompanyUserLimit(company)
+    if (limitError) {
+      return res.status(403).json({ success: false, error: limitError })
+    }
+    const existingUser = await prisma.user.findUnique({ where: { email: trimmedEmail } })
+    if (existingUser) {
+      return res.status(400).json({ success: false, error: 'User with this email already exists' })
+    }
+    const hashedPassword = await bcrypt.hash(password, 10)
+    const role = makeCompanyAdmin === true ? 'COMPANY_ADMIN' : null
+    const rawCompany = company != null ? String(company).trim() : ''
+    const companyValue = rawCompany === '' || rawCompany === UNNAMED_KEY ? null : rawCompany
+    const user = await prisma.user.create({
+      data: {
+        email: trimmedEmail,
+        password: hashedPassword,
+        name: displayName,
+        company: companyValue,
+        role,
+        mustChangePasswordOnFirstLogin: true,
+      },
+      select: { id: true, email: true, name: true, company: true },
+    })
+    res.status(201).json({
+      success: true,
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          company: user.company,
+        },
+        message: 'User created',
+      },
+    })
+  } catch (error) {
+    console.error('Platform admin create user error:', error)
     res.status(500).json({ success: false, error: 'Internal server error' })
   }
 })

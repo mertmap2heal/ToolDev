@@ -112,11 +112,7 @@ export default function ProjectNavigation() {
 
   const handleNavigation = (route: string) => {
     if (projectId) {
-      if (route === 'tasks') {
-        navigate(`/tasks/all?projectId=${projectId}`)
-      } else {
-        navigate(`/projects/${projectId}/${route}`)
-      }
+      navigate(`/projects/${projectId}/${route}`)
     }
   }
 

@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react'
-import { Loader2, Pencil, Plus } from 'lucide-react'
+import { Loader2, Pencil, Plus, KeyRound } from 'lucide-react'
 import {
   getOrganizations,
+  getCompanies,
   updateOrganization,
   createCompany,
   type PlatformAdminOrganizationItem,
+  type PlatformAdminCompanyItem,
+  type PlatformAdminCompanyUser,
 } from '../../services/platformAdmin.service'
+import ResetPasswordModal from '../../components/platform-admin/ResetPasswordModal'
 
 interface EditModalProps {
   item: PlatformAdminOrganizationItem
@@ -241,24 +245,29 @@ function CreateCompanyModal({ onClose, onCreated }: { onClose: () => void; onCre
 
 export default function CompaniesPage() {
   const [organizations, setOrganizations] = useState<PlatformAdminOrganizationItem[]>([])
+  const [companies, setCompanies] = useState<PlatformAdminCompanyItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState<PlatformAdminOrganizationItem | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  const [resetPasswordUser, setResetPasswordUser] = useState<PlatformAdminCompanyUser | null>(null)
 
   const load = () => {
     setLoading(true)
     setError(null)
-    getOrganizations()
-      .then((res) => {
-        if (res.success && Array.isArray(res.data)) {
-          setOrganizations(res.data)
+    Promise.all([getOrganizations(), getCompanies()])
+      .then(([orgRes, compRes]) => {
+        if (orgRes.success && Array.isArray(orgRes.data)) {
+          setOrganizations(orgRes.data)
         } else {
-          setError(res.error || 'Failed to load organizations')
+          setError(orgRes.error || 'Failed to load organizations')
+        }
+        if (compRes.success && Array.isArray(compRes.data)) {
+          setCompanies(compRes.data)
         }
       })
       .catch((err) => {
-        setError(err?.message || 'Failed to load organizations')
+        setError(err?.message || 'Failed to load data')
       })
       .finally(() => {
         setLoading(false)
@@ -398,6 +407,71 @@ export default function CompaniesPage() {
             setCreateOpen(false)
             load()
           }}
+        />
+      )}
+
+      {!loading && !error && companies.length > 0 && (
+        <div className="mt-10">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+            Company users
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Reset user passwords. Users will be required to change the password on next login unless you uncheck that option.
+          </p>
+          <div className="space-y-4">
+            {companies.map((comp) => (
+              <div
+                key={comp.key ?? '__null__'}
+                className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden"
+              >
+                <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {comp.displayName}
+                  </span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
+                    {comp.users.length} user{comp.users.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
+                  {comp.users.length === 0 ? (
+                    <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                      No users
+                    </div>
+                  ) : (
+                    comp.users.map((u) => (
+                      <div
+                        key={u.id}
+                        className="flex items-center justify-between px-4 py-2 hover:bg-gray-50/50 dark:hover:bg-gray-800/50"
+                      >
+                        <div>
+                          <span className="font-medium text-gray-900 dark:text-white">{u.name}</span>
+                          <span className="text-sm text-gray-600 dark:text-gray-400 ml-2">
+                            {u.email}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setResetPasswordUser(u)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
+                        >
+                          <KeyRound size={14} />
+                          Reset password
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {resetPasswordUser && (
+        <ResetPasswordModal
+          user={resetPasswordUser}
+          onClose={() => setResetPasswordUser(null)}
+          onSuccess={load}
         />
       )}
     </div>

@@ -1,12 +1,14 @@
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Building2, Users, FileText, LogOut } from 'lucide-react'
+import { Building2, Users, FileText, LogOut, UserPlus } from 'lucide-react'
 import Logo from '../Logo'
+import ForceChangePasswordModal from '../auth/ForceChangePasswordModal'
 import { authService } from '../../services/auth.service'
 import { useAuthStore } from '../../store/authStore'
 import { usePlatformAdminStore } from '../../store/platformAdminStore'
 import CompanySelector from './CompanySelector'
 
 const navItems = [
+  { icon: UserPlus, label: 'Create company admin', path: '/platform-admin/create-company-admin' },
   { icon: Building2, label: 'Companies', path: '/platform-admin/companies' },
   { icon: Users, label: 'Company limits', path: '/platform-admin/limits' },
   { icon: FileText, label: 'Global audit logs', path: '/platform-admin/audit-logs' },
@@ -15,8 +17,16 @@ const navItems = [
 export default function PlatformAdminLayout() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, logout } = useAuthStore()
+  const { user, logout, setUser } = useAuthStore()
   const { activeCompanyName, setActiveCompanyName } = usePlatformAdminStore()
+
+  const handleForceChangePasswordSuccess = () => {
+    authService.getCurrentUser().then((res) => {
+      if (res.success && res.data) {
+        setUser(res.data)
+      }
+    })
+  }
 
   const handleLogout = () => {
     authService.logout()
@@ -27,6 +37,9 @@ export default function PlatformAdminLayout() {
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
+      {user?.mustChangePassword && (
+        <ForceChangePasswordModal onSuccess={handleForceChangePasswordSuccess} />
+      )}
       <aside
         className="w-56 flex flex-col border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900"
         aria-label="Platform admin navigation"

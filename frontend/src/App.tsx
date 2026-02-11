@@ -1,7 +1,7 @@
 import { BrowserRouter } from 'react-router-dom'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import MainLayout from './components/layout/MainLayout'
-import ProtectedRoute from './components/ProtectedRoute'
+import LandingOrApp from './components/LandingOrApp'
 import LoginPage from './pages/Login/LoginPage'
 import DashboardPage from './pages/Dashboard/DashboardPage'
 import RequirementsPage from './pages/Requirements/RequirementsPage'
@@ -68,6 +68,7 @@ import PlatformAdminRouteGuard from './components/platform-admin/PlatformAdminRo
 import PlatformAdminLayout from './components/platform-admin/PlatformAdminLayout'
 import PlatformAdminPage from './pages/PlatformAdmin/PlatformAdminPage'
 import CompaniesPage from './pages/PlatformAdmin/CompaniesPage'
+import CreateCompanyAdminPage from './pages/PlatformAdmin/CreateCompanyAdminPage'
 import CompanyLimitsPage from './pages/PlatformAdmin/CompanyLimitsPage'
 import AuditLogsPage from './pages/PlatformAdmin/AuditLogsPage'
 import OrganizationPage from './pages/Organization/OrganizationPage'
@@ -80,12 +81,13 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         {/* MBSE Models - Full page experience outside MainLayout */}
         <Route path="projects/:projectId/mbse-models" element={<MBSEModelsPage />} />
-        {/* Protected routes - require authentication */}
-        <Route path="/" element={<ProtectedRoute />}>
+        {/* Landing when unauthenticated, app when authenticated */}
+        <Route path="/" element={<LandingOrApp />}>
           {/* Platform Admin - dedicated layout, no MainLayout sidebar */}
           <Route path="platform-admin" element={<PlatformAdminRouteGuard />}>
             <Route element={<PlatformAdminLayout />}>
               <Route index element={<PlatformAdminPage />} />
+              <Route path="create-company-admin" element={<CreateCompanyAdminPage />} />
               <Route path="companies" element={<CompaniesPage />} />
               <Route path="limits" element={<CompanyLimitsPage />} />
               <Route path="audit-logs" element={<AuditLogsPage />} />

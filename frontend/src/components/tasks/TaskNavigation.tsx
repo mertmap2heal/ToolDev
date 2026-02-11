@@ -1,4 +1,4 @@
-import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams, useParams, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   UserCheck,
@@ -31,8 +31,10 @@ const navItems = [
 
 export default function TaskNavigation() {
   const location = useLocation()
+  const navigate = useNavigate()
+  const { projectId: routeProjectId } = useParams<{ projectId?: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
-  const projectId = searchParams.get('projectId')
+  const projectId = searchParams.get('projectId') || routeProjectId || undefined
 
   const getNavPath = (itemPath: string) => {
     // Preserve projectId query parameter when navigating
@@ -43,9 +45,14 @@ export default function TaskNavigation() {
   }
 
   const clearProjectFilter = () => {
-    const newParams = new URLSearchParams(searchParams)
-    newParams.delete('projectId')
-    setSearchParams(newParams)
+    // When in project context, navigate to standalone tasks; otherwise clear query param
+    if (routeProjectId) {
+      navigate('/tasks')
+    } else {
+      const newParams = new URLSearchParams(searchParams)
+      newParams.delete('projectId')
+      setSearchParams(newParams)
+    }
   }
 
   return (

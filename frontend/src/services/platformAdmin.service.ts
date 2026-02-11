@@ -127,3 +127,22 @@ export async function createCompany(data: {
 }): Promise<ApiResponse<{ companyKey: string; displayName: string; maxUsers: number | null }>> {
   return apiClient.post('/platform-admin/companies', data)
 }
+
+export interface CreatePlatformUserData {
+  email: string
+  name: string
+  password: string
+  company?: string | null
+  makeCompanyAdmin?: boolean
+}
+
+export interface CreatePlatformUserResponse {
+  user: { id: string; email: string; name: string; company: string | null }
+  message: string
+}
+
+export async function createPlatformUser(
+  data: CreatePlatformUserData
+): Promise<ApiResponse<CreatePlatformUserResponse>> {
+  return apiClient.post<CreatePlatformUserResponse>('/platform-admin/users', data)
+}

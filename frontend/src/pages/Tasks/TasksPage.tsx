@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useParams, useLocation, useSearchParams } from 'react-router-dom'
+import { useParams, useLocation, useSearchParams, Link } from 'react-router-dom'
+import ProjectNavigation from '../../components/projects/ProjectNavigation'
 import TaskNavigation from '../../components/tasks/TaskNavigation'
 import TaskListView from '../../components/tasks/TaskListView'
 import TaskBoardView from '../../components/tasks/TaskBoardView'
@@ -26,6 +27,69 @@ export default function TasksPage() {
     viewType = 'calendar'
   }
 
+  const taskContent = (
+    <>
+      {viewType === 'list' ? (
+        <TaskListView onTaskSelect={setSelectedTask} projectId={projectId} />
+      ) : viewType === 'board' ? (
+        <TaskBoardView onTaskSelect={setSelectedTask} projectId={projectId} />
+      ) : (
+        <TaskCalendarView onTaskSelect={setSelectedTask} projectId={projectId} />
+      )}
+
+      {selectedTask && (
+        <TaskDetailDrawer
+          task={selectedTask}
+          isOpen={!!selectedTask}
+          onClose={() => setSelectedTask(null)}
+          onUpdate={(updatedTask) => setSelectedTask(updatedTask)}
+        />
+      )}
+    </>
+  )
+
+  if (routeProjectId) {
+    return (
+      <div className="flex flex-col min-h-0">
+        <div className="flex-shrink-0 space-y-4">
+          <ProjectNavigation />
+
+          <nav className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+            <Link to="/" className="hover:text-gray-900 dark:hover:text-white transition-colors">
+              Home
+            </Link>
+            <span>/</span>
+            <Link
+              to={`/projects/${routeProjectId}`}
+              className="hover:text-gray-900 dark:hover:text-white transition-colors"
+            >
+              Project
+            </Link>
+            <span>/</span>
+            <span className="text-gray-900 dark:text-white font-medium">Tasks</span>
+          </nav>
+
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tasks</h1>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                Tasks assigned and tracked within this project
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <CSVImportExport projectId={projectId} />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6 mt-6">
+          <TaskNavigation />
+          <div>{taskContent}</div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <TaskNavigation />
@@ -43,23 +107,7 @@ export default function TasksPage() {
             <CSVImportExport projectId={projectId} />
           </div>
         </div>
-
-        {viewType === 'list' ? (
-          <TaskListView onTaskSelect={setSelectedTask} projectId={projectId} />
-        ) : viewType === 'board' ? (
-          <TaskBoardView onTaskSelect={setSelectedTask} projectId={projectId} />
-        ) : (
-          <TaskCalendarView onTaskSelect={setSelectedTask} projectId={projectId} />
-        )}
-
-        {selectedTask && (
-          <TaskDetailDrawer
-            task={selectedTask}
-            isOpen={!!selectedTask}
-            onClose={() => setSelectedTask(null)}
-            onUpdate={(updatedTask) => setSelectedTask(updatedTask)}
-          />
-        )}
+        {taskContent}
       </div>
     </div>
   )

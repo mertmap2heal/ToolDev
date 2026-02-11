@@ -44,8 +44,8 @@ function toCompanyKey(value: string | null | undefined): string {
   return String(value)
 }
 
-/** Check company user limit; returns error message or null if allowed */
-async function checkCompanyUserLimit(company: string | null | undefined): Promise<string | null> {
+/** Check company user limit; returns error message or null if allowed. Exported for platform-admin. */
+export async function checkCompanyUserLimit(company: string | null | undefined): Promise<string | null> {
   const companyKey = toCompanyKey(company)
   const limitRow = await prisma.companyLimit.findUnique({
     where: { companyKey },
@@ -293,7 +293,10 @@ export const getCurrentUser = async (req: Request, res: Response) => {
       data: { lastLoginAt: new Date() },
     })
 
-    const isAdmin = await resolveIsAdmin(user.email)
+    const isAdmin =
+      user.role === 'SUPERIOR_ADMIN' ||
+      user.role === 'COMPANY_ADMIN' ||
+      (await resolveIsAdmin(user.email))
     const mustChange = user.mustChangePasswordOnFirstLogin ?? false
     const isSuperiorAdmin = user.role === 'SUPERIOR_ADMIN'
     const { mustChangePasswordOnFirstLogin: _omit, ...rest } = user
@@ -365,19 +368,21 @@ export const resetUserPassword = async (req: AuthRequest, res: Response) => {
 
     const currentUser = await prisma.user.findUnique({
       where: { id: currentUserId },
-      select: { email: true },
+      select: { email: true, role: true },
     })
     if (!currentUser) {
       return res.status(401).json({ success: false, error: 'User not found' })
     }
 
-    const isAdmin = await resolveIsAdmin(currentUser.email)
+    const isAdmin =
+      currentUser.role === 'SUPERIOR_ADMIN' ||
+      (await resolveIsAdmin(currentUser.email))
     if (!isAdmin) {
       return res.status(403).json({ success: false, error: 'Admin access required' })
     }
 
     const { userId } = req.params
-    const { newPassword } = req.body
+    const { newPassword, forceChangeOnNextLogin } = req.body
 
     if (!userId || !newPassword || typeof newPassword !== 'string') {
       return res.status(400).json({
@@ -404,7 +409,10 @@ export const resetUserPassword = async (req: AuthRequest, res: Response) => {
     const hashedPassword = await bcrypt.hash(trimmed, 10)
     await prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword },
+      data: {
+        password: hashedPassword,
+        ...(forceChangeOnNextLogin !== false && { mustChangePasswordOnFirstLogin: true }),
+      },
     })
 
     res.json({ success: true, message: 'Password updated' })

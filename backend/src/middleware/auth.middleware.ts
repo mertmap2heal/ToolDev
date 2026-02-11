@@ -57,7 +57,7 @@ export const requireSuperiorAdmin = async (
   next()
 }
 
-/** Requires admin (ADMIN_EMAILS or first user). Use after authenticateToken. */
+/** Requires admin (SUPERIOR_ADMIN, COMPANY_ADMIN, ADMIN_EMAILS, or first user). Use after authenticateToken. */
 export const requireAdmin = async (
   req: AuthRequest,
   res: Response,
@@ -69,12 +69,15 @@ export const requireAdmin = async (
   }
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { email: true },
+    select: { email: true, role: true },
   })
   if (!user) {
     return res.status(401).json({ success: false, error: 'User not found' })
   }
-  const isAdmin = await resolveIsAdmin(user.email)
+  const isAdmin =
+    user.role === 'SUPERIOR_ADMIN' ||
+    user.role === 'COMPANY_ADMIN' ||
+    (await resolveIsAdmin(user.email))
   if (!isAdmin) {
     return res.status(403).json({ success: false, error: 'Admin access required' })
   }
