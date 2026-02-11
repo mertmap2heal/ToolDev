@@ -272,11 +272,13 @@ export default function RequirementsPBSTree({
     }, [requirements])
 
     return (
-        <div className="flex flex-col h-full bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
+        <div className="flex flex-col h-[calc(100%-1rem)] m-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm overflow-hidden">
             {/* Header */}
-            <div className="px-4 py-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="px-4 py-4 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                    <Package className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
+                        <Package className="w-4 h-4" />
+                    </div>
                     PBS Components
                 </h3>
                 <div className="relative">
@@ -286,21 +288,21 @@ export default function RequirementsPBSTree({
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search components..."
-                        className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg
-              bg-white dark:bg-gray-700 text-gray-900 dark:text-white
-              focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-              placeholder-gray-400 dark:placeholder-gray-500"
+                        className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl
+              bg-white dark:bg-gray-700/50 text-gray-900 dark:text-white
+              focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500
+              placeholder-gray-400 dark:placeholder-gray-500 transition-all"
                     />
                 </div>
             </div>
 
             {/* Tree */}
-            <div className="flex-1 overflow-y-auto py-2">
+            <div className="flex-1 overflow-y-auto py-2 space-y-0.5">
                 {flatItems.length === 0 && (
                     <div className="px-4 py-8 text-center text-sm text-gray-400 dark:text-gray-500">
                         <FolderOpen className="w-10 h-10 mx-auto mb-3 opacity-50" />
                         <p className="font-medium">No components found.</p>
-                        <p className="mt-1 text-xs">Create components in the PBS page first.</p>
+                        <p className="mt-1 text-xs opacity-70">Create components in the PBS page first.</p>
                     </div>
                 )}
                 {flatItems.map(item => {
@@ -311,20 +313,20 @@ export default function RequirementsPBSTree({
                     const isExpanded = nodeId ? expandedNodes.has(nodeId) : false
 
                     if (item.type === 'requirement') {
-                        // Requirement row
+                        // Requirement row - indented, smaller
                         return (
                             <div
                                 key={item.id}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm cursor-grab hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                                className="group flex items-center gap-2 px-3 py-1.5 mx-2 text-sm rounded-lg cursor-grab hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border border-transparent hover:border-gray-100 dark:hover:border-gray-700"
                                 style={{ paddingLeft: `${item.depth * 16 + 12}px` }}
                                 draggable
                                 onDragStart={(e) => handleDragStart(e, item.requirement!.id)}
                             >
-                                <FileText className="w-4 h-4 text-blue-500 dark:text-blue-400 flex-shrink-0" />
-                                <span className="text-gray-400 dark:text-gray-500 font-mono text-xs flex-shrink-0">
+                                <FileText className="w-3.5 h-3.5 text-blue-400 dark:text-blue-500 flex-shrink-0 opacity-70 group-hover:opacity-100 transition-opacity" />
+                                <span className="text-gray-400 dark:text-gray-500 font-mono text-[10px] flex-shrink-0">
                                     {item.requirementId || '—'}
                                 </span>
-                                <span className="text-gray-700 dark:text-gray-300 truncate" title={item.name}>
+                                <span className="text-gray-600 dark:text-gray-300 truncate group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors" title={item.name}>
                                     {item.name}
                                 </span>
                             </div>
@@ -336,10 +338,10 @@ export default function RequirementsPBSTree({
                         return (
                             <div
                                 key={item.id}
-                                className={`flex items-center gap-1.5 px-3 py-2 text-sm cursor-pointer select-none
-                  border-t border-gray-200 dark:border-gray-700 mt-2
-                  ${isUnassignedDragOver ? 'bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-400' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}
-                  transition-colors`}
+                                className={`flex items-center gap-2 px-3 py-2 mx-2 mt-2 text-sm rounded-lg cursor-pointer select-none border transition-all
+                  ${isUnassignedDragOver
+                                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+                                        : 'border-transparent text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200'}`}
                                 onClick={() => {
                                     toggleNode('unassigned')
                                     handleComponentClick(null)
@@ -349,12 +351,12 @@ export default function RequirementsPBSTree({
                                 onDrop={(e) => handleDrop(e, null)}
                             >
                                 {isExpanded ? (
-                                    <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                    <ChevronDown className="w-4 h-4 opacity-50 flex-shrink-0" />
                                 ) : (
-                                    <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                    <ChevronRight className="w-4 h-4 opacity-50 flex-shrink-0" />
                                 )}
-                                <Inbox className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                <span className="text-gray-500 dark:text-gray-400 font-medium">{item.name}</span>
+                                <Inbox className="w-4 h-4 opacity-70 flex-shrink-0" />
+                                <span className="font-medium">{item.name}</span>
                             </div>
                         )
                     }
@@ -364,10 +366,11 @@ export default function RequirementsPBSTree({
                     return (
                         <div
                             key={item.id}
-                            className={`flex items-center gap-1.5 px-3 py-2 text-sm cursor-pointer select-none
-                ${isSelected ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}
-                ${isDragOver ? 'ring-1 ring-blue-400 bg-blue-50 dark:bg-blue-900/20' : ''}
-                transition-colors`}
+                            className={`flex items-center gap-2 px-3 py-2 mx-2 text-sm rounded-lg cursor-pointer select-none border transition-all
+                ${isSelected
+                                    ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-100 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-medium shadow-sm'
+                                    : 'border-transparent text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-100'}
+                ${isDragOver ? 'ring-2 ring-blue-400 bg-blue-50 dark:bg-blue-900/20 z-10' : ''}`}
                             style={{ paddingLeft: `${item.depth * 16 + 12}px` }}
                             onClick={() => {
                                 toggleNode(item.componentId!)
@@ -378,20 +381,21 @@ export default function RequirementsPBSTree({
                             onDrop={(e) => handleDrop(e, item.componentId!)}
                         >
                             {item.hasChildren ? (
-                                isExpanded ? (
-                                    <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                ) : (
-                                    <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                )
+                                <span className={`flex transition-transform duration-200 ${isExpanded ? 'rotate-0' : '-rotate-90'}`}>
+                                    <ChevronDown className="w-4 h-4 opacity-50 flex-shrink-0" />
+                                </span>
                             ) : (
                                 <span className="w-4 flex-shrink-0" />
                             )}
-                            <Package className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-blue-500' : 'text-amber-500 dark:text-amber-400'}`} />
+                            <Package className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-blue-500' : 'text-amber-500/80 dark:text-amber-400/80'}`} />
                             <span className="truncate flex-1" title={item.name}>
                                 {item.name}
                             </span>
                             {count > 0 && (
-                                <span className="flex-shrink-0 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full px-2 py-0.5 text-xs font-medium">
+                                <span className={`flex-shrink-0 text-xs font-medium px-2 py-0.5 rounded-full transition-colors
+                                    ${isSelected
+                                        ? 'bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200'
+                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
                                     {count}
                                 </span>
                             )}
@@ -401,7 +405,7 @@ export default function RequirementsPBSTree({
             </div>
 
             {/* Footer info */}
-            <div className="px-4 py-2.5 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-400 dark:text-gray-500">
+            <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/50 text-xs text-center text-gray-400 dark:text-gray-500">
                 Drag requirements to assign components
             </div>
         </div>
