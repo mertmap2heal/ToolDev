@@ -2,8 +2,28 @@ import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { PrismaClient } from '@prisma/client'
 import { createVersionSnapshot } from './version.controller'
+import { traceabilityService } from '../services/traceability.service'
+import { linkageAuditService } from '../services/linkageAudit.service'
+import { requirementValidationService } from '../services/requirementValidation.service'
 
 const prisma = new PrismaClient()
+
+const MEANINGFUL_FIELDS = [
+  'title',
+  'description',
+  'acceptanceCriteria',
+  'verificationMethod',
+  'parentId',
+  'requirementType',
+  'requirementLevel',
+  'risk',
+  'complexity',
+  'source',
+  'owner',
+  'rationale',
+  'assumptions',
+  'linkedMocCode',
+]
 
 // Mapping from requirement types to ID prefixes
 // All prefixes include REQ- for consistency
@@ -376,6 +396,36 @@ export const getRequirementChildren = async (req: AuthRequest, res: Response) =>
   }
 }
 
+/** GET /requirements/:projectId/audit?entityType=&entityId= - audit events for an entity */
+export const getAuditEvents = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+    const { entityType, entityId } = req.query
+    if (!entityType || !entityId) {
+      return res.status(400).json({
+        success: false,
+        error: 'entityType and entityId query params are required',
+      })
+    }
+    const events = await prisma.verAuditEvent.findMany({
+      where: {
+        projectId,
+        entityType: String(entityType),
+        entityId: String(entityId),
+      },
+      orderBy: { performedAt: 'desc' },
+      take: 100,
+    })
+    res.json({ success: true, data: events })
+  } catch (error) {
+    console.error('Get audit events error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    })
+  }
+}
+
 export const createRequirement = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
@@ -400,6 +450,8 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
       complexity,
       rationale,
       linkedMocCode,
+      lifecycleId,
+      statusId,
     } = req.body
 
     if (!title) {
@@ -494,6 +546,15 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
       },
     })
 
+    await linkageAuditService.log({
+      projectId,
+      entityType: 'REQUIREMENT',
+      entityId: requirement.id,
+      action: 'REQUIREMENT_CREATED',
+      newValue: { requirementId: requirement.requirementId, title: requirement.title },
+      performedByUserId: req.user?.id,
+    })
+
     res.status(201).json({
       success: true,
       data: requirement,
@@ -549,6 +610,8 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       verificationDate,
       verificationNotes,
       linkedMocCode,
+      lifecycleId,
+      statusId,
     } = req.body
 
     // Find the requirement
@@ -721,8 +784,40 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       complexity: complexity !== undefined ? complexity : undefined,
       rationale: rationale !== undefined ? rationale : undefined,
       linkedMocCode: linkedMocCode !== undefined ? (linkedMocCode ? parseInt(linkedMocCode, 10) : null) : undefined,
+      lifecycleId: lifecycleId !== undefined ? lifecycleId : undefined,
+      statusId: statusId !== undefined ? statusId : undefined,
     }
-    
+
+    // When statusId changes: validate lifecycle gates, set statusChangedAt/statusChangedBy
+    if (statusId !== undefined && statusId !== requirement.statusId) {
+      const targetStatusName = req.body.status ?? (status as string) ?? ''
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { strictLifecycleGates: true },
+      })
+      const strictMode = project?.strictLifecycleGates ?? false
+      const reqWithMoc = await prisma.requirement.findUnique({
+        where: { id: requirement.id },
+        include: { moc: true },
+      })
+      if (reqWithMoc && targetStatusName) {
+        const gates = await requirementValidationService.checkLifecycleGates(
+          { ...reqWithMoc, projectId } as any,
+          targetStatusName,
+          strictMode
+        )
+        if (!gates.passed && gates.blockers.length > 0) {
+          return res.status(400).json({
+            success: false,
+            error: `Lifecycle gates not met: ${gates.blockers.join('; ')}`,
+            gates: { warnings: gates.warnings, blockers: gates.blockers },
+          })
+        }
+      }
+      updateData.statusChangedAt = new Date()
+      updateData.statusChangedBy = req.user?.id ?? null
+    }
+
     // Only include requirementId in update if it was generated or manually provided
     if (finalRequirementId !== undefined) {
       updateData.requirementId = finalRequirementId
@@ -761,28 +856,64 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       },
     })
 
-    // Mark downstream trace links as suspect when content changes or requirementId changes
-    const contentChanged = title !== undefined || description !== undefined || acceptanceCriteria !== undefined
-    const requirementIdChanged = finalRequirementId !== undefined && finalRequirementId !== requirement.requirementId
-    
-    if (contentChanged || requirementIdChanged) {
+    // Mark downstream trace links as suspect when meaningful fields change
+    const changedFields: string[] = []
+    if (title !== undefined) changedFields.push('title')
+    if (description !== undefined) changedFields.push('description')
+    if (acceptanceCriteria !== undefined) changedFields.push('acceptanceCriteria')
+    if (verificationMethod !== undefined) changedFields.push('verificationMethod')
+    if (parentId !== undefined) changedFields.push('parentId')
+    if (requirementType !== undefined) changedFields.push('requirementType')
+    if (requirementLevel !== undefined) changedFields.push('requirementLevel')
+    if (risk !== undefined) changedFields.push('risk')
+    if (complexity !== undefined) changedFields.push('complexity')
+    if (source !== undefined) changedFields.push('source')
+    if (owner !== undefined) changedFields.push('owner')
+    if (rationale !== undefined) changedFields.push('rationale')
+    if (assumptions !== undefined) changedFields.push('assumptions')
+    if (linkedMocCode !== undefined) changedFields.push('linkedMocCode')
+    if (finalRequirementId !== undefined && finalRequirementId !== requirement.requirementId) {
+      changedFields.push('requirementId')
+    }
+
+    if (changedFields.length > 0) {
+      await traceabilityService.markLinksSuspectByMeaningfulChange(
+        projectId,
+        requirement.id,
+        changedFields
+      )
+      // Also mark all requirement-to-requirement links (both directions) for full coverage
       await prisma.traceLink.updateMany({
         where: {
           projectId,
           OR: [
-            {
-              sourceId: requirement.id,
-              sourceType: 'requirement',
-            },
-            {
-              targetId: requirement.id,
-              targetType: 'requirement',
-            },
+            { sourceId: requirement.id, sourceType: 'requirement' },
+            { targetId: requirement.id, targetType: 'requirement' },
           ],
         },
-        data: {
-          isSuspect: true,
-        },
+        data: { isSuspect: true },
+      })
+    }
+
+    await linkageAuditService.log({
+      projectId,
+      entityType: 'REQUIREMENT',
+      entityId: requirement.id,
+      action: 'REQUIREMENT_UPDATED',
+      oldValue: requirement,
+      newValue: updatedRequirement,
+      performedByUserId: req.user?.id,
+    })
+
+    if (statusId !== undefined && statusId !== requirement.statusId) {
+      await linkageAuditService.log({
+        projectId,
+        entityType: 'REQUIREMENT',
+        entityId: requirement.id,
+        action: 'REQUIREMENT_STATUS_CHANGED',
+        oldValue: { status: requirement.status, statusId: requirement.statusId },
+        newValue: { status: updatedRequirement.status, statusId: updatedRequirement.statusId },
+        performedByUserId: req.user?.id,
       })
     }
 

@@ -2,6 +2,9 @@ import { useState, useRef } from 'react'
 import { Plus, Trash2, ChevronUp, ChevronDown, GripVertical, FileText, X } from 'lucide-react'
 import CustomDropdown from './CustomDropdown'
 
+// Re-export Interface for consumers that import both Component and Interface from this module
+export type { Interface } from './InterfaceFormSection'
+
 export interface Component {
   id: string
   name: string

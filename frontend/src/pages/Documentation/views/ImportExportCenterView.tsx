@@ -4,11 +4,14 @@ import type { ExportProfile } from '../types'
 
 interface ImportExportCenterViewProps {
   profiles: ExportProfile[]
+  exportHistory?: unknown[]
   onImportDocumentPlaceholder: () => void
   onImportTemplatePlaceholder: () => void
   onImportExternalPlaceholder: () => void
   onCreateProfile: () => void
   onEditProfile: (profile: ExportProfile) => void
+  onExportHistoryDetail?: (item: unknown) => void
+  onPlannedFeature?: () => void
 }
 
 export default function ImportExportCenterView({

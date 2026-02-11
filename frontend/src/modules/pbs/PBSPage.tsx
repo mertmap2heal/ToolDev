@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
 import { projectService } from '../../services/project.service'
@@ -35,7 +35,10 @@ const SAVE_DEBOUNCE_MS = 600
 
 export default function PBSPage() {
   const params = useParams()
+  const [searchParams] = useSearchParams()
   const projectId = params.projectId ?? undefined
+  const focusType = searchParams.get('focusType')
+  const focusId = searchParams.get('focusId')
   const [nodes, setNodes] = useState([] as PBSNode[])
   const [changeLog, setChangeLog] = useState([] as PBSChangeLogEntry[])
   const [selectedId, setSelectedId] = useState(null as string | null)
@@ -53,6 +56,12 @@ export default function PBSPage() {
   const PANEL_MAX = 600
   const PANEL_DEFAULT = 320
   const [leftPanelWidth, setLeftPanelWidth] = useState(PANEL_DEFAULT)
+
+  useEffect(() => {
+    if (focusType === 'pbs_component' && focusId && nodes.some((n) => n.id === focusId)) {
+      setSelectedId(focusId)
+    }
+  }, [focusType, focusId, nodes])
 
   useEffect(() => {
     try {

@@ -9,8 +9,8 @@ import DeleteConfirmationModal from '../../components/projects/DeleteConfirmatio
 import IssueSourceDetailsModal from '../../components/issues/IssueSourceDetailsModal'
 import CreateIssueModal from '../../components/issues/CreateIssueModal'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
-import type { Issue } from '../../../shared/types/engineering.types'
-import type { SystemFunction } from '../../../shared/types/engineering.types'
+import type { Issue } from 'shared/types/engineering.types'
+import type { SystemFunction } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
 

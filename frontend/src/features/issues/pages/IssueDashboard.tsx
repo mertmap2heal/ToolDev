@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useState, useMemo, useEffect } from 'react'
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { Search, Plus, AlertTriangle, ChevronDown } from 'lucide-react'
 import clsx from 'clsx'
 import ProjectNavigation from '../../../components/projects/ProjectNavigation'
@@ -45,7 +45,16 @@ function getStatusBadgeClass(status: IssueStatus): string {
 export default function IssueDashboard() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const focusType = searchParams.get('focusType')
+  const focusId = searchParams.get('focusId')
   const { issues, isLoading } = useIssues()
+
+  useEffect(() => {
+    if (focusType === 'issue' && focusId && projectId && issues.some((i: any) => i.id === focusId)) {
+      navigate(`/projects/${projectId}/issues/${focusId}`, { replace: true })
+    }
+  }, [focusType, focusId, projectId, navigate, issues])
   const [searchQuery, setSearchQuery] = useState('')
   const [dalFilter, setDalFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')

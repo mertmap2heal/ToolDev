@@ -18,7 +18,7 @@ export interface DiagramTab {
  */
 export interface SelectedElement {
   id: string
-  type: 'requirement' | 'function' | 'useCase' | 'package' | 'diagram'
+  type: 'requirement' | 'function' | 'useCase' | 'package' | 'diagram' | 'category'
   name: string
   data?: Record<string, unknown>
 }

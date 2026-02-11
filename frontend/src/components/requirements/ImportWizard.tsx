@@ -3,8 +3,9 @@ import { X, Upload, FileText, FileSpreadsheet, File, ChevronRight, ChevronLeft, 
 import * as XLSX from 'xlsx'
 import Papa from 'papaparse'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiClient } from '../../services/api'
 import { requirementService } from '../../services/requirement.service'
-import type { CreateRequirementDto, Requirement } from '../../../../shared/types/engineering.types'
+import type { CreateRequirementDto, Requirement, RequirementType, RequirementLevel, RiskLevel, ComplexityLevel } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 
 interface ImportWizardProps {
@@ -261,11 +262,19 @@ export default function ImportWizard({ projectId, onClose }: ImportWizardProps) 
         } else if (fieldKey === 'parentId') {
           // Will be resolved later
           mapped.parentId = String(value).trim()
+        } else if (fieldKey === 'requirementType') {
+          mapped.requirementType = String(value).trim() as RequirementType
+        } else if (fieldKey === 'requirementLevel') {
+          mapped.requirementLevel = String(value).trim() as RequirementLevel
+        } else if (fieldKey === 'risk') {
+          mapped.risk = String(value).trim() as RiskLevel
+        } else if (fieldKey === 'complexity') {
+          mapped.complexity = String(value).trim() as ComplexityLevel
         } else if (fieldKey === 'description' || fieldKey === 'acceptanceCriteria') {
           // Preserve HTML if present, otherwise use as plain text
           mapped[fieldKey] = String(value)
         } else {
-          mapped[fieldKey as keyof CreateRequirementDto] = String(value).trim()
+          (mapped as Record<string, unknown>)[fieldKey] = String(value).trim()
         }
       })
 
@@ -386,7 +395,7 @@ export default function ImportWizard({ projectId, onClose }: ImportWizardProps) 
       return response.data
     },
     onSuccess: (result) => {
-      setImportResult(result)
+      setImportResult(result ? { success: true, ...result } : null)
       queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
       setCurrentStep('import')
     },
@@ -885,13 +894,13 @@ function PreviewStep({
                         {row.mapped.title || '(No title)'}
                       </span>
                       {row.errors.length > 0 && (
-                        <AlertCircle size={14} className="text-red-500" title={row.errors.join(', ')} />
+                        <AlertCircle size={14} className="text-red-500" aria-label={row.errors.join(', ')} />
                       )}
                       {row.warnings.length > 0 && (
                         <AlertTriangle
                           size={14}
                           className="text-yellow-500"
-                          title={row.warnings.join(', ')}
+                          aria-label={row.warnings.join(', ')}
                         />
                       )}
                       {row.errors.length === 0 && row.warnings.length === 0 && (

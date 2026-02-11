@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { taskService } from '../../../services/task.service'
 import { AlertCircle, Calendar } from 'lucide-react'
 import { format } from 'date-fns'
-import type { Task } from '../../../../shared/types/task.types'
+import type { Task } from 'shared/types/task.types'
 
 export default function OverdueTasksWidget({ projectId }: { projectId?: string }) {
   const { data, isLoading } = useQuery({

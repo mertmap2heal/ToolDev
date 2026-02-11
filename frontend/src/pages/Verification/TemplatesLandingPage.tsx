@@ -30,7 +30,14 @@ export default function TemplatesLandingPage() {
   const [kebabId, setKebabId] = useState<string | null>(null)
   const [exportPlaceholder, setExportPlaceholder] = useState(false)
 
-  const { data: list = [], isLoading } = useQuery({
+  interface TemplateListItem {
+    id: string
+    name?: string
+    type?: string
+    status?: string
+    [key: string]: unknown
+  }
+  const { data: list = [], isLoading } = useQuery<TemplateListItem[]>({
     queryKey: ['verification-templates', projectId, section, showArchived],
     queryFn: async () => {
       if (!projectId) return []
@@ -38,12 +45,12 @@ export default function TemplatesLandingPage() {
         type: section,
         includeArchived: showArchived,
       })
-      return res.success && res.data ? res.data : []
+      return res.success && res.data ? (res.data as TemplateListItem[]) : []
     },
     enabled: !!projectId,
   })
 
-  const createMutation = useMutation({
+  const createMutation = useMutation<{ id: string }>({
     mutationFn: async () => {
       if (!projectId) throw new Error('No project')
       const res = await verificationService.createTemplate(projectId, {
@@ -51,7 +58,7 @@ export default function TemplatesLandingPage() {
         name: `New ${section === 'TEST_CASE' ? 'Test Case' : 'Test Plan'} Template`,
       })
       if (!res.success || !res.data) throw new Error(res.error || 'Create failed')
-      return res.data
+      return res.data as { id: string }
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['verification-templates', projectId] })
@@ -59,12 +66,12 @@ export default function TemplatesLandingPage() {
     },
   })
 
-  const duplicateMutation = useMutation({
+  const duplicateMutation = useMutation<{ id: string }>({
     mutationFn: async (id: string) => {
       if (!projectId) throw new Error('No project')
       const res = await verificationService.duplicateTemplate(projectId, id)
       if (!res.success || !res.data) throw new Error(res.error || 'Duplicate failed')
-      return res.data
+      return res.data as { id: string }
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['verification-templates', projectId] })

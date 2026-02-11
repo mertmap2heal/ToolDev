@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
-import type { CreateParameterDto } from '../../../shared/types/engineering.types'
+import type { CreateParameterDto } from 'shared/types/engineering.types'
 
 interface CreateParameterModalProps {
   isOpen: boolean

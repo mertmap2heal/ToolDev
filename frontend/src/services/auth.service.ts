@@ -1,6 +1,6 @@
 import { apiClient } from './api'
-import type { User } from '../../../shared/types/project.types'
-import type { ApiResponse } from '../../../shared/types/api.types'
+import type { User } from 'shared/types/project.types'
+import type { ApiResponse } from 'shared/types/api.types'
 import type { AdminUser, PermissionMap } from '../types/admin.types'
 import { emptyPermissionMap } from '../types/admin.types'
 

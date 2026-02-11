@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { Bookmark, Plus, X, Edit2, Trash2 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { taskService } from '../../services/task.service'
-import type { SavedView, ListTasksFilters } from '../../../shared/types/task.types'
+import type { SavedView, ListTasksFilters } from 'shared/types/task.types'
 
 interface SavedViewsPanelProps {
   currentFilters: ListTasksFilters

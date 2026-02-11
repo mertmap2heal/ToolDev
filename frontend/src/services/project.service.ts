@@ -4,8 +4,8 @@ import type {
   ProjectMember,
   CreateProjectDto,
   UpdateProjectDto,
-} from '../../../shared/types/project.types'
-import type { ApiResponse } from '../../../shared/types/api.types'
+} from 'shared/types/project.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 export const projectService = {
   async getProjects(): Promise<ApiResponse<Project[]>> {

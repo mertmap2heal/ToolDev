@@ -7,7 +7,7 @@ import CommentsTab from './CommentsTab'
 import AttachmentsTab from './AttachmentsTab'
 import DependenciesTab from './DependenciesTab'
 import ActivityTab from './ActivityTab'
-import type { Task, TaskStatus, TaskPriority, UpdateTaskDto } from '../../../shared/types/task.types'
+import type { Task, TaskStatus, TaskPriority, UpdateTaskDto } from 'shared/types/task.types'
 import { format } from 'date-fns'
 
 interface TaskDetailDrawerProps {

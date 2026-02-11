@@ -25,12 +25,13 @@ import {
   Star,
   X,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
 export interface IconDefinition {
   id: string
   name: string
   category: string
-  icon?: React.ComponentType<{ size?: number; className?: string }>
+  icon?: LucideIcon
   svg?: string
   isCustom?: boolean
 }

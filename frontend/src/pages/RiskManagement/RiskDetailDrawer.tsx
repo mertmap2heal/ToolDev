@@ -13,11 +13,11 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import clsx from 'clsx'
 import type { Risk, RiskStatus } from './types'
 import {
   RISK_STATUSES,
-  CLASSIFICATIONS,
   ARTIFACT_ROUTES,
   MOCK_ARTIFACT_COUNTS,
   getStatusColor,
@@ -26,7 +26,7 @@ import {
 } from './constants'
 import PlannedFeatureModal from './PlannedFeatureModal'
 
-const ARTIFACT_ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+const ARTIFACT_ICONS: Record<string, LucideIcon> = {
   Requirements: FileText,
   Interfaces: Network,
   Issues: AlertCircle,

@@ -275,7 +275,11 @@ function TreeNodeRow({
         {(() => {
           const IconComponent = TYPE_ICONS[node.type] ?? Box
           const iconClass = TYPE_ICON_CLASS[node.type] ?? 'text-gray-500'
-          return <IconComponent size={14} className={clsx('flex-shrink-0', iconClass)} title={node.type} />
+          return (
+            <span title={node.type}>
+              <IconComponent size={14} className={clsx('flex-shrink-0', iconClass)} />
+            </span>
+          )
         })()}
         {isEditing ? (
           <input

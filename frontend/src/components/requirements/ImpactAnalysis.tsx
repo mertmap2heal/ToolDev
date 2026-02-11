@@ -5,8 +5,8 @@ import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
 import { traceabilityService } from '../../services/traceability.service'
-import type { Requirement, SystemFunction, Issue } from '../../../../shared/types/engineering.types'
-import type { TraceLink } from '../../../../shared/types/traceability.types'
+import type { Requirement, SystemFunction, Issue } from 'shared/types/engineering.types'
+import type { TraceLink } from 'shared/types/traceability.types'
 import clsx from 'clsx'
 
 interface ImpactAnalysisProps {
@@ -328,7 +328,7 @@ export default function ImpactAnalysis({ projectId, requirement, onClose }: Impa
           </span>
 
           {node.isSuspect && (
-            <AlertTriangle size={12} className="text-yellow-500" title="Suspect link" />
+            <AlertTriangle size={12} className="text-yellow-500" aria-label="Suspect link" />
           )}
 
           <span className={clsx(

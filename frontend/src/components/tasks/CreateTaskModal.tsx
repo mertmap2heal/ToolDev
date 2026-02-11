@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { taskService } from '../../services/task.service'
 import TagPicker from './TagPicker'
-import type { CreateTaskDto, TaskStatus } from '../../../shared/types/task.types'
+import type { CreateTaskDto, TaskStatus } from 'shared/types/task.types'
 
 interface CreateTaskModalProps {
   isOpen: boolean

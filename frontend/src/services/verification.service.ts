@@ -1,5 +1,5 @@
 import { apiClient } from './api'
-import type { ApiResponse } from '../../shared/types/api.types'
+import type { ApiResponse } from 'shared/types/api.types'
 import type { EvidenceItem } from '../modules/certification/types'
 
 const notImplemented = (): Promise<ApiResponse<never>> =>
@@ -57,19 +57,19 @@ export async function getVerificationEvidence(
 ): Promise<ApiResponse<EvidenceItem[]>> {
   const res = await apiClient.get<VerEvidenceFromApi[]>(`/verification/evidence/${projectId}`)
   if (!res.success || !res.data) {
-    return res as ApiResponse<EvidenceItem[]>
+    return res as unknown as ApiResponse<EvidenceItem[]>
   }
   return {
     success: true,
     data: res.data.map(mapVerEvidenceToEvidenceItem),
-  }
+  } as ApiResponse<EvidenceItem[]>
 }
 
 /** Verification API service object used by Verification pages and CreateRequirementModal */
 export const verificationService = {
   getMocs,
   getVerificationEvidence,
-  getTemplates: (_projectId: string, _opts?: { type?: string }) => notImplemented(),
+  getTemplates: (_projectId: string, _opts?: { type?: string; includeArchived?: boolean }) => notImplemented(),
   createTemplate: (_projectId: string, _data: unknown) => notImplemented(),
   duplicateTemplate: (_projectId: string, _id: string) => notImplemented(),
   publishTemplate: (_projectId: string, _id: string) => notImplemented(),
@@ -105,9 +105,6 @@ export const verificationService = {
   createSetup: (_projectId: string, _data: unknown) => notImplemented(),
   getTestResult: (_projectId: string, _id: string) => notImplemented(),
   updateTestResult: (_projectId: string, _id: string, _data: unknown) => notImplemented(),
-  deleteTestResult: (_projectId: string, _id: string) => notImplemented(),
-  linkTestResult: (_projectId: string, _resultId: string, _data: unknown) => notImplemented(),
-  unlinkTestResult: (_projectId: string, _resultId: string, _data: unknown) => notImplemented(),
   downloadTestResult: (_projectId: string, _id: string) => notImplemented(),
   getTestCase: (_projectId: string, _id: string) => notImplemented(),
   getMethods: (_projectId: string) => notImplemented(),

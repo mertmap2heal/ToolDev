@@ -23,7 +23,7 @@ import DiagramLegend from '../shared/DiagramLegend'
 import { functionService } from '../../../services/function.service'
 import { requirementService } from '../../../services/requirement.service'
 import { traceabilityService } from '../../../services/traceability.service'
-import type { SystemFunction } from '../../../../../shared/types/engineering.types'
+import type { SystemFunction } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 
 interface BlockDefinitionDiagramProps {

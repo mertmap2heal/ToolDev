@@ -44,31 +44,31 @@ export default function TestResultDetailDrawer({
   const queryClient = useQueryClient()
 
   // Fetch full test result details
-  const { data: resultDetails } = useQuery({
+  const { data: resultDetails } = useQuery<{ links?: Array<{ id: string; linkedEntityType: string; linkedEntityId: string }> } | null>({
     queryKey: ['test-result', projectId, testResult?.id],
     queryFn: async () => {
       if (!testResult?.id) return null
       const response = await verificationService.getTestResult(projectId, testResult.id)
-      return response.success ? response.data : null
+      return (response.success ? response.data : null) as { links?: Array<{ id: string; linkedEntityType: string; linkedEntityId: string }> } | null
     },
     enabled: isOpen && !!testResult?.id,
   })
 
   // Fetch test cases and test plans for linking
-  const { data: testCases = [] } = useQuery({
+  const { data: testCases = [] } = useQuery<Array<{ id: string; key?: string; title?: string }>>({
     queryKey: ['test-cases', projectId],
     queryFn: async () => {
       const response = await verificationService.getTestCases(projectId)
-      return response.success && response.data ? response.data : []
+      return (response.success && response.data ? response.data : []) as Array<{ id: string; key?: string; title?: string }>
     },
     enabled: isOpen,
   })
 
-  const { data: testPlans = [] } = useQuery({
+  const { data: testPlans = [] } = useQuery<Array<{ id: string; key?: string; name?: string }>>({
     queryKey: ['test-plans', projectId],
     queryFn: async () => {
       const response = await verificationService.getTestPlans(projectId)
-      return response.success && response.data ? response.data : []
+      return (response.success && response.data ? response.data : []) as Array<{ id: string; key?: string; name?: string }>
     },
     enabled: isOpen,
   })
@@ -152,7 +152,9 @@ export default function TestResultDetailDrawer({
 
   const handleDownload = async () => {
     try {
-      const blob = await verificationService.downloadTestResult(projectId, testResult.id)
+      const result = await verificationService.downloadTestResult(projectId, testResult.id)
+      const blob = (result as { data?: Blob }).data ?? (result as unknown as Blob)
+      if (!(blob instanceof Blob)) throw new Error('Download failed: invalid response')
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -535,7 +537,8 @@ export default function TestResultDetailDrawer({
                     {!linkedTestPlan && (
                       <button
                         onClick={() => {
-                          const unlinkedPlans = testPlans.filter((tp: any) => tp.id !== linkedTestPlan?.id)
+                          const linkedId = (linkedTestPlan as { id?: string } | null)?.id
+                          const unlinkedPlans = testPlans.filter((tp) => tp.id !== linkedId)
                           if (unlinkedPlans.length > 0) {
                             const selected = prompt(
                               `Enter test plan ID to link:\nAvailable: ${unlinkedPlans.map((tp: any) => `${tp.key} (${tp.id})`).join(', ')}`

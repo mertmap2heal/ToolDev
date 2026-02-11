@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { X, Archive, Trash2, Plus, ArrowLeftRight, Calendar, User, FileText, Search, CheckSquare, Square, ChevronRight, ChevronLeft, Eye, Download } from 'lucide-react'
+import { X, Archive, Trash2, Plus, ArrowLeftRight, Calendar, User, FileText, Search, CheckSquare, Square, ChevronRight, ChevronLeft, Eye, Download, Link2, AlertTriangle } from 'lucide-react'
 import { baselineService } from '../../services/baseline.service'
 import { requirementService } from '../../services/requirement.service'
 import BaselineViewModal from './BaselineViewModal'
 import BaselineExportModal from './BaselineExportModal'
 import BaselineComparisonModal from './BaselineComparisonModal'
-import type { Baseline, Requirement } from '../../../../shared/types/engineering.types'
+import { LINKAGE_V1 } from '../../config/featureFlags'
+import type { Baseline } from 'shared/types/engineering.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
 
@@ -302,6 +303,20 @@ export default function BaselineManager({ projectId, onClose }: BaselineManagerP
                         <FileText size={12} />
                         {baseline.itemCount || 0} requirements
                       </span>
+                      {LINKAGE_V1 && (baseline.linksCount != null || baseline.suspectLinksCount != null) && (
+                        <>
+                          <span className="flex items-center gap-1">
+                            <Link2 size={12} />
+                            {baseline.linksCount ?? 0} links
+                          </span>
+                          {(baseline.suspectLinksCount ?? 0) > 0 && (
+                            <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                              <AlertTriangle size={12} />
+                              {baseline.suspectLinksCount} suspect
+                            </span>
+                          )}
+                        </>
+                      )}
                       <span className="flex items-center gap-1">
                         <Calendar size={12} />
                         {format(new Date(baseline.createdAt), 'PP')}

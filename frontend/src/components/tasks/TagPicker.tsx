@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { X, Plus } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { taskService } from '../../services/task.service'
-import type { TaskTag } from '../../../shared/types/task.types'
+import type { TaskTag } from 'shared/types/task.types'
 
 interface TagPickerProps {
   selectedTagIds: string[]

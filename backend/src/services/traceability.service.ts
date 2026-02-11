@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import type { TraceLink, TraceabilityGraph } from '../../../shared/types/traceability.types'
+import { linkageAuditService } from './linkageAudit.service'
 
 const prisma = new PrismaClient()
 
@@ -8,10 +9,55 @@ const prisma = new PrismaClient()
  * artifacts (requirements, functions, etc.) including suspect link detection
  * and coverage analysis.
  */
+const MEANINGFUL_LINK_TYPES = [
+  'verified_by',
+  'validated_by',
+  'documented_in',
+  'mitigates',
+  'complies_with',
+  'cert_objective',
+  'verifies', // legacy
+]
+
+const MEANINGFUL_FIELDS = [
+  'title',
+  'description',
+  'acceptanceCriteria',
+  'verificationMethod',
+  'parentId',
+  'requirementType',
+  'requirementLevel',
+  'risk',
+  'complexity',
+  'source',
+  'owner',
+  'rationale',
+  'assumptions',
+  'linkedMocCode',
+]
+
 export const traceabilityService = {
-  async getTraceLinks(projectId: string): Promise<TraceLink[]> {
+  async getTraceLinks(
+    projectId: string,
+    filters?: {
+      sourceType?: string
+      targetType?: string
+      sourceId?: string
+      targetId?: string
+      excludeFunctions?: boolean
+    }
+  ): Promise<TraceLink[]> {
+    const baseWhere: any = { projectId }
+    if (filters?.sourceType) baseWhere.sourceType = filters.sourceType
+    if (filters?.targetType) baseWhere.targetType = filters.targetType
+    if (filters?.sourceId) baseWhere.sourceId = filters.sourceId
+    if (filters?.targetId) baseWhere.targetId = filters.targetId
+    const where = filters?.excludeFunctions
+      ? { AND: [baseWhere, { targetType: { notIn: ['function', 'parameter'] } }] }
+      : baseWhere
+
     const links = await prisma.traceLink.findMany({
-      where: { projectId },
+      where,
       orderBy: { createdAt: 'desc' },
     })
 
@@ -33,12 +79,16 @@ export const traceabilityService = {
     }))
   },
 
-  async getSuspectLinks(projectId: string): Promise<TraceLink[]> {
+  async getSuspectLinks(
+    projectId: string,
+    options?: { excludeFunctions?: boolean }
+  ): Promise<TraceLink[]> {
+    const where: any = { projectId, isSuspect: true }
+    if (options?.excludeFunctions) {
+      where.targetType = { notIn: ['function', 'parameter'] }
+    }
     const links = await prisma.traceLink.findMany({
-      where: { 
-        projectId,
-        isSuspect: true,
-      },
+      where,
       orderBy: { createdAt: 'desc' },
     })
 
@@ -116,7 +166,8 @@ export const traceabilityService = {
     targetId: string,
     linkType: string,
     direction?: string,
-    rationale?: string
+    rationale?: string,
+    performedByUserId?: string
   ): Promise<TraceLink> {
     const link = await prisma.traceLink.create({
       data: {
@@ -132,6 +183,15 @@ export const traceabilityService = {
         isSuspect: false,
         lastChecked: new Date(),
       },
+    })
+
+    await linkageAuditService.log({
+      projectId,
+      entityType: 'LINK',
+      entityId: link.id,
+      action: 'LINK_CREATED',
+      newValue: { sourceType, sourceId, targetType, targetId, linkType },
+      performedByUserId,
     })
 
     return {
@@ -155,13 +215,28 @@ export const traceabilityService = {
   /**
    * Clears the suspect flag on a link, marking it as reviewed
    */
-  async clearSuspectLink(projectId: string, linkId: string): Promise<TraceLink> {
+  async clearSuspectLink(
+    projectId: string,
+    linkId: string,
+    performedByUserId?: string,
+    comment?: string
+  ): Promise<TraceLink> {
     const link = await prisma.traceLink.update({
       where: { id: linkId },
       data: {
         isSuspect: false,
         lastChecked: new Date(),
       },
+    })
+
+    await linkageAuditService.log({
+      projectId,
+      entityType: 'LINK',
+      entityId: linkId,
+      action: 'LINK_CLEARED_SUSPECT',
+      oldValue: { isSuspect: true },
+      newValue: { isSuspect: false, comment: comment || undefined },
+      performedByUserId,
     })
 
     return {
@@ -202,11 +277,60 @@ export const traceabilityService = {
   },
 
   /**
+   * Marks links as suspect when meaningful requirement fields change.
+   * Only marks links of types: verified_by, validated_by, documented_in,
+   * mitigates, complies_with, cert_objective (and legacy verifies).
+   */
+  async markLinksSuspectByMeaningfulChange(
+    projectId: string,
+    requirementId: string,
+    changedFields: string[]
+  ): Promise<number> {
+    const meaningful = changedFields.filter((f) =>
+      MEANINGFUL_FIELDS.includes(f)
+    )
+    if (meaningful.length === 0) return 0
+
+    const result = await prisma.traceLink.updateMany({
+      where: {
+        projectId,
+        sourceId: requirementId,
+        linkType: { in: MEANINGFUL_LINK_TYPES },
+      },
+      data: { isSuspect: true },
+    })
+    return result.count
+  },
+
+  /**
    * Deletes a trace link
    */
-  async deleteTraceLink(projectId: string, linkId: string): Promise<void> {
+  async deleteTraceLink(
+    projectId: string,
+    linkId: string,
+    performedByUserId?: string
+  ): Promise<void> {
+    const link = await prisma.traceLink.findUnique({
+      where: { id: linkId },
+    })
     await prisma.traceLink.delete({
       where: { id: linkId },
     })
+    if (link) {
+      await linkageAuditService.log({
+        projectId,
+        entityType: 'LINK',
+        entityId: linkId,
+        action: 'LINK_REMOVED',
+        oldValue: {
+          sourceType: link.sourceType,
+          sourceId: link.sourceId,
+          targetType: link.targetType,
+          targetId: link.targetId,
+          linkType: link.linkType,
+        },
+        performedByUserId,
+      })
+    }
   },
 }

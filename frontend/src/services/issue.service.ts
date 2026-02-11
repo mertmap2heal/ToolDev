@@ -1,6 +1,6 @@
 import { apiClient } from './api'
-import type { Issue, CreateIssueDto } from '../../../shared/types/engineering.types'
-import type { ApiResponse } from '../../../shared/types/api.types'
+import type { Issue, CreateIssueDto } from 'shared/types/engineering.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 export const issueService = {
   async getIssues(projectId: string): Promise<ApiResponse<Issue[]>> {

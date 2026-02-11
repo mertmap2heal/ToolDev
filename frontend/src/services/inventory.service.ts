@@ -314,14 +314,6 @@ class InventoryService {
     return response.data
   }
 
-  async getSupplier(supplierId: string) {
-    const response = await axios.get(
-      `${API_BASE_URL}/inventory/suppliers/${supplierId}`,
-      this.getAuthHeaders()
-    )
-    return response.data
-  }
-
   // Purchase Orders
   async getPurchaseOrders(filters?: {
     supplierId?: string

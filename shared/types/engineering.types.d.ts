@@ -116,6 +116,8 @@ export interface Baseline {
     createdByName?: string;
     lockedAt?: string;
     itemCount?: number;
+    linksCount?: number;
+    suspectLinksCount?: number;
     createdAt: string;
     updatedAt: string;
 }
@@ -145,24 +147,39 @@ export interface RequirementComparisonItem {
         status?: string;
     };
 }
+export interface BaselineLinkChange {
+    id: string;
+    sourceId: string;
+    sourceType: string;
+    targetId: string;
+    targetType: string;
+    linkType: string;
+}
 export interface BaselineComparison {
     baselineA: {
         id: string;
         name: string;
         createdAt: string;
+        linksCount?: number;
     };
     baselineB: {
         id: string;
         name: string;
         createdAt: string;
+        linksCount?: number;
     };
     added: RequirementComparisonItem[];
     removed: RequirementComparisonItem[];
     modified: RequirementComparisonItem[];
+    linksAdded?: BaselineLinkChange[];
+    linksRemoved?: BaselineLinkChange[];
+    linksSuspectChanged?: BaselineLinkChange[];
     summary?: {
         addedCount: number;
         removedCount: number;
         modifiedCount: number;
+        linksAddedCount?: number;
+        linksRemovedCount?: number;
     };
 }
 export interface SystemFunction {

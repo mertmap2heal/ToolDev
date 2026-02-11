@@ -69,7 +69,7 @@ export default function CustomSectionEditor({
             // or construct absolute URL based on API base
             const apiBase = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api/v1' : 'http://localhost:5000/api/v1')
             const serverBase = apiBase.startsWith('/') ? '' : apiBase.replace('/api/v1', '')
-            return `${serverBase}${response.data.fileUrl}`
+            return `${serverBase}${(response.data as { fileUrl: string }).fileUrl}`
           }
         } catch (error) {
           console.error('Failed to upload image:', error)

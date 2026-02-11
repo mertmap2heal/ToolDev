@@ -8,7 +8,7 @@ import { authService } from '../../services/auth.service'
 import { useAuthStore } from '../../store/authStore'
 import { notificationService } from '../../services/notification.service'
 import { projectService } from '../../services/project.service'
-import type { Notification } from '../../../shared/types/project.types'
+import type { Notification } from 'shared/types/project.types'
 
 export default function Header() {
   const [dropdownOpen, setDropdownOpen] = useState(false)

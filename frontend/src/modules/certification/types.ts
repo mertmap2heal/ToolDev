@@ -48,6 +48,7 @@ export interface CertificationObjective {
   linkedCiCount: number
   notes: string
   reviewed?: boolean
+  safetyObjectiveRef?: string
   linkedRequirements?: LinkedRequirement[]
 }
 

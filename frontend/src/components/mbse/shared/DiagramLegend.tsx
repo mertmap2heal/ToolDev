@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useState } from 'react'
 
-interface LegendItem {
+export interface LegendItem {
   label: string
   color: string
   shape?: 'rectangle' | 'circle' | 'diamond' | 'ellipse' | 'hexagon'

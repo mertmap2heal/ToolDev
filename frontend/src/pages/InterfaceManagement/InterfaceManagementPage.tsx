@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Search,
   X,
@@ -44,6 +45,9 @@ function getNextId(interfaces: Interface[]): string {
 }
 
 export default function InterfaceManagementPage() {
+  const [searchParams] = useSearchParams()
+  const focusType = searchParams.get('focusType')
+  const focusId = searchParams.get('focusId')
   const [interfaces, setInterfaces] = useState<Interface[]>(MOCK_INTERFACES)
   const [searchQuery, setSearchQuery] = useState('')
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
@@ -72,6 +76,13 @@ export default function InterfaceManagementPage() {
     }
     return new Set(['id', 'name', 'type', 'sourceElement', 'targetElement', 'status', 'owner', 'lastUpdated', 'actions'])
   })
+
+  useEffect(() => {
+    if (focusType === 'interface' && focusId) {
+      const iface = interfaces.find((i) => i.id === focusId)
+      if (iface) setSelectedInterface(iface)
+    }
+  }, [focusType, focusId, interfaces])
 
   useEffect(() => {
     if (toastMessage) {
@@ -496,7 +507,10 @@ export default function InterfaceManagementPage() {
                       {'sortKey' in col ? (
                         <button
                           type="button"
-                          onClick={() => toggleSort(col.sortKey)}
+                          onClick={() => {
+                            const k = (col as { sortKey?: typeof sortKey }).sortKey
+                            if (k) toggleSort(k)
+                          }}
                           className="flex items-center gap-1 hover:text-gray-900 dark:hover:text-white"
                         >
                           {col.label}

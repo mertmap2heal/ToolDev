@@ -1,6 +1,6 @@
 import { apiClient } from './api'
-import type { RequirementTemplate, CreateRequirementTemplateDto, UpdateRequirementTemplateDto } from '../../../shared/types/template.types'
-import type { ApiResponse } from '../../../shared/types/api.types'
+import type { RequirementTemplate, CreateRequirementTemplateDto, UpdateRequirementTemplateDto } from 'shared/types/template.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 export const templateService = {
   async getTemplates(projectId: string): Promise<ApiResponse<RequirementTemplate[]>> {

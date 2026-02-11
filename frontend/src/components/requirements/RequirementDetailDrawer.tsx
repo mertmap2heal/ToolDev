@@ -1,15 +1,22 @@
 import { useState, useEffect } from 'react'
-import { X, Edit2, Trash2, MessageSquare, Paperclip, Tag, ChevronRight, ChevronDown, Link2, FileText, Settings, AlertCircle, Zap, History } from 'lucide-react'
+import { X, Edit2, Trash2, MessageSquare, Paperclip, Tag, ChevronRight, ChevronDown, Link2, FileText, Settings, AlertCircle, Zap, History, ExternalLink, Check } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
 import { changeRequestService } from '../../services/changeRequest.service'
+import { linkService } from '../../services/link.service'
+import { LINKAGE_V1, LIFECYCLE_V1 } from '../../config/featureFlags'
+import { lifecycleService } from '../../services/lifecycle.service'
+import { useLifecycleStore } from '../../store/lifecycleStore'
+import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
+import { buildDeepLink } from '../../linkage/buildDeepLink'
 import ImpactAnalysis from './ImpactAnalysis'
 import RequirementVersionHistory from './RequirementVersionHistory'
 import RequirementReviewPanel from './RequirementReviewPanel'
 import ReviewStatusBadge from './ReviewStatusBadge'
-import type { Requirement, RequirementComment } from '../../../shared/types/engineering.types'
+import type { Requirement, RequirementComment } from 'shared/types/engineering.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
 
@@ -17,15 +24,150 @@ interface RequirementDetailDrawerProps {
   isOpen: boolean
   requirement: Requirement | null
   projectId: string
+  baselineId?: string | null
   onClose: () => void
   onEdit: (requirement: Requirement) => void
   onDelete: (requirement: Requirement) => void
+}
+
+/** Gates checklist for lifecycle - simple client-side checks */
+function LifecycleGatesChecklist({ requirement, links }: { requirement: Requirement; links: any[] }) {
+  const hasOwner = !!requirement.owner?.trim()
+  const hasAcceptanceCriteria = !!requirement.acceptanceCriteria?.trim()
+  const hasVerificationMethod = !!requirement.verificationMethod?.trim()
+  const hasAllocation = links.some((l: any) => l.linkType === 'allocated_to' && l.targetType === 'pbs_component')
+  return (
+    <div className="space-y-2">
+      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Gates</h4>
+      <ul className="space-y-1 text-sm">
+        <li className={clsx('flex items-center gap-2', hasOwner ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400')}>
+          {hasOwner ? <Check size={14} /> : <AlertCircle size={14} />}
+          Owner assigned
+        </li>
+        <li className={clsx('flex items-center gap-2', hasAcceptanceCriteria ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400')}>
+          {hasAcceptanceCriteria ? <Check size={14} /> : <AlertCircle size={14} />}
+          Acceptance criteria
+        </li>
+        <li className={clsx('flex items-center gap-2', hasVerificationMethod ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400')}>
+          {hasVerificationMethod ? <Check size={14} /> : <AlertCircle size={14} />}
+          Verification method
+        </li>
+        <li className={clsx('flex items-center gap-2', hasAllocation ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400')}>
+          {hasAllocation ? <Check size={14} /> : <AlertCircle size={14} />}
+          Allocated to PBS
+        </li>
+      </ul>
+    </div>
+  )
+}
+
+function LifecycleApprovalsTab({
+  requirement,
+  projectId,
+  links,
+  onStatusChanged,
+}: {
+  requirement: Requirement
+  projectId: string
+  links: any[]
+  onStatusChanged: () => void
+}) {
+  const { lifecycles } = useLifecycleStore()
+  const { statuses } = useStatusDefinitionsStore()
+  const queryClient = useQueryClient()
+  const lifecycle = requirement.lifecycleId
+    ? lifecycles.find((lc) => lc.id === requirement.lifecycleId)
+    : lifecycles.find((lc) => lc.applicableItemTypes?.includes('Requirement'))
+
+  const currentStatusId = requirement.statusId ?? statuses.find((s) => s.name === requirement.status)?.id
+  const [transitions, setTransitions] = useState<Array<{ toStatusId: string; toStatusName: string }>>([])
+
+  useEffect(() => {
+    const lid = requirement.lifecycleId ?? lifecycle?.id
+    if (lid && currentStatusId) {
+      lifecycleService.getAllowedTransitions(lid, currentStatusId).then((r) => {
+        if (r.success && r.data?.transitions) {
+          setTransitions(r.data.transitions.map((t) => ({ toStatusId: t.toStatusId, toStatusName: t.toStatusName })))
+        }
+      })
+    }
+  }, [requirement, lifecycle?.id, currentStatusId])
+
+  const { data: auditEvents = [] } = useQuery({
+    queryKey: ['audit', projectId, requirement.id],
+    queryFn: async () => {
+      const r = await requirementService.getAuditEvents(projectId, 'REQUIREMENT', requirement.id)
+      return r.success && r.data ? r.data : []
+    },
+    enabled: !!projectId && !!requirement.id,
+  })
+
+  const statusHistory = auditEvents.filter((e: any) => e.action === 'REQUIREMENT_STATUS_CHANGED')
+
+  const updateMutation = useMutation({
+    mutationFn: (updates: { statusId: string; status: string }) =>
+      requirementService.updateRequirement(projectId, requirement.id, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['requirement', projectId, requirement.id] })
+      onStatusChanged()
+    },
+  })
+
+  return (
+    <div className="space-y-6">
+      {lifecycle && (
+        <div>
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Lifecycle</h3>
+          <p className="text-base text-gray-900 dark:text-white">{lifecycle.name} v{lifecycle.version}</p>
+        </div>
+      )}
+      <div>
+        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Current Status</h3>
+        <p className="text-base text-gray-900 dark:text-white">{requirement.status || '—'}</p>
+      </div>
+      {statusHistory.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Status History</h3>
+          <div className="space-y-2">
+            {statusHistory.slice(0, 10).map((evt: any) => (
+              <div key={evt.id} className="flex gap-2 text-sm border-l-2 border-gray-200 dark:border-gray-600 pl-3 py-1">
+                <span className="text-gray-500">{format(new Date(evt.performedAt), 'MMM d, HH:mm')}</span>
+                <span>
+                  {evt.oldValue?.status ?? '?'} → {evt.newValue?.status ?? '?'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {transitions.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Allowed Transitions</h3>
+          <div className="flex flex-wrap gap-2">
+            {transitions.map((t) => (
+              <button
+                key={t.toStatusId}
+                onClick={() => updateMutation.mutate({ statusId: t.toStatusId, status: t.toStatusName })}
+                disabled={updateMutation.isPending}
+                className="px-3 py-2 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 text-sm font-medium disabled:opacity-50"
+              >
+                → {t.toStatusName}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <LifecycleGatesChecklist requirement={requirement} links={links} />
+    </div>
+  )
 }
 
 export default function RequirementDetailDrawer({
   isOpen,
   requirement,
   projectId,
+  baselineId,
   onClose,
   onEdit,
   onDelete,
@@ -37,6 +179,27 @@ export default function RequirementDetailDrawer({
   const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false)
 
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+
+  const { data: requirements = [] } = useQuery({
+    queryKey: ['requirements', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const response = await requirementService.getRequirements(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: isOpen && !!projectId && LINKAGE_V1,
+  })
+
+  const { data: links = [] } = useQuery({
+    queryKey: ['requirement-links', projectId, requirement?.id],
+    queryFn: async () => {
+      if (!projectId || !requirement?.id) return []
+      const response = await linkService.getLinks(projectId, { sourceId: requirement.id })
+      return response.success && response.data ? response.data : []
+    },
+    enabled: isOpen && !!projectId && !!requirement?.id && LINKAGE_V1,
+  })
 
   const { data: fullRequirement } = useQuery({
     queryKey: ['requirement', projectId, requirement?.id],
@@ -179,20 +342,24 @@ export default function RequirementDetailDrawer({
           >
             <Zap size={20} />
           </button>
-          <button
-            onClick={() => onEdit(displayRequirement)}
-            className="p-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-            title="Edit requirement"
-          >
-            <Edit2 size={20} />
-          </button>
-          <button
-            onClick={() => onDelete(displayRequirement)}
-            className="p-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-            title="Delete requirement"
-          >
-            <Trash2 size={20} />
-          </button>
+          {!baselineId && (
+            <>
+              <button
+                onClick={() => onEdit(displayRequirement)}
+                className="p-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                title="Edit requirement"
+              >
+                <Edit2 size={20} />
+              </button>
+              <button
+                onClick={() => onDelete(displayRequirement)}
+                className="p-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                title="Delete requirement"
+              >
+                <Trash2 size={20} />
+              </button>
+            </>
+          )}
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -210,7 +377,7 @@ export default function RequirementDetailDrawer({
             { id: 'hierarchy', label: 'Hierarchy' },
             { id: 'links', label: 'Links' },
             { id: 'reviews', label: 'Reviews' },
-            { id: 'lifecycle-status', label: 'Lifecycle Status' },
+            ...(LIFECYCLE_V1 ? [{ id: 'lifecycle-status' as const, label: 'Lifecycle & Approvals' }] : []),
             { id: 'comments', label: `Comments (${displayRequirement.comments?.length || 0})` },
           ].map((tab) => (
             <button
@@ -384,68 +551,115 @@ export default function RequirementDetailDrawer({
 
         {activeTab === 'links' && (
           <div className="space-y-6">
-            {/* Linked Functions */}
-            {linkedFunctions.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Settings size={16} className="text-blue-600 dark:text-blue-400" />
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Linked Functions ({linkedFunctions.length})
-                  </h3>
-                </div>
-                <div className="space-y-2">
-                  {linkedFunctions.map((func) => (
-                    <div key={func.id} className="p-3 bg-blue-50/50 dark:bg-blue-900/10 rounded-lg border border-blue-200 dark:border-blue-800">
-                      <div className="font-mono text-xs text-gray-500 dark:text-gray-400 mb-1">
-                        {func.functionId || func.id.substring(0, 8)}
+            {LINKAGE_V1 ? (
+              <>
+                {links.length > 0 ? (
+                  (() => {
+                    const byType = links.reduce<Record<string, typeof links>>((acc, link) => {
+                      const t = link.linkType || 'trace'
+                      if (!acc[t]) acc[t] = []
+                      acc[t].push(link)
+                      return acc
+                    }, {})
+                    return Object.entries(byType).map(([linkType, linkList]) => (
+                      <div key={linkType}>
+                        <div className="flex items-center gap-2 mb-3">
+                          <Link2 size={16} className="text-blue-600 dark:text-blue-400" />
+                          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {linkType.replace(/_/g, ' ')} ({linkList.length})
+                          </h3>
+                        </div>
+                        <div className="space-y-2">
+                          {linkList.map((link) => {
+                            const req = requirements.find((r: any) => r.id === link.targetId)
+                            const targetLabel = link.targetType === 'requirement'
+                              ? (displayRequirement?.id === link.targetId ? 'Self' : req?.title || req?.requirementId || `${link.targetType} (${link.targetId.slice(0, 8)})`)
+                              : `${link.targetType} (${link.targetId.slice(0, 8)})`
+                            const deepLink = buildDeepLink(projectId, { type: link.targetType as any, id: link.targetId })
+                            return (
+                              <div
+                                key={link.id}
+                                className="flex items-center justify-between gap-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{targetLabel}</div>
+                                  {link.isSuspect && (
+                                    <span className="inline-flex items-center gap-0.5 mt-1 px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                                      <AlertCircle size={10} /> Suspect
+                                    </span>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(deepLink)}
+                                  className="p-2 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded"
+                                  title="Open linked item"
+                                >
+                                  <ExternalLink size={14} />
+                                </button>
+                              </div>
+                            )
+                          })}
+                        </div>
                       </div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">{func.name}</div>
+                    ))
+                  })()
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">No linked items</p>
+                )}
+              </>
+            ) : (
+              <>
+                {linkedFunctions.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Settings size={16} className="text-blue-600 dark:text-blue-400" />
+                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Linked Functions ({linkedFunctions.length})</h3>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Linked Issues */}
-            {linkedIssues.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <AlertCircle size={16} className="text-yellow-600 dark:text-yellow-400" />
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Linked Issues ({linkedIssues.length})
-                  </h3>
-                </div>
-                <div className="space-y-2">
-                  {linkedIssues.map((issue) => (
-                    <div key={issue.id} className="p-3 bg-yellow-50/50 dark:bg-yellow-900/10 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">{issue.title}</div>
+                    <div className="space-y-2">
+                      {linkedFunctions.map((func) => (
+                        <div key={func.id} className="p-3 bg-blue-50/50 dark:bg-blue-900/10 rounded-lg border border-blue-200 dark:border-blue-800">
+                          <div className="font-mono text-xs text-gray-500 dark:text-gray-400 mb-1">{func.functionId || func.id.substring(0, 8)}</div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">{func.name}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Linked Change Requests */}
-            {linkedChangeRequests.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <FileText size={16} className="text-purple-600 dark:text-purple-400" />
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Linked Change Requests ({linkedChangeRequests.length})
-                  </h3>
-                </div>
-                <div className="space-y-2">
-                  {linkedChangeRequests.map((cr) => (
-                    <div key={cr.id} className="p-3 bg-purple-50/50 dark:bg-purple-900/10 rounded-lg border border-purple-200 dark:border-purple-800">
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">{cr.title}</div>
+                  </div>
+                )}
+                {linkedIssues.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <AlertCircle size={16} className="text-yellow-600 dark:text-yellow-400" />
+                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Linked Issues ({linkedIssues.length})</h3>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {linkedFunctions.length === 0 && linkedIssues.length === 0 && linkedChangeRequests.length === 0 && (
-              <p className="text-sm text-gray-500 dark:text-gray-400">No linked items</p>
+                    <div className="space-y-2">
+                      {linkedIssues.map((issue) => (
+                        <div key={issue.id} className="p-3 bg-yellow-50/50 dark:bg-yellow-900/10 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">{issue.title}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {linkedChangeRequests.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <FileText size={16} className="text-purple-600 dark:text-purple-400" />
+                      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Linked Change Requests ({linkedChangeRequests.length})</h3>
+                    </div>
+                    <div className="space-y-2">
+                      {linkedChangeRequests.map((cr) => (
+                        <div key={cr.id} className="p-3 bg-purple-50/50 dark:bg-purple-900/10 rounded-lg border border-purple-200 dark:border-purple-800">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">{cr.title}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {linkedFunctions.length === 0 && linkedIssues.length === 0 && linkedChangeRequests.length === 0 && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">No linked items</p>
+                )}
+              </>
             )}
           </div>
         )}
@@ -458,13 +672,13 @@ export default function RequirementDetailDrawer({
           />
         )}
 
-        {activeTab === 'lifecycle-status' && (
-          <div className="space-y-4">
-            <div className="p-6 bg-gray-50 dark:bg-gray-900 rounded-lg text-center">
-              <p className="text-gray-600 dark:text-gray-400">Lifecycle Status feature will be implemented here</p>
-              <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">This section is reserved for future implementation</p>
-            </div>
-          </div>
+        {activeTab === 'lifecycle-status' && LIFECYCLE_V1 && (
+          <LifecycleApprovalsTab
+            requirement={displayRequirement!}
+            projectId={projectId}
+            links={links}
+            onStatusChanged={() => queryClient.invalidateQueries({ queryKey: ['requirement', projectId, requirement?.id] })}
+          />
         )}
 
         {activeTab === 'comments' && (

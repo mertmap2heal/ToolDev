@@ -60,17 +60,18 @@ model Organization {
 }
 
 model Project {
-  id          String    @id @default(uuid())
-  name        String
-  description String?
-  domain      String
-  companyName String?
-  progress    Float     @default(0)
-  status      String    @default("active")
-  deadline    DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  userId      String
+  id                   String    @id @default(uuid())
+  name                 String
+  description          String?
+  domain               String
+  companyName          String?
+  progress             Float     @default(0)
+  status               String    @default("active")
+  deadline             DateTime?
+  strictLifecycleGates Boolean?  @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  userId               String
 
   teamMembers            ProjectMember[]
   requirements           Requirement[]
@@ -212,6 +213,10 @@ model Requirement {
   verificationDate   DateTime?
   verificationNotes  String?
   linkedMocCode      Int?
+  lifecycleId        String?
+  statusId           String?
+  statusChangedAt    DateTime?
+  statusChangedBy    String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -460,16 +465,17 @@ model RequirementVersion {
 }
 
 model Baseline {
-  id            String    @id @default(uuid())
-  projectId     String
-  name          String
-  description   String?
-  status        String    @default("active") // 'active' | 'locked' | 'archived'
-  createdBy     String?
-  createdByName String?
-  lockedAt      DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id             String    @id @default(uuid())
+  projectId      String
+  name           String
+  description    String?
+  status         String    @default("active") // 'active' | 'locked' | 'archived'
+  createdBy      String?
+  createdByName  String?
+  lockedAt       DateTime?
+  linksSnapshot  Json?     // Snapshot of links where source or target is a requirement
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   items   BaselineItem[]
   project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)

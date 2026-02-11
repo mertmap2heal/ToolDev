@@ -48,7 +48,9 @@ export default function CustomDropdown({
     queryFn: () => verificationService.getCustomOptions(projectId, optionType),
   })
 
-  const options: CustomOption[] = optionsResponse?.success ? optionsResponse.data : []
+  const options: CustomOption[] = optionsResponse?.success && optionsResponse.data
+    ? (optionsResponse.data as CustomOption[])
+    : []
 
   // Add custom option mutation
   const addOptionMutation = useMutation({
@@ -56,7 +58,7 @@ export default function CustomDropdown({
     onSuccess: (response) => {
       if (response.success && response.data) {
         // Auto-select the newly added option
-        const capitalizedValue = capitalizeFirstLetter(response.data.value)
+        const capitalizedValue = capitalizeFirstLetter((response.data as { value: string }).value)
         onChange(capitalizedValue)
       }
       queryClient.invalidateQueries({ queryKey: ['custom-options', projectId, optionType] })
@@ -68,10 +70,10 @@ export default function CustomDropdown({
   // Remove custom option mutation
   const removeOptionMutation = useMutation({
     mutationFn: (id: string) => verificationService.removeCustomOption(projectId, id),
-    onSuccess: () => {
+    onSuccess: (_, removedId) => {
       queryClient.invalidateQueries({ queryKey: ['custom-options', projectId, optionType] })
       // If the removed option was selected, clear the selection
-      if (options.find((opt) => opt.id === id)?.value === value) {
+      if (options.find((opt) => opt.id === removedId)?.value === value) {
         onChange('')
       }
     },

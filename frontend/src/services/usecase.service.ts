@@ -1,6 +1,6 @@
 import { apiClient } from './api'
-import type { UseCase, Actor, CreateUseCaseDto, UpdateUseCaseDto, CreateActorDto, UpdateActorDto } from '../../../shared/types/usecase.types'
-import type { ApiResponse } from '../../../shared/types/api.types'
+import type { UseCase, Actor, CreateUseCaseDto, UpdateUseCaseDto, CreateActorDto, UpdateActorDto } from 'shared/types/usecase.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 export const useCaseService = {
   async getUseCases(projectId: string): Promise<ApiResponse<UseCase[]>> {

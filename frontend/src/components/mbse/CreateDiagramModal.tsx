@@ -16,7 +16,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { diagramService } from '../../services/diagram.service'
-import type { DiagramType, CreateDiagramDto, SourceElementType } from '../../../../shared/types/diagram.types'
+import type { DiagramType, CreateDiagramDto, SourceElementType } from 'shared/types/diagram.types'
 import clsx from 'clsx'
 
 interface CreateDiagramModalProps {

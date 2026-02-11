@@ -18,6 +18,7 @@ export default function EvidenceDetailDrawer({
   onClose,
   onOpenSourceModule,
 }: EvidenceDetailDrawerProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()

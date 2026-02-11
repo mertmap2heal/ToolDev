@@ -1,6 +1,6 @@
 import { apiClient } from './api'
-import type { SavedView } from '../../../shared/types/engineering.types'
-import type { ApiResponse } from '../../../shared/types/api.types'
+import type { SavedView } from 'shared/types/engineering.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 export interface CreateSavedViewDto {
   name: string

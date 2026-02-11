@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { Search, X, Filter, ChevronDown, ChevronUp, FileText, ExternalLink, Plus } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
@@ -10,16 +10,19 @@ import { issueService } from '../../services/issue.service'
 import { parameterService } from '../../services/parameter.service'
 import ChangeRequestDetailsModal from '../../components/changeRequests/ChangeRequestDetailsModal'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
-import type { ChangeRequest } from '../../../shared/types/engineering.types'
-import type { SystemFunction } from '../../../shared/types/engineering.types'
-import type { Issue } from '../../../shared/types/engineering.types'
-import type { Parameter } from '../../../shared/types/engineering.types'
+import type { ChangeRequest } from 'shared/types/engineering.types'
+import type { SystemFunction } from 'shared/types/engineering.types'
+import type { Issue } from 'shared/types/engineering.types'
+import type { Parameter } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
 
 export default function ChangeRequestsPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const focusType = searchParams.get('focusType')
+  const focusId = searchParams.get('focusId')
   const [searchQuery, setSearchQuery] = useState('')
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -166,6 +169,13 @@ export default function ChangeRequestsPage() {
   const uniqueStatuses = Array.from(new Set(changeRequests.map((cr) => cr.status)))
   const uniquePriorities = Array.from(new Set(changeRequests.map((cr) => cr.priority)))
   const uniqueSourceTypes = Array.from(new Set(changeRequests.map((cr) => cr.sourceType)))
+
+  useEffect(() => {
+    if (focusType === 'change_request' && focusId && changeRequests.length > 0) {
+      const cr = changeRequests.find((c) => c.id === focusId)
+      if (cr) setSelectedChangeRequest(cr)
+    }
+  }, [focusType, focusId, changeRequests])
 
   return (
     <div className="space-y-6">

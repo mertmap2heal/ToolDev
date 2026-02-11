@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import type { Parameter } from '../../../shared/types/engineering.types'
+import type { Parameter } from 'shared/types/engineering.types'
 
 interface SourceDetailsModalProps {
   isOpen: boolean

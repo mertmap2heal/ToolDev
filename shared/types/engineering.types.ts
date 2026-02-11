@@ -35,6 +35,10 @@ export interface Requirement {
   verificationDate?: string
   verificationNotes?: string
   linkedMocCode?: number
+  lifecycleId?: string
+  statusId?: string
+  statusChangedAt?: string
+  statusChangedBy?: string
   moc?: {
     code: number
     name: string
@@ -122,6 +126,12 @@ export interface Baseline {
   createdByName?: string
   lockedAt?: string
   itemCount?: number
+  /** Snapshot items (from GET baseline with expand) */
+  items?: BaselineItem[]
+  /** Number of requirement-related links in baseline snapshot (LINKAGE_V1) */
+  linksCount?: number
+  /** Number of suspect links in baseline snapshot (LINKAGE_V1) */
+  suspectLinksCount?: number
   createdAt: string
   updatedAt: string
 }
@@ -155,24 +165,44 @@ export interface RequirementComparisonItem {
   }
 }
 
+/** Link change between baselines (LINKAGE_V1) */
+export interface BaselineLinkChange {
+  id: string
+  sourceId: string
+  sourceType: string
+  targetId: string
+  targetType: string
+  linkType: string
+}
+
 export interface BaselineComparison {
   baselineA: {
     id: string
     name: string
     createdAt: string
+    linksCount?: number
   }
   baselineB: {
     id: string
     name: string
     createdAt: string
+    linksCount?: number
   }
   added: RequirementComparisonItem[]
   removed: RequirementComparisonItem[]
   modified: RequirementComparisonItem[]
+  /** Links added in B compared to A (LINKAGE_V1) */
+  linksAdded?: BaselineLinkChange[]
+  /** Links removed in B compared to A (LINKAGE_V1) */
+  linksRemoved?: BaselineLinkChange[]
+  /** Links that became suspect or were suspect in both (LINKAGE_V1) */
+  linksSuspectChanged?: BaselineLinkChange[]
   summary?: {
     addedCount: number
     removedCount: number
     modifiedCount: number
+    linksAddedCount?: number
+    linksRemovedCount?: number
   }
 }
 
@@ -246,6 +276,7 @@ export interface CreateIssueDto {
   title: string
   description: string
   priority: 'low' | 'medium' | 'high' | 'critical'
+  status?: Issue['status']
   owner?: string
   relatedFunctionIds?: string[]
   relatedParameterIds?: string[]
@@ -358,11 +389,15 @@ export interface CreateRequirementDto {
   verificationStatus?: 'not_verified' | 'verified' | 'failed'
   verificationDate?: string
   verificationNotes?: string
+  lifecycleId?: string
+  statusId?: string
 }
 
 export interface UpdateRequirementDto {
   requirementId?: string
   title?: string
+  lifecycleId?: string
+  statusId?: string
   description?: string
   parentId?: string | null
   priority?: 'low' | 'medium' | 'high' | 'critical'

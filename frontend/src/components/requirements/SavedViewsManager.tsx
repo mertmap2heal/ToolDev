@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Save, FolderOpen, Trash2, Edit2, X, Check, Plus, Eye, Users, Building2 } from 'lucide-react'
 import { viewService, CreateSavedViewDto } from '../../services/view.service'
-import type { SavedView } from '../../../../shared/types/engineering.types'
+import type { SavedView } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 
 interface SavedViewsManagerProps {

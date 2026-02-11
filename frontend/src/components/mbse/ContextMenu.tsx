@@ -19,7 +19,7 @@ import {
   Plus,
 } from 'lucide-react'
 import clsx from 'clsx'
-import type { DiagramType } from '../../../../shared/types/diagram.types'
+import type { DiagramType } from 'shared/types/diagram.types'
 
 /**
  * Menu item configuration

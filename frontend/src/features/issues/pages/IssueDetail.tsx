@@ -9,6 +9,7 @@ import {
   CheckCircle,
   AlertCircle,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { format } from 'date-fns'
 import ProjectNavigation from '../../../components/projects/ProjectNavigation'
 import { useIssueDetail } from '../hooks/useIssueDetail'
@@ -18,7 +19,7 @@ import type { TraceabilityLink } from '../types'
 
 type TabId = 'overview' | 'analysis' | 'traceability'
 
-const TABS: { id: TabId; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
+const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: 'overview', label: 'Overview', icon: FileText },
   { id: 'analysis', label: 'Analysis (RCA)', icon: ClipboardList },
   { id: 'traceability', label: 'Traceability', icon: Link2 },

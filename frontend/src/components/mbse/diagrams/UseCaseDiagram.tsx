@@ -22,7 +22,7 @@ import DiagramExporter from '../shared/DiagramExporter'
 import DiagramLegend from '../shared/DiagramLegend'
 import { useCaseService } from '../../../services/usecase.service'
 import { requirementService } from '../../../services/requirement.service'
-import type { UseCase, Actor } from '../../../../../shared/types/usecase.types'
+import type { UseCase, Actor } from 'shared/types/usecase.types'
 import clsx from 'clsx'
 
 interface UseCaseDiagramProps {

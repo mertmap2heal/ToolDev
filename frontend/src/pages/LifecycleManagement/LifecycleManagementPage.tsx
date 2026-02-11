@@ -27,6 +27,7 @@ import {
   Users,
   UserPlus
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import clsx from 'clsx'
 import { useQuery } from '@tanstack/react-query'
 import { useStatusDefinitionsStore, type StatusDefinition } from '../../store/statusDefinitionsStore'
@@ -43,7 +44,7 @@ type TabId = 'library' | 'builder' | 'status' | 'user-groups' | 'transitions' | 
 interface Tab {
   id: TabId
   label: string
-  icon: React.ComponentType<{ size?: number; className?: string }>
+  icon: LucideIcon
   description: string
 }
 

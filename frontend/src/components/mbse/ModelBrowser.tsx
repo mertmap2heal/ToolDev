@@ -42,9 +42,9 @@ import { DIAGRAM_INFO, type DiagramType } from './MBSEDiagramMenu'
 import VerificationPanel from './VerificationPanel'
 import ContextMenu, { useContextMenu, buildElementContextMenuItems } from './ContextMenu'
 import CreateDiagramModal from './CreateDiagramModal'
-import type { Requirement, Parameter } from '../../../../shared/types/engineering.types'
-import type { UseCase } from '../../../../shared/types/usecase.types'
-import type { SourceElementType, Diagram } from '../../../../shared/types/diagram.types'
+import type { Requirement, Parameter } from 'shared/types/engineering.types'
+import type { UseCase } from 'shared/types/usecase.types'
+import type { SourceElementType, Diagram } from 'shared/types/diagram.types'
 import clsx from 'clsx'
 
 interface ModelBrowserProps {

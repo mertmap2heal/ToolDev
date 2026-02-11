@@ -20,10 +20,11 @@ import {
   ShieldCheck,
   Award,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
 interface ModuleItem {
   label: string
-  icon: React.ComponentType<{ size?: number; className?: string }>
+  icon: LucideIcon
   workflow: string[]
 }
 

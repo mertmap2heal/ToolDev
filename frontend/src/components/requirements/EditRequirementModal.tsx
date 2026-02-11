@@ -5,8 +5,10 @@ import { requirementService } from '../../services/requirement.service'
 import { projectService } from '../../services/project.service'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import { useLifecycleStore } from '../../store/lifecycleStore'
+import { LIFECYCLE_V1 } from '../../config/featureFlags'
+import { lifecycleService } from '../../services/lifecycle.service'
 import RichTextEditor from '../common/RichTextEditor'
-import type { Requirement, UpdateRequirementDto } from '../../../shared/types/engineering.types'
+import type { Requirement, UpdateRequirementDto, RequirementType } from 'shared/types/engineering.types'
 
 interface EditRequirementModalProps {
   isOpen: boolean
@@ -47,12 +49,34 @@ export default function EditRequirementModal({
   const [showAddSource, setShowAddSource] = useState(false)
   const [sourceTypes, setSourceTypes] = useState<string[]>(sources)
   const [tagInput, setTagInput] = useState('')
+  const [allowedTransitions, setAllowedTransitions] = useState<Array<{ toStatusId: string; toStatusName: string }>>([])
 
   const queryClient = useQueryClient()
   const { statuses } = useStatusDefinitionsStore()
   const { lifecycles } = useLifecycleStore()
 
-  // Get available statuses from lifecycle that applies to Requirements
+  // When LIFECYCLE_V1: fetch allowed transitions for current status
+  useEffect(() => {
+    if (LIFECYCLE_V1 && isOpen && requirement) {
+      const lifecycleId = requirement.lifecycleId ?? lifecycles.find((lc) => lc.applicableItemTypes?.includes('Requirement'))?.id
+      const currentStatusId = requirement.statusId ?? statuses.find((s) => s.name === requirement.status)?.id
+      if (lifecycleId && currentStatusId) {
+        lifecycleService.getAllowedTransitions(lifecycleId, currentStatusId).then((result) => {
+          if (result.success && result.data?.transitions) {
+            setAllowedTransitions(result.data.transitions.map((t) => ({ toStatusId: t.toStatusId, toStatusName: t.toStatusName })))
+          } else {
+            setAllowedTransitions([])
+          }
+        })
+      } else {
+        setAllowedTransitions([])
+      }
+    } else {
+      setAllowedTransitions([])
+    }
+  }, [LIFECYCLE_V1, isOpen, requirement, lifecycles, statuses])
+
+  // Get available statuses from lifecycle that applies to Requirements (when LIFECYCLE_V1=OFF)
   const availableStatuses = useMemo(() => {
     // Find lifecycle that applies to "Requirement"
     const requirementLifecycle = lifecycles.find((lc) =>
@@ -103,17 +127,21 @@ export default function EditRequirementModal({
       return response.success && response.data ? response.data : []
     },
     enabled: isOpen && !!projectId,
-    onSuccess: (data) => {
-      // Merge predefined and custom types
-      const customTypeNames = data.map(t => t.typeName)
-      setAvailableRequirementTypes([...predefinedTypes, ...customTypeNames])
-    },
   })
+
+  useEffect(() => {
+    if (Array.isArray(customTypesData) && customTypesData.length > 0) {
+      const customTypeNames = customTypesData.map((t: { typeName: string }) => t.typeName)
+      setAvailableRequirementTypes([...predefinedTypes, ...customTypeNames])
+    }
+  }, [customTypesData])
 
   useEffect(() => {
     if (requirement) {
       setFormData({
         requirementId: requirement.requirementId,
+        lifecycleId: requirement.lifecycleId,
+        statusId: requirement.statusId,
         title: requirement.title,
         requirementType: requirement.requirementType,
         requirementLevel: requirement.requirementLevel,
@@ -196,7 +224,7 @@ export default function EditRequirementModal({
           }
           return prev
         })
-        setFormData((prev) => ({ ...prev, requirementType: newType }))
+        setFormData((prev) => ({ ...prev, requirementType: newType as RequirementType }))
         setCustomRequirementType('')
         setShowAddRequirementType(false)
         queryClient.invalidateQueries({ queryKey: ['customRequirementTypes', projectId] })
@@ -312,6 +340,8 @@ export default function EditRequirementModal({
       requirementId: formData.requirementId || undefined,
       priority: formData.priority,
       status: formData.status,
+      lifecycleId: formData.lifecycleId,
+      statusId: formData.statusId,
       stage: formData.stage,
       verificationMethod: formData.verificationMethod || undefined,
       source: formData.source || undefined,
@@ -472,22 +502,47 @@ export default function EditRequirementModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                Status
+                Status {LIFECYCLE_V1 && '(allowed transitions only)'}
               </label>
-              <select
-                value={formData.status || ''}
-                onChange={(e) => handleChange('status', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value="">Select status</option>
-                {availableStatuses.map((status) => (
-                  <option key={status.id} value={status.name}>
-                    {status.name}
+              {LIFECYCLE_V1 ? (
+                <select
+                  value={formData.statusId || formData.status || ''}
+                  onChange={(e) => {
+                    const opt = e.target.options[e.target.selectedIndex]
+                    const toStatusId = opt.value
+                    const toStatusName = opt.text
+                    if (toStatusId) {
+                      handleChange('statusId', toStatusId)
+                      handleChange('status', toStatusName)
+                    }
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value={formData.statusId || requirement?.statusId || ''}>
+                    {formData.status || requirement?.status || 'Current'}
                   </option>
-                ))}
-              </select>
+                  {allowedTransitions.map((t) => (
+                    <option key={t.toStatusId} value={t.toStatusId}>
+                      {t.toStatusName}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <select
+                  value={formData.status || ''}
+                  onChange={(e) => handleChange('status', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="">Select status</option>
+                  {availableStatuses.map((status) => (
+                    <option key={status.id} value={status.name}>
+                      {status.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
-                Status from lifecycle for Requirements
+                {LIFECYCLE_V1 ? 'Only allowed transitions from lifecycle' : 'Status from lifecycle for Requirements'}
               </p>
             </div>
           </div>

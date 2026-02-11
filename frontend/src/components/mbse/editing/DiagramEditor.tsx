@@ -50,8 +50,8 @@ import {
 import { requirementService } from '../../../services/requirement.service'
 import { functionService } from '../../../services/function.service'
 import { traceabilityService } from '../../../services/traceability.service'
-import type { Requirement, SystemFunction } from '../../../../../shared/types/engineering.types'
-import type { TraceLink, LinkType } from '../../../../../shared/types/traceability.types'
+import type { Requirement, SystemFunction } from 'shared/types/engineering.types'
+import type { TraceLink, LinkType } from 'shared/types/traceability.types'
 import clsx from 'clsx'
 
 interface DiagramEditorProps {
@@ -284,11 +284,10 @@ function DiagramEditorContent({ projectId, onClose }: DiagramEditorProps) {
   // Create requirement mutation
   const createRequirementMutation = useMutation({
     mutationFn: (data: { title: string; description?: string; priority?: string }) => {
-      return requirementService.createRequirement({
-        projectId,
+      return requirementService.createRequirement(projectId, {
         title: data.title,
         description: data.description || '',
-        priority: data.priority as any || 'medium',
+        priority: (data.priority as any) || 'medium',
         status: 'draft',
       })
     },
@@ -300,8 +299,7 @@ function DiagramEditorContent({ projectId, onClose }: DiagramEditorProps) {
   // Create function mutation
   const createFunctionMutation = useMutation({
     mutationFn: (data: { name: string; description?: string; sourceReqId?: string }) => {
-      return functionService.createFunction({
-        projectId,
+      return functionService.createFunction(projectId, {
         name: data.name,
         description: data.description || '',
         sourceReqId: data.sourceReqId,

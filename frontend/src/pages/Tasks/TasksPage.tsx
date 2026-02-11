@@ -7,7 +7,7 @@ import TaskBoardView from '../../components/tasks/TaskBoardView'
 import TaskCalendarView from '../../components/tasks/TaskCalendarView'
 import TaskDetailDrawer from '../../components/tasks/TaskDetailDrawer'
 import CSVImportExport from '../../components/tasks/CSVImportExport'
-import type { Task } from '../../../shared/types/task.types'
+import type { Task } from 'shared/types/task.types'
 
 type ViewType = 'list' | 'board' | 'calendar'
 

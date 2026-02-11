@@ -15,12 +15,20 @@ export default function TemplateEditorPage() {
   const [showVersions, setShowVersions] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
 
-  const { data: template, isLoading } = useQuery({
+  interface VerificationTemplate {
+    id?: string
+    name?: string
+    type?: string
+    status?: string
+    contentJson?: object
+    versions?: unknown[]
+  }
+  const { data: template, isLoading } = useQuery<VerificationTemplate | null>({
     queryKey: ['verification-template', projectId, templateId],
     queryFn: async () => {
       if (!projectId || !templateId) return null
       const res = await verificationService.getTemplate(projectId, templateId)
-      return res.success ? res.data : null
+      return res.success ? (res.data as unknown as VerificationTemplate) : null
     },
     enabled: !!projectId && !!templateId,
   })

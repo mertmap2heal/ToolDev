@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Plus, X, Save } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { taskService } from '../../services/task.service'
-import type { AutomationRule, AutomationTriggerType } from '../../../shared/types/task.types'
+import type { AutomationRule, AutomationTriggerType } from 'shared/types/task.types'
 
 interface AutomationRuleBuilderProps {
   onClose?: () => void

@@ -3,6 +3,7 @@ import { authenticateToken } from '../middleware/auth.middleware'
 import {
   getRequirements,
   getRequirement,
+  getAuditEvents,
   createRequirement,
   updateRequirement,
   deleteRequirement,
@@ -23,6 +24,7 @@ const router = Router()
 router.use(authenticateToken)
 
 router.get('/:projectId', getRequirements)
+router.get('/:projectId/audit', getAuditEvents)
 router.get('/:projectId/:requirementId', getRequirement)
 router.get('/:projectId/:requirementId/children', getRequirementChildren)
 router.post('/:projectId', createRequirement)

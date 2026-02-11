@@ -8,7 +8,7 @@ import { Plus, AlertCircle } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { taskService } from '../../services/task.service'
 import CreateTaskModal from './CreateTaskModal'
-import type { Task, TaskStatus, TaskPriority, BoardColumn } from '../../../shared/types/task.types'
+import type { Task, TaskStatus, TaskPriority, BoardColumn } from 'shared/types/task.types'
 import { format } from 'date-fns'
 
 interface TaskBoardViewProps {
@@ -59,7 +59,7 @@ function TaskCard({ task, onSelect }: TaskCardProps) {
       <div className="flex items-start justify-between gap-2 mb-2">
         <h4 className="font-medium text-gray-900 dark:text-white text-sm flex-1">{task.title}</h4>
         {task.blocked && (
-          <AlertCircle className="text-red-500 flex-shrink-0" size={16} title="Blocked" />
+          <AlertCircle className="text-red-500 flex-shrink-0" size={16} aria-label="Blocked" />
         )}
       </div>
       <div className="flex items-center gap-2">
@@ -214,6 +214,9 @@ export default function TaskBoardView({ onTaskSelect, projectId: propProjectId }
             },
             onDragEnd({ active, over }) {
               return over ? `Task ${active.id} moved to ${over.id}` : `Task ${active.id} returned to original position`
+            },
+            onDragCancel({ active }) {
+              return `Task ${active.id} returned to original position`
             },
           },
         }}

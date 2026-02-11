@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
-import { X, FileText, Calendar, User, Archive, Lock } from 'lucide-react'
+import { X, FileText, Calendar, User, Archive, Lock, Link2, AlertTriangle } from 'lucide-react'
 import { baselineService } from '../../services/baseline.service'
-import type { Baseline } from '../../../../shared/types/engineering.types'
+import { LINKAGE_V1 } from '../../config/featureFlags'
+import type { Baseline } from 'shared/types/engineering.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
 
@@ -104,6 +105,20 @@ export default function BaselineViewModal({ projectId, baselineId, onClose }: Ba
                     <FileText size={16} />
                     <span>{baseline.itemCount || 0} requirements</span>
                   </div>
+                  {LINKAGE_V1 && (baseline.linksCount != null || baseline.suspectLinksCount != null) && (
+                    <>
+                      <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                        <Link2 size={16} />
+                        <span>{baseline.linksCount ?? 0} links</span>
+                      </div>
+                      {(baseline.suspectLinksCount ?? 0) > 0 && (
+                        <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                          <AlertTriangle size={16} />
+                          <span>{baseline.suspectLinksCount} suspect links</span>
+                        </div>
+                      )}
+                    </>
+                  )}
                   <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                     <Calendar size={16} />
                     <span>Created: {format(new Date(baseline.createdAt), 'PPp')}</span>

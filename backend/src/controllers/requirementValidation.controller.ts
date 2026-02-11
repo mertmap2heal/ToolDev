@@ -16,6 +16,7 @@ export const validateRequirement = async (req: AuthRequest, res: Response) => {
         projectId,
         OR: [{ id: requirementId }, { requirementId: requirementId }],
       },
+      include: { moc: true },
     })
 
     if (!requirement) {

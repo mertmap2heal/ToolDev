@@ -5,6 +5,7 @@ import clsx from 'clsx'
 import type { Interface, InterfaceType, InterfaceStatus, TechnicalCharacteristics } from './mockInterfaces'
 import { ARTIFACT_ROUTES, MOCK_ARTIFACT_COUNTS, INTERFACE_STATUSES, getStatusColor } from './constants'
 import PlaceholderModal from './PlaceholderModal'
+import type { LucideIcon } from 'lucide-react'
 import { format } from 'date-fns'
 
 const DEFAULT_TIMELINE = [
@@ -20,7 +21,7 @@ interface InterfaceDetailDrawerProps {
   onStatusChange?: (item: Interface, newStatus: Interface['status']) => void
 }
 
-const ARTIFACT_ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+const ARTIFACT_ICONS: Record<string, LucideIcon> = {
   Requirements: FileText,
   Functions: Settings,
   'PBS Elements': FolderTree,

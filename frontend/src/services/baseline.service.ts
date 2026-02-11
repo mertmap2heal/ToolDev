@@ -1,6 +1,6 @@
 import { apiClient } from './api'
-import type { Baseline, CreateBaselineDto, BaselineComparison } from '../../../shared/types/engineering.types'
-import type { ApiResponse } from '../../../shared/types/api.types'
+import type { Baseline, CreateBaselineDto, BaselineComparison } from 'shared/types/engineering.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 /**
  * Baseline service provides client-side API methods for managing

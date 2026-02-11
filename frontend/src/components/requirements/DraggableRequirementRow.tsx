@@ -2,7 +2,7 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical } from 'lucide-react'
 import clsx from 'clsx'
-import type { Requirement } from '../../../../shared/types/engineering.types'
+import type { Requirement } from 'shared/types/engineering.types'
 
 interface DraggableRequirementRowProps {
   requirement: Requirement

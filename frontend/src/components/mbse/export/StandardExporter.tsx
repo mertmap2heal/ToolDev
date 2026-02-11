@@ -17,9 +17,9 @@ import { requirementService } from '../../../services/requirement.service'
 import { functionService } from '../../../services/function.service'
 import { traceabilityService } from '../../../services/traceability.service'
 import { useCaseService } from '../../../services/usecase.service'
-import type { Requirement, SystemFunction } from '../../../../../shared/types/engineering.types'
-import type { TraceLink } from '../../../../../shared/types/traceability.types'
-import type { UseCase } from '../../../../../shared/types/usecase.types'
+import type { Requirement, SystemFunction } from 'shared/types/engineering.types'
+import type { TraceLink } from 'shared/types/traceability.types'
+import type { UseCase } from 'shared/types/usecase.types'
 import clsx from 'clsx'
 
 interface StandardExporterProps {
@@ -240,7 +240,7 @@ ${functions.map((func) => `      <packagedElement xmi:type="uml:Class" xmi:id="F
       </packagedElement>`).join('\n')}
     </packagedElement>` : ''}
 ${options.includeUseCases ? `    <packagedElement xmi:type="uml:Package" xmi:id="PKG-UseCases" name="Use Cases">
-${useCases.map((uc) => `      <packagedElement xmi:type="uml:UseCase" xmi:id="UC-${uc.id}" name="${escapeXml(uc.title)}">
+${useCases.map((uc) => `      <packagedElement xmi:type="uml:UseCase" xmi:id="UC-${uc.id}" name="${escapeXml(uc.name)}">
         <ownedComment xmi:type="uml:Comment" xmi:id="CMT-${uc.id}" body="${escapeXml(uc.description || '')}"/>
       </packagedElement>`).join('\n')}
     </packagedElement>` : ''}
@@ -297,7 +297,7 @@ ${options.includeFunctions ? functions.map((func) => `      <!-- SysML Block: ${
     
     <!-- Use Cases Package -->
 ${options.includeUseCases ? `    <packagedElement xmi:type="uml:Package" xmi:id="PKG-UseCases" name="Use Cases">
-${useCases.map((uc) => `      <packagedElement xmi:type="uml:UseCase" xmi:id="UC-${uc.id}" name="${escapeXml(uc.title)}">
+${useCases.map((uc) => `      <packagedElement xmi:type="uml:UseCase" xmi:id="UC-${uc.id}" name="${escapeXml(uc.name)}">
         <ownedComment xmi:type="uml:Comment" xmi:id="CMT-UC-${uc.id}">
           <body>${escapeXml(uc.description || '')}</body>
         </ownedComment>
@@ -370,7 +370,7 @@ ${options.includeFunctions ? functions.map((func) => `  <SysML:Block xmi:id="STE
         useCases: useCases.map((uc) => ({
           '@id': `uc:${uc.id}`,
           '@type': 'UseCase',
-          title: uc.title,
+          title: uc.name,
           description: uc.description,
           status: uc.status,
         })),

@@ -43,10 +43,10 @@ export interface StakeholdersState {
   readOnlyMode: boolean
 }
 
-function nextId(prefix: string, items: { [key: string]: string }[], idKey: string): string {
-  const nums = items
+function nextId<T>(prefix: string, items: T[], idKey: string): string {
+  const nums = (items as Record<string, unknown>[])
     .map((item) => {
-      const id = (item as Record<string, string>)[idKey] ?? ''
+      const id = String(item[idKey] ?? '')
       const m = id.match(new RegExp(`${prefix}-?(\\d+)`, 'i'))
       return m ? parseInt(m[1], 10) : 0
     })

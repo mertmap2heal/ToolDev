@@ -8,11 +8,17 @@ export default function TaskTemplatesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const queryClient = useQueryClient()
 
-  const { data: templates, isLoading } = useQuery({
+  interface TaskTemplate {
+    id: string
+    name?: string
+    description?: string
+  }
+  const { data: templates, isLoading } = useQuery<TaskTemplate[]>({
     queryKey: ['task-templates'],
     queryFn: async () => {
-      const response = await apiClient.get('/task-templates')
-      return response.data || []
+      const response = await apiClient.get<TaskTemplate[] | unknown>('/task-templates')
+      const data = response.data
+      return Array.isArray(data) ? data : []
     },
   })
 
@@ -57,7 +63,7 @@ export default function TaskTemplatesPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {(templates || []).map((template: any) => (
+            {(templates ?? []).map((template) => (
               <div
                 key={template.id}
                 className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6"

@@ -21,19 +21,27 @@ export const getBaselines = async (req: AuthRequest, res: Response) => {
       orderBy: { createdAt: 'desc' },
     })
 
-    const formattedBaselines = baselines.map((baseline) => ({
-      id: baseline.id,
-      projectId: baseline.projectId,
-      name: baseline.name,
-      description: baseline.description,
-      status: baseline.status,
-      createdBy: baseline.createdBy,
-      createdByName: baseline.createdByName,
-      lockedAt: baseline.lockedAt?.toISOString(),
-      itemCount: baseline._count.items,
-      createdAt: baseline.createdAt.toISOString(),
-      updatedAt: baseline.updatedAt.toISOString(),
-    }))
+    const formattedBaselines = baselines.map((baseline) => {
+      const linksSnapshot = baseline.linksSnapshot as { links?: Array<{ isSuspect?: boolean }> } | null
+      const links = linksSnapshot?.links || []
+      const linksCount = links.length
+      const suspectLinksCount = links.filter((l: any) => l.isSuspect).length
+      return {
+        id: baseline.id,
+        projectId: baseline.projectId,
+        name: baseline.name,
+        description: baseline.description,
+        status: baseline.status,
+        createdBy: baseline.createdBy,
+        createdByName: baseline.createdByName,
+        lockedAt: baseline.lockedAt?.toISOString(),
+        itemCount: baseline._count.items,
+        linksCount,
+        suspectLinksCount,
+        createdAt: baseline.createdAt.toISOString(),
+        updatedAt: baseline.updatedAt.toISOString(),
+      }
+    })
 
     res.json({
       success: true,
@@ -88,6 +96,11 @@ export const getBaseline = async (req: AuthRequest, res: Response) => {
       createdAt: item.createdAt.toISOString(),
     }))
 
+    const linksSnapshot = baseline.linksSnapshot as { links?: Array<{ isSuspect?: boolean }> } | null
+    const links = linksSnapshot?.links || []
+    const linksCount = links.length
+    const suspectLinksCount = links.filter((l: any) => l.isSuspect).length
+
     res.json({
       success: true,
       data: {
@@ -100,6 +113,8 @@ export const getBaseline = async (req: AuthRequest, res: Response) => {
         createdByName: baseline.createdByName,
         lockedAt: baseline.lockedAt?.toISOString(),
         itemCount: baseline._count.items,
+        linksCount,
+        suspectLinksCount,
         createdAt: baseline.createdAt.toISOString(),
         updatedAt: baseline.updatedAt.toISOString(),
         items: formattedItems,
@@ -154,6 +169,8 @@ export const createBaseline = async (req: AuthRequest, res: Response) => {
       },
     })
 
+    const snapshotReqIds = requirements.map((r) => r.id)
+
     // Create baseline and items in a transaction
     const baseline = await prisma.$transaction(async (tx) => {
       // Verify that baseline model exists on transaction client
@@ -172,6 +189,36 @@ export const createBaseline = async (req: AuthRequest, res: Response) => {
           createdByName: req.user?.name,
         },
       })
+
+      // Snapshot links where source or target is a requirement in this baseline
+      let linksSnapshot: { links: any[] } | null = null
+      if (snapshotReqIds.length > 0) {
+        const traceLinks = await tx.traceLink.findMany({
+          where: {
+            projectId,
+            OR: [
+              { sourceType: 'requirement', sourceId: { in: snapshotReqIds } },
+              { targetType: 'requirement', targetId: { in: snapshotReqIds } },
+            ],
+          },
+        })
+        linksSnapshot = {
+          links: traceLinks.map((l) => ({
+            id: l.id,
+            sourceType: l.sourceType,
+            sourceId: l.sourceId,
+            targetType: l.targetType,
+            targetId: l.targetId,
+            linkType: l.linkType,
+            rationale: l.rationale,
+            isSuspect: l.isSuspect,
+          })),
+        }
+        await tx.baseline.update({
+          where: { id: newBaseline.id },
+          data: { linksSnapshot },
+        })
+      }
 
       // Create baseline items for each requirement
       if (requirements.length > 0) {
@@ -461,6 +508,52 @@ export const compareBaselines = async (req: AuthRequest, res: Response) => {
       }
     })
 
+    // Diff links from linksSnapshot (LINKAGE_V1)
+    const linksA = (baselineA.linksSnapshot as { links?: any[] } | null)?.links || []
+    const linksB = (baselineB.linksSnapshot as { links?: any[] } | null)?.links || []
+    const linkKey = (l: any) => `${l.sourceType}:${l.sourceId}:${l.targetType}:${l.targetId}:${l.linkType}`
+    const setA = new Map(linksA.map((l) => [linkKey(l), l]))
+    const setB = new Map(linksB.map((l) => [linkKey(l), l]))
+
+    const linksAdded: Array<{ id: string; sourceId: string; sourceType: string; targetId: string; targetType: string; linkType: string }> = []
+    const linksRemoved: Array<{ id: string; sourceId: string; sourceType: string; targetId: string; targetType: string; linkType: string }> = []
+    const linksSuspectChanged: Array<{ id: string; sourceId: string; sourceType: string; targetId: string; targetType: string; linkType: string }> = []
+
+    setB.forEach((linkB, key) => {
+      const linkA = setA.get(key)
+      if (!linkA) {
+        linksAdded.push({
+          id: linkB.id,
+          sourceId: linkB.sourceId,
+          sourceType: linkB.sourceType,
+          targetId: linkB.targetId,
+          targetType: linkB.targetType,
+          linkType: linkB.linkType,
+        })
+      } else if (linkA.isSuspect !== linkB.isSuspect) {
+        linksSuspectChanged.push({
+          id: linkB.id,
+          sourceId: linkB.sourceId,
+          sourceType: linkB.sourceType,
+          targetId: linkB.targetId,
+          targetType: linkB.targetType,
+          linkType: linkB.linkType,
+        })
+      }
+    })
+    setA.forEach((linkA, key) => {
+      if (!setB.has(key)) {
+        linksRemoved.push({
+          id: linkA.id,
+          sourceId: linkA.sourceId,
+          sourceType: linkA.sourceType,
+          targetId: linkA.targetId,
+          targetType: linkA.targetType,
+          linkType: linkA.linkType,
+        })
+      }
+    })
+
     res.json({
       success: true,
       data: {
@@ -468,19 +561,26 @@ export const compareBaselines = async (req: AuthRequest, res: Response) => {
           id: baselineA.id,
           name: baselineA.name,
           createdAt: baselineA.createdAt.toISOString(),
+          linksCount: linksA.length,
         },
         baselineB: {
           id: baselineB.id,
           name: baselineB.name,
           createdAt: baselineB.createdAt.toISOString(),
+          linksCount: linksB.length,
         },
         added,
         removed,
         modified,
+        linksAdded,
+        linksRemoved,
+        linksSuspectChanged,
         summary: {
           addedCount: added.length,
           removedCount: removed.length,
           modifiedCount: modified.length,
+          linksAddedCount: linksAdded.length,
+          linksRemovedCount: linksRemoved.length,
         },
       },
     })

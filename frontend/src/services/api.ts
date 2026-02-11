@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosError } from 'axios'
-import type { ApiResponse } from '../../../shared/types/api.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 // In dev, use relative URL so Vite proxy forwards /api to backend (avoids CORS and localhost vs 127.0.0.1 issues)
 const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api/v1' : 'http://localhost:5000/api/v1')
@@ -50,9 +50,9 @@ class ApiClient {
     )
   }
 
-  async get<T>(url: string): Promise<ApiResponse<T>> {
+  async get<T>(url: string, config?: { params?: Record<string, unknown> }): Promise<ApiResponse<T>> {
     try {
-      const response = await this.client.get<ApiResponse<T>>(url)
+      const response = await this.client.get<ApiResponse<T>>(url, config)
       return response.data
     } catch (error) {
       return this.handleError(error)

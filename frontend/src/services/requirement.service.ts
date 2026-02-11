@@ -1,6 +1,6 @@
 import { apiClient } from './api'
-import type { Requirement, CreateRequirementDto, UpdateRequirementDto, RequirementComment, BulkImportRequest, BulkImportResult } from '../../../shared/types/engineering.types'
-import type { ApiResponse } from '../../../shared/types/api.types'
+import type { Requirement, CreateRequirementDto, UpdateRequirementDto, RequirementComment, BulkImportRequest, BulkImportResult } from 'shared/types/engineering.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 export const requirementService = {
   async getRequirements(projectId: string): Promise<ApiResponse<Requirement[]>> {
@@ -41,6 +41,16 @@ export const requirementService = {
 
   async deleteRequirementComment(projectId: string, commentId: string): Promise<ApiResponse<void>> {
     return apiClient.delete<void>(`/requirements/${projectId}/comments/${commentId}`)
+  },
+
+  async getAuditEvents(
+    projectId: string,
+    entityType: string,
+    entityId: string
+  ): Promise<ApiResponse<Array<{ id: string; action: string; oldValue?: unknown; newValue?: unknown; performedByUserId?: string; performedAt: string }>>> {
+    return apiClient.get(
+      `/requirements/${projectId}/audit?entityType=${encodeURIComponent(entityType)}&entityId=${encodeURIComponent(entityId)}`
+    )
   },
 
   async bulkImportRequirements(projectId: string, data: BulkImportRequest): Promise<ApiResponse<BulkImportResult>> {

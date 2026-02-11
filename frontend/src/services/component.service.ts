@@ -1,6 +1,6 @@
 import { apiClient } from './api'
-import type { Component, ComponentTreeNode, CreateComponentDto, UpdateComponentDto } from '../../../shared/types/project.types'
-import type { ApiResponse } from '../../../shared/types/api.types'
+import type { Component, ComponentTreeNode, CreateComponentDto, UpdateComponentDto } from 'shared/types/project.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 export const componentService = {
   /**

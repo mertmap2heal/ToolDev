@@ -1,11 +1,14 @@
 import { useState, useMemo } from 'react'
-import { X, Download, Plus, Check, X as XIcon } from 'lucide-react'
+import { X, Download, Plus, Check } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { traceabilityService } from '../../services/traceability.service'
-import type { Requirement } from '../../../../shared/types/engineering.types'
-import type { SystemFunction } from '../../../../shared/types/engineering.types'
+import { linkService } from '../../services/link.service'
+import { LINKAGE_V1 } from '../../config/featureFlags'
+import { loadPBS } from '../../modules/pbs/storage'
+import type { Requirement } from 'shared/types/engineering.types'
+import type { SystemFunction } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 
 interface AllocationTableProps {
@@ -13,14 +16,16 @@ interface AllocationTableProps {
   onClose: () => void
 }
 
-type AllocationType = 'function' | 'component' | 'test' | 'verification'
+type AllocationType = 'function' | 'pbs_component' | 'component' | 'test' | 'verification'
 
 /**
  * AllocationTable provides a matrix view showing requirements allocated to
- * various artifacts (functions, components, test cases, verification activities).
+ * various artifacts. When LINKAGE_V1: PBS components only (allocated_to).
+ * Legacy: functions (allocate).
  */
 export default function AllocationTable({ projectId, onClose }: AllocationTableProps) {
-  const [allocationType, setAllocationType] = useState<AllocationType>('function')
+  const defaultType: AllocationType = LINKAGE_V1 ? 'pbs_component' : 'function'
+  const [allocationType, setAllocationType] = useState<AllocationType>(defaultType)
   const [selectedRequirement, setSelectedRequirement] = useState<string | null>(null)
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null)
 
@@ -41,12 +46,25 @@ export default function AllocationTable({ projectId, onClose }: AllocationTableP
       const response = await functionService.getFunctions(projectId)
       return response.success && response.data ? response.data : []
     },
-    enabled: !!projectId && allocationType === 'function',
+    enabled: !!projectId && allocationType === 'function' && !LINKAGE_V1,
+  })
+
+  const { data: pbsComponents = [] } = useQuery({
+    queryKey: ['pbs-nodes', projectId],
+    queryFn: async () => {
+      const data = loadPBS(projectId)
+      return data?.nodes || []
+    },
+    enabled: !!projectId && allocationType === 'pbs_component' && LINKAGE_V1,
   })
 
   const { data: traceLinks = [] } = useQuery({
-    queryKey: ['trace-links', projectId],
+    queryKey: LINKAGE_V1 ? ['links', projectId] : ['trace-links', projectId],
     queryFn: async () => {
+      if (LINKAGE_V1) {
+        const response = await linkService.getLinks(projectId)
+        return response.success && response.data ? response.data : []
+      }
       const response = await traceabilityService.getTraceLinks(projectId)
       return response.success && response.data ? response.data : []
     },
@@ -92,23 +110,35 @@ export default function AllocationTable({ projectId, onClose }: AllocationTableP
     return []
   }, [allocationType, functions])
 
+  const allocationLinkType = LINKAGE_V1 && allocationType === 'pbs_component' ? 'allocated_to' : 'allocate'
+  const effectiveTargetType = LINKAGE_V1 && allocationType === 'pbs_component' ? 'pbs_component' : allocationType
+
   const createAllocationMutation = useMutation({
     mutationFn: async ({ reqId, targetId }: { reqId: string; targetId: string }) => {
-      const targetType = allocationType === 'function' ? 'function' : allocationType
-      const response = await traceabilityService.createTraceLink(projectId, {
-        sourceType: 'requirement',
-        sourceId: reqId,
-        targetType: targetType as any,
-        targetId: targetId,
-        linkType: 'allocate',
-      })
+      const targetType = LINKAGE_V1 && allocationType === 'pbs_component' ? 'pbs_component' : allocationType === 'function' ? 'function' : allocationType
+      const linkType = allocationLinkType
+      const response = LINKAGE_V1
+        ? await linkService.createLink(projectId, {
+            sourceType: 'requirement',
+            sourceId: reqId,
+            targetType,
+            targetId,
+            linkType,
+          })
+        : await traceabilityService.createTraceLink(projectId, {
+            sourceType: 'requirement',
+            sourceId: reqId,
+            targetType: targetType as any,
+            targetId,
+            linkType: 'allocate',
+          })
       if (!response.success) {
         throw new Error(response.error || 'Failed to create allocation')
       }
       return response
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+      queryClient.invalidateQueries({ queryKey: LINKAGE_V1 ? ['links', projectId] : ['trace-links', projectId] })
       setSelectedRequirement(null)
       setSelectedTarget(null)
     },
@@ -116,14 +146,16 @@ export default function AllocationTable({ projectId, onClose }: AllocationTableP
 
   const deleteAllocationMutation = useMutation({
     mutationFn: async (linkId: string) => {
-      const response = await traceabilityService.deleteTraceLink(projectId, linkId)
+      const response = LINKAGE_V1
+        ? await linkService.deleteLink(projectId, linkId)
+        : await traceabilityService.deleteTraceLink(projectId, linkId)
       if (!response.success) {
         throw new Error(response.error || 'Failed to delete allocation')
       }
       return response
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+      queryClient.invalidateQueries({ queryKey: LINKAGE_V1 ? ['links', projectId] : ['trace-links', projectId] })
     },
   })
 
@@ -133,10 +165,10 @@ export default function AllocationTable({ projectId, onClose }: AllocationTableP
 
   const getLinkId = (reqId: string, targetId: string): string | null => {
     const link = traceLinks.find(
-      (l) =>
+      (l: any) =>
         l.sourceType === 'requirement' &&
         l.sourceId === reqId &&
-        l.targetType === allocationType &&
+        (l.targetType === effectiveTargetType || l.targetType === allocationType) &&
         l.targetId === targetId
     )
     return link?.id || null
@@ -156,7 +188,8 @@ export default function AllocationTable({ projectId, onClose }: AllocationTableP
   }
 
   const exportToCsv = () => {
-    const headers = ['Requirement ID', 'Requirement Title', ...targets.map((t) => (t as SystemFunction).functionId || t.name || 'Unknown')]
+    const targetLabels = targets.map((t: any) => t.pbsCode || t.functionId || t.name || 'Unknown')
+    const headers = ['Requirement ID', 'Requirement Title', ...targetLabels]
     const rows = requirements.map((req) => {
       const row = [
         req.requirementId || req.id.substring(0, 8),
@@ -193,10 +226,19 @@ export default function AllocationTable({ projectId, onClose }: AllocationTableP
               onChange={(e) => setAllocationType(e.target.value as AllocationType)}
               className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
-              <option value="function">Functions</option>
-              <option value="component" disabled>Components (Coming Soon)</option>
-              <option value="test" disabled>Test Cases (Coming Soon)</option>
-              <option value="verification" disabled>Verification (Coming Soon)</option>
+              {LINKAGE_V1 ? (
+                <>
+                  <option value="pbs_component">PBS Components</option>
+                  <option value="test" disabled>Test Cases (Coming Soon)</option>
+                </>
+              ) : (
+                <>
+                  <option value="function">Functions</option>
+                  <option value="component" disabled>Components (Coming Soon)</option>
+                  <option value="test" disabled>Test Cases (Coming Soon)</option>
+                  <option value="verification" disabled>Verification (Coming Soon)</option>
+                </>
+              )}
             </select>
             <button
               onClick={exportToCsv}
@@ -228,18 +270,18 @@ export default function AllocationTable({ projectId, onClose }: AllocationTableP
                     <th className="px-4 py-3 text-left border-b border-gray-200 dark:border-gray-700 font-semibold text-gray-900 dark:text-white sticky left-0 bg-white dark:bg-gray-800 z-20 min-w-[200px]">
                       Requirement
                     </th>
-                    {targets.map((target) => (
+                    {targets.map((target: any) => (
                       <th
                         key={target.id}
                         className="px-3 py-3 text-center border-b border-gray-200 dark:border-gray-700 font-semibold text-gray-900 dark:text-white min-w-[100px]"
-                        title={(target as SystemFunction).name || 'Unknown'}
+                        title={target.name || 'Unknown'}
                       >
                         <div className="flex flex-col items-center">
                           <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
-                            {(target as SystemFunction).functionId || target.id.substring(0, 8)}
+                            {target.pbsCode || target.functionId || target.id.substring(0, 8)}
                           </span>
-                          <span className="text-xs truncate max-w-[80px]" title={(target as SystemFunction).name || 'Unknown'}>
-                            {(target as SystemFunction).name || 'Unknown'}
+                          <span className="text-xs truncate max-w-[80px]" title={target.name || 'Unknown'}>
+                            {target.name || 'Unknown'}
                           </span>
                         </div>
                       </th>

@@ -5,8 +5,8 @@ import type {
   CreateReviewDto,
   UpdateReviewerDto,
   ReviewStatus,
-} from '../../../shared/types/engineering.types'
-import type { ApiResponse } from '../../../shared/types/api.types'
+} from 'shared/types/engineering.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 export const requirementReviewService = {
   /**

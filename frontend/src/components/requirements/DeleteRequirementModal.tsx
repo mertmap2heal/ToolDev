@@ -1,11 +1,14 @@
 import { X, AlertTriangle } from 'lucide-react'
-import type { Requirement } from '../../../shared/types/engineering.types'
+import type { Requirement } from 'shared/types/engineering.types'
 
 interface DeleteRequirementModalProps {
   isOpen: boolean
   requirement: Requirement | null
   hasChildren: boolean
-  linkedFunctionsCount: number
+  /** Legacy: count of linked functions. When LINKAGE_V1, use linkedItemsCount instead. */
+  linkedFunctionsCount?: number
+  /** When LINKAGE_V1: count of linked items (excludes function/parameter) */
+  linkedItemsCount?: number
   onConfirm: () => void
   onCancel: () => void
   isDeleting?: boolean
@@ -15,7 +18,8 @@ export default function DeleteRequirementModal({
   isOpen,
   requirement,
   hasChildren,
-  linkedFunctionsCount,
+  linkedFunctionsCount = 0,
+  linkedItemsCount,
   onConfirm,
   onCancel,
   isDeleting = false,
@@ -26,8 +30,13 @@ export default function DeleteRequirementModal({
   if (hasChildren) {
     warnings.push('This requirement has child requirements that must be deleted or reassigned first.')
   }
-  if (linkedFunctionsCount > 0) {
-    warnings.push(`This requirement is linked to ${linkedFunctionsCount} function(s). Please unlink them first.`)
+  const linkCount = linkedItemsCount ?? linkedFunctionsCount
+  if (linkCount > 0) {
+    warnings.push(
+      linkedItemsCount != null
+        ? `This requirement is linked to ${linkCount} item(s). Please unlink them first.`
+        : `This requirement is linked to ${linkCount} function(s). Please unlink them first.`
+    )
   }
 
   return (

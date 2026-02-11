@@ -4,8 +4,8 @@ import type {
   CreateTaskDto,
   UpdateTaskDto,
   ListTasksFilters,
-} from '../../../shared/types/task.types'
-import type { ApiResponse, PaginatedResponse as ApiPaginatedResponse } from '../../../shared/types/api.types'
+} from 'shared/types/task.types'
+import type { ApiResponse, PaginatedResponse as ApiPaginatedResponse } from 'shared/types/api.types'
 
 export const taskService = {
   async getTasks(filters?: ListTasksFilters): Promise<ApiResponse<ApiPaginatedResponse<Task>>> {

@@ -4,7 +4,7 @@ import { X, Download, FileSpreadsheet, FileText, File, CheckSquare, Square } fro
 import { baselineService } from '../../services/baseline.service'
 import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
-import type { Baseline } from '../../../../shared/types/engineering.types'
+import type { Baseline } from 'shared/types/engineering.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
 

@@ -1,6 +1,6 @@
 import { apiClient } from './api'
-import type { Notification } from '../../../shared/types/project.types'
-import type { ApiResponse } from '../../../shared/types/api.types'
+import type { Notification } from 'shared/types/project.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 const BASE = '/notifications'
 

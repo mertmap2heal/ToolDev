@@ -19,11 +19,11 @@ import 'reactflow/dist/style.css'
 import { Filter, ChevronDown, ChevronUp, LayoutGrid } from 'lucide-react'
 import { nodeTypes } from '../nodes'
 import DiagramExporter from '../shared/DiagramExporter'
-import DiagramLegend from '../shared/DiagramLegend'
+import DiagramLegend, { type LegendItem } from '../shared/DiagramLegend'
 import { requirementService } from '../../../services/requirement.service'
 import { traceabilityService } from '../../../services/traceability.service'
-import type { Requirement } from '../../../../../shared/types/engineering.types'
-import type { TraceLink, LinkType } from '../../../../../shared/types/traceability.types'
+import type { Requirement } from 'shared/types/engineering.types'
+import type { TraceLink, LinkType } from 'shared/types/traceability.types'
 import clsx from 'clsx'
 
 interface RequirementsDiagramProps {
@@ -339,7 +339,7 @@ function RequirementsDiagramContent({ projectId }: RequirementsDiagramProps) {
 
   // Build legend items dynamically based on groupByType mode
   const legendItems = useMemo(() => {
-    const items = []
+    const items: LegendItem[] = []
     
     // Add type colors when grouping by type
     if (groupByType) {

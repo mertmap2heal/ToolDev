@@ -1,6 +1,7 @@
 export type ArtifactType = 
   | 'requirement'
   | 'function'
+  | 'parameter'
   | 'architecture'
   | 'verification'
 

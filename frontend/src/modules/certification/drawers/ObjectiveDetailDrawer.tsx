@@ -12,7 +12,7 @@ import {
   removeObjectiveRequirementLink,
 } from '../../../services/certification.service'
 import { requirementService } from '../../../services/requirement.service'
-import type { Requirement } from '../../../../shared/types/engineering.types'
+import type { Requirement } from 'shared/types/engineering.types'
 
 interface ObjectiveDetailDrawerProps {
   objective: CertificationObjective | null

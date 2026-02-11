@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X, UserPlus, Trash2, Loader2 } from 'lucide-react'
-import type { Project, ProjectMember, User } from '../../../shared/types/project.types'
+import type { Project, ProjectMember, User } from 'shared/types/project.types'
 import { projectService } from '../../services/project.service'
 import { authService } from '../../services/auth.service'
 import { useAuthStore } from '../../store/authStore'
@@ -38,6 +38,7 @@ export default function ProjectTeamModal({ project, onClose, onSuccess }: Projec
     setCurrentUserId(null)
 
     async function load() {
+      if (!project) return
       setLoading(true)
       try {
         const [membersRes, usersRes, meRes] = await Promise.all([

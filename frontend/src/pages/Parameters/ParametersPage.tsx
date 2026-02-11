@@ -10,7 +10,7 @@ import EditParameterModal from '../../components/parameters/EditParameterModal'
 import SourceDetailsModal from '../../components/parameters/SourceDetailsModal'
 import CreateParameterModal from '../../components/parameters/CreateParameterModal'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
-import type { Parameter } from '../../../shared/types/engineering.types'
+import type { Parameter } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
 

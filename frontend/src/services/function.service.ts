@@ -1,6 +1,6 @@
 import { apiClient } from './api'
-import type { SystemFunction, CreateSystemFunctionDto } from '../../../shared/types/engineering.types'
-import type { ApiResponse } from '../../../shared/types/api.types'
+import type { SystemFunction, CreateSystemFunctionDto } from 'shared/types/engineering.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 export const functionService = {
   async getFunctions(projectId: string): Promise<ApiResponse<SystemFunction[]>> {

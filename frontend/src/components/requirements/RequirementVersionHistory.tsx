@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { X, History, ChevronDown, ChevronRight, ArrowLeftRight, Clock, User, FileText, Tag } from 'lucide-react'
 import { versionService, VersionComparison } from '../../services/version.service'
-import type { Requirement, RequirementVersion } from '../../../../shared/types/engineering.types'
+import type { Requirement, RequirementVersion } from 'shared/types/engineering.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
 

@@ -47,20 +47,20 @@ export default function CreateTestResultModal({ isOpen, onClose, projectId }: Cr
   const queryClient = useQueryClient()
 
   // Fetch test cases and test plans for linking
-  const { data: testCases = [] } = useQuery({
+  const { data: testCases = [] } = useQuery<Array<{ id: string; key?: string; title?: string }>>({
     queryKey: ['test-cases', projectId],
     queryFn: async () => {
       const response = await verificationService.getTestCases(projectId)
-      return response.success && response.data ? response.data : []
+      return (response.success && response.data ? response.data : []) as Array<{ id: string; key?: string; title?: string }>
     },
     enabled: isOpen,
   })
 
-  const { data: testPlans = [] } = useQuery({
+  const { data: testPlans = [] } = useQuery<Array<{ id: string; key?: string; name?: string }>>({
     queryKey: ['test-plans', projectId],
     queryFn: async () => {
       const response = await verificationService.getTestPlans(projectId)
-      return response.success && response.data ? response.data : []
+      return (response.success && response.data ? response.data : []) as Array<{ id: string; key?: string; name?: string }>
     },
     enabled: isOpen,
   })
@@ -229,12 +229,12 @@ export default function CreateTestResultModal({ isOpen, onClose, projectId }: Cr
   })
 
   // Get selected test cases for display
-  const selectedTestCases = testCases.filter((tc: any) =>
+  const selectedTestCases = testCases.filter((tc) =>
     formData.linkedTestCaseIds.includes(tc.id)
   )
 
   // Get selected test plan for display
-  const selectedTestPlan = testPlans.find((plan: any) => plan.id === formData.linkedTestPlanId)
+  const selectedTestPlan = testPlans.find((plan) => plan.id === formData.linkedTestPlanId)
 
   // Click outside handlers
   useEffect(() => {
@@ -479,7 +479,7 @@ export default function CreateTestResultModal({ isOpen, onClose, projectId }: Cr
               {/* Selected Test Cases */}
               {selectedTestCases.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-2">
-                  {selectedTestCases.map((testCase: any) => (
+                  {selectedTestCases.map((testCase) => (
                     <span
                       key={testCase.id}
                       className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"

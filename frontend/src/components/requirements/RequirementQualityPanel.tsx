@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { X, AlertTriangle, CheckCircle, AlertCircle, TrendingUp } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '../../services/api'
-import type { ApiResponse } from '../../../../shared/types/api.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 interface ValidationResult {
   isValid: boolean
@@ -20,9 +20,11 @@ interface RequirementQualityCheck {
 interface RequirementQualityPanelProps {
   projectId: string
   onClose: () => void
+  /** When provided, requirement rows are clickable to open in detail drawer */
+  onRequirementClick?: (requirementId: string) => void
 }
 
-export default function RequirementQualityPanel({ projectId, onClose }: RequirementQualityPanelProps) {
+export default function RequirementQualityPanel({ projectId, onClose, onRequirementClick }: RequirementQualityPanelProps) {
   const [selectedRequirement, setSelectedRequirement] = useState<string | null>(null)
 
   const { data: qualityChecks = [], isLoading } = useQuery({
@@ -103,7 +105,11 @@ export default function RequirementQualityPanel({ projectId, onClose }: Requirem
               {qualityChecks.map((check) => (
                 <div
                   key={check.requirementId}
+                  role={onRequirementClick ? 'button' : undefined}
+                  onClick={onRequirementClick ? () => onRequirementClick(check.requirementId) : undefined}
                   className={`border rounded-lg p-4 ${
+                    onRequirementClick ? 'cursor-pointer hover:opacity-90' : ''
+                  } ${
                     check.validation.isValid
                       ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/10'
                       : 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/10'

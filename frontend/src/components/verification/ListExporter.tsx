@@ -42,6 +42,17 @@ interface ListExporterProps {
 
 type ExportFormat = 'pdf' | 'csv' | 'json' | 'word'
 
+interface TestCaseReport {
+  testCase?: { key?: string; title?: string; status?: string; version?: string; objective?: string; preconditions?: string; steps?: string[]; expectedResults?: string[] }
+  testResults?: Array<{ title?: string; resultStatus?: string; executedByName?: string; executedAt?: string }>
+}
+
+interface TestPlanReport {
+  testPlan?: { key?: string; name?: string; status?: string; phase?: string; description?: string; scope?: string; planCases?: unknown[] }
+  statistics?: { totalCases?: number; executed?: number; passed?: number; failed?: number; coveragePercentage?: number }
+  testResults?: Array<{ title?: string; resultStatus?: string; executedByName?: string; executedAt?: string }>
+}
+
 const formatInfo = {
   pdf: { icon: FileText, label: 'PDF', description: 'Formatted document' },
   csv: { icon: FileSpreadsheet, label: 'CSV', description: 'Spreadsheet compatible' },
@@ -100,19 +111,19 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
   const selectedItemsList = items.filter((item) => selectedItems.has(item.id))
 
   // Fetch detailed report data for selected items
-  const fetchDetailedReports = async () => {
-    const reports = []
+  const fetchDetailedReports = async (): Promise<Array<TestCaseReport | TestPlanReport>> => {
+    const reports: Array<TestCaseReport | TestPlanReport> = []
     for (const item of selectedItemsList) {
       try {
         if (exportType === 'test-cases') {
           const response = await verificationService.getTestCaseReport(projectId, item.id)
-          if (response.success) {
-            reports.push(response.data)
+          if (response.success && response.data) {
+            reports.push(response.data as TestCaseReport)
           }
         } else {
           const response = await verificationService.getTestPlanReport(projectId, item.id)
-          if (response.success) {
-            reports.push(response.data)
+          if (response.success && response.data) {
+            reports.push(response.data as TestPlanReport)
           }
         }
       } catch (e) {
@@ -153,7 +164,8 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
         const report = reports[i]
 
         if (exportType === 'test-cases') {
-          const tc = report.testCase
+          const r = report as TestCaseReport
+          const tc = r.testCase!
 
           doc.setFontSize(14)
           doc.setFont('helvetica', 'bold')
@@ -197,13 +209,13 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
           }
 
           // Test Results
-          if (report.testResults && report.testResults.length > 0) {
+          if (r.testResults && r.testResults.length > 0) {
             doc.setFontSize(12)
             doc.setFont('helvetica', 'bold')
             doc.text('Linked Test Results', 14, yPos)
             yPos += 6
 
-            const trData = report.testResults.map((tr: any) => [
+            const trData = r.testResults.map((tr: any) => [
               tr.title || 'N/A',
               tr.resultStatus || 'N/A',
               tr.executedByName || 'N/A',
@@ -220,7 +232,8 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
             })
           }
         } else {
-          const tp = report.testPlan
+          const r = report as TestPlanReport
+          const tp = r.testPlan!
 
           doc.setFontSize(14)
           doc.setFont('helvetica', 'bold')
@@ -245,18 +258,18 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
           yPos = (doc as any).lastAutoTable.finalY + 10
 
           // Statistics
-          if (report.statistics) {
+          if (r.statistics) {
             doc.setFontSize(12)
             doc.setFont('helvetica', 'bold')
             doc.text('Statistics', 14, yPos)
             yPos += 6
 
             const statsData = [
-              ['Total Cases', report.statistics.totalCases?.toString() || '0'],
-              ['Executed', report.statistics.executed?.toString() || '0'],
-              ['Passed', report.statistics.passed?.toString() || '0'],
-              ['Failed', report.statistics.failed?.toString() || '0'],
-              ['Coverage', `${report.statistics.coveragePercentage || 0}%`],
+              ['Total Cases', r.statistics.totalCases?.toString() || '0'],
+              ['Executed', r.statistics.executed?.toString() || '0'],
+              ['Passed', r.statistics.passed?.toString() || '0'],
+              ['Failed', r.statistics.failed?.toString() || '0'],
+              ['Coverage', `${r.statistics.coveragePercentage || 0}%`],
             ]
 
             ;(doc as any).autoTable({
@@ -272,13 +285,13 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
           }
 
           // Test Results
-          if (report.testResults && report.testResults.length > 0) {
+          if (r.testResults && r.testResults.length > 0) {
             doc.setFontSize(12)
             doc.setFont('helvetica', 'bold')
             doc.text('Linked Test Results', 14, yPos)
             yPos += 6
 
-            const trData = report.testResults.map((tr: any) => [
+            const trData = r.testResults.map((tr: any) => [
               tr.title || 'N/A',
               tr.resultStatus || 'N/A',
               tr.executedByName || 'N/A',
@@ -349,10 +362,11 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
         rows.push(['Key', 'Title', 'Status', 'Version', 'Objective', 'Preconditions', 'Steps', 'Expected Results', 'Test Results Count', 'Test Results'])
 
         reports.forEach((report) => {
-          const tc = report.testCase
-          const stepsStr = Array.isArray(tc.steps) ? tc.steps.join('; ') : tc.steps || ''
-          const expectedStr = Array.isArray(tc.expectedResults) ? tc.expectedResults.join('; ') : tc.expectedResults || ''
-          const testResultsStr = report.testResults?.map((tr: any) => `${tr.title} (${tr.resultStatus})`).join('; ') || ''
+          const r = report as TestCaseReport
+          const tc = r.testCase!
+          const stepsStr = Array.isArray(tc.steps) ? tc.steps.join('; ') : String(tc.steps ?? '')
+          const expectedStr = Array.isArray(tc.expectedResults) ? tc.expectedResults.join('; ') : String(tc.expectedResults ?? '')
+          const testResultsStr = r.testResults?.map((tr: any) => `${tr.title} (${tr.resultStatus})`).join('; ') || ''
 
           rows.push([
             tc.key || '',
@@ -363,7 +377,7 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
             tc.preconditions || '',
             stepsStr,
             expectedStr,
-            (report.testResults?.length || 0).toString(),
+            (r.testResults?.length || 0).toString(),
             testResultsStr,
           ])
         })
@@ -371,9 +385,10 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
         rows.push(['Key', 'Name', 'Status', 'Phase', 'Description', 'Scope', 'Total Cases', 'Executed', 'Passed', 'Failed', 'Coverage', 'Test Results Count', 'Test Results'])
 
         reports.forEach((report) => {
-          const tp = report.testPlan
-          const stats = report.statistics || {}
-          const testResultsStr = report.testResults?.map((tr: any) => `${tr.title} (${tr.resultStatus})`).join('; ') || ''
+          const r = report as TestPlanReport
+          const tp = r.testPlan!
+          const stats = r.statistics || {}
+          const testResultsStr = r.testResults?.map((tr: any) => `${tr.title} (${tr.resultStatus})`).join('; ') || ''
 
           rows.push([
             tp.key || '',
@@ -387,7 +402,7 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
             (stats.passed || 0).toString(),
             (stats.failed || 0).toString(),
             `${stats.coveragePercentage || 0}%`,
-            (report.testResults?.length || 0).toString(),
+            (r.testResults?.length || 0).toString(),
             testResultsStr,
           ])
         })
@@ -516,7 +531,8 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
 
       for (const report of reports) {
         if (exportType === 'test-cases') {
-          const tc = report.testCase
+          const r = report as TestCaseReport
+          const tc = r.testCase!
 
           children.push(createParagraph(`${tc.key}: ${tc.title}`, { heading: HeadingLevel.HEADING_2, size: 28 }))
           children.push(createParagraph(`Status: ${tc.status || 'N/A'}`))
@@ -528,9 +544,9 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
             children.push(createTable(['#', 'Step'], stepsRows))
           }
 
-          if (report.testResults && report.testResults.length > 0) {
+          if (r.testResults && r.testResults.length > 0) {
             children.push(createParagraph('Linked Test Results', { heading: HeadingLevel.HEADING_3, size: 26 }))
-            const trRows = report.testResults.map((tr: any) => [
+            const trRows = r.testResults.map((tr: any) => [
               tr.title || 'N/A',
               tr.resultStatus || 'N/A',
               tr.executedByName || 'N/A',
@@ -541,25 +557,26 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
 
           children.push(createParagraph(''))
         } else {
-          const tp = report.testPlan
+          const r = report as TestPlanReport
+          const tp = r.testPlan!
 
           children.push(createParagraph(`${tp.key}: ${tp.name}`, { heading: HeadingLevel.HEADING_2, size: 28 }))
           children.push(createParagraph(`Status: ${tp.status || 'N/A'}`))
           children.push(createParagraph(`Phase: ${tp.phase || 'N/A'}`))
           children.push(createParagraph(`Description: ${tp.description || 'N/A'}`))
 
-          if (report.statistics) {
+          if (r.statistics) {
             children.push(createParagraph('Statistics', { heading: HeadingLevel.HEADING_3, size: 26 }))
-            children.push(createParagraph(`Total Cases: ${report.statistics.totalCases || 0}`))
-            children.push(createParagraph(`Executed: ${report.statistics.executed || 0}`))
-            children.push(createParagraph(`Passed: ${report.statistics.passed || 0}`))
-            children.push(createParagraph(`Failed: ${report.statistics.failed || 0}`))
-            children.push(createParagraph(`Coverage: ${report.statistics.coveragePercentage || 0}%`))
+            children.push(createParagraph(`Total Cases: ${r.statistics.totalCases || 0}`))
+            children.push(createParagraph(`Executed: ${r.statistics.executed || 0}`))
+            children.push(createParagraph(`Passed: ${r.statistics.passed || 0}`))
+            children.push(createParagraph(`Failed: ${r.statistics.failed || 0}`))
+            children.push(createParagraph(`Coverage: ${r.statistics.coveragePercentage || 0}%`))
           }
 
-          if (report.testResults && report.testResults.length > 0) {
+          if (r.testResults && r.testResults.length > 0) {
             children.push(createParagraph('Linked Test Results', { heading: HeadingLevel.HEADING_3, size: 26 }))
-            const trRows = report.testResults.map((tr: any) => [
+            const trRows = r.testResults.map((tr: any) => [
               tr.title || 'N/A',
               tr.resultStatus || 'N/A',
               tr.executedByName || 'N/A',

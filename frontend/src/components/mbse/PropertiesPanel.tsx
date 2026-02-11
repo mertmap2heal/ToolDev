@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import { useMBSEStore } from '../../store/mbseStore'
 import { traceabilityService } from '../../services/traceability.service'
-import type { TraceLink } from '../../../../shared/types/traceability.types'
+import type { TraceLink } from 'shared/types/traceability.types'
 import clsx from 'clsx'
 
 interface PropertiesPanelProps {

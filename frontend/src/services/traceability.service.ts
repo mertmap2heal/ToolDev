@@ -1,6 +1,6 @@
 import { apiClient } from './api'
-import type { TraceLink, TraceabilityGraph, CreateTraceLinkDto } from '../../../shared/types/traceability.types'
-import type { ApiResponse } from '../../../shared/types/api.types'
+import type { TraceLink, TraceabilityGraph, CreateTraceLinkDto } from 'shared/types/traceability.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 /**
  * Traceability service provides client-side API methods for managing
@@ -23,8 +23,8 @@ export const traceabilityService = {
     return apiClient.post<TraceLink>(`/traceability/${projectId}`, data)
   },
 
-  async clearSuspectLink(projectId: string, linkId: string): Promise<ApiResponse<TraceLink>> {
-    return apiClient.put<TraceLink>(`/traceability/${projectId}/links/${linkId}/clear-suspect`, {})
+  async clearSuspectLink(projectId: string, linkId: string, comment?: string): Promise<ApiResponse<TraceLink>> {
+    return apiClient.put<TraceLink>(`/traceability/${projectId}/links/${linkId}/clear-suspect`, { comment })
   },
 
   async markDownstreamSuspect(projectId: string, sourceId: string): Promise<ApiResponse<{ count: number }>> {

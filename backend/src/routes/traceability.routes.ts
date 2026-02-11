@@ -84,7 +84,8 @@ router.post('/:projectId', async (req, res) => {
       targetId,
       linkType,
       direction,
-      rationale
+      rationale,
+      (req as any).user?.id
     )
 
     res.status(201).json({
@@ -104,7 +105,13 @@ router.post('/:projectId', async (req, res) => {
 router.put('/:projectId/links/:linkId/clear-suspect', async (req, res) => {
   try {
     const { projectId, linkId } = req.params
-    const link = await traceabilityService.clearSuspectLink(projectId, linkId)
+    const { comment } = req.body || {}
+    const link = await traceabilityService.clearSuspectLink(
+      projectId,
+      linkId,
+      (req as any).user?.id,
+      comment
+    )
 
     res.json({
       success: true,
@@ -143,7 +150,11 @@ router.post('/:projectId/mark-suspect/:sourceId', async (req, res) => {
 router.delete('/:projectId/links/:linkId', async (req, res) => {
   try {
     const { projectId, linkId } = req.params
-    await traceabilityService.deleteTraceLink(projectId, linkId)
+    await traceabilityService.deleteTraceLink(
+      projectId,
+      linkId,
+      (req as any).user?.id
+    )
 
     res.json({
       success: true,

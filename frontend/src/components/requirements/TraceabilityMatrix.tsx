@@ -4,8 +4,21 @@ import { X, Check, AlertTriangle, Link as LinkIcon, Download, Plus, Loader } fro
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { traceabilityService } from '../../services/traceability.service'
-import type { Requirement } from '../../../../shared/types/engineering.types'
-import type { LinkType } from '../../../../shared/types/traceability.types'
+import { linkService } from '../../services/link.service'
+import { LINKAGE_V1 } from '../../config/featureFlags'
+import {
+  pbsAdapter,
+  interfaceAdapter,
+  issueAdapter,
+  changeRequestAdapter,
+  verificationAdapter,
+  hazardAdapter,
+  riskAdapter,
+  documentAdapter,
+} from '../../linkage/adapters'
+import type { Requirement } from 'shared/types/engineering.types'
+import type { LinkType } from 'shared/types/traceability.types'
+import type { EntitySummary } from 'shared/types/linkage.types'
 import clsx from 'clsx'
 
 interface TraceabilityMatrixProps {
@@ -15,17 +28,50 @@ interface TraceabilityMatrixProps {
 
 type CellStatus = 'linked' | 'suspect' | 'none'
 type MatrixType = 'requirements-functions' | 'requirements-requirements'
+type LinkageTargetType =
+  | 'pbs_component'
+  | 'interface'
+  | 'issue'
+  | 'change_request'
+  | 'test_case'
+  | 'hazard'
+  | 'risk'
+  | 'document'
+
+const LINKAGE_TARGET_OPTIONS: { value: LinkageTargetType; label: string; adapter: { search: (q: string, pid: string) => Promise<EntitySummary[]> } }[] = [
+  { value: 'pbs_component', label: 'PBS Components', adapter: pbsAdapter },
+  { value: 'interface', label: 'Interfaces', adapter: interfaceAdapter },
+  { value: 'test_case', label: 'Test Cases', adapter: verificationAdapter },
+  { value: 'hazard', label: 'Hazards', adapter: hazardAdapter },
+  { value: 'risk', label: 'Risks', adapter: riskAdapter },
+  { value: 'document', label: 'Documents', adapter: documentAdapter },
+  { value: 'change_request', label: 'Change Requests', adapter: changeRequestAdapter },
+  { value: 'issue', label: 'Issues', adapter: issueAdapter },
+]
+
+const LINK_TYPE_MAP: Record<LinkageTargetType, string> = {
+  pbs_component: 'allocated_to',
+  interface: 'related_interface',
+  issue: 'tracked_by',
+  change_request: 'changes_via',
+  test_case: 'verified_by',
+  hazard: 'mitigates',
+  risk: 'mitigates',
+  document: 'documented_in',
+}
 
 /**
  * TraceabilityMatrix component displays an interactive matrix showing the coverage
- * between requirements and functions. Provides visual indicators for linked,
- * suspect, and unlinked items, with the ability to create and manage trace links.
+ * between requirements and target entities. LINKAGE_V1: PBS, Interfaces, etc. (no Functions).
+ * Legacy: Requirements vs Functions, Requirements vs Requirements.
  */
 export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityMatrixProps) {
   const [matrixType, setMatrixType] = useState<MatrixType>('requirements-functions')
+  const [linkageTargetType, setLinkageTargetType] = useState<LinkageTargetType>('pbs_component')
   const [selectedReq, setSelectedReq] = useState<string | null>(null)
   const [selectedFunc, setSelectedFunc] = useState<string | null>(null)
   const [selectedTargetReq, setSelectedTargetReq] = useState<string | null>(null)
+  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
   const [filterLinked, setFilterLinked] = useState<'all' | 'linked' | 'unlinked'>('all')
   const [showSuspectOnly, setShowSuspectOnly] = useState(false)
   const [showLinkDialog, setShowLinkDialog] = useState(false)
@@ -45,21 +91,31 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     enabled: !!projectId,
   })
 
-  // Fetch functions
+  // Fetch functions (legacy only when !LINKAGE_V1)
   const { data: functions = [], isLoading: loadingFuncs } = useQuery({
     queryKey: ['functions', projectId],
     queryFn: async () => {
       const response = await functionService.getFunctions(projectId)
       return response.success && response.data ? response.data : []
     },
-    enabled: !!projectId,
+    enabled: !!projectId && !LINKAGE_V1,
   })
 
-  // Fetch trace links
+  // Fetch linkage targets (LINKAGE_V1 only)
+  const targetOpt = LINKAGE_TARGET_OPTIONS.find((o) => o.value === linkageTargetType)
+  const { data: linkageTargets = [], isLoading: loadingLinkageTargets } = useQuery({
+    queryKey: ['linkage-targets', projectId, linkageTargetType],
+    queryFn: () => (targetOpt ? targetOpt.adapter.search('', projectId) : Promise.resolve([])),
+    enabled: !!projectId && !!targetOpt && LINKAGE_V1,
+  })
+
+  // Fetch trace links (use link.service when LINKAGE_V1)
   const { data: traceLinks = [], isLoading: loadingLinks } = useQuery({
     queryKey: ['trace-links', projectId],
     queryFn: async () => {
-      const response = await traceabilityService.getTraceLinks(projectId)
+      const response = LINKAGE_V1
+        ? await linkService.getLinks(projectId)
+        : await traceabilityService.getTraceLinks(projectId)
       return response.success && response.data ? response.data : []
     },
     enabled: !!projectId,
@@ -69,7 +125,30 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
   const linkMap = useMemo(() => {
     const map = new Map<string, Map<string, { linked: boolean; suspect: boolean; linkId?: string }>>()
     
-    if (matrixType === 'requirements-functions') {
+    if (LINKAGE_V1) {
+      // LINKAGE_V1: requirements vs selected target type (PBS, interfaces, etc.)
+      requirements.forEach((req) => {
+        map.set(req.id, new Map())
+        linkageTargets.forEach((t) => {
+          map.get(req.id)?.set(t.id, { linked: false, suspect: false })
+        })
+      })
+      traceLinks.forEach((link: any) => {
+        if (
+          link.sourceType === 'requirement' &&
+          link.targetType === linkageTargetType
+        ) {
+          const reqMap = map.get(link.sourceId)
+          if (reqMap && reqMap.has(link.targetId)) {
+            reqMap.set(link.targetId, {
+              linked: true,
+              suspect: link.isSuspect || link.status === 'suspect' || false,
+              linkId: link.id,
+            })
+          }
+        }
+      })
+    } else if (matrixType === 'requirements-functions') {
       // Initialize map for all requirements -> functions
       requirements.forEach((req) => {
         map.set(req.id, new Map())
@@ -131,7 +210,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     }
 
     return map
-  }, [requirements, functions, traceLinks, matrixType])
+  }, [requirements, functions, traceLinks, matrixType, LINKAGE_V1, linkageTargetType, linkageTargets])
 
   // Calculate coverage statistics
   const stats = useMemo(() => {
@@ -163,7 +242,11 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     sourcesWithLinks = linkedSources.size
     targetsWithLinks = linkedTargets.size
 
-    const targetCount = matrixType === 'requirements-functions' ? functions.length : requirements.length
+    const targetCount = LINKAGE_V1
+      ? linkageTargets.length
+      : matrixType === 'requirements-functions'
+      ? functions.length
+      : requirements.length
 
     return {
       totalLinks,
@@ -175,7 +258,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
       sourceCoverage: requirements.length > 0 ? Math.round((sourcesWithLinks / requirements.length) * 100) : 0,
       targetCoverage: targetCount > 0 ? Math.round((targetsWithLinks / targetCount) * 100) : 0,
     }
-  }, [linkMap, requirements.length, functions.length, matrixType])
+  }, [linkMap, requirements.length, functions.length, matrixType, LINKAGE_V1, linkageTargets.length])
 
   // Filter requirements based on filter settings
   const filteredRequirements = useMemo(() => {
@@ -194,14 +277,12 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     })
   }, [requirements, linkMap, filterLinked, showSuspectOnly])
 
-  // Get target items (functions or requirements) based on matrix type
+  // Get target items based on matrix type or linkage target
   const targetItems = useMemo(() => {
-    if (matrixType === 'requirements-functions') {
-      return functions
-    } else {
-      return requirements
-    }
-  }, [matrixType, functions, requirements])
+    if (LINKAGE_V1) return linkageTargets
+    if (matrixType === 'requirements-functions') return functions
+    return requirements
+  }, [LINKAGE_V1, matrixType, functions, requirements, linkageTargets])
 
   // Get cell status
   const getCellStatus = (sourceId: string, targetId: string): CellStatus => {
@@ -211,9 +292,24 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     return 'linked'
   }
 
-  // Create link mutation
-  const createLinkMutation = useMutation({
+  // Create link mutation (returns TraceLink or Link depending on LINKAGE_V1)
+  const createLinkMutation = useMutation<
+    Awaited<ReturnType<typeof linkService.createLink>> | Awaited<ReturnType<typeof traceabilityService.createTraceLink>>,
+    Error,
+    { sourceId: string; targetId: string; linkType: LinkType; direction?: string; rationale?: string }
+  >({
     mutationFn: (data: { sourceId: string; targetId: string; linkType: LinkType; direction?: string; rationale?: string }) => {
+      if (LINKAGE_V1) {
+        const linkType = LINK_TYPE_MAP[linkageTargetType] || 'trace'
+        return linkService.createLink(projectId, {
+          sourceType: 'requirement',
+          sourceId: data.sourceId,
+          targetType: linkageTargetType,
+          targetId: data.targetId,
+          linkType,
+          rationale: data.rationale,
+        })
+      }
       const targetType = matrixType === 'requirements-functions' ? 'function' : 'requirement'
       return traceabilityService.createTraceLink(projectId, {
         sourceType: 'requirement',
@@ -227,10 +323,12 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+      if (LINKAGE_V1) queryClient.invalidateQueries({ queryKey: ['linkage-targets', projectId, linkageTargetType] })
       setShowLinkDialog(false)
       setSelectedReq(null)
       setSelectedFunc(null)
       setSelectedTargetReq(null)
+      setSelectedTargetId(null)
       setLinkDirection('')
       setLinkRationale('')
     },
@@ -243,7 +341,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
   // Delete link mutation
   const deleteLinkMutation = useMutation({
     mutationFn: (linkId: string) => {
-      return traceabilityService.deleteTraceLink(projectId, linkId)
+      return LINKAGE_V1 ? linkService.deleteLink(projectId, linkId) : traceabilityService.deleteTraceLink(projectId, linkId)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
@@ -264,12 +362,18 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     if (status === 'none') {
       // Show dialog to create link
       setSelectedReq(sourceId)
-      if (matrixType === 'requirements-functions') {
+      if (LINKAGE_V1) {
+        setSelectedTargetId(targetId)
+        setSelectedFunc(null)
+        setSelectedTargetReq(null)
+      } else if (matrixType === 'requirements-functions') {
         setSelectedFunc(targetId)
         setSelectedTargetReq(null)
+        setSelectedTargetId(null)
       } else {
         setSelectedTargetReq(targetId)
         setSelectedFunc(null)
+        setSelectedTargetId(null)
       }
       setShowLinkDialog(true)
     } else if (linkId) {
@@ -283,7 +387,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
   // Handle create link
   const handleCreateLink = () => {
     if (!selectedReq) return
-    const targetId = matrixType === 'requirements-functions' ? selectedFunc : selectedTargetReq
+    const targetId = LINKAGE_V1 ? selectedTargetId : matrixType === 'requirements-functions' ? selectedFunc : selectedTargetReq
     if (!targetId) return
     
     createLinkMutation.mutate({
@@ -299,7 +403,9 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
   const exportToCsv = () => {
     const sourceLabel = 'Requirement ID'
     const sourceTitleLabel = 'Requirement Title'
-    const targetHeaders = matrixType === 'requirements-functions' 
+    const targetHeaders = LINKAGE_V1
+      ? targetItems.map((t: any) => t.label || t.id)
+      : matrixType === 'requirements-functions'
       ? targetItems.map((f: any) => f.functionId || f.name)
       : targetItems.map((r: any) => r.requirementId || r.id.substring(0, 8))
     
@@ -318,17 +424,17 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
       return row
     })
 
-    const csvContent = [headers, ...rows].map((row) => row.map((cell) => `"${cell}"`).join(',')).join('\n')
+    const csvContent = [headers, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
     const blob = new Blob([csvContent], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `traceability_matrix_${matrixType}.csv`
+    a.download = `traceability_matrix_${LINKAGE_V1 ? linkageTargetType : matrixType}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
 
-  const isLoading = loadingReqs || loadingFuncs || loadingLinks
+  const isLoading = loadingReqs || loadingLinks || (LINKAGE_V1 ? loadingLinkageTargets : loadingFuncs)
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -341,20 +447,39 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">
                 Traceability Matrix
               </h2>
-              <select
-                value={matrixType}
-                onChange={(e) => {
-                  setMatrixType(e.target.value as MatrixType)
-                  setSelectedReq(null)
-                  setSelectedFunc(null)
-                  setSelectedTargetReq(null)
-                  setShowLinkDialog(false)
-                }}
-                className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value="requirements-functions">Requirements vs Functions</option>
-                <option value="requirements-requirements">Requirements vs Requirements</option>
-              </select>
+              {LINKAGE_V1 ? (
+                <select
+                  value={linkageTargetType}
+                  onChange={(e) => {
+                    setLinkageTargetType(e.target.value as LinkageTargetType)
+                    setSelectedReq(null)
+                    setSelectedTargetId(null)
+                    setShowLinkDialog(false)
+                  }}
+                  className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  {LINKAGE_TARGET_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      Requirements vs {o.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <select
+                  value={matrixType}
+                  onChange={(e) => {
+                    setMatrixType(e.target.value as MatrixType)
+                    setSelectedReq(null)
+                    setSelectedFunc(null)
+                    setSelectedTargetReq(null)
+                    setShowLinkDialog(false)
+                  }}
+                  className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="requirements-functions">Requirements vs Functions</option>
+                  <option value="requirements-requirements">Requirements vs Requirements</option>
+                </select>
+              )}
               <div className="flex items-center gap-2 text-sm">
                 <span className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
                   <span className="w-3 h-3 bg-green-500 rounded-sm"></span>
@@ -388,7 +513,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
             <span className="text-gray-500 dark:text-gray-400">Suspect Links:</span>{' '}
             <span className="font-semibold text-yellow-600 dark:text-yellow-400">{stats.suspectLinks}</span>
           </div>
-          {matrixType === 'requirements-functions' && (
+          {(LINKAGE_V1 || matrixType === 'requirements-functions') && (
             <>
               <div className="text-sm">
                 <span className="text-gray-500 dark:text-gray-400">Source Coverage:</span>{' '}
@@ -400,12 +525,12 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                 </span>
               </div>
               <div className="text-sm">
-                <span className="text-gray-500 dark:text-gray-400">Func Coverage:</span>{' '}
+                <span className="text-gray-500 dark:text-gray-400">Target Coverage:</span>{' '}
                 <span className={clsx(
                   'font-semibold',
                   stats.targetCoverage >= 80 ? 'text-green-600' : stats.targetCoverage >= 50 ? 'text-yellow-600' : 'text-red-600'
                 )}>
-                  {stats.targetCoverage}% ({stats.targetsWithLinks}/{functions.length})
+                  {stats.targetCoverage}% ({stats.targetsWithLinks}/{targetItems.length})
                 </span>
               </div>
             </>
@@ -447,13 +572,15 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
             <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
               Loading matrix data...
             </div>
-          ) : requirements.length === 0 || (matrixType === 'requirements-functions' && functions.length === 0) ? (
+          ) : requirements.length === 0 || (!LINKAGE_V1 && matrixType === 'requirements-functions' && functions.length === 0) || (LINKAGE_V1 && targetItems.length === 0) ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
               <LinkIcon size={48} className="mb-4 opacity-50" />
               <p className="text-lg">
                 {requirements.length === 0
                   ? 'No requirements found. Create requirements to build the matrix.'
-                  : matrixType === 'requirements-functions' && functions.length === 0
+                  : LINKAGE_V1 && targetItems.length === 0
+                  ? `No ${targetOpt?.label ?? 'targets'} found. Add items to build the matrix.`
+                  : !LINKAGE_V1 && matrixType === 'requirements-functions' && functions.length === 0
                   ? 'No functions found. Create functions to build the matrix.'
                   : 'No requirements found. Create requirements to build the matrix.'}
               </p>
@@ -470,10 +597,12 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                       <th
                         key={target.id}
                         className="px-2 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 min-w-[80px] max-w-[120px] bg-gray-100 dark:bg-gray-900"
-                        title={matrixType === 'requirements-functions' ? target.name : target.title}
+                        title={LINKAGE_V1 ? target.label : matrixType === 'requirements-functions' ? target.name : target.title}
                       >
                         <div className="truncate">
-                          {matrixType === 'requirements-functions' 
+                          {LINKAGE_V1
+                            ? (target.label || target.id)
+                            : matrixType === 'requirements-functions'
                             ? (target.functionId || target.id.substring(0, 8))
                             : (target.requirementId || target.id.substring(0, 8))}
                         </div>
@@ -495,8 +624,8 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                         </div>
                       </td>
                       {targetItems.map((target: any) => {
-                        // Skip if it's requirements-requirements and it's the same requirement
-                        if (matrixType === 'requirements-requirements' && req.id === target.id) {
+                        // Skip if it's requirements-requirements and it's the same requirement (not LINKAGE_V1)
+                        if (!LINKAGE_V1 && matrixType === 'requirements-requirements' && req.id === target.id) {
                           return (
                             <td
                               key={target.id}
@@ -509,7 +638,9 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                         
                         const status = getCellStatus(req.id, target.id)
                         const sourceLabel = req.requirementId || req.title
-                        const targetLabel = matrixType === 'requirements-functions' 
+                        const targetLabel = LINKAGE_V1
+                          ? (target.label || target.id)
+                          : matrixType === 'requirements-functions'
                           ? (target.functionId || target.name)
                           : (target.requirementId || target.title)
                         
@@ -554,7 +685,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
         {/* Footer */}
         <div className="flex items-center justify-between p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
           <div className="text-sm text-gray-500 dark:text-gray-400">
-            Showing {filteredRequirements.length} of {requirements.length} requirements × {targetItems.length} {matrixType === 'requirements-functions' ? 'functions' : 'requirements'}
+            Showing {filteredRequirements.length} of {requirements.length} requirements × {targetItems.length} {LINKAGE_V1 ? (targetOpt?.label ?? 'targets') : matrixType === 'requirements-functions' ? 'functions' : 'requirements'}
           </div>
           <button
             onClick={onClose}
@@ -566,7 +697,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
       </div>
 
       {/* Create Link Dialog */}
-      {(showLinkDialog && selectedReq && (matrixType === 'requirements-functions' ? selectedFunc : selectedTargetReq)) && (
+      {(showLinkDialog && selectedReq && (LINKAGE_V1 ? selectedTargetId : matrixType === 'requirements-functions' ? selectedFunc : selectedTargetReq)) && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[500px] p-6">
             <div className="flex items-center justify-between mb-4">
@@ -579,6 +710,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                   setSelectedReq(null)
                   setSelectedFunc(null)
                   setSelectedTargetReq(null)
+                  setSelectedTargetId(null)
                   setLinkDirection('')
                   setLinkRationale('')
                 }}
@@ -598,10 +730,14 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
 
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                  {matrixType === 'requirements-functions' ? 'Function' : 'Target Requirement'}
+                  {LINKAGE_V1 ? targetOpt?.label ?? 'Target' : matrixType === 'requirements-functions' ? 'Function' : 'Target Requirement'}
                 </p>
                 <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  {matrixType === 'requirements-functions' ? (
+                  {LINKAGE_V1 ? (
+                    <>
+                      {linkageTargets.find((t) => t.id === selectedTargetId)?.label || selectedTargetId?.substring(0, 8)}
+                    </>
+                  ) : matrixType === 'requirements-functions' ? (
                     <>
                       {functions.find((f) => f.id === selectedFunc)?.functionId || selectedFunc?.substring(0, 8)} - {functions.find((f) => f.id === selectedFunc)?.name}
                     </>
@@ -613,6 +749,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                 </p>
               </div>
 
+              {!LINKAGE_V1 && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Link Type (SysML Relationship)
@@ -635,6 +772,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                   Select the SysML relationship type between the requirement and function
                 </p>
               </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

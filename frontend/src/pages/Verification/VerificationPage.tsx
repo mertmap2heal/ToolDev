@@ -142,8 +142,10 @@ const saveColumnPreferences = (entityType: string, visibleColumns: Set<ColumnKey
 export default function VerificationPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab') || 'overview'
+  const focusType = searchParams.get('focusType')
+  const focusId = searchParams.get('focusId')
   const activeTab = (['overview', 'plans', 'cases', 'setups', 'results'].includes(tabParam)
     ? tabParam
     : 'overview') as 'overview' | 'plans' | 'cases' | 'setups' | 'results'
@@ -264,18 +266,24 @@ export default function VerificationPage() {
     saveColumnPreferences(storageKeys[entityType], newSet)
   }
 
-  // Fetch overview data
-  const { data: overview, isLoading: loadingOverview } = useQuery({
+  // Fetch overview data (typed: getOverview returns never until implemented)
+  interface VerificationOverview {
+    testPlans?: { total?: number; byStatus?: Record<string, number>; withTestResults?: number }
+    testCases?: { total?: number; byStatus?: Record<string, number>; withTestResults?: number }
+    coverage?: { overall?: number }
+    nonconformities?: { total?: number; open?: number }
+  }
+  const { data: overview, isLoading: loadingOverview } = useQuery<VerificationOverview | null>({
     queryKey: ['verification-overview', projectId],
     queryFn: async () => {
       if (!projectId) return null
       const response = await verificationService.getOverview(projectId)
-      return response.success ? response.data : null
+      return response.success ? (response.data as unknown as VerificationOverview) : null
     },
     enabled: !!projectId && activeTab === 'overview',
   })
 
-  // Fetch test plans
+  // Fetch test plans (also when focus targets a plan)
   const { data: testPlans = [], isLoading: loadingPlans } = useQuery({
     queryKey: ['test-plans', projectId],
     queryFn: async () => {
@@ -283,7 +291,7 @@ export default function VerificationPage() {
       const response = await verificationService.getTestPlans(projectId)
       return response.success && response.data ? response.data : []
     },
-    enabled: !!projectId && activeTab === 'plans',
+    enabled: !!projectId && (activeTab === 'plans' || focusType === 'test_plan' || focusType === 'test-plan'),
   })
 
   // Fetch test cases
@@ -294,7 +302,7 @@ export default function VerificationPage() {
       const response = await verificationService.getTestCases(projectId)
       return response.success && response.data ? response.data : []
     },
-    enabled: !!projectId && activeTab === 'cases',
+    enabled: !!projectId && (activeTab === 'cases' || focusType === 'test_case' || focusType === 'test-case'),
   })
 
   // Fetch test setups
@@ -305,7 +313,7 @@ export default function VerificationPage() {
       const response = await verificationService.getSetups(projectId)
       return response.success && response.data ? response.data : []
     },
-    enabled: !!projectId && activeTab === 'setups',
+    enabled: !!projectId && (activeTab === 'setups' || focusType === 'test_setup' || focusType === 'test-setup'),
   })
 
   // Fetch test results
@@ -316,8 +324,61 @@ export default function VerificationPage() {
       const response = await verificationService.getTestResults(projectId)
       return response.success && response.data ? response.data : []
     },
-    enabled: !!projectId && activeTab === 'results',
+    enabled: !!projectId && (activeTab === 'results' || focusType === 'test_result' || focusType === 'test-result'),
   })
+
+  // Navigate to tab when focus type requires it
+  useEffect(() => {
+    if (!focusType || !focusId) return
+    const tabMap: Record<string, string> = {
+      'test_plan': 'plans', 'test-plan': 'plans',
+      'test_case': 'cases', 'test-case': 'cases',
+      'test_setup': 'setups', 'test-setup': 'setups',
+      'test_result': 'results', 'test-result': 'results',
+    }
+    const targetTab = tabMap[focusType]
+    if (targetTab && activeTab !== targetTab) {
+      setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', targetTab); return n }, { replace: true })
+    }
+  }, [focusType, focusId, activeTab, setSearchParams])
+
+  // Focus handling: open drawer when focusType/focusId match loaded data
+  useEffect(() => {
+    if (!focusType || !focusId || !projectId) return
+    if (focusType === 'test_plan' || focusType === 'test-plan') {
+      if (testPlans.length > 0) {
+        const plan = testPlans.find((p: any) => p.id === focusId)
+        if (plan) {
+          setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'plans'); n.delete('focusType'); n.delete('focusId'); return n }, { replace: true })
+          drawer.openPlan(plan)
+        }
+      }
+    } else if (focusType === 'test_case' || focusType === 'test-case') {
+      if (testCases.length > 0) {
+        const tc = testCases.find((c: any) => c.id === focusId)
+        if (tc) {
+          setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'cases'); n.delete('focusType'); n.delete('focusId'); return n }, { replace: true })
+          drawer.openCase(tc)
+        }
+      }
+    } else if (focusType === 'test_setup' || focusType === 'test-setup') {
+      if (testSetups.length > 0) {
+        const setup = testSetups.find((s: any) => s.id === focusId)
+        if (setup) {
+          setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'setups'); n.delete('focusType'); n.delete('focusId'); return n }, { replace: true })
+          drawer.openSetup(setup)
+        }
+      }
+    } else if (focusType === 'test_result' || focusType === 'test-result') {
+      if (testResults.length > 0) {
+        const result = testResults.find((r: any) => r.id === focusId)
+        if (result) {
+          setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'results'); n.delete('focusType'); n.delete('focusId'); return n }, { replace: true })
+          drawer.openResult(result)
+        }
+      }
+    }
+  }, [focusType, focusId, projectId, testPlans, testCases, testSetups, testResults, drawer, setSearchParams])
 
   // Delete mutations
   const deleteTestPlanMutation = useMutation({
@@ -500,7 +561,7 @@ export default function VerificationPage() {
                     <div>
                       <div className="text-sm font-medium text-gray-900 dark:text-white">Nonconformities</div>
                       <div className="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">
-                        {overview.nonconformities.total}
+                        {overview.nonconformities.total ?? 0}
                       </div>
                       <div className="text-xs text-gray-500 mt-1">
                         {overview.nonconformities.open} open

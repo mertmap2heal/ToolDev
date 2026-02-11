@@ -12,9 +12,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
 import { changeRequestService } from '../../services/changeRequest.service'
-import type { SystemFunction } from '../../../shared/types/engineering.types'
-import type { Issue } from '../../../shared/types/engineering.types'
-import type { ChangeRequest } from '../../../shared/types/engineering.types'
+import type { SystemFunction } from 'shared/types/engineering.types'
+import type { Issue } from 'shared/types/engineering.types'
+import type { ChangeRequest } from 'shared/types/engineering.types'
 
 
 interface ExpandedRow {

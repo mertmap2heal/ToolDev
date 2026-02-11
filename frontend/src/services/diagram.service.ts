@@ -5,8 +5,8 @@ import type {
   UpdateDiagramDto,
   DiagramLayout,
   SourceElementType,
-} from '../../../shared/types/diagram.types'
-import type { ApiResponse } from '../../../shared/types/api.types'
+} from 'shared/types/diagram.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 /**
  * Diagram service provides client-side API methods for managing

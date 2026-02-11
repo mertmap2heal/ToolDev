@@ -3,7 +3,7 @@ import { X, Plus, Edit2, Trash2, FileText } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { useCaseService } from '../../services/usecase.service'
-import type { UseCase, Actor } from '../../../../shared/types/usecase.types'
+import type { UseCase, Actor } from 'shared/types/usecase.types'
 
 interface UseCaseManagerProps {
   projectId: string

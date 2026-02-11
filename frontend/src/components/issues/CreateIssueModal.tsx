@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { issueService } from '../../services/issue.service'
 import { functionService } from '../../services/function.service'
 import { parameterService } from '../../services/parameter.service'
-import type { CreateIssueDto, SystemFunction, Parameter } from '../../../shared/types/engineering.types'
+import type { CreateIssueDto, SystemFunction, Parameter } from 'shared/types/engineering.types'
 
 interface CreateIssueModalProps {
   isOpen: boolean

@@ -6,7 +6,7 @@ import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
 import { parameterService } from '../../services/parameter.service'
 import { requirementService } from '../../services/requirement.service'
-import type { CreateChangeRequestDto, SystemFunction, Issue, Parameter, Requirement } from '../../../shared/types/engineering.types'
+import type { CreateChangeRequestDto, SystemFunction, Issue, Parameter, Requirement } from 'shared/types/engineering.types'
 
 interface CreateChangeRequestModalProps {
   isOpen: boolean
@@ -228,7 +228,7 @@ export default function CreateChangeRequestModal({
         try {
           await Promise.all(
             selectedFiles.map((file) =>
-              changeRequestService.uploadAttachment(projectId, response.data.id, file)
+              changeRequestService.uploadAttachment(projectId, response.data!.id, file)
             )
           )
         } catch (error) {

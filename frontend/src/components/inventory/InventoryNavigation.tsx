@@ -1,20 +1,19 @@
 import { useNavigate, useLocation } from 'react-router-dom'
+import type { LucideIcon } from 'lucide-react'
 import { 
   Package, 
   Warehouse, 
   ShoppingCart, 
   Truck, 
   ArrowLeftRight, 
-  FileText,
   BarChart3,
-  Settings
 } from 'lucide-react'
 import clsx from 'clsx'
 
 interface NavigationItem {
   id: string
   label: string
-  icon: React.ComponentType<{ size?: number; className?: string }>
+  icon: LucideIcon
   route: string
 }
 

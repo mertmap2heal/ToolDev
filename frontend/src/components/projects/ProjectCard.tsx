@@ -1,5 +1,5 @@
 import { MoreVertical } from 'lucide-react'
-import type { Project } from '../../../shared/types/project.types'
+import type { Project } from 'shared/types/project.types'
 
 interface ProjectCardProps {
   project: Project

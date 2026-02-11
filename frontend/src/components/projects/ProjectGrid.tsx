@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import ProjectCard from './ProjectCard'
-import type { Project } from '../../../shared/types/project.types'
+import type { Project } from 'shared/types/project.types'
 
 interface ProjectGridProps {
   projects: Project[]

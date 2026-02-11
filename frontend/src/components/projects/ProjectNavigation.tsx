@@ -24,12 +24,13 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import clsx from 'clsx'
 
 interface NavigationItem {
   id: string
   label: string
-  icon: React.ComponentType<{ size?: number; className?: string }>
+  icon: LucideIcon
   route: string
 }
 

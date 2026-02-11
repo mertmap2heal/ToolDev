@@ -1,10 +1,10 @@
 import React from 'react'
 import { CheckCircle2, XCircle, Clock, FileText } from 'lucide-react'
 import clsx from 'clsx'
-import type { ReviewStatus } from '../../../shared/types/engineering.types'
+import type { ReviewStatus, ReviewerStatus } from 'shared/types/engineering.types'
 
 interface ReviewStatusBadgeProps {
-  status: ReviewStatus | 'draft' | 'under_review' | 'approved' | 'rejected'
+  status: ReviewStatus | ReviewerStatus | 'draft' | 'under_review' | 'approved' | 'rejected'
   size?: 'sm' | 'md' | 'lg'
 }
 
@@ -19,10 +19,18 @@ export default function ReviewStatusBadge({ status, size = 'md' }: ReviewStatusB
         }
       case 'under_review':
       case 'in_review':
+      case 'pending':
+      case 'in_progress':
         return {
           icon: Clock,
           label: 'Under Review',
           className: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
+        }
+      case 'deferred':
+        return {
+          icon: Clock,
+          label: 'Deferred',
+          className: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
         }
       case 'approved':
         return {

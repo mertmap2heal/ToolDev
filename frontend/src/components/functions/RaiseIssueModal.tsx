@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { X, AlertCircle } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { issueService } from '../../services/issue.service'
-import type { SystemFunction } from '../../../shared/types/engineering.types'
-import type { CreateIssueDto } from '../../../shared/types/engineering.types'
+import type { SystemFunction } from 'shared/types/engineering.types'
+import type { CreateIssueDto } from 'shared/types/engineering.types'
 
 interface RaiseIssueModalProps {
   isOpen: boolean

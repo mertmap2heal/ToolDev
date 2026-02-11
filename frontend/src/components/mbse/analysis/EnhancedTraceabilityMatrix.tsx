@@ -28,9 +28,9 @@ import { traceabilityService } from '../../../services/traceability.service'
 import { useCaseService } from '../../../services/usecase.service'
 import { issueService } from '../../../services/issue.service'
 import { changeRequestService } from '../../../services/changeRequest.service'
-import type { Requirement, SystemFunction, Issue, ChangeRequest } from '../../../../../shared/types/engineering.types'
-import type { TraceLink, LinkType } from '../../../../../shared/types/traceability.types'
-import type { UseCase } from '../../../../../shared/types/usecase.types'
+import type { Requirement, SystemFunction, Issue, ChangeRequest } from 'shared/types/engineering.types'
+import type { TraceLink, LinkType } from 'shared/types/traceability.types'
+import type { UseCase } from 'shared/types/usecase.types'
 import clsx from 'clsx'
 
 interface EnhancedTraceabilityMatrixProps {

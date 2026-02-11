@@ -9,14 +9,15 @@ import CustomDropdown from './CustomDropdown'
 import VerificationLifecycle from './VerificationLifecycle'
 import clsx from 'clsx'
 import ReactFlow, {
-  Node,
-  Edge,
+  type Node as ReactFlowNode,
+  type Edge,
   ReactFlowProvider,
   Controls,
   Background,
+  BackgroundVariant,
   useNodesState,
   useEdgesState,
-  NodeTypes,
+  type NodeTypes,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { useDrawIO, getDrawIOUrl, extractXml, EMPTY_DIAGRAM } from './useDrawIO'
@@ -75,7 +76,7 @@ function DiagramTab({
 }: {
   isDrawioFormat: boolean
   diagramXml: string
-  nodes: Node[]
+  nodes: ReactFlowNode[]
   edges: Edge[]
   nodeTypes: NodeTypes
 }) {
@@ -141,7 +142,7 @@ function DiagramTab({
               className="bg-gray-50 dark:bg-gray-900"
             >
               <Controls />
-              <Background variant="dots" gap={12} size={1} />
+              <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
             </ReactFlow>
           </ReactFlowProvider>
         </div>
@@ -167,13 +168,30 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
   const statusDropdownRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
-  // Fetch full setup details
-  const { data: setupDetails } = useQuery({
+  // Fetch full setup details (typed: getSetup returns never until implemented)
+  interface SetupDetails {
+    id?: string
+    name?: string
+    description?: string
+    environmentType?: string
+    version?: string
+    status?: string
+    components?: Component[]
+    interfaces?: Interface[]
+    diagramData?: {
+      nodes?: ReactFlowNode[]
+      edges?: Edge[]
+      xml?: string
+      format?: string
+      [key: string]: unknown
+    }
+  }
+  const { data: setupDetails } = useQuery<SetupDetails | null>({
     queryKey: ['test-setup', projectId, setup?.id],
     queryFn: async () => {
       if (!setup?.id) return null
       const response = await verificationService.getSetup(projectId, setup.id)
-      return response.success ? response.data : null
+      return response.success ? (response.data as unknown as SetupDetails) : null
     },
     enabled: isOpen && !!setup?.id,
   })
@@ -287,7 +305,7 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as globalThis.Node)) {
         setStatusDropdownOpen(false)
       }
     }

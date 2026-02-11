@@ -1,6 +1,6 @@
 import { apiClient } from './api'
-import type { Parameter, CreateParameterDto, UpdateParameterDto } from '../../../shared/types/engineering.types'
-import type { ApiResponse } from '../../../shared/types/api.types'
+import type { Parameter, CreateParameterDto, UpdateParameterDto } from 'shared/types/engineering.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 export const parameterService = {
   async getParameters(projectId: string): Promise<ApiResponse<Parameter[]>> {

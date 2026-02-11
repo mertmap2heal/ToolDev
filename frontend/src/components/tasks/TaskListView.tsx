@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { taskService } from '../../services/task.service'
 import CreateTaskModal from './CreateTaskModal'
 import TaskFilters from './TaskFilters'
-import type { Task, TaskStatus, TaskPriority, ListTasksFilters } from '../../../shared/types/task.types'
+import type { Task, TaskStatus, TaskPriority, ListTasksFilters } from 'shared/types/task.types'
 import { format } from 'date-fns'
 
 interface TaskListViewProps {

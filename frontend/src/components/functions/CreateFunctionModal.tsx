@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { functionService } from '../../services/function.service'
-import type { CreateSystemFunctionDto } from '../../../shared/types/engineering.types'
+import type { CreateSystemFunctionDto } from 'shared/types/engineering.types'
 
 interface CreateFunctionModalProps {
   isOpen: boolean

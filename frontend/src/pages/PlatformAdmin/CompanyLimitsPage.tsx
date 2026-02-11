@@ -52,7 +52,7 @@ export default function CompanyLimitsPage() {
     setSaving(item.companyKey)
     setError(null)
     try {
-      const res = await setCompanyLimit(item.companyKey, maxUsers)
+      const res = await setCompanyLimit(item.companyKey, maxUsers as number | null)
       if (res.success) {
         setEditing((prev) => {
           const next = { ...prev }

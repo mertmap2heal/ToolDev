@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Upload, Download, FileText, X } from 'lucide-react'
 import { useMutation } from '@tanstack/react-query'
 import { taskService } from '../../services/task.service'
-import type { ListTasksFilters } from '../../../shared/types/task.types'
+import type { ListTasksFilters } from 'shared/types/task.types'
 
 interface CSVImportExportProps {
   projectId?: string

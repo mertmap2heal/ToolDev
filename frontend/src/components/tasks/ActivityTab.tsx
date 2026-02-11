@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { taskService } from '../../services/task.service'
-import type { ActivityFeedEntry } from '../../../shared/types/task.types'
+import type { ActivityFeedEntry } from 'shared/types/task.types'
 import { format } from 'date-fns'
 import { CheckCircle, MessageSquare, Paperclip, Link2, AlertCircle, FileText } from 'lucide-react'
 

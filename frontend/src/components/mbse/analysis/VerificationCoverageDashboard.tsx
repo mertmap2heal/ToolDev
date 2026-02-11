@@ -18,8 +18,8 @@ import {
 import { requirementService } from '../../../services/requirement.service'
 import { functionService } from '../../../services/function.service'
 import { traceabilityService } from '../../../services/traceability.service'
-import type { Requirement, SystemFunction } from '../../../../../shared/types/engineering.types'
-import type { TraceLink } from '../../../../../shared/types/traceability.types'
+import type { Requirement, SystemFunction } from 'shared/types/engineering.types'
+import type { TraceLink } from 'shared/types/traceability.types'
 import clsx from 'clsx'
 
 interface VerificationCoverageDashboardProps {

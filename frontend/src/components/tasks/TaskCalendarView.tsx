@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-reac
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { taskService } from '../../services/task.service'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns'
-import type { Task } from '../../../shared/types/task.types'
+import type { Task } from 'shared/types/task.types'
 
 interface TaskCalendarViewProps {
   onTaskSelect?: (task: Task) => void

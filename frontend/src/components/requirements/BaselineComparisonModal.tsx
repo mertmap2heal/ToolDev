@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
-import { X, ArrowLeftRight, Plus, Minus, Edit, FileText } from 'lucide-react'
+import { X, ArrowLeftRight, Plus, Minus, Edit, FileText, Link2, Link2Off, AlertTriangle } from 'lucide-react'
 import { baselineService } from '../../services/baseline.service'
-import type { BaselineComparison } from '../../../../shared/types/engineering.types'
+import { LINKAGE_V1 } from '../../config/featureFlags'
+import type { BaselineComparison } from 'shared/types/engineering.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
 
@@ -75,9 +76,14 @@ export default function BaselineComparisonModal({
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                     {comparison.baselineA.name}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-gray-500 mb-1">
                     Created: {format(new Date(comparison.baselineA.createdAt), 'PPp')}
                   </p>
+                  {LINKAGE_V1 && comparison.baselineA.linksCount != null && (
+                    <p className="text-xs text-gray-500 dark:text-gray-500">
+                      {comparison.baselineA.linksCount} links
+                    </p>
+                  )}
                 </div>
                 <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
                   <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
@@ -86,9 +92,14 @@ export default function BaselineComparisonModal({
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                     {comparison.baselineB.name}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-gray-500 mb-1">
                     Created: {format(new Date(comparison.baselineB.createdAt), 'PPp')}
                   </p>
+                  {LINKAGE_V1 && comparison.baselineB.linksCount != null && (
+                    <p className="text-xs text-gray-500 dark:text-gray-500">
+                      {comparison.baselineB.linksCount} links
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -97,25 +108,47 @@ export default function BaselineComparisonModal({
                 <h3 className="font-semibold text-gray-900 dark:text-white mb-3">
                   Summary
                 </h3>
-                <div className="grid grid-cols-3 gap-4">
+                <div className={`grid gap-4 ${LINKAGE_V1 && (comparison.linksAdded?.length || comparison.linksRemoved?.length || comparison.linksSuspectChanged?.length) ? 'grid-cols-6' : 'grid-cols-3'}`}>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-green-600 dark:text-green-400">
                       {comparison.added.length}
                     </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Added</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">Req Added</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-red-600 dark:text-red-400">
                       {comparison.removed.length}
                     </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Removed</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">Req Removed</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
                       {comparison.modified.length}
                     </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Modified</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">Req Modified</div>
                   </div>
+                  {LINKAGE_V1 && (comparison.linksAdded?.length || comparison.linksRemoved?.length || comparison.linksSuspectChanged?.length) ? (
+                    <>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                          {comparison.linksAdded?.length ?? 0}
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Links Added</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                          {comparison.linksRemoved?.length ?? 0}
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Links Removed</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                          {comparison.linksSuspectChanged?.length ?? 0}
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Suspect Changed</div>
+                      </div>
+                    </>
+                  ) : null}
                 </div>
               </div>
 
@@ -291,10 +324,74 @@ export default function BaselineComparisonModal({
                 </div>
               )}
 
+              {/* Link Changes (LINKAGE_V1) */}
+              {LINKAGE_V1 && (comparison.linksAdded?.length || comparison.linksRemoved?.length || comparison.linksSuspectChanged?.length) ? (
+                <div className="space-y-4">
+                  {comparison.linksAdded && comparison.linksAdded.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Link2 className="text-green-600 dark:text-green-400" size={20} />
+                        <h3 className="font-semibold text-gray-900 dark:text-white">
+                          Links Added ({comparison.linksAdded.length})
+                        </h3>
+                      </div>
+                      <div className="border border-green-200 dark:border-green-800 rounded-lg overflow-hidden bg-green-50/50 dark:bg-green-900/10 max-h-48 overflow-y-auto">
+                        <div className="divide-y divide-green-200 dark:divide-green-800">
+                          {comparison.linksAdded.map((link) => (
+                            <div key={link.id} className="p-2 text-sm font-mono">
+                              {link.sourceType}:{link.sourceId?.slice(0, 8)} → {link.targetType}:{link.targetId?.slice(0, 8)} [{link.linkType}]
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {comparison.linksRemoved && comparison.linksRemoved.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Link2Off className="text-red-600 dark:text-red-400" size={20} />
+                        <h3 className="font-semibold text-gray-900 dark:text-white">
+                          Links Removed ({comparison.linksRemoved.length})
+                        </h3>
+                      </div>
+                      <div className="border border-red-200 dark:border-red-800 rounded-lg overflow-hidden bg-red-50/50 dark:bg-red-900/10 max-h-48 overflow-y-auto">
+                        <div className="divide-y divide-red-200 dark:divide-red-800">
+                          {comparison.linksRemoved.map((link) => (
+                            <div key={link.id} className="p-2 text-sm font-mono">
+                              {link.sourceType}:{link.sourceId?.slice(0, 8)} → {link.targetType}:{link.targetId?.slice(0, 8)} [{link.linkType}]
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {comparison.linksSuspectChanged && comparison.linksSuspectChanged.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <AlertTriangle className="text-amber-600 dark:text-amber-400" size={20} />
+                        <h3 className="font-semibold text-gray-900 dark:text-white">
+                          Links Suspect Status Changed ({comparison.linksSuspectChanged.length})
+                        </h3>
+                      </div>
+                      <div className="border border-amber-200 dark:border-amber-800 rounded-lg overflow-hidden bg-amber-50/50 dark:bg-amber-900/10 max-h-48 overflow-y-auto">
+                        <div className="divide-y divide-amber-200 dark:divide-amber-800">
+                          {comparison.linksSuspectChanged.map((link) => (
+                            <div key={link.id} className="p-2 text-sm font-mono">
+                              {link.sourceType}:{link.sourceId?.slice(0, 8)} → {link.targetType}:{link.targetId?.slice(0, 8)} [{link.linkType}]
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
               {/* No Changes */}
               {comparison.added.length === 0 &&
                 comparison.removed.length === 0 &&
-                comparison.modified.length === 0 && (
+                comparison.modified.length === 0 &&
+                !(LINKAGE_V1 && (comparison.linksAdded?.length || comparison.linksRemoved?.length || comparison.linksSuspectChanged?.length)) && (
                   <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                     <FileText size={48} className="mx-auto mb-4 text-gray-300 dark:text-gray-600" />
                     <p>No differences found between the two baselines</p>

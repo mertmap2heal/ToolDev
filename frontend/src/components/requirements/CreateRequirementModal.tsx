@@ -1,14 +1,27 @@
 import { useState, useEffect, useMemo } from 'react'
-import { X, Plus, Trash2 } from 'lucide-react'
+import { X, Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { requirementService } from '../../services/requirement.service'
 import { projectService } from '../../services/project.service'
 import { templateService } from '../../services/template.service'
 import { verificationService } from '../../services/verification.service'
+import { linkService } from '../../services/link.service'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import { useLifecycleStore } from '../../store/lifecycleStore'
-// import RichTextEditor from '../common/RichTextEditor' // Temporarily disabled - using textarea instead
-import type { CreateRequirementDto, Requirement } from '../../../shared/types/engineering.types'
+import { LINKAGE_V1, LIFECYCLE_V1 } from '../../config/featureFlags'
+import { lifecycleService } from '../../services/lifecycle.service'
+import { stakeholderAdapter } from '../../linkage/adapters/stakeholderAdapter'
+import { pbsAdapter } from '../../linkage/adapters/pbsAdapter'
+import { interfaceAdapter } from '../../linkage/adapters/interfaceAdapter'
+import { hazardAdapter } from '../../linkage/adapters/hazardAdapter'
+import { riskAdapter } from '../../linkage/adapters/riskAdapter'
+import type { CreateRequirementDto, Requirement, RequirementType } from 'shared/types/engineering.types'
+
+interface Moc {
+  code?: string | number
+  name?: string
+  description?: string
+}
 
 interface CreateRequirementModalProps {
   isOpen: boolean
@@ -32,6 +45,94 @@ const defaultRequirementTypes = [
 
 const verificationMethods = ['Test', 'Analysis', 'Inspection', 'Demonstration', 'Review']
 const sources = ['Customer', 'Regulatory', 'Internal', 'Derived', 'Standard']
+
+interface QuickLinkAdapter {
+  search: (query: string, projectId: string) => Promise<{ id: string; label: string }[]>
+}
+
+function QuickLinkSelector({
+  label,
+  projectId,
+  adapter,
+  selectedIds,
+  selectedLabels,
+  onToggle,
+}: {
+  label: string
+  projectId: string
+  adapter: QuickLinkAdapter
+  selectedIds: string[]
+  selectedLabels: Record<string, string>
+  onToggle: (id: string, label: string) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<{ id: string; label: string }[]>([])
+  const [showDropdown, setShowDropdown] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    adapter.search(query, projectId).then((r) => {
+      if (!cancelled) setResults((r as { id: string; label: string }[]).slice(0, 20))
+    })
+    return () => { cancelled = true }
+  }, [query, projectId])
+
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{label}</label>
+      <div className="flex flex-wrap gap-1 mb-1">
+        {selectedIds.map((id) => {
+          const itemLabel = selectedLabels[id] || results.find((r) => r.id === id)?.label || id.slice(0, 8)
+          return (
+            <span
+              key={id}
+              className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 rounded text-xs"
+            >
+              {itemLabel}
+              <button type="button" onClick={() => onToggle(id, itemLabel)} className="hover:text-red-600">
+                <X size={12} />
+              </button>
+            </span>
+          )
+        })}
+      </div>
+      <div className="relative">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setShowDropdown(true)
+          }}
+          onFocus={() => setShowDropdown(true)}
+          placeholder="Search..."
+          className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+        />
+        {showDropdown && results.length > 0 && (
+          <div
+            className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border rounded shadow-lg max-h-32 overflow-y-auto"
+            onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+          >
+            {results.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  onToggle(item.id, item.label)
+                  setShowDropdown(false)
+                  setQuery('')
+                }}
+                className="w-full text-left px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm"
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 export default function CreateRequirementModal({
   isOpen,
@@ -69,10 +170,42 @@ export default function CreateRequirementModal({
   const [sourceTypes, setSourceTypes] = useState<string[]>(sources)
   const [autoGenerateId, setAutoGenerateId] = useState(true)
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
+  // Quick Links (LINKAGE_V1)
+  const [quickLinksExpanded, setQuickLinksExpanded] = useState(false)
+  const [quickLinksPbs, setQuickLinksPbs] = useState<string[]>([])
+  const [quickLinksInterfaces, setQuickLinksInterfaces] = useState<string[]>([])
+  const [quickLinksHazards, setQuickLinksHazards] = useState<string[]>([])
+  const [quickLinksRisks, setQuickLinksRisks] = useState<string[]>([])
+  const [quickLinksLabels, setQuickLinksLabels] = useState<Record<string, string>>({})
 
   const queryClient = useQueryClient()
   const { statuses } = useStatusDefinitionsStore()
   const { lifecycles } = useLifecycleStore()
+  const [applicableLifecycle, setApplicableLifecycle] = useState<{
+    lifecycleId: string
+    defaultStatusId: string
+    statusName: string
+  } | null>(null)
+
+  // When LIFECYCLE_V1: fetch applicable lifecycle on open
+  useEffect(() => {
+    if (LIFECYCLE_V1 && isOpen && projectId) {
+      lifecycleService.getApplicableLifecycle(projectId, 'Requirement').then((result) => {
+        if (result.success && result.data) {
+          const statusName = lifecycleService.getStatusName(result.data.defaultStatusId)
+          setApplicableLifecycle({
+            lifecycleId: result.data.lifecycleId,
+            defaultStatusId: result.data.defaultStatusId,
+            statusName: statusName || result.data.defaultStatusId,
+          })
+        } else {
+          setApplicableLifecycle(null)
+        }
+      })
+    } else {
+      setApplicableLifecycle(null)
+    }
+  }, [LIFECYCLE_V1, isOpen, projectId])
 
   // Fetch templates
   const { data: templates = [] } = useQuery({
@@ -84,7 +217,7 @@ export default function CreateRequirementModal({
     enabled: isOpen && !!projectId,
   })
 
-  // Get initial status from lifecycle that applies to Requirements
+  // Get initial status from lifecycle that applies to Requirements (when LIFECYCLE_V1=OFF)
   const initialStatus = useMemo(() => {
     // Find all lifecycles that apply to "Requirement"
     const requirementLifecycles = lifecycles.filter((lc) =>
@@ -144,19 +277,31 @@ export default function CreateRequirementModal({
       return response.success && response.data ? response.data : []
     },
     enabled: isOpen && !!projectId,
-    onSuccess: (data) => {
-      // Merge predefined and custom types
-      const customTypeNames = data.map(t => t.typeName)
+  })
+
+  useEffect(() => {
+    if (Array.isArray(customTypesData) && customTypesData.length > 0) {
+      const customTypeNames = customTypesData.map((t: { typeName: string }) => t.typeName)
       setAvailableRequirementTypes([...predefinedTypes, ...customTypeNames])
+    }
+  }, [customTypesData])
+
+  // Fetch stakeholders for owner dropdown (LINKAGE_V1)
+  const { data: stakeholders = [] } = useQuery({
+    queryKey: ['stakeholders-owner', projectId],
+    queryFn: async () => {
+      const results = await stakeholderAdapter.search('', projectId)
+      return results
     },
+    enabled: isOpen && !!projectId && LINKAGE_V1,
   })
 
   // Fetch MOCs
-  const { data: mocs = [] } = useQuery({
+  const { data: mocs = [] } = useQuery<Moc[]>({
     queryKey: ['mocs'],
     queryFn: async () => {
       const response = await verificationService.getMocs()
-      return response.success && response.data ? response.data : []
+      return (response.success && response.data ? response.data : []) as Moc[]
     },
     enabled: isOpen,
   })
@@ -171,8 +316,12 @@ export default function CreateRequirementModal({
 
   // Update status when lifecycle or status definitions change
   useEffect(() => {
-    setFormData((prev) => ({ ...prev, status: initialStatus }))
-  }, [initialStatus])
+    if (LIFECYCLE_V1 && applicableLifecycle) {
+      setFormData((prev) => ({ ...prev, status: applicableLifecycle.statusName }))
+    } else {
+      setFormData((prev) => ({ ...prev, status: initialStatus }))
+    }
+  }, [LIFECYCLE_V1, applicableLifecycle, initialStatus])
 
   // Apply template when selected
   useEffect(() => {
@@ -182,7 +331,7 @@ export default function CreateRequirementModal({
         setFormData((prev) => ({
           ...prev,
           ...template.templateFields,
-          requirementType: template.requirementType || prev.requirementType,
+          requirementType: (template.requirementType || prev.requirementType) as RequirementType | undefined,
         }))
       }
     }
@@ -243,13 +392,18 @@ export default function CreateRequirementModal({
       linkedMocCode: '',
     })
     setErrors({})
-    setCustomType('')
-    setShowAddType(false)
+    setCustomRequirementType('')
+    setShowAddRequirementType(false)
     setCustomSource('')
     setShowAddSource(false)
     setAutoGenerateId(true)
     setTagInput('')
     setSelectedTemplate('')
+    setQuickLinksPbs([])
+    setQuickLinksInterfaces([])
+    setQuickLinksHazards([])
+    setQuickLinksRisks([])
+    setQuickLinksLabels({})
   }
 
   const handleAddTag = () => {
@@ -281,7 +435,7 @@ export default function CreateRequirementModal({
           }
           return prev
         })
-        setFormData((prev) => ({ ...prev, requirementType: newType }))
+        setFormData((prev) => ({ ...prev, requirementType: newType as RequirementType }))
         setCustomRequirementType('')
         setShowAddRequirementType(false)
         queryClient.invalidateQueries({ queryKey: ['customRequirementTypes', projectId] })
@@ -334,7 +488,7 @@ export default function CreateRequirementModal({
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     const newErrors: Record<string, string> = {}
@@ -347,6 +501,13 @@ export default function CreateRequirementModal({
     if (!formData.linkedMocCode) {
       newErrors.linkedMocCode = 'Means of Compliance (MoC) is required'
     }
+    const selectedMoc = mocs.find((m) => String(m.code) === String(formData.linkedMocCode))
+    if (selectedMoc && /^Test$/i.test(selectedMoc.name ?? '')) {
+      if (!formData.verificationMethod?.trim()) {
+        newErrors.verificationMethod = 'Verification method is required when MoC is Test'
+      }
+    }
+    // MoC=Test/Analysis: acceptance criteria is a soft warning (no block)
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
@@ -362,8 +523,76 @@ export default function CreateRequirementModal({
       acceptanceCriteria: formData.acceptanceCriteria?.trim() || undefined,
       relatedDocuments: formData.relatedDocuments && formData.relatedDocuments.length > 0 ? formData.relatedDocuments : undefined,
     }
+    if (LIFECYCLE_V1 && applicableLifecycle) {
+      submitData.lifecycleId = applicableLifecycle.lifecycleId
+      submitData.statusId = applicableLifecycle.defaultStatusId
+      submitData.status = applicableLifecycle.statusName
+    }
 
-    createRequirementMutation.mutate(submitData)
+    try {
+      const response = await createRequirementMutation.mutateAsync(submitData)
+      if (response.success && response.data && LINKAGE_V1) {
+        const createdReq = response.data
+        if (submitData.parentId) {
+          await linkService.createLink(projectId, {
+            sourceType: 'requirement',
+            sourceId: createdReq.id,
+            targetType: 'requirement',
+            targetId: submitData.parentId,
+            linkType: 'derived_from',
+          })
+        }
+        const linkPromises: Promise<any>[] = []
+        quickLinksPbs.forEach((targetId) =>
+          linkPromises.push(
+            linkService.createLink(projectId, {
+              sourceType: 'requirement',
+              sourceId: createdReq.id,
+              targetType: 'pbs_component',
+              targetId,
+              linkType: 'allocated_to',
+            })
+          )
+        )
+        quickLinksInterfaces.forEach((targetId) =>
+          linkPromises.push(
+            linkService.createLink(projectId, {
+              sourceType: 'requirement',
+              sourceId: createdReq.id,
+              targetType: 'interface',
+              targetId,
+              linkType: 'related_interface',
+            })
+          )
+        )
+        quickLinksHazards.forEach((targetId) =>
+          linkPromises.push(
+            linkService.createLink(projectId, {
+              sourceType: 'requirement',
+              sourceId: createdReq.id,
+              targetType: 'hazard',
+              targetId,
+              linkType: 'mitigates',
+            })
+          )
+        )
+        quickLinksRisks.forEach((targetId) =>
+          linkPromises.push(
+            linkService.createLink(projectId, {
+              sourceType: 'requirement',
+              sourceId: createdReq.id,
+              targetType: 'risk',
+              targetId,
+              linkType: 'mitigates',
+            })
+          )
+        )
+        await Promise.allSettled(linkPromises)
+        queryClient.invalidateQueries({ queryKey: ['traceability', projectId] })
+      }
+    } catch {
+      // Errors handled by mutation onError
+    }
   }
 
   const handleChange = (field: keyof CreateRequirementDto, value: any) => {
@@ -542,18 +771,34 @@ export default function CreateRequirementModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                Status <span className="text-xs text-gray-500">(from lifecycle)</span>
+                Status {LIFECYCLE_V1 && '(from lifecycle)'}
               </label>
-              <input
-                type="text"
-                value={formData.status || initialStatus}
-                readOnly
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 cursor-not-allowed"
-                title="Status is set automatically from lifecycle definition"
-              />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
-                Initial status from lifecycle management
-              </p>
+              {LIFECYCLE_V1 ? (
+                <>
+                  <input
+                    type="text"
+                    value={formData.status || applicableLifecycle?.statusName || initialStatus}
+                    readOnly
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700/50 text-gray-600 dark:text-gray-400 cursor-not-allowed"
+                    title="Status is set automatically from lifecycle definition"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
+                    Initial status from lifecycle management
+                  </p>
+                </>
+              ) : (
+                <select
+                  value={formData.status || initialStatus}
+                  onChange={(e) => handleChange('status', e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  {statuses.length > 0
+                    ? statuses.map((s) => (
+                        <option key={s.id} value={s.name}>{s.name}</option>
+                      ))
+                    : <option value={initialStatus}>{initialStatus}</option>}
+                </select>
+              )}
             </div>
           </div>
 
@@ -569,11 +814,19 @@ export default function CreateRequirementModal({
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
                 <option value="">Select owner</option>
-                {project?.teamMembers?.map((member) => (
-                  <option key={member.userId} value={member.user?.name || member.userId}>
-                    {member.user?.name || member.userId}
-                  </option>
-                ))}
+                {LINKAGE_V1 && stakeholders.length > 0 ? (
+                  stakeholders.map((s) => (
+                    <option key={s.id} value={s.label}>
+                      {s.label}
+                    </option>
+                  ))
+                ) : (
+                  project?.teamMembers?.map((member) => (
+                    <option key={member.userId} value={member.user?.name || member.userId}>
+                      {member.user?.name || member.userId}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
             <div>
@@ -653,11 +906,16 @@ export default function CreateRequirementModal({
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
               Verification Method
+              {mocs.find((m: any) => String(m.code) === String(formData.linkedMocCode))?.name === 'Test' && (
+                <span className="text-red-500 ml-1">*</span>
+              )}
             </label>
             <select
               value={formData.verificationMethod || ''}
               onChange={(e) => handleChange('verificationMethod', e.target.value || undefined)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
+                errors.verificationMethod ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+              }`}
             >
               <option value="">Select verification method</option>
               {verificationMethods.map((method) => (
@@ -666,6 +924,9 @@ export default function CreateRequirementModal({
                 </option>
               ))}
             </select>
+            {errors.verificationMethod && (
+              <p className="mt-1 text-sm text-red-500">{errors.verificationMethod}</p>
+            )}
           </div>
 
           {/* Acceptance Criteria */}
@@ -934,6 +1195,96 @@ export default function CreateRequirementModal({
               </div>
             )}
           </div>
+
+          {/* Quick Links (LINKAGE_V1, collapsible) */}
+          {LINKAGE_V1 && (
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+              <button
+                type="button"
+                onClick={() => setQuickLinksExpanded(!quickLinksExpanded)}
+                className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+              >
+                {quickLinksExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                Quick Links — Allocate to PBS, Interfaces, Hazards, Risks
+              </button>
+              {quickLinksExpanded && (
+                <div className="mt-3 space-y-3 pl-6">
+                  <QuickLinkSelector
+                    label="Allocate to PBS"
+                    projectId={projectId}
+                    adapter={pbsAdapter}
+                    selectedIds={quickLinksPbs}
+                    selectedLabels={quickLinksLabels}
+                    onToggle={(id, label) => {
+                      setQuickLinksPbs((prev) =>
+                        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+                      )
+                      setQuickLinksLabels((prev) => {
+                        const next = { ...prev }
+                        if (quickLinksPbs.includes(id)) delete next[id]
+                        else next[id] = label
+                        return next
+                      })
+                    }}
+                  />
+                  <QuickLinkSelector
+                    label="Related Interfaces"
+                    projectId={projectId}
+                    adapter={interfaceAdapter}
+                    selectedIds={quickLinksInterfaces}
+                    selectedLabels={quickLinksLabels}
+                    onToggle={(id, label) => {
+                      setQuickLinksInterfaces((prev) =>
+                        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+                      )
+                      setQuickLinksLabels((prev) => {
+                        const next = { ...prev }
+                        if (quickLinksInterfaces.includes(id)) delete next[id]
+                        else next[id] = label
+                        return next
+                      })
+                    }}
+                  />
+                  <QuickLinkSelector
+                    label="Related Hazards"
+                    projectId={projectId}
+                    adapter={hazardAdapter}
+                    selectedIds={quickLinksHazards}
+                    selectedLabels={quickLinksLabels}
+                    onToggle={(id, label) => {
+                      setQuickLinksHazards((prev) =>
+                        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+                      )
+                      setQuickLinksLabels((prev) => {
+                        const next = { ...prev }
+                        if (quickLinksHazards.includes(id)) delete next[id]
+                        else next[id] = label
+                        return next
+                      })
+                    }}
+                  />
+                  <QuickLinkSelector
+                    label="Related Risks"
+                    projectId={projectId}
+                    adapter={riskAdapter}
+                    selectedIds={quickLinksRisks}
+                    selectedLabels={quickLinksLabels}
+                    onToggle={(id, label) => {
+                      setQuickLinksRisks((prev) =>
+                        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+                      )
+                      setQuickLinksLabels((prev) => {
+                        const next = { ...prev }
+                        if (quickLinksRisks.includes(id)) delete next[id]
+                        else next[id] = label
+                        return next
+                      })
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Error Message */}
           {errors.submit && (

@@ -3,7 +3,7 @@ import { X, Download, FileSpreadsheet, FileText, File, CheckSquare, Square, Code
 import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
 import { apiClient } from '../../services/api'
-import type { Requirement } from '../../../../shared/types/engineering.types'
+import type { Requirement } from 'shared/types/engineering.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
 

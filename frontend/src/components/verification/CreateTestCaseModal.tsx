@@ -92,7 +92,7 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
     mutationFn: (data: any) => verificationService.createTestCase(projectId, data),
     onSuccess: async (response) => {
       if (response.success && response.data) {
-        const testCaseId = response.data.id
+        const testCaseId = (response.data as { id: string }).id
 
         // Link test setups
         if (selectedSetups.length > 0) {
@@ -130,7 +130,7 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
 
               if (evidenceResponse.success && evidenceResponse.data) {
                 // Link evidence to test case
-                await verificationService.linkEvidence(projectId, evidenceResponse.data.id, {
+                await verificationService.linkEvidence(projectId, (evidenceResponse.data as { id: string }).id, {
                   linkedEntityType: 'TEST_CASE',
                   linkedEntityId: testCaseId,
                   relation: 'SUPPORTING',

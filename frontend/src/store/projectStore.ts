@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Project } from '../../../shared/types/project.types'
+import type { Project } from 'shared/types/project.types'
 
 interface ProjectState {
   projects: Project[]

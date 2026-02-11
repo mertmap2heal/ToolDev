@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { requirementService } from '../../services/requirement.service'
 import { traceabilityService } from '../../services/traceability.service'
-import type { Requirement } from '../../../../shared/types/engineering.types'
+import type { Requirement } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 
 interface VerificationPanelProps {

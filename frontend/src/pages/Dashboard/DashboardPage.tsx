@@ -7,7 +7,7 @@ import DeleteConfirmationModal from '../../components/projects/DeleteConfirmatio
 import ProjectTeamModal from '../../components/projects/ProjectTeamModal'
 import { projectService } from '../../services/project.service'
 import { useProjectStore } from '../../store/projectStore'
-import type { Project } from '../../../shared/types/project.types'
+import type { Project } from 'shared/types/project.types'
 
 export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -176,18 +176,38 @@ export default function DashboardPage() {
           </div>
         ) : error ? (
           <div className="p-8 text-left">
-            <p className="text-red-600 dark:text-red-400 mb-2">
+            <p className="text-red-600 dark:text-red-400 mb-2 font-medium">
               {error instanceof Error ? error.message : 'Error loading projects.'}
             </p>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
               Check that the backend is running, the database is connected, and you are logged in.
             </p>
-            <button
-              onClick={() => refetch()}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
-            >
-              Retry
-            </button>
+            <div className="flex flex-wrap gap-2 mb-4">
+              <button
+                onClick={() => refetch()}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+              >
+                Retry
+              </button>
+              <a
+                href="/api/health"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium"
+              >
+                Check backend health
+              </a>
+            </div>
+            <details className="text-sm text-gray-500 dark:text-gray-400">
+              <summary className="cursor-pointer font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Troubleshooting steps
+              </summary>
+              <ol className="list-decimal list-inside space-y-1 mt-2">
+                <li>Start the backend: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">cd backend && npm run dev</code></li>
+                <li>Ensure PostgreSQL is running (e.g. <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">docker compose up -d</code>)</li>
+                <li>If you were logged out, go to the login page and sign in again</li>
+              </ol>
+            </details>
           </div>
         ) : displayedProjects.length === 0 ? (
           <div className="p-8 text-left text-gray-500 dark:text-gray-400">

@@ -41,11 +41,14 @@ export default function ExportWithTemplateModal({
     setError(null)
     setIsExporting(true)
     try {
-      const blob = await verificationService.exportWithTemplate(projectId, {
+      const result = await verificationService.exportWithTemplate(projectId, {
         entityType,
         entityId,
         templateId,
       })
+      // Service returns ApiResponse<never> when not implemented; cast for type safety
+      const blob = (result as { data?: Blob }).data ?? (result as unknown as Blob)
+      if (!(blob instanceof Blob)) throw new Error('Export failed: invalid response')
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url

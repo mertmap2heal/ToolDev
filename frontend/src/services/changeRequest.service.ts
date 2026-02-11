@@ -1,6 +1,6 @@
 import { apiClient } from './api'
-import type { ChangeRequest, CreateChangeRequestDto } from '../../../shared/types/engineering.types'
-import type { ApiResponse } from '../../../shared/types/api.types'
+import type { ChangeRequest, CreateChangeRequestDto } from 'shared/types/engineering.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 export const changeRequestService = {
   async getChangeRequests(projectId: string): Promise<ApiResponse<ChangeRequest[]>> {

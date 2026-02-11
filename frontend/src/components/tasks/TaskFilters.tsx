@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Filter, ChevronDown, ChevronUp, X } from 'lucide-react'
-import type { ListTasksFilters, TaskStatus, TaskPriority } from '../../../shared/types/task.types'
+import type { ListTasksFilters, TaskStatus, TaskPriority } from 'shared/types/task.types'
 
 interface TaskFiltersProps {
   filters: ListTasksFilters

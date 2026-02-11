@@ -9,19 +9,33 @@ export default function TimeTrackingPage() {
   const [showLogModal, setShowLogModal] = useState(false)
   const queryClient = useQueryClient()
 
-  const { data: timeLogs, isLoading } = useQuery({
+  interface TimeLog {
+    id: string
+    task?: { title?: string }
+    loggedAt: string
+    durationMinutes: number
+    description?: string
+    billable?: boolean
+  }
+  interface TimeSummary {
+    totalHours?: number
+    billableHours?: number
+    logCount?: number
+  }
+  const { data: timeLogs, isLoading } = useQuery<TimeLog[]>({
     queryKey: ['time-logs'],
     queryFn: async () => {
-      const response = await apiClient.get('/time-tracking')
-      return response.data || []
+      const response = await apiClient.get<TimeLog[] | unknown>('/time-tracking')
+      const data = response.data
+      return Array.isArray(data) ? data : []
     },
   })
 
-  const { data: summary } = useQuery({
+  const { data: summary } = useQuery<TimeSummary | null>({
     queryKey: ['time-summary'],
     queryFn: async () => {
-      const response = await apiClient.get('/time-tracking/summary')
-      return response.data
+      const response = await apiClient.get<TimeSummary>('/time-tracking/summary')
+      return response.data ?? null
     },
   })
 
@@ -86,7 +100,7 @@ export default function TimeTrackingPage() {
                 <p className="text-gray-500 dark:text-gray-400">No time logs yet</p>
               ) : (
                 <div className="space-y-4">
-                  {(timeLogs || []).map((log: any) => (
+                  {(timeLogs || []).map((log: TimeLog) => (
                     <div key={log.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
                       <div>
                         <div className="font-medium text-gray-900 dark:text-white">

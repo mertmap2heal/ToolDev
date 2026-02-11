@@ -9,12 +9,16 @@ export default function TasksReportsPage() {
   const [searchParams] = useSearchParams()
   const projectId = searchParams.get('projectId') || undefined
 
-  const { data: statistics, isLoading } = useQuery({
+  interface TaskStatistics {
+    byStatus?: Record<string, number>
+    byPriority?: Record<string, number>
+  }
+  const { data: statistics, isLoading } = useQuery<TaskStatistics>({
     queryKey: ['task-statistics', projectId],
     queryFn: async () => {
       const params = projectId ? `?project_id=${projectId}` : ''
-      const response = await apiClient.get(`/task-analytics/statistics${params}`)
-      return response.data
+      const response = await apiClient.get<TaskStatistics>(`/task-analytics/statistics${params}`)
+      return response.data ?? {}
     },
   })
 

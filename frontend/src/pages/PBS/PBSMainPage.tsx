@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { FolderTree, Loader2, Box, Save } from 'lucide-react'
 import { useComponentContext } from '../../components/layout/ProjectLayout'
 import { componentService } from '../../services/component.service'
-import type { Component } from '../../../shared/types/project.types'
+import type { Component } from 'shared/types/project.types'
 
 /**
  * Main content for Product Breakdown Structure.

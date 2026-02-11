@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
@@ -23,7 +23,12 @@ import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
 import { changeRequestService } from '../../services/changeRequest.service'
 import { traceabilityService } from '../../services/traceability.service'
-import type { Requirement, UpdateRequirementDto } from '../../../shared/types/engineering.types'
+import { linkService } from '../../services/link.service'
+import { baselineService } from '../../services/baseline.service'
+import { LINKAGE_V1, LIFECYCLE_V1 } from '../../config/featureFlags'
+import ChangeStatusPopover, { getStatusColorClasses } from '../../components/requirements/ChangeStatusPopover'
+import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
+import type { Requirement, UpdateRequirementDto } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
 
@@ -33,6 +38,7 @@ interface ExpandedRow {
   linkedFunctions: Array<{ id: string; functionId?: string; name: string }>
   linkedIssues: Array<{ id: string; title: string }>
   linkedChangeRequests: Array<{ id: string; title: string }>
+  linkedItems?: Array<{ id: string; targetType: string; targetId: string; label?: string; linkType?: string }>
 }
 
 /**
@@ -46,6 +52,8 @@ interface InlineEditState {
 
 export default function RequirementsPage() {
   const { projectId } = useParams<{ projectId: string }>()
+  const [searchParams] = useSearchParams()
+  const baselineId = searchParams.get('baselineId')
   const [searchQuery, setSearchQuery] = useState('')
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -66,6 +74,8 @@ export default function RequirementsPage() {
   const [isQualityPanelOpen, setIsQualityPanelOpen] = useState(false)
   const [isChangeRequestModalOpen, setIsChangeRequestModalOpen] = useState(false)
   const [selectedRequirementForChangeRequest, setSelectedRequirementForChangeRequest] = useState<Requirement | null>(null)
+  const [suspectLinksForCR, setSuspectLinksForCR] = useState<{ sourceType: string; sourceId: string; targetType: string; targetId: string }[] | null>(null)
+  const [changeStatusAnchor, setChangeStatusAnchor] = useState<{ requirement: Requirement; el: HTMLElement } | null>(null)
   
   // Inline editing state
   const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null)
@@ -175,6 +185,7 @@ export default function RequirementsPage() {
   }
 
   const queryClient = useQueryClient()
+  const { statuses: statusDefinitions } = useStatusDefinitionsStore()
 
   const { data: requirements = [], isLoading } = useQuery({
     queryKey: ['requirements', projectId],
@@ -231,6 +242,29 @@ export default function RequirementsPage() {
       return response.success && response.data ? response.data : []
     },
     enabled: !!projectId,
+  })
+
+  const { data: baseline } = useQuery({
+    queryKey: ['baseline', projectId, baselineId],
+    queryFn: async () => {
+      if (!projectId || !baselineId) return null
+      const response = await baselineService.getBaseline(projectId, baselineId)
+      return response.success && response.data ? response.data : null
+    },
+    enabled: !!projectId && !!baselineId,
+  })
+
+  const isBaselineView = !!baselineId
+
+  // Fetch links for LINKAGE_V1 (used for linked items count and expanded row)
+  const { data: links = [] } = useQuery({
+    queryKey: ['links', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const response = await linkService.getLinks(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId && LINKAGE_V1,
   })
 
   const deleteRequirementMutation = useMutation({
@@ -370,6 +404,7 @@ export default function RequirementsPage() {
 
   // Handle starting inline edit
   const startInlineEdit = (req: Requirement, field: InlineEditState['field']) => {
+    if (isBaselineView) return
     setInlineEdit({
       requirementId: req.id,
       field,
@@ -474,12 +509,26 @@ export default function RequirementsPage() {
     // Get children
     const children = requirements.filter((req) => req.parentId === requirementId)
 
+    // Get linked items (LINKAGE_V1)
+    const linkedItems = LINKAGE_V1
+      ? (links as any[])
+          .filter((l: any) => l.sourceType === 'requirement' && l.sourceId === requirementId)
+          .map((l: any) => ({
+            id: l.id,
+            targetType: l.targetType,
+            targetId: l.targetId,
+            label: l.targetLabel ?? `${l.targetType}:${l.targetId}`,
+            linkType: l.linkType,
+          }))
+      : []
+
     return {
       requirementId,
       children,
       linkedFunctions,
       linkedIssues,
       linkedChangeRequests,
+      linkedItems,
     }
   }
 
@@ -693,6 +742,13 @@ export default function RequirementsPage() {
     Array.from(new Set(requirements.map((r) => r.category).filter(Boolean))),
     [requirements]
   )
+
+  const getStatusColorForRequirement = (req: Requirement) => {
+    if (!LIFECYCLE_V1) return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+    const statusId = req.statusId ?? statusDefinitions.find((s) => s.name === req.status)?.id
+    const statusDef = statusDefinitions.find((s) => s.id === statusId)
+    return getStatusColorClasses(statusDef?.color ?? 'gray')
+  }
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -910,10 +966,28 @@ export default function RequirementsPage() {
             )}
           </td>
           )}
-          {/* Status - inline editable */}
+          {/* Status - pill when LIFECYCLE_V1, Change Status popover; else inline editable */}
           {requirementColumns.has('status') && (
             <td className="px-4 py-3">
-            {inlineEdit?.requirementId === req.id && inlineEdit.field === 'status' ? (
+            {LIFECYCLE_V1 ? (
+              <div className="flex items-center gap-1">
+                <span
+                  className={clsx('px-2 py-1 rounded-full text-xs font-medium', getStatusColorForRequirement(req))}
+                >
+                  {req.status || 'draft'}
+                </span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setChangeStatusAnchor({ requirement: req, el: e.currentTarget })
+                  }}
+                  className="p-0.5 text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 rounded"
+                  title="Change status"
+                >
+                  <ChevronDown size={14} />
+                </button>
+              </div>
+            ) : inlineEdit?.requirementId === req.id && inlineEdit.field === 'status' ? (
               <select
                 value={inlineEdit.value}
                 onChange={(e) => {
@@ -1045,33 +1119,62 @@ export default function RequirementsPage() {
               >
                 <GitBranch size={16} />
               </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setEditingRequirement(req)
-                }}
-                className="p-1.5 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                title="Edit requirement"
-              >
-                <Edit2 size={16} />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setDeleteConfirmation(req)
-                }}
-                className="p-1.5 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                title="Delete requirement"
-              >
-                <Trash2 size={16} />
-              </button>
+              {!isBaselineView && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setEditingRequirement(req)
+                    }}
+                    className="p-1.5 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                    title="Edit requirement"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setDeleteConfirmation(req)
+                    }}
+                    className="p-1.5 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    title="Delete requirement"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </>
+              )}
             </div>
           </td>
         </tr>
         {isExpanded && rowData && (
           <>
-            {/* Linked Functions */}
-            {rowData.linkedFunctions.length > 0 && (
+            {/* Linked Items (LINKAGE_V1) or Linked Functions (legacy) */}
+            {LINKAGE_V1 && rowData.linkedItems && rowData.linkedItems.length > 0 && (
+              <tr>
+                <td colSpan={getTotalColumnCount()} className="px-4 py-2 bg-blue-50/50 dark:bg-blue-900/10">
+                  <div className="pl-8">
+                    <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-2 flex items-center gap-2">
+                      <Settings size={14} />
+                      Linked Items ({rowData.linkedItems.length})
+                    </p>
+                    <div className="space-y-1">
+                      {rowData.linkedItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700"
+                        >
+                          <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
+                            {item.targetType} ({item.targetId.slice(0, 8)})
+                          </span>{' '}
+                          - {item.linkType}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            )}
+            {!LINKAGE_V1 && rowData.linkedFunctions.length > 0 && (
               <tr>
                   <td colSpan={getTotalColumnCount()} className="px-4 py-2 bg-blue-50/50 dark:bg-blue-900/10">
                   <div className="pl-8">
@@ -1185,9 +1288,9 @@ export default function RequirementsPage() {
   const handleDeleteClick = (req: Requirement) => {
     const hasChildren = requirements.some((r) => r.parentId === req.id)
     const linkedFunctionsCount = functions.filter((f) => f.sourceReqId === req.id).length
-    
-    if (hasChildren || linkedFunctionsCount > 0) {
-      // Show warning modal
+    const linkedItemsCount = LINKAGE_V1 ? links.filter((l: any) => l.sourceType === 'requirement' && l.sourceId === req.id).length : 0
+
+    if (hasChildren || (LINKAGE_V1 ? linkedItemsCount > 0 : linkedFunctionsCount > 0)) {
       setDeleteConfirmation(req)
     } else {
       // Direct delete
@@ -1208,6 +1311,15 @@ export default function RequirementsPage() {
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto space-y-6 pr-6">
         <ProjectNavigation />
+
+        {isBaselineView && (
+          <div className="px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center gap-2">
+            <Archive size={20} className="text-amber-600 dark:text-amber-400" />
+            <span className="font-medium text-amber-800 dark:text-amber-200">
+              Viewing baseline{baseline ? `: ${baseline.name}` : ''}. Editing is disabled.
+            </span>
+          </div>
+        )}
 
         <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Requirements</h2>
@@ -1361,7 +1473,8 @@ export default function RequirementsPage() {
               setParentRequirement(null)
               setIsCreateModalOpen(true)
             }}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+            disabled={isBaselineView}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-colors"
           >
             <Plus size={16} />
             <span>Create Requirement</span>
@@ -1755,12 +1868,22 @@ export default function RequirementsPage() {
         />
       )}
 
+      {LIFECYCLE_V1 && changeStatusAnchor && projectId && (
+        <ChangeStatusPopover
+          requirement={changeStatusAnchor.requirement}
+          projectId={projectId}
+          anchorEl={changeStatusAnchor.el}
+          onClose={() => setChangeStatusAnchor(null)}
+        />
+      )}
+
       {deleteConfirmation && (
         <DeleteRequirementModal
           isOpen={!!deleteConfirmation}
           requirement={deleteConfirmation}
           hasChildren={requirements.some((r) => r.parentId === deleteConfirmation.id)}
-          linkedFunctionsCount={functions.filter((f) => f.sourceReqId === deleteConfirmation.id).length}
+          linkedFunctionsCount={LINKAGE_V1 ? undefined : functions.filter((f) => f.sourceReqId === deleteConfirmation.id).length}
+          linkedItemsCount={LINKAGE_V1 ? links.filter((l: any) => l.sourceType === 'requirement' && l.sourceId === deleteConfirmation.id).length : undefined}
           onConfirm={handleConfirmDelete}
           onCancel={() => setDeleteConfirmation(null)}
           isDeleting={deleteRequirementMutation.isPending}
@@ -1778,6 +1901,13 @@ export default function RequirementsPage() {
         <SuspectLinksReview
           projectId={projectId}
           onClose={() => setIsSuspectReviewOpen(false)}
+          onCreateChangeRequest={(impactedRefs) => {
+            setSuspectLinksForCR(impactedRefs)
+            setIsSuspectReviewOpen(false)
+            const firstReq = requirements.find((r) => r.id === impactedRefs[0]?.sourceId)
+            setSelectedRequirementForChangeRequest(firstReq || null)
+            setIsChangeRequestModalOpen(true)
+          }}
         />
       )}
 
@@ -1824,22 +1954,34 @@ export default function RequirementsPage() {
         <RequirementQualityPanel
           projectId={projectId}
           onClose={() => setIsQualityPanelOpen(false)}
+          onRequirementClick={(requirementId) => {
+            const req = requirements.find((r) => r.id === requirementId)
+            if (req) {
+              setDetailRequirement(req)
+              setIsQualityPanelOpen(false)
+            }
+          }}
         />
       )}
 
-      {isChangeRequestModalOpen && projectId && selectedRequirementForChangeRequest && (
+      {isChangeRequestModalOpen && projectId && (
         <CreateChangeRequestModal
           isOpen={isChangeRequestModalOpen}
           onClose={() => {
             setIsChangeRequestModalOpen(false)
             setSelectedRequirementForChangeRequest(null)
+            setSuspectLinksForCR(null)
           }}
           projectId={projectId}
-          sourceType="requirement"
-          sourceId={selectedRequirementForChangeRequest.id}
-          sourceName={selectedRequirementForChangeRequest.title}
-          sourceTitle={selectedRequirementForChangeRequest.title}
-          sourceDescription={selectedRequirementForChangeRequest.description}
+          sourceType={selectedRequirementForChangeRequest ? 'requirement' : undefined}
+          sourceId={selectedRequirementForChangeRequest?.id}
+          sourceName={selectedRequirementForChangeRequest?.title}
+          sourceTitle={selectedRequirementForChangeRequest ? (suspectLinksForCR ? `Suspect Links Review (${suspectLinksForCR.length} links)` : selectedRequirementForChangeRequest.title) : undefined}
+          sourceDescription={
+            suspectLinksForCR?.length
+              ? `Created from Suspect Links Review. Impacted traceability: ${suspectLinksForCR.map((r) => `${r.sourceType}:${r.sourceId.substring(0, 8)} -> ${r.targetType}:${r.targetId.substring(0, 8)}`).join('; ')}`
+              : selectedRequirementForChangeRequest?.description
+          }
         />
       )}
       </div>
@@ -1849,6 +1991,7 @@ export default function RequirementsPage() {
         isOpen={!!detailRequirement}
         requirement={detailRequirement}
         projectId={projectId || ''}
+        baselineId={baselineId}
         onClose={() => setDetailRequirement(null)}
         onEdit={(req) => {
           setDetailRequirement(null)

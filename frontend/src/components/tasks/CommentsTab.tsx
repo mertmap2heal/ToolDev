@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Send } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { taskService } from '../../services/task.service'
-import type { TaskComment } from '../../../shared/types/task.types'
+import type { TaskComment } from 'shared/types/task.types'
 import { format } from 'date-fns'
 
 interface CommentsTabProps {

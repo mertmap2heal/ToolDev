@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import { componentService } from '../../services/component.service'
-import type { ComponentTreeNode } from '../../../../shared/types/project.types'
+import type { ComponentTreeNode } from 'shared/types/project.types'
 
 interface PBSSidebarProps {
   onComponentSelect?: (componentId: string | null) => void
@@ -274,7 +274,7 @@ export default function PBSSidebar({ onComponentSelect }: PBSSidebarProps) {
         {/* Children */}
         {hasChildren && isExpanded && (
           <div>
-            {node.children.map((child) => renderTreeNode(child, level + 1))}
+            {node.children?.map((child) => renderTreeNode(child, level + 1))}
           </div>
         )}
       </div>

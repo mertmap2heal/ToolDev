@@ -1,6 +1,6 @@
 import { apiClient } from './api'
-import type { RequirementVersion } from '../../../shared/types/engineering.types'
-import type { ApiResponse } from '../../../shared/types/api.types'
+import type { RequirementVersion } from 'shared/types/engineering.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 export interface VersionComparison {
   versionA: RequirementVersion
