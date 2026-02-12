@@ -16,6 +16,7 @@ import { pbsAdapter } from '../../linkage/adapters/pbsAdapter'
 import { interfaceAdapter } from '../../linkage/adapters/interfaceAdapter'
 import { hazardAdapter } from '../../linkage/adapters/hazardAdapter'
 import { riskAdapter } from '../../linkage/adapters/riskAdapter'
+import { authService } from '../../services/auth.service'
 import type { CreateRequirementDto, Requirement, RequirementType } from 'shared/types/engineering.types'
 import type { ComponentTreeNode } from 'shared/types/project.types'
 
@@ -361,15 +362,13 @@ export default function CreateRequirementModal({
     }
   }, [customTypesData])
 
-  // Fetch stakeholders for owner dropdown (LINKAGE_V1)
-  const { data: stakeholders = [] } = useQuery({
-    queryKey: ['stakeholders-owner', projectId],
-    queryFn: async () => {
-      const results = await stakeholderAdapter.search('', projectId)
-      return results
-    },
-    enabled: isOpen && !!projectId && LINKAGE_V1,
+  // Fetch Admin Panel users for Owner dropdown
+  const { data: adminUsersRes } = useQuery({
+    queryKey: ['admin-users'],
+    queryFn: () => authService.getUsers(),
+    enabled: isOpen,
   })
+  const adminUsers = adminUsersRes?.success ? adminUsersRes.data || [] : []
 
   // Fetch MOCs
   const { data: mocs = [] } = useQuery<Moc[]>({
@@ -989,19 +988,11 @@ export default function CreateRequirementModal({
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
                 <option value="">Select owner</option>
-                {LINKAGE_V1 && stakeholders.length > 0 ? (
-                  stakeholders.map((s) => (
-                    <option key={s.id} value={s.label}>
-                      {s.label}
-                    </option>
-                  ))
-                ) : (
-                  project?.teamMembers?.map((member) => (
-                    <option key={member.userId} value={member.user?.name || member.userId}>
-                      {member.user?.name || member.userId}
-                    </option>
-                  ))
-                )}
+                {adminUsers.map((user) => (
+                  <option key={user.id} value={user.name || user.email}>
+                    {user.name || user.email}
+                  </option>
+                ))}
               </select>
             </div>
             <div>

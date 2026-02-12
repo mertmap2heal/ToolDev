@@ -47,9 +47,20 @@ export const createChangeRequest = async (req: AuthRequest, res: Response) => {
     }
 
     // Generate a simple CR ID
-    // In a real app, this should be atomic, but for now we'll use a count + 1 or timestamp approach to minimize locking complexity
     const count = await prisma.changeRequest.count({ where: { projectId } })
     const crId = `CR-${(count + 1).toString().padStart(4, '0')}`
+
+    // Auto-populate requestedBy if not provided
+    let finalRequestedBy = requestedBy
+    if (!finalRequestedBy && req.userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: req.userId },
+        select: { name: true }
+      })
+      if (user) {
+        finalRequestedBy = user.name
+      }
+    }
 
     const changeRequest = await prisma.changeRequest.create({
       data: {
@@ -60,13 +71,33 @@ export const createChangeRequest = async (req: AuthRequest, res: Response) => {
         sourceType,
         sourceId,
         priority: priority || 'medium',
-        requestedBy: requestedBy || null,
+        requestedBy: finalRequestedBy || 'system',
         owner: owner || null,
         risk: risk || null,
         effort: effort || null,
         justification: justification || null,
-        createdBy: req.userId || 'system', // Assuming auth middleware populates userId
+        createdBy: req.userId || 'system',
         updatedBy: req.userId || 'system',
+        requirementLinks: sourceType === 'requirement' ? {
+          create: {
+            requirementId: sourceId,
+            relationshipType: 'originates_from'
+          }
+        } : undefined,
+      },
+      include: {
+        attachments: true,
+        requirementLinks: {
+          include: {
+            requirement: {
+              select: {
+                id: true,
+                requirementId: true,
+                title: true,
+              }
+            }
+          }
+        },
       },
     })
 
@@ -91,6 +122,17 @@ export const getChangeRequests = async (req: AuthRequest, res: Response) => {
       where: { projectId },
       include: {
         attachments: true,
+        requirementLinks: {
+          include: {
+            requirement: {
+              select: {
+                id: true,
+                requirementId: true,
+                title: true,
+              }
+            }
+          }
+        },
       },
       orderBy: { createdAt: 'desc' },
     })
@@ -119,6 +161,17 @@ export const getChangeRequest = async (req: AuthRequest, res: Response) => {
       },
       include: {
         attachments: true,
+        requirementLinks: {
+          include: {
+            requirement: {
+              select: {
+                id: true,
+                requirementId: true,
+                title: true,
+              }
+            }
+          }
+        },
       },
     })
 

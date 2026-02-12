@@ -259,6 +259,7 @@ model Requirement {
   reviews     RequirementReview[]
   moc         VerMoc?                 @relation(fields: [linkedMocCode], references: [code], onDelete: SetNull)
   certObjectiveLinks CertObjectiveRequirementLink[]
+  changeRequestLinks RequirementChangeRequestLink[]
 
   @@unique([projectId, requirementId])
   @@index([projectId])
@@ -435,6 +436,7 @@ model ChangeRequest {
 
   project     Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   attachments ChangeRequestAttachment[]
+  requirementLinks RequirementChangeRequestLink[]
   
   @@index([projectId])
   @@index([sourceType, sourceId])
@@ -458,6 +460,23 @@ model ChangeRequestAttachment {
 
   @@index([changeRequestId])
   @@index([projectId])
+}
+
+model RequirementChangeRequestLink {
+  id              String   @id @default(uuid())
+  requirementId   String
+  changeRequestId String
+  relationshipType String   @default("originates_from") // originates_from | relates_to
+  note            String?
+  createdBy       String?
+  createdAt       DateTime @default(now())
+
+  requirement     Requirement   @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  changeRequest   ChangeRequest @relation(fields: [changeRequestId], references: [id], onDelete: Cascade)
+
+  @@unique([requirementId, changeRequestId])
+  @@index([requirementId])
+  @@index([changeRequestId])
 }
 
 model SavedView {

@@ -6,6 +6,7 @@ import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
 import { parameterService } from '../../services/parameter.service'
 import { requirementService } from '../../services/requirement.service'
+import { authService } from '../../services/auth.service'
 import type { CreateChangeRequestDto, SystemFunction, Issue, Parameter, Requirement } from 'shared/types/engineering.types'
 
 interface CreateChangeRequestModalProps {
@@ -55,10 +56,10 @@ export default function CreateChangeRequestModal({
   const [selectedSource, setSelectedSource] = useState<SourceItem | null>(
     initialSourceType && initialSourceId && initialSourceName
       ? {
-          id: initialSourceId,
-          type: initialSourceType,
-          name: initialSourceName,
-        }
+        id: initialSourceId,
+        type: initialSourceType,
+        name: initialSourceName,
+      }
       : null
   )
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
@@ -96,6 +97,19 @@ export default function CreateChangeRequestModal({
   const issues = issuesData?.success ? issuesData.data || [] : []
   const parameters = parametersData?.success ? parametersData.data || [] : []
   const requirements = requirementsData?.success ? requirementsData.data || [] : []
+
+  // Fetch current user for Requested By
+  const { data: userData } = useQuery({
+    queryKey: ['current-user'],
+    queryFn: () => authService.getCurrentUser(),
+    enabled: isOpen,
+  })
+
+  useEffect(() => {
+    if (userData?.success && userData?.data && !formData.requestedBy) {
+      setFormData(prev => ({ ...prev, requestedBy: userData.data!.name }))
+    }
+  }, [userData, isOpen])
 
   // Combine all sources into a unified list
   const allSources: SourceItem[] = [
@@ -168,30 +182,30 @@ export default function CreateChangeRequestModal({
           name: initialSourceName || initialSourceTitle || '',
           requirementId: initialSourceType === 'requirement' ? initialSourceId : undefined,
         })
-        setFormData({
+        setFormData(prev => ({
+          ...prev,
           title: initialSourceTitle || '',
           description: initialSourceDescription || '',
           sourceType: initialSourceType,
           sourceId: initialSourceId,
           priority: 'medium',
-          requestedBy: '',
           risk: undefined,
           effort: undefined,
           justification: '',
-        })
+        }))
       } else {
         setSelectedSource(null)
-        setFormData({
+        setFormData(prev => ({
+          ...prev,
           title: '',
           description: '',
           sourceType: 'function',
           sourceId: '',
           priority: 'medium',
-          requestedBy: '',
           risk: undefined,
           effort: undefined,
           justification: '',
-        })
+        }))
       }
       setErrors({})
       setSourceSearchQuery('')
@@ -332,7 +346,17 @@ export default function CreateChangeRequestModal({
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-700 pb-2">
               Change Request Details
             </h3>
-            
+
+            {/* Change Request ID (Auto-assigned) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Change Request ID
+              </label>
+              <div className="px-4 py-2 bg-gray-50 dark:bg-gray-700/30 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-500 dark:text-gray-400 font-mono italic">
+                (Auto-assigned on save)
+              </div>
+            </div>
+
             {/* Source Selection */}
             {initialSourceType && initialSourceId ? (
               <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
@@ -352,15 +376,14 @@ export default function CreateChangeRequestModal({
                   <div className="flex flex-wrap gap-2 mb-2">
                     {selectedSource && (
                       <span
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
-                          selectedSource.type === 'function'
-                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
-                            : selectedSource.type === 'issue'
+                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${selectedSource.type === 'function'
+                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+                          : selectedSource.type === 'issue'
                             ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400'
                             : selectedSource.type === 'requirement'
-                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400'
-                            : 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-                        }`}
+                              ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400'
+                              : 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                          }`}
                       >
                         {selectedSource.type.charAt(0).toUpperCase() + selectedSource.type.slice(1)}: {selectedSource.name}
                         <button
@@ -387,9 +410,8 @@ export default function CreateChangeRequestModal({
                         setShowSourceDropdown(true)
                       }}
                       onFocus={() => setShowSourceDropdown(true)}
-                      className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
-                        errors.sourceId ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                      }`}
+                      className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.sourceId ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                        }`}
                     />
                     {showSourceDropdown && filteredSources.length > 0 && (
                       <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
@@ -401,15 +423,14 @@ export default function CreateChangeRequestModal({
                             className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                           >
                             <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                                source.type === 'function'
-                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
-                                  : source.type === 'issue'
+                              className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${source.type === 'function'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+                                : source.type === 'issue'
                                   ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400'
                                   : source.type === 'requirement'
-                                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400'
-                                  : 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-                              }`}
+                                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400'
+                                    : 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                                }`}
                             >
                               {source.type.charAt(0).toUpperCase() + source.type.slice(1)}
                             </span>
@@ -448,9 +469,8 @@ export default function CreateChangeRequestModal({
                 type="text"
                 value={formData.title}
                 onChange={(e) => handleChange('title', e.target.value)}
-                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${
-                  errors.title ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                }`}
+                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.title ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                  }`}
                 placeholder="Brief summary of the change request"
               />
               {errors.title && <p className="mt-1 text-sm text-red-500">{errors.title}</p>}
@@ -470,9 +490,8 @@ export default function CreateChangeRequestModal({
                 value={formData.description}
                 onChange={(e) => handleChange('description', e.target.value)}
                 rows={5}
-                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none ${
-                  errors.description ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                }`}
+                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none ${errors.description ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                  }`}
                 placeholder="Describe in detail what change is being requested and why it is needed. Include current state, proposed change, reason for change, and relevant context."
               />
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -509,7 +528,7 @@ export default function CreateChangeRequestModal({
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
               Assessment & Priority
             </h3>
-            
+
             {/* Priority */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -577,9 +596,13 @@ export default function CreateChangeRequestModal({
                 type="text"
                 value={formData.requestedBy || ''}
                 onChange={(e) => handleChange('requestedBy', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="Enter requester name (optional)"
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-white"
+                placeholder="Name of requester"
+                readOnly
               />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Automatically pre-filled with your account name
+              </p>
             </div>
           </div>
 
@@ -613,7 +636,7 @@ export default function CreateChangeRequestModal({
                   PDF, DOC, XLS, PPT, Images (max 10MB per file)
                 </span>
               </div>
-              
+
               {selectedFiles.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {selectedFiles.map((file, index) => (

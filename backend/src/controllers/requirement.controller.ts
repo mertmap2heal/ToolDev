@@ -252,6 +252,11 @@ export const getRequirements = async (req: AuthRequest, res: Response) => {
         attachments: {
           orderBy: { createdAt: 'desc' },
         },
+        _count: {
+          select: {
+            changeRequestLinks: true,
+          },
+        },
       },
       orderBy: [
         { parentId: 'asc' },
@@ -309,6 +314,19 @@ export const getRequirement = async (req: AuthRequest, res: Response) => {
         },
         attachments: {
           orderBy: { createdAt: 'desc' },
+        },
+        changeRequestLinks: {
+          include: {
+            changeRequest: {
+              select: {
+                id: true,
+                crId: true,
+                title: true,
+                status: true,
+                priority: true,
+              },
+            },
+          },
         },
       },
     })

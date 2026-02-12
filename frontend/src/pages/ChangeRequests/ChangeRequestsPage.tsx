@@ -9,6 +9,9 @@ import { format } from 'date-fns'
 import clsx from 'clsx'
 import type { ChangeRequest } from 'shared/types/engineering.types'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
+import RequirementDetailDrawer from '../../components/requirements/RequirementDetailDrawer'
+import { requirementService } from '../../services/requirement.service'
+import type { Requirement } from 'shared/types/engineering.types'
 
 type SortField = 'crId' | 'title' | 'priority' | 'status' | 'updatedAt' | 'requestedBy'
 type SortOrder = 'asc' | 'desc'
@@ -21,6 +24,10 @@ export default function ChangeRequestsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [selectedChangeRequest, setSelectedChangeRequest] = useState<ChangeRequest | null>(null)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+
+  // Requirement Drawer State
+  const [selectedRequirement, setSelectedRequirement] = useState<Requirement | null>(null)
+  const [isReqDrawerOpen, setIsReqDrawerOpen] = useState(false)
 
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string[]>([])
@@ -44,6 +51,26 @@ export default function ChangeRequestsPage() {
     },
     enabled: !!projectId,
   })
+
+  // Fetch Requirements for ID mapping
+  const { data: requirements = [] } = useQuery({
+    queryKey: ['requirements', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const response = await requirementService.getRequirements(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId,
+  })
+
+  // Requirement ID Map for quick lookup
+  const reqIdMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    requirements.forEach(req => {
+      map[req.id] = req.requirementId || req.id
+    })
+    return map
+  }, [requirements])
 
   // Delete Mutation
   const deleteMutation = useMutation({
@@ -102,6 +129,15 @@ export default function ChangeRequestsPage() {
   const handleRowClick = (cr: ChangeRequest) => {
     setSelectedChangeRequest(cr)
     setIsDrawerOpen(true)
+  }
+
+  const handleReqClick = (e: React.MouseEvent, reqId: string) => {
+    e.stopPropagation()
+    const req = requirements.find(r => r.id === reqId)
+    if (req) {
+      setSelectedRequirement(req)
+      setIsReqDrawerOpen(true)
+    }
   }
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -310,6 +346,9 @@ export default function ChangeRequestsPage() {
                       <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => handleSort('title')}>
                         <div className="flex items-center gap-1">Title <ArrowUpDown size={12} className="opacity-50" /></div>
                       </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
+                        Source
+                      </th>
                       <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => handleSort('status')}>
                         <div className="flex items-center gap-1">Status <ArrowUpDown size={12} className="opacity-50" /></div>
                       </th>
@@ -346,8 +385,36 @@ export default function ChangeRequestsPage() {
                           {cr.crId || <span className="text-gray-300">-</span>}
                         </td>
                         <td className="px-4 py-3 max-w-md">
-                          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{cr.title}</div>
                           <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{cr.description}</div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                          {cr.requirementLinks && cr.requirementLinks.length > 0 ? (
+                            <div className="flex flex-col gap-1">
+                              {cr.requirementLinks.map(link => (
+                                <button
+                                  key={link.requirement.id}
+                                  onClick={(e) => handleReqClick(e, link.requirement.id)}
+                                  className="text-left font-mono text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+                                >
+                                  {link.requirement.requirementId || link.requirement.id.substring(0, 8)}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-1">
+                              <span className="capitalize">{cr.sourceType}</span>
+                              {cr.sourceType === 'requirement' && cr.sourceId ? (
+                                <button
+                                  onClick={(e) => handleReqClick(e, cr.sourceId!)}
+                                  className="text-left font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                                >
+                                  {reqIdMap[cr.sourceId] || cr.sourceId.substring(0, 8)}
+                                </button>
+                              ) : (
+                                <span className="font-mono text-xs text-gray-400">{cr.sourceId ? cr.sourceId.substring(0, 8) : '-'}</span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5">
@@ -392,6 +459,16 @@ export default function ChangeRequestsPage() {
             setIsCreateModalOpen(true)
           }}
           onDelete={handleDelete}
+        />
+
+        {/* Requirement Detail Drawer */}
+        <RequirementDetailDrawer
+          isOpen={isReqDrawerOpen}
+          requirement={selectedRequirement}
+          projectId={projectId!}
+          onClose={() => setIsReqDrawerOpen(false)}
+          onEdit={() => { }}
+          onDelete={() => { }}
         />
       </div>
     </div>

@@ -352,6 +352,7 @@ export interface ChangeRequest {
   createdAt: string
   updatedAt: string
   attachments?: ChangeRequestAttachment[]
+  requirementLinks?: { requirement: { id: string; requirementId?: string; title: string } }[]
 }
 
 export interface CreateChangeRequestDto {

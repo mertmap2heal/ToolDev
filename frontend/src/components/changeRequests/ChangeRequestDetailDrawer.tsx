@@ -273,19 +273,40 @@ export default function ChangeRequestDetailDrawer({
                         <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                             <div className="flex items-center justify-between mb-2">
                                 <h3 className="text-sm font-medium text-gray-900 dark:text-white">Target Item</h3>
-                                <a href="#" className="hidden text-xs text-blue-600 hover:text-blue-800 dark:hover:text-blue-400 flex items-center gap-0.5">
-                                    View Source <Link2 size={10} />
-                                </a>
                             </div>
-                            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 flex items-start gap-3">
-                                <div className="p-2 bg-white dark:bg-gray-800 rounded shadow-sm">
-                                    <FileText size={18} className="text-blue-500" />
-                                </div>
-                                <div>
-                                    <div className="text-xs text-gray-500 uppercase font-semibold">{displayCR.sourceType}</div>
-                                    <div className="text-sm font-medium text-gray-900 dark:text-white">{displayCR.sourceId}</div>
-                                    {/* Note: We would need to fetch the source item title to show it here */}
-                                </div>
+                            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                                {displayCR.requirementLinks && displayCR.requirementLinks.length > 0 ? (
+                                    <div className="space-y-2">
+                                        {displayCR.requirementLinks.map(link => (
+                                            <div key={link.requirement.id} className="flex items-start gap-3">
+                                                <div className="p-2 bg-white dark:bg-gray-800 rounded shadow-sm">
+                                                    <FileText size={18} className="text-blue-500" />
+                                                </div>
+                                                <div>
+                                                    <div className="text-xs text-gray-500 uppercase font-semibold">Requirement</div>
+                                                    <a
+                                                        href={`/projects/${projectId}/requirements?highlight=${link.requirement.id}`}
+                                                        className="text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1"
+                                                    >
+                                                        {link.requirement.requirementId || link.requirement.id.substring(0, 8)}
+                                                        <Link2 size={12} />
+                                                    </a>
+                                                    <div className="text-xs text-gray-500 truncate max-w-[200px]">{link.requirement.title}</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="flex items-start gap-3">
+                                        <div className="p-2 bg-white dark:bg-gray-800 rounded shadow-sm">
+                                            <FileText size={18} className="text-blue-500" />
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-gray-500 uppercase font-semibold">{displayCR.sourceType}</div>
+                                            <div className="text-sm font-medium text-gray-900 dark:text-white">{displayCR.sourceId}</div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </>
