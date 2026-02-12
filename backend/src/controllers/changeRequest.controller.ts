@@ -19,7 +19,18 @@ if (!fs.existsSync(uploadsDir)) {
 export const createChangeRequest = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
-    const { title, description, sourceType, sourceId, priority, requestedBy, risk, effort, justification } = req.body
+    const {
+      title,
+      description,
+      sourceType,
+      sourceId,
+      priority,
+      requestedBy,
+      owner,
+      risk,
+      effort,
+      justification
+    } = req.body
 
     if (!title || !description || !sourceType || !sourceId) {
       return res.status(400).json({
@@ -35,18 +46,27 @@ export const createChangeRequest = async (req: AuthRequest, res: Response) => {
       })
     }
 
+    // Generate a simple CR ID
+    // In a real app, this should be atomic, but for now we'll use a count + 1 or timestamp approach to minimize locking complexity
+    const count = await prisma.changeRequest.count({ where: { projectId } })
+    const crId = `CR-${(count + 1).toString().padStart(4, '0')}`
+
     const changeRequest = await prisma.changeRequest.create({
       data: {
         projectId,
+        crId,
         title,
         description,
         sourceType,
         sourceId,
         priority: priority || 'medium',
         requestedBy: requestedBy || null,
+        owner: owner || null,
         risk: risk || null,
         effort: effort || null,
         justification: justification || null,
+        createdBy: req.userId || 'system', // Assuming auth middleware populates userId
+        updatedBy: req.userId || 'system',
       },
     })
 
@@ -125,7 +145,19 @@ export const getChangeRequest = async (req: AuthRequest, res: Response) => {
 export const updateChangeRequest = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId, id } = req.params
-    const { title, description, priority, status, reviewedBy, reviewComments } = req.body
+    const {
+      title,
+      description,
+      priority,
+      status,
+      reviewedBy,
+      reviewComments,
+      owner,
+      requestedBy,
+      risk,
+      effort,
+      justification
+    } = req.body
 
     const changeRequest = await prisma.changeRequest.findFirst({
       where: {
@@ -150,6 +182,12 @@ export const updateChangeRequest = async (req: AuthRequest, res: Response) => {
         ...(status && { status }),
         ...(reviewedBy && { reviewedBy }),
         ...(reviewComments !== undefined && { reviewComments }),
+        ...(owner && { owner }),
+        ...(requestedBy && { requestedBy }),
+        ...(risk && { risk }),
+        ...(effort && { effort }),
+        ...(justification && { justification }),
+        updatedBy: req.userId || 'system',
       },
     })
 

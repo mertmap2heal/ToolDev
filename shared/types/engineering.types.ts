@@ -333,6 +333,7 @@ export interface ChangeRequestAttachment {
 export interface ChangeRequest {
   id: string
   projectId: string
+  crId?: string
   title: string
   description: string
   sourceType: 'function' | 'issue' | 'parameter' | 'requirement'
@@ -340,11 +341,14 @@ export interface ChangeRequest {
   priority: 'low' | 'medium' | 'high' | 'critical'
   status: 'pending' | 'approved' | 'rejected' | 'in-review'
   requestedBy?: string
+  owner?: string
   reviewedBy?: string
   reviewComments?: string
   risk?: 'low' | 'medium' | 'high' | 'critical'
   effort?: 'low' | 'medium' | 'high'
   justification?: string
+  createdBy?: string
+  updatedBy?: string
   createdAt: string
   updatedAt: string
   attachments?: ChangeRequestAttachment[]
@@ -357,6 +361,7 @@ export interface CreateChangeRequestDto {
   sourceId: string
   priority: 'low' | 'medium' | 'high' | 'critical'
   requestedBy?: string
+  owner?: string
   risk?: 'low' | 'medium' | 'high' | 'critical'
   effort?: 'low' | 'medium' | 'high'
   justification?: string

@@ -1,37 +1,38 @@
-import { useState, useEffect } from 'react'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { Search, X, Filter, ChevronDown, ChevronUp, FileText, ExternalLink, Plus } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
-import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
+import { useState, useMemo } from 'react'
+import { Plus, Filter, Download, Columns, Search, RefreshCw, ChevronDown, ChevronRight, ArrowUpDown, MoreHorizontal, FileText, AlertCircle, CheckCircle, Clock } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useParams } from 'react-router-dom'
 import { changeRequestService } from '../../services/changeRequest.service'
-import { functionService } from '../../services/function.service'
-import { issueService } from '../../services/issue.service'
-import { parameterService } from '../../services/parameter.service'
-import ChangeRequestDetailsModal from '../../components/changeRequests/ChangeRequestDetailsModal'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
-import type { ChangeRequest } from 'shared/types/engineering.types'
-import type { SystemFunction } from 'shared/types/engineering.types'
-import type { Issue } from 'shared/types/engineering.types'
-import type { Parameter } from 'shared/types/engineering.types'
-import clsx from 'clsx'
+import ChangeRequestDetailDrawer from '../../components/changeRequests/ChangeRequestDetailDrawer'
 import { format } from 'date-fns'
+import clsx from 'clsx'
+import type { ChangeRequest } from 'shared/types/engineering.types'
+import ProjectNavigation from '../../components/projects/ProjectNavigation'
+
+type SortField = 'crId' | 'title' | 'priority' | 'status' | 'updatedAt' | 'requestedBy'
+type SortOrder = 'asc' | 'desc'
 
 export default function ChangeRequestsPage() {
   const { projectId } = useParams<{ projectId: string }>()
-  const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const focusType = searchParams.get('focusType')
-  const focusId = searchParams.get('focusId')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [priorityFilter, setPriorityFilter] = useState<string>('all')
-  const [sourceTypeFilter, setSourceTypeFilter] = useState<string>('all')
-  const [selectedChangeRequest, setSelectedChangeRequest] = useState<ChangeRequest | null>(null)
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const queryClient = useQueryClient()
 
-  const { data: changeRequests = [], isLoading } = useQuery({
+  // State
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [selectedChangeRequest, setSelectedChangeRequest] = useState<ChangeRequest | null>(null)
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string[]>([])
+  const [priorityFilter, setPriorityFilter] = useState<string[]>([])
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false)
+
+  const [sortField, setSortField] = useState<SortField>('updatedAt')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
+
+  // Data Fetching
+  const { data: changeRequests = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['change-requests', projectId],
     queryFn: async () => {
       if (!projectId) throw new Error('Project ID required')
@@ -44,406 +45,355 @@ export default function ChangeRequestsPage() {
     enabled: !!projectId,
   })
 
-  // Fetch all source items for linking
-  const { data: functionsData } = useQuery({
-    queryKey: ['functions', projectId],
-    queryFn: async () => {
-      if (!projectId) return []
-      const response = await functionService.getFunctions(projectId)
-      return response.success && response.data ? response.data : []
+  // Delete Mutation
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => {
+      if (!projectId) throw new Error('Project ID required')
+      return changeRequestService.deleteChangeRequest(projectId, id)
     },
-    enabled: !!projectId,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['change-requests', projectId] })
+      if (selectedChangeRequest) {
+        setIsDrawerOpen(false)
+        setSelectedChangeRequest(null)
+      }
+    },
   })
 
-  const { data: issuesData } = useQuery({
-    queryKey: ['issues', projectId],
-    queryFn: async () => {
-      if (!projectId) return []
-      const response = await issueService.getIssues(projectId)
-      return response.success && response.data ? response.data : []
-    },
-    enabled: !!projectId,
-  })
+  // Filtering & Sorting
+  const filteredChangeRequests = useMemo(() => {
+    return changeRequests.filter((cr) => {
+      // Search
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase()
+        const matchTitle = cr.title.toLowerCase().includes(query)
+        const matchDesc = cr.description.toLowerCase().includes(query)
+        const matchId = cr.crId?.toLowerCase().includes(query) || false
+        if (!matchTitle && !matchDesc && !matchId) return false
+      }
 
-  const { data: parametersData } = useQuery({
-    queryKey: ['parameters', projectId],
-    queryFn: async () => {
-      if (!projectId) return []
-      const response = await parameterService.getParameters(projectId)
-      return response.success && response.data ? response.data : []
-    },
-    enabled: !!projectId,
-  })
+      // Filters
+      if (statusFilter.length > 0 && !statusFilter.includes(cr.status)) return false
+      if (priorityFilter.length > 0 && !priorityFilter.includes(cr.priority)) return false
 
-  // Ensure arrays with fallback
-  const functions = Array.isArray(functionsData) ? functionsData : []
-  const issues = Array.isArray(issuesData) ? issuesData : []
-  const parameters = Array.isArray(parametersData) ? parametersData : []
+      return true
+    }).sort((a, b) => {
+      const aValue = a[sortField] || ''
+      const bValue = b[sortField] || ''
 
-  const getSourceItem = (cr: ChangeRequest) => {
-    if (cr.sourceType === 'function') {
-      if (!Array.isArray(functions)) return null
-      const func = functions.find((f) => f.id === cr.sourceId)
-      return func ? { type: 'function', item: func, name: `${func.functionId || 'N/A'}: ${func.name}` } : null
-    } else if (cr.sourceType === 'issue') {
-      if (!Array.isArray(issues)) return null
-      const issue = issues.find((i) => i.id === cr.sourceId)
-      return issue ? { type: 'issue', item: issue, name: issue.title } : null
-    } else if (cr.sourceType === 'parameter') {
-      if (!Array.isArray(parameters)) return null
-      const param = parameters.find((p) => p.id === cr.sourceId)
-      return param ? { type: 'parameter', item: param, name: param.name } : null
-    }
-    return null
-  }
+      if (sortOrder === 'asc') {
+        return aValue > bValue ? 1 : -1
+      } else {
+        return aValue < bValue ? 1 : -1
+      }
+    })
+  }, [changeRequests, searchQuery, statusFilter, priorityFilter, sortField, sortOrder])
 
-  const handleSourceClick = (cr: ChangeRequest) => {
-    if (!projectId) return
-    if (cr.sourceType === 'function') {
-      navigate(`/projects/${projectId}/functions`)
-    } else if (cr.sourceType === 'issue') {
-      navigate(`/projects/${projectId}/issues`)
-    } else if (cr.sourceType === 'parameter') {
-      navigate(`/projects/${projectId}/parameters`)
+  // Handlers
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortOrder('desc') // Default to desc for new field
     }
   }
 
+  const handleRowClick = (cr: ChangeRequest) => {
+    setSelectedChangeRequest(cr)
+    setIsDrawerOpen(true)
+  }
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedRows(new Set(filteredChangeRequests.map(cr => cr.id)))
+    } else {
+      setSelectedRows(new Set())
+    }
+  }
+
+  const handleSelectRow = (id: string, e: React.SyntheticEvent) => {
+    e.stopPropagation()
+    const newSelected = new Set(selectedRows)
+    if (newSelected.has(id)) {
+      newSelected.delete(id)
+    } else {
+      newSelected.add(id)
+    }
+    setSelectedRows(newSelected)
+  }
+
+  const handleDelete = (cr: ChangeRequest) => {
+    if (window.confirm(`Are you sure you want to delete ${cr.crId || 'this change request'}?`)) {
+      deleteMutation.mutate(cr.id)
+    }
+  }
+
+  // UI Helpers
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'critical':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
-      case 'high':
-        return 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400'
-      case 'medium':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
-      case 'low':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+      case 'critical': return 'text-red-600 bg-red-50 dark:bg-red-900/20'
+      case 'high': return 'text-orange-600 bg-orange-50 dark:bg-orange-900/20'
+      case 'medium': return 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20'
+      case 'low': return 'text-green-600 bg-green-50 dark:bg-green-900/20'
+      default: return 'text-gray-600 bg-gray-50 dark:bg-gray-800'
     }
   }
 
-  const getStatusColor = (status: string) => {
+  const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
-      case 'in-review':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
-      case 'approved':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-      case 'rejected':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+      case 'approved': return <CheckCircle size={14} className="text-green-500" />
+      case 'rejected': return <AlertCircle size={14} className="text-red-500" />
+      case 'in-review': return <Clock size={14} className="text-blue-500" />
+      default: return <Clock size={14} className="text-gray-400" />
     }
   }
-
-  const filteredChangeRequests = changeRequests.filter((cr) => {
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
-      const matchesTitle = cr.title.toLowerCase().includes(query)
-      const matchesDescription = cr.description.toLowerCase().includes(query)
-      const matchesRequestedBy = cr.requestedBy?.toLowerCase().includes(query) || false
-      const sourceItem = getSourceItem(cr)
-      const matchesSource = sourceItem?.name.toLowerCase().includes(query) || false
-      if (!matchesTitle && !matchesDescription && !matchesRequestedBy && !matchesSource) {
-        return false
-      }
-    }
-
-    if (statusFilter !== 'all' && cr.status !== statusFilter) {
-      return false
-    }
-
-    if (priorityFilter !== 'all' && cr.priority !== priorityFilter) {
-      return false
-    }
-
-    if (sourceTypeFilter !== 'all' && cr.sourceType !== sourceTypeFilter) {
-      return false
-    }
-
-    return true
-  })
-
-  const uniqueStatuses = Array.from(new Set(changeRequests.map((cr) => cr.status)))
-  const uniquePriorities = Array.from(new Set(changeRequests.map((cr) => cr.priority)))
-  const uniqueSourceTypes = Array.from(new Set(changeRequests.map((cr) => cr.sourceType)))
-
-  useEffect(() => {
-    if (focusType === 'change_request' && focusId && changeRequests.length > 0) {
-      const cr = changeRequests.find((c) => c.id === focusId)
-      if (cr) setSelectedChangeRequest(cr)
-    }
-  }, [focusType, focusId, changeRequests])
 
   return (
-    <div className="space-y-6">
-      <ProjectNavigation />
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Change Requests</h2>
-        <div className="flex items-center gap-3">
-          {projectId && <SafetyLinkPanel variant="impact-status" badge="Pending" />}
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
-          >
-            <Plus size={16} />
-            <span>Create a new change request</span>
-          </button>
-        </div>
+    <div className="h-[calc(100vh-4rem)] flex flex-col">
+      <div className="flex-shrink-0 pr-6">
+        <ProjectNavigation />
       </div>
 
-      {/* Search */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-          <input
-            type="text"
-            placeholder="Search change requests..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-            >
-              <X size={16} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-        <button
-          onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
-          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <Filter size={18} className="text-gray-600 dark:text-gray-400" />
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Filters</span>
-          </div>
-          {isFiltersExpanded ? (
-            <ChevronUp size={18} className="text-gray-600 dark:text-gray-400" />
-          ) : (
-            <ChevronDown size={18} className="text-gray-600 dark:text-gray-400" />
-          )}
-        </button>
-        {isFiltersExpanded && (
-          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Status Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="all">All Statuses</option>
-                  {uniqueStatuses.map((status) => (
-                    <option key={status} value={status}>
-                      {status.charAt(0).toUpperCase() + status.slice(1).replace('-', ' ')}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Priority Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Priority</label>
-                <select
-                  value={priorityFilter}
-                  onChange={(e) => setPriorityFilter(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="all">All Priorities</option>
-                  {uniquePriorities.map((priority) => (
-                    <option key={priority} value={priority}>
-                      {priority.charAt(0).toUpperCase() + priority.slice(1)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Source Type Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Source Type</label>
-                <select
-                  value={sourceTypeFilter}
-                  onChange={(e) => setSourceTypeFilter(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="all">All Source Types</option>
-                  {uniqueSourceTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {type.charAt(0).toUpperCase() + type.slice(1)}
-                    </option>
-                  ))}
-                </select>
-              </div>
+      <div className="flex flex-1 min-h-0">
+        <div className="flex-1 overflow-y-auto space-y-6 pr-6">
+          {/* Header / Toolbar */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Change Requests</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Manage and track changes to requirements and design artifacts.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+                <Download size={16} />
+                Export
+              </button>
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
+              >
+                <Plus size={16} />
+                New Change Request
+              </button>
             </div>
           </div>
-        )}
-      </div>
 
-      {/* Change Requests Table */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Title
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Source
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Priority
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Requested By
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Created
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                    Loading change requests...
-                  </td>
-                </tr>
-              ) : filteredChangeRequests.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                    No change requests found
-                  </td>
-                </tr>
-              ) : (
-                filteredChangeRequests.map((cr) => {
-                  const sourceItem = getSourceItem(cr)
-                  const sourceFunction = cr.sourceType === 'function' && Array.isArray(functions) ? functions.find((f) => f.id === cr.sourceId) : null
-                  const sourceIssue = cr.sourceType === 'issue' && Array.isArray(issues) ? issues.find((i) => i.id === cr.sourceId) : null
-                  const sourceParameter = cr.sourceType === 'parameter' && Array.isArray(parameters) ? parameters.find((p) => p.id === cr.sourceId) : null
-                  
-                  return (
-                    <tr
-                      key={cr.id}
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        setSelectedChangeRequest(cr)
-                      }}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors cursor-pointer"
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col">
-                          <span className="font-medium text-gray-900 dark:text-white">{cr.title}</span>
-                          {cr.description && (
-                            <span className="text-sm text-gray-500 dark:text-gray-400 line-clamp-1 mt-1">
-                              {cr.description}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                        {sourceItem ? (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleSourceClick(cr)
-                            }}
-                            className="flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer group"
-                          >
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400">
-                              {cr.sourceType.charAt(0).toUpperCase() + cr.sourceType.slice(1)}
-                            </span>
-                            <span className="font-medium">{sourceItem.name}</span>
-                            <ExternalLink size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </button>
-                        ) : (
-                          <span className="text-gray-400 dark:text-gray-500">
-                            {cr.sourceType}: {cr.sourceId.substring(0, 8)}...
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={clsx(
-                            'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                            getPriorityColor(cr.priority)
-                          )}
-                        >
-                          {cr.priority.charAt(0).toUpperCase() + cr.priority.slice(1)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={clsx(
-                            'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
-                            getStatusColor(cr.status)
-                          )}
-                        >
-                          {cr.status.charAt(0).toUpperCase() + cr.status.slice(1).replace('-', ' ')}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                        {cr.requestedBy || '—'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                        {format(new Date(cr.createdAt), 'MMM dd, yyyy')}
-                      </td>
+          {/* Search & Filters Card */}
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+            <div className="flex items-center gap-4">
+              <div className="relative flex-1">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search change requests..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+                  className={clsx(
+                    "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors border",
+                    isFiltersOpen || statusFilter.length > 0 || priorityFilter.length > 0
+                      ? "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600"
+                  )}
+                >
+                  <Filter size={16} />
+                  Filters
+                  {(statusFilter.length > 0 || priorityFilter.length > 0) && (
+                    <span className="bg-blue-600 text-white text-xs px-1.5 rounded-full">
+                      {statusFilter.length + priorityFilter.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => refetch()}
+                  className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                  title="Refresh"
+                >
+                  <RefreshCw size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Filters Accordion */}
+            {isFiltersOpen && (
+              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 grid grid-cols-4 gap-6 animate-in slide-in-from-top-2 duration-200">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Status</label>
+                  <div className="space-y-1">
+                    {['pending', 'in-review', 'approved', 'rejected'].map(status => (
+                      <label key={status} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={statusFilter.includes(status)}
+                          onChange={(e) => {
+                            if (e.target.checked) setStatusFilter([...statusFilter, status])
+                            else setStatusFilter(statusFilter.filter(s => s !== status))
+                          }}
+                          className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="capitalize">{status.replace('-', ' ')}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Priority</label>
+                  <div className="space-y-1">
+                    {['low', 'medium', 'high', 'critical'].map(p => (
+                      <label key={p} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={priorityFilter.includes(p)}
+                          onChange={(e) => {
+                            if (e.target.checked) setPriorityFilter([...priorityFilter, p])
+                            else setPriorityFilter(priorityFilter.filter(s => s !== p))
+                          }}
+                          className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="capitalize">{p}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Table Content */}
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+            {isLoading ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : filteredChangeRequests.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 text-center">
+                <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-full mb-4">
+                  <Filter size={32} className="text-gray-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">No change requests found</h3>
+                <p className="text-gray-500 dark:text-gray-400 max-w-sm">
+                  {searchQuery || statusFilter.length > 0 ? "Try adjusting your filters or search query." : "Get started by creating a new change request."}
+                </p>
+                {!searchQuery && statusFilter.length === 0 && (
+                  <button
+                    onClick={() => setIsCreateModalOpen(true)}
+                    className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Create Change Request
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                    <tr>
+                      <th className="w-10 px-4 py-3">
+                        <input
+                          type="checkbox"
+                          className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                          checked={selectedRows.size > 0 && selectedRows.size === filteredChangeRequests.length}
+                          onChange={handleSelectAll}
+                        />
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => handleSort('crId')}>
+                        <div className="flex items-center gap-1">ID <ArrowUpDown size={12} className="opacity-50" /></div>
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => handleSort('title')}>
+                        <div className="flex items-center gap-1">Title <ArrowUpDown size={12} className="opacity-50" /></div>
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => handleSort('status')}>
+                        <div className="flex items-center gap-1">Status <ArrowUpDown size={12} className="opacity-50" /></div>
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => handleSort('priority')}>
+                        <div className="flex items-center gap-1">Priority <ArrowUpDown size={12} className="opacity-50" /></div>
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => handleSort('requestedBy')}>
+                        <div className="flex items-center gap-1">Requested By <ArrowUpDown size={12} className="opacity-50" /></div>
+                      </th>
+                      <th className="px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => handleSort('updatedAt')}>
+                        <div className="flex items-center gap-1">Updated <ArrowUpDown size={12} className="opacity-50" /></div>
+                      </th>
                     </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
+                    {filteredChangeRequests.map((cr) => (
+                      <tr
+                        key={cr.id}
+                        onClick={() => handleRowClick(cr)}
+                        className={clsx(
+                          "group hover:bg-blue-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer",
+                          selectedChangeRequest?.id === cr.id ? "bg-blue-50 dark:bg-gray-700/50" : ""
+                        )}
+                      >
+                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                            checked={selectedRows.has(cr.id)}
+                            onChange={(e) => handleSelectRow(cr.id, e)}
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-sm font-mono text-gray-600 dark:text-gray-400">
+                          {cr.crId || <span className="text-gray-300">-</span>}
+                        </td>
+                        <td className="px-4 py-3 max-w-md">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{cr.title}</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{cr.description}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5">
+                            {getStatusIcon(cr.status)}
+                            <span className="text-sm text-gray-700 dark:text-gray-300 capitalize">{cr.status.replace('-', ' ')}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={clsx("px-2 py-0.5 rounded text-xs font-medium capitalize", getPriorityColor(cr.priority))}>
+                            {cr.priority}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                          {cr.requestedBy || 'Unknown'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                          {format(new Date(cr.updatedAt), 'MMM d, yyyy')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Modals placed within scrolling container like RequirementsPage */}
+          <CreateChangeRequestModal
+            isOpen={isCreateModalOpen}
+            onClose={() => setIsCreateModalOpen(false)}
+            projectId={projectId!}
+          />
         </div>
-      </div>
 
-      {/* Change Request Details Modal */}
-      {selectedChangeRequest && (
-        <ChangeRequestDetailsModal
-          isOpen={!!selectedChangeRequest}
-          onClose={() => setSelectedChangeRequest(null)}
+        {/* Detail Drawer - Sibling to scrolling content */}
+        <ChangeRequestDetailDrawer
+          isOpen={isDrawerOpen}
           changeRequest={selectedChangeRequest}
-          sourceFunction={
-            selectedChangeRequest.sourceType === 'function'
-              ? functions.find((f) => f.id === selectedChangeRequest.sourceId) || null
-              : null
-          }
-          sourceIssue={
-            selectedChangeRequest.sourceType === 'issue'
-              ? issues.find((i) => i.id === selectedChangeRequest.sourceId) || null
-              : null
-          }
-          sourceParameter={
-            selectedChangeRequest.sourceType === 'parameter'
-              ? parameters.find((p) => p.id === selectedChangeRequest.sourceId) || null
-              : null
-          }
+          projectId={projectId!}
+          onClose={() => setIsDrawerOpen(false)}
+          onEdit={(cr) => {
+            setIsCreateModalOpen(true)
+          }}
+          onDelete={handleDelete}
         />
-      )}
-
-      {/* Create Change Request Modal */}
-      {projectId && (
-        <CreateChangeRequestModal
-          isOpen={isCreateModalOpen}
-          onClose={() => setIsCreateModalOpen(false)}
-          projectId={projectId}
-        />
-      )}
+      </div>
     </div>
   )
 }
