@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as adminService from '../../services/admin.service'
 import { authService, setStoredAdminProfile } from '../../services/auth.service'
 import { projectService } from '../../services/project.service'
@@ -16,6 +16,7 @@ interface UserEditDrawerProps {
 }
 
 export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers }: UserEditDrawerProps) {
+  const queryClient = useQueryClient()
   const [status, setStatus] = useState<AdminUser['status']>(user.status)
   const [inviteEmail, setInviteEmail] = useState<string>(user.inviteEmail ?? '')
   const [projects, setProjects] = useState<string[]>(user.projects)
@@ -48,6 +49,21 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
     queryKey: ['admin', 'authorities'],
     queryFn: () => adminService.getAuthorities(),
   })
+  const { data: engRoles = [] } = useQuery({
+    queryKey: ['admin', 'engineeringRoles'],
+    queryFn: () => adminService.getEngineeringRoles(),
+  })
+  const [selectedEngRoles, setSelectedEngRoles] = useState<Set<string>>(new Set())
+
+  // Initialize engineering roles from fetched data
+  useEffect(() => {
+    if (engRoles.length > 0) {
+      const userEngRoleIds = engRoles
+        .filter((r) => r.assignedUsers?.some((u) => u.id === user.id))
+        .map((r) => r.id)
+      setSelectedEngRoles(new Set(userEngRoleIds))
+    }
+  }, [engRoles, user.id])
 
   const toggleProject = (id: string) => {
     setProjects((prev) =>
@@ -63,6 +79,14 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
     setAuthorities((prev) =>
       prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]
     )
+  }
+  const toggleEngRole = (id: string) => {
+    setSelectedEngRoles((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   const handleSaveEmail = async () => {
@@ -144,6 +168,22 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
         authorities,
         permissions,
       })
+
+      // Save engineering role assignments via API
+      const prevEngIds = new Set(
+        engRoles.filter((r) => r.assignedUsers?.some((u) => u.id === user.id)).map((r) => r.id)
+      )
+      for (const roleId of selectedEngRoles) {
+        if (!prevEngIds.has(roleId)) {
+          await adminService.assignEngineeringRole(roleId, [user.id])
+        }
+      }
+      for (const roleId of prevEngIds) {
+        if (!selectedEngRoles.has(roleId)) {
+          await adminService.unassignEngineeringRole(roleId, [user.id])
+        }
+      }
+      queryClient.invalidateQueries({ queryKey: ['admin', 'engineeringRoles'] })
       onSaved()
     } finally {
       setSaving(false)
@@ -259,6 +299,27 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
                     type="checkbox"
                     checked={roles.includes(r.id)}
                     onChange={() => toggleRole(r.id)}
+                    className="rounded text-blue-600"
+                  />
+                  <span className="text-sm text-gray-900 dark:text-gray-100">{r.name}</span>
+                </label>
+              ))}
+            </div>
+          </section>
+          <section>
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+              Roles
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {engRoles.map((r) => (
+                <label
+                  key={r.id}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-900 dark:text-white"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedEngRoles.has(r.id)}
+                    onChange={() => toggleEngRole(r.id)}
                     className="rounded text-blue-600"
                   />
                   <span className="text-sm text-gray-900 dark:text-gray-100">{r.name}</span>

@@ -2,6 +2,19 @@ import { useLifecycleStore } from '../store/lifecycleStore'
 import { useStatusDefinitionsStore } from '../store/statusDefinitionsStore'
 import { apiClient } from './api'
 
+export interface LifecycleSummary {
+  id: string
+  name: string
+  displayName?: string
+  scope: 'standard' | 'organization' | 'project'
+  version: string
+  applicableItems: string[]
+  defaultStatusId: string
+  description?: string
+  tags?: string[]
+  isActive: boolean
+}
+
 export interface ApplicableLifecycle {
   lifecycleId: string
   defaultStatusId: string
@@ -43,6 +56,65 @@ export const lifecycleService = {
     }
 
     return this.getApplicableLifecycleFromStore(itemType)
+  },
+
+  /**
+   * Get all applicable lifecycles for an item type in a project.
+   * Returns list of LifecycleSummary.
+   */
+  async getLifecycles(
+    projectId: string,
+    itemType: string
+  ): Promise<{ success: boolean; data?: LifecycleSummary[]; error?: string }> {
+    // Try backend first (future proofing)
+    try {
+      const response = await apiClient.get<LifecycleSummary[]>(
+        `/lifecycle/library?projectId=${projectId}&itemType=${encodeURIComponent(itemType)}`
+      )
+      if (response.success && response.data) {
+        return { success: true, data: response.data }
+      }
+    } catch {
+      // Backend not available - continue to store fallback
+    }
+
+    return this.getLifecyclesFromStore(itemType)
+  },
+
+  getLifecyclesFromStore(itemType: string): { success: boolean; data?: LifecycleSummary[]; error?: string } {
+    const { lifecycles } = useLifecycleStore.getState()
+    const { statuses } = useStatusDefinitionsStore.getState()
+
+    // Filter lifecycles that apply to the item type
+    const applicableLifecycles = lifecycles.filter((lc) =>
+      lc.applicableItemTypes?.some((t) => t.toLowerCase() === itemType.toLowerCase()) &&
+      lc.steps && lc.steps.length > 0 // Must have steps to be valid
+    )
+
+    const summaries: LifecycleSummary[] = applicableLifecycles.map(lc => {
+      // Determine default status
+      const sortedSteps = [...(lc.steps || [])].sort((a, b) => a.order - b.order)
+      const firstStep = sortedSteps[0]
+      const defaultStatusId = firstStep?.statusId ?? statuses.find((s) => s.isInitial)?.id ?? 'draft'
+
+      return {
+        id: lc.id,
+        name: lc.name,
+        displayName: lc.name, // Use name as display name for now
+        scope: lc.type,
+        version: lc.version,
+        applicableItems: lc.applicableItemTypes,
+        defaultStatusId,
+        description: lc.description,
+        tags: lc.type === 'standard' ? ['Standard'] : lc.type === 'organization' ? ['Org'] : ['Project'],
+        isActive: true
+      }
+    })
+
+    return {
+      success: true,
+      data: summaries
+    }
   },
 
   getApplicableLifecycleFromStore(itemType: string): { success: boolean; data?: ApplicableLifecycle; error?: string } {

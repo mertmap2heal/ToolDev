@@ -23,6 +23,7 @@ model User {
 
   projects         ProjectMember[]
   notifications    Notification[]
+  engineeringRoles UserEngineeringRole[]
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -36,6 +37,33 @@ model AdminRole {
 
   @@unique([companyKey, name])
   @@index([companyKey])
+}
+
+// Engineering roles: discipline-based roles (Systems Engineer, Test Engineer, etc.).
+model EngineeringRole {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users UserEngineeringRole[]
+}
+
+// Junction table: many-to-many User <-> EngineeringRole.
+model UserEngineeringRole {
+  id        String   @id @default(uuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  user User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role EngineeringRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
 }
 
 // Per-company user quota: max users (excluding SUPERIOR_ADMIN). companyKey = company name or __null__ for unnamed.

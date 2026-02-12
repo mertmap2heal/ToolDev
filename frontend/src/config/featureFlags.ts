@@ -5,3 +5,4 @@
  */
 export const LINKAGE_V1 = import.meta.env.VITE_LINKAGE_V1 === 'true'
 export const LIFECYCLE_V1 = import.meta.env.VITE_LIFECYCLE_V1 === 'true'
+export const LIFECYCLE_SELECT_V1 = true

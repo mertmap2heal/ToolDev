@@ -9,8 +9,8 @@ import { verificationService } from '../../services/verification.service'
 import { linkService } from '../../services/link.service'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import { useLifecycleStore } from '../../store/lifecycleStore'
-import { LINKAGE_V1, LIFECYCLE_V1 } from '../../config/featureFlags'
-import { lifecycleService } from '../../services/lifecycle.service'
+import { LINKAGE_V1, LIFECYCLE_V1, LIFECYCLE_SELECT_V1 } from '../../config/featureFlags'
+import { lifecycleService, type LifecycleSummary } from '../../services/lifecycle.service'
 import { stakeholderAdapter } from '../../linkage/adapters/stakeholderAdapter'
 import { pbsAdapter } from '../../linkage/adapters/pbsAdapter'
 import { interfaceAdapter } from '../../linkage/adapters/interfaceAdapter'
@@ -189,9 +189,35 @@ export default function CreateRequirementModal({
     statusName: string
   } | null>(null)
 
-  // When LIFECYCLE_V1: fetch applicable lifecycle on open
+  const [availableLifecycles, setAvailableLifecycles] = useState<LifecycleSummary[]>([])
+
+  // Fetch lifecycles logic
   useEffect(() => {
-    if (LIFECYCLE_V1 && isOpen && projectId) {
+    if (!isOpen || !projectId) {
+      setApplicableLifecycle(null)
+      return
+    }
+
+    if (LIFECYCLE_SELECT_V1) {
+      // New logic: fetch all applicable lifecycles
+      lifecycleService.getLifecycles(projectId, 'Requirement').then((result) => {
+        if (result.success && result.data) {
+          setAvailableLifecycles(result.data)
+
+          // Auto-select if only one option
+          if (result.data.length === 1) {
+            const lc = result.data[0]
+            const statusName = lifecycleService.getStatusName(lc.defaultStatusId)
+            setApplicableLifecycle({
+              lifecycleId: lc.id,
+              defaultStatusId: lc.defaultStatusId,
+              statusName: statusName || lc.defaultStatusId,
+            })
+          }
+        }
+      })
+    } else if (LIFECYCLE_V1) {
+      // Old logic: fetch single applicable lifecycle
       lifecycleService.getApplicableLifecycle(projectId, 'Requirement').then((result) => {
         if (result.success && result.data) {
           const statusName = lifecycleService.getStatusName(result.data.defaultStatusId)
@@ -207,7 +233,31 @@ export default function CreateRequirementModal({
     } else {
       setApplicableLifecycle(null)
     }
-  }, [LIFECYCLE_V1, isOpen, projectId])
+  }, [LIFECYCLE_V1, LIFECYCLE_SELECT_V1, isOpen, projectId])
+
+  // Rule-based Suggestion Engine
+  useEffect(() => {
+    if (LIFECYCLE_SELECT_V1 && availableLifecycles.length > 1 && formData.requirementType) {
+      const typeName = formData.requirementType.toLowerCase()
+      // Use 'includes' for a loose match (e.g. 'Safety' matches 'System Safety Lifecycle')
+      const match = availableLifecycles.find(lc =>
+        lc.name.toLowerCase().includes(typeName) ||
+        (lc.description && lc.description.toLowerCase().includes(typeName))
+      )
+
+      if (match) {
+        // Update selection if it differs from current to avoid loops (though check is cheap)
+        if (applicableLifecycle?.lifecycleId !== match.id) {
+          const statusName = lifecycleService.getStatusName(match.defaultStatusId)
+          setApplicableLifecycle({
+            lifecycleId: match.id,
+            defaultStatusId: match.defaultStatusId,
+            statusName: statusName || match.defaultStatusId,
+          })
+        }
+      }
+    }
+  }, [LIFECYCLE_SELECT_V1, availableLifecycles, formData.requirementType])
 
   // Fetch templates
   const { data: templates = [] } = useQuery({
@@ -547,6 +597,8 @@ export default function CreateRequirementModal({
       owner: formData.owner?.trim() || undefined,
       acceptanceCriteria: formData.acceptanceCriteria?.trim() || undefined,
       relatedDocuments: formData.relatedDocuments && formData.relatedDocuments.length > 0 ? formData.relatedDocuments : undefined,
+      lifecycleId: applicableLifecycle?.lifecycleId,
+      statusId: applicableLifecycle?.defaultStatusId,
     }
     if (LIFECYCLE_V1 && applicableLifecycle) {
       submitData.lifecycleId = applicableLifecycle.lifecycleId
@@ -684,6 +736,10 @@ export default function CreateRequirementModal({
             </div>
           )}
 
+
+
+
+
           {/* Requirement ID */}
           <div>
             <div className="flex items-center gap-3 mb-2">
@@ -726,8 +782,8 @@ export default function CreateRequirementModal({
               value={formData.title}
               onChange={(e) => handleChange('title', e.target.value)}
               className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.title
-                  ? 'border-red-500'
-                  : 'border-gray-300 dark:border-gray-600'
+                ? 'border-red-500'
+                : 'border-gray-300 dark:border-gray-600'
                 } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
               placeholder="Enter requirement title"
             />
@@ -747,8 +803,8 @@ export default function CreateRequirementModal({
               placeholder="Enter requirement description..."
               rows={6}
               className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.description
-                  ? 'border-red-500'
-                  : 'border-gray-300 dark:border-gray-600'
+                ? 'border-red-500'
+                : 'border-gray-300 dark:border-gray-600'
                 } bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none`}
             />
             {errors.description && (
@@ -798,6 +854,52 @@ export default function CreateRequirementModal({
           </div>
 
           {/* Priority and Status */}
+          {/* Lifecycle Selection (Feature Flag: LIFECYCLE_SELECT_V1) */}
+          {LIFECYCLE_SELECT_V1 && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                Lifecycle Model <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={applicableLifecycle?.lifecycleId || ''}
+                onChange={(e) => {
+                  const selectedId = e.target.value
+                  const lc = availableLifecycles.find(l => l.id === selectedId)
+                  if (lc) {
+                    const statusName = lifecycleService.getStatusName(lc.defaultStatusId)
+                    setApplicableLifecycle({
+                      lifecycleId: lc.id,
+                      defaultStatusId: lc.defaultStatusId,
+                      statusName: statusName || lc.defaultStatusId,
+                    })
+                  }
+                }}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                required={availableLifecycles.length > 0}
+                disabled={availableLifecycles.length === 0}
+              >
+                <option value="" disabled>
+                  {availableLifecycles.length === 0 ? 'No applicable lifecycles found' : 'Select a lifecycle...'}
+                </option>
+                {availableLifecycles.map((lc) => (
+                  <option key={lc.id} value={lc.id}>
+                    {lc.name} (v{lc.version})
+                  </option>
+                ))}
+              </select>
+              {availableLifecycles.length === 0 && (
+                <p className="mt-1 text-xs text-red-500 text-left">
+                  Please create a lifecycle for &quot;Requirement&quot; in Lifecycle Management.
+                </p>
+              )}
+              {applicableLifecycle && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
+                  Initial Status: <span className="font-medium text-gray-700 dark:text-gray-300">{applicableLifecycle.statusName}</span>
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
@@ -930,8 +1032,8 @@ export default function CreateRequirementModal({
               value={formData.linkedMocCode || ''}
               onChange={(e) => handleChange('linkedMocCode', e.target.value)}
               className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.linkedMocCode
-                  ? 'border-red-500 dark:border-red-500'
-                  : 'border-gray-300 dark:border-gray-600'
+                ? 'border-red-500 dark:border-red-500'
+                : 'border-gray-300 dark:border-gray-600'
                 }`}
             >
               <option value="">Select MoC (required)</option>

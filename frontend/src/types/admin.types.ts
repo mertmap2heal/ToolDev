@@ -70,14 +70,14 @@ export const PERMISSION_GROUPS: Record<
 
 export function emptyPermissionMap(): PermissionMap {
   const map: PermissionMap = {}
-  ;(Object.keys(PERMISSION_GROUPS) as PermissionGroupId[]).forEach((g) => {
-    const actions = PERMISSION_GROUPS[g].actions
-    const groupMap: Record<string, boolean> = {}
-    actions.forEach((a) => {
-      groupMap[a] = false
+    ; (Object.keys(PERMISSION_GROUPS) as PermissionGroupId[]).forEach((g) => {
+      const actions = PERMISSION_GROUPS[g].actions
+      const groupMap: Record<string, boolean> = {}
+      actions.forEach((a) => {
+        groupMap[a] = false
+      })
+      map[g] = groupMap
     })
-    map[g] = groupMap
-  })
   return map
 }
 
@@ -102,6 +102,29 @@ export interface Authority {
   permissions: PermissionMap
   version?: string
   deprecated?: boolean
+}
+
+// --- Engineering roles (discipline-based) ---
+export interface EngineeringRole {
+  id: string
+  name: string
+  description?: string | null
+  isSystem: boolean
+  userCount: number
+  assignedUsers?: { id: string; name: string; email: string }[]
+}
+
+// --- Stakeholder user (for stakeholder directory) ---
+export interface StakeholderUser {
+  id: string
+  name: string
+  email: string
+  company?: string | null
+  status: 'Active' | 'Inactive'
+  engineeringRoles: { id: string; name: string }[]
+  lastLoginAt?: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 // --- Audit log ---

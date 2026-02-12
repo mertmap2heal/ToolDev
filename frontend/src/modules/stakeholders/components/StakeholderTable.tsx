@@ -1,91 +1,81 @@
 import { useState, useMemo, useEffect } from 'react'
 import {
-  ChevronDown,
-  ChevronUp,
-  Filter,
   UserPlus,
   FileDown,
 } from 'lucide-react'
 import clsx from 'clsx'
-import { useStakeholdersStore } from '../store'
-import type { Stakeholder } from '../types'
+import { useQuery } from '@tanstack/react-query'
+import * as adminService from '../../../services/admin.service'
+import type { StakeholderUser } from '../../../types/admin.types'
 import TableSkeleton from './TableSkeleton'
 
 const PAGE_SIZE = 10
 
+type SortKey = 'name' | 'email' | 'company' | 'status'
+
 interface StakeholderTableProps {
   globalSearch?: string
-  onSelectStakeholder: (s: Stakeholder | null) => void
+  onSelectStakeholder: (s: StakeholderUser | null) => void
   onShowToast: (msg: string) => void
-  onCreateStakeholder: () => void
   onAddToCommittee: (stakeholderIds: string[]) => void
   canEdit: boolean
+  roleFilter?: Set<string>
+  statusFilter?: Set<string>
+  companyFilter?: Set<string>
 }
 
 export default function StakeholderTable({
   globalSearch = '',
   onSelectStakeholder,
   onShowToast,
-  onCreateStakeholder,
   onAddToCommittee,
   canEdit,
+  roleFilter = new Set(),
+  statusFilter = new Set(),
+  companyFilter = new Set(),
 }: StakeholderTableProps) {
-  const { state } = useStakeholdersStore()
-  const [searchQuery, setSearchQuery] = useState('')
-  const [filtersExpanded, setFiltersExpanded] = useState(false)
-  const [orgFilter, setOrgFilter] = useState<Set<string>>(new Set())
-  const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set())
-  const [disciplineFilter, setDisciplineFilter] = useState<Set<string>>(new Set())
-  const [authorityFilter, setAuthorityFilter] = useState<Set<string>>(new Set())
-  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set())
-  const [sortKey, setSortKey] = useState<keyof Stakeholder>('displayName')
+  const { data: users = [], isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['admin', 'usersWithRoles'],
+    queryFn: () => adminService.getUsersWithRoles(),
+    refetchOnWindowFocus: true,
+  })
+
+  const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortAsc, setSortAsc] = useState(true)
   const [page, setPage] = useState(0)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    const t = setTimeout(() => setIsLoading(false), 400)
-    return () => clearTimeout(t)
-  }, [])
-
-  const effectiveSearch = (globalSearch?.trim() || searchQuery.trim()).toLowerCase()
+  const effectiveSearch = (globalSearch?.trim() || '').toLowerCase()
 
   const filtered = useMemo(() => {
-    let list = state.stakeholders.filter((s) => {
+    let list = users.filter((u) => {
       if (
         effectiveSearch &&
-        !s.displayName.toLowerCase().includes(effectiveSearch) &&
-        !s.organization.toLowerCase().includes(effectiveSearch) &&
-        !s.stakeholderId.toLowerCase().includes(effectiveSearch)
+        !u.name.toLowerCase().includes(effectiveSearch) &&
+        !u.email.toLowerCase().includes(effectiveSearch) &&
+        !(u.company ?? '').toLowerCase().includes(effectiveSearch)
       )
         return false
-      if (orgFilter.size > 0 && !orgFilter.has(s.organization)) return false
-      if (typeFilter.size > 0 && !typeFilter.has(s.stakeholderType)) return false
-      if (disciplineFilter.size > 0 && !disciplineFilter.has(s.discipline)) return false
-      if (authorityFilter.size > 0 && !authorityFilter.has(s.authorityLevel)) return false
-      if (statusFilter.size > 0 && !statusFilter.has(s.status)) return false
+      if (roleFilter.size > 0 && !u.engineeringRoles.some((r) => roleFilter.has(r.name)))
+        return false
+      if (statusFilter.size > 0 && !statusFilter.has(u.status))
+        return false
+      if (companyFilter.size > 0 && !companyFilter.has(u.company ?? ''))
+        return false
       return true
     })
     list = [...list].sort((a, b) => {
-      const av = a[sortKey]
-      const bv = b[sortKey]
-      if (typeof av === 'string' && typeof bv === 'string') return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av)
-      if (Array.isArray(av) && Array.isArray(bv)) return sortAsc ? av.length - bv.length : bv.length - av.length
-      return 0
+      const av = a[sortKey] ?? ''
+      const bv = b[sortKey] ?? ''
+      return sortAsc
+        ? String(av).localeCompare(String(bv))
+        : String(bv).localeCompare(String(av))
     })
     return list
-  }, [
-    state.stakeholders,
-    effectiveSearch,
-    orgFilter,
-    typeFilter,
-    disciplineFilter,
-    authorityFilter,
-    statusFilter,
-    sortKey,
-    sortAsc,
-  ])
+  }, [users, effectiveSearch, roleFilter, statusFilter, companyFilter, sortKey, sortAsc])
+
+  // Reset page when filters change
+  useEffect(() => { setPage(0) }, [effectiveSearch, roleFilter, statusFilter, companyFilter])
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
   const paginated = useMemo(
@@ -93,26 +83,14 @@ export default function StakeholderTable({
     [filtered, page]
   )
 
-  const toggleSort = (key: keyof Stakeholder) => {
+  const toggleSort = (key: SortKey) => {
     setSortKey(key)
     setSortAsc((prev) => (sortKey === key ? !prev : true))
   }
 
-  const toggleFilter = (
-    setter: React.Dispatch<React.SetStateAction<Set<string>>>,
-    value: string
-  ) => {
-    setter((prev) => {
-      const next = new Set(prev)
-      if (next.has(value)) next.delete(value)
-      else next.add(value)
-      return next
-    })
-  }
-
   const toggleSelectAll = () => {
     if (selectedIds.size === paginated.length) setSelectedIds(new Set())
-    else setSelectedIds(new Set(paginated.map((s) => s.stakeholderId)))
+    else setSelectedIds(new Set(paginated.map((u) => u.id)))
   }
 
   const toggleSelect = (id: string) => {
@@ -132,131 +110,48 @@ export default function StakeholderTable({
     onShowToast('Export selected is a placeholder. No file is generated.')
   }
 
-  const orgs = [...new Set(state.stakeholders.map((s) => s.organization))]
-  const types = ['Internal', 'Supplier', 'Partner', 'Authority', 'Customer']
-  const disciplines = [
-    'Systems', 'Safety', 'Verification', 'CM', 'Certification', 'SW', 'HW', 'QA', 'PM', 'Manufacturing',
-  ]
-  const authorities = ['Viewer', 'Reviewer', 'Approver', 'Owner']
-  const statuses = ['Active', 'Inactive']
+  if (isError) {
+    return (
+      <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-6 text-center">
+        <p className="text-sm text-red-700 dark:text-red-300 mb-2">
+          {error instanceof Error ? error.message : 'Failed to load stakeholder directory.'}
+        </p>
+        <p className="text-xs text-red-600 dark:text-red-400 mb-3">
+          Make sure you are logged in and the backend is running.
+        </p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="px-4 py-2 text-sm font-medium text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30"
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="relative flex-1 min-w-[180px] max-w-sm">
-          <input
-            type="text"
-            placeholder="Search directory..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-3 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => setFiltersExpanded((x) => !x)}
-          className="flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300"
-        >
-          <Filter size={16} />
-          Filters
-          {filtersExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </button>
-        {selectedIds.size > 0 && (
-          <>
-            <button
-              type="button"
-              onClick={() => onAddToCommittee(Array.from(selectedIds))}
-              disabled={!canEdit}
-              title={!canEdit ? 'Read-only mode is on or your role cannot edit' : undefined}
-              className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 disabled:opacity-50"
-            >
-              <UserPlus size={16} />
-              Add to committee
-            </button>
-            <button
-              type="button"
-              onClick={handleExportSelected}
-              className="flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300"
-            >
-              <FileDown size={16} />
-              Export selected
-            </button>
-          </>
-        )}
-      </div>
-
-      {filtersExpanded && (
-        <div className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg flex flex-wrap gap-4">
-          <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Organization</span>
-            {orgs.slice(0, 8).map((o) => (
-              <label key={o} className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  checked={orgFilter.has(o)}
-                  onChange={() => toggleFilter(setOrgFilter, o)}
-                  className="rounded border-gray-300 dark:border-gray-600"
-                />
-                {o}
-              </label>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Type</span>
-            {types.map((t) => (
-              <label key={t} className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  checked={typeFilter.has(t)}
-                  onChange={() => toggleFilter(setTypeFilter, t)}
-                  className="rounded border-gray-300 dark:border-gray-600"
-                />
-                {t}
-              </label>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Discipline</span>
-            {disciplines.slice(0, 6).map((d) => (
-              <label key={d} className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  checked={disciplineFilter.has(d)}
-                  onChange={() => toggleFilter(setDisciplineFilter, d)}
-                  className="rounded border-gray-300 dark:border-gray-600"
-                />
-                {d}
-              </label>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Authority</span>
-            {authorities.map((a) => (
-              <label key={a} className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  checked={authorityFilter.has(a)}
-                  onChange={() => toggleFilter(setAuthorityFilter, a)}
-                  className="rounded border-gray-300 dark:border-gray-600"
-                />
-                {a}
-              </label>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Status</span>
-            {statuses.map((s) => (
-              <label key={s} className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  checked={statusFilter.has(s)}
-                  onChange={() => toggleFilter(setStatusFilter, s)}
-                  className="rounded border-gray-300 dark:border-gray-600"
-                />
-                {s}
-              </label>
-            ))}
-          </div>
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-4">
+          <button
+            type="button"
+            onClick={() => onAddToCommittee(Array.from(selectedIds))}
+            disabled={!canEdit}
+            title={!canEdit ? 'Read-only mode is on or your role cannot edit' : undefined}
+            className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 disabled:opacity-50"
+          >
+            <UserPlus size={16} />
+            Add to committee
+          </button>
+          <button
+            type="button"
+            onClick={handleExportSelected}
+            className="flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300"
+          >
+            <FileDown size={16} />
+            Export selected
+          </button>
         </div>
       )}
 
@@ -276,76 +171,99 @@ export default function StakeholderTable({
                 <th className="px-4 py-2 text-left">
                   <button
                     type="button"
-                    onClick={() => toggleSort('stakeholderId')}
+                    onClick={() => toggleSort('name')}
                     className="font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                   >
-                    ID {sortKey === 'stakeholderId' && (sortAsc ? '↑' : '↓')}
+                    Name {sortKey === 'name' && (sortAsc ? '↑' : '↓')}
                   </button>
                 </th>
                 <th className="px-4 py-2 text-left">
                   <button
                     type="button"
-                    onClick={() => toggleSort('displayName')}
+                    onClick={() => toggleSort('email')}
                     className="font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                   >
-                    Name {sortKey === 'displayName' && (sortAsc ? '↑' : '↓')}
+                    Email {sortKey === 'email' && (sortAsc ? '↑' : '↓')}
                   </button>
                 </th>
                 <th className="px-4 py-2 text-left">
                   <button
                     type="button"
-                    onClick={() => toggleSort('organization')}
+                    onClick={() => toggleSort('company')}
                     className="font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                   >
-                    Organization {sortKey === 'organization' && (sortAsc ? '↑' : '↓')}
+                    Organization {sortKey === 'company' && (sortAsc ? '↑' : '↓')}
                   </button>
                 </th>
-                <th className="px-4 py-2 text-left text-gray-500 dark:text-gray-400">Type</th>
-                <th className="px-4 py-2 text-left text-gray-500 dark:text-gray-400">Discipline</th>
-                <th className="px-4 py-2 text-left text-gray-500 dark:text-gray-400">Authority</th>
-                <th className="px-4 py-2 text-left text-gray-500 dark:text-gray-400">Status</th>
+                <th className="px-4 py-2 text-left text-gray-500 dark:text-gray-400">Roles</th>
+                <th className="px-4 py-2 text-left">
+                  <button
+                    type="button"
+                    onClick={() => toggleSort('status')}
+                    className="font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                  >
+                    Status {sortKey === 'status' && (sortAsc ? '↑' : '↓')}
+                  </button>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {isLoading ? (
-                <TableSkeleton rows={6} cols={8} />
+                <TableSkeleton rows={6} cols={6} />
               ) : paginated.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                    No stakeholders match the filters. Create one or clear filters.
+                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                    {users.length === 0
+                      ? 'No users found. Add users via the Admin Panel.'
+                      : 'No stakeholders match the current filters.'}
                   </td>
                 </tr>
               ) : (
-                paginated.map((s) => (
+                paginated.map((u) => (
                   <tr
-                    key={s.stakeholderId}
-                    onClick={() => onSelectStakeholder(s)}
+                    key={u.id}
+                    onClick={() => onSelectStakeholder(u)}
                     className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
                   >
                     <td className="px-4 py-2 text-gray-900 dark:text-white" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
-                        checked={selectedIds.has(s.stakeholderId)}
-                        onChange={() => toggleSelect(s.stakeholderId)}
+                        checked={selectedIds.has(u.id)}
+                        onChange={() => toggleSelect(u.id)}
                         className="rounded border-gray-300 dark:border-gray-600"
                       />
                     </td>
-                    <td className="px-4 py-2 font-mono text-xs text-gray-900 dark:text-white">{s.stakeholderId}</td>
-                    <td className="px-4 py-2 font-medium text-gray-900 dark:text-white">{s.displayName}</td>
-                    <td className="px-4 py-2 text-gray-600 dark:text-gray-400">{s.organization}</td>
-                    <td className="px-4 py-2 text-gray-900 dark:text-white">{s.stakeholderType}</td>
-                    <td className="px-4 py-2 text-gray-900 dark:text-white">{s.discipline}</td>
-                    <td className="px-4 py-2 text-gray-900 dark:text-white">{s.authorityLevel}</td>
-<td className="px-4 py-2 text-gray-900 dark:text-white">
-                        <span
+                    <td className="px-4 py-2 font-medium text-gray-900 dark:text-white">
+                      {u.name}
+                    </td>
+                    <td className="px-4 py-2 text-gray-600 dark:text-gray-400">{u.email}</td>
+                    <td className="px-4 py-2 text-gray-900 dark:text-white">{u.company || '—'}</td>
+                    <td className="px-4 py-2 text-gray-900 dark:text-white">
+                      {u.engineeringRoles.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {u.engineeringRoles.map((r) => (
+                            <span
+                              key={r.id}
+                              className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300"
+                            >
+                              {r.name}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 dark:text-gray-500 text-xs">None</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-gray-900 dark:text-white">
+                      <span
                         className={clsx(
                           'px-2 py-0.5 rounded text-xs',
-                          s.status === 'Active'
+                          u.status === 'Active'
                             ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
                             : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
                         )}
                       >
-                        {s.status}
+                        {u.status}
                       </span>
                     </td>
                   </tr>

@@ -3,6 +3,8 @@ import { useParams, useSearchParams, Link } from 'react-router-dom'
 import {
   Search,
   ChevronDown,
+  ChevronUp,
+  Filter,
   Plus,
   Users,
   LayoutGrid,
@@ -20,11 +22,11 @@ import clsx from 'clsx'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
 import { StakeholdersStoreProvider, useStakeholdersStore } from '../../modules/stakeholders/store'
 import { canEditStakeholders, canEditGovernance } from '../../modules/stakeholders/permissions'
-import RoleSwitcher from '../../modules/stakeholders/components/RoleSwitcher'
+import { useQuery } from '@tanstack/react-query'
+import * as adminService from '../../services/admin.service'
 import StakeholderTable from '../../modules/stakeholders/components/StakeholderTable'
-import StakeholderDrawer from '../../modules/stakeholders/components/StakeholderDrawer'
-import CreateStakeholderModal from '../../modules/stakeholders/components/CreateStakeholderModal'
 import AddToCommitteeModal from '../../modules/stakeholders/components/AddToCommitteeModal'
+import type { StakeholderUser } from '../../types/admin.types'
 import CommitteeTable from '../../modules/stakeholders/components/CommitteeTable'
 import CommitteeDrawer from '../../modules/stakeholders/components/CommitteeDrawer'
 import RaciMatrix from '../../modules/stakeholders/components/RaciMatrix'
@@ -34,7 +36,7 @@ import CommunicationTimeline from '../../modules/stakeholders/components/Communi
 import AuditTrailTable from '../../modules/stakeholders/components/AuditTrailTable'
 import SettingsRolesTab from '../../modules/stakeholders/components/SettingsRolesTab'
 import CreateCommitteeModal from '../../modules/stakeholders/components/CreateCommitteeModal'
-import type { Stakeholder, Committee } from '../../modules/stakeholders/types'
+import type { Committee } from '../../modules/stakeholders/types'
 
 const TABS = [
   { id: 'directory', label: 'Directory', icon: Users },
@@ -55,6 +57,72 @@ function isValidTabId(id: string): id is TabId {
   return VALID_TAB_IDS.includes(id as TabId)
 }
 
+function toggleFilterValue(setter: React.Dispatch<React.SetStateAction<Set<string>>>, value: string) {
+  setter((prev) => {
+    const next = new Set(prev)
+    if (next.has(value)) next.delete(value)
+    else next.add(value)
+    return next
+  })
+}
+
+function DirectoryFilterPanel({
+  roleFilter, setRoleFilter,
+  statusFilter, setStatusFilter,
+  companyFilter, setCompanyFilter,
+}: {
+  roleFilter: Set<string>; setRoleFilter: React.Dispatch<React.SetStateAction<Set<string>>>
+  statusFilter: Set<string>; setStatusFilter: React.Dispatch<React.SetStateAction<Set<string>>>
+  companyFilter: Set<string>; setCompanyFilter: React.Dispatch<React.SetStateAction<Set<string>>>
+}) {
+  const { data: allEngRoles = [] } = useQuery({
+    queryKey: ['admin', 'engineeringRoles'],
+    queryFn: () => adminService.getEngineeringRoles(),
+  })
+  const { data: users = [] } = useQuery({
+    queryKey: ['admin', 'usersWithRoles'],
+    queryFn: () => adminService.getUsersWithRoles(),
+  })
+  const allRoleNames = allEngRoles.map((r) => r.name).sort()
+  const allCompanies = [...new Set(users.map((u) => u.company).filter(Boolean) as string[])].sort()
+
+  return (
+    <div className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg flex flex-wrap gap-4">
+      {allRoleNames.length > 0 && (
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Role</span>
+          {allRoleNames.map((r) => (
+            <label key={r} className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300">
+              <input type="checkbox" checked={roleFilter.has(r)} onChange={() => toggleFilterValue(setRoleFilter, r)} className="rounded border-gray-300 dark:border-gray-600" />
+              {r}
+            </label>
+          ))}
+        </div>
+      )}
+      {allCompanies.length > 0 && (
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Organization</span>
+          {allCompanies.map((c) => (
+            <label key={c} className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300">
+              <input type="checkbox" checked={companyFilter.has(c)} onChange={() => toggleFilterValue(setCompanyFilter, c)} className="rounded border-gray-300 dark:border-gray-600" />
+              {c}
+            </label>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2 items-center">
+        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Status</span>
+        {['Active', 'Inactive'].map((s) => (
+          <label key={s} className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300">
+            <input type="checkbox" checked={statusFilter.has(s)} onChange={() => toggleFilterValue(setStatusFilter, s)} className="rounded border-gray-300 dark:border-gray-600" />
+            {s}
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function StakeholdersContent() {
   const { projectId } = useParams<{ projectId: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -66,13 +134,16 @@ function StakeholdersContent() {
   const [globalSearch, setGlobalSearch] = useState('')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
-  const [roleSwitcherOpen, setRoleSwitcherOpen] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [roleFilter, setRoleFilter] = useState<Set<string>>(new Set())
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set())
+  const [companyFilter, setCompanyFilter] = useState<Set<string>>(new Set())
   const createRef = useRef<HTMLDivElement>(null)
+  const filtersRef = useRef<HTMLDivElement>(null)
 
   // Directory
-  const [selectedStakeholder, setSelectedStakeholder] = useState<Stakeholder | null>(null)
+  const [selectedStakeholder, setSelectedStakeholder] = useState<StakeholderUser | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [editStakeholder, setEditStakeholder] = useState<Stakeholder | null>(null)
   const [addToCommitteeIds, setAddToCommitteeIds] = useState<string[]>([])
 
   // Committees
@@ -94,7 +165,7 @@ function StakeholdersContent() {
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (createRef.current && !createRef.current.contains(e.target as Node)) setCreateOpen(false)
-      setRoleSwitcherOpen(false)
+      if (filtersRef.current && !filtersRef.current.contains(e.target as Node)) setFiltersOpen(false)
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -118,12 +189,6 @@ function StakeholdersContent() {
   const openCreate = (kind: string) => {
     setCreateOpen(false)
     switch (kind) {
-      case 'stakeholder':
-        setEditStakeholder(null)
-        setActiveTab('directory')
-        setSearchParams({ tab: 'directory' }, { replace: true })
-        setCreateOpen(true)
-        break
       case 'committee':
         setActiveTab('committees')
         setSearchParams({ tab: 'committees' }, { replace: true })
@@ -218,14 +283,6 @@ function StakeholdersContent() {
               <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 z-20">
                 <button
                   type="button"
-                  onClick={() => openCreate('stakeholder')}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                >
-                  <UserPlus size={14} />
-                  Create Stakeholder
-                </button>
-                <button
-                  type="button"
                   onClick={() => openCreate('committee')}
                   className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                 >
@@ -267,8 +324,25 @@ function StakeholdersContent() {
               </div>
             )}
           </div>
-          <RoleSwitcher isOpen={roleSwitcherOpen} onToggle={() => setRoleSwitcherOpen((o) => !o)} />
+          <div className="relative" ref={filtersRef}>
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((o) => !o)}
+              className="flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm hover:bg-gray-50 dark:hover:bg-gray-700"
+            >
+              <Filter size={16} />
+              Filters
+              {(roleFilter.size > 0 || statusFilter.size > 0 || companyFilter.size > 0) && (
+                <span className="ml-1 px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded text-xs font-medium">
+                  {roleFilter.size + statusFilter.size + companyFilter.size}
+                </span>
+              )}
+              {filtersOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+          </div>
         </div>
+
+        {filtersOpen && activeTab === 'directory' && <DirectoryFilterPanel roleFilter={roleFilter} setRoleFilter={setRoleFilter} statusFilter={statusFilter} setStatusFilter={setStatusFilter} companyFilter={companyFilter} setCompanyFilter={setCompanyFilter} />}
 
         <div className="flex-shrink-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-x-auto">
           <div className="flex border-b border-gray-200 dark:border-gray-700 min-w-max">
@@ -306,41 +380,62 @@ function StakeholdersContent() {
                 setDrawerOpen(true)
               }}
               onShowToast={showToast}
-              onCreateStakeholder={() => {
-                setEditStakeholder(null)
-                setCreateOpen(true)
-              }}
               onAddToCommittee={(ids) => setAddToCommitteeIds(ids)}
               canEdit={canEdit}
+              roleFilter={roleFilter}
+              statusFilter={statusFilter}
+              companyFilter={companyFilter}
             />
-            <StakeholderDrawer
-              stakeholder={selectedStakeholder}
-              isOpen={drawerOpen}
-              onClose={() => {
-                setDrawerOpen(false)
-                setSelectedStakeholder(null)
-              }}
-              onEdit={() => {
-                if (selectedStakeholder) {
-                  setEditStakeholder(selectedStakeholder)
-                  setCreateOpen(true)
-                }
-              }}
-              onShowToast={showToast}
-              canEdit={canEdit}
-            />
-            <CreateStakeholderModal
-              isOpen={createOpen && activeTab === 'directory'}
-              onClose={() => {
-                setCreateOpen(false)
-                setEditStakeholder(null)
-              }}
-              editStakeholder={editStakeholder}
-              onSaved={() => {
-                setEditStakeholder(null)
-                showToast('Stakeholder saved.')
-              }}
-            />
+            {/* User detail drawer from central data */}
+            {drawerOpen && selectedStakeholder && (
+              <div className="fixed inset-0 z-40 flex justify-end">
+                <div className="absolute inset-0 bg-black/30" onClick={() => { setDrawerOpen(false); setSelectedStakeholder(null) }} />
+                <div className="relative w-full max-w-lg h-full bg-white dark:bg-gray-800 shadow-2xl border-l border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden">
+                  <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">User Details</h2>
+                    <button type="button" onClick={() => { setDrawerOpen(false); setSelectedStakeholder(null) }} className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                      <X size={18} />
+                    </button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-xl font-bold text-white">
+                        {selectedStakeholder.name?.charAt(0)?.toUpperCase() || '?'}
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{selectedStakeholder.name}</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">{selectedStakeholder.email}</p>
+                      </div>
+                    </div>
+                    <dl className="grid grid-cols-2 gap-3 text-sm">
+                      <dt className="text-gray-500 dark:text-gray-400">Organization</dt>
+                      <dd className="text-gray-900 dark:text-white">{selectedStakeholder.company || '—'}</dd>
+                      <dt className="text-gray-500 dark:text-gray-400">Status</dt>
+                      <dd><span className={`px-2 py-0.5 rounded text-xs ${selectedStakeholder.status === 'Active' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'}`}>{selectedStakeholder.status}</span></dd>
+                      <dt className="text-gray-500 dark:text-gray-400">Last Login</dt>
+                      <dd className="text-gray-900 dark:text-white">{selectedStakeholder.lastLoginAt ? new Date(selectedStakeholder.lastLoginAt).toLocaleDateString() : 'Never'}</dd>
+                      <dt className="text-gray-500 dark:text-gray-400">Created</dt>
+                      <dd className="text-gray-900 dark:text-white">{new Date(selectedStakeholder.createdAt).toLocaleDateString()}</dd>
+                    </dl>
+                    <section>
+                      <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Roles</h4>
+                      {selectedStakeholder.engineeringRoles.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {selectedStakeholder.engineeringRoles.map((r) => (
+                            <span key={r.id} className="inline-block px-2.5 py-1 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">{r.name}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 dark:text-gray-400">No engineering roles assigned. Assign roles via the Admin Panel.</p>
+                      )}
+                    </section>
+                    <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">User data is managed centrally via the <strong>Admin Panel</strong>. To edit user details, roles, or status, navigate to Admin → Users.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             <AddToCommitteeModal
               isOpen={addToCommitteeIds.length > 0}
               onClose={() => setAddToCommitteeIds([])}

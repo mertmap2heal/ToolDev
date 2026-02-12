@@ -541,6 +541,8 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
         rationale: rationale || null,
         linkedMocCode: linkedMocCode ? parseInt(linkedMocCode, 10) : null,
         componentId: componentId || null,
+        lifecycleId: lifecycleId || null,
+        statusId: statusId || null,
       },
       include: {
         parent: {

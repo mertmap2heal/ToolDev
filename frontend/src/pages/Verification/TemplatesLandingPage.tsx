@@ -66,7 +66,7 @@ export default function TemplatesLandingPage() {
     },
   })
 
-  const duplicateMutation = useMutation<{ id: string }, Error, string>({
+  const duplicateMutation = useMutation({
     mutationFn: async (id: string) => {
       if (!projectId) throw new Error('No project')
       const res = await verificationService.duplicateTemplate(projectId, id)

@@ -14,6 +14,8 @@ import type {
   CreateUserInput,
   CreateUserResult,
   PermissionMap,
+  EngineeringRole,
+  StakeholderUser,
 } from '../types/admin.types'
 import { emptyPermissionMap } from '../types/admin.types'
 
@@ -317,4 +319,74 @@ export async function applyAuthorityToRoles(
 ): Promise<boolean> {
   // TODO: implement when backend supports it
   return true
+}
+
+// --- Engineering Roles ---
+export async function getEngineeringRoles(): Promise<EngineeringRole[]> {
+  const res = await apiClient.get<EngineeringRole[]>('/admin/engineering-roles')
+  if (!res.success || !Array.isArray(res.data)) {
+    throw new Error(res.error ?? 'Failed to load engineering roles')
+  }
+  return res.data
+}
+
+export async function createEngineeringRole(
+  name: string,
+  description?: string
+): Promise<EngineeringRole> {
+  const res = await apiClient.post<EngineeringRole>('/admin/engineering-roles', {
+    name,
+    description,
+  })
+  if (!res.success || !res.data) {
+    throw new Error(res.error ?? 'Failed to create engineering role')
+  }
+  return res.data
+}
+
+export async function updateEngineeringRole(
+  id: string,
+  updates: { name?: string; description?: string }
+): Promise<EngineeringRole> {
+  const res = await apiClient.put<EngineeringRole>(`/admin/engineering-roles/${id}`, updates)
+  if (!res.success || !res.data) {
+    throw new Error(res.error ?? 'Failed to update engineering role')
+  }
+  return res.data
+}
+
+export async function deleteEngineeringRole(id: string): Promise<void> {
+  const res = await apiClient.delete<{ id: string }>(`/admin/engineering-roles/${id}`)
+  if (!res.success) {
+    throw new Error(res.error ?? 'Failed to delete engineering role')
+  }
+}
+
+export async function assignEngineeringRole(
+  roleId: string,
+  userIds: string[]
+): Promise<void> {
+  const res = await apiClient.post(`/admin/engineering-roles/${roleId}/assign`, { userIds })
+  if (!res.success) {
+    throw new Error(res.error ?? 'Failed to assign engineering role')
+  }
+}
+
+export async function unassignEngineeringRole(
+  roleId: string,
+  userIds: string[]
+): Promise<void> {
+  const res = await apiClient.post(`/admin/engineering-roles/${roleId}/unassign`, { userIds })
+  if (!res.success) {
+    throw new Error(res.error ?? 'Failed to unassign engineering role')
+  }
+}
+
+// --- Users with engineering roles (stakeholder directory) ---
+export async function getUsersWithRoles(): Promise<StakeholderUser[]> {
+  const res = await apiClient.get<StakeholderUser[]>('/admin/users-with-roles')
+  if (!res.success || !Array.isArray(res.data)) {
+    throw new Error(res.error ?? 'Failed to load users with roles')
+  }
+  return res.data
 }
