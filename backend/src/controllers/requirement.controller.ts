@@ -25,41 +25,14 @@ const MEANINGFUL_FIELDS = [
   'linkedMocCode',
 ]
 
-// Mapping from requirement types to ID prefixes
-// All prefixes include REQ- for consistency
-const REQUIREMENT_TYPE_PREFIXES: Record<string, string> = {
-  functional: 'REQ-FUNC',
-  performance: 'REQ-PERF',
-  interface: 'REQ-INTF',
-  design_constraint: 'REQ-DCON',
-  safety: 'REQ-SAFE',
-  security: 'REQ-SECU',
-  usability: 'REQ-USAB',
-  other: 'REQ',
-}
+
 
 // Helper function to generate requirement ID based on classification
 async function generateRequirementId(
-  projectId: string,
-  requirementType?: string
+  projectId: string
 ): Promise<string> {
-  // Determine prefix based on requirementType (classification)
-  let prefix = 'REQ'
-
-  if (requirementType) {
-    if (REQUIREMENT_TYPE_PREFIXES[requirementType]) {
-      // Use predefined prefix for known types
-      prefix = REQUIREMENT_TYPE_PREFIXES[requirementType]
-    } else {
-      // Handle custom requirementType values not in predefined mapping
-      // Convert to uppercase, remove non-letters, take first 3 letters
-      const customPrefix = requirementType
-        .toUpperCase()
-        .replace(/[^A-Z]/g, '')  // Remove non-letters first
-        .substring(0, 3)  // Take first 3 letters
-      prefix = `REQ-${customPrefix}`
-    }
-  }
+  // Always use the generic prefix 'REQ' regardless of type
+  const prefix = 'REQ'
 
   // Find the highest number for this prefix
   // Fetch all requirements and filter in JavaScript since requirementId is nullable
@@ -479,7 +452,7 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
     // Uses requirementType (classification) as primary, category as fallback
     let finalRequirementId = providedRequirementId
     if (!finalRequirementId) {
-      finalRequirementId = await generateRequirementId(projectId, requirementType)
+      finalRequirementId = await generateRequirementId(projectId)
     }
 
     // Check if requirementId already exists in this project
@@ -697,43 +670,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       newRequirementId !== '' &&
       newRequirementId !== requirement.requirementId
 
-    // Check if current ID needs to be updated due to format change (for custom types with old 4-letter format)
-    let needsFormatUpdate = false
-    if (effectiveType && !REQUIREMENT_TYPE_PREFIXES[effectiveType] && requirement.requirementId) {
-      // This is a custom type - check if ID matches expected format
-      const expectedPrefix = `REQ-${effectiveType.toUpperCase().replace(/[^A-Z]/g, '').substring(0, 3)}`
-      // Extract prefix from current ID (format: REQ-XXXX-001 or REQ-XXX-001)
-      const idParts = requirement.requirementId.split('-')
-      if (idParts.length >= 2) {
-        const currentIdPrefix = `${idParts[0]}-${idParts[1]}`
-        // Check if prefix doesn't match expected format (e.g., old 4-letter vs new 3-letter)
-        // Also check if the middle part (the type code) has 4 characters instead of 3
-        const typeCode = idParts[1]
-        if (currentIdPrefix !== expectedPrefix || (typeCode && typeCode.length === 4)) {
-          needsFormatUpdate = true
-          console.log(`[Requirement ID Update] ID format mismatch detected. Current prefix: "${currentIdPrefix}", Expected: "${expectedPrefix}", Type code length: ${typeCode?.length}`)
-        }
-      }
-    }
-
-    // If classification changed and no manual ID override provided, generate new ID
-    if (classificationChanged && !hasManualIdOverride) {
-      // Generate new ID based on the new classification
-      finalRequirementId = await generateRequirementId(
-        projectId,
-        requirementType || undefined,
-        category !== undefined ? category : requirement.category || undefined
-      )
-      console.log(`[Requirement ID Update] Classification changed from "${currentType}" to "${newType}". Generated new ID: ${finalRequirementId}`)
-    } else if (needsFormatUpdate && !hasManualIdOverride) {
-      // ID format needs updating (e.g., old 4-letter format to new 3-letter format)
-      finalRequirementId = await generateRequirementId(
-        projectId,
-        effectiveType || undefined,
-        effectiveCategory || undefined
-      )
-      console.log(`[Requirement ID Update] ID format updated from "${requirement.requirementId}" to "${finalRequirementId}"`)
-    } else if (hasManualIdOverride) {
+    if (hasManualIdOverride) {
       // Manual ID override provided (different from current ID)
       finalRequirementId = newRequirementId
       console.log(`[Requirement ID Update] Manual ID override provided: ${finalRequirementId}`)
@@ -1326,7 +1263,7 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
           // Uses requirementType (classification) as primary, category as fallback
           let requirementId = reqData.requirementId
           if (!requirementId) {
-            requirementId = await generateRequirementId(projectId, reqData.requirementType)
+            requirementId = await generateRequirementId(projectId)
           }
 
           // Create requirement
