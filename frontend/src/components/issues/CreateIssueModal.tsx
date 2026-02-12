@@ -4,31 +4,45 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { issueService } from '../../services/issue.service'
 import { functionService } from '../../services/function.service'
 import { parameterService } from '../../services/parameter.service'
+import { requirementService } from '../../services/requirement.service'
 import type { CreateIssueDto, SystemFunction, Parameter } from 'shared/types/engineering.types'
 
 interface CreateIssueModalProps {
   isOpen: boolean
   onClose: () => void
   projectId: string
+  initialSourceType?: 'function' | 'parameter' | 'requirement'
+  initialSourceId?: string
+  initialSourceTitle?: string
+  initialSourceDescription?: string
 }
 
 type SourceItem = {
   id: string
-  type: 'function' | 'parameter'
+  type: 'function' | 'parameter' | 'requirement'
   name: string
   description?: string
   functionId?: string
+  requirementId?: string
   index?: number
 }
 
-export default function CreateIssueModal({ isOpen, onClose, projectId }: CreateIssueModalProps) {
+export default function CreateIssueModal({
+  isOpen,
+  onClose,
+  projectId,
+  initialSourceType,
+  initialSourceId,
+  initialSourceTitle,
+  initialSourceDescription,
+}: CreateIssueModalProps) {
   const [formData, setFormData] = useState<CreateIssueDto>({
-    title: '',
-    description: '',
+    title: initialSourceTitle || '',
+    description: initialSourceDescription || '',
     priority: 'medium',
     owner: '',
-    relatedFunctionIds: [],
-    relatedParameterIds: [],
+    relatedFunctionIds: initialSourceType === 'function' && initialSourceId ? [initialSourceId] : [],
+    relatedParameterIds: initialSourceType === 'parameter' && initialSourceId ? [initialSourceId] : [],
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [sourceSearchQuery, setSourceSearchQuery] = useState('')
@@ -49,8 +63,16 @@ export default function CreateIssueModal({ isOpen, onClose, projectId }: CreateI
     enabled: isOpen,
   })
 
+  // Fetch requirements
+  const { data: requirementsData } = useQuery({
+    queryKey: ['requirements', projectId],
+    queryFn: () => requirementService.getRequirements(projectId),
+    enabled: isOpen,
+  })
+
   const functions = functionsData?.success ? functionsData.data || [] : []
   const parameters = parametersData?.success ? parametersData.data || [] : []
+  const requirements = requirementsData?.success ? requirementsData.data || [] : []
 
   // Combine functions and parameters into a unified source list
   const allSources: SourceItem[] = [
@@ -68,6 +90,13 @@ export default function CreateIssueModal({ isOpen, onClose, projectId }: CreateI
       name: param.name,
       description: param.description,
     })),
+    ...requirements.map((req) => ({
+      id: req.id,
+      type: 'requirement' as const,
+      name: req.title,
+      description: req.description,
+      requirementId: req.requirementId,
+    })),
   ]
 
   // Filter sources based on search
@@ -76,12 +105,14 @@ export default function CreateIssueModal({ isOpen, onClose, projectId }: CreateI
     const name = source.name || ''
     const description = source.description || ''
     const functionId = source.functionId || ''
-    const typeLabel = source.type === 'function' ? 'function' : 'parameter'
-    
+    const requirementId = source.requirementId || ''
+    const typeLabel = source.type
+
     return (
       name.toLowerCase().includes(searchLower) ||
       description?.toLowerCase().includes(searchLower) ||
       functionId.toLowerCase().includes(searchLower) ||
+      requirementId.toLowerCase().includes(searchLower) ||
       typeLabel.includes(searchLower)
     )
   })
@@ -118,7 +149,7 @@ export default function CreateIssueModal({ isOpen, onClose, projectId }: CreateI
     onError: (error: any) => {
       console.error('Create issue error:', error)
       let errorMessage = 'Failed to create issue.'
-      
+
       if (error?.error) {
         errorMessage = error.error
       } else if (error?.message) {
@@ -126,7 +157,7 @@ export default function CreateIssueModal({ isOpen, onClose, projectId }: CreateI
       } else if (error?.response?.data?.error) {
         errorMessage = error.response.data.error
       }
-      
+
       setErrors({ submit: errorMessage })
     },
   })
@@ -177,12 +208,15 @@ export default function CreateIssueModal({ isOpen, onClose, projectId }: CreateI
         ? currentIds.filter((id) => id !== source.id)
         : [...currentIds, source.id]
       handleChange('relatedFunctionIds', newIds)
-    } else {
+    } else if (source.type === 'parameter') {
       const currentIds = formData.relatedParameterIds || []
       const newIds = currentIds.includes(source.id)
         ? currentIds.filter((id) => id !== source.id)
         : [...currentIds, source.id]
       handleChange('relatedParameterIds', newIds)
+    } else if (source.type === 'requirement') {
+      // Requirements are currently linked via description or tags until a specialized field is added
+      // For now, we can just pre-fill the description if it's the initial source
     }
   }
 
@@ -214,22 +248,22 @@ export default function CreateIssueModal({ isOpen, onClose, projectId }: CreateI
     }
   }
 
-  // Reset form when modal closes
+  // Reset form when modal closes or initial source changes
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
       setFormData({
-        title: '',
-        description: '',
+        title: initialSourceTitle || '',
+        description: initialSourceDescription || '',
         priority: 'medium',
         owner: '',
-        relatedFunctionIds: [],
-        relatedParameterIds: [],
+        relatedFunctionIds: initialSourceType === 'function' && initialSourceId ? [initialSourceId] : [],
+        relatedParameterIds: initialSourceType === 'parameter' && initialSourceId ? [initialSourceId] : [],
       })
       setErrors({})
       setSourceSearchQuery('')
       setShowSourceDropdown(false)
     }
-  }, [isOpen])
+  }, [isOpen, initialSourceId, initialSourceType, initialSourceTitle, initialSourceDescription])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -277,11 +311,10 @@ export default function CreateIssueModal({ isOpen, onClose, projectId }: CreateI
               type="text"
               value={formData.title}
               onChange={(e) => handleChange('title', e.target.value)}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.title
-                  ? 'border-red-500'
-                  : 'border-gray-300 dark:border-gray-600'
-              } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.title
+                ? 'border-red-500'
+                : 'border-gray-300 dark:border-gray-600'
+                } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
               placeholder="Enter issue title"
             />
             {errors.title && (
@@ -298,11 +331,10 @@ export default function CreateIssueModal({ isOpen, onClose, projectId }: CreateI
               value={formData.description}
               onChange={(e) => handleChange('description', e.target.value)}
               rows={4}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${
-                errors.description
-                  ? 'border-red-500'
-                  : 'border-gray-300 dark:border-gray-600'
-              } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${errors.description
+                ? 'border-red-500'
+                : 'border-gray-300 dark:border-gray-600'
+                } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
               placeholder="Enter issue description"
             />
             {errors.description && (
@@ -335,10 +367,12 @@ export default function CreateIssueModal({ isOpen, onClose, projectId }: CreateI
                   {filteredSources.length > 0 ? (
                     filteredSources.map((source) => {
                       const isSelected = isSourceSelected(source)
-                      const displayName = source.type === 'function' 
+                      const displayName = source.type === 'function'
                         ? `${formatFunctionId(source)}: ${source.name}`
-                        : source.name
-                      
+                        : source.type === 'requirement'
+                          ? `${source.requirementId || source.id.slice(0, 8)}: ${source.name}`
+                          : source.name
+
                       return (
                         <button
                           key={`${source.type}-${source.id}`}
@@ -346,11 +380,10 @@ export default function CreateIssueModal({ isOpen, onClose, projectId }: CreateI
                           onClick={() => toggleSource(source)}
                           className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3"
                         >
-                          <div className={`w-5 h-5 border-2 rounded flex items-center justify-center ${
-                            isSelected
-                              ? 'bg-blue-600 border-blue-600'
-                              : 'border-gray-300 dark:border-gray-600'
-                          }`}>
+                          <div className={`w-5 h-5 border-2 rounded flex items-center justify-center ${isSelected
+                            ? 'bg-blue-600 border-blue-600'
+                            : 'border-gray-300 dark:border-gray-600'
+                            }`}>
                             {isSelected && <Check size={14} className="text-white" />}
                           </div>
                           <div className="flex-1">
@@ -358,12 +391,11 @@ export default function CreateIssueModal({ isOpen, onClose, projectId }: CreateI
                               <span className="font-medium text-gray-900 dark:text-white">
                                 {displayName}
                               </span>
-                              <span className={`text-xs px-2 py-0.5 rounded ${
-                                source.type === 'function'
-                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300'
-                                  : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
-                              }`}>
-                                {source.type === 'function' ? 'Function' : 'Parameter'}
+                              <span className={`text-xs px-2 py-0.5 rounded ${source.type === 'function'
+                                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300'
+                                : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                                }`}>
+                                {source.type === 'function' ? 'Function' : source.type === 'requirement' ? 'Requirement' : 'Parameter'}
                               </span>
                             </div>
                             {source.description && (
@@ -386,21 +418,24 @@ export default function CreateIssueModal({ isOpen, onClose, projectId }: CreateI
             {selectedSources.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-2">
                 {selectedSources.map((source) => {
-                  const displayName = source.type === 'function' 
+                  const displayName = source.type === 'function'
                     ? `${formatFunctionId(source)}: ${source.name}`
-                    : source.name
-                  
+                    : source.type === 'requirement'
+                      ? `${source.requirementId || source.id.slice(0, 8)}: ${source.name}`
+                      : source.name
+
                   return (
                     <span
                       key={`${source.type}-${source.id}`}
-                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-sm ${
-                        source.type === 'function'
-                          ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300'
+                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-sm ${source.type === 'function'
+                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300'
+                        : source.type === 'requirement'
+                          ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300'
                           : 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
-                      }`}
+                        }`}
                     >
                       <span className="text-xs font-medium">
-                        {source.type === 'function' ? 'F' : 'P'}:
+                        {source.type === 'function' ? 'F' : source.type === 'requirement' ? 'R' : 'P'}:
                       </span>
                       {displayName}
                       <button

@@ -17,6 +17,7 @@ import RequirementQualityPanel from '../../components/requirements/RequirementQu
 import AllocationTable from '../../components/requirements/AllocationTable'
 import RequirementsPBSTree from '../../components/requirements/RequirementsPBSTree'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
+import CreateIssueModal from '../../components/issues/CreateIssueModal'
 import ReviewStatusBadge from '../../components/requirements/ReviewStatusBadge'
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import { requirementService } from '../../services/requirement.service'
@@ -75,6 +76,8 @@ export default function RequirementsPage() {
   const [isQualityPanelOpen, setIsQualityPanelOpen] = useState(false)
   const [isChangeRequestModalOpen, setIsChangeRequestModalOpen] = useState(false)
   const [selectedRequirementForChangeRequest, setSelectedRequirementForChangeRequest] = useState<Requirement | null>(null)
+  const [isCreateIssueModalOpen, setIsCreateIssueModalOpen] = useState(false)
+  const [selectedRequirementForIssue, setSelectedRequirementForIssue] = useState<Requirement | null>(null)
   const [suspectLinksForCR, setSuspectLinksForCR] = useState<{ sourceType: string; sourceId: string; targetType: string; targetId: string }[] | null>(null)
   const [changeStatusAnchor, setChangeStatusAnchor] = useState<{ requirement: Requirement; el: HTMLElement } | null>(null)
 
@@ -1135,6 +1138,17 @@ export default function RequirementsPage() {
               >
                 <GitBranch size={16} />
               </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setSelectedRequirementForIssue(req)
+                  setIsCreateIssueModalOpen(true)
+                }}
+                className="p-1.5 text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
+                title="Create issue"
+              >
+                <AlertCircle size={16} />
+              </button>
               {!isBaselineView && (
                 <>
                   <button
@@ -2052,7 +2066,7 @@ export default function RequirementsPage() {
                 setSelectedRequirementForChangeRequest(null)
                 setSuspectLinksForCR(null)
               }}
-              projectId={projectId}
+              projectId={projectId || ''}
               sourceType={selectedRequirementForChangeRequest ? 'requirement' : undefined}
               sourceId={selectedRequirementForChangeRequest?.id}
               sourceName={selectedRequirementForChangeRequest?.title}
@@ -2064,6 +2078,19 @@ export default function RequirementsPage() {
               }
             />
           )}
+
+          <CreateIssueModal
+            isOpen={isCreateIssueModalOpen}
+            onClose={() => {
+              setIsCreateIssueModalOpen(false)
+              setSelectedRequirementForIssue(null)
+            }}
+            projectId={projectId || ''}
+            initialSourceType="requirement"
+            initialSourceId={selectedRequirementForIssue?.id}
+            initialSourceTitle={selectedRequirementForIssue ? `Issue for ${selectedRequirementForIssue.requirementId || selectedRequirementForIssue.title}` : ''}
+            initialSourceDescription={selectedRequirementForIssue ? `Issue created from requirement: ${selectedRequirementForIssue.title}\n\n${selectedRequirementForIssue.description}` : ''}
+          />
         </div>
 
         {/* Drawer - Side by side with main content */}
