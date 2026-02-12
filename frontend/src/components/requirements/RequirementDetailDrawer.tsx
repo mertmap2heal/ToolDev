@@ -5,12 +5,14 @@ import { useNavigate } from 'react-router-dom'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
+import { useLifecycleStore } from '../../store/lifecycleStore'
+import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
+import { LifecycleFlowViewer } from '../lifecycle/LifecycleFlowViewer'
 import { changeRequestService } from '../../services/changeRequest.service'
 import { linkService } from '../../services/link.service'
 import { LINKAGE_V1, LIFECYCLE_V1 } from '../../config/featureFlags'
 import { lifecycleService } from '../../services/lifecycle.service'
-import { useLifecycleStore } from '../../store/lifecycleStore'
-import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
+
 import { buildDeepLink } from '../../linkage/buildDeepLink'
 import ImpactAnalysis from './ImpactAnalysis'
 import RequirementVersionHistory from './RequirementVersionHistory'
@@ -179,6 +181,7 @@ export default function RequirementDetailDrawer({
   const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false)
 
   const { lifecycles } = useLifecycleStore()
+  const { statuses } = useStatusDefinitionsStore()
 
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -307,14 +310,16 @@ export default function RequirementDetailDrawer({
   return (
     <div
       className={clsx(
-        'h-full bg-white dark:bg-gray-800 shadow-2xl border-l border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out overflow-hidden',
-        isOpen && displayRequirement ? 'w-full max-w-2xl min-w-[32rem]' : 'w-0 min-w-0'
+        'flex flex-col transition-all duration-300 ease-in-out overflow-hidden',
+        isOpen && displayRequirement
+          ? 'h-[calc(100%-1rem)] m-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm w-[32rem] flex-shrink-0'
+          : 'w-0 min-w-0 h-full'
       )}
     >
       {displayRequirement && (
         <>
           {/* Header */}
-          <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between flex-shrink-0">
+          <div className="px-4 py-4 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm flex items-center justify-between flex-shrink-0">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <span className="font-mono text-sm text-gray-600 dark:text-gray-400">
@@ -327,7 +332,12 @@ export default function RequirementDetailDrawer({
                   <ReviewStatusBadge status={displayRequirement.reviewStatus} size="sm" />
                 )}
               </div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">{displayRequirement.title}</h2>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400 inline-flex">
+                  <FileText className="w-5 h-5" />
+                </div>
+                {displayRequirement.title}
+              </h2>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -372,7 +382,7 @@ export default function RequirementDetailDrawer({
           </div>
 
           {/* Tabs */}
-          <div className="border-b border-gray-200 dark:border-gray-700 px-6 flex-shrink-0">
+          <div className="border-b border-gray-200 dark:border-gray-700 px-4 flex-shrink-0">
             <div className="flex gap-4">
               {[
                 { id: 'overview', label: 'Overview' },
@@ -399,9 +409,28 @@ export default function RequirementDetailDrawer({
           </div>
 
           {/* Content */}
-          <div className="overflow-y-auto flex-1 px-6 py-4">
+          <div className="overflow-y-auto flex-1 px-4 py-4">
             {activeTab === 'overview' && (
               <div className="space-y-6">
+                {/* Lifecycle Flow */}
+                {displayRequirement.lifecycleId && (() => {
+                  const lifecycle = lifecycles.find(l => l.id === displayRequirement.lifecycleId)
+
+                  if (lifecycle && lifecycle.steps && lifecycle.steps.length > 0) {
+                    return (
+                      <div className="mb-6">
+                        <LifecycleFlowViewer
+                          steps={lifecycle.steps}
+                          transitionRules={lifecycle.transitionRules || []}
+                          statuses={statuses}
+                          currentStatusId={displayRequirement.statusId}
+                        />
+                      </div>
+                    )
+                  }
+                  return null
+                })()}
+
                 {/* Tags */}
                 {displayRequirement.tags && displayRequirement.tags.length > 0 && (
                   <div>
