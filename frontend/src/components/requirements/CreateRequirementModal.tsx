@@ -183,13 +183,9 @@ export default function CreateRequirementModal({
   const queryClient = useQueryClient()
   const { statuses } = useStatusDefinitionsStore()
   const { lifecycles } = useLifecycleStore()
-  const [applicableLifecycle, setApplicableLifecycle] = useState<{
-    lifecycleId: string
-    defaultStatusId: string
-    statusName: string
-  } | null>(null)
-
   const [availableLifecycles, setAvailableLifecycles] = useState<LifecycleSummary[]>([])
+  const [applicableLifecycle, setApplicableLifecycle] = useState<{ lifecycleId: string; defaultStatusId: string; statusName: string } | null>(null)
+  const [lifecycleStatuses, setLifecycleStatuses] = useState<{ id: string; name: string }[]>([])
 
   // Fetch lifecycles logic
   useEffect(() => {
@@ -208,6 +204,8 @@ export default function CreateRequirementModal({
           if (result.data.length === 1) {
             const lc = result.data[0]
             const statusName = lifecycleService.getStatusName(lc.defaultStatusId)
+            const statuses = lifecycleService.getLifecycleStatuses(lc.id)
+            setLifecycleStatuses(statuses)
             setApplicableLifecycle({
               lifecycleId: lc.id,
               defaultStatusId: lc.defaultStatusId,
@@ -249,6 +247,8 @@ export default function CreateRequirementModal({
         // Update selection if it differs from current to avoid loops (though check is cheap)
         if (applicableLifecycle?.lifecycleId !== match.id) {
           const statusName = lifecycleService.getStatusName(match.defaultStatusId)
+          const statuses = lifecycleService.getLifecycleStatuses(match.id)
+          setLifecycleStatuses(statuses)
           setApplicableLifecycle({
             lifecycleId: match.id,
             defaultStatusId: match.defaultStatusId,
@@ -865,8 +865,12 @@ export default function CreateRequirementModal({
                 onChange={(e) => {
                   const selectedId = e.target.value
                   const lc = availableLifecycles.find(l => l.id === selectedId)
+                  // Update valid statuses when lifecycle changes
                   if (lc) {
                     const statusName = lifecycleService.getStatusName(lc.defaultStatusId)
+                    const statuses = lifecycleService.getLifecycleStatuses(lc.id)
+                    setLifecycleStatuses(statuses)
+
                     setApplicableLifecycle({
                       lifecycleId: lc.id,
                       defaultStatusId: lc.defaultStatusId,
@@ -920,7 +924,31 @@ export default function CreateRequirementModal({
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
                 Status {LIFECYCLE_V1 && '(from lifecycle)'}
               </label>
-              {LIFECYCLE_V1 ? (
+              {LIFECYCLE_SELECT_V1 && applicableLifecycle ? (
+                <select
+                  value={formData.status || applicableLifecycle.statusName}
+                  onChange={(e) => {
+                    // Find status object to get ID if needed
+                    const s = lifecycleStatuses.find(st => st.name === e.target.value)
+                    handleChange('status', e.target.value)
+                    // If backend needs ID, we might need to store it separately or assume name matches
+                    // For now, consistent with existing logic which uses name
+                    if (s) {
+                      // Update defaultStatusId in applicableLifecycle to track current selection's ID
+                      setApplicableLifecycle(prev => prev ? ({ ...prev, defaultStatusId: s.id, statusName: s.name }) : null)
+                    }
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  {lifecycleStatuses.length > 0 ? (
+                    lifecycleStatuses.map((s) => (
+                      <option key={s.id} value={s.name}>{s.name}</option>
+                    ))
+                  ) : (
+                    <option value={applicableLifecycle.statusName}>{applicableLifecycle.statusName}</option>
+                  )}
+                </select>
+              ) : LIFECYCLE_V1 ? (
                 <>
                   <input
                     type="text"
@@ -947,9 +975,9 @@ export default function CreateRequirementModal({
                 </select>
               )}
             </div>
+
           </div>
 
-          {/* Owner and Source */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">

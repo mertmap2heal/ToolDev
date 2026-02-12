@@ -211,4 +211,26 @@ export const lifecycleService = {
   getLifecycle(lifecycleId: string) {
     return useLifecycleStore.getState().getLifecycle(lifecycleId)
   },
+
+  /**
+   * Get valid statuses for a specific lifecycle.
+   */
+  getLifecycleStatuses(lifecycleId: string): { id: string; name: string }[] {
+    const { lifecycles } = useLifecycleStore.getState()
+    const { statuses } = useStatusDefinitionsStore.getState()
+
+    const lifecycle = lifecycles.find(l => l.id === lifecycleId)
+    if (!lifecycle || !lifecycle.steps) return []
+
+    // Extract unique status IDs from steps
+    const statusIds = Array.from(new Set(lifecycle.steps.map(s => s.statusId)))
+
+    // Map to status objects
+    return statusIds
+      .map(id => {
+        const s = statuses.find(def => def.id === id)
+        return s ? { id: s.id, name: s.name } : null
+      })
+      .filter((s): s is { id: string; name: string } => s !== null)
+  },
 }
