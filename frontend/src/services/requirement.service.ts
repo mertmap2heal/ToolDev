@@ -2,6 +2,12 @@ import { apiClient } from './api'
 import type { Requirement, CreateRequirementDto, UpdateRequirementDto, RequirementComment, BulkImportRequest, BulkImportResult } from 'shared/types/engineering.types'
 import type { ApiResponse } from 'shared/types/api.types'
 
+export type RequirementSubscriptionSnapshot = {
+  subscribed: boolean
+  subscriberCount: number
+  preview: Array<{ id: string; name: string; avatarUrl: string | null }>
+}
+
 export const requirementService = {
   async getRequirements(projectId: string): Promise<ApiResponse<Requirement[]>> {
     return apiClient.get<Requirement[]>(`/requirements/${projectId}`)
@@ -23,8 +29,28 @@ export const requirementService = {
     return apiClient.delete<void>(`/requirements/${projectId}/${requirementId}`)
   },
 
+  async lockRequirement(projectId: string, requirementId: string): Promise<ApiResponse<Requirement>> {
+    return apiClient.post<Requirement>(`/requirements/${projectId}/${requirementId}/lock`, {})
+  },
+
+  async unlockRequirement(projectId: string, requirementId: string): Promise<ApiResponse<Requirement>> {
+    return apiClient.post<Requirement>(`/requirements/${projectId}/${requirementId}/unlock`, {})
+  },
+
   async getRequirementChildren(projectId: string, requirementId: string): Promise<ApiResponse<Requirement[]>> {
     return apiClient.get<Requirement[]>(`/requirements/${projectId}/${requirementId}/children`)
+  },
+
+  async getRequirementSubscription(projectId: string, requirementId: string): Promise<ApiResponse<RequirementSubscriptionSnapshot>> {
+    return apiClient.get<RequirementSubscriptionSnapshot>(`/requirements/${projectId}/${requirementId}/subscription`)
+  },
+
+  async subscribeToRequirement(projectId: string, requirementId: string): Promise<ApiResponse<RequirementSubscriptionSnapshot>> {
+    return apiClient.post<RequirementSubscriptionSnapshot>(`/requirements/${projectId}/${requirementId}/subscribe`, {})
+  },
+
+  async unsubscribeFromRequirement(projectId: string, requirementId: string): Promise<ApiResponse<RequirementSubscriptionSnapshot>> {
+    return apiClient.post<RequirementSubscriptionSnapshot>(`/requirements/${projectId}/${requirementId}/unsubscribe`, {})
   },
 
   async updateRequirementParent(projectId: string, requirementId: string, newParentId: string | null): Promise<ApiResponse<Requirement>> {

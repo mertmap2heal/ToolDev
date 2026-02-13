@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client'
+import { buildRequirementChangeSummary, notifyRequirementSubscribers } from './requirementNotification.service'
 import { XMLBuilder, XMLParser } from 'fast-xml-parser'
 
 const prisma = new PrismaClient()
@@ -304,7 +305,7 @@ export const reqifService = {
   /**
    * Import requirements from ReqIF format
    */
-  async importFromReqIF(projectId: string, reqifXml: string): Promise<{
+  async importFromReqIF(projectId: string, reqifXml: string, actorUserId?: string): Promise<{
     created: number
     updated: number
     skipped: number
@@ -367,7 +368,7 @@ export const reqifService = {
 
         if (existing) {
           // Update existing requirement
-          await prisma.requirement.update({
+          const updatedRequirement = await prisma.requirement.update({
             where: { id: existing.id },
             data: {
               title: requirement.title,
@@ -386,6 +387,19 @@ export const reqifService = {
               tags: requirement.tags || existing.tags,
               verificationStatus: requirement.verificationStatus || existing.verificationStatus,
               verificationNotes: requirement.verificationNotes || existing.verificationNotes,
+            },
+          })
+
+          const changes = buildRequirementChangeSummary(existing as any, updatedRequirement as any)
+          await notifyRequirementSubscribers({
+            projectId,
+            requirementId: updatedRequirement.id,
+            actorUserId,
+            changes,
+            requirementSnapshot: {
+              id: updatedRequirement.id,
+              requirementId: updatedRequirement.requirementId,
+              title: updatedRequirement.title,
             },
           })
           updated.push(i)

@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client'
+import { notifyRequirementSubscribers } from './requirementNotification.service'
 
 const prisma = new PrismaClient()
 
@@ -90,7 +91,7 @@ export const requirementReviewService = {
   /**
    * Start a review (change status from draft to in_review)
    */
-  async startReview(reviewId: string) {
+  async startReview(reviewId: string, actorUserId?: string) {
     try {
       const review = await prisma.requirementReview.update({
         where: { id: reviewId },
@@ -105,9 +106,23 @@ export const requirementReviewService = {
       })
 
       // Update requirement review status
+      const previousStatus = review.requirement.reviewStatus
+      const nextStatus = 'under_review'
       await prisma.requirement.update({
         where: { id: review.requirementId },
-        data: { reviewStatus: 'under_review' },
+        data: { reviewStatus: nextStatus },
+      })
+
+      await notifyRequirementSubscribers({
+        projectId: review.requirement.projectId,
+        requirementId: review.requirementId,
+        actorUserId,
+        changes: [`Review status: ${previousStatus || '—'} -> ${nextStatus}`],
+        requirementSnapshot: {
+          id: review.requirementId,
+          requirementId: review.requirement.requirementId,
+          title: review.requirement.title,
+        },
       })
 
       return { success: true, data: review }
@@ -120,7 +135,7 @@ export const requirementReviewService = {
   /**
    * Update reviewer response
    */
-  async updateReviewer(reviewerId: string, request: UpdateReviewerRequest) {
+  async updateReviewer(reviewerId: string, request: UpdateReviewerRequest, actorUserId?: string) {
     try {
       const reviewer = await prisma.requirementReviewer.update({
         where: { id: reviewerId },
@@ -162,6 +177,17 @@ export const requirementReviewService = {
       }
 
       if (newReviewStatus !== review.reviewStatus) {
+        const requirementSnapshot = await prisma.requirement.findUnique({
+          where: { id: review.requirementId },
+          select: {
+            id: true,
+            requirementId: true,
+            title: true,
+            projectId: true,
+            reviewStatus: true,
+          },
+        })
+
         await prisma.requirementReview.update({
           where: { id: review.id },
           data: {
@@ -171,12 +197,32 @@ export const requirementReviewService = {
         })
 
         // Update requirement review status
+        const nextStatus = newReviewStatus === 'approved'
+          ? 'approved'
+          : newReviewStatus === 'rejected'
+            ? 'rejected'
+            : 'under_review'
+
         await prisma.requirement.update({
           where: { id: review.requirementId },
           data: {
-            reviewStatus: newReviewStatus === 'approved' ? 'approved' : newReviewStatus === 'rejected' ? 'rejected' : 'under_review',
+            reviewStatus: nextStatus,
           },
         })
+
+        if (requirementSnapshot) {
+          await notifyRequirementSubscribers({
+            projectId: requirementSnapshot.projectId,
+            requirementId: review.requirementId,
+            actorUserId,
+            changes: [`Review status: ${requirementSnapshot.reviewStatus || '—'} -> ${nextStatus}`],
+            requirementSnapshot: {
+              id: requirementSnapshot.id,
+              requirementId: requirementSnapshot.requirementId,
+              title: requirementSnapshot.title,
+            },
+          })
+        }
       }
 
       return { success: true, data: reviewer }
@@ -274,7 +320,7 @@ export const requirementReviewService = {
   /**
    * Cancel a review
    */
-  async cancelReview(reviewId: string) {
+  async cancelReview(reviewId: string, actorUserId?: string) {
     try {
       const review = await prisma.requirementReview.update({
         where: { id: reviewId },
@@ -289,9 +335,22 @@ export const requirementReviewService = {
 
       // Reset requirement review status if it was under review
       if (review.requirement.reviewStatus === 'under_review') {
+        const previousStatus = review.requirement.reviewStatus
         await prisma.requirement.update({
           where: { id: review.requirementId },
           data: { reviewStatus: 'draft' },
+        })
+
+        await notifyRequirementSubscribers({
+          projectId: review.requirement.projectId,
+          requirementId: review.requirementId,
+          actorUserId,
+          changes: [`Review status: ${previousStatus || '—'} -> draft`],
+          requirementSnapshot: {
+            id: review.requirementId,
+            requirementId: review.requirement.requirementId,
+            title: review.requirement.title,
+          },
         })
       }
 

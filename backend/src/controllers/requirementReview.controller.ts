@@ -51,8 +51,9 @@ export const createReview = async (req: AuthRequest, res: Response) => {
 export const startReview = async (req: AuthRequest, res: Response) => {
   try {
     const { reviewId } = req.params
+    const actorUserId = req.userId
 
-    const result = await requirementReviewService.startReview(reviewId)
+    const result = await requirementReviewService.startReview(reviewId, actorUserId)
 
     if (!result.success) {
       return res.status(400).json(result)
@@ -76,6 +77,7 @@ export const updateReviewer = async (req: AuthRequest, res: Response) => {
   try {
     const { reviewerId } = req.params
     const { status, reviewComments } = req.body
+    const actorUserId = req.userId
 
     if (!status) {
       return res.status(400).json({
@@ -92,10 +94,11 @@ export const updateReviewer = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    const result = await requirementReviewService.updateReviewer(reviewerId, {
-      status,
-      reviewComments,
-    })
+    const result = await requirementReviewService.updateReviewer(
+      reviewerId,
+      { status, reviewComments },
+      actorUserId
+    )
 
     if (!result.success) {
       return res.status(400).json(result)
@@ -194,8 +197,9 @@ export const getProjectReviews = async (req: AuthRequest, res: Response) => {
 export const cancelReview = async (req: AuthRequest, res: Response) => {
   try {
     const { reviewId } = req.params
+    const actorUserId = req.userId
 
-    const result = await requirementReviewService.cancelReview(reviewId)
+    const result = await requirementReviewService.cancelReview(reviewId, actorUserId)
 
     if (!result.success) {
       return res.status(400).json(result)

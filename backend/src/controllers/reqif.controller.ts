@@ -34,6 +34,7 @@ export const exportToReqIF = async (req: AuthRequest, res: Response) => {
 export const importFromReqIF = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
+    const actorUserId = req.userId
 
     if (!req.body || !req.body.reqifXml) {
       return res.status(400).json({
@@ -42,7 +43,7 @@ export const importFromReqIF = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    const result = await reqifService.importFromReqIF(projectId, req.body.reqifXml)
+    const result = await reqifService.importFromReqIF(projectId, req.body.reqifXml, actorUserId)
 
     res.json({
       success: true,

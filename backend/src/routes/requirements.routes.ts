@@ -8,6 +8,9 @@ import {
   updateRequirement,
   deleteRequirement,
   getRequirementChildren,
+  getRequirementSubscription,
+  subscribeToRequirement,
+  unsubscribeFromRequirement,
   createRequirementComment,
   deleteRequirementComment,
   updateRequirementParent,
@@ -18,6 +21,8 @@ import {
   deleteCustomRequirementType,
   migrateCategoryToRequirementType,
   updateRequirementComponent,
+  lockRequirement,
+  unlockRequirement,
 } from '../controllers/requirement.controller'
 
 const router = Router()
@@ -28,10 +33,15 @@ router.get('/:projectId', getRequirements)
 router.get('/:projectId/audit', getAuditEvents)
 router.get('/:projectId/:requirementId', getRequirement)
 router.get('/:projectId/:requirementId/children', getRequirementChildren)
+router.get('/:projectId/:requirementId/subscription', getRequirementSubscription)
 router.post('/:projectId', createRequirement)
+router.post('/:projectId/:requirementId/subscribe', subscribeToRequirement)
+router.post('/:projectId/:requirementId/unsubscribe', unsubscribeFromRequirement)
 router.put('/:projectId/:requirementId', updateRequirement)
 router.put('/:projectId/:requirementId/parent', updateRequirementParent)
 router.delete('/:projectId/:requirementId', deleteRequirement)
+router.post('/:projectId/:requirementId/lock', lockRequirement)
+router.post('/:projectId/:requirementId/unlock', unlockRequirement)
 router.post('/:projectId/bulk-update', bulkUpdateRequirements)
 router.post('/:projectId/bulk-import', bulkImportRequirements)
 

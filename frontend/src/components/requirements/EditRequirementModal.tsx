@@ -174,7 +174,7 @@ export default function EditRequirementModal({
     if (requirement) {
       setFormData({
         requirementId: requirement.requirementId,
-        lifecycleId: requirement.lifecycleId,
+        lifecycleId: requirement.lifecycleId ?? undefined,
         statusId: requirement.statusId,
         title: requirement.title,
         requirementType: requirement.requirementType,
@@ -188,7 +188,7 @@ export default function EditRequirementModal({
         stakeholders: requirement.stakeholders,
         verificationStatus: requirement.verificationStatus,
         verificationDate: requirement.verificationDate,
-        verificationNotes: requirement.verificationNotes,
+        verificationNotes: requirement.verificationNotes ?? undefined,
         description: requirement.description,
         parentId: requirement.parentId,
         priority: requirement.priority,

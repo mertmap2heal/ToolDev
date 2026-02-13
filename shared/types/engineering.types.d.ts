@@ -33,8 +33,15 @@ export interface Requirement {
     stakeholders?: string[];
     verificationStatus?: 'not_verified' | 'verified' | 'failed';
     verificationDate?: string;
-    verificationNotes?: string;
-    linkedMocCode?: number;
+    verificationNotes?: string | null;
+    linkedMocCode?: number | null;
+    isLocked: boolean;
+    lockedByUserId?: string | null;
+    lockedAt?: string | null;
+    lifecycleId?: string | null;
+    statusId?: string;
+    statusChangedAt?: string;
+    statusChangedBy?: string;
     moc?: {
         code: number;
         name: string;
@@ -117,7 +124,11 @@ export interface Baseline {
     createdByName?: string;
     lockedAt?: string;
     itemCount?: number;
+    /** Snapshot items (from GET baseline with expand) */
+    items?: BaselineItem[];
+    /** Number of requirement-related links in baseline snapshot (LINKAGE_V1) */
     linksCount?: number;
+    /** Number of suspect links in baseline snapshot (LINKAGE_V1) */
     suspectLinksCount?: number;
     createdAt: string;
     updatedAt: string;
@@ -148,6 +159,7 @@ export interface RequirementComparisonItem {
         status?: string;
     };
 }
+/** Link change between baselines (LINKAGE_V1) */
 export interface BaselineLinkChange {
     id: string;
     sourceId: string;
@@ -172,8 +184,11 @@ export interface BaselineComparison {
     added: RequirementComparisonItem[];
     removed: RequirementComparisonItem[];
     modified: RequirementComparisonItem[];
+    /** Links added in B compared to A (LINKAGE_V1) */
     linksAdded?: BaselineLinkChange[];
+    /** Links removed in B compared to A (LINKAGE_V1) */
     linksRemoved?: BaselineLinkChange[];
+    /** Links that became suspect or were suspect in both (LINKAGE_V1) */
     linksSuspectChanged?: BaselineLinkChange[];
     summary?: {
         addedCount: number;
@@ -246,6 +261,7 @@ export interface CreateIssueDto {
     title: string;
     description: string;
     priority: 'low' | 'medium' | 'high' | 'critical';
+    status?: Issue['status'];
     owner?: string;
     relatedFunctionIds?: string[];
     relatedParameterIds?: string[];
@@ -296,6 +312,7 @@ export interface ChangeRequestAttachment {
 export interface ChangeRequest {
     id: string;
     projectId: string;
+    crId?: string;
     title: string;
     description: string;
     sourceType: 'function' | 'issue' | 'parameter' | 'requirement';
@@ -303,14 +320,24 @@ export interface ChangeRequest {
     priority: 'low' | 'medium' | 'high' | 'critical';
     status: 'pending' | 'approved' | 'rejected' | 'in-review';
     requestedBy?: string;
+    owner?: string;
     reviewedBy?: string;
     reviewComments?: string;
     risk?: 'low' | 'medium' | 'high' | 'critical';
     effort?: 'low' | 'medium' | 'high';
     justification?: string;
+    createdBy?: string;
+    updatedBy?: string;
     createdAt: string;
     updatedAt: string;
     attachments?: ChangeRequestAttachment[];
+    requirementLinks?: {
+        requirement: {
+            id: string;
+            requirementId?: string;
+            title: string;
+        };
+    }[];
 }
 export interface CreateChangeRequestDto {
     title: string;
@@ -319,6 +346,7 @@ export interface CreateChangeRequestDto {
     sourceId: string;
     priority: 'low' | 'medium' | 'high' | 'critical';
     requestedBy?: string;
+    owner?: string;
     risk?: 'low' | 'medium' | 'high' | 'critical';
     effort?: 'low' | 'medium' | 'high';
     justification?: string;
@@ -352,10 +380,14 @@ export interface CreateRequirementDto {
     verificationStatus?: 'not_verified' | 'verified' | 'failed';
     verificationDate?: string;
     verificationNotes?: string;
+    lifecycleId?: string;
+    statusId?: string;
 }
 export interface UpdateRequirementDto {
     requirementId?: string;
     title?: string;
+    lifecycleId?: string;
+    statusId?: string;
     description?: string;
     parentId?: string | null;
     componentId?: string | null;

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { X, Edit2, Trash2, MessageSquare, Paperclip, Tag, ChevronRight, ChevronDown, Link2, FileText, Settings, AlertCircle, Zap, History, ExternalLink, Check } from 'lucide-react'
+import { X, Edit2, Trash2, MessageSquare, Paperclip, Tag, ChevronRight, ChevronDown, Link2, FileText, Settings, AlertCircle, Zap, History, ExternalLink, Check, Bell, BellRing } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { requirementService } from '../../services/requirement.service'
+import { requirementService, type RequirementSubscriptionSnapshot } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
 import { useLifecycleStore } from '../../store/lifecycleStore'
@@ -21,6 +21,9 @@ import ReviewStatusBadge from './ReviewStatusBadge'
 import type { Requirement, RequirementComment } from 'shared/types/engineering.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
+import { LockButton } from './LockButton'
+import { useAuthStore } from '../../store/authStore'
+import RichTextEditor from '../common/RichTextEditor'
 
 interface RequirementDetailDrawerProps {
   isOpen: boolean
@@ -179,12 +182,43 @@ export default function RequirementDetailDrawer({
   const [newComment, setNewComment] = useState('')
   const [isImpactAnalysisOpen, setIsImpactAnalysisOpen] = useState(false)
   const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   const { lifecycles } = useLifecycleStore()
   const { statuses } = useStatusDefinitionsStore()
 
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const { user } = useAuthStore()
+  const currentUserId = user?.id
+
+  useEffect(() => {
+    if (!toastMessage) return
+    const timeout = setTimeout(() => setToastMessage(null), 3000)
+    return () => clearTimeout(timeout)
+  }, [toastMessage])
+
+  const lockMutation = useMutation({
+    mutationFn: () => {
+      if (!requirement) throw new Error('Requirement not found')
+      return requirementService.lockRequirement(projectId, requirement.id)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requirement', projectId, requirement?.id] })
+      queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+    },
+  })
+
+  const unlockMutation = useMutation({
+    mutationFn: () => {
+      if (!requirement) throw new Error('Requirement not found')
+      return requirementService.unlockRequirement(projectId, requirement.id)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requirement', projectId, requirement?.id] })
+      queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+    },
+  })
 
   const { data: requirements = [] } = useQuery({
     queryKey: ['requirements', projectId],
@@ -268,6 +302,86 @@ export default function RequirementDetailDrawer({
 
   const displayRequirement = fullRequirement || requirement
 
+  const showToast = (message: string) => setToastMessage(message)
+
+  const { data: subscriptionSnapshot, isLoading: subscriptionLoading } = useQuery<RequirementSubscriptionSnapshot>({
+    queryKey: ['requirement-subscription', projectId, requirement?.id],
+    queryFn: async () => {
+      if (!projectId || !requirement?.id) throw new Error('Requirement not found')
+      const response = await requirementService.getRequirementSubscription(projectId, requirement.id)
+      if (response.success && response.data) {
+        return response.data
+      }
+      throw new Error(response.error || 'Failed to load subscription status')
+    },
+    enabled: isOpen && !!projectId && !!requirement?.id,
+  })
+
+  const subscriptionMutation = useMutation({
+    mutationFn: async (nextSubscribed: boolean) => {
+      if (!requirement?.id) throw new Error('Requirement not found')
+      return nextSubscribed
+        ? requirementService.subscribeToRequirement(projectId, requirement.id)
+        : requirementService.unsubscribeFromRequirement(projectId, requirement.id)
+    },
+    onMutate: async (nextSubscribed: boolean) => {
+      await queryClient.cancelQueries({ queryKey: ['requirement-subscription', projectId, requirement?.id] })
+      const previous = queryClient.getQueryData<RequirementSubscriptionSnapshot>([
+        'requirement-subscription',
+        projectId,
+        requirement?.id,
+      ])
+
+      if (previous) {
+        const delta = nextSubscribed === previous.subscribed ? 0 : nextSubscribed ? 1 : -1
+        queryClient.setQueryData<RequirementSubscriptionSnapshot>(
+          ['requirement-subscription', projectId, requirement?.id],
+          {
+            ...previous,
+            subscribed: nextSubscribed,
+            subscriberCount: Math.max(0, previous.subscriberCount + delta),
+          }
+        )
+      }
+
+      return { previous }
+    },
+    onError: (_error, _nextSubscribed, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(
+          ['requirement-subscription', projectId, requirement?.id],
+          context.previous
+        )
+      }
+      showToast('Could not update subscription. Try again.')
+    },
+    onSuccess: (response, nextSubscribed) => {
+      if (response.success && response.data) {
+        queryClient.setQueryData(
+          ['requirement-subscription', projectId, requirement?.id],
+          response.data
+        )
+        showToast(nextSubscribed ? 'Subscribed to updates.' : 'Unsubscribed.')
+      } else {
+        showToast(response.error || 'Could not update subscription. Try again.')
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['requirement-subscription', projectId, requirement?.id] })
+    },
+  })
+
+  const isSubscribed = subscriptionSnapshot?.subscribed ?? false
+  const subscriberCount = subscriptionSnapshot?.subscriberCount ?? 0
+  const subscriberPreview = subscriptionSnapshot?.preview ?? []
+  const subscriberOverflow = Math.max(0, subscriberCount - subscriberPreview.length)
+  const subscriptionDisabled = subscriptionLoading || subscriptionMutation.isPending
+
+  const isLocked = displayRequirement?.isLocked
+  const isLockedByCurrentUser = displayRequirement?.lockedByUserId === currentUserId
+  // Strict locking: if locked, NO ONE can edit (must unlock first)
+  const canEdit = !isLocked
+
   const linkedFunctions = functions.filter((f) => f.sourceReqId === (displayRequirement?.id || ''))
   const linkedIssues = issues.filter((issue) => {
     if (!displayRequirement) return false
@@ -307,15 +421,27 @@ export default function RequirementDetailDrawer({
     }
   }
 
+  const getInitials = (name: string) => {
+    const parts = name.trim().split(/\s+/)
+    if (parts.length === 0) return 'U'
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase()
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+  }
+
   return (
     <div
       className={clsx(
-        'flex flex-col transition-all duration-300 ease-in-out overflow-hidden',
+        'flex flex-col transition-all duration-300 ease-in-out overflow-hidden relative',
         isOpen && displayRequirement
           ? 'h-[calc(100%-1rem)] m-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm w-[32rem] flex-shrink-0'
           : 'w-0 min-w-0 h-full'
       )}
     >
+      {toastMessage && (
+        <div className="absolute top-3 right-3 z-10 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 shadow-sm">
+          {toastMessage}
+        </div>
+      )}
       {displayRequirement && (
         <>
           {/* Header */}
@@ -347,6 +473,13 @@ export default function RequirementDetailDrawer({
               >
                 <History size={20} />
               </button>
+              <LockButton
+                requirement={displayRequirement}
+                currentUserId={currentUserId}
+                onLock={() => lockMutation.mutate()}
+                onUnlock={() => unlockMutation.mutate()}
+                isLoading={lockMutation.isPending || unlockMutation.isPending}
+              />
               <button
                 onClick={() => setIsImpactAnalysisOpen(true)}
                 className="p-2 text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
@@ -358,15 +491,40 @@ export default function RequirementDetailDrawer({
                 <>
                   <button
                     onClick={() => onEdit(displayRequirement)}
-                    className="p-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                    title="Edit requirement"
+                    className={clsx(
+                      "p-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300",
+                      !canEdit && "opacity-50 cursor-not-allowed"
+                    )}
+                    title={!canEdit ? "Requirement is locked. Unlock to edit." : "Edit requirement"}
+                    disabled={!canEdit}
                   >
                     <Edit2 size={20} />
                   </button>
                   <button
+                    onClick={() => subscriptionMutation.mutate(!isSubscribed)}
+                    className={clsx(
+                      "p-2 hover:text-gray-700 dark:hover:text-gray-300",
+                      isSubscribed ? "text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-gray-400",
+                      subscriptionDisabled && "opacity-50 cursor-not-allowed"
+                    )}
+                    title={isSubscribed ? 'Unsubscribe' : 'Subscribe to updates'}
+                    disabled={subscriptionDisabled}
+                  >
+                    <span className="relative inline-flex">
+                      {isSubscribed ? <BellRing size={20} /> : <Bell size={20} />}
+                      {isSubscribed && (
+                        <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-blue-500" />
+                      )}
+                    </span>
+                  </button>
+                  <button
                     onClick={() => onDelete(displayRequirement)}
-                    className="p-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                    title="Delete requirement"
+                    className={clsx(
+                      "p-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300",
+                      !canEdit && "opacity-50 cursor-not-allowed"
+                    )}
+                    title={!canEdit ? "Requirement is locked. Unlock to edit." : "Delete requirement"}
+                    disabled={!canEdit}
                   >
                     <Trash2 size={20} />
                   </button>
@@ -454,9 +612,12 @@ export default function RequirementDetailDrawer({
                 {/* Description */}
                 <div>
                   <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Description</h3>
-                  <p className="text-base text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
-                    {displayRequirement.description}
-                  </p>
+                  <RichTextEditor
+                    content={displayRequirement.description || ''}
+                    onChange={() => { }}
+                    editable={false}
+                    className="max-w-none"
+                  />
                 </div>
 
                 {/* Acceptance Criteria */}
@@ -490,6 +651,38 @@ export default function RequirementDetailDrawer({
                   <div>
                     <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Owner</h3>
                     <p className="text-sm text-gray-900 dark:text-white">{displayRequirement.owner || '—'}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Subscribers</h3>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-gray-900 dark:text-white">
+                        Subscribers: {subscriptionLoading ? '—' : subscriberCount}
+                      </p>
+                      {subscriberPreview.length > 0 && (
+                        <div className="flex items-center gap-1">
+                          {subscriberPreview.map((subscriber) => (
+                            <div
+                              key={subscriber.id}
+                              className="h-6 w-6 rounded-full bg-gray-200 dark:bg-gray-700 text-[11px] font-semibold text-gray-700 dark:text-gray-200 flex items-center justify-center overflow-hidden"
+                              title={subscriber.name}
+                            >
+                              {subscriber.avatarUrl ? (
+                                <img
+                                  src={subscriber.avatarUrl}
+                                  alt={subscriber.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                getInitials(subscriber.name)
+                              )}
+                            </div>
+                          ))}
+                          {subscriberOverflow > 0 && (
+                            <div className="text-[11px] text-gray-600 dark:text-gray-300">+{subscriberOverflow}</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Source</h3>

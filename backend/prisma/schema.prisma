@@ -24,6 +24,7 @@ model User {
   projects         ProjectMember[]
   notifications    Notification[]
   engineeringRoles UserEngineeringRole[]
+  requirementSubscriptions RequirementSubscription[]
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -243,6 +244,12 @@ model Requirement {
   verificationDate   DateTime?
   verificationNotes  String?
   linkedMocCode      Int?
+  
+  // Locking mechanism
+  isLocked           Boolean   @default(false)
+  lockedByUserId     String?
+  lockedAt           DateTime?
+
   lifecycleId        String?
   statusId           String?
   statusChangedAt    DateTime?
@@ -260,12 +267,28 @@ model Requirement {
   moc         VerMoc?                 @relation(fields: [linkedMocCode], references: [code], onDelete: SetNull)
   certObjectiveLinks CertObjectiveRequirementLink[]
   changeRequestLinks RequirementChangeRequestLink[]
+  subscriptions RequirementSubscription[]
 
   @@unique([projectId, requirementId])
   @@index([projectId])
   @@index([parentId])
   @@index([componentId])
   @@index([linkedMocCode])
+}
+
+model RequirementSubscription {
+  id              String   @id @default(uuid())
+  requirementId   String
+  userId          String
+  createdAt       DateTime @default(now())
+  lastNotifiedAt  DateTime?
+
+  requirement Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([requirementId, userId])
+  @@index([requirementId])
+  @@index([userId])
 }
 
 model RequirementComment {

@@ -1,6 +1,7 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { PrismaClient } from '@prisma/client'
+import { buildRequirementChangeSummary, notifyRequirementSubscribers } from '../services/requirementNotification.service'
 
 const prisma = new PrismaClient()
 
@@ -425,7 +426,7 @@ export const deleteComponent = async (req: AuthRequest, res: Response) => {
 
       // Move all artifacts to target component (requirements, functions, etc.)
       // This updates all componentId references from this component to the target
-      await reassignArtifacts(componentId, reassignTo)
+      await reassignArtifacts(componentId, reassignTo, req.userId)
     }
 
     // Delete the component
@@ -471,17 +472,51 @@ async function checkIsDescendant(componentId: string, targetId: string): Promise
  * Helper function to reassign component artifacts from one component to another.
  * Moves child components and any associated requirements.
  */
-async function reassignArtifacts(fromComponentId: string, toComponentId: string): Promise<void> {
+async function reassignArtifacts(
+  fromComponentId: string,
+  toComponentId: string,
+  actorUserId?: string
+): Promise<void> {
   await prisma.component.updateMany({
     where: { parentId: fromComponentId },
     data: { parentId: toComponentId },
   })
 
   // Reassign requirements from the deleted component to the target component
+  const affectedRequirements = await prisma.requirement.findMany({
+    where: { componentId: fromComponentId },
+  })
+
   await prisma.requirement.updateMany({
     where: { componentId: fromComponentId },
     data: { componentId: toComponentId },
   })
+
+  if (affectedRequirements.length > 0) {
+    const updatedRequirements = await prisma.requirement.findMany({
+      where: { id: { in: affectedRequirements.map((req) => req.id) } },
+    })
+    const updatedById = new Map(updatedRequirements.map((req) => [req.id, req]))
+
+    await Promise.all(
+      affectedRequirements.map(async (before) => {
+        const after = updatedById.get(before.id)
+        if (!after) return
+        const changes = buildRequirementChangeSummary(before as any, after as any)
+        await notifyRequirementSubscribers({
+          projectId: after.projectId,
+          requirementId: before.id,
+          actorUserId,
+          changes,
+          requirementSnapshot: {
+            id: after.id,
+            requirementId: after.requirementId,
+            title: after.title,
+          },
+        })
+      })
+    )
+  }
 }
 
 /**

@@ -121,3 +121,77 @@ This is an automated message; please do not reply.
     html,
   })
 }
+
+export interface SendRequirementUpdateEmailParams {
+  to: string
+  requirementKey: string
+  requirementTitle: string
+  actorName: string
+  timestamp: string
+  changes: string[]
+  link: string
+  action?: 'updated' | 'deleted'
+}
+
+export async function sendRequirementUpdateEmail({
+  to,
+  requirementKey,
+  requirementTitle,
+  actorName,
+  timestamp,
+  changes,
+  link,
+  action = 'updated',
+}: SendRequirementUpdateEmailParams): Promise<void> {
+  const toolName = process.env.APP_NAME ?? FROM_NAME ?? 'Engineering Tool'
+  const subject = action === 'deleted'
+    ? `[${toolName}] Requirement ${requirementKey} deleted`
+    : `[${toolName}] Requirement ${requirementKey} updated`
+
+  const changeLines = changes.length > 0 ? changes : ['Requirement updated']
+  const text = `
+${toolName} notification
+
+Requirement: ${requirementKey} - ${requirementTitle}
+Updated by: ${actorName}
+Time: ${timestamp}
+
+Changes:
+${changeLines.map((line) => `- ${line}`).join('\n')}
+
+Open Requirement: ${link}
+
+This is an automated message; please do not reply.
+`.trim()
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Requirement update</title></head>
+<body style="font-family: Arial, sans-serif; line-height: 1.5; color: #1f2937;">
+  <h2 style="margin: 0 0 12px;">${toolName} notification</h2>
+  <p style="margin: 0 0 6px;"><strong>Requirement:</strong> ${requirementKey} &ndash; ${requirementTitle}</p>
+  <p style="margin: 0 0 6px;"><strong>Updated by:</strong> ${actorName}</p>
+  <p style="margin: 0 0 12px;"><strong>Time:</strong> ${timestamp}</p>
+  <div style="margin: 12px 0; padding: 12px; background: #f3f4f6; border-radius: 8px;">
+    <strong>Changes</strong>
+    <ul style="margin: 8px 0 0 16px; padding: 0;">
+      ${changeLines.map((line) => `<li>${line}</li>`).join('')}
+    </ul>
+  </div>
+  <p style="margin: 16px 0;">
+    <a href="${link}" style="display: inline-block; background: #2563eb; color: #ffffff; text-decoration: none; padding: 10px 16px; border-radius: 6px;">Open Requirement</a>
+  </p>
+  <p style="color:#6b7280;font-size:0.9em;">This is an automated message; please do not reply.</p>
+</body>
+</html>
+`.trim()
+
+  await transporter.sendMail({
+    from: FROM_NAME.includes('@') ? FROM_NAME : `"${FROM_NAME}" <${user || 'noreply@localhost'}>`,
+    to,
+    subject,
+    text,
+    html,
+  })
+}

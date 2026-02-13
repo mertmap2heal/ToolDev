@@ -34,9 +34,15 @@ export interface Requirement {
   stakeholders?: string[]
   verificationStatus?: 'not_verified' | 'verified' | 'failed'
   verificationDate?: string
-  verificationNotes?: string
-  linkedMocCode?: number
-  lifecycleId?: string
+  verificationNotes?: string | null
+  linkedMocCode?: number | null
+
+  // Locking
+  isLocked: boolean
+  lockedByUserId?: string | null
+  lockedAt?: string | null // ISO Date string
+
+  lifecycleId?: string | null
   statusId?: string
   statusChangedAt?: string
   statusChangedBy?: string

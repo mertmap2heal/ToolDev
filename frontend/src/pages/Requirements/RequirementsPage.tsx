@@ -20,6 +20,7 @@ import CreateChangeRequestModal from '../../components/changeRequests/CreateChan
 import CreateIssueModal from '../../components/issues/CreateIssueModal'
 import ReviewStatusBadge from '../../components/requirements/ReviewStatusBadge'
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
+import LockWarningModal from '../../components/requirements/LockWarningModal'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
@@ -33,6 +34,7 @@ import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import type { Requirement, UpdateRequirementDto } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
+import { useAuthStore } from '../../store/authStore'
 
 interface ExpandedRow {
   requirementId: string
@@ -56,7 +58,10 @@ export default function RequirementsPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [searchParams] = useSearchParams()
   const baselineId = searchParams.get('baselineId')
+  const focusRequirementId = searchParams.get('requirementId')
   const [searchQuery, setSearchQuery] = useState('')
+  const { user } = useAuthStore()
+  const currentUserId = user?.id
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingRequirement, setEditingRequirement] = useState<Requirement | null>(null)
@@ -80,6 +85,7 @@ export default function RequirementsPage() {
   const [selectedRequirementForIssue, setSelectedRequirementForIssue] = useState<Requirement | null>(null)
   const [suspectLinksForCR, setSuspectLinksForCR] = useState<{ sourceType: string; sourceId: string; targetType: string; targetId: string }[] | null>(null)
   const [changeStatusAnchor, setChangeStatusAnchor] = useState<{ requirement: Requirement; el: HTMLElement } | null>(null)
+  const [lockWarning, setLockWarning] = useState<{ isOpen: boolean; message: string }>({ isOpen: false, message: '' })
 
   // Inline editing state
   const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null)
@@ -211,6 +217,16 @@ export default function RequirementsPage() {
     },
     enabled: !!projectId,
   })
+
+  useEffect(() => {
+    if (!focusRequirementId || requirements.length === 0) return
+    const req = requirements.find(
+      (item) => item.id === focusRequirementId || item.requirementId === focusRequirementId
+    )
+    if (req) {
+      setDetailRequirement(req)
+    }
+  }, [focusRequirementId, requirements])
 
   // Fetch functions for linking
   const { data: functions = [] } = useQuery({
@@ -1031,7 +1047,7 @@ export default function RequirementsPage() {
               ) : (
                 <span
                   className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
-                  onDoubleClick={() => startInlineEdit(req, 'status')}
+                  onDoubleClick={() => canInlineEdit(req) && startInlineEdit(req, 'status')}
                   title="Double-click to edit"
                 >
                   {req.status || 'draft'}
@@ -1066,7 +1082,7 @@ export default function RequirementsPage() {
               ) : (
                 <span
                   className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
-                  onDoubleClick={() => startInlineEdit(req, 'owner')}
+                  onDoubleClick={() => canInlineEdit(req) && startInlineEdit(req, 'owner')}
                   title="Double-click to edit"
                 >
                   {req.owner || '—'}
@@ -1154,20 +1170,26 @@ export default function RequirementsPage() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      setEditingRequirement(req)
+                      handleEditClick(req)
                     }}
-                    className="p-1.5 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                    title="Edit requirement"
+                    className={clsx(
+                      "p-1.5 hover:text-blue-700 dark:hover:text-blue-300",
+                      req.isLocked ? "text-gray-400 cursor-not-allowed" : "text-blue-600 dark:text-blue-400"
+                    )}
+                    title={req.isLocked ? "Requirement is locked" : "Edit requirement"}
                   >
                     <Edit2 size={16} />
                   </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      setDeleteConfirmation(req)
+                      handleDeleteClick(req)
                     }}
-                    className="p-1.5 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                    title="Delete requirement"
+                    className={clsx(
+                      "p-1.5 hover:text-red-700 dark:hover:text-red-300",
+                      req.isLocked ? "text-gray-400 cursor-not-allowed" : "text-red-600 dark:text-red-400"
+                    )}
+                    title={req.isLocked ? "Requirement is locked" : "Delete requirement"}
                   >
                     <Trash2 size={16} />
                   </button>
@@ -1315,7 +1337,28 @@ export default function RequirementsPage() {
     )
   }
 
+
+  const handleEditClick = (req: Requirement) => {
+    if (req.isLocked) {
+      const isOwner = req.lockedByUserId === currentUserId
+      setLockWarning({
+        isOpen: true,
+        message: `Requirement is locked by ${isOwner ? "you" : "another user"}. Please unlock to edit.`
+      })
+      return
+    }
+    setEditingRequirement(req)
+  }
+
   const handleDeleteClick = (req: Requirement) => {
+    if (req.isLocked) {
+      const isOwner = req.lockedByUserId === currentUserId
+      setLockWarning({
+        isOpen: true,
+        message: `Requirement is locked by ${isOwner ? "you" : "another user"}. Please unlock to delete.`
+      })
+      return
+    }
     const hasChildren = requirements.some((r) => r.parentId === req.id)
     const linkedFunctionsCount = functions.filter((f) => f.sourceReqId === req.id).length
     const linkedItemsCount = LINKAGE_V1 ? links.filter((l: any) => l.sourceType === 'requirement' && l.sourceId === req.id).length : 0
@@ -1329,6 +1372,20 @@ export default function RequirementsPage() {
       }
     }
   }
+
+  // Helper to check lock before inline edit
+  const canInlineEdit = (req: Requirement) => {
+    if (req.isLocked) {
+      const isOwner = req.lockedByUserId === currentUserId
+      setLockWarning({
+        isOpen: true,
+        message: `Requirement is locked by ${isOwner ? "you" : "another user"}. Please unlock to edit.`
+      })
+      return false
+    }
+    return true
+  }
+
 
   const handleConfirmDelete = () => {
     if (deleteConfirmation) {
@@ -1428,17 +1485,30 @@ export default function RequirementsPage() {
                       const action = e.target.value
                       if (action && action !== 'bulk-action') {
                         const requirementIds = Array.from(selectedRequirements)
-                        if (action === 'create-change-request') {
+                        // Check for locks before critical actions
+                        if (action === 'bulk-delete') {
+                          const selectedReqs = requirements.filter(r => selectedRequirements.has(r.id))
+                          const lockedReqs = selectedReqs.filter(r => r.isLocked)
+
+                          if (lockedReqs.length > 0) {
+                            setLockWarning({
+                              isOpen: true,
+                              message: `Cannot delete ${lockedReqs.length} locked requirement(s). Please unlock them first.`
+                            })
+                            e.target.value = 'bulk-action'
+                            return
+                          }
+
+                          if (window.confirm(`Are you sure you want to delete ${requirementIds.length} requirement(s)? This action cannot be undone.`)) {
+                            bulkDeleteMutation.mutate(requirementIds)
+                          }
+                        } else if (action === 'create-change-request') {
                           if (window.confirm(`Create change request(s) for ${requirementIds.length} selected requirement(s)?`)) {
                             bulkCreateChangeRequestsMutation.mutate(requirementIds)
                           }
                         } else if (action === 'create-issue') {
                           if (window.confirm(`Create issue(s) for ${requirementIds.length} selected requirement(s)?`)) {
                             bulkCreateIssuesMutation.mutate(requirementIds)
-                          }
-                        } else if (action === 'bulk-delete') {
-                          if (window.confirm(`Are you sure you want to delete ${requirementIds.length} requirement(s)? This action cannot be undone.`)) {
-                            bulkDeleteMutation.mutate(requirementIds)
                           }
                         }
                         e.target.value = 'bulk-action'
@@ -2011,6 +2081,12 @@ export default function RequirementsPage() {
               onClose={() => setIsBaselineManagerOpen(false)}
             />
           )}
+
+          <LockWarningModal
+            isOpen={lockWarning.isOpen}
+            onClose={() => setLockWarning({ ...lockWarning, isOpen: false })}
+            message={lockWarning.message}
+          />
 
           {isExportOpen && projectId && (
             <ExportBuilder

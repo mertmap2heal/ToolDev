@@ -1,4 +1,4 @@
-export type ArtifactType = 'requirement' | 'function' | 'architecture' | 'verification';
+export type ArtifactType = 'requirement' | 'function' | 'parameter' | 'architecture' | 'verification';
 export type LinkType = 'satisfies' | 'implements' | 'verifies' | 'derives' | 'refines' | 'copy' | 'trace' | 'allocate';
 export interface TraceLink {
     id: string;

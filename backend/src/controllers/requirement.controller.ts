@@ -5,6 +5,8 @@ import { createVersionSnapshot } from './version.controller'
 import { traceabilityService } from '../services/traceability.service'
 import { linkageAuditService } from '../services/linkageAudit.service'
 import { requirementValidationService } from '../services/requirementValidation.service'
+import { requirementSubscriptionService } from '../services/requirementSubscription.service'
+import { buildRequirementChangeSummary, notifyRequirementSubscribers } from '../services/requirementNotification.service'
 
 const prisma = new PrismaClient()
 
@@ -22,8 +24,19 @@ const MEANINGFUL_FIELDS = [
   'owner',
   'rationale',
   'assumptions',
+  'assumptions',
   'linkedMocCode',
+  'isLocked', // Added for completeness, though handled separately
+  'lockedByUserId',
+  'lockedAt'
 ]
+
+// Helper to check if a requirement is locked by another user
+// Helper to check if a requirement is locked
+const checkLock = (requirement: any, userId: string | undefined): boolean => {
+  // If locked, no one can edit (must explicitly unlock first)
+  return !!requirement.isLocked
+}
 
 
 
@@ -351,6 +364,113 @@ export const getRequirement = async (req: AuthRequest, res: Response) => {
   }
 }
 
+export const getRequirementSubscription = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, requirementId } = req.params
+    const userId = req.userId
+
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+
+    const requirement = await prisma.requirement.findFirst({
+      where: {
+        projectId,
+        OR: [{ id: requirementId }, { requirementId: requirementId }],
+      },
+    })
+
+    if (!requirement) {
+      return res.status(404).json({ success: false, error: 'Requirement not found' })
+    }
+
+    const snapshot = await requirementSubscriptionService.getSubscriptionSnapshot(
+      requirement.id,
+      userId
+    )
+
+    res.json({
+      success: true,
+      data: snapshot,
+    })
+  } catch (error) {
+    console.error('Get requirement subscription error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+}
+
+export const subscribeToRequirement = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, requirementId } = req.params
+    const userId = req.userId
+
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+
+    const requirement = await prisma.requirement.findFirst({
+      where: {
+        projectId,
+        OR: [{ id: requirementId }, { requirementId: requirementId }],
+      },
+    })
+
+    if (!requirement) {
+      return res.status(404).json({ success: false, error: 'Requirement not found' })
+    }
+
+    await requirementSubscriptionService.subscribe(requirement.id, userId)
+    const snapshot = await requirementSubscriptionService.getSubscriptionSnapshot(
+      requirement.id,
+      userId
+    )
+
+    res.json({
+      success: true,
+      data: snapshot,
+    })
+  } catch (error) {
+    console.error('Subscribe requirement error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+}
+
+export const unsubscribeFromRequirement = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, requirementId } = req.params
+    const userId = req.userId
+
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+
+    const requirement = await prisma.requirement.findFirst({
+      where: {
+        projectId,
+        OR: [{ id: requirementId }, { requirementId: requirementId }],
+      },
+    })
+
+    if (!requirement) {
+      return res.status(404).json({ success: false, error: 'Requirement not found' })
+    }
+
+    await requirementSubscriptionService.unsubscribe(requirement.id, userId)
+    const snapshot = await requirementSubscriptionService.getSubscriptionSnapshot(
+      requirement.id,
+      userId
+    )
+
+    res.json({
+      success: true,
+      data: snapshot,
+    })
+  } catch (error) {
+    console.error('Unsubscribe requirement error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+}
+
 export const getRequirementChildren = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId, requirementId } = req.params
@@ -553,7 +673,7 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
       entityId: requirement.id,
       action: 'REQUIREMENT_CREATED',
       newValue: { requirementId: requirement.requirementId, title: requirement.title },
-      performedByUserId: req.user?.id,
+      performedByUserId: req.userId,
     })
 
     res.status(201).json({
@@ -577,6 +697,94 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
       success: false,
       error: errorMessage,
     })
+  }
+}
+
+export const lockRequirement = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, requirementId } = req.params
+    const userId = req.userId
+
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+
+    const requirement = await prisma.requirement.findFirst({
+      where: { projectId, id: requirementId },
+    })
+
+    if (!requirement) {
+      return res.status(404).json({ success: false, error: 'Requirement not found' })
+    }
+
+    if (requirement.isLocked) {
+      if (requirement.lockedByUserId === userId) {
+        return res.json({ success: true, data: requirement }) // Idempotent success
+      }
+      return res.status(409).json({
+        success: false,
+        error: 'Requirement is already locked by another user',
+        lockedByUserId: requirement.lockedByUserId,
+      })
+    }
+
+    const lockedRequirement = await prisma.requirement.update({
+      where: { id: requirement.id },
+      data: {
+        isLocked: true,
+        lockedByUserId: userId,
+        lockedAt: new Date(),
+      },
+    })
+
+    res.json({ success: true, data: lockedRequirement })
+  } catch (error) {
+    console.error('Lock requirement error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+}
+
+export const unlockRequirement = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, requirementId } = req.params
+    const userId = req.userId
+
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+
+    const requirement = await prisma.requirement.findFirst({
+      where: { projectId, id: requirementId },
+    })
+
+    if (!requirement) {
+      return res.status(404).json({ success: false, error: 'Requirement not found' })
+    }
+
+    if (!requirement.isLocked) {
+      return res.json({ success: true, data: requirement })
+    }
+
+    if (requirement.lockedByUserId !== userId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Only the user who locked the requirement can unlock it',
+      })
+    }
+
+    const unlockedRequirement = await prisma.requirement.update({
+      where: { id: requirement.id },
+      data: {
+        isLocked: false,
+        lockedByUserId: null,
+        lockedAt: null,
+      },
+    })
+
+    res.json({ success: true, data: unlockedRequirement })
+  } catch (error) {
+    console.error('Unlock requirement error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
   }
 }
 
@@ -631,6 +839,15 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({
         success: false,
         error: 'Requirement not found',
+      })
+    }
+
+    // Check lock
+    if (checkLock(requirement, req.userId)) {
+      return res.status(423).json({
+        success: false,
+        error: 'Requirement is locked. Please unlock to edit.',
+        lockedByUserId: requirement.lockedByUserId,
       })
     }
 
@@ -720,8 +937,8 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       await createVersionSnapshot(
         requirement.id,
         projectId,
-        req.user?.id,
-        req.user?.name,
+        req.userId,
+        undefined,
         'Updated via API'
       )
     } catch (versionError) {
@@ -782,7 +999,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
         }
       }
       updateData.statusChangedAt = new Date()
-      updateData.statusChangedBy = req.user?.id ?? null
+      updateData.statusChangedBy = req.userId ?? null
     }
 
     // Only include requirementId in update if it was generated or manually provided
@@ -869,7 +1086,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       action: 'REQUIREMENT_UPDATED',
       oldValue: requirement,
       newValue: updatedRequirement,
-      performedByUserId: req.user?.id,
+      performedByUserId: req.userId,
     })
 
     if (statusId !== undefined && statusId !== requirement.statusId) {
@@ -880,9 +1097,22 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
         action: 'REQUIREMENT_STATUS_CHANGED',
         oldValue: { status: requirement.status, statusId: requirement.statusId },
         newValue: { status: updatedRequirement.status, statusId: updatedRequirement.statusId },
-        performedByUserId: req.user?.id,
+        performedByUserId: req.userId,
       })
     }
+
+    const changes = buildRequirementChangeSummary(requirement, updatedRequirement as any)
+    await notifyRequirementSubscribers({
+      projectId,
+      requirementId: requirement.id,
+      actorUserId: req.userId,
+      changes,
+      requirementSnapshot: {
+        id: updatedRequirement.id,
+        requirementId: updatedRequirement.requirementId,
+        title: updatedRequirement.title,
+      },
+    })
 
     res.json({
       success: true,
@@ -932,6 +1162,15 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
       })
     }
 
+    // Check lock
+    if (checkLock(requirement, req.userId)) {
+      return res.status(423).json({
+        success: false,
+        error: 'Requirement is locked. Please unlock to edit.',
+        lockedByUserId: requirement.lockedByUserId,
+      })
+    }
+
     // Check if requirement has children
     if (requirement.children.length > 0) {
       return res.status(400).json({
@@ -956,6 +1195,19 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
     }
 
     // Delete the requirement
+    await notifyRequirementSubscribers({
+      projectId,
+      requirementId: requirement.id,
+      actorUserId: req.userId,
+      changes: ['Requirement deleted'],
+      action: 'deleted',
+      requirementSnapshot: {
+        id: requirement.id,
+        requirementId: requirement.requirementId,
+        title: requirement.title,
+      },
+    })
+
     await prisma.requirement.delete({
       where: { id: requirement.id },
     })
@@ -1007,8 +1259,8 @@ export const createRequirementComment = async (req: AuthRequest, res: Response) 
         requirementId: requirement.id,
         projectId,
         content: content.trim(),
-        authorId: req.user?.id,
-        authorName: req.user?.name,
+        authorId: req.userId,
+        authorName: undefined,
       },
     })
 
@@ -1082,6 +1334,15 @@ export const updateRequirementParent = async (req: AuthRequest, res: Response) =
       })
     }
 
+    // Check lock
+    if (checkLock(requirement, req.userId)) {
+      return res.status(423).json({
+        success: false,
+        error: 'Requirement is locked. Please unlock to edit.',
+        lockedByUserId: requirement.lockedByUserId,
+      })
+    }
+
     if (newParentId) {
       const hasCircularRef = await checkCircularReference(requirement.id, newParentId)
       if (hasCircularRef) {
@@ -1133,6 +1394,19 @@ export const updateRequirementParent = async (req: AuthRequest, res: Response) =
       },
     })
 
+    const changes = buildRequirementChangeSummary(requirement, updatedRequirement as any)
+    await notifyRequirementSubscribers({
+      projectId,
+      requirementId: requirement.id,
+      actorUserId: req.userId,
+      changes,
+      requirementSnapshot: {
+        id: updatedRequirement.id,
+        requirementId: updatedRequirement.requirementId,
+        title: updatedRequirement.title,
+      },
+    })
+
     res.json({
       success: true,
       data: updatedRequirement,
@@ -1172,6 +1446,13 @@ export const bulkUpdateRequirements = async (req: AuthRequest, res: Response) =>
     if (updates.category !== undefined) updateData.category = updates.category || null
     if (updates.tags !== undefined) updateData.tags = updates.tags || []
 
+    const beforeRequirements = await prisma.requirement.findMany({
+      where: {
+        projectId,
+        id: { in: requirementIds },
+      },
+    })
+
     const result = await prisma.requirement.updateMany({
       where: {
         projectId,
@@ -1181,6 +1462,33 @@ export const bulkUpdateRequirements = async (req: AuthRequest, res: Response) =>
       },
       data: updateData,
     })
+
+    const afterRequirements = await prisma.requirement.findMany({
+      where: {
+        projectId,
+        id: { in: requirementIds },
+      },
+    })
+
+    const afterById = new Map(afterRequirements.map((req) => [req.id, req]))
+    await Promise.all(
+      beforeRequirements.map(async (before) => {
+        const after = afterById.get(before.id)
+        if (!after) return
+        const changes = buildRequirementChangeSummary(before, after)
+        await notifyRequirementSubscribers({
+          projectId,
+          requirementId: before.id,
+          actorUserId: req.userId,
+          changes,
+          requirementSnapshot: {
+            id: after.id,
+            requirementId: after.requirementId,
+            title: after.title,
+          },
+        })
+      })
+    )
 
     res.json({
       success: true,
@@ -1387,8 +1695,8 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
             await createVersionSnapshot(
               existing.id,
               projectId,
-              req.user?.id,
-              req.user?.name,
+              req.userId,
+              undefined,
               'Updated via bulk import'
             )
           } catch (versionError) {
@@ -1396,7 +1704,7 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
           }
 
           // Update requirement
-          await prisma.requirement.update({
+          const updatedRequirement = await prisma.requirement.update({
             where: { id: existing.id },
             data: {
               title: updateData.title !== undefined ? updateData.title : existing.title,
@@ -1423,6 +1731,19 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
               verificationStatus: updateData.verificationStatus !== undefined ? (updateData.verificationStatus || null) : existing.verificationStatus,
               verificationDate: updateData.verificationDate !== undefined ? (updateData.verificationDate ? new Date(updateData.verificationDate) : null) : existing.verificationDate,
               verificationNotes: updateData.verificationNotes !== undefined ? (updateData.verificationNotes || null) : existing.verificationNotes,
+            },
+          })
+
+          const changes = buildRequirementChangeSummary(existing, updatedRequirement as any)
+          await notifyRequirementSubscribers({
+            projectId,
+            requirementId: updatedRequirement.id,
+            actorUserId: req.userId,
+            changes,
+            requirementSnapshot: {
+              id: updatedRequirement.id,
+              requirementId: updatedRequirement.requirementId,
+              title: updatedRequirement.title,
             },
           })
 
@@ -1616,6 +1937,15 @@ export const updateRequirementComponent = async (req: AuthRequest, res: Response
       })
     }
 
+    // Check lock
+    if (checkLock(requirement, req.userId)) {
+      return res.status(423).json({
+        success: false,
+        error: 'Requirement is locked by another user',
+        lockedByUserId: requirement.lockedByUserId,
+      })
+    }
+
     // If componentId is provided, verify it exists in the same project
     if (componentId) {
       const component = await prisma.component.findFirst({
@@ -1645,6 +1975,19 @@ export const updateRequirementComponent = async (req: AuthRequest, res: Response
             name: true,
           },
         },
+      },
+    })
+
+    const changes = buildRequirementChangeSummary(requirement, updated as any)
+    await notifyRequirementSubscribers({
+      projectId,
+      requirementId: requirement.id,
+      actorUserId: req.userId,
+      changes,
+      requirementSnapshot: {
+        id: updated.id,
+        requirementId: updated.requirementId,
+        title: updated.title,
       },
     })
 

@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import type { TraceLink, TraceabilityGraph } from '../../../shared/types/traceability.types'
 import { linkageAuditService } from './linkageAudit.service'
+import { notifyRequirementSubscribers } from './requirementNotification.service'
 
 const prisma = new PrismaClient()
 
@@ -194,6 +195,17 @@ export const traceabilityService = {
       performedByUserId,
     })
 
+    await notifyRequirementLinkChange({
+      projectId,
+      sourceType,
+      sourceId,
+      targetType,
+      targetId,
+      linkType,
+      action: 'added',
+      actorUserId: performedByUserId,
+    })
+
     return {
       id: link.id,
       projectId: link.projectId,
@@ -331,6 +343,56 @@ export const traceabilityService = {
         },
         performedByUserId,
       })
+
+      await notifyRequirementLinkChange({
+        projectId,
+        sourceType: link.sourceType,
+        sourceId: link.sourceId,
+        targetType: link.targetType,
+        targetId: link.targetId,
+        linkType: link.linkType,
+        action: 'removed',
+        actorUserId: performedByUserId,
+      })
     }
   },
+}
+
+async function notifyRequirementLinkChange(params: {
+  projectId: string
+  sourceType: string
+  sourceId: string
+  targetType: string
+  targetId: string
+  linkType: string
+  action: 'added' | 'removed'
+  actorUserId?: string
+}) {
+  const { projectId, sourceType, sourceId, targetType, targetId, linkType, action, actorUserId } = params
+  const actionLabel = action === 'added' ? 'Link added' : 'Link removed'
+
+  const targetSummary = `${targetType} ${formatShortId(targetId)}`
+  const sourceSummary = `${sourceType} ${formatShortId(sourceId)}`
+
+  if (sourceType === 'requirement') {
+    await notifyRequirementSubscribers({
+      projectId,
+      requirementId: sourceId,
+      actorUserId,
+      changes: [`${actionLabel} (${linkType}) to ${targetSummary}`],
+    })
+  }
+
+  if (targetType === 'requirement') {
+    await notifyRequirementSubscribers({
+      projectId,
+      requirementId: targetId,
+      actorUserId,
+      changes: [`${actionLabel} (${linkType}) from ${sourceSummary}`],
+    })
+  }
+}
+
+function formatShortId(value: string): string {
+  return value.length > 8 ? value.substring(0, 8) : value
 }
