@@ -176,7 +176,7 @@ export default function IssueDetailPage() {
 
       {/* Breadcrumb */}
       <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-        <div className="mx-auto px-6 py-4">
+        <div className="mx-auto px-6 py-2">
           <nav className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
             <Link to="/" className="hover:text-blue-600 transition-colors">
               Home
@@ -202,8 +202,8 @@ export default function IssueDetailPage() {
 
       {/* Header */}
       <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-        <div className="mx-auto px-6 py-6">
-          <div className="flex items-start justify-between mb-4">
+        <div className="mx-auto px-6 py-4">
+          <div className="flex items-start justify-between mb-3">
             <button
               onClick={handleBackToList}
               className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
@@ -275,7 +275,7 @@ export default function IssueDetailPage() {
           </div>
 
           {/* Title */}
-          <div className="mb-4">
+          <div className="mb-2">
             {isEditingTitle ? (
               <div className="flex items-center gap-2">
                 <input
@@ -335,10 +335,10 @@ export default function IssueDetailPage() {
       </div>
 
       {/* Two-column layout */}
-      <div className="mx-auto px-6 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="mx-auto px-6 py-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Main content */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-4">
             {/* Description */}
             <IssueDescriptionEditor
               issue={issue}
@@ -351,8 +351,8 @@ export default function IssueDetailPage() {
             <IssueLinkedItems issue={issue} projectId={projectId!} />
 
             {/* Activity feed */}
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+              <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-3">
                 Activity
               </h3>
               <IssueActivityFeed projectId={projectId!} issueId={issueId!} />

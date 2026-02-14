@@ -54,8 +54,8 @@ export default function IssueCommentComposer({
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+      <form onSubmit={handleSubmit} className="space-y-3">
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -90,7 +90,7 @@ export default function IssueCommentComposer({
           </div>
 
           {isPreview ? (
-            <div className="min-h-[120px] px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50">
+            <div className="min-h-[100px] px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50">
               {content ? (
                 <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
                   {content}
@@ -106,7 +106,7 @@ export default function IssueCommentComposer({
               value={content}
               onChange={(e) => setContent(e.target.value)}
               onKeyDown={handleKeyDown}
-              rows={6}
+              rows={4}
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               placeholder="Write a comment... (Cmd/Ctrl + Enter to submit)"
             />

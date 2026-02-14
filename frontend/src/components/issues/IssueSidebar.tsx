@@ -109,10 +109,10 @@ export default function IssueSidebar({ issue, projectId, currentUser }: IssueSid
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Assignee */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-3">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+        <div className="flex items-center justify-between mb-2">
           <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
             <User size={16} />
             Assignee
@@ -166,8 +166,8 @@ export default function IssueSidebar({ issue, projectId, currentUser }: IssueSid
       </div>
 
       {/* Labels */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-3">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+        <div className="flex items-center justify-between mb-2">
           <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
             <Tag size={16} />
             Labels
@@ -181,7 +181,7 @@ export default function IssueSidebar({ issue, projectId, currentUser }: IssueSid
         </div>
 
         {isEditingLabels && (
-          <div className="mb-3 space-y-2">
+          <div className="mb-2 space-y-2">
             {labels.map((label: IssueLabel) => {
               const isSelected = issue.labelIds?.includes(label.id)
               return (
@@ -294,7 +294,7 @@ export default function IssueSidebar({ issue, projectId, currentUser }: IssueSid
       </div>
 
       {/* Dates */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
         <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2 mb-3">
           <Calendar size={16} />
           Dates
@@ -316,8 +316,8 @@ export default function IssueSidebar({ issue, projectId, currentUser }: IssueSid
       </div>
 
       {/* Time tracking */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-        <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2 mb-3">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+        <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2 mb-2">
           <Clock size={16} />
           Time Tracking
         </h4>
@@ -339,8 +339,8 @@ export default function IssueSidebar({ issue, projectId, currentUser }: IssueSid
 
       {/* Participants */}
       {issue.participants && issue.participants.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2 mb-3">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2 mb-2">
             <Users size={16} />
             Participants ({issue.participants.length})
           </h4>

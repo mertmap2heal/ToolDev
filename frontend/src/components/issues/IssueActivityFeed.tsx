@@ -30,20 +30,20 @@ export default function IssueActivityFeed({ projectId, issueId }: IssueActivityF
       // Comment
       const comment = activity as unknown as import('shared/types/engineering.types').IssueComment
       return (
-        <div key={comment.id} className="flex gap-3">
+        <div key={comment.id} className="flex gap-2">
           <div className="flex-shrink-0">
-            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium">
+            <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-medium">
               {comment.authorName?.charAt(0).toUpperCase() || '?'}
             </div>
           </div>
           <div className="flex-1">
-            <div className="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
+            <div className="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg p-3">
+              <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-gray-900 dark:text-white">
+                  <span className="font-medium text-sm text-gray-900 dark:text-white">
                     {comment.authorName || 'Unknown User'}
                   </span>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
                     commented {formatDistanceToNow(new Date(comment.createdAt))} ago
                   </span>
                 </div>
@@ -56,7 +56,7 @@ export default function IssueActivityFeed({ projectId, issueId }: IssueActivityF
                   </button>
                 </div>
               </div>
-              <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+              <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
                 {comment.content}
               </p>
             </div>
@@ -67,9 +67,9 @@ export default function IssueActivityFeed({ projectId, issueId }: IssueActivityF
       // System note
       const note = activity as unknown as import('shared/types/engineering.types').IssueSystemNote
       return (
-        <div key={note.id} className="flex gap-3">
+        <div key={note.id} className="flex gap-2">
           <div className="flex-shrink-0">
-            <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center text-white text-xs">
+            <div className="w-7 h-7 rounded-full bg-gray-600 flex items-center justify-center text-white text-xs">
               <History size={14} />
             </div>
           </div>
@@ -143,7 +143,7 @@ export default function IssueActivityFeed({ projectId, issueId }: IssueActivityF
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Filters */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -196,15 +196,15 @@ export default function IssueActivityFeed({ projectId, issueId }: IssueActivityF
 
       {/* Activity list */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-8">
+        <div className="flex items-center justify-center py-6">
           <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
         </div>
       ) : activities.length === 0 ? (
-        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+        <div className="text-center py-6 text-gray-500 dark:text-gray-400">
           No {filter !== 'all' ? filter : 'activity'} yet
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {activities.map((activity) => renderActivity(activity))}
         </div>
       )}

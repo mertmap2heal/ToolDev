@@ -46,9 +46,9 @@ export default function IssueDescriptionEditor({
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white">
           Description
         </h3>
         {!isEditing && (
@@ -62,11 +62,11 @@ export default function IssueDescriptionEditor({
       </div>
 
       {isEditing ? (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            rows={10}
+            rows={6}
             className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             placeholder="Add a description..."
           />

@@ -78,9 +78,9 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
           <LinkIcon size={18} />
           Linked Items
           {issue.links && issue.links.length > 0 && (
@@ -101,7 +101,7 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
 
       {/* Add link form */}
       {isAdding && (
-        <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg space-y-3">
+        <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg space-y-2">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Link Type
