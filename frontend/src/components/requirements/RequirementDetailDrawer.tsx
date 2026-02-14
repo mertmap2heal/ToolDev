@@ -631,7 +631,7 @@ export default function RequirementDetailDrawer({
                 )}
 
                 {/* Details Grid */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Lifecycle Model</h3>
                     <p className="text-sm text-gray-900 dark:text-white">
@@ -858,7 +858,7 @@ export default function RequirementDetailDrawer({
                                     <button
                                       type="button"
                                       onClick={() => navigate(deepLink)}
-                                      className="mt-1 p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all"
+                                      className="mt-1 p-2 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/40 rounded-lg transition-all"
                                       title="Open linked item"
                                     >
                                       <ExternalLink size={16} />

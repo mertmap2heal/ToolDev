@@ -356,7 +356,7 @@ export default function RequirementsPBSTree({
                                     <ChevronRight className="w-4 h-4 opacity-50 flex-shrink-0" />
                                 )}
                                 <Inbox className="w-4 h-4 opacity-70 flex-shrink-0" />
-                                <span className="font-medium">{item.name}</span>
+                                <span className="font-medium" title={item.name}>{item.name}</span>
                             </div>
                         )
                     }

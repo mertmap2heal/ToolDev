@@ -1312,7 +1312,7 @@ export default function RequirementsPage() {
             {/* Linked Issues */}
             {rowData.linkedIssues.length > 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-2 bg-yellow-50/50 dark:bg-yellow-900/10">
+                <td colSpan={getTotalColumnCount()} className="px-4 py-2 bg-yellow-50/50 dark:bg-yellow-900/10">
                   <div className="pl-8">
                     <p className="text-xs font-medium text-yellow-600 dark:text-yellow-400 mb-2 flex items-center gap-2">
                       <AlertCircle size={14} />
@@ -1494,9 +1494,11 @@ export default function RequirementsPage() {
             </div>
             {/* Resize handle */}
             <div
-              className="w-1 cursor-col-resize hover:bg-blue-400 active:bg-blue-500 transition-colors flex-shrink-0"
+              className="w-2 cursor-col-resize hover:bg-blue-400/50 active:bg-blue-500 transition-colors flex-shrink-0 relative group"
               onMouseDown={handlePBSResizeStart}
-            />
+            >
+              <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[1px] bg-gray-200 dark:bg-gray-700 group-hover:bg-blue-400 transition-colors" />
+            </div>
           </>
         )}
 
@@ -1760,7 +1762,7 @@ export default function RequirementsPage() {
             </button>
             {isFiltersExpanded && (
               <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-                <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                   {/* Status Filter */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
@@ -1886,10 +1888,10 @@ export default function RequirementsPage() {
           </div>
 
           {/* Requirements Table */}
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden flex-1 min-h-0">
+            <div className="overflow-x-auto h-full">
+              <table className="w-full border-collapse">
+                <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(0,0,0,0.1)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-12">
                       <input
