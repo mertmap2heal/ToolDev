@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
@@ -42,7 +42,7 @@ interface ExpandedRow {
   linkedFunctions: Array<{ id: string; functionId?: string; name: string }>
   linkedIssues: Array<{ id: string; title: string }>
   linkedChangeRequests: Array<{ id: string; title: string }>
-  linkedItems?: Array<{ id: string; targetType: string; targetId: string; label?: string; linkType?: string }>
+  linkedItems?: Array<{ id: string; targetType: string; targetId: string; label?: string; linkType?: string; issue?: { id: string; title: string; issueKey?: string; createdByUser?: { id: string; name: string; email: string } } }>
 }
 
 /**
@@ -57,6 +57,7 @@ interface InlineEditState {
 export default function RequirementsPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const baselineId = searchParams.get('baselineId')
   const focusRequirementId = searchParams.get('requirementId')
   const [searchQuery, setSearchQuery] = useState('')
@@ -541,13 +542,28 @@ export default function RequirementsPage() {
     const linkedItems = LINKAGE_V1
       ? (links as any[])
         .filter((l: any) => l.sourceType === 'requirement' && l.sourceId === requirementId)
-        .map((l: any) => ({
-          id: l.id,
-          targetType: l.targetType,
-          targetId: l.targetId,
-          label: l.targetLabel ?? `${l.targetType}:${l.targetId}`,
-          linkType: l.linkType,
-        }))
+        .map((l: any) => {
+          const item: any = {
+            id: l.id,
+            targetType: l.targetType,
+            targetId: l.targetId,
+            label: l.targetLabel ?? `${l.targetType}:${l.targetId}`,
+            linkType: l.linkType,
+          }
+          // If targetType is 'issue', find and attach the full issue details
+          if (l.targetType === 'issue') {
+            const issue = issues.find((i: any) => i.id === l.targetId)
+            if (issue) {
+              item.issue = {
+                id: issue.id,
+                title: issue.title,
+                issueKey: issue.issueKey,
+                createdByUser: issue.createdByUser,
+              }
+            }
+          }
+          return item
+        })
       : []
 
     return {
@@ -1215,10 +1231,31 @@ export default function RequirementsPage() {
                           key={item.id}
                           className="text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700"
                         >
-                          <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
-                            {item.targetType} ({item.targetId.slice(0, 8)})
-                          </span>{' '}
-                          - {item.linkType}
+                          {item.targetType === 'issue' && item.issue ? (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => navigate(`/projects/${projectId}/issues/${item.issue!.id}`)}
+                                className="font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                              >
+                                {item.issue.issueKey || `#${item.issue.id.slice(0, 8)}`} - {item.issue.title}
+                              </button>
+                              {item.issue.createdByUser && (
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  by {item.issue.createdByUser.name}
+                                </span>
+                              )}
+                              <span className="text-xs text-gray-400 dark:text-gray-500">
+                                ({item.linkType})
+                              </span>
+                            </div>
+                          ) : (
+                            <>
+                              <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
+                                {item.targetType} ({item.targetId.slice(0, 8)})
+                              </span>{' '}
+                              - {item.linkType}
+                            </>
+                          )}
                         </div>
                       ))}
                     </div>

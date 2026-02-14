@@ -416,6 +416,7 @@ export interface CreateIssueDto {
   startDate?: string
   dueDate?: string
   estimatedTime?: string
+  sourceRequirementId?: string
 }
 
 export interface UpdateIssueDto {

@@ -190,6 +190,7 @@ export default function CreateIssueModal({
       owner: formData.owner?.trim() || '',
       relatedFunctionIds: formData.relatedFunctionIds || [],
       relatedParameterIds: formData.relatedParameterIds || [],
+      sourceRequirementId: initialSourceType === 'requirement' && initialSourceId ? initialSourceId : undefined,
     }
 
     createIssueMutation.mutate(submitData)

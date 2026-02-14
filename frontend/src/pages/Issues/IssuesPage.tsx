@@ -309,28 +309,25 @@ export default function IssuesPage() {
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-32">
+                  ID
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Title
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Description
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Priority
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Owner
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Source
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Created
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-24">
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-24">
                   Actions
                 </th>
               </tr>
@@ -338,13 +335,13 @@ export default function IssuesPage() {
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {issuesLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={7} className="px-3 py-6 text-center text-gray-500 dark:text-gray-400">
                     Loading issues...
                   </td>
                 </tr>
               ) : filteredIssues.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={7} className="px-3 py-6 text-center text-gray-500 dark:text-gray-400">
                     {issues.length === 0
                       ? 'No issues found. Create your first issue from the Functions page.'
                       : 'No issues match your filter criteria.'}
@@ -357,10 +354,15 @@ export default function IssuesPage() {
                     onClick={() => handleIssueRowClick(issue.id)}
                     className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
                   >
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
+                      <span className="font-mono text-sm text-blue-600 dark:text-blue-400">
+                        {issue.issueKey || `#${issue.id.slice(0, 8)}`}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
                         <AlertCircle
-                          size={16}
+                          size={14}
                           className={clsx(
                             issue.priority === 'critical' && 'text-red-500',
                             issue.priority === 'high' && 'text-orange-500',
@@ -368,15 +370,10 @@ export default function IssuesPage() {
                             issue.priority === 'low' && 'text-blue-500'
                           )}
                         />
-                        <span className="font-medium text-gray-900 dark:text-white">{issue.title}</span>
+                        <span className="font-medium text-sm text-gray-900 dark:text-white">{issue.title}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-md">
-                      <p className="truncate" title={issue.description}>
-                        {issue.description}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <span
                         className={clsx(
                           'inline-flex px-2 py-1 text-xs font-medium rounded-full',
@@ -386,7 +383,7 @@ export default function IssuesPage() {
                         {issue.priority.charAt(0).toUpperCase() + issue.priority.slice(1)}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       {editingIssueId === issue.id ? (
                         <select
                           value={editingStatus}
@@ -414,31 +411,13 @@ export default function IssuesPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                    <td className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">
                       {issue.owner || <span className="text-gray-400 dark:text-gray-500">—</span>}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                      {issue.relatedFunctionIds && issue.relatedFunctionIds.length > 0 ? (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setViewingSource(issue)
-                          }}
-                          className="text-blue-600 dark:text-blue-400 hover:underline text-left"
-                          title="Click to view source details"
-                        >
-                          {issue.relatedFunctionIds.length === 1
-                            ? getFunctionName(issue.relatedFunctionIds[0])
-                            : `${issue.relatedFunctionIds.length} function(s)`}
-                        </button>
-                      ) : (
-                        <span className="text-gray-400 dark:text-gray-500">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
                       {format(new Date(issue.createdAt), 'MMM dd, yyyy')}
                     </td>
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={(e) => {

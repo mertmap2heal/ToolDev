@@ -286,44 +286,44 @@ export default function IssueDetailPage() {
                     if (e.key === 'Enter') handleTitleSave()
                     if (e.key === 'Escape') setIsEditingTitle(false)
                   }}
-                  className="flex-1 text-2xl font-bold px-3 py-2 border border-blue-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className="flex-1 text-xl font-bold px-3 py-2 border border-blue-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   autoFocus
                 />
                 <button
                   onClick={handleTitleSave}
                   disabled={updateTitleMutation.isPending}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  {updateTitleMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Save'}
+                  {updateTitleMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
                 </button>
                 <button
                   onClick={() => setIsEditingTitle(false)}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
                   Cancel
                 </button>
               </div>
             ) : (
               <div className="flex items-start gap-3 group">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex-1">
+                <h1 className="text-xl font-bold text-gray-900 dark:text-white flex-1">
                   {issue.title}
                 </h1>
                 <button
                   onClick={() => setIsEditingTitle(true)}
                   className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
                 >
-                  <Edit2 size={18} className="text-gray-600 dark:text-gray-400" />
+                  <Edit2 size={16} className="text-gray-600 dark:text-gray-400" />
                 </button>
               </div>
             )}
           </div>
 
           {/* Meta */}
-          <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-            <span className={clsx('px-3 py-1 rounded-full font-medium', getStatusColor(issue.status))}>
+          <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
+            <span className={clsx('px-2 py-1 rounded-full text-xs font-medium', getStatusColor(issue.status))}>
               {issue.status}
             </span>
-            <span>
+            <span className="font-mono font-semibold text-blue-600 dark:text-blue-400">
               {issue.issueKey || `#${issue.id.slice(0, 8)}`}
             </span>
             <span>

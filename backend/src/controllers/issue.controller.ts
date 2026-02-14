@@ -41,7 +41,8 @@ export const createIssue = async (req: AuthRequest, res: Response) => {
       labelIds,
       startDate,
       dueDate,
-      estimatedTime
+      estimatedTime,
+      sourceRequirementId
     } = req.body
 
     if (!title || !description) {
@@ -51,9 +52,26 @@ export const createIssue = async (req: AuthRequest, res: Response) => {
       })
     }
 
+    // Generate unique issue key (ISS-0001)
+    const latestIssue = await prisma.issue.findFirst({
+      where: { issueKey: { not: null } },
+      orderBy: { issueKey: 'desc' },
+      select: { issueKey: true },
+    })
+
+    let issueNumber = 1
+    if (latestIssue?.issueKey) {
+      const match = latestIssue.issueKey.match(/ISS-(\d+)/)
+      if (match) {
+        issueNumber = parseInt(match[1]) + 1
+      }
+    }
+    const issueKey = `ISS-${issueNumber.toString().padStart(4, '0')}`
+
     const issue = await prisma.issue.create({
       data: {
         projectId,
+        issueKey,
         title,
         description,
         priority: priority || 'medium',
@@ -78,6 +96,36 @@ export const createIssue = async (req: AuthRequest, res: Response) => {
           userId: req.user.userId,
         },
       }).catch(() => {}) // Ignore if already subscribed
+    }
+
+    // Auto-link to requirement if created from one
+    if (sourceRequirementId) {
+      const requirement = await prisma.requirement.findUnique({
+        where: { id: sourceRequirementId },
+        select: { requirementKey: true, title: true },
+      })
+
+      await prisma.issueLink.create({
+        data: {
+          issueId: issue.id,
+          linkedType: 'requirement',
+          linkedId: sourceRequirementId,
+          linkType: 'related',
+          linkedRequirementKey: requirement?.requirementKey || null,
+          linkedRequirementTitle: requirement?.title || null,
+        },
+      })
+
+      // Create system note
+      await createSystemNote(
+        issue.id,
+        projectId,
+        'link_added',
+        null,
+        `Requirement: ${requirement?.requirementKey || sourceRequirementId}`,
+        req.user?.userId,
+        req.user?.name
+      )
     }
 
     res.status(201).json({
@@ -106,6 +154,22 @@ export const getIssues = async (req: AuthRequest, res: Response) => {
     const issues = await prisma.issue.findMany({
       where: { projectId },
       orderBy: { createdAt: 'desc' },
+      include: {
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        createdByUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
     })
 
     res.json({
