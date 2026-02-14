@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Plus, Filter, Download, Columns, Search, RefreshCw, ChevronDown, ChevronRight, ArrowUpDown, MoreHorizontal, FileText, AlertCircle, CheckCircle, Clock } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { changeRequestService } from '../../services/changeRequest.service'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import ChangeRequestDetailDrawer from '../../components/changeRequests/ChangeRequestDetailDrawer'
@@ -18,6 +18,8 @@ type SortOrder = 'asc' | 'desc'
 
 export default function ChangeRequestsPage() {
   const { projectId } = useParams<{ projectId: string }>()
+  const [searchParams] = useSearchParams()
+  const focusId = searchParams.get('focusId')
   const queryClient = useQueryClient()
 
   // State
@@ -86,6 +88,16 @@ export default function ChangeRequestsPage() {
       }
     },
   })
+
+  // Handle Deep Links
+  useEffect(() => {
+    if (!focusId || changeRequests.length === 0) return
+    const cr = changeRequests.find(item => item.id === focusId || item.crId === focusId)
+    if (cr) {
+      setSelectedChangeRequest(cr)
+      setIsDrawerOpen(true)
+    }
+  }, [focusId, changeRequests])
 
   // Filtering & Sorting
   const filteredChangeRequests = useMemo(() => {
