@@ -1407,7 +1407,16 @@ export const getRecentlyDeletedRequirements = async (req: AuthRequest, res: Resp
       },
     })
 
-    // Map to include calculated "daysLeft"
+    // Fetch user details for deletedBy users
+    const userIds = [...new Set(deletedRequirements.map(req => req.deletedById).filter(Boolean))] as string[]
+    const users = userIds.length > 0 ? await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, name: true, email: true, avatarUrl: true },
+    }) : []
+
+    const userMap = new Map(users.map(user => [user.id, user]))
+
+    // Map to include calculated "daysLeft" and user details
     const result = deletedRequirements.map(req => {
       const deletedAt = new Date(req.deletedAt!)
       const expiresAt = new Date(deletedAt.getTime() + 7 * 24 * 60 * 60 * 1000) // +7 days
@@ -1417,7 +1426,8 @@ export const getRecentlyDeletedRequirements = async (req: AuthRequest, res: Resp
 
       return {
         ...req,
-        daysLeft: daysLeft > 0 ? daysLeft : 0
+        daysLeft: daysLeft > 0 ? daysLeft : 0,
+        deletedByUser: req.deletedById ? userMap.get(req.deletedById) || null : null,
       }
     })
 

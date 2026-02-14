@@ -45,6 +45,7 @@ export interface Requirement {
   // Soft Delete
   deletedAt?: string | null
   deletedById?: string | null
+  deletedByUser?: { id: string; name: string; email: string; avatarUrl?: string | null } | null
   deleteReason?: string | null
   restoredAt?: string | null
   restoredById?: string | null

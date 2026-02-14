@@ -227,11 +227,16 @@ export default function ArchivePage() {
                           )}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
-                          {/* We might need to fetch user name, but for now showing ID or just 'User' if not populated in backend yet. 
-                              The backend implementation of getRecentlyDeletedRequirements didn't include user details, 
-                              so deletedBy is just an ID. We should ideally resolve it or the backend should include it.
-                              For now, display ID or placeholder. */}
-                          {req.deletedById ? <span className="font-mono text-xs">{req.deletedById.substring(0, 8)}...</span> : 'Unknown'}
+                          {req.deletedByUser ? (
+                            <div className="flex flex-col">
+                              <span className="font-medium">{req.deletedByUser.name}</span>
+                              <span className="text-xs text-gray-400">{req.deletedByUser.email}</span>
+                            </div>
+                          ) : req.deletedById ? (
+                            <span className="font-mono text-xs">{req.deletedById.substring(0, 8)}...</span>
+                          ) : (
+                            <span className="text-gray-400 italic">Unknown</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
                           {req.deletedAt && (
