@@ -30,13 +30,13 @@ const createSystemNote = async (
 export const createIssue = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
-    const { 
-      title, 
-      description, 
-      priority, 
-      owner, 
-      assigneeId, 
-      relatedFunctionIds, 
+    const {
+      title,
+      description,
+      priority,
+      owner,
+      assigneeId,
+      relatedFunctionIds,
       relatedParameterIds,
       labelIds,
       startDate,
@@ -95,14 +95,14 @@ export const createIssue = async (req: AuthRequest, res: Response) => {
           issueId: issue.id,
           userId: req.user.userId,
         },
-      }).catch(() => {}) // Ignore if already subscribed
+      }).catch(() => { }) // Ignore if already subscribed
     }
 
     // Auto-link to requirement if created from one
     if (sourceRequirementId) {
       const requirement = await prisma.requirement.findUnique({
         where: { id: sourceRequirementId },
-        select: { requirementKey: true, title: true },
+        select: { requirementId: true, title: true },
       })
 
       await prisma.issueLink.create({
@@ -111,7 +111,7 @@ export const createIssue = async (req: AuthRequest, res: Response) => {
           linkedType: 'requirement',
           linkedId: sourceRequirementId,
           linkType: 'related',
-          linkedRequirementKey: requirement?.requirementKey || null,
+          linkedRequirementKey: requirement?.requirementId || null,
           linkedRequirementTitle: requirement?.title || null,
         },
       })
@@ -122,7 +122,7 @@ export const createIssue = async (req: AuthRequest, res: Response) => {
         projectId,
         'link_added',
         null,
-        `Requirement: ${requirement?.requirementKey || sourceRequirementId}`,
+        `Requirement: ${requirement?.requirementId || sourceRequirementId}`,
         req.user?.userId,
         req.user?.name
       )
@@ -134,12 +134,12 @@ export const createIssue = async (req: AuthRequest, res: Response) => {
     })
   } catch (error: any) {
     console.error('Create issue error:', error)
-    
+
     let errorMessage = 'Internal server error'
     if (error?.message) {
       errorMessage = error.message
     }
-    
+
     res.status(500).json({
       success: false,
       error: errorMessage,
@@ -221,8 +221,8 @@ export const getIssue = async (req: AuthRequest, res: Response) => {
     // Fetch labels
     const labels = issue.labelIds.length > 0
       ? await prisma.issueLabel.findMany({
-          where: { id: { in: issue.labelIds } },
-        })
+        where: { id: { in: issue.labelIds } },
+      })
       : []
 
     // Fetch links
@@ -360,14 +360,14 @@ export const getIssueActivity = async (req: AuthRequest, res: Response) => {
 export const updateIssue = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
-    const { 
-      title, 
-      description, 
-      priority, 
-      status, 
-      owner, 
+    const {
+      title,
+      description,
+      priority,
+      status,
+      owner,
       assigneeId,
-      relatedFunctionIds, 
+      relatedFunctionIds,
       relatedParameterIds,
       labelIds,
       startDate,

@@ -136,6 +136,19 @@ export default function CreateIssueModal({
     onSuccess: (response) => {
       if (response.success) {
         queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
+        // Invalidate links and requirements to show the new link in other views
+        queryClient.invalidateQueries({ queryKey: ['links', projectId] })
+        queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+        queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+
+        queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+
+        // Invalidate specific requirement queries if created from a requirement
+        if (initialSourceType === 'requirement' && initialSourceId) {
+          queryClient.invalidateQueries({ queryKey: ['requirement-links', projectId, initialSourceId] })
+          queryClient.invalidateQueries({ queryKey: ['requirement', projectId, initialSourceId] })
+        }
+
         onClose()
         setFormData({
           title: '',

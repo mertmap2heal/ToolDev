@@ -62,7 +62,65 @@ export const traceabilityService = {
       orderBy: { createdAt: 'desc' },
     })
 
-    return links.map((link) => ({
+    // Fetch IssueLinks to include in the trace (mapped to TraceLink items)
+
+    // 1. Where Issue is the SOURCE (Issue -> X)
+    let issueLinksDirect: any[] = []
+    if (!filters?.sourceType || filters.sourceType === 'issue') {
+      const whereDirect: any = { issue: { projectId } }
+      if (filters?.sourceId) whereDirect.issueId = filters.sourceId
+      if (filters?.targetType) whereDirect.linkedType = filters.targetType
+      if (filters?.targetId) whereDirect.linkedId = filters.targetId
+
+      const results = await prisma.issueLink.findMany({ where: whereDirect, include: { issue: true } })
+      issueLinksDirect = results.map(l => ({
+        id: l.id,
+        projectId: l.issue.projectId,
+        sourceType: 'issue',
+        sourceId: l.issueId,
+        targetType: l.linkedType,
+        targetId: l.linkedId,
+        linkType: l.linkType,
+        isSuspect: false,
+        createdAt: l.createdAt,
+        isAuto: false,
+        direction: undefined,
+        rationale: undefined,
+        confidence: undefined,
+        lastChecked: undefined
+      }))
+    }
+
+    // 2. Where Issue is the TARGET (X -> Issue) - Stored as Issue -> X
+    let issueLinksInverse: any[] = []
+    if (!filters?.targetType || filters.targetType === 'issue') {
+      const whereInverse: any = { issue: { projectId } }
+      if (filters?.sourceType) whereInverse.linkedType = filters.sourceType
+      if (filters?.sourceId) whereInverse.linkedId = filters.sourceId
+      if (filters?.targetId) whereInverse.issueId = filters.targetId
+
+      const results = await prisma.issueLink.findMany({ where: whereInverse, include: { issue: true } })
+      issueLinksInverse = results.map(l => ({
+        id: l.id,
+        projectId: l.issue.projectId,
+        sourceType: l.linkedType,
+        sourceId: l.linkedId,
+        targetType: 'issue',
+        targetId: l.issueId,
+        linkType: l.linkType === 'relates_to' ? 'relates_to' : `${l.linkType}_inverse`,
+        isSuspect: false,
+        createdAt: l.createdAt,
+        isAuto: false,
+        direction: undefined,
+        rationale: undefined,
+        confidence: undefined,
+        lastChecked: undefined
+      }))
+    }
+
+    const allLinks = [...links, ...issueLinksDirect, ...issueLinksInverse]
+
+    return allLinks.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((link) => ({
       id: link.id,
       projectId: link.projectId,
       sourceType: link.sourceType as any,
