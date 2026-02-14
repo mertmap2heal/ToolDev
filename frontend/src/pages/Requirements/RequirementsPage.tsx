@@ -870,7 +870,7 @@ export default function RequirementsPage() {
     const isExpanded = expandedRows.has(req.id)
     const hasChildren = req.children && req.children.length > 0
     const rowData = requirementData.get(req.id)
-    const linkedFunctionsCount = functions.filter((f) => f.sourceReqId === req.id).length
+
 
     return (
       <>
@@ -2083,13 +2083,15 @@ export default function RequirementsPage() {
             <DeleteRequirementModal
               isOpen={!!deleteConfirmation}
               requirement={deleteConfirmation}
-              hasChildren={requirements.some((r) => r.parentId === deleteConfirmation.id)}
               children={requirementData.get(deleteConfirmation.id)?.children || []}
               linkedFunctionsCount={LINKAGE_V1 ? undefined : functions.filter((f) => f.sourceReqId === deleteConfirmation.id).length}
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               linkedItemsCount={LINKAGE_V1 ? links.filter((l: any) => l.sourceType === 'requirement' && l.sourceId === deleteConfirmation.id).length : undefined}
               linkedIssues={requirementData.get(deleteConfirmation.id)?.linkedIssues || []}
               linkedChangeRequests={requirementData.get(deleteConfirmation.id)?.linkedChangeRequests || []}
+              linkedFunctions={requirementData.get(deleteConfirmation.id)?.linkedFunctions || []}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              linkedItems={requirementData.get(deleteConfirmation.id)?.linkedItems as any[] || []}
               onConfirm={handleConfirmDelete}
               onCancel={() => setDeleteConfirmation(null)}
               isDeleting={deleteRequirementMutation.isPending}

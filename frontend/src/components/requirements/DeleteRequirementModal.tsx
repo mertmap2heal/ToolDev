@@ -5,7 +5,7 @@ import type { Requirement } from 'shared/types/engineering.types'
 interface DeleteRequirementModalProps {
   isOpen: boolean
   requirement: Requirement | null
-  hasChildren: boolean
+
   /** Legacy: count of linked functions. When LINKAGE_V1, use linkedItemsCount instead. */
   linkedFunctionsCount?: number
   /** When LINKAGE_V1: count of linked items (excludes function/parameter) */
@@ -15,13 +15,15 @@ interface DeleteRequirementModalProps {
   children?: Requirement[]
   linkedIssues?: { id: string; title: string }[]
   linkedChangeRequests?: { id: string; title: string }[]
+  linkedFunctions?: { id: string; name: string; functionId?: string }[]
+  linkedItems?: { id: string; targetType: string; targetId: string; label?: string; linkType?: string }[]
   onConfirm: (reason?: string, childrenToDelete?: string[]) => void
 }
 
 export default function DeleteRequirementModal({
   isOpen,
   requirement,
-  hasChildren,
+
   linkedFunctionsCount = 0,
   linkedItemsCount,
   onConfirm,
@@ -30,6 +32,8 @@ export default function DeleteRequirementModal({
   children = [], // New prop for children list
   linkedIssues = [], // New prop
   linkedChangeRequests = [], // New prop
+  linkedFunctions = [],
+  linkedItems = [],
 }: DeleteRequirementModalProps) {
   const [reason, setReason] = React.useState('')
   const [childrenToDelete, setChildrenToDelete] = React.useState<Set<string>>(new Set())
@@ -56,7 +60,7 @@ export default function DeleteRequirementModal({
   if (!isOpen || !requirement) return null
 
   const displayLinkedFunctionsCount = linkedItemsCount ?? linkedFunctionsCount
-  const hasLinkedItems = displayLinkedFunctionsCount > 0 || linkedIssues.length > 0 || linkedChangeRequests.length > 0
+  const hasLinkedItems = displayLinkedFunctionsCount > 0 || linkedIssues.length > 0 || linkedChangeRequests.length > 0 || linkedFunctions.length > 0 || linkedItems.length > 0
 
   const handleConfirm = () => {
     onConfirm(reason, Array.from(childrenToDelete))
@@ -134,17 +138,85 @@ export default function DeleteRequirementModal({
                 </p>
               </div>
 
-              <ul className="list-disc list-inside text-sm text-yellow-700 dark:text-yellow-400 pl-6 space-y-1">
-                {displayLinkedFunctionsCount > 0 && (
-                  <li>{displayLinkedFunctionsCount} linked function(s)</li>
+              <div className="space-y-3 pl-6">
+                {/* Linked Functions */}
+                {linkedFunctions.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-yellow-900 dark:text-yellow-200 uppercase tracking-wide mb-1">
+                      Functions ({linkedFunctions.length})
+                    </p>
+                    <ul className="text-sm text-yellow-800 dark:text-yellow-300 space-y-1">
+                      {linkedFunctions.map(func => (
+                        <li key={func.id} className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full flex-shrink-0" />
+                          <span className="font-mono text-xs">{func.functionId || 'FUNC'}</span>
+                          <span className="truncate">{func.name}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
+
+                {/* Fallback for count only if list is empty but count is > 0 */}
+                {linkedFunctions.length === 0 && linkedFunctionsCount > 0 && (
+                  <div>
+                    <p className="text-sm text-yellow-800 dark:text-yellow-300">
+                      • {linkedFunctionsCount} linked function(s)
+                    </p>
+                  </div>
+                )}
+
+                {/* Linked Issues */}
                 {linkedIssues.length > 0 && (
-                  <li>{linkedIssues.length} linked issue(s)</li>
+                  <div>
+                    <p className="text-xs font-semibold text-yellow-900 dark:text-yellow-200 uppercase tracking-wide mb-1">
+                      Issues ({linkedIssues.length})
+                    </p>
+                    <ul className="text-sm text-yellow-800 dark:text-yellow-300 space-y-1">
+                      {linkedIssues.map(issue => (
+                        <li key={issue.id} className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full flex-shrink-0" />
+                          {issue.title}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
+
+                {/* Linked Change Requests */}
                 {linkedChangeRequests.length > 0 && (
-                  <li>{linkedChangeRequests.length} linked change request(s)</li>
+                  <div>
+                    <p className="text-xs font-semibold text-yellow-900 dark:text-yellow-200 uppercase tracking-wide mb-1">
+                      Change Requests ({linkedChangeRequests.length})
+                    </p>
+                    <ul className="text-sm text-yellow-800 dark:text-yellow-300 space-y-1">
+                      {linkedChangeRequests.map(cr => (
+                        <li key={cr.id} className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full flex-shrink-0" />
+                          {cr.title}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
-              </ul>
+
+                {/* Linked Items (Generic/V1) */}
+                {linkedItems.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-yellow-900 dark:text-yellow-200 uppercase tracking-wide mb-1">
+                      Other Links ({linkedItems.length})
+                    </p>
+                    <ul className="text-sm text-yellow-800 dark:text-yellow-300 space-y-1">
+                      {linkedItems.map(item => (
+                        <li key={item.id} className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full flex-shrink-0" />
+                          [{item.targetType}] {item.label || item.targetId} ({item.linkType})
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
