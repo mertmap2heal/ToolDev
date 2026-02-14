@@ -331,7 +331,7 @@ export default function ImportWizard({ projectId, onClose }: ImportWizardProps) 
           if (parentReq) {
             row.mapped.parentId = parentReq.id
           } else {
-            row.errors.push(`Parent requirement ID "${row.mapped.parentId}" not found`)
+            row.errors.push(`Parent ID "${row.mapped.parentId}" not found`)
             row.action = 'skip'
           }
         }

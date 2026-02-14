@@ -148,7 +148,7 @@ export default function StandardExporter({
             <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="AT-Description" LONG-NAME="Description">
               <TYPE><DATATYPE-DEFINITION-STRING-REF>DT-String</DATATYPE-DEFINITION-STRING-REF></TYPE>
             </ATTRIBUTE-DEFINITION-STRING>
-            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="AT-ReqID" LONG-NAME="Requirement ID">
+            <ATTRIBUTE-DEFINITION-STRING IDENTIFIER="AT-ReqID" LONG-NAME="ID">
               <TYPE><DATATYPE-DEFINITION-STRING-REF>DT-String</DATATYPE-DEFINITION-STRING-REF></TYPE>
             </ATTRIBUTE-DEFINITION-STRING>
             <ATTRIBUTE-DEFINITION-ENUMERATION IDENTIFIER="AT-Priority" LONG-NAME="Priority">
@@ -307,14 +307,14 @@ ${useCases.map((uc) => `      <packagedElement xmi:type="uml:UseCase" xmi:id="UC
     <!-- Satisfy and Derive Relationships -->
 ${options.includeTraceLinks ? `    <packagedElement xmi:type="uml:Package" xmi:id="PKG-Relationships" name="Traceability">
 ${traceLinks.map((link) => {
-  const relType = link.linkType === 'satisfies' ? 'SysML:Satisfy' : 
-                  link.linkType === 'derives' ? 'SysML:DeriveReqt' : 
-                  link.linkType === 'refines' ? 'SysML:Refine' : 'uml:Abstraction'
-  return `      <packagedElement xmi:type="${relType}" xmi:id="REL-${link.id}">
+      const relType = link.linkType === 'satisfies' ? 'SysML:Satisfy' :
+        link.linkType === 'derives' ? 'SysML:DeriveReqt' :
+          link.linkType === 'refines' ? 'SysML:Refine' : 'uml:Abstraction'
+      return `      <packagedElement xmi:type="${relType}" xmi:id="REL-${link.id}">
         <client xmi:idref="${getElementRef(link.sourceType, link.sourceId)}"/>
         <supplier xmi:idref="${getElementRef(link.targetType, link.targetId)}"/>
       </packagedElement>`
-}).join('\n')}
+    }).join('\n')}
     </packagedElement>` : ''}
   </uml:Model>
   
@@ -391,11 +391,11 @@ ${options.includeFunctions ? functions.map((func) => `  <SysML:Block xmi:id="STE
 
   const generateCSV = useCallback(() => {
     const lines: string[] = []
-    
+
     // Requirements CSV
     if (options.includeRequirements) {
       lines.push('# Requirements')
-      lines.push('ID,RequirementID,Title,Description,Type,Priority,Status,VerificationMethod,VerificationStatus,ParentID')
+      lines.push('UUID,ID,Title,Description,Type,Priority,Status,VerificationMethod,VerificationStatus,ParentID')
       requirements.forEach((req) => {
         lines.push([
           req.id,
@@ -415,7 +415,7 @@ ${options.includeFunctions ? functions.map((func) => `  <SysML:Block xmi:id="STE
 
     if (options.includeFunctions) {
       lines.push('# Functions')
-      lines.push('ID,FunctionID,Name,Description,Status,SourceReqID')
+      lines.push('UUID,ID,Name,Description,Status,SourceReqID')
       functions.forEach((func) => {
         lines.push([
           func.id,
@@ -778,7 +778,7 @@ function buildReqIFHierarchy(requirements: Requirement[], flatten: boolean): str
   const buildNode = (req: Requirement, indent: number): string => {
     const spaces = '            ' + '  '.repeat(indent)
     const children = childMap.get(req.id) || []
-    
+
     if (children.length === 0) {
       return `${spaces}<SPEC-HIERARCHY IDENTIFIER="HIER-${req.id}">
 ${spaces}  <OBJECT><SPEC-OBJECT-REF>REQ-${req.id}</SPEC-OBJECT-REF></OBJECT>

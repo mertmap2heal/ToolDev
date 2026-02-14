@@ -765,7 +765,7 @@ export default function CreateRequirementModal({
                   placeholder="e.g., REQ-001, REQ-SYS-001"
                 />
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
-                  Enter a unique requirement ID for this project
+                  Enter a unique ID for this project
                 </p>
               </div>
             )}

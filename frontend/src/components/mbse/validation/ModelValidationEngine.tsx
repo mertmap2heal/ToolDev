@@ -348,7 +348,7 @@ export default function ModelValidationEngine({
               'requirement',
               req.id,
               reqId,
-              `Duplicate requirement ID "${reqId}" found`,
+              `Duplicate ID "${reqId}" found`,
               'Ensure each requirement has a unique identifier'
             )
           })
