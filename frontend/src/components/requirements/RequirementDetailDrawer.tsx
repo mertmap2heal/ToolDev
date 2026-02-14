@@ -798,7 +798,9 @@ export default function RequirementDetailDrawer({
                             <div className="flex items-center gap-2 mb-3">
                               <Link2 size={16} className="text-blue-600 dark:text-blue-400" />
                               <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                {linkType.replace(/_/g, ' ')} ({linkList.length})
+                                {linkType === 'related_inverse' ? 'Issues' :
+                                  linkType === 'originates_from' ? 'Change Requests' :
+                                    linkType.replace(/_/g, ' ')} ({linkList.length})
                               </h3>
                             </div>
                             <div className="space-y-2">
