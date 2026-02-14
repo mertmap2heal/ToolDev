@@ -89,7 +89,9 @@ export default function IssueActivityFeed({ projectId, issueId }: IssueActivityF
     }
   }
 
-  const formatSystemAction = (action: string, oldValue: string | null, newValue: string | null) => {
+  const formatSystemAction = (action: string | undefined, oldValue: string | null, newValue: string | null) => {
+    if (!action) return 'performed an action'
+
     switch (action) {
       case 'status_changed':
         return (

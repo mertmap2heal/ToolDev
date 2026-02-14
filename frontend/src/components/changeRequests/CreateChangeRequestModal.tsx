@@ -260,6 +260,14 @@ export default function CreateChangeRequestModal({
         }
       }
       queryClient.invalidateQueries({ queryKey: ['change-requests', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+
+      // Invalidate specific requirement queries if created from a requirement
+      if (initialSourceType === 'requirement' && initialSourceId) {
+        queryClient.invalidateQueries({ queryKey: ['requirement-links', projectId, initialSourceId] })
+        queryClient.invalidateQueries({ queryKey: ['requirement', projectId, initialSourceId] })
+      }
+
       onClose()
     },
     onError: (error: any) => {
