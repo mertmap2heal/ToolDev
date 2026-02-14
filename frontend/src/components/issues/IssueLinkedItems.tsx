@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
-import { Link as LinkIcon, Plus, X, ExternalLink } from 'lucide-react'
+import { Link as LinkIcon, Plus, X, ExternalLink, FileText, AlertCircle, GitPullRequest, Settings } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { issueService } from '../../services/issue.service'
 import { requirementService } from '../../services/requirement.service'
 import type { Issue, IssueLink } from 'shared/types/engineering.types'
@@ -13,6 +14,7 @@ interface IssueLinkedItemsProps {
 
 export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsProps) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [isAdding, setIsAdding] = useState(false)
   const [linkType, setLinkType] = useState<'requirement' | 'issue' | 'function'>('requirement')
   const [selectedItemId, setSelectedItemId] = useState('')
@@ -64,17 +66,19 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
     }
   }
 
-  const getLinkLabel = (link: IssueLink) => {
-    if (link.linkedType === 'requirement') {
-      return link.linkedRequirementKey
-        ? `Requirement: ${link.linkedRequirementKey}`
-        : `Requirement #${link.linkedId.slice(0, 8)}`
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'requirement': return <FileText size={16} className="text-blue-500" />
+      case 'function': return <Settings size={16} className="text-green-500" />
+      case 'issue': return <AlertCircle size={16} className="text-orange-500" />
+      case 'change_request': return <GitPullRequest size={16} className="text-purple-500" />
+      default: return <LinkIcon size={16} className="text-gray-500" />
     }
-    return `${link.linkedType} #${link.linkedId.slice(0, 8)}`
   }
 
-  const getLinkTitle = (link: IssueLink) => {
-    return link.linkedRequirementTitle || ''
+  const getDisplayId = (link: IssueLink) => {
+    if (link.linkedType === 'requirement') return link.linkedRequirementKey || `#${link.linkedId.slice(0, 8)}`
+    return `#${link.linkedId.slice(0, 8)}`
   }
 
   return (
@@ -164,28 +168,46 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
           {issue.links.map((link) => (
             <div
               key={link.id}
-              className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg group hover:border-gray-300 dark:hover:border-gray-500 transition-colors"
+              className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-blue-500/50 dark:hover:border-blue-500/50 transition-all shadow-sm group"
             >
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
-                    {getLinkLabel(link)}
-                  </span>
-                  <ExternalLink size={12} className="text-gray-400" />
-                </div>
-                {getLinkTitle(link) && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    {getLinkTitle(link)}
-                  </p>
-                )}
+              <div className="mt-1 flex-shrink-0 p-1.5 rounded-lg bg-gray-50 dark:bg-gray-700/50 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 transition-colors">
+                {getIcon(link.linkedType)}
               </div>
-              <button
-                onClick={() => deleteLinkMutation.mutate(link.id)}
-                disabled={deleteLinkMutation.isPending}
-                className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
-              >
-                <X size={14} className="text-gray-600 dark:text-gray-400" />
-              </button>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                    {getDisplayId(link)}
+                  </span>
+                </div>
+                <div className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                  {getLinkTitle(link)}
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const path = link.linkedType === 'requirement'
+                      ? `/projects/${projectId}/requirements?focusRequirementId=${link.linkedId}`
+                      : link.linkedType === 'issue'
+                        ? `/projects/${projectId}/issues/${link.linkedId}`
+                        : `/projects/${projectId}/${link.linkedType}s/${link.linkedId}`
+                    navigate(path)
+                  }}
+                  className="p-2 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/40 rounded-lg transition-all"
+                  title="Open linked item"
+                >
+                  <ExternalLink size={16} />
+                </button>
+                <button
+                  onClick={() => deleteLinkMutation.mutate(link.id)}
+                  disabled={deleteLinkMutation.isPending}
+                  className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/40 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                  title="Remove link"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
           ))}
         </div>

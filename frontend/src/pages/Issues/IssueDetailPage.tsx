@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { 
-  ArrowLeft, 
-  Edit2, 
-  Link as LinkIcon, 
-  Bell, 
-  BellOff, 
+import {
+  ArrowLeft,
+  Edit2,
+  Link as LinkIcon,
+  Bell,
+  BellOff,
   MoreVertical,
   X,
   Check,
@@ -174,8 +174,8 @@ export default function IssueDetailPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <ProjectNavigation />
 
-      {/* Breadcrumb */}
-      <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      {/* Breadcrumb - Sticky */}
+      <div className="border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm sticky top-0 z-20">
         <div className="mx-auto px-6 py-2">
           <nav className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
             <Link to="/" className="hover:text-blue-600 transition-colors">
@@ -200,8 +200,8 @@ export default function IssueDetailPage() {
         </div>
       </div>
 
-      {/* Header */}
-      <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      {/* Header - Sticky below breadcrumb */}
+      <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 sticky top-[37px] z-10 shadow-sm">
         <div className="mx-auto px-6 py-4">
           <div className="flex items-start justify-between mb-3">
             <button

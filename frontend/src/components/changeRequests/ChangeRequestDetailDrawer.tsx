@@ -1,8 +1,8 @@
-import { useState } from 'react'
-import { X, Edit2, Trash2, Paperclip, ChevronRight, ChevronDown, Link2, FileText, Check, AlertCircle } from 'lucide-react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { X, Edit2, Trash2, Paperclip, ChevronRight, ChevronDown, Link2, FileText, AlertCircle, Settings, ExternalLink } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { changeRequestService } from '../../services/changeRequest.service'
-import type { ChangeRequest, ChangeRequestAttachment } from 'shared/types/engineering.types'
+import type { ChangeRequest } from 'shared/types/engineering.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
 
@@ -23,10 +23,11 @@ export default function ChangeRequestDetailDrawer({
     onEdit,
     onDelete,
 }: ChangeRequestDetailDrawerProps) {
+    const navigate = useNavigate()
     const [activeTab, setActiveTab] = useState<'overview' | 'links' | 'activity'>('overview')
     const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview', 'details']))
 
-    const queryClient = useQueryClient()
+
 
     const { data: fullChangeRequest } = useQuery({
         queryKey: ['changeRequest', projectId, changeRequest?.id],
@@ -204,8 +205,10 @@ export default function ChangeRequestDetailDrawer({
                             </div>
                             <div className="space-y-1">
                                 <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Source Type</label>
-                                <div className="text-sm text-gray-900 dark:text-white flex items-center gap-1 capitalize">
-                                    <Link2 size={12} className="text-blue-500" />
+                                <div className="text-sm text-gray-900 dark:text-white flex items-center gap-1.5 capitalize">
+                                    <div className="p-1 rounded bg-blue-50 dark:bg-blue-900/30">
+                                        <Link2 size={12} className="text-blue-500" />
+                                    </div>
                                     {displayCR.sourceType}
                                 </div>
                             </div>
@@ -271,39 +274,57 @@ export default function ChangeRequestDetailDrawer({
                         </div>
 
                         <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                            <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center justify-between mb-3">
                                 <h3 className="text-sm font-medium text-gray-900 dark:text-white">Target Item</h3>
                             </div>
-                            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                            <div className="space-y-2">
                                 {displayCR.requirementLinks && displayCR.requirementLinks.length > 0 ? (
-                                    <div className="space-y-2">
+                                    <>
                                         {displayCR.requirementLinks.map(link => (
-                                            <div key={link.requirement.id} className="flex items-start gap-3">
-                                                <div className="p-2 bg-white dark:bg-gray-800 rounded shadow-sm">
-                                                    <FileText size={18} className="text-blue-500" />
+                                            <div
+                                                key={link.requirement.id}
+                                                className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-blue-500/50 dark:hover:border-blue-500/50 transition-all shadow-sm group"
+                                            >
+                                                <div className="mt-1 flex-shrink-0 p-1.5 rounded-lg bg-gray-50 dark:bg-gray-700/50 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 transition-colors">
+                                                    <FileText size={16} className="text-blue-500" />
                                                 </div>
-                                                <div>
-                                                    <div className="text-xs text-gray-500 uppercase font-semibold">Requirement</div>
-                                                    <a
-                                                        href={`/projects/${projectId}/requirements?highlight=${link.requirement.id}`}
-                                                        className="text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1"
-                                                    >
-                                                        {link.requirement.requirementId || link.requirement.id.substring(0, 8)}
-                                                        <Link2 size={12} />
-                                                    </a>
-                                                    <div className="text-xs text-gray-500 truncate max-w-[200px]">{link.requirement.title}</div>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                                            {link.requirement.requirementId || link.requirement.id.substring(0, 8)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                                        {link.requirement.title}
+                                                    </div>
                                                 </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => navigate(`/projects/${projectId}/requirements?focusRequirementId=${link.requirement.id}`)}
+                                                    className="mt-1 p-2 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/40 rounded-lg transition-all"
+                                                    title="Open linked requirement"
+                                                >
+                                                    <ExternalLink size={16} />
+                                                </button>
                                             </div>
                                         ))}
-                                    </div>
+                                    </>
                                 ) : (
-                                    <div className="flex items-start gap-3">
-                                        <div className="p-2 bg-white dark:bg-gray-800 rounded shadow-sm">
-                                            <FileText size={18} className="text-blue-500" />
+                                    <div className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                                        <div className="mt-1 flex-shrink-0 p-1.5 rounded-lg bg-gray-50 dark:bg-gray-700/50">
+                                            {displayCR.sourceType === 'issue' ? <AlertCircle size={16} className="text-orange-500" /> :
+                                                displayCR.sourceType === 'function' ? <Settings size={16} className="text-green-500" /> :
+                                                    <Link2 size={16} className="text-gray-500" />}
                                         </div>
-                                        <div>
-                                            <div className="text-xs text-gray-500 uppercase font-semibold">{displayCR.sourceType}</div>
-                                            <div className="text-sm font-medium text-gray-900 dark:text-white">{displayCR.sourceId}</div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 uppercase">
+                                                    {displayCR.sourceType}
+                                                </span>
+                                            </div>
+                                            <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                                {displayCR.sourceId ? displayCR.sourceId.substring(0, 8) : 'Unspecified Source'}
+                                            </div>
                                         </div>
                                     </div>
                                 )}

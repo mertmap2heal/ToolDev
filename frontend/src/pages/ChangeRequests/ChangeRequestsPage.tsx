@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Filter, Download, Columns, Search, RefreshCw, ChevronDown, ChevronRight, ArrowUpDown, MoreHorizontal, FileText, AlertCircle, CheckCircle, Clock } from 'lucide-react'
+import { Plus, Filter, Download, Search, RefreshCw, ArrowUpDown, AlertCircle, CheckCircle, Clock } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { changeRequestService } from '../../services/changeRequest.service'
@@ -41,7 +41,7 @@ export default function ChangeRequestsPage() {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
 
   // Data Fetching
-  const { data: changeRequests = [], isLoading, isError, refetch } = useQuery({
+  const { data: changeRequests = [], isLoading, refetch } = useQuery({
     queryKey: ['change-requests', projectId],
     queryFn: async () => {
       if (!projectId) throw new Error('Project ID required')
@@ -272,7 +272,7 @@ export default function ChangeRequestsPage() {
 
             {/* Filters Accordion */}
             {isFiltersOpen && (
-              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 grid grid-cols-4 gap-6 animate-in slide-in-from-top-2 duration-200">
+              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 animate-in slide-in-from-top-2 duration-200">
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Status</label>
                   <div className="space-y-1">
@@ -316,7 +316,7 @@ export default function ChangeRequestsPage() {
           </div>
 
           {/* Table Content */}
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden flex-1 min-h-0">
             {isLoading ? (
               <div className="flex items-center justify-center h-64">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -340,9 +340,9 @@ export default function ChangeRequestsPage() {
                 )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto h-full">
                 <table className="w-full text-left border-collapse">
-                  <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(0,0,0,0.1)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
                     <tr>
                       <th className="w-10 px-4 py-3">
                         <input
@@ -467,7 +467,7 @@ export default function ChangeRequestsPage() {
           changeRequest={selectedChangeRequest}
           projectId={projectId!}
           onClose={() => setIsDrawerOpen(false)}
-          onEdit={(cr) => {
+          onEdit={() => {
             setIsCreateModalOpen(true)
           }}
           onDelete={handleDelete}

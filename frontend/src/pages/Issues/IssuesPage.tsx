@@ -186,7 +186,7 @@ export default function IssuesPage() {
     if (statusFilter !== 'all') params.set('status', statusFilter)
     if (priorityFilter !== 'all') params.set('priority', priorityFilter)
     if (ownerFilter !== 'all') params.set('owner', ownerFilter)
-    
+
     const queryString = params.toString()
     navigate(`/projects/${projectId}/issues/${issueId}${queryString ? `?${queryString}` : ''}`)
   }
@@ -252,7 +252,7 @@ export default function IssuesPage() {
         </button>
         {isFiltersExpanded && (
           <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {/* Status Filter */}
               <div>
                 <select
@@ -304,10 +304,10 @@ export default function IssuesPage() {
       </div>
 
       {/* Issues Table */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden flex-1 min-h-[400px]">
+        <div className="overflow-x-auto h-full">
+          <table className="w-full border-collapse">
+            <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(0,0,0,0.1)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
               <tr>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-32">
                   ID
