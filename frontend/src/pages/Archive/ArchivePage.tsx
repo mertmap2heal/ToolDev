@@ -228,10 +228,7 @@ export default function ArchivePage() {
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
                           {req.deletedByUser ? (
-                            <div className="flex flex-col">
-                              <span className="font-medium">{req.deletedByUser.name}</span>
-                              <span className="text-xs text-gray-400">{req.deletedByUser.email}</span>
-                            </div>
+                            <span className="font-medium">{req.deletedByUser.name}</span>
                           ) : req.deletedById ? (
                             <span className="font-mono text-xs">{req.deletedById.substring(0, 8)}...</span>
                           ) : (
