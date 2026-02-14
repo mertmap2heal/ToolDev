@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Edit2, Trash2, MessageSquare, Paperclip, Tag, ChevronRight, ChevronDown, Link2, FileText, Settings, AlertCircle, Zap, History, ExternalLink, Check, Bell, BellRing } from 'lucide-react'
+import { X, Edit2, Trash2, MessageSquare, Paperclip, Tag, ChevronRight, ChevronDown, Link2, FileText, Settings, AlertCircle, Zap, History, ExternalLink, Check, Bell, BellRing, GitPullRequest } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { requirementService, type RequirementSubscriptionSnapshot } from '../../services/requirement.service'
@@ -803,31 +803,63 @@ export default function RequirementDetailDrawer({
                             </div>
                             <div className="space-y-2">
                               {linkList.map((link) => {
-                                const req = requirements.find((r: any) => r.id === link.targetId)
-                                const targetLabel = link.targetType === 'requirement'
-                                  ? (displayRequirement?.id === link.targetId ? 'Self' : req?.title || req?.requirementId || `${link.targetType} (${link.targetId.slice(0, 8)})`)
-                                  : `${link.targetType} (${link.targetId.slice(0, 8)})`
+                                const targetItem: any =
+                                  link.targetType === 'requirement' ? requirements.find((r: any) => r.id === link.targetId) :
+                                    link.targetType === 'function' ? functions.find((f: any) => f.id === link.targetId) :
+                                      link.targetType === 'issue' ? issues.find((i: any) => i.id === link.targetId) :
+                                        link.targetType === 'change_request' ? changeRequests.find((cr: any) => cr.id === link.targetId) : null;
+
+                                const displayId = targetItem ? (
+                                  targetItem.requirementId ||
+                                  targetItem.functionId ||
+                                  targetItem.issueKey ||
+                                  targetItem.crId ||
+                                  link.targetId.slice(0, 8)
+                                ) : link.targetId.slice(0, 8);
+
+                                const title = targetItem ? (targetItem.title || targetItem.name) : `${link.targetType} (${link.targetId.slice(0, 8)})`;
+
+                                const getIcon = () => {
+                                  switch (link.targetType) {
+                                    case 'requirement': return <FileText size={16} className="text-blue-500" />
+                                    case 'function': return <Settings size={16} className="text-green-500" />
+                                    case 'issue': return <AlertCircle size={16} className="text-orange-500" />
+                                    case 'change_request': return <GitPullRequest size={16} className="text-purple-500" />
+                                    default: return <Link2 size={16} className="text-gray-500" />
+                                  }
+                                }
+
                                 const deepLink = buildDeepLink(projectId, { type: link.targetType as any, id: link.targetId })
                                 return (
                                   <div
                                     key={link.id}
-                                    className="flex items-center justify-between gap-2 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700"
+                                    className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-blue-500/50 dark:hover:border-blue-500/50 transition-all shadow-sm group"
                                   >
+                                    <div className="mt-1 flex-shrink-0 p-1.5 rounded-lg bg-gray-50 dark:bg-gray-700/50 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 transition-colors">
+                                      {getIcon()}
+                                    </div>
                                     <div className="min-w-0 flex-1">
-                                      <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{targetLabel}</div>
-                                      {link.isSuspect && (
-                                        <span className="inline-flex items-center gap-0.5 mt-1 px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                                          <AlertCircle size={10} /> Suspect
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                          {displayId}
                                         </span>
-                                      )}
+                                        {link.isSuspect && (
+                                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                                            <AlertCircle size={10} /> Suspect
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                        {title}
+                                      </div>
                                     </div>
                                     <button
                                       type="button"
                                       onClick={() => navigate(deepLink)}
-                                      className="p-2 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded"
+                                      className="mt-1 p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all"
                                       title="Open linked item"
                                     >
-                                      <ExternalLink size={14} />
+                                      <ExternalLink size={16} />
                                     </button>
                                   </div>
                                 )

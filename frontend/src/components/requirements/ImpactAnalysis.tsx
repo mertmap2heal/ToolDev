@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { X, AlertTriangle, ArrowRight, ChevronDown, ChevronRight, Download, Filter, Target, Zap, Settings, AlertCircle } from 'lucide-react'
+import { X, AlertTriangle, ArrowRight, ChevronDown, ChevronRight, Download, Filter, Target, Zap, Settings, AlertCircle, GitPullRequest } from 'lucide-react'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
@@ -110,7 +110,7 @@ export default function ImpactAnalysis({ projectId, requirement, onClose }: Impa
         const issue = issues.find((i) => i.id === id)
         if (!issue) return null
         name = issue.title
-        displayId = id.substring(0, 8)
+        displayId = issue.issueKey || id.substring(0, 8)
       }
 
       const children: ImpactNode[] = []
@@ -242,7 +242,9 @@ export default function ImpactAnalysis({ projectId, requirement, onClose }: Impa
       case 'function':
         return <Settings size={14} className="text-green-500" />
       case 'issue':
-        return <AlertCircle size={14} className="text-yellow-500" />
+        return <AlertCircle size={14} className="text-orange-500" />
+      case 'change_request':
+        return <GitPullRequest size={14} className="text-purple-500" />
       default:
         return <Zap size={14} className="text-gray-500" />
     }
@@ -453,7 +455,7 @@ export default function ImpactAnalysis({ projectId, requirement, onClose }: Impa
         {/* Footer */}
         <div className="flex items-center justify-between p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {impactStats.totalImpacted > 0 
+            {impactStats.totalImpacted > 0
               ? `${impactStats.totalImpacted} artifact(s) will be affected if this requirement changes.`
               : 'No downstream dependencies detected.'}
           </p>
