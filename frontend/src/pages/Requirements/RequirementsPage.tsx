@@ -296,9 +296,9 @@ export default function RequirementsPage() {
   })
 
   const deleteRequirementMutation = useMutation({
-    mutationFn: (requirementId: string) => {
+    mutationFn: ({ requirementId, reason }: { requirementId: string; reason?: string }) => {
       if (!projectId) throw new Error('Project ID required')
-      return requirementService.deleteRequirement(projectId, requirementId)
+      return requirementService.deleteRequirement(projectId, requirementId, reason)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
@@ -1363,14 +1363,8 @@ export default function RequirementsPage() {
     const linkedFunctionsCount = functions.filter((f) => f.sourceReqId === req.id).length
     const linkedItemsCount = LINKAGE_V1 ? links.filter((l: any) => l.sourceType === 'requirement' && l.sourceId === req.id).length : 0
 
-    if (hasChildren || (LINKAGE_V1 ? linkedItemsCount > 0 : linkedFunctionsCount > 0)) {
-      setDeleteConfirmation(req)
-    } else {
-      // Direct delete
-      if (window.confirm(`Are you sure you want to delete requirement "${req.requirementId || req.title}"?`)) {
-        deleteRequirementMutation.mutate(req.id)
-      }
-    }
+    // Always show modal to allow entering a reason
+    setDeleteConfirmation(req)
   }
 
   // Helper to check lock before inline edit
@@ -1387,9 +1381,9 @@ export default function RequirementsPage() {
   }
 
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = (reason?: string) => {
     if (deleteConfirmation) {
-      deleteRequirementMutation.mutate(deleteConfirmation.id)
+      deleteRequirementMutation.mutate({ requirementId: deleteConfirmation.id, reason })
     }
   }
 

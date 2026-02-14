@@ -13,6 +13,9 @@ export type LinkageAuditAction =
   | 'LINK_CLEARED_SUSPECT'
   | 'BASELINE_CREATED'
   | 'QUALITY_ANALYSIS_RUN'
+  | 'REQUIREMENT_DELETED_SOFT'
+  | 'REQUIREMENT_RESTORED'
+  | 'REQUIREMENT_PERMANENTLY_DELETED'
 
 /**
  * Audit service for requirements linkage events.

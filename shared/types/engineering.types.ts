@@ -42,6 +42,13 @@ export interface Requirement {
   lockedByUserId?: string | null
   lockedAt?: string | null // ISO Date string
 
+  // Soft Delete
+  deletedAt?: string | null
+  deletedById?: string | null
+  deleteReason?: string | null
+  restoredAt?: string | null
+  restoredById?: string | null
+
   lifecycleId?: string | null
   statusId?: string
   statusChangedAt?: string

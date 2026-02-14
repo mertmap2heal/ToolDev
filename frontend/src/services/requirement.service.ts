@@ -25,8 +25,20 @@ export const requirementService = {
     return apiClient.put<Requirement>(`/requirements/${projectId}/${requirementId}`, data)
   },
 
-  async deleteRequirement(projectId: string, requirementId: string): Promise<ApiResponse<void>> {
-    return apiClient.delete<void>(`/requirements/${projectId}/${requirementId}`)
+  async deleteRequirement(projectId: string, requirementId: string, reason?: string): Promise<ApiResponse<void>> {
+    return apiClient.delete<void>(`/requirements/${projectId}/${requirementId}`, { reason })
+  },
+
+  async restoreRequirement(projectId: string, requirementId: string): Promise<ApiResponse<void>> {
+    return apiClient.post<void>(`/requirements/${projectId}/${requirementId}/restore`, {})
+  },
+
+  async permanentDeleteRequirement(projectId: string, requirementId: string): Promise<ApiResponse<void>> {
+    return apiClient.delete<void>(`/requirements/${projectId}/${requirementId}/permanent`)
+  },
+
+  async getRecentlyDeletedRequirements(projectId: string): Promise<ApiResponse<Requirement[]>> {
+    return apiClient.get<Requirement[]>(`/requirements/${projectId}/requirements/archive/recently-deleted`)
   },
 
   async lockRequirement(projectId: string, requirementId: string): Promise<ApiResponse<Requirement>> {

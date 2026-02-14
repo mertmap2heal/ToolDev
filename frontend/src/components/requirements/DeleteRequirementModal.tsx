@@ -1,3 +1,4 @@
+import React from 'react'
 import { X, AlertTriangle } from 'lucide-react'
 import type { Requirement } from 'shared/types/engineering.types'
 
@@ -9,7 +10,7 @@ interface DeleteRequirementModalProps {
   linkedFunctionsCount?: number
   /** When LINKAGE_V1: count of linked items (excludes function/parameter) */
   linkedItemsCount?: number
-  onConfirm: () => void
+  onConfirm: (reason?: string) => void
   onCancel: () => void
   isDeleting?: boolean
 }
@@ -24,6 +25,8 @@ export default function DeleteRequirementModal({
   onCancel,
   isDeleting = false,
 }: DeleteRequirementModalProps) {
+  const [reason, setReason] = React.useState('')
+
   if (!isOpen || !requirement) return null
 
   const warnings: string[] = []
@@ -39,6 +42,10 @@ export default function DeleteRequirementModal({
     )
   }
 
+  const handleConfirm = () => {
+    onConfirm(reason)
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
@@ -49,7 +56,7 @@ export default function DeleteRequirementModal({
               <AlertTriangle size={20} className="text-red-600 dark:text-red-400" />
             </div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-              Delete Requirement
+              Move to Trash
             </h2>
           </div>
           <button
@@ -64,16 +71,17 @@ export default function DeleteRequirementModal({
         {/* Content */}
         <div className="p-6">
           <p className="text-gray-700 dark:text-gray-300 mb-4">
-            Are you sure you want to delete requirement{' '}
+            Are you sure you want to move requirement{' '}
             <span className="font-semibold text-gray-900 dark:text-white">
               "{requirement.requirementId || requirement.id.substring(0, 8)} - {requirement.title}"
-            </span>?
+            </span>{' '}
+            to trash?
           </p>
-          
+
           {warnings.length > 0 && (
             <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
               <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300 mb-2">
-                Cannot delete requirement:
+                Cannot move to trash:
               </p>
               <ul className="list-disc list-inside text-sm text-yellow-700 dark:text-yellow-400 space-y-1">
                 {warnings.map((warning, index) => (
@@ -84,9 +92,24 @@ export default function DeleteRequirementModal({
           )}
 
           {warnings.length === 0 && (
-            <p className="text-sm text-red-600 dark:text-red-400 mb-6">
-              This action cannot be undone. The requirement will be permanently deleted.
-            </p>
+            <>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Items in trash will be permanently deleted after 7 days.
+              </p>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Reason (optional)
+                </label>
+                <textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="Why are you deleting this?"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  rows={2}
+                />
+              </div>
+            </>
           )}
 
           {/* Actions */}
@@ -101,17 +124,17 @@ export default function DeleteRequirementModal({
             </button>
             <button
               type="button"
-              onClick={onConfirm}
+              onClick={handleConfirm}
               disabled={isDeleting || warnings.length > 0}
               className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isDeleting ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Deleting...</span>
+                  <span>Moving...</span>
                 </>
               ) : (
-                'Delete Requirement'
+                'Move to Trash'
               )}
             </button>
           </div>

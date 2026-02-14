@@ -7,6 +7,9 @@ import {
   createRequirement,
   updateRequirement,
   deleteRequirement,
+  restoreRequirement,
+  permanentDeleteRequirement,
+  getRecentlyDeletedRequirements,
   getRequirementChildren,
   getRequirementSubscription,
   subscribeToRequirement,
@@ -58,5 +61,22 @@ router.post('/:projectId/migrate-category-to-type', migrateCategoryToRequirement
 
 // Component assignment (drag-and-drop)
 router.patch('/:projectId/:requirementId/component', updateRequirementComponent)
+
+
+// Requirement Soft Delete & Archive
+router.post(
+  '/:projectId/requirements/:requirementId/restore',
+  restoreRequirement
+)
+
+router.delete(
+  '/:projectId/requirements/:requirementId/permanent',
+  permanentDeleteRequirement
+)
+
+router.get(
+  '/:projectId/requirements/archive/recently-deleted',
+  getRecentlyDeletedRequirements
+)
 
 export default router

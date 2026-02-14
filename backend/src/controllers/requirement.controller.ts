@@ -235,7 +235,10 @@ export const getRequirements = async (req: AuthRequest, res: Response) => {
     const { projectId } = req.params
 
     const requirements = await prisma.requirement.findMany({
-      where: { projectId },
+      where: {
+        projectId,
+        deletedAt: null, // Only active requirements
+      },
       include: {
         parent: {
           select: {
@@ -602,6 +605,13 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
     })
 
     if (existingRequirement) {
+      // Check if it's soft deleted
+      if (existingRequirement.deletedAt) {
+        return res.status(400).json({
+          success: false,
+          error: `This Requirement ID "${finalRequirementId}" is reserved until the deleted item is restored or permanently deleted.`,
+        })
+      }
       return res.status(400).json({
         success: false,
         error: `Requirement ID "${finalRequirementId}" already exists in this project`,
@@ -1171,7 +1181,9 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    // Check if requirement has children
+    // Check if requirement has children (must not allow soft delete if children exist, or handle cascading?
+    // Current rule from analysis: "This requirement has child requirements that must be deleted or reassigned first."
+    // We maintain this strict check for now to avoid orphaned children in active view.
     if (requirement.children.length > 0) {
       return res.status(400).json({
         success: false,
@@ -1179,27 +1191,31 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    // Check if requirement is linked to functions
-    const linkedFunctions = await prisma.systemFunction.findMany({
-      where: {
-        projectId,
-        sourceReqId: requirement.id,
+    // Soft delete the requirement
+    const deletedRequirement = await prisma.requirement.update({
+      where: { id: requirement.id },
+      data: {
+        deletedAt: new Date(),
+        deletedById: req.userId,
+        deleteReason: req.body.reason || null,
       },
     })
 
-    if (linkedFunctions.length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: `Cannot delete requirement: it is linked to ${linkedFunctions.length} function(s). Please unlink functions first.`,
-      })
-    }
+    await linkageAuditService.log({
+      projectId,
+      entityType: 'REQUIREMENT',
+      entityId: requirement.id,
+      action: 'REQUIREMENT_DELETED_SOFT',
+      oldValue: { status: requirement.status },
+      newValue: { deletedAt: deletedRequirement.deletedAt, reason: deletedRequirement.deleteReason },
+      performedByUserId: req.userId,
+    })
 
-    // Delete the requirement
     await notifyRequirementSubscribers({
       projectId,
       requirementId: requirement.id,
       actorUserId: req.userId,
-      changes: ['Requirement deleted'],
+      changes: ['Requirement moved to trash'],
       action: 'deleted',
       requirementSnapshot: {
         id: requirement.id,
@@ -1208,16 +1224,209 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
       },
     })
 
-    await prisma.requirement.delete({
+    res.json({
+      success: true,
+      message: 'Requirement moved to trash successfully',
+    })
+  } catch (error) {
+    console.error('Delete requirement error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    })
+  }
+}
+
+export const restoreRequirement = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, requirementId } = req.params
+
+    const requirement = await prisma.requirement.findFirst({
+      where: {
+        projectId,
+        OR: [
+          { id: requirementId },
+          { requirementId: requirementId },
+        ],
+      },
+    })
+
+    if (!requirement) {
+      return res.status(404).json({
+        success: false,
+        error: 'Requirement not found',
+      })
+    }
+
+    if (!requirement.deletedAt) {
+      return res.status(400).json({
+        success: false,
+        error: 'Requirement is not deleted',
+      })
+    }
+
+    // Restore the requirement
+    const restoredRequirement = await prisma.requirement.update({
       where: { id: requirement.id },
+      data: {
+        deletedAt: null,
+        deletedById: null,
+        deleteReason: null,
+        restoredAt: new Date(),
+        restoredById: req.userId,
+      },
+    })
+
+    await linkageAuditService.log({
+      projectId,
+      entityType: 'REQUIREMENT',
+      entityId: requirement.id,
+      action: 'REQUIREMENT_RESTORED',
+      performedByUserId: req.userId,
     })
 
     res.json({
       success: true,
-      message: 'Requirement deleted successfully',
+      message: 'Requirement restored successfully',
+      data: restoredRequirement,
     })
   } catch (error) {
-    console.error('Delete requirement error:', error)
+    console.error('Restore requirement error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    })
+  }
+}
+
+export const permanentDeleteRequirement = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, requirementId } = req.params
+
+    const requirement = await prisma.requirement.findFirst({
+      where: {
+        projectId,
+        OR: [
+          { id: requirementId },
+          { requirementId: requirementId },
+        ],
+      },
+      include: {
+        children: { select: { id: true } },
+      },
+    })
+
+    if (!requirement) {
+      return res.status(404).json({
+        success: false,
+        error: 'Requirement not found',
+      })
+    }
+
+    // Ensure it is already soft deleted?
+    // Requirement says: "Permanent delete requires explicit confirmation"
+    // Usually we allow perm delete from Trash (so it must be soft deleted first), OR explicitly from active if rights allow.
+    // Use case implies this action comes from Archive page, so likely soft deleted. But let's act on the ID regardless.
+
+    // Constraint: Check children again (just in case)
+    if (requirement.children.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot permanently delete: has ${requirement.children.length} children.`,
+      })
+    }
+
+    // Check functions links - strict Referential Integrity might fail or cascade, but let's check manually to be safe/friendly
+    const linkedFunctions = await prisma.systemFunction.findMany({
+      where: { projectId, sourceReqId: requirement.id }
+    })
+    if (linkedFunctions.length > 0) {
+      // Decide: Block or unlink?
+      // Requirement says: "Permanent delete... item removed".
+      // If DB has constraints, it will fail. Let's block to be safe.
+      return res.status(400).json({
+        success: false,
+        error: `Cannot permanently delete: linked to ${linkedFunctions.length} function(s).`,
+      })
+    }
+
+    const snapshot = JSON.stringify(requirement)
+
+    await prisma.requirement.delete({
+      where: { id: requirement.id },
+    })
+
+    // Log to permanent audit
+    await linkageAuditService.log({
+      projectId,
+      entityType: 'REQUIREMENT',
+      entityId: requirement.id,
+      action: 'REQUIREMENT_PERMANENTLY_DELETED',
+      oldValue: { snapshot },
+      performedByUserId: req.userId,
+    })
+
+    res.json({
+      success: true,
+      message: 'Requirement permanently deleted',
+    })
+  } catch (error) {
+    console.error('Permanent delete error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    })
+  }
+}
+
+export const getRecentlyDeletedRequirements = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+    const { deletedBy, from, to } = req.query
+
+    const whereClause: any = {
+      projectId,
+      deletedAt: { not: null },
+    }
+
+    if (deletedBy) {
+      whereClause.deletedById = String(deletedBy)
+    }
+
+    if (from || to) {
+      whereClause.deletedAt = {}
+      if (from) whereClause.deletedAt.gte = new Date(String(from))
+      if (to) whereClause.deletedAt.lte = new Date(String(to))
+    }
+
+    const deletedRequirements = await prisma.requirement.findMany({
+      where: whereClause,
+      orderBy: { deletedAt: 'desc' },
+      include: {
+        component: { select: { id: true, name: true } },
+      },
+    })
+
+    // Map to include calculated "daysLeft"
+    const result = deletedRequirements.map(req => {
+      const deletedAt = new Date(req.deletedAt!)
+      const expiresAt = new Date(deletedAt.getTime() + 7 * 24 * 60 * 60 * 1000) // +7 days
+      const now = new Date()
+      const msLeft = expiresAt.getTime() - now.getTime()
+      const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24))
+
+      return {
+        ...req,
+        daysLeft: daysLeft > 0 ? daysLeft : 0
+      }
+    })
+
+    res.json({
+      success: true,
+      data: result,
+    })
+  } catch (error) {
+    console.error('Get recently deleted error:', error)
     res.status(500).json({
       success: false,
       error: 'Internal server error',

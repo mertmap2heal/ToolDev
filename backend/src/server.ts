@@ -64,8 +64,20 @@ app.get('/api/v1', (req, res) => {
 app.use('/api/v1', routes)
 
 // Global error handler: return JSON 500 for any unhandled errors
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use(async (err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Unhandled error:', err)
+
+  // Log to file for debugging
+  const logPath = path.join(__dirname, '../error.log')
+  const logMessage = `[${new Date().toISOString()}] ${err.stack || err.message}\n`
+  // Ensure fs is imported at top of file
+  try {
+    const fs = await import('fs');
+    fs.default.appendFileSync(logPath, logMessage)
+  } catch (e) {
+    console.error('Failed to write to log file:', e)
+  }
+
   const message = process.env.NODE_ENV === 'production' ? 'Internal server error' : (err.message ?? 'Internal server error')
   res.status(500).json({ success: false, error: message })
 })
@@ -74,6 +86,17 @@ if (process.env.NODE_ENV !== 'test') {
   console.log('Server: binding to port', PORT, '...')
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`)
+
+    // Schedule cleanup job (daily)
+    import('./services/cleanup.service.js').then(({ cleanupSoftDeletedRequirements }) => {
+      // Run immediately on startup (for dev/demo purposes)
+      cleanupSoftDeletedRequirements().catch(err => console.error('Cleanup startup error:', err))
+
+      // Schedule daily (86400000 ms)
+      setInterval(() => {
+        cleanupSoftDeletedRequirements().catch(err => console.error('Cleanup interval error:', err))
+      }, 24 * 60 * 60 * 1000)
+    })
   }).on('error', (err: NodeJS.ErrnoException) => {
     console.error('Server failed to listen:', err.message)
     if (err.code === 'EADDRINUSE') console.error('Port', PORT, 'is already in use.')

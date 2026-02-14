@@ -98,9 +98,9 @@ class ApiClient {
     }
   }
 
-  async delete<T>(url: string, headers?: Record<string, string>): Promise<ApiResponse<T>> {
+  async delete<T>(url: string, data?: any, headers?: Record<string, string>): Promise<ApiResponse<T>> {
     try {
-      const response = await this.client.delete<ApiResponse<T>>(url, { headers })
+      const response = await this.client.delete<ApiResponse<T>>(url, { headers, data })
       return response.data
     } catch (error) {
       return this.handleError(error)
@@ -129,7 +129,7 @@ class ApiClient {
         statusCode: status,
       }
     }
-    
+
     // Network errors (backend not running, CORS, etc.)
     if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error') || error.message?.includes('Failed to fetch')) {
       return {
@@ -138,7 +138,7 @@ class ApiClient {
         statusCode: 0,
       }
     }
-    
+
     return {
       success: false,
       error: error.message || 'Network error',
