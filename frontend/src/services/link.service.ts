@@ -19,6 +19,9 @@ function traceLinkToLink(tl: TraceLink): Link {
     rationale: tl.rationale,
     createdAt: tl.createdAt,
     isSuspect: tl.isSuspect,
+    targetTitle: tl.targetTitle,
+    targetDescription: tl.targetDescription,
+    targetDisplayId: tl.targetDisplayId
   }
 }
 

@@ -297,9 +297,9 @@ export default function RequirementsPage() {
   })
 
   const deleteRequirementMutation = useMutation({
-    mutationFn: ({ requirementId, reason, childrenToDelete }: { requirementId: string; reason?: string; childrenToDelete?: string[] }) => {
+    mutationFn: ({ requirementId, reason, childrenToDelete, linkedItemsToDelete }: { requirementId: string; reason?: string; childrenToDelete?: string[], linkedItemsToDelete?: { type: string, id: string }[] }) => {
       if (!projectId) throw new Error('Project ID required')
-      return requirementService.deleteRequirement(projectId, requirementId, reason, childrenToDelete)
+      return requirementService.deleteRequirement(projectId, requirementId, reason, childrenToDelete, linkedItemsToDelete)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
@@ -549,6 +549,9 @@ export default function RequirementsPage() {
             targetId: l.targetId,
             label: l.targetLabel ?? `${l.targetType}:${l.targetId}`,
             linkType: l.linkType,
+            title: l.targetTitle,
+            description: l.targetDescription,
+            displayId: l.targetDisplayId,
           }
           // If targetType is 'issue', find and attach the full issue details
           // Enrich with details if available in loaded lists
@@ -1416,14 +1419,13 @@ export default function RequirementsPage() {
     }
 
 
-    // Ensure linked elements are loaded for the modal
-    if (!requirementData.has(req.id)) {
-      setRequirementData((prev) => {
-        const newMap = new Map(prev)
-        newMap.set(req.id, getLinkedElements(req.id))
-        return newMap
-      })
-    }
+    // Always refresh linked elements for the modal to ensure fresh data
+    const linkedElements = getLinkedElements(req.id)
+    setRequirementData((prev) => {
+      const newMap = new Map(prev)
+      newMap.set(req.id, linkedElements)
+      return newMap
+    })
 
     // Always show modal to allow entering a reason
     setDeleteConfirmation(req)
@@ -1443,9 +1445,9 @@ export default function RequirementsPage() {
   }
 
 
-  const handleConfirmDelete = (reason?: string, childrenToDelete?: string[]) => {
+  const handleConfirmDelete = (reason?: string, childrenToDelete?: string[], linkedItemsToDelete?: { type: string, id: string }[]) => {
     if (deleteConfirmation) {
-      deleteRequirementMutation.mutate({ requirementId: deleteConfirmation.id, reason, childrenToDelete })
+      deleteRequirementMutation.mutate({ requirementId: deleteConfirmation.id, reason, childrenToDelete, linkedItemsToDelete })
     }
   }
 

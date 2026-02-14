@@ -7,6 +7,8 @@ import { linkageAuditService } from '../services/linkageAudit.service'
 import { requirementValidationService } from '../services/requirementValidation.service'
 import { requirementSubscriptionService } from '../services/requirementSubscription.service'
 import { buildRequirementChangeSummary, notifyRequirementSubscribers } from '../services/requirementNotification.service'
+import fs from 'fs'
+import path from 'path'
 
 const prisma = new PrismaClient()
 
@@ -1217,6 +1219,53 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
           parentId: null
         }
       })
+    }
+
+    // 3. Process Linked Items (Issues, Change Requests)
+    // The frontend passes a list of items that the user explicitly selected for deletion.
+    // We will hard delete them to match the behavior of their respective controllers.
+    const { linkedItemsToDelete } = req.body
+
+    if (linkedItemsToDelete && Array.isArray(linkedItemsToDelete) && linkedItemsToDelete.length > 0) {
+      console.log(`[Delete Requirement] Processing ${linkedItemsToDelete.length} linked items for deletion`)
+
+      for (const item of linkedItemsToDelete) {
+        try {
+          if (item.type === 'issue') {
+            // Hard delete issue
+            await prisma.issue.delete({ where: { id: item.id } }).catch(e => {
+              console.error(`Failed to delete linked issue ${item.id}:`, e)
+            })
+          } else if (item.type === 'change_request') {
+            // Find CR to delete attachments first
+            const cr = await prisma.changeRequest.findUnique({
+              where: { id: item.id },
+              include: { attachments: true }
+            })
+
+            if (cr) {
+              // Delete attachments from FS
+              const uploadsDir = path.join(__dirname, '../../uploads/change-requests')
+              for (const attachment of cr.attachments) {
+                if (attachment.fileUrl && !attachment.fileUrl.startsWith('data:')) {
+                  const filePath = path.join(uploadsDir, path.basename(attachment.fileUrl))
+                  if (fs.existsSync(filePath)) {
+                    try { fs.unlinkSync(filePath) } catch (e) { console.error('Failed to unlink file:', e) }
+                  }
+                }
+              }
+
+              // Hard delete CR
+              await prisma.changeRequest.delete({ where: { id: item.id } }).catch(e => {
+                console.error(`Failed to delete linked change request ${item.id}:`, e)
+              })
+            }
+          }
+        } catch (error) {
+          console.error(`Error processing linked item deletion for ${item.type}:${item.id}`, error)
+          // Continue processing other items even if one fails
+        }
+      }
     }
 
     // Soft delete the requirement

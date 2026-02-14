@@ -114,7 +114,10 @@ export const traceabilityService = {
         direction: undefined,
         rationale: undefined,
         confidence: undefined,
-        lastChecked: undefined
+        lastChecked: undefined,
+        targetTitle: l.issue.title,
+        targetDescription: l.issue.description,
+        targetDisplayId: l.issue.issueKey || l.issue.id.substring(0, 8)
       }))
     }
 
@@ -153,7 +156,10 @@ export const traceabilityService = {
           direction: undefined,
           rationale: l.note,
           confidence: undefined,
-          lastChecked: undefined
+          lastChecked: undefined,
+          targetTitle: l.changeRequest.title,
+          targetDescription: l.changeRequest.description,
+          targetDisplayId: l.changeRequest.crId || l.changeRequest.id.substring(0, 8)
         })))
       }
 
@@ -189,7 +195,10 @@ export const traceabilityService = {
           direction: undefined,
           rationale: l.note,
           confidence: undefined,
-          lastChecked: undefined
+          lastChecked: undefined,
+          targetTitle: l.requirement.title,
+          targetDescription: l.requirement.description,
+          targetDisplayId: l.requirement.requirementId || l.requirement.id.substring(0, 8)
         })))
       }
     }
@@ -230,6 +239,9 @@ export const traceabilityService = {
       isSuspect: link.isSuspect || false,
       lastChecked: link.lastChecked?.toISOString(),
       createdAt: link.createdAt.toISOString(),
+      targetTitle: link.targetTitle, // Added
+      targetDescription: link.targetDescription, // Added
+      targetDisplayId: link.targetDisplayId // Added
     }))
   },
 

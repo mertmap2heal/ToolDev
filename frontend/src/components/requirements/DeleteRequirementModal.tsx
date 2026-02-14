@@ -17,7 +17,7 @@ interface DeleteRequirementModalProps {
   linkedChangeRequests?: { id: string; title: string }[]
   linkedFunctions?: { id: string; name: string; functionId?: string }[]
   linkedItems?: { id: string; targetType: string; targetId: string; label?: string; linkType?: string; title?: string; description?: string; displayId?: string }[]
-  onConfirm: (reason?: string, childrenToDelete?: string[]) => void
+  onConfirm: (reason?: string, childrenToDelete?: string[], linkedItemsToDelete?: { type: string, id: string }[]) => void
 }
 
 export default function DeleteRequirementModal({
@@ -37,13 +37,27 @@ export default function DeleteRequirementModal({
 }: DeleteRequirementModalProps) {
   const [reason, setReason] = React.useState('')
   const [childrenToDelete, setChildrenToDelete] = React.useState<Set<string>>(new Set())
+  const [linkedItemsToDelete, setLinkedItemsToDelete] = React.useState<Set<string>>(new Set())
 
-  // Initialize all children as selected for deletion by default
+  // Initialize all children and linked items as selected for deletion by default
   React.useEffect(() => {
-    if (children && children.length > 0) {
-      setChildrenToDelete(new Set(children.map(c => c.id)))
+    if (isOpen) {
+      if (children && children.length > 0) {
+        setChildrenToDelete(new Set(children.map(c => c.id)))
+      }
+
+      const initialLinkedItems = new Set<string>()
+      linkedIssues.forEach(i => initialLinkedItems.add(`issue:${i.id}`))
+      linkedChangeRequests.forEach(cr => initialLinkedItems.add(`change_request:${cr.id}`))
+      // Generic items
+      linkedItems.forEach(item => {
+        if (item.targetType === 'issue' || item.targetType === 'change_request') {
+          initialLinkedItems.add(`${item.targetType}:${item.targetId}`)
+        }
+      })
+      setLinkedItemsToDelete(initialLinkedItems)
     }
-  }, [children, isOpen])
+  }, [children, linkedIssues, linkedChangeRequests, linkedItems, isOpen])
 
   const toggleChild = (childId: string) => {
     setChildrenToDelete(prev => {
@@ -57,13 +71,30 @@ export default function DeleteRequirementModal({
     })
   }
 
+  const toggleLinkedItem = (type: string, id: string) => {
+    const key = `${type}:${id}`
+    setLinkedItemsToDelete(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }
+
   if (!isOpen || !requirement) return null
 
   const displayLinkedFunctionsCount = linkedItemsCount ?? linkedFunctionsCount
   const hasLinkedItems = displayLinkedFunctionsCount > 0 || linkedIssues.length > 0 || linkedChangeRequests.length > 0 || linkedFunctions.length > 0 || linkedItems.length > 0
 
   const handleConfirm = () => {
-    onConfirm(reason, Array.from(childrenToDelete))
+    const linkedToDeleteList = Array.from(linkedItemsToDelete).map(key => {
+      const [type, id] = key.split(':')
+      return { type, id }
+    })
+    onConfirm(reason, Array.from(childrenToDelete), linkedToDeleteList)
   }
 
   return (
@@ -134,12 +165,13 @@ export default function DeleteRequirementModal({
               <div className="flex items-start gap-2">
                 <AlertTriangle size={16} className="text-yellow-600 dark:text-yellow-400 mt-0.5 shrink-0" />
                 <p className="text-sm text-yellow-800 dark:text-yellow-300 font-medium">
-                  This requirement is linked to other items. Deleting it will break these links.
+                  This requirement is linked to other items.
+                  Uncheck items to keep them (link will be removed). Checked items will be deleted.
                 </p>
               </div>
 
               <div className="space-y-3 pl-6">
-                {/* Linked Functions */}
+                {/* Linked Functions (Always Info Only as we don't delete functions from here) */}
                 {linkedFunctions.length > 0 && (
                   <div>
                     <p className="text-xs font-semibold text-yellow-900 dark:text-yellow-200 uppercase tracking-wide mb-1">
@@ -157,29 +189,25 @@ export default function DeleteRequirementModal({
                   </div>
                 )}
 
-                {/* Fallback for count only if list is empty but count is > 0 */}
-                {linkedFunctions.length === 0 && linkedFunctionsCount > 0 && (
-                  <div>
-                    <p className="text-sm text-yellow-800 dark:text-yellow-300">
-                      • {linkedFunctionsCount} linked function(s)
-                    </p>
-                  </div>
-                )}
-
                 {/* Linked Issues */}
                 {linkedIssues.length > 0 && (
                   <div>
                     <p className="text-xs font-semibold text-yellow-900 dark:text-yellow-200 uppercase tracking-wide mb-1">
                       Issues ({linkedIssues.length})
                     </p>
-                    <ul className="text-sm text-yellow-800 dark:text-yellow-300 space-y-1">
+                    <div className="space-y-1">
                       {linkedIssues.map(issue => (
-                        <li key={issue.id} className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full flex-shrink-0" />
-                          {issue.title}
-                        </li>
+                        <label key={issue.id} className="flex items-center gap-2 cursor-pointer hover:bg-yellow-100/50 dark:hover:bg-yellow-900/10 rounded px-1 py-0.5">
+                          <input
+                            type="checkbox"
+                            checked={linkedItemsToDelete.has(`issue:${issue.id}`)}
+                            onChange={() => toggleLinkedItem('issue', issue.id)}
+                            className="w-3.5 h-3.5 text-red-600 border-yellow-400 rounded focus:ring-red-500 dark:border-yellow-600 dark:bg-gray-700"
+                          />
+                          <span className="text-sm text-yellow-800 dark:text-yellow-300 truncate">{issue.title}</span>
+                        </label>
                       ))}
-                    </ul>
+                    </div>
                   </div>
                 )}
 
@@ -189,14 +217,19 @@ export default function DeleteRequirementModal({
                     <p className="text-xs font-semibold text-yellow-900 dark:text-yellow-200 uppercase tracking-wide mb-1">
                       Change Requests ({linkedChangeRequests.length})
                     </p>
-                    <ul className="text-sm text-yellow-800 dark:text-yellow-300 space-y-1">
+                    <div className="space-y-1">
                       {linkedChangeRequests.map(cr => (
-                        <li key={cr.id} className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full flex-shrink-0" />
-                          {cr.title}
-                        </li>
+                        <label key={cr.id} className="flex items-center gap-2 cursor-pointer hover:bg-yellow-100/50 dark:hover:bg-yellow-900/10 rounded px-1 py-0.5">
+                          <input
+                            type="checkbox"
+                            checked={linkedItemsToDelete.has(`change_request:${cr.id}`)}
+                            onChange={() => toggleLinkedItem('change_request', cr.id)}
+                            className="w-3.5 h-3.5 text-red-600 border-yellow-400 rounded focus:ring-red-500 dark:border-yellow-600 dark:bg-gray-700"
+                          />
+                          <span className="text-sm text-yellow-800 dark:text-yellow-300 truncate">{cr.title}</span>
+                        </label>
                       ))}
-                    </ul>
+                    </div>
                   </div>
                 )}
 
@@ -206,21 +239,33 @@ export default function DeleteRequirementModal({
                     <p className="text-xs font-semibold text-yellow-900 dark:text-yellow-200 uppercase tracking-wide mb-1">
                       Other Links ({linkedItems.length})
                     </p>
-                    <ul className="text-sm text-yellow-800 dark:text-yellow-300 space-y-1">
+                    <div className="space-y-1">
                       {linkedItems.map(item => {
                         const typeLabel = item.targetType.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-                        const linkLabel = item.linkType ? item.linkType.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : ''
                         const displayId = item.displayId || item.targetId.substring(0, 8)
+
+                        // Only allow checking for issue and change_request, others are just info/links
+                        const canDelete = item.targetType === 'issue' || item.targetType === 'change_request'
 
                         // Determine URL
                         let url = '#'
-                        if (item.targetType === 'issue') url = `/projects/${requirement.projectId}/issues/${item.targetId}` // Using projectId from requirement
+                        if (item.targetType === 'issue') url = `/projects/${requirement.projectId}/issues/${item.targetId}`
                         else if (item.targetType === 'change_request') url = `/projects/${requirement.projectId}/change-requests/${item.targetId}?changeRequestId=${item.targetId}`
                         else if (item.targetType === 'requirement') url = `/projects/${requirement.projectId}/requirements?requirementId=${item.targetId}`
 
                         return (
-                          <li key={item.id} className="flex items-center gap-2 py-0.5">
-                            <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full flex-shrink-0" />
+                          <div key={item.id} className="flex items-center gap-2 py-0.5">
+                            {canDelete ? (
+                              <input
+                                type="checkbox"
+                                checked={linkedItemsToDelete.has(`${item.targetType}:${item.targetId}`)}
+                                onChange={() => toggleLinkedItem(item.targetType, item.targetId)}
+                                className="w-3.5 h-3.5 text-red-600 border-yellow-400 rounded focus:ring-red-500 dark:border-yellow-600 dark:bg-gray-700 shrink-0"
+                              />
+                            ) : (
+                              <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full flex-shrink-0" />
+                            )}
+
                             <div className="flex flex-col min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300 uppercase tracking-wide">
@@ -236,18 +281,16 @@ export default function DeleteRequirementModal({
                                   {displayId}
                                 </a>
                               </div>
-                              {(item.title || linkLabel) && (
+                              {item.title && (
                                 <div className="flex items-center gap-1 ml-1 text-xs text-yellow-700 dark:text-yellow-400">
-                                  {item.title && <span className="truncate max-w-[200px] italic">"{item.title}"</span>}
-                                  {item.title && linkLabel && <span>&mdash;</span>}
-                                  {linkLabel && <span className="opacity-75">{linkLabel}</span>}
+                                  <span className="truncate max-w-[200px] italic">"{item.title}"</span>
                                 </div>
                               )}
                             </div>
-                          </li>
+                          </div>
                         )
                       })}
-                    </ul>
+                    </div>
                   </div>
                 )}
               </div>

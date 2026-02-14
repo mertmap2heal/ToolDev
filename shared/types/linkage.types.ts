@@ -84,6 +84,9 @@ export interface Link {
   updatedBy?: string
   updatedAt?: string
   isSuspect?: boolean
+  targetTitle?: string
+  targetDescription?: string
+  targetDisplayId?: string
 }
 
 export interface EntitySummary {

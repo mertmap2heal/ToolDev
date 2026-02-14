@@ -1,11 +1,11 @@
-export type ArtifactType = 
+export type ArtifactType =
   | 'requirement'
   | 'function'
   | 'parameter'
   | 'architecture'
   | 'verification'
 
-export type LinkType = 
+export type LinkType =
   | 'satisfies'
   | 'implements'
   | 'verifies'
@@ -30,6 +30,9 @@ export interface TraceLink {
   isSuspect?: boolean
   lastChecked?: string
   createdAt: string
+  targetTitle?: string
+  targetDescription?: string
+  targetDisplayId?: string
 }
 
 export interface CreateTraceLinkDto {

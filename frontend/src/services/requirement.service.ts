@@ -32,8 +32,8 @@ export const requirementService = {
     return apiClient.put<Requirement>(`/requirements/${projectId}/${requirementId}`, data)
   },
 
-  async deleteRequirement(projectId: string, requirementId: string, reason?: string, childrenToDelete?: string[]): Promise<ApiResponse<void>> {
-    return apiClient.delete<void>(`/requirements/${projectId}/${requirementId}`, { reason, childrenToDelete })
+  async deleteRequirement(projectId: string, requirementId: string, reason?: string, childrenToDelete?: string[], linkedItemsToDelete?: { type: string, id: string }[]): Promise<ApiResponse<void>> {
+    return apiClient.delete<void>(`/requirements/${projectId}/${requirementId}`, { reason, childrenToDelete, linkedItemsToDelete })
   },
 
   async restoreRequirement(projectId: string, requirementId: string): Promise<ApiResponse<void>> {
