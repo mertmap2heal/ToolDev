@@ -573,7 +573,7 @@ export default function RequirementsPage() {
             if (cr) {
               item.title = cr.title
               item.description = cr.description
-              item.displayId = cr.id.substring(0, 8)
+              item.displayId = cr.crId || cr.id.substring(0, 8)
             }
           } else if (l.targetType === 'requirement') {
             const req = requirements.find((r: any) => r.id === l.targetId)

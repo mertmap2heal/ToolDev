@@ -170,43 +170,59 @@ export default function DeleteRequirementModal({
                 </p>
               </div>
 
-              <div className="space-y-3 pl-6">
-                {/* Linked Functions (Always Info Only as we don't delete functions from here) */}
+              <div className="space-y-4">
+                {/* Linked Functions */}
                 {linkedFunctions.length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold text-yellow-900 dark:text-yellow-200 uppercase tracking-wide mb-1">
+                    <p className="text-xs font-semibold text-yellow-900 dark:text-yellow-200 uppercase tracking-wide mb-2 pl-1">
                       Functions ({linkedFunctions.length})
                     </p>
-                    <ul className="text-sm text-yellow-800 dark:text-yellow-300 space-y-1">
+                    <div className="bg-white/50 dark:bg-gray-900/30 rounded-lg border border-yellow-200 dark:border-yellow-800 divide-y divide-yellow-100 dark:divide-yellow-900/30 overflow-hidden">
                       {linkedFunctions.map(func => (
-                        <li key={func.id} className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full flex-shrink-0" />
-                          <span className="font-mono text-xs">{func.functionId || 'FUNC'}</span>
-                          <span className="truncate">{func.name}</span>
-                        </li>
+                        <div key={func.id} className="flex items-center p-3">
+                          <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full flex-shrink-0 mr-3" />
+                          <div className="flex flex-col min-w-0 text-left">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs font-semibold text-yellow-900 dark:text-yellow-200 bg-yellow-100 dark:bg-yellow-900/40 px-1 rounded">
+                                {func.functionId || 'FUNC'}
+                              </span>
+                              <span className="text-sm text-yellow-800 dark:text-yellow-300 truncate">{func.name}</span>
+                            </div>
+                          </div>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   </div>
                 )}
 
                 {/* Linked Issues */}
                 {linkedIssues.length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold text-yellow-900 dark:text-yellow-200 uppercase tracking-wide mb-1">
+                    <p className="text-xs font-semibold text-yellow-900 dark:text-yellow-200 uppercase tracking-wide mb-2 pl-1">
                       Issues ({linkedIssues.length})
                     </p>
-                    <div className="space-y-1">
-                      {linkedIssues.map(issue => (
-                        <label key={issue.id} className="flex items-center gap-2 cursor-pointer hover:bg-yellow-100/50 dark:hover:bg-yellow-900/10 rounded px-1 py-0.5">
-                          <input
-                            type="checkbox"
-                            checked={linkedItemsToDelete.has(`issue:${issue.id}`)}
-                            onChange={() => toggleLinkedItem('issue', issue.id)}
-                            className="w-3.5 h-3.5 text-red-600 border-yellow-400 rounded focus:ring-red-500 dark:border-yellow-600 dark:bg-gray-700"
-                          />
-                          <span className="text-sm text-yellow-800 dark:text-yellow-300 truncate">{issue.title}</span>
-                        </label>
-                      ))}
+                    <div className="bg-white/50 dark:bg-gray-900/30 rounded-lg border border-yellow-200 dark:border-yellow-800 divide-y divide-yellow-100 dark:divide-yellow-900/30 overflow-hidden">
+                      {linkedIssues.map(issue => {
+                        const key = `issue:${issue.id}`;
+                        return (
+                          <label key={issue.id} className="flex items-center p-3 hover:bg-yellow-100/50 dark:hover:bg-yellow-900/10 cursor-pointer transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={linkedItemsToDelete.has(key)}
+                              onChange={() => toggleLinkedItem('issue', issue.id)}
+                              className="w-4 h-4 text-red-600 border-yellow-400 rounded focus:ring-red-500 dark:border-yellow-600 dark:bg-gray-700"
+                            />
+                            <div className="ml-3 flex-1 min-w-0 text-left">
+                              <p className="text-sm font-medium text-yellow-900 dark:text-yellow-100 truncate">
+                                {issue.title}
+                              </p>
+                              <p className="text-xs text-yellow-700 dark:text-yellow-400">
+                                {linkedItemsToDelete.has(key) ? 'Will be deleted' : 'Link will be removed'}
+                              </p>
+                            </div>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -214,21 +230,31 @@ export default function DeleteRequirementModal({
                 {/* Linked Change Requests */}
                 {linkedChangeRequests.length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold text-yellow-900 dark:text-yellow-200 uppercase tracking-wide mb-1">
+                    <p className="text-xs font-semibold text-yellow-900 dark:text-yellow-200 uppercase tracking-wide mb-2 pl-1">
                       Change Requests ({linkedChangeRequests.length})
                     </p>
-                    <div className="space-y-1">
-                      {linkedChangeRequests.map(cr => (
-                        <label key={cr.id} className="flex items-center gap-2 cursor-pointer hover:bg-yellow-100/50 dark:hover:bg-yellow-900/10 rounded px-1 py-0.5">
-                          <input
-                            type="checkbox"
-                            checked={linkedItemsToDelete.has(`change_request:${cr.id}`)}
-                            onChange={() => toggleLinkedItem('change_request', cr.id)}
-                            className="w-3.5 h-3.5 text-red-600 border-yellow-400 rounded focus:ring-red-500 dark:border-yellow-600 dark:bg-gray-700"
-                          />
-                          <span className="text-sm text-yellow-800 dark:text-yellow-300 truncate">{cr.title}</span>
-                        </label>
-                      ))}
+                    <div className="bg-white/50 dark:bg-gray-900/30 rounded-lg border border-yellow-200 dark:border-yellow-800 divide-y divide-yellow-100 dark:divide-yellow-900/30 overflow-hidden">
+                      {linkedChangeRequests.map(cr => {
+                        const key = `change_request:${cr.id}`;
+                        return (
+                          <label key={cr.id} className="flex items-center p-3 hover:bg-yellow-100/50 dark:hover:bg-yellow-900/10 cursor-pointer transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={linkedItemsToDelete.has(key)}
+                              onChange={() => toggleLinkedItem('change_request', cr.id)}
+                              className="w-4 h-4 text-red-600 border-yellow-400 rounded focus:ring-red-500 dark:border-yellow-600 dark:bg-gray-700"
+                            />
+                            <div className="ml-3 flex-1 min-w-0 text-left">
+                              <p className="text-sm font-medium text-yellow-900 dark:text-yellow-100 truncate">
+                                {cr.title}
+                              </p>
+                              <p className="text-xs text-yellow-700 dark:text-yellow-400">
+                                {linkedItemsToDelete.has(key) ? 'Will be deleted' : 'Link will be removed'}
+                              </p>
+                            </div>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -236,16 +262,17 @@ export default function DeleteRequirementModal({
                 {/* Linked Items (Generic/V1) */}
                 {linkedItems.length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold text-yellow-900 dark:text-yellow-200 uppercase tracking-wide mb-1">
+                    <p className="text-xs font-semibold text-yellow-900 dark:text-yellow-200 uppercase tracking-wide mb-2 pl-1">
                       Other Links ({linkedItems.length})
                     </p>
-                    <div className="space-y-1">
+                    <div className="bg-white/50 dark:bg-gray-900/30 rounded-lg border border-yellow-200 dark:border-yellow-800 divide-y divide-yellow-100 dark:divide-yellow-900/30 overflow-hidden">
                       {linkedItems.map(item => {
                         const typeLabel = item.targetType.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
                         const displayId = item.displayId || item.targetId.substring(0, 8)
 
                         // Only allow checking for issue and change_request, others are just info/links
                         const canDelete = item.targetType === 'issue' || item.targetType === 'change_request'
+                        const key = `${item.targetType}:${item.targetId}`;
 
                         // Determine URL
                         let url = '#'
@@ -253,42 +280,59 @@ export default function DeleteRequirementModal({
                         else if (item.targetType === 'change_request') url = `/projects/${requirement.projectId}/change-requests/${item.targetId}?changeRequestId=${item.targetId}`
                         else if (item.targetType === 'requirement') url = `/projects/${requirement.projectId}/requirements?requirementId=${item.targetId}`
 
-                        return (
-                          <div key={item.id} className="flex items-center gap-2 py-0.5">
-                            {canDelete ? (
+                        const content = (
+                          <div className="flex-1 min-w-0 text-left">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300 uppercase tracking-wide border border-yellow-200/50 dark:border-yellow-700/50">
+                                {typeLabel}
+                              </span>
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-mono text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline truncate"
+                                onClick={(e) => e.stopPropagation()} // Prevent checkbox toggle when clicking link
+                                title={item.title || item.label}
+                              >
+                                {displayId}
+                              </a>
+                            </div>
+                            {item.title && (
+                              <p className="text-sm text-yellow-900 dark:text-yellow-100 truncate">
+                                {item.title}
+                              </p>
+                            )}
+                            <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-0.5">
+                              {canDelete
+                                ? (linkedItemsToDelete.has(key) ? 'Will be deleted' : 'Link will be removed')
+                                : 'Link will be removed'
+                              }
+                            </p>
+                          </div>
+                        );
+
+                        if (canDelete) {
+                          return (
+                            <label key={item.id} className="flex items-start p-3 hover:bg-yellow-100/50 dark:hover:bg-yellow-900/10 cursor-pointer transition-colors">
                               <input
                                 type="checkbox"
-                                checked={linkedItemsToDelete.has(`${item.targetType}:${item.targetId}`)}
+                                checked={linkedItemsToDelete.has(key)}
                                 onChange={() => toggleLinkedItem(item.targetType, item.targetId)}
-                                className="w-3.5 h-3.5 text-red-600 border-yellow-400 rounded focus:ring-red-500 dark:border-yellow-600 dark:bg-gray-700 shrink-0"
+                                className="w-4 h-4 text-red-600 border-yellow-400 rounded focus:ring-red-500 dark:border-yellow-600 dark:bg-gray-700 mt-0.5"
                               />
-                            ) : (
-                              <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full flex-shrink-0" />
-                            )}
-
-                            <div className="flex flex-col min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300 uppercase tracking-wide">
-                                  {typeLabel}
-                                </span>
-                                <a
-                                  href={url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="font-mono text-xs truncate hover:underline hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
-                                  title={item.title || item.label}
-                                >
-                                  {displayId}
-                                </a>
+                              <div className="ml-3 flex-1 min-w-0">
+                                {content}
                               </div>
-                              {item.title && (
-                                <div className="flex items-center gap-1 ml-1 text-xs text-yellow-700 dark:text-yellow-400">
-                                  <span className="truncate max-w-[200px] italic">"{item.title}"</span>
-                                </div>
-                              )}
-                            </div>
+                            </label>
+                          );
+                        }
+
+                        return (
+                          <div key={item.id} className="flex items-start p-3 bg-yellow-50/30 dark:bg-yellow-900/5">
+                            <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full flex-shrink-0 mt-2 mr-3" />
+                            {content}
                           </div>
-                        )
+                        );
                       })}
                     </div>
                   </div>
