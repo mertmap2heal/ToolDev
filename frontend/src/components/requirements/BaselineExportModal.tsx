@@ -38,7 +38,7 @@ interface ExportColumn {
 }
 
 const defaultColumns: ExportColumn[] = [
-  { key: 'requirementId', label: 'Requirement ID', selected: true },
+  { key: 'requirementId', label: 'ID', selected: true },
   { key: 'title', label: 'Title', selected: true },
   { key: 'description', label: 'Description', selected: true },
   { key: 'priority', label: 'Priority', selected: true },

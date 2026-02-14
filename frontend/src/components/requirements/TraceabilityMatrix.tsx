@@ -78,7 +78,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
   const [selectedLinkType, setSelectedLinkType] = useState<LinkType>('satisfies')
   const [linkDirection, setLinkDirection] = useState<string>('')
   const [linkRationale, setLinkRationale] = useState<string>('')
-  
+
   const queryClient = useQueryClient()
 
   // Fetch requirements
@@ -124,7 +124,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
   // Build a map of source -> target links based on matrix type
   const linkMap = useMemo(() => {
     const map = new Map<string, Map<string, { linked: boolean; suspect: boolean; linkId?: string }>>()
-    
+
     if (LINKAGE_V1) {
       // LINKAGE_V1: requirements vs selected target type (PBS, interfaces, etc.)
       requirements.forEach((req) => {
@@ -162,8 +162,8 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
         if (link.sourceType === 'requirement' && link.targetType === 'function') {
           const reqMap = map.get(link.sourceId)
           if (reqMap) {
-            reqMap.set(link.targetId, { 
-              linked: true, 
+            reqMap.set(link.targetId, {
+              linked: true,
               suspect: link.isSuspect || false,
               linkId: link.id,
             })
@@ -199,8 +199,8 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
         if (link.sourceType === 'requirement' && link.targetType === 'requirement') {
           const reqMap = map.get(link.sourceId)
           if (reqMap) {
-            reqMap.set(link.targetId, { 
-              linked: true, 
+            reqMap.set(link.targetId, {
+              linked: true,
               suspect: link.isSuspect || false,
               linkId: link.id,
             })
@@ -245,8 +245,8 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     const targetCount = LINKAGE_V1
       ? linkageTargets.length
       : matrixType === 'requirements-functions'
-      ? functions.length
-      : requirements.length
+        ? functions.length
+        : requirements.length
 
     return {
       totalLinks,
@@ -389,7 +389,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     if (!selectedReq) return
     const targetId = LINKAGE_V1 ? selectedTargetId : matrixType === 'requirements-functions' ? selectedFunc : selectedTargetReq
     if (!targetId) return
-    
+
     createLinkMutation.mutate({
       sourceId: selectedReq,
       targetId: targetId,
@@ -401,14 +401,14 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
 
   // Export matrix as CSV
   const exportToCsv = () => {
-    const sourceLabel = 'Requirement ID'
+    const sourceLabel = 'ID'
     const sourceTitleLabel = 'Requirement Title'
     const targetHeaders = LINKAGE_V1
       ? targetItems.map((t: any) => t.label || t.id)
       : matrixType === 'requirements-functions'
-      ? targetItems.map((f: any) => f.functionId || f.name)
-      : targetItems.map((r: any) => r.requirementId || r.id.substring(0, 8))
-    
+        ? targetItems.map((f: any) => f.functionId || f.name)
+        : targetItems.map((r: any) => r.requirementId || r.id.substring(0, 8))
+
     const headers = [sourceLabel, sourceTitleLabel, ...targetHeaders]
     const rows = filteredRequirements.map((req) => {
       const row = [
@@ -505,65 +505,65 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
 
           {/* Stats Bar */}
           <div className="bg-gray-50 dark:bg-gray-900/50 flex items-center gap-6 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-          <div className="text-sm">
-            <span className="text-gray-500 dark:text-gray-400">Total Links:</span>{' '}
-            <span className="font-semibold text-gray-900 dark:text-white">{stats.totalLinks}</span>
+            <div className="text-sm">
+              <span className="text-gray-500 dark:text-gray-400">Total Links:</span>{' '}
+              <span className="font-semibold text-gray-900 dark:text-white">{stats.totalLinks}</span>
+            </div>
+            <div className="text-sm">
+              <span className="text-gray-500 dark:text-gray-400">Suspect Links:</span>{' '}
+              <span className="font-semibold text-yellow-600 dark:text-yellow-400">{stats.suspectLinks}</span>
+            </div>
+            {(LINKAGE_V1 || matrixType === 'requirements-functions') && (
+              <>
+                <div className="text-sm">
+                  <span className="text-gray-500 dark:text-gray-400">Source Coverage:</span>{' '}
+                  <span className={clsx(
+                    'font-semibold',
+                    stats.sourceCoverage >= 80 ? 'text-green-600' : stats.sourceCoverage >= 50 ? 'text-yellow-600' : 'text-red-600'
+                  )}>
+                    {stats.sourceCoverage}% ({stats.sourcesWithLinks}/{requirements.length})
+                  </span>
+                </div>
+                <div className="text-sm">
+                  <span className="text-gray-500 dark:text-gray-400">Target Coverage:</span>{' '}
+                  <span className={clsx(
+                    'font-semibold',
+                    stats.targetCoverage >= 80 ? 'text-green-600' : stats.targetCoverage >= 50 ? 'text-yellow-600' : 'text-red-600'
+                  )}>
+                    {stats.targetCoverage}% ({stats.targetsWithLinks}/{targetItems.length})
+                  </span>
+                </div>
+              </>
+            )}
+            <div className="flex-1" />
+            <div className="flex items-center gap-2">
+              <select
+                value={filterLinked}
+                onChange={(e) => setFilterLinked(e.target.value as any)}
+                className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="all">All Requirements</option>
+                <option value="linked">Linked Only</option>
+                <option value="unlinked">Unlinked Only</option>
+              </select>
+              <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showSuspectOnly}
+                  onChange={(e) => setShowSuspectOnly(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                />
+                Suspect Only
+              </label>
+              <button
+                onClick={exportToCsv}
+                className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-1"
+              >
+                <Download size={14} />
+                Export CSV
+              </button>
+            </div>
           </div>
-          <div className="text-sm">
-            <span className="text-gray-500 dark:text-gray-400">Suspect Links:</span>{' '}
-            <span className="font-semibold text-yellow-600 dark:text-yellow-400">{stats.suspectLinks}</span>
-          </div>
-          {(LINKAGE_V1 || matrixType === 'requirements-functions') && (
-            <>
-              <div className="text-sm">
-                <span className="text-gray-500 dark:text-gray-400">Source Coverage:</span>{' '}
-                <span className={clsx(
-                  'font-semibold',
-                  stats.sourceCoverage >= 80 ? 'text-green-600' : stats.sourceCoverage >= 50 ? 'text-yellow-600' : 'text-red-600'
-                )}>
-                  {stats.sourceCoverage}% ({stats.sourcesWithLinks}/{requirements.length})
-                </span>
-              </div>
-              <div className="text-sm">
-                <span className="text-gray-500 dark:text-gray-400">Target Coverage:</span>{' '}
-                <span className={clsx(
-                  'font-semibold',
-                  stats.targetCoverage >= 80 ? 'text-green-600' : stats.targetCoverage >= 50 ? 'text-yellow-600' : 'text-red-600'
-                )}>
-                  {stats.targetCoverage}% ({stats.targetsWithLinks}/{targetItems.length})
-                </span>
-              </div>
-            </>
-          )}
-          <div className="flex-1" />
-          <div className="flex items-center gap-2">
-            <select
-              value={filterLinked}
-              onChange={(e) => setFilterLinked(e.target.value as any)}
-              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            >
-              <option value="all">All Requirements</option>
-              <option value="linked">Linked Only</option>
-              <option value="unlinked">Unlinked Only</option>
-            </select>
-            <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showSuspectOnly}
-                onChange={(e) => setShowSuspectOnly(e.target.checked)}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded"
-              />
-              Suspect Only
-            </label>
-            <button
-              onClick={exportToCsv}
-              className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-1"
-            >
-              <Download size={14} />
-              Export CSV
-            </button>
-          </div>
-        </div>
         </div>
 
         {/* Matrix Content */}
@@ -579,10 +579,10 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                 {requirements.length === 0
                   ? 'No requirements found. Create requirements to build the matrix.'
                   : LINKAGE_V1 && targetItems.length === 0
-                  ? `No ${targetOpt?.label ?? 'targets'} found. Add items to build the matrix.`
-                  : !LINKAGE_V1 && matrixType === 'requirements-functions' && functions.length === 0
-                  ? 'No functions found. Create functions to build the matrix.'
-                  : 'No requirements found. Create requirements to build the matrix.'}
+                    ? `No ${targetOpt?.label ?? 'targets'} found. Add items to build the matrix.`
+                    : !LINKAGE_V1 && matrixType === 'requirements-functions' && functions.length === 0
+                      ? 'No functions found. Create functions to build the matrix.'
+                      : 'No requirements found. Create requirements to build the matrix.'}
               </p>
             </div>
           ) : (
@@ -603,8 +603,8 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                           {LINKAGE_V1
                             ? (target.label || target.id)
                             : matrixType === 'requirements-functions'
-                            ? (target.functionId || target.id.substring(0, 8))
-                            : (target.requirementId || target.id.substring(0, 8))}
+                              ? (target.functionId || target.id.substring(0, 8))
+                              : (target.requirementId || target.id.substring(0, 8))}
                         </div>
                       </th>
                     ))}
@@ -635,15 +635,15 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                             </td>
                           )
                         }
-                        
+
                         const status = getCellStatus(req.id, target.id)
                         const sourceLabel = req.requirementId || req.title
                         const targetLabel = LINKAGE_V1
                           ? (target.label || target.id)
                           : matrixType === 'requirements-functions'
-                          ? (target.functionId || target.name)
-                          : (target.requirementId || target.title)
-                        
+                            ? (target.functionId || target.name)
+                            : (target.requirementId || target.title)
+
                         return (
                           <td
                             key={target.id}
@@ -658,8 +658,8 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                               status === 'linked'
                                 ? `${sourceLabel} → ${targetLabel}: Linked (Click to delete)`
                                 : status === 'suspect'
-                                ? `${sourceLabel} → ${targetLabel}: Suspect Link (Click to delete)`
-                                : `${sourceLabel} → ${targetLabel}: Not linked (Click to create link)`
+                                  ? `${sourceLabel} → ${targetLabel}: Suspect Link (Click to delete)`
+                                  : `${sourceLabel} → ${targetLabel}: Not linked (Click to create link)`
                             }
                           >
                             {status === 'linked' && (
@@ -750,28 +750,28 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
               </div>
 
               {!LINKAGE_V1 && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Link Type (SysML Relationship)
-                </label>
-                <select
-                  value={selectedLinkType}
-                  onChange={(e) => setSelectedLinkType(e.target.value as LinkType)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="satisfies">Satisfies</option>
-                  <option value="implements">Implements</option>
-                  <option value="verifies">Verifies</option>
-                  <option value="derives">Derives</option>
-                  <option value="refines">Refines</option>
-                  <option value="copy">Copy</option>
-                  <option value="trace">Trace</option>
-                  <option value="allocate">Allocate</option>
-                </select>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Select the SysML relationship type between the requirement and function
-                </p>
-              </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Link Type (SysML Relationship)
+                  </label>
+                  <select
+                    value={selectedLinkType}
+                    onChange={(e) => setSelectedLinkType(e.target.value as LinkType)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  >
+                    <option value="satisfies">Satisfies</option>
+                    <option value="implements">Implements</option>
+                    <option value="verifies">Verifies</option>
+                    <option value="derives">Derives</option>
+                    <option value="refines">Refines</option>
+                    <option value="copy">Copy</option>
+                    <option value="trace">Trace</option>
+                    <option value="allocate">Allocate</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Select the SysML relationship type between the requirement and function
+                  </p>
+                </div>
               )}
 
               <div>

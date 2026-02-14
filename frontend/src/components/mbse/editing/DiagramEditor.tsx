@@ -100,12 +100,12 @@ const EditableRequirementNode = ({ data, selected }: { data: any; selected: bool
             style={{
               backgroundColor:
                 data.priority === 'critical' ? '#fee2e2' :
-                data.priority === 'high' ? '#ffedd5' :
-                data.priority === 'medium' ? '#fef9c3' : '#dcfce7',
+                  data.priority === 'high' ? '#ffedd5' :
+                    data.priority === 'medium' ? '#fef9c3' : '#dcfce7',
               color:
                 data.priority === 'critical' ? '#dc2626' :
-                data.priority === 'high' ? '#ea580c' :
-                data.priority === 'medium' ? '#ca8a04' : '#16a34a',
+                  data.priority === 'high' ? '#ea580c' :
+                    data.priority === 'medium' ? '#ca8a04' : '#16a34a',
             }}
           >
             {data.priority}
@@ -573,7 +573,7 @@ function DiagramEditorContent({ projectId, onClose }: DiagramEditorProps) {
       setPendingNodes([])
       setPendingEdges([])
       setHasUnsavedChanges(false)
-      
+
       // Refresh data
       await queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
       await queryClient.invalidateQueries({ queryKey: ['functions', projectId] })
@@ -821,7 +821,7 @@ function DiagramEditorContent({ projectId, onClose }: DiagramEditorProps) {
                   <X size={14} />
                 </button>
               </div>
-              
+
               {selectedElement ? (
                 <div className="flex-1 overflow-auto p-3 space-y-4">
                   {editingProperties?.id === selectedElement.id ? (
@@ -840,7 +840,7 @@ function DiagramEditorContent({ projectId, onClose }: DiagramEditorProps) {
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                          {selectedElement.type === 'requirement' ? 'Requirement ID' : 'Function ID'}
+                          {selectedElement.type === 'requirement' ? 'ID' : 'Function ID'}
                         </label>
                         <input
                           type="text"
@@ -915,7 +915,7 @@ function DiagramEditorContent({ projectId, onClose }: DiagramEditorProps) {
                       </div>
                       <div>
                         <div className="text-xs text-gray-500">
-                          {selectedElement.type === 'requirement' ? 'Requirement ID' : 'Function ID'}
+                          {selectedElement.type === 'requirement' ? 'ID' : 'Function ID'}
                         </div>
                         <div className="text-sm font-mono text-gray-900 dark:text-white">
                           {(selectedElement.type === 'requirement' ? selectedElement.requirementId : selectedElement.functionId) || 'Not set'}

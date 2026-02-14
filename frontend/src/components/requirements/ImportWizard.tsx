@@ -40,7 +40,7 @@ interface ImportResult {
 }
 
 const requirementFields = [
-  { key: 'requirementId', label: 'Requirement ID', required: false },
+  { key: 'requirementId', label: 'ID', required: false },
   { key: 'title', label: 'Title', required: true },
   { key: 'description', label: 'Description', required: true },
   { key: 'priority', label: 'Priority', required: false },
@@ -52,7 +52,7 @@ const requirementFields = [
   { key: 'acceptanceCriteria', label: 'Acceptance Criteria', required: false },
   { key: 'stage', label: 'Stage', required: false },
   { key: 'tags', label: 'Tags', required: false },
-  { key: 'parentId', label: 'Parent Requirement ID', required: false },
+  { key: 'parentId', label: 'Parent ID', required: false },
   { key: 'requirementType', label: 'Requirement Type', required: false },
   { key: 'requirementLevel', label: 'Requirement Level', required: false },
   { key: 'risk', label: 'Risk Level', required: false },
@@ -67,7 +67,7 @@ const priorityValues = ['low', 'medium', 'high', 'critical']
  */
 function autoMapColumns(fileColumns: string[]): Map<string, string | null> {
   const mapping = new Map<string, string | null>()
-  
+
   const fieldVariations: Record<string, string[]> = {
     requirementId: ['requirement id', 'req id', 'id', 'requirementid', 'reqid'],
     title: ['title', 'name', 'requirement title', 'req title'],
@@ -294,7 +294,7 @@ export default function ImportWizard({ projectId, onClose }: ImportWizardProps) 
         if (existing) {
           isDuplicate = true
           existingRequirementId = existing.id
-          warnings.push(`Requirement ID "${mapped.requirementId}" already exists`)
+          warnings.push(`ID "${mapped.requirementId}" already exists`)
         }
       }
 

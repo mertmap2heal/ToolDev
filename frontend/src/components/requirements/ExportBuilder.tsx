@@ -39,7 +39,7 @@ interface ExportColumn {
 }
 
 const defaultColumns: ExportColumn[] = [
-  { key: 'requirementId', label: 'Requirement ID', selected: true },
+  { key: 'requirementId', label: 'ID', selected: true },
   { key: 'title', label: 'Title', selected: true },
   { key: 'description', label: 'Description', selected: true },
   { key: 'priority', label: 'Priority', selected: true },
@@ -175,7 +175,7 @@ export default function ExportBuilder({ requirements, projectName, projectId, on
     try {
       const requirementIds = requirements.map((r) => r.id).join(',')
       const url = `/reqif/${projectId}/export${requirementIds ? `?requirementIds=${requirementIds}` : ''}`
-      
+
       // Use fetch directly for blob response
       const token = localStorage.getItem('token')
       const apiBase = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api/v1' : 'http://localhost:5000/api/v1')

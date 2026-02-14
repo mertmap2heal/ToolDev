@@ -120,7 +120,7 @@ export default function RequirementsPage() {
   }
 
   const REQUIREMENT_COLUMNS: ColumnConfig[] = [
-    { key: 'requirementId', label: 'Requirement ID', defaultVisible: true },
+    { key: 'requirementId', label: 'ID', defaultVisible: true },
     { key: 'title', label: 'Title', defaultVisible: true },
     { key: 'description', label: 'Description', defaultVisible: true },
     { key: 'priority', label: 'Priority', defaultVisible: true },

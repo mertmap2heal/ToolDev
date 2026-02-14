@@ -119,19 +119,19 @@ export default function AllocationTable({ projectId, onClose }: AllocationTableP
       const linkType = allocationLinkType
       const response = LINKAGE_V1
         ? await linkService.createLink(projectId, {
-            sourceType: 'requirement',
-            sourceId: reqId,
-            targetType,
-            targetId,
-            linkType,
-          })
+          sourceType: 'requirement',
+          sourceId: reqId,
+          targetType,
+          targetId,
+          linkType,
+        })
         : await traceabilityService.createTraceLink(projectId, {
-            sourceType: 'requirement',
-            sourceId: reqId,
-            targetType: targetType as any,
-            targetId,
-            linkType: 'allocate',
-          })
+          sourceType: 'requirement',
+          sourceId: reqId,
+          targetType: targetType as any,
+          targetId,
+          linkType: 'allocate',
+        })
       if (!response.success) {
         throw new Error(response.error || 'Failed to create allocation')
       }
@@ -189,7 +189,7 @@ export default function AllocationTable({ projectId, onClose }: AllocationTableP
 
   const exportToCsv = () => {
     const targetLabels = targets.map((t: any) => t.pbsCode || t.functionId || t.name || 'Unknown')
-    const headers = ['Requirement ID', 'Requirement Title', ...targetLabels]
+    const headers = ['ID', 'Requirement Title', ...targetLabels]
     const rows = requirements.map((req) => {
       const row = [
         req.requirementId || req.id.substring(0, 8),

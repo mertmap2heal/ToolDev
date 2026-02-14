@@ -83,21 +83,21 @@ const DEFAULT_RULES: ValidationRule[] = [
   { id: 'REQ-COMP-002', name: 'Requirement Owner Required', category: 'completeness', severity: 'warning', description: 'Requirements should have an assigned owner', enabled: true },
   { id: 'REQ-COMP-003', name: 'Verification Method Required', category: 'completeness', severity: 'warning', description: 'Requirements should specify verification method', enabled: true },
   { id: 'REQ-COMP-004', name: 'Acceptance Criteria Required', category: 'completeness', severity: 'info', description: 'Requirements should have acceptance criteria', enabled: true },
-  
+
   // Traceability Rules
   { id: 'TRACE-001', name: 'Orphan Requirement', category: 'traceability', severity: 'warning', description: 'Requirements should be linked to at least one function or parent', enabled: true },
   { id: 'TRACE-002', name: 'Orphan Function', category: 'traceability', severity: 'warning', description: 'Functions should satisfy at least one requirement', enabled: true },
   { id: 'TRACE-003', name: 'Suspect Link Present', category: 'traceability', severity: 'warning', description: 'Suspect links need review after source changes', enabled: true },
   { id: 'TRACE-004', name: 'Circular Dependency', category: 'traceability', severity: 'error', description: 'Circular trace dependencies detected', enabled: true },
-  
+
   // Consistency Rules
-  { id: 'CONS-001', name: 'Duplicate Requirement ID', category: 'consistency', severity: 'error', description: 'Requirement IDs must be unique', enabled: true },
+  { id: 'CONS-001', name: 'Duplicate ID', category: 'consistency', severity: 'error', description: 'Requirement IDs must be unique', enabled: true },
   { id: 'CONS-002', name: 'Parent-Child Priority Mismatch', category: 'consistency', severity: 'info', description: 'Child requirement priority should not exceed parent', enabled: true },
-  
+
   // Conformance Rules
   { id: 'CONF-001', name: 'Invalid Status Transition', category: 'conformance', severity: 'warning', description: 'Status transitions should follow workflow', enabled: true },
   { id: 'CONF-002', name: 'Missing Requirement Type', category: 'conformance', severity: 'info', description: 'Requirements should have a type classification', enabled: true },
-  
+
   // Verification Rules
   { id: 'VER-001', name: 'Unverified Approved Requirement', category: 'verification', severity: 'warning', description: 'Approved requirements should be verified', enabled: true },
   { id: 'VER-002', name: 'Failed Verification', category: 'verification', severity: 'error', description: 'Requirement verification has failed', enabled: true },
@@ -188,7 +188,7 @@ export default function ModelValidationEngine({
     const reqMap = new Map(requirements.map((r) => [r.id, r]))
     const funcMap = new Map(functions.map((f) => [f.id, f]))
     const reqIdSet = new Set(requirements.map((r) => r.requirementId).filter(Boolean))
-    
+
     // Get linked requirement IDs (requirements that have trace links to functions)
     const linkedReqIds = new Set<string>()
     const linkedFuncIds = new Set<string>()
@@ -375,7 +375,7 @@ export default function ModelValidationEngine({
     traceLinks.forEach((link) => {
       // TRACE-003: Suspect links
       if (enabledRules.find((r) => r.id === 'TRACE-003') && link.isSuspect) {
-        const sourceName = link.sourceType === 'requirement' 
+        const sourceName = link.sourceType === 'requirement'
           ? reqMap.get(link.sourceId)?.title || link.sourceId
           : funcMap.get(link.sourceId)?.name || link.sourceId
         addIssue(
@@ -393,15 +393,15 @@ export default function ModelValidationEngine({
     if (enabledRules.find((r) => r.id === 'TRACE-004')) {
       const visited = new Set<string>()
       const recursionStack = new Set<string>()
-      
+
       const hasCycle = (reqId: string): boolean => {
         visited.add(reqId)
         recursionStack.add(reqId)
-        
+
         const childLinks = traceLinks.filter(
           (l) => l.sourceType === 'requirement' && l.sourceId === reqId && l.targetType === 'requirement'
         )
-        
+
         for (const link of childLinks) {
           if (!visited.has(link.targetId)) {
             if (hasCycle(link.targetId)) return true
@@ -409,11 +409,11 @@ export default function ModelValidationEngine({
             return true
           }
         }
-        
+
         recursionStack.delete(reqId)
         return false
       }
-      
+
       requirements.forEach((req) => {
         if (!visited.has(req.id) && hasCycle(req.id)) {
           addIssue(
@@ -699,8 +699,8 @@ export default function ModelValidationEngine({
                                       issue.severity === 'error'
                                         ? '#ef4444'
                                         : issue.severity === 'warning'
-                                        ? '#f59e0b'
-                                        : '#3b82f6',
+                                          ? '#f59e0b'
+                                          : '#3b82f6',
                                   }}
                                 >
                                   <div className="flex items-start justify-between">
