@@ -10,7 +10,14 @@ export type RequirementSubscriptionSnapshot = {
 
 export const requirementService = {
   async getRequirements(projectId: string): Promise<ApiResponse<Requirement[]>> {
-    return apiClient.get<Requirement[]>(`/requirements/${projectId}`)
+    const response = await apiClient.get<Requirement[]>(`/requirements/${projectId}`)
+    if (response.success && response.data && !Array.isArray(response.data)) {
+      return {
+        ...response,
+        data: [],
+      }
+    }
+    return response
   },
 
   async getRequirement(projectId: string, requirementId: string): Promise<ApiResponse<Requirement>> {

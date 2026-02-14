@@ -4,7 +4,14 @@ import type { ApiResponse } from 'shared/types/api.types'
 
 export const functionService = {
   async getFunctions(projectId: string): Promise<ApiResponse<SystemFunction[]>> {
-    return apiClient.get<SystemFunction[]>(`/functions/${projectId}`)
+    const response = await apiClient.get<SystemFunction[]>(`/functions/${projectId}`)
+    if (response.success && response.data && !Array.isArray(response.data)) {
+      return {
+        ...response,
+        data: [],
+      }
+    }
+    return response
   },
 
   async getFunction(projectId: string, functionId: string): Promise<ApiResponse<SystemFunction>> {

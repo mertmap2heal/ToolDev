@@ -50,29 +50,34 @@ export default function CreateIssueModal({
   const queryClient = useQueryClient()
 
   // Fetch functions
-  const { data: functionsData } = useQuery({
+  const { data: functions = [] } = useQuery({
     queryKey: ['functions', projectId],
-    queryFn: () => functionService.getFunctions(projectId),
+    queryFn: async () => {
+      const response = await functionService.getFunctions(projectId)
+      return response.success && response.data ? response.data : []
+    },
     enabled: isOpen,
   })
 
   // Fetch parameters
-  const { data: parametersData } = useQuery({
+  const { data: parameters = [] } = useQuery({
     queryKey: ['parameters', projectId],
-    queryFn: () => parameterService.getParameters(projectId),
+    queryFn: async () => {
+      const response = await parameterService.getParameters(projectId)
+      return response.success && response.data ? response.data : []
+    },
     enabled: isOpen,
   })
 
   // Fetch requirements
-  const { data: requirementsData } = useQuery({
+  const { data: requirements = [] } = useQuery({
     queryKey: ['requirements', projectId],
-    queryFn: () => requirementService.getRequirements(projectId),
+    queryFn: async () => {
+      const response = await requirementService.getRequirements(projectId)
+      return response.success && response.data ? response.data : []
+    },
     enabled: isOpen,
   })
-
-  const functions = functionsData?.success ? functionsData.data || [] : []
-  const parameters = parametersData?.success ? parametersData.data || [] : []
-  const requirements = requirementsData?.success ? requirementsData.data || [] : []
 
   // Combine functions and parameters into a unified source list
   const allSources: SourceItem[] = [

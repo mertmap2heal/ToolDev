@@ -69,34 +69,41 @@ export default function CreateChangeRequestModal({
   const queryClient = useQueryClient()
 
   // Fetch functions, issues, parameters, and requirements for source selection
-  const { data: functionsData } = useQuery({
+  const { data: functions = [] } = useQuery({
     queryKey: ['functions', projectId],
-    queryFn: () => functionService.getFunctions(projectId),
+    queryFn: async () => {
+      const response = await functionService.getFunctions(projectId)
+      return response.success && response.data ? response.data : []
+    },
     enabled: isOpen && !initialSourceType,
   })
 
-  const { data: issuesData } = useQuery({
+  const { data: issues = [] } = useQuery({
     queryKey: ['issues', projectId],
-    queryFn: () => issueService.getIssues(projectId),
+    queryFn: async () => {
+      const response = await issueService.getIssues(projectId)
+      return response.success && response.data ? response.data : []
+    },
     enabled: isOpen && !initialSourceType,
   })
 
-  const { data: parametersData } = useQuery({
+  const { data: parameters = [] } = useQuery({
     queryKey: ['parameters', projectId],
-    queryFn: () => parameterService.getParameters(projectId),
+    queryFn: async () => {
+      const response = await parameterService.getParameters(projectId)
+      return response.success && response.data ? response.data : []
+    },
     enabled: isOpen && !initialSourceType,
   })
 
-  const { data: requirementsData } = useQuery({
+  const { data: requirements = [] } = useQuery({
     queryKey: ['requirements', projectId],
-    queryFn: () => requirementService.getRequirements(projectId),
+    queryFn: async () => {
+      const response = await requirementService.getRequirements(projectId)
+      return response.success && response.data ? response.data : []
+    },
     enabled: isOpen && !initialSourceType,
   })
-
-  const functions = functionsData?.success ? functionsData.data || [] : []
-  const issues = issuesData?.success ? issuesData.data || [] : []
-  const parameters = parametersData?.success ? parametersData.data || [] : []
-  const requirements = requirementsData?.success ? requirementsData.data || [] : []
 
   // Fetch current user for Requested By
   const { data: userData } = useQuery({

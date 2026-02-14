@@ -19,6 +19,7 @@ import MBSEModelsPage from './pages/MBSEModels/MBSEModelsPage'
 import ReportsPage from './pages/Reports/ReportsPage'
 import IssueDashboard from './features/issues/pages/IssueDashboard'
 import IssueDetail from './features/issues/pages/IssueDetail'
+import IssuesPage from './pages/Issues/IssuesPage'
 import ParametersPage from './pages/Parameters/ParametersPage'
 import ChangeRequestsPage from './pages/ChangeRequests/ChangeRequestsPage'
 import TasksPage from './pages/Tasks/TasksPage'
@@ -126,7 +127,7 @@ function App() {
               <Route path="templates/:templateId" element={<TemplateEditorPage />} />
             </Route>
               <Route path="projects/:projectId/issues/:issueId" element={<IssueDetail />} />
-            <Route path="projects/:projectId/issues" element={<IssueDashboard />} />
+            <Route path="projects/:projectId/issues" element={<IssuesPage />} />
             <Route path="projects/:projectId/documentation" element={<DocumentationPage />} />
             <Route path="projects/:projectId/lifecycle-status" element={<LifecycleStatusPage />} />
             <Route path="projects/:projectId/certification" element={<CertificationPage />} />
