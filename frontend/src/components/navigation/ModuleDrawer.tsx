@@ -62,7 +62,7 @@ export default function ModuleDrawer({
 
                 <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
                     {modules.map(module => (
-                        <div key={module.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 group transition-colors">
+                        <div key={module.id} className="flex items-center justify-between p-3 rounded-2xl border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 group transition-colors">
                             <button
                                 onClick={() => handleNavigation(module.route)}
                                 className="flex items-center gap-3 flex-1 text-left"

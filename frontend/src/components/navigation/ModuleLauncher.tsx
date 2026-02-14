@@ -48,7 +48,7 @@ export default function ModuleLauncher({ activeCategory, projectId, pinnedIds, o
                 <div key={module.id} className="relative group">
                     <button
                         onClick={() => handleNavigation(module.route)}
-                        className="flex items-center gap-2 px-3 py-2 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-sm transition-all duration-200 min-w-[140px]"
+                        className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-sm transition-all duration-200 min-w-[140px]"
                         title={module.tooltip || module.label}
                     >
                         <module.icon size={16} className="text-gray-500 dark:text-gray-400 group-hover:text-blue-500" />
@@ -80,7 +80,7 @@ export default function ModuleLauncher({ activeCategory, projectId, pinnedIds, o
                 <div className="relative" ref={dropdownRef}>
                     <button
                         onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                        className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
+                        className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
                     >
                         More <ChevronDown size={14} />
                     </button>

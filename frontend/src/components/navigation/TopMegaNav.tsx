@@ -84,52 +84,54 @@ export default function TopMegaNav() {
     }
 
     return (
-        <div className="w-full bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm mb-6">
-            <div className="max-w-screen-2xl mx-auto px-4 py-3">
-                {/* Desktop View (>= 1200px) */}
-                <div className="hidden xl:block space-y-3">
-                    <div className="flex items-center justify-between">
-                        <CategoryTabs activeCategory={activeCategory} onSelectCategory={setActiveCategory} />
+        <div className="mt-4">
+            <div className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm rounded-2xl overflow-hidden mb-6">
+                <div className="px-4 py-3">
+                    {/* Desktop View (>= 1200px) */}
+                    <div className="hidden xl:block space-y-3">
+                        <div className="flex items-center justify-between">
+                            <CategoryTabs activeCategory={activeCategory} onSelectCategory={setActiveCategory} />
+                        </div>
+
+                        <ModuleLauncher
+                            activeCategory={activeCategory}
+                            projectId={projectId}
+                            pinnedIds={pinnedSet}
+                            onTogglePin={handleTogglePin}
+                        />
+
+                        <QuickAccessBar
+                            projectId={projectId}
+                            pinnedIds={pinnedSet}
+                            onTogglePin={handleTogglePin}
+                        />
                     </div>
 
-                    <ModuleLauncher
-                        activeCategory={activeCategory}
-                        projectId={projectId}
-                        pinnedIds={pinnedSet}
-                        onTogglePin={handleTogglePin}
-                    />
+                    {/* Mobile/Tablet View (< 1200px) */}
+                    <div className="xl:hidden flex items-center justify-between">
+                        <div className="font-semibold text-gray-700 dark:text-gray-200">
+                            Menu
+                        </div>
 
-                    <QuickAccessBar
-                        projectId={projectId}
-                        pinnedIds={pinnedSet}
-                        onTogglePin={handleTogglePin}
-                    />
-                </div>
-
-                {/* Mobile/Tablet View (< 1200px) */}
-                <div className="xl:hidden flex items-center justify-between">
-                    <div className="font-semibold text-gray-700 dark:text-gray-200">
-                        Menu
+                        <div className="flex items-center gap-4">
+                            <button
+                                onClick={() => setIsDrawerOpen(true)}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full transition-colors"
+                            >
+                                <Menu size={18} />
+                                <span>Browse Modules</span>
+                            </button>
+                        </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                        <button
-                            onClick={() => setIsDrawerOpen(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
-                        >
-                            <Menu size={18} />
-                            <span>Browse Modules</span>
-                        </button>
+                    {/* Mobile Quick Access (visible below header) */}
+                    <div className="xl:hidden mt-2">
+                        <QuickAccessBar
+                            projectId={projectId}
+                            pinnedIds={pinnedSet}
+                            onTogglePin={handleTogglePin}
+                        />
                     </div>
-                </div>
-
-                {/* Mobile Quick Access (visible below header) */}
-                <div className="xl:hidden mt-2">
-                    <QuickAccessBar
-                        projectId={projectId}
-                        pinnedIds={pinnedSet}
-                        onTogglePin={handleTogglePin}
-                    />
                 </div>
             </div>
 
