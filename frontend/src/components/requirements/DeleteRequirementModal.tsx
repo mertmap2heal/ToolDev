@@ -16,7 +16,7 @@ interface DeleteRequirementModalProps {
   linkedIssues?: { id: string; title: string }[]
   linkedChangeRequests?: { id: string; title: string }[]
   linkedFunctions?: { id: string; name: string; functionId?: string }[]
-  linkedItems?: { id: string; targetType: string; targetId: string; label?: string; linkType?: string }[]
+  linkedItems?: { id: string; targetType: string; targetId: string; label?: string; linkType?: string; title?: string; description?: string; displayId?: string }[]
   onConfirm: (reason?: string, childrenToDelete?: string[]) => void
 }
 
@@ -207,12 +207,46 @@ export default function DeleteRequirementModal({
                       Other Links ({linkedItems.length})
                     </p>
                     <ul className="text-sm text-yellow-800 dark:text-yellow-300 space-y-1">
-                      {linkedItems.map(item => (
-                        <li key={item.id} className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full flex-shrink-0" />
-                          [{item.targetType}] {item.label || item.targetId} ({item.linkType})
-                        </li>
-                      ))}
+                      {linkedItems.map(item => {
+                        const typeLabel = item.targetType.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+                        const linkLabel = item.linkType ? item.linkType.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : ''
+                        const displayId = item.displayId || item.targetId.substring(0, 8)
+
+                        // Determine URL
+                        let url = '#'
+                        if (item.targetType === 'issue') url = `/projects/${requirement.projectId}/issues/${item.targetId}` // Using projectId from requirement
+                        else if (item.targetType === 'change_request') url = `/projects/${requirement.projectId}/change-requests/${item.targetId}?changeRequestId=${item.targetId}`
+                        else if (item.targetType === 'requirement') url = `/projects/${requirement.projectId}/requirements?requirementId=${item.targetId}`
+
+                        return (
+                          <li key={item.id} className="flex items-center gap-2 py-0.5">
+                            <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full flex-shrink-0" />
+                            <div className="flex flex-col min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300 uppercase tracking-wide">
+                                  {typeLabel}
+                                </span>
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-mono text-xs truncate hover:underline hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
+                                  title={item.title || item.label}
+                                >
+                                  {displayId}
+                                </a>
+                              </div>
+                              {(item.title || linkLabel) && (
+                                <div className="flex items-center gap-1 ml-1 text-xs text-yellow-700 dark:text-yellow-400">
+                                  {item.title && <span className="truncate max-w-[200px] italic">"{item.title}"</span>}
+                                  {item.title && linkLabel && <span>&mdash;</span>}
+                                  {linkLabel && <span className="opacity-75">{linkLabel}</span>}
+                                </div>
+                              )}
+                            </div>
+                          </li>
+                        )
+                      })}
                     </ul>
                   </div>
                 )}

@@ -551,15 +551,33 @@ export default function RequirementsPage() {
             linkType: l.linkType,
           }
           // If targetType is 'issue', find and attach the full issue details
+          // Enrich with details if available in loaded lists
           if (l.targetType === 'issue') {
             const issue = issues.find((i: any) => i.id === l.targetId)
             if (issue) {
+              item.title = issue.title
+              item.description = issue.description
+              item.displayId = issue.issueKey || issue.id.substring(0, 8)
               item.issue = {
                 id: issue.id,
                 title: issue.title,
                 issueKey: issue.issueKey,
                 createdByUser: issue.createdByUser,
               }
+            }
+          } else if (l.targetType === 'change_request') {
+            const cr = changeRequests.find((c: any) => c.id === l.targetId)
+            if (cr) {
+              item.title = cr.title
+              item.description = cr.description
+              item.displayId = cr.id.substring(0, 8)
+            }
+          } else if (l.targetType === 'requirement') {
+            const req = requirements.find((r: any) => r.id === l.targetId)
+            if (req) {
+              item.title = req.title
+              item.description = req.description
+              item.displayId = req.requirementId || req.id.substring(0, 8)
             }
           }
           return item
