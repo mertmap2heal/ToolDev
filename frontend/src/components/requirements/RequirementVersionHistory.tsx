@@ -1,20 +1,10 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { X, History, ChevronDown, ChevronRight, ArrowLeftRight, Clock, User, FileText, Tag, Trash2, RotateCcw, Plus } from 'lucide-react'
-import { versionService, VersionComparison } from '../../services/version.service'
+import { X, History, ChevronDown, ChevronRight, ArrowLeftRight, Clock, User, FileText, Tag, Trash2, RotateCcw, Plus, AlertCircle, GitPullRequest, ExternalLink } from 'lucide-react'
+import { versionService, VersionComparison, AuditEvent } from '../../services/version.service'
 import type { Requirement, RequirementVersion } from 'shared/types/engineering.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
-
-interface AuditEvent {
-  id: string
-  action: string
-  performedAt: string
-  performedByUserId?: string | null
-  performedByUser?: { id: string; name: string; email: string } | null
-  oldValue?: any
-  newValue?: any
-}
 
 interface RequirementVersionHistoryProps {
   projectId: string
@@ -108,6 +98,10 @@ export default function RequirementVersionHistory({
         return { icon: Plus, label: 'Created', color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-200 dark:border-blue-800' }
       case 'REQUIREMENT_PERMANENTLY_DELETED':
         return { icon: Trash2, label: 'Permanently Deleted', color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200 dark:border-red-800' }
+      case 'ISSUE_LINKED':
+        return { icon: AlertCircle, label: 'Issue Linked', color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-900/20', border: 'border-indigo-200 dark:border-indigo-800' }
+      case 'CHANGE_REQUEST_LINKED':
+        return { icon: GitPullRequest, label: 'Change Request Linked', color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-900/20', border: 'border-purple-200 dark:border-purple-800' }
       default:
         return { icon: FileText, label: action, color: 'text-gray-500', bg: 'bg-gray-50 dark:bg-gray-900/20', border: 'border-gray-200 dark:border-gray-800' }
     }
@@ -149,7 +143,7 @@ export default function RequirementVersionHistory({
               const isChanged = changedFields.includes(field)
               if (!isChanged) return null
 
-              const valueA = field === 'tags' 
+              const valueA = field === 'tags'
                 ? (versionA.tags || []).join(', ') || '—'
                 : (versionA[field] as string) || '—'
               const valueB = field === 'tags'
@@ -247,7 +241,7 @@ export default function RequirementVersionHistory({
             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               Loading version history...
             </div>
-          ) : versions.length === 0 ? (
+          ) : (versions.length === 0 && auditEvents.length === 0) ? (
             <div className="text-center py-8">
               <History size={48} className="mx-auto mb-4 text-gray-300 dark:text-gray-600" />
               <p className="text-lg font-medium text-gray-900 dark:text-white">
@@ -370,7 +364,7 @@ export default function RequirementVersionHistory({
                                 {format(item.date, 'PPp')}
                               </span>
                             </div>
-                            
+
                             <div
                               className="cursor-pointer"
                               onClick={() => toggleExpanded(version.version)}
@@ -458,11 +452,37 @@ export default function RequirementVersionHistory({
                                 {format(item.date, 'PPp')}
                               </span>
                             </div>
-                            
+
                             {event.newValue?.reason && (
                               <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 italic">
                                 Reason: "{event.newValue.reason}"
                               </p>
+                            )}
+
+                            {/* Link Details */}
+                            {(event.action === 'ISSUE_LINKED' || event.action === 'CHANGE_REQUEST_LINKED') && event.newValue && (
+                              <div className="mt-3 flex items-start gap-3 bg-white/50 dark:bg-gray-800/50 p-2 rounded border border-white/20">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                      {event.newValue.issueKey || event.newValue.crId || 'LINKED'}
+                                    </span>
+                                    <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                      {event.newValue.title}
+                                    </span>
+                                  </div>
+                                </div>
+                                <a
+                                  href={event.action === 'ISSUE_LINKED'
+                                    ? `/projects/${projectId}/issues/${event.newValue.issueId || event.newValue.id}`
+                                    : `/projects/${projectId}/change-requests/${event.newValue.id}?changeRequestId=${event.newValue.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-500 hover:text-blue-600 transition-colors"
+                                >
+                                  <ExternalLink size={14} />
+                                </a>
+                              </div>
                             )}
                           </div>
                         </div>

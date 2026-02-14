@@ -1,6 +1,7 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { PrismaClient } from '@prisma/client'
+import { linkageAuditService } from '../services/linkageAudit.service'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -100,6 +101,22 @@ export const createChangeRequest = async (req: AuthRequest, res: Response) => {
         },
       },
     })
+
+    // Log linkage for Requirement version history
+    if (sourceType === 'requirement') {
+      await linkageAuditService.log({
+        projectId,
+        entityType: 'REQUIREMENT',
+        entityId: sourceId,
+        action: 'CHANGE_REQUEST_LINKED',
+        newValue: {
+          crId: changeRequest.crId,
+          title: changeRequest.title,
+          id: changeRequest.id
+        },
+        performedByUserId: req.userId || undefined,
+      })
+    }
 
     res.status(201).json({
       success: true,

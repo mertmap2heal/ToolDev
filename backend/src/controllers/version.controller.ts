@@ -30,7 +30,7 @@ export const getRequirementVersions = async (req: AuthRequest, res: Response) =>
     }
 
     const versions = await prisma.requirementVersion.findMany({
-      where: { 
+      where: {
         requirementId: requirement.id,
         projectId,
       },
@@ -44,7 +44,14 @@ export const getRequirementVersions = async (req: AuthRequest, res: Response) =>
         entityType: 'REQUIREMENT',
         entityId: requirement.id,
         action: {
-          in: ['REQUIREMENT_DELETED_SOFT', 'REQUIREMENT_RESTORED', 'REQUIREMENT_PERMANENTLY_DELETED', 'REQUIREMENT_CREATED']
+          in: [
+            'REQUIREMENT_DELETED_SOFT',
+            'REQUIREMENT_RESTORED',
+            'REQUIREMENT_PERMANENTLY_DELETED',
+            'REQUIREMENT_CREATED',
+            'ISSUE_LINKED',
+            'CHANGE_REQUEST_LINKED'
+          ]
         }
       },
       orderBy: { performedAt: 'desc' },
@@ -166,7 +173,7 @@ export const createRequirementVersion = async (req: AuthRequest, res: Response) 
 
     // Get the latest version number
     const latestVersion = await prisma.requirementVersion.findFirst({
-      where: { 
+      where: {
         requirementId: requirement.id,
         projectId,
       },

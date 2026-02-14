@@ -1,6 +1,7 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { PrismaClient } from '@prisma/client'
+import { linkageAuditService } from '../services/linkageAudit.service'
 
 const prisma = new PrismaClient()
 
@@ -126,6 +127,20 @@ export const createIssue = async (req: AuthRequest, res: Response) => {
         req.user?.userId,
         req.user?.name
       )
+
+      // Log linkage for Requirement version history
+      await linkageAuditService.log({
+        projectId,
+        entityType: 'REQUIREMENT',
+        entityId: sourceRequirementId,
+        action: 'ISSUE_LINKED',
+        newValue: {
+          issueId: issue.id,
+          issueKey: issue.issueKey,
+          title: issue.title
+        },
+        performedByUserId: req.user?.userId,
+      })
     }
 
     res.status(201).json({
@@ -657,6 +672,22 @@ export const createIssueLink = async (req: AuthRequest, res: Response) => {
       req.user?.userId,
       req.user?.name
     )
+
+    // Log linkage for Requirement version history if linked to a requirement
+    if (linkedType === 'requirement') {
+      await linkageAuditService.log({
+        projectId: issue.projectId,
+        entityType: 'REQUIREMENT',
+        entityId: linkedId,
+        action: 'ISSUE_LINKED',
+        newValue: {
+          issueId: id,
+          issueKey: issue.issueKey,
+          title: issue.title
+        },
+        performedByUserId: req.user?.userId,
+      })
+    }
 
     res.status(201).json({ success: true, data: link })
   } catch (error) {

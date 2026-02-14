@@ -9,13 +9,28 @@ export interface VersionComparison {
   changedFields: string[]
 }
 
+export interface AuditEvent {
+  id: string
+  action: string
+  performedAt: string
+  performedByUserId?: string | null
+  performedByUser?: { id: string; name: string; email: string } | null
+  oldValue?: any
+  newValue?: any
+}
+
+export interface RequirementVersionHistoryResponse {
+  versions: RequirementVersion[]
+  auditEvents: AuditEvent[]
+}
+
 /**
  * Version service provides client-side API methods for managing
  * requirement version history and comparisons.
  */
 export const versionService = {
-  async getRequirementVersions(projectId: string, requirementId: string): Promise<ApiResponse<RequirementVersion[]>> {
-    return apiClient.get<RequirementVersion[]>(`/versions/${projectId}/requirements/${requirementId}`)
+  async getRequirementVersions(projectId: string, requirementId: string): Promise<ApiResponse<RequirementVersionHistoryResponse>> {
+    return apiClient.get<RequirementVersionHistoryResponse>(`/versions/${projectId}/requirements/${requirementId}`)
   },
 
   async getRequirementVersion(
