@@ -276,15 +276,131 @@ export interface CreateVerificationPlanDto {
 export interface Issue {
   id: string
   projectId: string
+  issueKey?: string // e.g., ISSUE-123
   title: string
   description: string
   priority: 'low' | 'medium' | 'high' | 'critical'
-  status: 'open' | 'in-progress' | 'closed'
+  status: 'open' | 'in-progress' | 'resolved' | 'closed'
   owner?: string
+  assigneeId?: string
+  assignee?: {
+    id: string
+    name: string
+    email: string
+    avatarUrl?: string
+  }
+  createdBy?: string
+  createdByUser?: {
+    id: string
+    name: string
+    email: string
+    avatarUrl?: string
+  }
+  updatedBy?: string
+  closedAt?: string
+  closedBy?: string
   relatedFunctionIds?: string[]
   relatedParameterIds?: string[]
+  labelIds?: string[]
+  labels?: IssueLabel[]
+  startDate?: string
+  dueDate?: string
+  estimatedTime?: string
+  actualTime?: string
   createdAt: string
   updatedAt: string
+  // Populated fields
+  comments?: IssueComment[]
+  systemNotes?: IssueSystemNote[]
+  links?: IssueLink[]
+  subscribers?: IssueSubscriber[]
+  participants?: IssueParticipant[]
+}
+
+export interface IssueComment {
+  id: string
+  issueId: string
+  projectId: string
+  content: string
+  authorId: string
+  authorName: string
+  author?: {
+    id: string
+    name: string
+    email: string
+    avatarUrl?: string
+  }
+  parentCommentId?: string
+  replies?: IssueComment[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface IssueSystemNote {
+  id: string
+  issueId: string
+  projectId: string
+  action: string // "status_changed", "closed", "reopened", "description_updated", "assignee_changed", "label_added", etc.
+  oldValue?: string
+  newValue?: string
+  userId?: string
+  userName?: string
+  user?: {
+    id: string
+    name: string
+    email: string
+    avatarUrl?: string
+  }
+  createdAt: string
+}
+
+export interface IssueSubscription {
+  id: string
+  issueId: string
+  userId: string
+  createdAt: string
+}
+
+export interface IssueSubscriber {
+  id: string
+  name: string
+  email: string
+  avatarUrl?: string
+}
+
+export interface IssueParticipant {
+  id: string
+  name: string
+  email: string
+  avatarUrl?: string
+}
+
+export interface IssueLabel {
+  id: string
+  projectId: string
+  name: string
+  color: string
+  createdAt: string
+}
+
+export interface IssueLink {
+  id: string
+  issueId: string
+  linkedType: string // "issue", "requirement", "function", "parameter"
+  linkedId: string
+  linkType: string // "relates_to", "blocks", "blocked_by", "duplicates", "parent_of", "child_of"
+  linkedRequirementKey?: string
+  linkedRequirementTitle?: string
+  linkedItem?: any // populated based on linkedType
+  createdBy?: string
+  createdAt: string
+}
+
+export interface IssueActivity {
+  id: string
+  type: 'comment' | 'system_note'
+  data: IssueComment | IssueSystemNote
+  createdAt: string
 }
 
 export interface CreateIssueDto {
@@ -293,8 +409,35 @@ export interface CreateIssueDto {
   priority: 'low' | 'medium' | 'high' | 'critical'
   status?: Issue['status']
   owner?: string
+  assigneeId?: string
   relatedFunctionIds?: string[]
   relatedParameterIds?: string[]
+  labelIds?: string[]
+  startDate?: string
+  dueDate?: string
+  estimatedTime?: string
+}
+
+export interface UpdateIssueDto {
+  title?: string
+  description?: string
+  priority?: Issue['priority']
+  status?: Issue['status']
+  assigneeId?: string | null
+  labelIds?: string[]
+  startDate?: string | null
+  dueDate?: string | null
+  estimatedTime?: string | null
+  actualTime?: string | null
+}
+
+export interface CreateIssueCommentDto {
+  content: string
+  parentCommentId?: string
+}
+
+export interface UpdateIssueCommentDto {
+  content: string
 }
 
 export interface Parameter {

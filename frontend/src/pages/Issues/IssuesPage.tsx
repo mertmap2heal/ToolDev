@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { Search, Filter, AlertCircle, X, Edit2, Trash2, Plus, ChevronDown, ChevronUp, FileText } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
@@ -16,10 +16,12 @@ import { format } from 'date-fns'
 
 export default function IssuesPage() {
   const { projectId } = useParams<{ projectId: string }>()
-  const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [priorityFilter, setPriorityFilter] = useState<string>('all')
-  const [ownerFilter, setOwnerFilter] = useState<string>('all')
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '')
+  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') || 'all')
+  const [priorityFilter, setPriorityFilter] = useState<string>(searchParams.get('priority') || 'all')
+  const [ownerFilter, setOwnerFilter] = useState<string>(searchParams.get('owner') || 'all')
   const [editingIssueId, setEditingIssueId] = useState<string | null>(null)
   const [editingStatus, setEditingStatus] = useState<string>('')
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string; title: string } | null>(null)
@@ -175,6 +177,18 @@ export default function IssuesPage() {
   const handleDeleteClick = (e: React.MouseEvent, issue: Issue) => {
     e.stopPropagation()
     setDeleteConfirmation({ id: issue.id, title: issue.title })
+  }
+
+  const handleIssueRowClick = (issueId: string) => {
+    // Preserve current filter state in URL
+    const params = new URLSearchParams()
+    if (searchQuery) params.set('q', searchQuery)
+    if (statusFilter !== 'all') params.set('status', statusFilter)
+    if (priorityFilter !== 'all') params.set('priority', priorityFilter)
+    if (ownerFilter !== 'all') params.set('owner', ownerFilter)
+    
+    const queryString = params.toString()
+    navigate(`/projects/${projectId}/issues/${issueId}${queryString ? `?${queryString}` : ''}`)
   }
 
   const handleConfirmDelete = () => {
@@ -340,7 +354,8 @@ export default function IssuesPage() {
                 filteredIssues.map((issue) => (
                   <tr
                     key={issue.id}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    onClick={() => handleIssueRowClick(issue.id)}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">

@@ -25,6 +25,9 @@ model User {
   notifications    Notification[]
   engineeringRoles UserEngineeringRole[]
   requirementSubscriptions RequirementSubscription[]
+  issueSubscriptions IssueSubscription[]
+  issueComments    IssueComment[]
+  issueSystemNotes IssueSystemNote[]
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -407,17 +410,121 @@ model Document {
 model Issue {
   id                  String   @id @default(uuid())
   projectId           String
+  issueKey            String?  @unique // e.g., ISSUE-123
   title               String
   description         String
   priority            String   @default("medium")
   status              String   @default("open")
   owner               String?
+  assigneeId          String?
+  createdBy           String?
+  updatedBy           String?
+  closedAt            DateTime?
+  closedBy            String?
   relatedFunctionIds  String[] @default([])
   relatedParameterIds String[] @default([])
+  labelIds            String[] @default([])
+  startDate           DateTime?
+  dueDate             DateTime?
+  estimatedTime       String?  // e.g., "2h", "1d"
+  actualTime          String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  comments      IssueComment[]
+  systemNotes   IssueSystemNote[]
+  subscriptions IssueSubscription[]
+  links         IssueLink[]         @relation("IssueToLink")
+  linkedBy      IssueLink[]         @relation("LinkedIssue")
+
+  @@index([projectId])
+  @@index([issueKey])
+  @@index([status])
+  @@index([assigneeId])
+}
+
+model IssueComment {
+  id              String   @id @default(uuid())
+  issueId         String
+  projectId       String
+  content         String
+  authorId        String
+  authorName      String
+  parentCommentId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  issue         Issue           @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author        User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parentComment IssueComment?   @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies       IssueComment[]  @relation("CommentReplies")
+
+  @@index([issueId])
+  @@index([authorId])
+  @@index([parentCommentId])
+}
+
+model IssueSystemNote {
+  id        String   @id @default(uuid())
+  issueId   String
+  projectId String
+  action    String   // e.g., "status_changed", "closed", "reopened", "description_updated", "assignee_changed", "label_added"
+  oldValue  String?
+  newValue  String?
+  userId    String?
+  userName  String?
+  createdAt DateTime @default(now())
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([issueId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model IssueSubscription {
+  id        String   @id @default(uuid())
+  issueId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([issueId, userId])
+  @@index([userId])
+}
+
+model IssueLabel {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String
+  color     String   @default("#3b82f6") // hex color
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, name])
+  @@index([projectId])
+}
+
+model IssueLink {
+  id                    String   @id @default(uuid())
+  issueId               String
+  linkedType            String   // "issue", "requirement", "function", "parameter"
+  linkedId              String
+  linkType              String   @default("relates_to") // "relates_to", "blocks", "blocked_by", "duplicates", "parent_of", "child_of"
+  linkedRequirementKey  String?  // For display: REQ-003
+  linkedRequirementTitle String?
+  createdBy             String?
+  createdAt             DateTime @default(now())
+
+  issue       Issue  @relation("IssueToLink", fields: [issueId], references: [id], onDelete: Cascade)
+  linkedIssue Issue? @relation("LinkedIssue", fields: [linkedId], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
+  @@index([linkedId])
+  @@index([linkedType, linkedId])
 }
 
 model Parameter {
