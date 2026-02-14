@@ -1,10 +1,20 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { X, History, ChevronDown, ChevronRight, ArrowLeftRight, Clock, User, FileText, Tag } from 'lucide-react'
+import { X, History, ChevronDown, ChevronRight, ArrowLeftRight, Clock, User, FileText, Tag, Trash2, RotateCcw, Plus } from 'lucide-react'
 import { versionService, VersionComparison } from '../../services/version.service'
 import type { Requirement, RequirementVersion } from 'shared/types/engineering.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
+
+interface AuditEvent {
+  id: string
+  action: string
+  performedAt: string
+  performedByUserId?: string | null
+  performedByUser?: { id: string; name: string; email: string } | null
+  oldValue?: any
+  newValue?: any
+}
 
 interface RequirementVersionHistoryProps {
   projectId: string
@@ -27,14 +37,17 @@ export default function RequirementVersionHistory({
   const [isComparing, setIsComparing] = useState(false)
 
   // Fetch version history
-  const { data: versions = [], isLoading } = useQuery({
+  const { data: historyData, isLoading } = useQuery({
     queryKey: ['requirement-versions', projectId, requirement.id],
     queryFn: async () => {
       const response = await versionService.getRequirementVersions(projectId, requirement.id)
-      return response.success && response.data ? response.data : []
+      return response.success && response.data ? response.data : { versions: [], auditEvents: [] }
     },
     enabled: !!projectId && !!requirement.id,
   })
+
+  const versions = historyData?.versions || []
+  const auditEvents = historyData?.auditEvents || []
 
   // Fetch comparison data when comparing
   const { data: comparison, isLoading: loadingComparison } = useQuery({
@@ -82,6 +95,22 @@ export default function RequirementVersionHistory({
       tags: 'Tags',
     }
     return labels[field] || field
+  }
+
+  // Get icon and color for audit action
+  const getActionDisplay = (action: string) => {
+    switch (action) {
+      case 'REQUIREMENT_DELETED_SOFT':
+        return { icon: Trash2, label: 'Moved to Trash', color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/20', border: 'border-orange-200 dark:border-orange-800' }
+      case 'REQUIREMENT_RESTORED':
+        return { icon: RotateCcw, label: 'Restored', color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-900/20', border: 'border-green-200 dark:border-green-800' }
+      case 'REQUIREMENT_CREATED':
+        return { icon: Plus, label: 'Created', color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-200 dark:border-blue-800' }
+      case 'REQUIREMENT_PERMANENTLY_DELETED':
+        return { icon: Trash2, label: 'Permanently Deleted', color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200 dark:border-red-800' }
+      default:
+        return { icon: FileText, label: action, color: 'text-gray-500', bg: 'bg-gray-50 dark:bg-gray-900/20', border: 'border-gray-200 dark:border-gray-800' }
+    }
   }
 
   // Render diff view for two versions
@@ -183,7 +212,7 @@ export default function RequirementVersionHistory({
         <div className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">
-              {versions.length} version{versions.length !== 1 ? 's' : ''} recorded
+              {versions.length + auditEvents.length} event{versions.length + auditEvents.length !== 1 ? 's' : ''} recorded
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -311,86 +340,136 @@ export default function RequirementVersionHistory({
                   </div>
                 </div>
 
-                {/* Historical Versions */}
-                {versions.map((version, index) => (
-                  <div key={version.id} className="relative pl-10">
-                    <div className="absolute left-2 w-4 h-4 bg-gray-300 dark:bg-gray-600 rounded-full border-2 border-white dark:border-gray-800" />
-                    <div className="bg-white dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                            Version {version.version}
-                          </span>
-                          {version.changedByName && (
-                            <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                              <User size={12} />
-                              {version.changedByName}
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {format(new Date(version.createdAt), 'PPp')}
-                        </span>
-                      </div>
-                      
-                      <div
-                        className="cursor-pointer"
-                        onClick={() => toggleExpanded(version.version)}
-                      >
-                        <div className="flex items-center gap-2">
-                          {expandedVersion === version.version ? (
-                            <ChevronDown size={16} className="text-gray-500" />
-                          ) : (
-                            <ChevronRight size={16} className="text-gray-500" />
-                          )}
-                          <p className="font-medium text-gray-900 dark:text-white">{version.title}</p>
-                        </div>
-                      </div>
+                {/* Merge and sort versions and audit events by date */}
+                {(() => {
+                  const timeline: Array<{ type: 'version' | 'audit'; data: any; date: Date }> = [
+                    ...versions.map(v => ({ type: 'version' as const, data: v, date: new Date(v.createdAt) })),
+                    ...auditEvents.map(e => ({ type: 'audit' as const, data: e, date: new Date(e.performedAt) })),
+                  ].sort((a, b) => b.date.getTime() - a.date.getTime())
 
-                      {version.changeReason && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">
-                          "{version.changeReason}"
-                        </p>
-                      )}
-
-                      {expandedVersion === version.version && (
-                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600 space-y-2">
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div>
-                              <span className="text-gray-500 dark:text-gray-400">Status:</span>{' '}
-                              <span className="text-gray-900 dark:text-white">{version.status}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500 dark:text-gray-400">Priority:</span>{' '}
-                              <span className="text-gray-900 dark:text-white">{version.priority}</span>
-                            </div>
-                            {version.owner && (
-                              <div>
-                                <span className="text-gray-500 dark:text-gray-400">Owner:</span>{' '}
-                                <span className="text-gray-900 dark:text-white">{version.owner}</span>
+                  return timeline.map((item, index) => {
+                    if (item.type === 'version') {
+                      const version = item.data as RequirementVersion
+                      return (
+                        <div key={`version-${version.id}`} className="relative pl-10">
+                          <div className="absolute left-2 w-4 h-4 bg-gray-300 dark:bg-gray-600 rounded-full border-2 border-white dark:border-gray-800" />
+                          <div className="bg-white dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                  Version {version.version}
+                                </span>
+                                {version.changedByName && (
+                                  <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                                    <User size={12} />
+                                    {version.changedByName}
+                                  </span>
+                                )}
                               </div>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                {format(item.date, 'PPp')}
+                              </span>
+                            </div>
+                            
+                            <div
+                              className="cursor-pointer"
+                              onClick={() => toggleExpanded(version.version)}
+                            >
+                              <div className="flex items-center gap-2">
+                                {expandedVersion === version.version ? (
+                                  <ChevronDown size={16} className="text-gray-500" />
+                                ) : (
+                                  <ChevronRight size={16} className="text-gray-500" />
+                                )}
+                                <p className="font-medium text-gray-900 dark:text-white">{version.title}</p>
+                              </div>
+                            </div>
+
+                            {version.changeReason && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">
+                                "{version.changeReason}"
+                              </p>
                             )}
-                            {version.category && (
-                              <div>
-                                <span className="text-gray-500 dark:text-gray-400">Category:</span>{' '}
-                                <span className="text-gray-900 dark:text-white">{version.category}</span>
+
+                            {expandedVersion === version.version && (
+                              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600 space-y-2">
+                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                  <div>
+                                    <span className="text-gray-500 dark:text-gray-400">Status:</span>{' '}
+                                    <span className="text-gray-900 dark:text-white">{version.status}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-500 dark:text-gray-400">Priority:</span>{' '}
+                                    <span className="text-gray-900 dark:text-white">{version.priority}</span>
+                                  </div>
+                                  {version.owner && (
+                                    <div>
+                                      <span className="text-gray-500 dark:text-gray-400">Owner:</span>{' '}
+                                      <span className="text-gray-900 dark:text-white">{version.owner}</span>
+                                    </div>
+                                  )}
+                                  {version.category && (
+                                    <div>
+                                      <span className="text-gray-500 dark:text-gray-400">Category:</span>{' '}
+                                      <span className="text-gray-900 dark:text-white">{version.category}</span>
+                                    </div>
+                                  )}
+                                </div>
+                                {version.description && (
+                                  <div className="mt-2">
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Description:</p>
+                                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                                      {version.description.substring(0, 200)}
+                                      {version.description.length > 200 && '...'}
+                                    </p>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
-                          {version.description && (
-                            <div className="mt-2">
-                              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Description:</p>
-                              <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                                {version.description.substring(0, 200)}
-                                {version.description.length > 200 && '...'}
-                              </p>
-                            </div>
-                          )}
                         </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                      )
+                    } else {
+                      // Audit event
+                      const event = item.data as AuditEvent
+                      const actionDisplay = getActionDisplay(event.action)
+                      const ActionIcon = actionDisplay.icon
+
+                      return (
+                        <div key={`audit-${event.id}`} className="relative pl-10">
+                          <div className={`absolute left-2 w-4 h-4 ${actionDisplay.color} rounded-full border-2 border-white dark:border-gray-800 flex items-center justify-center`}>
+                            <ActionIcon size={8} className="text-white" />
+                          </div>
+                          <div className={`rounded-lg p-4 border ${actionDisplay.bg} ${actionDisplay.border}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <ActionIcon size={16} className={actionDisplay.color} />
+                                <span className={`text-xs font-medium ${actionDisplay.color}`}>
+                                  {actionDisplay.label}
+                                </span>
+                                {event.performedByUser && (
+                                  <span className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
+                                    <User size={12} />
+                                    {event.performedByUser.name}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                {format(item.date, 'PPp')}
+                              </span>
+                            </div>
+                            
+                            {event.newValue?.reason && (
+                              <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 italic">
+                                Reason: "{event.newValue.reason}"
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    }
+                  })
+                })()}
               </div>
             </div>
           )}
@@ -399,7 +478,7 @@ export default function RequirementVersionHistory({
         {/* Footer */}
         <div className="flex items-center justify-between p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Version history is automatically recorded when requirements are updated.
+            Version history tracks all changes, deletions, and restorations.
           </p>
           <button
             onClick={onClose}

@@ -37,9 +37,45 @@ export const getRequirementVersions = async (req: AuthRequest, res: Response) =>
       orderBy: { version: 'desc' },
     })
 
+    // Fetch audit events for this requirement (delete, restore, etc.)
+    const auditEvents = await prisma.verAuditEvent.findMany({
+      where: {
+        projectId,
+        entityType: 'REQUIREMENT',
+        entityId: requirement.id,
+        action: {
+          in: ['REQUIREMENT_DELETED_SOFT', 'REQUIREMENT_RESTORED', 'REQUIREMENT_PERMANENTLY_DELETED', 'REQUIREMENT_CREATED']
+        }
+      },
+      orderBy: { performedAt: 'desc' },
+    })
+
+    // Fetch user details for audit events
+    const userIds = [...new Set(auditEvents.map(e => e.performedByUserId).filter(Boolean))] as string[]
+    const users = userIds.length > 0 ? await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, name: true, email: true },
+    }) : []
+
+    const userMap = new Map(users.map(user => [user.id, user]))
+
+    // Map audit events with user details
+    const enrichedAuditEvents = auditEvents.map(event => ({
+      id: event.id,
+      action: event.action,
+      performedAt: event.performedAt,
+      performedByUserId: event.performedByUserId,
+      performedByUser: event.performedByUserId ? userMap.get(event.performedByUserId) || null : null,
+      oldValue: event.oldValue,
+      newValue: event.newValue,
+    }))
+
     res.json({
       success: true,
-      data: versions,
+      data: {
+        versions,
+        auditEvents: enrichedAuditEvents,
+      }
     })
   } catch (error) {
     console.error('Get requirement versions error:', error)
