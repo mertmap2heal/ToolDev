@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Search, Filter, ChevronDown, ChevronUp, Archive, RotateCcw, Trash2, AlertTriangle, Clock } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { format, formatDistanceToNow, addDays, differenceInDays } from 'date-fns'
+import { format, formatDistanceToNow } from 'date-fns'
 import clsx from 'clsx'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
+import ConfirmDialog from '../../components/common/ConfirmDialog'
 import { requirementService } from '../../services/requirement.service'
 import type { Requirement } from 'shared/types/engineering.types'
 
@@ -13,6 +14,8 @@ export default function ArchivePage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState<'requirements' | 'issues'>('requirements')
+  const [confirmRestore, setConfirmRestore] = useState<Requirement | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<Requirement | null>(null)
   const queryClient = useQueryClient()
 
   // Fetch recently deleted requirements
@@ -68,20 +71,31 @@ export default function ArchivePage() {
   })
 
   const getDaysLeft = (deletedAt: string) => {
-    const evictionDate = addDays(new Date(deletedAt), 7)
-    const days = differenceInDays(evictionDate, new Date())
-    return Math.max(0, days)
+    const deletedDate = new Date(deletedAt)
+    const expiresAt = new Date(deletedDate.getTime() + 7 * 24 * 60 * 60 * 1000) // +7 days
+    const now = new Date()
+    const msLeft = expiresAt.getTime() - now.getTime()
+    const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24))
+    return Math.max(0, daysLeft)
   }
 
   const handleRestore = (req: Requirement) => {
-    if (confirm(`Restore requirement "${req.requirementId || req.title}"?`)) {
-      restoreMutation.mutate(req.id)
-    }
+    setConfirmRestore(req)
   }
 
   const handlePermanentDelete = (req: Requirement) => {
-    if (confirm(`Permanently delete "${req.requirementId || req.title}"? This cannot be undone.`)) {
-      permanentDeleteMutation.mutate(req.id)
+    setConfirmDelete(req)
+  }
+
+  const confirmRestoreAction = () => {
+    if (confirmRestore) {
+      restoreMutation.mutate(confirmRestore.id)
+    }
+  }
+
+  const confirmDeleteAction = () => {
+    if (confirmDelete) {
+      permanentDeleteMutation.mutate(confirmDelete.id)
     }
   }
 
@@ -269,6 +283,30 @@ export default function ArchivePage() {
           </div>
         </div>
       </div>
+
+      {/* Restore Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!confirmRestore}
+        onClose={() => setConfirmRestore(null)}
+        onConfirm={confirmRestoreAction}
+        title="Restore Requirement"
+        message={`Are you sure you want to restore "${confirmRestore?.requirementId || confirmRestore?.title}"? It will be moved back to the active requirements list.`}
+        confirmText="Restore"
+        cancelText="Cancel"
+        variant="info"
+      />
+
+      {/* Permanent Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={confirmDeleteAction}
+        title="Permanently Delete"
+        message={`Are you sure you want to permanently delete "${confirmDelete?.requirementId || confirmDelete?.title}"? This action cannot be undone and all data will be lost forever.`}
+        confirmText="Delete Forever"
+        cancelText="Cancel"
+        variant="danger"
+      />
     </div>
   )
 }

@@ -65,17 +65,17 @@ router.patch('/:projectId/:requirementId/component', updateRequirementComponent)
 
 // Requirement Soft Delete & Archive
 router.post(
-  '/:projectId/requirements/:requirementId/restore',
+  '/:projectId/:requirementId/restore',
   restoreRequirement
 )
 
 router.delete(
-  '/:projectId/requirements/:requirementId/permanent',
+  '/:projectId/:requirementId/permanent',
   permanentDeleteRequirement
 )
 
 router.get(
-  '/:projectId/requirements/archive/recently-deleted',
+  '/:projectId/archive/recently-deleted',
   getRecentlyDeletedRequirements
 )
 

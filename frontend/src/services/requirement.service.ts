@@ -38,7 +38,7 @@ export const requirementService = {
   },
 
   async getRecentlyDeletedRequirements(projectId: string): Promise<ApiResponse<Requirement[]>> {
-    return apiClient.get<Requirement[]>(`/requirements/${projectId}/requirements/archive/recently-deleted`)
+    return apiClient.get<Requirement[]>(`/requirements/${projectId}/archive/recently-deleted`)
   },
 
   async lockRequirement(projectId: string, requirementId: string): Promise<ApiResponse<Requirement>> {
