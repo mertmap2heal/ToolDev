@@ -297,9 +297,9 @@ export default function RequirementsPage() {
   })
 
   const deleteRequirementMutation = useMutation({
-    mutationFn: ({ requirementId, reason }: { requirementId: string; reason?: string }) => {
+    mutationFn: ({ requirementId, reason, childrenToDelete }: { requirementId: string; reason?: string; childrenToDelete?: string[] }) => {
       if (!projectId) throw new Error('Project ID required')
-      return requirementService.deleteRequirement(projectId, requirementId, reason)
+      return requirementService.deleteRequirement(projectId, requirementId, reason, childrenToDelete)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
@@ -1396,9 +1396,16 @@ export default function RequirementsPage() {
       })
       return
     }
-    const hasChildren = requirements.some((r) => r.parentId === req.id)
-    const linkedFunctionsCount = functions.filter((f) => f.sourceReqId === req.id).length
-    const linkedItemsCount = LINKAGE_V1 ? links.filter((l: any) => l.sourceType === 'requirement' && l.sourceId === req.id).length : 0
+
+
+    // Ensure linked elements are loaded for the modal
+    if (!requirementData.has(req.id)) {
+      setRequirementData((prev) => {
+        const newMap = new Map(prev)
+        newMap.set(req.id, getLinkedElements(req.id))
+        return newMap
+      })
+    }
 
     // Always show modal to allow entering a reason
     setDeleteConfirmation(req)
@@ -1418,9 +1425,9 @@ export default function RequirementsPage() {
   }
 
 
-  const handleConfirmDelete = (reason?: string) => {
+  const handleConfirmDelete = (reason?: string, childrenToDelete?: string[]) => {
     if (deleteConfirmation) {
-      deleteRequirementMutation.mutate({ requirementId: deleteConfirmation.id, reason })
+      deleteRequirementMutation.mutate({ requirementId: deleteConfirmation.id, reason, childrenToDelete })
     }
   }
 
@@ -2077,8 +2084,12 @@ export default function RequirementsPage() {
               isOpen={!!deleteConfirmation}
               requirement={deleteConfirmation}
               hasChildren={requirements.some((r) => r.parentId === deleteConfirmation.id)}
+              children={requirementData.get(deleteConfirmation.id)?.children || []}
               linkedFunctionsCount={LINKAGE_V1 ? undefined : functions.filter((f) => f.sourceReqId === deleteConfirmation.id).length}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               linkedItemsCount={LINKAGE_V1 ? links.filter((l: any) => l.sourceType === 'requirement' && l.sourceId === deleteConfirmation.id).length : undefined}
+              linkedIssues={requirementData.get(deleteConfirmation.id)?.linkedIssues || []}
+              linkedChangeRequests={requirementData.get(deleteConfirmation.id)?.linkedChangeRequests || []}
               onConfirm={handleConfirmDelete}
               onCancel={() => setDeleteConfirmation(null)}
               isDeleting={deleteRequirementMutation.isPending}

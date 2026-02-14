@@ -120,7 +120,7 @@ async function checkCircularReference(
     }
     visited.add(currentParentId)
 
-    const parent = await prisma.requirement.findUnique({
+    const parent: { parentId: string | null } | null = await prisma.requirement.findUnique({
       where: { id: currentParentId },
       select: { parentId: true },
     })
@@ -1184,10 +1184,38 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
     // Check if requirement has children (must not allow soft delete if children exist, or handle cascading?
     // Current rule from analysis: "This requirement has child requirements that must be deleted or reassigned first."
     // We maintain this strict check for now to avoid orphaned children in active view.
+
+    // Handle children based on user selection
     if (requirement.children.length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: `Cannot delete requirement: it has ${requirement.children.length} child requirement(s). Please delete or reassign children first.`,
+      const childrenToDelete = req.body.childrenToDelete || [] // IDs of children to delete
+
+      // 1. Soft delete selected children
+      if (childrenToDelete.length > 0) {
+        await prisma.requirement.updateMany({
+          where: {
+            id: { in: childrenToDelete },
+            parentId: requirement.id
+          },
+          data: {
+            deletedAt: new Date(),
+            deletedById: req.userId,
+            deleteReason: 'Cascade delete from parent',
+          }
+        })
+      }
+
+      // 2. Reparent remaining children (parentId = null)
+      // These are children that exist but were NOT selected for deletion
+      await prisma.requirement.updateMany({
+        where: {
+          parentId: requirement.id,
+          id: { notIn: childrenToDelete } // Ensure we don't reparent what we just deleted (though deleted ones still have parentId, so maybe safer to do this first or explicitly?)
+          // UpdateMany ignores soft-deleted if we don't filter them? No, prisma updates all.
+          // Safe approach: Reparent everything NOT in the delete list.
+        },
+        data: {
+          parentId: null
+        }
       })
     }
 
@@ -1200,6 +1228,11 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
         deleteReason: req.body.reason || null,
       },
     })
+
+    // Log children actions if any
+    if (requirement.children.length > 0) {
+      // We can log this but for now main log is enough
+    }
 
     await linkageAuditService.log({
       projectId,
