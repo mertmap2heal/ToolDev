@@ -249,6 +249,11 @@ model Requirement {
   verificationDate   DateTime?
   verificationNotes  String?
   linkedMocCode      Int?
+
+  // Premium / Extended Fields
+  thresholdValue     String? // for performance requirements
+  objectiveValue     String? // for performance requirements
+  customAttributes   Json?   // key-value pairs for extendable properties
   
   // Locking mechanism
   isLocked           Boolean   @default(false)

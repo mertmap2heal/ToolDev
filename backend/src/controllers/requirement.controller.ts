@@ -28,6 +28,9 @@ const MEANINGFUL_FIELDS = [
   'assumptions',
   'assumptions',
   'linkedMocCode',
+  'thresholdValue',
+  'objectiveValue',
+  'customAttributes',
   'isLocked', // Added for completeness, though handled separately
   'lockedByUserId',
   'lockedAt'
@@ -575,6 +578,9 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
       lifecycleId,
       statusId,
       componentId,
+      thresholdValue,
+      objectiveValue,
+      customAttributes,
     } = req.body
 
     if (!title) {
@@ -666,6 +672,9 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
         componentId: componentId || null,
         lifecycleId: lifecycleId || null,
         statusId: statusId || null,
+        thresholdValue: thresholdValue || null,
+        objectiveValue: objectiveValue || null,
+        customAttributes: customAttributes || null,
       },
       include: {
         parent: {
@@ -834,6 +843,9 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       lifecycleId,
       statusId,
       componentId,
+      thresholdValue,
+      objectiveValue,
+      customAttributes,
     } = req.body
 
     // Find the requirement
@@ -982,6 +994,9 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       lifecycleId: lifecycleId !== undefined ? lifecycleId : undefined,
       statusId: statusId !== undefined ? statusId : undefined,
       componentId: componentId !== undefined ? (componentId || null) : undefined,
+      thresholdValue: thresholdValue !== undefined ? thresholdValue : undefined,
+      objectiveValue: objectiveValue !== undefined ? objectiveValue : undefined,
+      customAttributes: customAttributes !== undefined ? customAttributes : undefined,
     }
 
     // When statusId changes: validate lifecycle gates, set statusChangedAt/statusChangedBy
@@ -1068,6 +1083,9 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
     if (rationale !== undefined) changedFields.push('rationale')
     if (assumptions !== undefined) changedFields.push('assumptions')
     if (linkedMocCode !== undefined) changedFields.push('linkedMocCode')
+    if (thresholdValue !== undefined) changedFields.push('thresholdValue')
+    if (objectiveValue !== undefined) changedFields.push('objectiveValue')
+    if (customAttributes !== undefined) changedFields.push('customAttributes')
     if (finalRequirementId !== undefined && finalRequirementId !== requirement.requirementId) {
       changedFields.push('requirementId')
     }

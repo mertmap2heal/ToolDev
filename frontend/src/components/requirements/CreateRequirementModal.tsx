@@ -186,6 +186,12 @@ export default function CreateRequirementModal({
   const [sourceDocumentInput, setSourceDocumentInput] = useState('')
   const [linkRationale, setLinkRationale] = useState('')
 
+  // Premium Fields
+  const [thresholdValue, setThresholdValue] = useState('')
+  const [objectiveValue, setObjectiveValue] = useState('')
+  const [customAttributeKey, setCustomAttributeKey] = useState('')
+  const [customAttributeValue, setCustomAttributeValue] = useState('')
+
   const queryClient = useQueryClient()
   const { statuses } = useStatusDefinitionsStore()
   const { lifecycles } = useLifecycleStore()
@@ -469,6 +475,9 @@ export default function CreateRequirementModal({
       verificationDate: undefined,
       verificationNotes: undefined,
       linkedMocCode: '',
+      thresholdValue: '',
+      objectiveValue: '',
+      customAttributes: {},
     })
     setErrors({})
     setCustomRequirementType('')
@@ -483,6 +492,11 @@ export default function CreateRequirementModal({
     setQuickLinksHazards([])
     setQuickLinksRisks([])
     setQuickLinksLabels({})
+    setThresholdValue('')
+    setObjectiveValue('')
+    setCustomAttributeKey('')
+    setCustomAttributeValue('')
+    setLinkRationale('')
   }
 
   const handleAddTag = () => {
@@ -584,6 +598,26 @@ export default function CreateRequirementModal({
     }
   }
 
+  const handleAddCustomAttribute = () => {
+    if (!customAttributeKey.trim() || !customAttributeValue.trim()) return
+    const currentAttrs = formData.customAttributes || {}
+    setFormData((prev) => ({
+      ...prev,
+      customAttributes: { ...currentAttrs, [customAttributeKey.trim()]: customAttributeValue.trim() },
+    }))
+    setCustomAttributeKey('')
+    setCustomAttributeValue('')
+  }
+
+  const handleRemoveCustomAttribute = (key: string) => {
+    const currentAttrs = { ...(formData.customAttributes || {}) }
+    delete currentAttrs[key]
+    setFormData((prev) => ({
+      ...prev,
+      customAttributes: currentAttrs,
+    }))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -620,6 +654,10 @@ export default function CreateRequirementModal({
       relatedDocuments: formData.relatedDocuments && formData.relatedDocuments.length > 0 ? formData.relatedDocuments : undefined,
       lifecycleId: applicableLifecycle?.lifecycleId,
       statusId: applicableLifecycle?.defaultStatusId,
+      thresholdValue: formData.requirementType === 'performance' ? thresholdValue : undefined,
+      objectiveValue: formData.requirementType === 'performance' ? objectiveValue : undefined,
+      customAttributes: formData.customAttributes,
+      rationale: linkRationale || formData.rationale,
     }
     if (LIFECYCLE_V1 && applicableLifecycle) {
       submitData.lifecycleId = applicableLifecycle.lifecycleId
@@ -1311,6 +1349,43 @@ export default function CreateRequirementModal({
                       className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
                     />
                   </div>
+
+                  {/* KPPs Section (Premium) */}
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-6">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <Activity size={16} className="text-blue-500" />
+                      Key Performance Parameters (KPP)
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 text-left uppercase">
+                          Threshold Value
+                        </label>
+                        <input
+                          type="text"
+                          value={thresholdValue}
+                          onChange={(e) => setThresholdValue(e.target.value)}
+                          placeholder="Minimum acceptable"
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 text-left uppercase">
+                          Objective Value
+                        </label>
+                        <input
+                          type="text"
+                          value={objectiveValue}
+                          onChange={(e) => setObjectiveValue(e.target.value)}
+                          placeholder="Desired target"
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-left">
+                      Define quantitative performance targets for verification.
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
@@ -1434,7 +1509,7 @@ export default function CreateRequirementModal({
             {activeTab === 'properties' && (
               <div className="space-y-6">
                 {/* Tags */}
-                <div>
+                <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
                     Tags
                   </label>
@@ -1479,6 +1554,60 @@ export default function CreateRequirementModal({
                       ))}
                     </div>
                   )}
+                </div>
+
+                {/* Custom Attributes (Premium) */}
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-6">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <Layers size={16} className="text-blue-500" />
+                    Custom Attributes
+                  </h3>
+                  <div className="flex gap-2 mb-4">
+                    <input
+                      type="text"
+                      value={customAttributeKey}
+                      onChange={(e) => setCustomAttributeKey(e.target.value)}
+                      placeholder="Property name (e.g. Weight)"
+                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                    <input
+                      type="text"
+                      value={customAttributeValue}
+                      onChange={(e) => setCustomAttributeValue(e.target.value)}
+                      placeholder="Value"
+                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddCustomAttribute}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+
+                  {formData.customAttributes && Object.keys(formData.customAttributes).length > 0 && (
+                    <div className="space-y-2">
+                      {Object.entries(formData.customAttributes).map(([key, value]) => (
+                        <div key={key} className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 text-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-gray-700 dark:text-gray-300">{key}:</span>
+                            <span className="text-gray-600 dark:text-gray-400">{String(value)}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCustomAttribute(key)}
+                            className="text-gray-400 hover:text-red-500"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-left">
+                    Add project-specific metadata or extended requirement properties.
+                  </p>
                 </div>
               </div>
             )}

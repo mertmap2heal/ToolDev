@@ -37,6 +37,11 @@ export interface Requirement {
   verificationNotes?: string | null
   linkedMocCode?: number | null
 
+  // Premium / Extended Fields
+  thresholdValue?: string | null
+  objectiveValue?: string | null
+  customAttributes?: Record<string, any> | null
+
   // Locking
   isLocked: boolean
   lockedByUserId?: string | null
@@ -549,6 +554,11 @@ export interface CreateRequirementDto {
   rationale?: string
   assumptions?: string
   linkedMocCode?: string
+
+  // Premium / Extended Fields
+  thresholdValue?: string
+  objectiveValue?: string
+  customAttributes?: Record<string, any>
   dependencies?: string[]
   conflicts?: string[]
   stakeholders?: string[]
@@ -583,6 +593,11 @@ export interface UpdateRequirementDto {
   complexity?: ComplexityLevel
   rationale?: string
   assumptions?: string
+
+  // Premium / Extended Fields
+  thresholdValue?: string
+  objectiveValue?: string
+  customAttributes?: Record<string, any>
   dependencies?: string[]
   conflicts?: string[]
   stakeholders?: string[]
