@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { X, Plus, Trash2, ChevronDown, ChevronRight, Layers, FileText, Link as LinkIcon, Tag, Activity, FileCheck, Shield, Target, GitBranch, CheckCircle2, AlertTriangle, ClipboardCheck, BarChart3, Info } from 'lucide-react'
+import { X, Plus, Trash2, ChevronDown, ChevronRight, Layers, FileText, Link as LinkIcon, Tag, Activity, FileCheck, Shield, Target, GitBranch, CheckCircle2, AlertTriangle, ClipboardCheck, BarChart3, Info, ArrowRight } from 'lucide-react'
 import clsx from 'clsx'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { requirementService } from '../../services/requirement.service'
@@ -1790,74 +1790,103 @@ export default function CreateRequirementModal({
                         </select>
                       </div>
 
-                      {/* Step 2: Multi-select target requirements */}
+                      {/* Step 2: Rationale (Optional) */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase">
+                          Relationship Rationale <span className="text-gray-400 normal-case">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={relationshipRationale}
+                          onChange={(e) => setRelationshipRationale(e.target.value)}
+                          placeholder="Why is this relationship established?"
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                        />
+                      </div>
+
+                      {/* Step 3: Search & Auto-Add Target Requirements */}
                       <QuickLinkSelector
                         label={`Target Requirements (${selectedRelationshipType.replace(/_/g, ' ')})`}
                         projectId={projectId}
                         adapter={requirementAdapter}
-                        selectedIds={quickLinksRequirements}
-                        selectedLabels={quickLinksLabels}
+                        selectedIds={[]} // Don't show tags, add directly to list
+                        selectedLabels={{}}
                         onToggle={(id, label) => {
-                          setQuickLinksRequirements(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
-                          setQuickLinksLabels(prev => { const next = { ...prev }; if (quickLinksRequirements.includes(id)) delete next[id]; else next[id] = label; return next })
+                          // Check if already linked
+                          if (traceLinks.some(l => l.targetId === id && l.linkType === selectedRelationshipType)) {
+                            return
+                          }
+                          // Add directly
+                          const newLink = {
+                            targetId: id,
+                            targetType: 'requirement',
+                            linkType: selectedRelationshipType,
+                            rationale: relationshipRationale,
+                            targetDisplayId: label || id.slice(0, 8),
+                          }
+                          setTraceLinks(prev => [...prev, newLink])
+                          // Optional: Clear rationale after add? Keeping it might be useful for batch adding with same rationale.
                         }}
                       />
-
-                      {/* Step 3: Rationale + add all */}
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase">
-                          Relationship Rationale
-                        </label>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={relationshipRationale}
-                            onChange={(e) => setRelationshipRationale(e.target.value)}
-                            placeholder="Why is this relationship established?"
-                            className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                          />
-                          <button
-                            type="button"
-                            onClick={handleBatchAddTraceLinks}
-                            disabled={quickLinksRequirements.length === 0}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 flex items-center gap-1 text-sm whitespace-nowrap"
-                          >
-                            <Plus size={16} />
-                            Add {quickLinksRequirements.length > 0 ? `(${quickLinksRequirements.length})` : ''}
-                          </button>
-                        </div>
-                      </div>
                       {traceLinks.length > 0 && (
-                        <div className="space-y-2 mt-2">
+                        <div className="space-y-3 mt-4">
+                          <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                            Pending Relationships ({traceLinks.length})
+                          </h4>
                           {traceLinks.map((link, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-2 bg-purple-50/50 dark:bg-purple-900/10 rounded border border-purple-100 dark:border-purple-900/30 text-sm">
-                              <div className="flex flex-col">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-bold text-purple-700 dark:text-purple-400 uppercase text-[10px]">
-                                    {link.linkType.replace(/_/g, ' ')}
-                                  </span>
-                                  <span className="text-gray-700 dark:text-gray-300">
-                                    {link.targetDisplayId}
-                                  </span>
+                            <div key={idx} className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border border-purple-100 dark:border-purple-900/30 shadow-sm hover:border-purple-300 dark:hover:border-purple-700 transition-colors group">
+                              <div className="flex items-center gap-3 flex-1 overflow-hidden">
+                                {/* Source (Implicit) */}
+                                <div className="flex flex-col items-center min-w-[60px] opacity-70">
+                                  <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-1">
+                                    <FileText size={14} className="text-gray-500" />
+                                  </div>
+                                  <span className="text-[10px] text-gray-500 font-medium">This Req</span>
                                 </div>
-                                {link.rationale && (
-                                  <span className="text-xs text-gray-500 dark:text-gray-400 italic">
-                                    "{link.rationale}"
-                                  </span>
-                                )}
+
+                                {/* Connection Line */}
+                                <div className="flex-1 flex items-center justify-center relative px-2">
+                                  <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                                    <div className="w-full border-t border-purple-200 dark:border-purple-800"></div>
+                                  </div>
+                                  <div className="relative flex justify-center">
+                                    <span className="bg-white dark:bg-gray-800 px-2 text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-tight">
+                                      {link.linkType.replace(/_/g, ' ')}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Target */}
+                                <div className="flex flex-col min-w-[120px] max-w-[200px]">
+                                  <div className="flex items-center gap-1.5 mb-0.5">
+                                    <LinkIcon size={12} className="text-purple-500" />
+                                    <span className="text-xs font-bold text-gray-900 dark:text-white truncate" title={link.targetDisplayId}>
+                                      {link.targetDisplayId}
+                                    </span>
+                                  </div>
+                                  {link.rationale ? (
+                                    <span className="text-[10px] text-gray-500 dark:text-gray-400 italic truncate" title={link.rationale}>
+                                      "{link.rationale}"
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-gray-400 dark:text-gray-600">No rationale</span>
+                                  )}
+                                </div>
                               </div>
+
                               <button
                                 type="button"
                                 onClick={() => handleRemoveTraceLink(link.targetId, link.linkType)}
-                                className="text-gray-400 hover:text-red-500"
+                                className="ml-3 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                                title="Remove link"
                               >
-                                <X size={14} />
+                                <X size={16} />
                               </button>
                             </div>
                           ))}
                         </div>
                       )}
-                      <p className="text-xs text-gray-500 dark:text-gray-400 text-left">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 text-left mt-2">
                         Define formal semantic links to other requirements for full lifecycle traceability.
                       </p>
                     </div>
