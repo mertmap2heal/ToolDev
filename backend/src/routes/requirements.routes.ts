@@ -32,6 +32,14 @@ const router = Router()
 
 router.use(authenticateToken)
 
+// Custom Requirement Types - MUST be defined before /:projectId/:requirementId
+router.get('/:projectId/custom-types', getCustomRequirementTypes)
+router.post('/:projectId/custom-types', addCustomRequirementType)
+router.delete('/:projectId/custom-types/:typeId', deleteCustomRequirementType)
+
+// Migration endpoint
+router.post('/:projectId/migrate-category-to-type', migrateCategoryToRequirementType)
+
 router.get('/:projectId', getRequirements)
 router.get('/:projectId/audit', getAuditEvents)
 router.get('/:projectId/:requirementId', getRequirement)
@@ -51,10 +59,7 @@ router.post('/:projectId/bulk-import', bulkImportRequirements)
 router.post('/:projectId/:requirementId/comments', createRequirementComment)
 router.delete('/:projectId/comments/:commentId', deleteRequirementComment)
 
-// Custom Requirement Types
-router.get('/:projectId/custom-types', getCustomRequirementTypes)
-router.post('/:projectId/custom-types', addCustomRequirementType)
-router.delete('/:projectId/custom-types/:typeId', deleteCustomRequirementType)
+// Custom Requirement Types (Moved to top)
 
 // Migration endpoint
 router.post('/:projectId/migrate-category-to-type', migrateCategoryToRequirementType)

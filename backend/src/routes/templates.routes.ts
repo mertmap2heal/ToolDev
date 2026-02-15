@@ -16,4 +16,12 @@ router.get('/', async (req, res) => {
   })
 })
 
+router.get('/:projectId', async (req, res) => {
+  res.json({
+    success: true,
+    data: [],
+    message: 'Requirement templates functionality coming soon',
+  })
+})
+
 export default router
