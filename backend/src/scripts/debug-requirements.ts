@@ -11,7 +11,9 @@ async function main() {
             requirementId: true,
             projectId: true,
             title: true,
-            status: true
+            status: true,
+            component: { select: { name: true } },
+            parent: { select: { requirementId: true, title: true } }
         }
     })
 
@@ -24,12 +26,14 @@ async function main() {
             acc[req.projectId] = acc[req.projectId] || []
             acc[req.projectId].push(req)
             return acc
-        }, {} as Record<string, typeof requirements>)
+        }, {} as any)
 
         for (const [projectId, reqs] of Object.entries(byProject)) {
             console.log(`\nProject: ${projectId}`)
-            reqs.forEach(r => {
-                console.log(`  - [${r.requirementId}] ${r.title} (Status: ${r.status})`)
+            reqs.forEach((r: any) => {
+                const loc = r.component ? `[Component: ${r.component.name}]` : '[No Component]'
+                const parent = r.parent ? `[Parent: ${r.parent.requirementId}]` : '[Top Level]'
+                console.log(`  - [${r.requirementId}] ${r.title} ${loc} ${parent}`)
             })
 
             // Calculate what the generation logic would produce

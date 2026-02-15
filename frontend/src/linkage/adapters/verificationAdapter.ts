@@ -5,24 +5,28 @@ async function fetchVerificationEntities(projectId: string): Promise<EntitySumma
   const results: EntitySummary[] = []
   try {
     const [plansRes, casesRes] = await Promise.all([
-      apiClient.get<any[]>(`/verification/test-plans/${projectId}`).catch(() => ({ success: false })),
-      apiClient.get<any[]>(`/verification/test-cases/${projectId}`).catch(() => ({ success: false })),
+      apiClient.get<any[]>(`/verification/test-plans/${projectId}`),
+      apiClient.get<any[]>(`/verification/test-cases/${projectId}`),
     ])
     const plans = Array.isArray((plansRes as any)?.data) ? (plansRes as any).data : []
     const cases = Array.isArray((casesRes as any)?.data) ? (casesRes as any).data : []
+
     plans.forEach((p: any) => {
       if (p?.id) results.push({ id: p.id, type: 'test_plan', label: p.name || p.title || p.id })
     })
     cases.forEach((c: any) => {
       if (c?.id) results.push({ id: c.id, type: 'test_case', label: c.name || c.title || c.id })
     })
-  } catch {
+  } catch (error) {
+    console.error('Verification Adapter Error:', error)
     // Mock fallback when API not available
     results.push(
-      { id: 'mock-tp-1', type: 'test_plan', label: 'System Verification Plan' },
-      { id: 'mock-tc-1', type: 'test_case', label: 'Unit Test Case 1' }
+      { id: 'mock-tp-1', type: 'test_plan', label: 'System Verification Plan (Fallback)' },
+      { id: 'mock-tc-1', type: 'test_case', label: 'Unit Test Case 1 (Fallback)' }
     )
   }
+
+  console.log('Verification Adapter: Returning', results)
   return results
 }
 

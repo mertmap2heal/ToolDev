@@ -227,27 +227,52 @@ export const traceabilityService = {
       uniqueCrLinks.set(key, l)
     })
 
+    // 4. For standard links (Req <-> Req, Req <-> Function), fetch Entity details to populate titles
+    // Collect IDs of requirements involved in links
+    const reqIdsToFetch = new Set<string>()
+    links.forEach(l => {
+      if (l.sourceType === 'requirement') reqIdsToFetch.add(l.sourceId)
+      if (l.targetType === 'requirement') reqIdsToFetch.add(l.targetId)
+    })
+
+    // Fetch titles
+    const reqDetails = await prisma.requirement.findMany({
+      where: { id: { in: Array.from(reqIdsToFetch) } },
+      select: { id: true, title: true, requirementId: true } // Minimal fetch
+    })
+
+    const reqMap = new Map(reqDetails.map(r => [r.id, r]))
+
     const allLinks = [...links, ...issueLinksDirect, ...issueLinksInverse, ...Array.from(uniqueCrLinks.values())]
 
-    return allLinks.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((link) => ({
-      id: link.id,
-      projectId: link.projectId,
-      sourceType: link.sourceType as any,
-      sourceId: link.sourceId,
-      targetType: link.targetType as any,
-      targetId: link.targetId,
-      linkType: link.linkType as any,
-      direction: link.direction || undefined,
-      rationale: link.rationale || undefined,
-      confidence: link.confidence || undefined,
-      isAuto: link.isAuto,
-      isSuspect: link.isSuspect || false,
-      lastChecked: link.lastChecked?.toISOString(),
-      createdAt: link.createdAt.toISOString(),
-      targetTitle: link.targetTitle, // Added
-      targetDescription: link.targetDescription, // Added
-      targetDisplayId: link.targetDisplayId // Added
-    }))
+    return allLinks.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((link) => {
+      const isReqSource = link.sourceType === 'requirement'
+      const isReqTarget = link.targetType === 'requirement'
+
+      const sReq = isReqSource ? reqMap.get(link.sourceId) : null
+      const tReq = isReqTarget ? reqMap.get(link.targetId) : null
+
+      return {
+        id: link.id,
+        projectId: link.projectId,
+        sourceType: link.sourceType as any,
+        sourceId: link.sourceId,
+        targetType: link.targetType as any,
+        targetId: link.targetId,
+        linkType: link.linkType as any,
+        direction: link.direction || undefined,
+        rationale: link.rationale || undefined,
+        confidence: link.confidence || undefined,
+        isAuto: link.isAuto,
+        isSuspect: link.isSuspect || false,
+        lastChecked: link.lastChecked?.toISOString(),
+        createdAt: link.createdAt.toISOString(),
+        targetTitle: link.targetTitle || (tReq ? tReq.title : undefined),
+        targetDisplayId: link.targetDisplayId || (tReq ? (tReq.requirementId || tReq.id.substring(0, 8)) : undefined),
+        sourceTitle: sReq ? sReq.title : undefined,
+        sourceDisplayId: sReq ? (sReq.requirementId || sReq.id.substring(0, 8)) : undefined
+      }
+    })
   },
 
   async getSuspectLinks(

@@ -5,11 +5,12 @@ const prisma = new PrismaClient()
 
 async function main() {
     const projects = await prisma.project.findMany()
-    console.log('Projects:')
+    console.log(`Found ${projects.length} projects`)
+
     for (const p of projects) {
-        console.log(`- ID: ${p.id}, Name: ${p.name}, Description: ${p.description}`)
-        const reqCount = await prisma.requirement.count({ where: { projectId: p.id } })
-        console.log(`  Requirements count: ${reqCount}`)
+        const testCases = await prisma.verTestCase.count({ where: { projectId: p.id } })
+        const testPlans = await prisma.verTestPlan.count({ where: { projectId: p.id } })
+        console.log(`Project ${p.id} (${p.name}): ${testCases} Test Cases, ${testPlans} Test Plans`)
     }
 }
 

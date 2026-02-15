@@ -1295,6 +1295,23 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
                 console.error(`Failed to delete linked change request ${item.id}:`, e)
               })
             }
+          } else if (item.type === 'function') {
+            // Hard delete function
+            await prisma.systemFunction.delete({ where: { id: item.id } }).catch(e => {
+              console.error(`Failed to delete linked function ${item.id}:`, e)
+            })
+          } else if (item.type === 'requirement' || item.type === 'hazard' || item.type === 'risk') {
+            // Soft delete linked requirement (or hazard/risk if they are requirements)
+            await prisma.requirement.update({
+              where: { id: item.id },
+              data: {
+                deletedAt: new Date(),
+                deletedById: req.userId,
+                deleteReason: `Deleted as linked item of ${requirement.requirementId || requirement.title}`,
+              }
+            }).catch(e => {
+              console.error(`Failed to delete linked requirement/item ${item.id}:`, e)
+            })
           }
         } catch (error) {
           console.error(`Error processing linked item deletion for ${item.type}:${item.id}`, error)

@@ -24,6 +24,7 @@ import { certificationAdapter } from '../../linkage/adapters/certificationAdapte
 import { complianceAdapter } from '../../linkage/adapters/complianceAdapter'
 import { taskAdapter } from '../../linkage/adapters/taskAdapter'
 import { issueAdapter } from '../../linkage/adapters/issueAdapter'
+import { requirementAdapter } from '../../linkage/adapters/requirementAdapter'
 import { authService } from '../../services/auth.service'
 import type { CreateRequirementDto, Requirement, RequirementType } from 'shared/types/engineering.types'
 import type { ComponentTreeNode } from 'shared/types/project.types'
@@ -221,7 +222,7 @@ export default function CreateRequirementModal({
   const [sourceDocumentInput, setSourceDocumentInput] = useState('')
   const [linkRationale, setLinkRationale] = useState('')
   const [traceLinks, setTraceLinks] = useState<{ targetId: string; targetType: string; linkType: string; rationale: string; targetDisplayId?: string }[]>([])
-  const [selectedRelationshipTarget, setSelectedRelationshipTarget] = useState('')
+  const [quickLinksRequirements, setQuickLinksRequirements] = useState<string[]>([])
   const [selectedRelationshipType, setSelectedRelationshipType] = useState('derives_from')
   const [relationshipRationale, setRelationshipRationale] = useState('')
 
@@ -540,6 +541,7 @@ export default function CreateRequirementModal({
     setQuickLinksTasks([])
     setQuickLinksCertification([])
     setQuickLinksCompliance([])
+    setQuickLinksRequirements([])
     setTraceSection({ origin: true, relationships: false, allocation: true, verification: true, safety: false, certification: false })
     setThresholdValue('')
     setObjectiveValue('')
@@ -547,7 +549,6 @@ export default function CreateRequirementModal({
     setCustomAttributeValue('')
     setLinkRationale('')
     setTraceLinks([])
-    setSelectedRelationshipTarget('')
     setRelationshipRationale('')
   }
 
@@ -585,21 +586,22 @@ export default function CreateRequirementModal({
     }))
   }
 
-  const handleAddTraceLink = () => {
-    if (!selectedRelationshipTarget) return
-    const target = availableParents.find(p => p.id === selectedRelationshipTarget)
-    if (!target) return
-
-    const newLink = {
-      targetId: selectedRelationshipTarget,
-      targetType: 'requirement',
-      linkType: selectedRelationshipType,
-      rationale: relationshipRationale,
-      targetDisplayId: target.requirementId || target.id.substring(0, 8)
-    }
-
-    setTraceLinks(prev => [...prev, newLink])
-    setSelectedRelationshipTarget('')
+  const handleBatchAddTraceLinks = () => {
+    if (quickLinksRequirements.length === 0) return
+    const newLinks = quickLinksRequirements
+      .filter(id => !traceLinks.some(l => l.targetId === id && l.linkType === selectedRelationshipType))
+      .map(id => {
+        const label = quickLinksLabels[id] || id.slice(0, 8)
+        return {
+          targetId: id,
+          targetType: 'requirement',
+          linkType: selectedRelationshipType,
+          rationale: relationshipRationale,
+          targetDisplayId: label,
+        }
+      })
+    setTraceLinks(prev => [...prev, ...newLinks])
+    setQuickLinksRequirements([])
     setRelationshipRationale('')
   }
 
@@ -1756,57 +1758,52 @@ export default function CreateRequirementModal({
                   </button>
                   {traceSection.relationships && (
                     <div className="p-4 space-y-4 border-t border-gray-200 dark:border-gray-700">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase">
-                            Target Requirement
-                          </label>
-                          <select
-                            value={selectedRelationshipTarget}
-                            onChange={(e) => setSelectedRelationshipTarget(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                          >
-                            <option value="">Select requirement...</option>
-                            {availableParents
-                              .filter(req => !traceLinks.some(l => l.targetId === req.id && l.linkType === selectedRelationshipType))
-                              .map((req) => (
-                              <option key={req.id} value={req.id}>
-                                [{req.requirementId || 'No ID'}] {req.title.substring(0, 40)}{req.title.length > 40 ? '...' : ''}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase">
-                            Relationship Type
-                          </label>
-                          <select
-                            value={selectedRelationshipType}
-                            onChange={(e) => setSelectedRelationshipType(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                          >
-                            <optgroup label="Derivation & Refinement">
-                              <option value="derives_from">Derives From</option>
-                              <option value="derived_to">Derived To</option>
-                              <option value="refines">Refines</option>
-                              <option value="refined_by">Refined By</option>
-                            </optgroup>
-                            <optgroup label="Dependency & Constraint">
-                              <option value="depends_on">Depends On</option>
-                              <option value="required_by">Required By</option>
-                              <option value="constrains">Constrains</option>
-                              <option value="constrained_by">Constrained By</option>
-                            </optgroup>
-                            <optgroup label="Logic & Support">
-                              <option value="conflicts_with">Conflicts With</option>
-                              <option value="supports">Supports</option>
-                              <option value="supported_by">Supported By</option>
-                              <option value="supersedes">Supersedes</option>
-                              <option value="superseded_by">Superseded By</option>
-                            </optgroup>
-                          </select>
-                        </div>
+                      {/* Step 1: Choose Relationship Type */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase">
+                          Relationship Type
+                        </label>
+                        <select
+                          value={selectedRelationshipType}
+                          onChange={(e) => setSelectedRelationshipType(e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                        >
+                          <optgroup label="Derivation & Refinement">
+                            <option value="derives_from">Derives From</option>
+                            <option value="derived_to">Derived To</option>
+                            <option value="refines">Refines</option>
+                            <option value="refined_by">Refined By</option>
+                          </optgroup>
+                          <optgroup label="Dependency & Constraint">
+                            <option value="depends_on">Depends On</option>
+                            <option value="required_by">Required By</option>
+                            <option value="constrains">Constrains</option>
+                            <option value="constrained_by">Constrained By</option>
+                          </optgroup>
+                          <optgroup label="Logic & Support">
+                            <option value="conflicts_with">Conflicts With</option>
+                            <option value="supports">Supports</option>
+                            <option value="supported_by">Supported By</option>
+                            <option value="supersedes">Supersedes</option>
+                            <option value="superseded_by">Superseded By</option>
+                          </optgroup>
+                        </select>
                       </div>
+
+                      {/* Step 2: Multi-select target requirements */}
+                      <QuickLinkSelector
+                        label={`Target Requirements (${selectedRelationshipType.replace(/_/g, ' ')})`}
+                        projectId={projectId}
+                        adapter={requirementAdapter}
+                        selectedIds={quickLinksRequirements}
+                        selectedLabels={quickLinksLabels}
+                        onToggle={(id, label) => {
+                          setQuickLinksRequirements(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+                          setQuickLinksLabels(prev => { const next = { ...prev }; if (quickLinksRequirements.includes(id)) delete next[id]; else next[id] = label; return next })
+                        }}
+                      />
+
+                      {/* Step 3: Rationale + add all */}
                       <div>
                         <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase">
                           Relationship Rationale
@@ -1821,11 +1818,12 @@ export default function CreateRequirementModal({
                           />
                           <button
                             type="button"
-                            onClick={handleAddTraceLink}
-                            disabled={!selectedRelationshipTarget}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50"
+                            onClick={handleBatchAddTraceLinks}
+                            disabled={quickLinksRequirements.length === 0}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 flex items-center gap-1 text-sm whitespace-nowrap"
                           >
                             <Plus size={16} />
+                            Add {quickLinksRequirements.length > 0 ? `(${quickLinksRequirements.length})` : ''}
                           </button>
                         </div>
                       </div>
@@ -1971,7 +1969,7 @@ export default function CreateRequirementModal({
                 </div>
 
                 {/* ═══════ Section 4: Verification & Validation (DO-178C Table A-7) ═══════ */}
-                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg">
                   <button
                     type="button"
                     onClick={() => setTraceSection(prev => ({ ...prev, verification: !prev.verification }))}

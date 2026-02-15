@@ -49,15 +49,16 @@ export default function DeleteRequirementModal({
       const initialLinkedItems = new Set<string>()
       linkedIssues.forEach(i => initialLinkedItems.add(`issue:${i.id}`))
       linkedChangeRequests.forEach(cr => initialLinkedItems.add(`change_request:${cr.id}`))
+      linkedFunctions.forEach(f => initialLinkedItems.add(`function:${f.id}`))
       // Generic items
       linkedItems.forEach(item => {
-        if (item.targetType === 'issue' || item.targetType === 'change_request') {
+        if (['issue', 'change_request', 'requirement', 'hazard', 'risk'].includes(item.targetType)) {
           initialLinkedItems.add(`${item.targetType}:${item.targetId}`)
         }
       })
       setLinkedItemsToDelete(initialLinkedItems)
     }
-  }, [children, linkedIssues, linkedChangeRequests, linkedItems, isOpen])
+  }, [children, linkedIssues, linkedChangeRequests, linkedFunctions, linkedItems, isOpen])
 
   const toggleChild = (childId: string) => {
     setChildrenToDelete(prev => {
@@ -178,19 +179,30 @@ export default function DeleteRequirementModal({
                       Functions ({linkedFunctions.length})
                     </p>
                     <div className="bg-white/50 dark:bg-gray-900/30 rounded-lg border border-yellow-200 dark:border-yellow-800 divide-y divide-yellow-100 dark:divide-yellow-900/30 overflow-hidden">
-                      {linkedFunctions.map(func => (
-                        <div key={func.id} className="flex items-center p-3">
-                          <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full flex-shrink-0 mr-3" />
-                          <div className="flex flex-col min-w-0 text-left">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono text-xs font-semibold text-yellow-900 dark:text-yellow-200 bg-yellow-100 dark:bg-yellow-900/40 px-1 rounded">
-                                {func.functionId || 'FUNC'}
-                              </span>
-                              <span className="text-sm text-yellow-800 dark:text-yellow-300 truncate">{func.name}</span>
+                      {linkedFunctions.map(func => {
+                        const key = `function:${func.id}`
+                        return (
+                          <label key={func.id} className="flex items-center p-3 hover:bg-yellow-100/50 dark:hover:bg-yellow-900/10 cursor-pointer transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={linkedItemsToDelete.has(key)}
+                              onChange={() => toggleLinkedItem('function', func.id)}
+                              className="w-4 h-4 text-red-600 border-yellow-400 rounded focus:ring-red-500 dark:border-yellow-600 dark:bg-gray-700"
+                            />
+                            <div className="ml-3 flex-1 min-w-0 flex flex-col">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs font-semibold text-yellow-900 dark:text-yellow-200 bg-yellow-100 dark:bg-yellow-900/40 px-1 rounded">
+                                  {func.functionId || 'FUNC'}
+                                </span>
+                                <span className="text-sm font-medium text-yellow-900 dark:text-yellow-100 truncate">{func.name}</span>
+                              </div>
+                              <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-0.5">
+                                {linkedItemsToDelete.has(key) ? 'Will be deleted' : 'Link will be removed'}
+                              </p>
                             </div>
-                          </div>
-                        </div>
-                      ))}
+                          </label>
+                        )
+                      })}
                     </div>
                   </div>
                 )}
@@ -270,8 +282,8 @@ export default function DeleteRequirementModal({
                         const typeLabel = item.targetType.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
                         const displayId = item.displayId || item.targetId.substring(0, 8)
 
-                        // Only allow checking for issue and change_request, others are just info/links
-                        const canDelete = item.targetType === 'issue' || item.targetType === 'change_request'
+                        // Only allow checking for issue, change_request, requirement, hazard, risk
+                        const canDelete = ['issue', 'change_request', 'requirement', 'hazard', 'risk'].includes(item.targetType)
                         const key = `${item.targetType}:${item.targetId}`;
 
                         // Determine URL

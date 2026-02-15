@@ -21,7 +21,10 @@ function traceLinkToLink(tl: TraceLink): Link {
     isSuspect: tl.isSuspect,
     targetTitle: tl.targetTitle,
     targetDescription: tl.targetDescription,
-    targetDisplayId: tl.targetDisplayId
+    targetDisplayId: tl.targetDisplayId,
+    sourceTitle: tl.sourceTitle,
+    sourceDescription: tl.sourceDescription,
+    sourceDisplayId: tl.sourceDisplayId
   }
 }
 

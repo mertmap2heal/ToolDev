@@ -47,6 +47,9 @@ export interface TraceLink {
   targetTitle?: string
   targetDescription?: string
   targetDisplayId?: string
+  sourceTitle?: string
+  sourceDescription?: string
+  sourceDisplayId?: string
 }
 
 export interface CreateTraceLinkDto {

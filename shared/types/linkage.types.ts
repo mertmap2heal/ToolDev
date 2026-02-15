@@ -72,21 +72,21 @@ export type LinkStatus = 'active' | 'suspect' | 'removed'
 export interface Link {
   id: string
   projectId: string
-  sourceType: string
+  sourceType: ArtifactType
   sourceId: string
-  targetType: string
+  targetType: ArtifactType
   targetId: string
-  linkType: string
-  status: LinkStatus
+  linkType: TraceLinkType
+  status: 'active' | 'suspect'
   rationale?: string
-  createdBy?: string
   createdAt: string
-  updatedBy?: string
-  updatedAt?: string
   isSuspect?: boolean
   targetTitle?: string
   targetDescription?: string
   targetDisplayId?: string
+  sourceTitle?: string
+  sourceDescription?: string
+  sourceDisplayId?: string
 }
 
 export interface EntitySummary {
