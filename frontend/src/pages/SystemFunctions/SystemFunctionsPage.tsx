@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { ChevronDown, ChevronRight, Plus, AlertCircle, Trash2, Edit2, Filter, ChevronUp, FileText } from 'lucide-react'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
+
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import CreateFunctionModal from '../../components/functions/CreateFunctionModal'
 import DeleteFunctionModal from '../../components/functions/DeleteFunctionModal'
@@ -335,7 +335,7 @@ export default function SystemFunctionsPage() {
 
   return (
     <div className="space-y-6">
-      <ProjectNavigation />
+
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Functions</h2>
         <div className="flex items-center gap-3">
@@ -511,9 +511,8 @@ export default function SystemFunctionsPage() {
                     <>
                       <tr
                         key={func.id}
-                        className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer ${
-                          isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                        }`}
+                        className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                          }`}
                         onClick={() => toggleRow(func.id)}
                       >
                         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
@@ -545,11 +544,11 @@ export default function SystemFunctionsPage() {
                               </div>
                             ) : (
                               <p className={isExpanded ? "whitespace-pre-wrap break-words" : "truncate"} title={func.description}>
-                                {isExpanded 
+                                {isExpanded
                                   ? func.description
-                                  : (func.description.length > 100 
-                                      ? `${func.description.substring(0, 100)}...` 
-                                      : func.description)}
+                                  : (func.description.length > 100
+                                    ? `${func.description.substring(0, 100)}...`
+                                    : func.description)}
                               </p>
                             )
                           ) : (
@@ -599,242 +598,242 @@ export default function SystemFunctionsPage() {
                           </div>
                         </td>
                       </tr>
-                    {isExpanded && (
-                      <tr key={`${func.id}-expanded`} className="bg-gray-50 dark:bg-gray-900/50">
-                        <td colSpan={9} className="px-4 py-4">
-                          <div className="space-y-4">
-                            {/* Show editable fields only when in edit mode (pen clicked) */}
-                            {isEditing ? (
-                              <>
-                                {/* Description */}
-                                <div>
-                                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Description
-                                  </label>
-                                  <textarea
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                                    rows={3}
-                                    value={displayData.description || ''}
-                                    placeholder="<Description of the Function>"
-                                    onClick={(e) => e.stopPropagation()}
-                                    onChange={(e) => handleFieldChange(func.id, 'description', e.target.value)}
-                                  />
-                                </div>
-
-                                {/* Status */}
-                                <div>
-                                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Status of the Function
-                                  </label>
-                                  <select
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={displayData.status || 'draft'}
-                                    onClick={(e) => e.stopPropagation()}
-                                    onChange={(e) => handleFieldChange(func.id, 'status', e.target.value)}
-                                  >
-                                    <option value="draft">Draft</option>
-                                    <option value="work-in-progress">Work in Progress</option>
-                                    <option value="in-review">In Review</option>
-                                    <option value="done">Done</option>
-                                  </select>
-                                </div>
-
-                                {/* Owner */}
-                                <div>
-                                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Owner of the Function
-                                  </label>
-                                  <input
-                                    type="text"
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    placeholder="Enter owner name"
-                                    value={displayData.owner || ''}
-                                    onClick={(e) => e.stopPropagation()}
-                                    onChange={(e) => handleFieldChange(func.id, 'owner', e.target.value)}
-                                  />
-                                </div>
-
-                                {/* Verification Method */}
-                                <div>
-                                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Verification Method
-                                  </label>
-                                  <input
-                                    type="text"
-                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    placeholder="Enter verification method"
-                                    value={displayData.verificationMethod || ''}
-                                    onClick={(e) => e.stopPropagation()}
-                                    onChange={(e) => handleFieldChange(func.id, 'verificationMethod', e.target.value)}
-                                  />
-                                </div>
-
-                                {/* Save/Cancel buttons */}
-                                <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleCancelEdit(func.id)
-                                    }}
-                                    className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
-                                    disabled={updateFunctionMutation.isPending}
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleSaveFunction(func)
-                                    }}
-                                    disabled={updateFunctionMutation.isPending}
-                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  >
-                                    {updateFunctionMutation.isPending ? 'Saving...' : 'Save Changes'}
-                                  </button>
-                                </div>
-                              </>
-                            ) : (
-                              /* Show linked elements only when arrow clicked (view mode) */
-                              linkedData && (
-                                <div>
-                                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Linked Function Elements
-                                  </label>
-                                  <div className="space-y-2">
-                                    {linkedData.linkedRequirements.length > 0 && (
-                                      <>
-                                        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
-                                          Requirements
-                                        </div>
-                                        {linkedData.linkedRequirements.map((req) => (
-                                          <div
-                                            key={req.id}
-                                            className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
-                                          >
-                                            <span>•</span>
-                                            <span>
-                                              {req.id}: {req.description}
-                                            </span>
-                                            <button className="text-blue-600 dark:text-blue-400 hover:underline ml-2">
-                                              → See Related/Linked Items
-                                            </button>
-                                          </div>
-                                        ))}
-                                      </>
-                                    )}
-                                    {linkedData.linkedTestCases.length > 0 && (
-                                      <>
-                                        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 mt-3">
-                                          Test Cases
-                                        </div>
-                                        {linkedData.linkedTestCases.map((tc) => (
-                                          <div
-                                            key={tc.id}
-                                            className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
-                                          >
-                                            <span>•</span>
-                                            <span>
-                                              {tc.id}: {tc.description}
-                                            </span>
-                                            <button className="text-blue-600 dark:text-blue-400 hover:underline ml-2">
-                                              → See Related/Linked Items
-                                            </button>
-                                          </div>
-                                        ))}
-                                      </>
-                                    )}
-                                    {linkedData.linkedMilestones.length > 0 && (
-                                      <>
-                                        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 mt-3">
-                                          Milestones
-                                        </div>
-                                        {linkedData.linkedMilestones.map((ms) => (
-                                          <div
-                                            key={ms.id}
-                                            className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
-                                          >
-                                            <span>•</span>
-                                            <span>{ms.id}: {ms.description}</span>
-                                          </div>
-                                        ))}
-                                      </>
-                                    )}
-                                    {linkedData.linkedIssues.length > 0 && (
-                                      <>
-                                        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 mt-3">
-                                          Issues
-                                        </div>
-                                        {linkedData.linkedIssues.map((issue) => (
-                                          <div
-                                            key={issue.id}
-                                            className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
-                                          >
-                                            <span>•</span>
-                                            <span>
-                                              {issue.title}: {issue.description}
-                                            </span>
-                                            <button 
-                                              onClick={(e) => {
-                                                e.stopPropagation()
-                                                if (projectId) {
-                                                  window.location.href = `/projects/${projectId}/issues`
-                                                }
-                                              }}
-                                              className="text-blue-600 dark:text-blue-400 hover:underline ml-2"
-                                            >
-                                              → See Related/Linked Items
-                                            </button>
-                                          </div>
-                                        ))}
-                                      </>
-                                    )}
-                                    {linkedData.linkedChangeRequests.length > 0 && (
-                                      <>
-                                        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 mt-3">
-                                          Change Requests
-                                        </div>
-                                        {linkedData.linkedChangeRequests.map((cr) => (
-                                          <div
-                                            key={cr.id}
-                                            className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
-                                          >
-                                            <span>•</span>
-                                            <span>
-                                              {cr.title}: {cr.description}
-                                            </span>
-                                            <button 
-                                              onClick={(e) => {
-                                                e.stopPropagation()
-                                                if (projectId) {
-                                                  window.location.href = `/projects/${projectId}/change-requests`
-                                                }
-                                              }}
-                                              className="text-blue-600 dark:text-blue-400 hover:underline ml-2"
-                                            >
-                                              → See Related/Linked Items
-                                            </button>
-                                          </div>
-                                        ))}
-                                      </>
-                                    )}
-                                    {linkedData.linkedRequirements.length === 0 &&
-                                      linkedData.linkedTestCases.length === 0 &&
-                                      linkedData.linkedMilestones.length === 0 &&
-                                      linkedData.linkedIssues.length === 0 &&
-                                      linkedData.linkedChangeRequests.length === 0 && (
-                                        <div className="text-sm text-gray-500 dark:text-gray-400 italic">
-                                          No linked elements found.
-                                        </div>
-                                      )}
+                      {isExpanded && (
+                        <tr key={`${func.id}-expanded`} className="bg-gray-50 dark:bg-gray-900/50">
+                          <td colSpan={9} className="px-4 py-4">
+                            <div className="space-y-4">
+                              {/* Show editable fields only when in edit mode (pen clicked) */}
+                              {isEditing ? (
+                                <>
+                                  {/* Description */}
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                      Description
+                                    </label>
+                                    <textarea
+                                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                                      rows={3}
+                                      value={displayData.description || ''}
+                                      placeholder="<Description of the Function>"
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) => handleFieldChange(func.id, 'description', e.target.value)}
+                                    />
                                   </div>
-                                </div>
-                              )
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </>
+
+                                  {/* Status */}
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                      Status of the Function
+                                    </label>
+                                    <select
+                                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      value={displayData.status || 'draft'}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) => handleFieldChange(func.id, 'status', e.target.value)}
+                                    >
+                                      <option value="draft">Draft</option>
+                                      <option value="work-in-progress">Work in Progress</option>
+                                      <option value="in-review">In Review</option>
+                                      <option value="done">Done</option>
+                                    </select>
+                                  </div>
+
+                                  {/* Owner */}
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                      Owner of the Function
+                                    </label>
+                                    <input
+                                      type="text"
+                                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      placeholder="Enter owner name"
+                                      value={displayData.owner || ''}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) => handleFieldChange(func.id, 'owner', e.target.value)}
+                                    />
+                                  </div>
+
+                                  {/* Verification Method */}
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                      Verification Method
+                                    </label>
+                                    <input
+                                      type="text"
+                                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      placeholder="Enter verification method"
+                                      value={displayData.verificationMethod || ''}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) => handleFieldChange(func.id, 'verificationMethod', e.target.value)}
+                                    />
+                                  </div>
+
+                                  {/* Save/Cancel buttons */}
+                                  <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleCancelEdit(func.id)
+                                      }}
+                                      className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                                      disabled={updateFunctionMutation.isPending}
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleSaveFunction(func)
+                                      }}
+                                      disabled={updateFunctionMutation.isPending}
+                                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      {updateFunctionMutation.isPending ? 'Saving...' : 'Save Changes'}
+                                    </button>
+                                  </div>
+                                </>
+                              ) : (
+                                /* Show linked elements only when arrow clicked (view mode) */
+                                linkedData && (
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                      Linked Function Elements
+                                    </label>
+                                    <div className="space-y-2">
+                                      {linkedData.linkedRequirements.length > 0 && (
+                                        <>
+                                          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
+                                            Requirements
+                                          </div>
+                                          {linkedData.linkedRequirements.map((req) => (
+                                            <div
+                                              key={req.id}
+                                              className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
+                                            >
+                                              <span>•</span>
+                                              <span>
+                                                {req.id}: {req.description}
+                                              </span>
+                                              <button className="text-blue-600 dark:text-blue-400 hover:underline ml-2">
+                                                → See Related/Linked Items
+                                              </button>
+                                            </div>
+                                          ))}
+                                        </>
+                                      )}
+                                      {linkedData.linkedTestCases.length > 0 && (
+                                        <>
+                                          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 mt-3">
+                                            Test Cases
+                                          </div>
+                                          {linkedData.linkedTestCases.map((tc) => (
+                                            <div
+                                              key={tc.id}
+                                              className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
+                                            >
+                                              <span>•</span>
+                                              <span>
+                                                {tc.id}: {tc.description}
+                                              </span>
+                                              <button className="text-blue-600 dark:text-blue-400 hover:underline ml-2">
+                                                → See Related/Linked Items
+                                              </button>
+                                            </div>
+                                          ))}
+                                        </>
+                                      )}
+                                      {linkedData.linkedMilestones.length > 0 && (
+                                        <>
+                                          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 mt-3">
+                                            Milestones
+                                          </div>
+                                          {linkedData.linkedMilestones.map((ms) => (
+                                            <div
+                                              key={ms.id}
+                                              className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
+                                            >
+                                              <span>•</span>
+                                              <span>{ms.id}: {ms.description}</span>
+                                            </div>
+                                          ))}
+                                        </>
+                                      )}
+                                      {linkedData.linkedIssues.length > 0 && (
+                                        <>
+                                          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 mt-3">
+                                            Issues
+                                          </div>
+                                          {linkedData.linkedIssues.map((issue) => (
+                                            <div
+                                              key={issue.id}
+                                              className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
+                                            >
+                                              <span>•</span>
+                                              <span>
+                                                {issue.title}: {issue.description}
+                                              </span>
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation()
+                                                  if (projectId) {
+                                                    window.location.href = `/projects/${projectId}/issues`
+                                                  }
+                                                }}
+                                                className="text-blue-600 dark:text-blue-400 hover:underline ml-2"
+                                              >
+                                                → See Related/Linked Items
+                                              </button>
+                                            </div>
+                                          ))}
+                                        </>
+                                      )}
+                                      {linkedData.linkedChangeRequests.length > 0 && (
+                                        <>
+                                          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 mt-3">
+                                            Change Requests
+                                          </div>
+                                          {linkedData.linkedChangeRequests.map((cr) => (
+                                            <div
+                                              key={cr.id}
+                                              className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
+                                            >
+                                              <span>•</span>
+                                              <span>
+                                                {cr.title}: {cr.description}
+                                              </span>
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation()
+                                                  if (projectId) {
+                                                    window.location.href = `/projects/${projectId}/change-requests`
+                                                  }
+                                                }}
+                                                className="text-blue-600 dark:text-blue-400 hover:underline ml-2"
+                                              >
+                                                → See Related/Linked Items
+                                              </button>
+                                            </div>
+                                          ))}
+                                        </>
+                                      )}
+                                      {linkedData.linkedRequirements.length === 0 &&
+                                        linkedData.linkedTestCases.length === 0 &&
+                                        linkedData.linkedMilestones.length === 0 &&
+                                        linkedData.linkedIssues.length === 0 &&
+                                        linkedData.linkedChangeRequests.length === 0 && (
+                                          <div className="text-sm text-gray-500 dark:text-gray-400 italic">
+                                            No linked elements found.
+                                          </div>
+                                        )}
+                                    </div>
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   )
                 })
               )}

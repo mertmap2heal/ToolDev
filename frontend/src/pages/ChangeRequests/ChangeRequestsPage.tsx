@@ -8,7 +8,7 @@ import ChangeRequestDetailDrawer from '../../components/changeRequests/ChangeReq
 import { format } from 'date-fns'
 import clsx from 'clsx'
 import type { ChangeRequest } from 'shared/types/engineering.types'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
+
 import RequirementDetailDrawer from '../../components/requirements/RequirementDetailDrawer'
 import { requirementService } from '../../services/requirement.service'
 import type { Requirement } from 'shared/types/engineering.types'
@@ -200,7 +200,7 @@ export default function ChangeRequestsPage() {
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col">
       <div className="flex-shrink-0 pr-6">
-        <ProjectNavigation />
+
       </div>
 
       <div className="flex flex-1 min-h-0">

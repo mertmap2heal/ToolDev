@@ -12,7 +12,7 @@ import {
   Upload as ImportIcon,
 } from 'lucide-react'
 import clsx from 'clsx'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
+
 import type {
   Document,
   Template,
@@ -348,7 +348,7 @@ export default function DocumentationPage() {
   if (openDocumentId && openDocument) {
     return (
       <div className="space-y-6">
-        <ProjectNavigation />
+
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Documentation</h2>
           <button
@@ -402,7 +402,7 @@ export default function DocumentationPage() {
   if (openPackId && openPack) {
     return (
       <div className="space-y-6">
-        <ProjectNavigation />
+
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Documentation</h2>
           <button
@@ -428,7 +428,7 @@ export default function DocumentationPage() {
   if (openTemplateId !== null) {
     return (
       <div className="space-y-6">
-        <ProjectNavigation />
+
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Documentation</h2>
         </div>
@@ -444,7 +444,7 @@ export default function DocumentationPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       <div className="flex-shrink-0 space-y-4">
-        <ProjectNavigation />
+
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Documentation</h2>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, useLocation, useSearchParams, Link } from 'react-router-dom'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
+
 import TaskNavigation from '../../components/tasks/TaskNavigation'
 import TaskListView from '../../components/tasks/TaskListView'
 import TaskBoardView from '../../components/tasks/TaskBoardView'
@@ -18,7 +18,7 @@ export default function TasksPage() {
   // Extract projectId from either route param or query param
   const projectId = routeProjectId || searchParams.get('projectId') || undefined
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
-  
+
   // Determine view type from URL path
   let viewType: ViewType = 'list'
   if (location.pathname.includes('/board')) {
@@ -52,7 +52,7 @@ export default function TasksPage() {
     return (
       <div className="flex flex-col min-h-0">
         <div className="flex-shrink-0 space-y-4">
-          <ProjectNavigation />
+
 
           <nav className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
             <Link to="/" className="hover:text-gray-900 dark:hover:text-white transition-colors">

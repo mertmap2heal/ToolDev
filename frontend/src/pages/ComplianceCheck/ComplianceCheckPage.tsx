@@ -13,7 +13,7 @@ import {
   X,
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
+
 import { complianceService, CHECK_TYPES } from '../../services/compliance.service'
 import { format } from 'date-fns'
 import clsx from 'clsx'
@@ -122,7 +122,7 @@ export default function ComplianceCheckPage() {
 
   return (
     <div className="space-y-6">
-      <ProjectNavigation />
+
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Compliance Check</h1>
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">

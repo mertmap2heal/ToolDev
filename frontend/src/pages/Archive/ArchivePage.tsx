@@ -4,7 +4,7 @@ import { Search, Filter, ChevronDown, ChevronUp, Archive, RotateCcw, Trash2, Ale
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format, formatDistanceToNow } from 'date-fns'
 import clsx from 'clsx'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
+
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import ConfirmDialog from '../../components/common/ConfirmDialog'
 import { requirementService } from '../../services/requirement.service'
@@ -102,7 +102,7 @@ export default function ArchivePage() {
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col">
       <div className="flex-shrink-0 pr-6">
-        <ProjectNavigation />
+
       </div>
 
       <div className="flex-1 overflow-y-auto pr-6 pb-6">

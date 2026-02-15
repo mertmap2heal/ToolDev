@@ -7,7 +7,7 @@ import {
   FileCode,
   Play,
 } from 'lucide-react'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
+
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import { VerificationDrawerProvider, useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
 import TestPlanDetailDrawer from '../../components/verification/TestPlanDetailDrawer'
@@ -42,7 +42,7 @@ function VerificationLayoutInner() {
       {/* Left column: nav, title, tabs, content — same as Requirements */}
       <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden pr-6 gap-6">
         <div className="flex-shrink-0">
-          <ProjectNavigation />
+
         </div>
         <div className="flex-shrink-0 flex items-center justify-between">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Verification</h2>

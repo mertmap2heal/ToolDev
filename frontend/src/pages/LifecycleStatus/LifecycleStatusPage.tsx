@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Search, Filter, ChevronDown, ChevronUp, Activity } from 'lucide-react'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
+
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 
 export default function LifecycleStatusPage() {
@@ -11,8 +11,8 @@ export default function LifecycleStatusPage() {
 
   return (
     <div className="space-y-6">
-      <ProjectNavigation />
-      
+
+
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
         {/* Header */}
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">

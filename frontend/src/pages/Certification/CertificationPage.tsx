@@ -19,7 +19,7 @@ import {
   Mail,
 } from 'lucide-react'
 import clsx from 'clsx'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
+
 import { CertificationStoreProvider, useCertificationStore } from '../../modules/certification/store'
 import { canCreateFinding, canStartReview, canGeneratePackage } from '../../modules/certification/certificationPermissions'
 import ContextSelectorCard from '../../modules/certification/ContextSelectorCard'
@@ -131,7 +131,7 @@ function CertificationContent() {
   return (
     <div className="flex flex-col min-h-0">
       <div className="flex-shrink-0 space-y-4">
-        <ProjectNavigation />
+
 
         <nav className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
           <Link to="/" className="hover:text-gray-900 dark:hover:text-white transition-colors">

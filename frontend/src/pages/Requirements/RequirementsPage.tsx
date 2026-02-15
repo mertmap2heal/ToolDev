@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
+
 import CreateRequirementModal from '../../components/requirements/CreateRequirementModal'
 import EditRequirementModal from '../../components/requirements/EditRequirementModal'
 import DeleteRequirementModal from '../../components/requirements/DeleteRequirementModal'
@@ -1478,7 +1478,7 @@ export default function RequirementsPage() {
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col">
       <div className="flex-shrink-0 pr-6">
-        <ProjectNavigation />
+
       </div>
       <div className="flex flex-1 min-h-0">
         {/* PBS Tree Panel */}

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import { format } from 'date-fns'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
+
 import {
   MOCK_INTERFACES,
   type Interface,
@@ -266,7 +266,7 @@ export default function InterfaceManagementPage() {
   return (
     <div className="flex h-[calc(100vh-4rem)]">
       <div className="flex-1 overflow-y-auto space-y-6 pr-6">
-        <ProjectNavigation />
+
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Interfaces</h1>

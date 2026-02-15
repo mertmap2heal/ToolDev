@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router-dom'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
+
 
 /**
  * Layout for the Product Breakdown Structure section.
@@ -8,7 +8,7 @@ import ProjectNavigation from '../../components/projects/ProjectNavigation'
 export default function PBSLayoutPage() {
   return (
     <div className="space-y-6">
-      <ProjectNavigation />
+
       <Outlet />
     </div>
   )

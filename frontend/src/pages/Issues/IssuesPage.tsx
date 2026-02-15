@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { Search, Filter, AlertCircle, X, Edit2, Trash2, Plus, ChevronDown, ChevronUp, FileText } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
+
 import { issueService } from '../../services/issue.service'
 import { functionService } from '../../services/function.service'
 import DeleteConfirmationModal from '../../components/projects/DeleteConfirmationModal'
@@ -199,7 +199,7 @@ export default function IssuesPage() {
 
   return (
     <div className="space-y-6">
-      <ProjectNavigation />
+
 
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Issues</h2>

@@ -15,7 +15,7 @@ import {
   X,
 } from 'lucide-react'
 import clsx from 'clsx'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
+
 import { CMStoreProvider, useCMStore } from '../../modules/configuration-management/store'
 import OverviewTab from '../../modules/configuration-management/OverviewTab'
 import ConfigurationItemsTab from '../../modules/configuration-management/ConfigurationItemsTab'
@@ -99,7 +99,7 @@ function ConfigurationManagementContent() {
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       <div className="flex-shrink-0 space-y-4">
-        <ProjectNavigation />
+
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">

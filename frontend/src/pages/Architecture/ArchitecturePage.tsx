@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Search, X, Filter, ChevronDown, ChevronUp } from 'lucide-react'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
+
 
 export default function ArchitecturePage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -10,7 +10,7 @@ export default function ArchitecturePage() {
 
   return (
     <div className="space-y-6">
-      <ProjectNavigation />
+
       <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Architecture</h2>
 
       {/* Search */}

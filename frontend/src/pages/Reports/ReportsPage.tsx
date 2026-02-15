@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Search, X, Filter, ChevronDown, ChevronUp } from 'lucide-react'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
+
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 
 export default function ReportsPage() {
@@ -11,7 +11,7 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <ProjectNavigation />
+
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Reports</h2>
         {projectId && <SafetyLinkPanel variant="report-pack" ctaOnly />}

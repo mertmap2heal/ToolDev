@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { Bell, Search, HelpCircle, Settings, Grid, GraduationCap, LogOut, Loader2, Shield } from 'lucide-react'
+import { Bell, Search, HelpCircle, Settings, Grid, GraduationCap, LogOut, Loader2, Shield, Menu } from 'lucide-react'
 import Logo from '../Logo'
 import Breadcrumbs from './Breadcrumbs'
 import { authService } from '../../services/auth.service'
@@ -9,6 +9,42 @@ import { useAuthStore } from '../../store/authStore'
 import { notificationService } from '../../services/notification.service'
 import { projectService } from '../../services/project.service'
 import type { Notification } from 'shared/types/project.types'
+import { CATEGORIES, type ModuleCategory } from '../../config/ModuleConfiguration'
+import HeaderMegaMenu from '../navigation/HeaderMegaMenu'
+import QuickAccessBar from '../navigation/QuickAccessBar'
+import clsx from 'clsx'
+
+// Custom hook since usehooks-ts might not be available
+function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T) => void] {
+  const [storedValue, setStoredValue] = useState<T>(() => {
+    if (typeof window === 'undefined') {
+      return initialValue
+    }
+    try {
+      const item = window.localStorage.getItem(key)
+      return item ? JSON.parse(item) : initialValue
+    } catch (error) {
+      console.log(error)
+      return initialValue
+    }
+  })
+
+  const setValue = (value: T) => {
+    try {
+      const valueToStore =
+        value instanceof Function ? value(storedValue) : value
+      setStoredValue(valueToStore)
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(key, JSON.stringify(valueToStore))
+      }
+    } catch (error) {
+      console.log(error)
+    }
+  }
+  return [storedValue, setValue]
+}
+
+const DEFAULT_PINNED_IDS = ['requirements', 'issues', 'change-requests', 'verification']
 
 export default function Header() {
   const [dropdownOpen, setDropdownOpen] = useState(false)
@@ -16,11 +52,44 @@ export default function Header() {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const bellRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
+  const location = useLocation()
+  const { projectId } = useParams<{ projectId: string }>()
   const queryClient = useQueryClient()
   const { user, logout } = useAuthStore()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [notificationsLoading, setNotificationsLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+
+  // Navigation State
+  const [activeCategory, setActiveCategory] = useLocalStorage<ModuleCategory>('mega-menu-category', 'system')
+  const [pinnedIds, setPinnedIds] = useLocalStorage<string[]>('mega-menu-pinned', DEFAULT_PINNED_IDS)
+  const [isMegaMenuOpen, setIsMegaMenuOpen] = useState(false)
+
+  const pinnedSet = new Set(pinnedIds)
+
+  const handleTogglePin = (moduleId: string) => {
+    const newSet = new Set(pinnedSet)
+    if (newSet.has(moduleId)) {
+      newSet.delete(moduleId)
+    } else {
+      newSet.add(moduleId)
+    }
+    setPinnedIds(Array.from(newSet))
+  }
+
+  const handleCategoryClick = (categoryId: ModuleCategory) => {
+    if (activeCategory === categoryId && isMegaMenuOpen) {
+      setIsMegaMenuOpen(false)
+    } else {
+      setActiveCategory(categoryId)
+      setIsMegaMenuOpen(true)
+    }
+  }
+
+  // Close mega menu on route change
+  useEffect(() => {
+    setIsMegaMenuOpen(false)
+  }, [location.pathname])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -84,23 +153,46 @@ export default function Header() {
   }
 
   const userInitial = user?.name?.charAt(0)?.toUpperCase() || 'M'
+  const isProjectContext = !!projectId
+
   return (
-    <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-      <div className="px-6 py-1">
-        <div className="flex items-center justify-between">
-          {/* Left: Logo/Branding - click navigates to main menu */}
-          <Link to="/" className="flex items-center gap-4 hover:opacity-90 transition-opacity">
-            <Logo size="sm" showText={false} />
-          </Link>
+    <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 relative z-30">
+      <div className="px-6 py-2">
+        <div className="flex items-center justify-between gap-4">
+          {/* Left: Logo + Navigation Categories */}
+          <div className="flex items-center gap-8">
+            <Link to="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity flex-shrink-0">
+              <Logo size="sm" showText={true} />
+            </Link>
+
+            {isProjectContext && (
+              <nav className="hidden md:flex items-center gap-1">
+                {CATEGORIES.map((category) => (
+                  <button
+                    key={category.id}
+                    onClick={() => handleCategoryClick(category.id)}
+                    className={clsx(
+                      'px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
+                      activeCategory === category.id && isMegaMenuOpen
+                        ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200'
+                    )}
+                  >
+                    {category.label}
+                  </button>
+                ))}
+              </nav>
+            )}
+          </div>
 
           {/* Center: Search */}
-          <div className="flex-1 max-w-sm mx-4">
-            <div className="relative">
+          <div className="hidden lg:flex flex-1 max-w-md mx-4">
+            <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
               <input
                 type="text"
                 placeholder="Search"
-                className="w-full pl-10 pr-4 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-10 pr-4 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
               />
               <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-gray-400">
                 Ctrl+K
@@ -109,9 +201,9 @@ export default function Header() {
           </div>
 
           {/* Right: Icons */}
-          <div className="flex items-center gap-2">
-            <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg relative">
-              <HelpCircle size={18} className="text-gray-600 dark:text-gray-400" />
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg relative hidden sm:block">
+              <HelpCircle size={20} className="text-gray-600 dark:text-gray-400" />
             </button>
             <div className="relative" ref={bellRef}>
               <button
@@ -120,7 +212,7 @@ export default function Header() {
                 aria-expanded={bellOpen}
                 aria-label="Notifications"
               >
-                <Bell size={18} className="text-gray-600 dark:text-gray-400" />
+                <Bell size={20} className="text-gray-600 dark:text-gray-400" />
                 {unreadCount > 0 && (
                   <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-medium bg-red-500 text-white rounded-full">
                     {unreadCount > 99 ? '99+' : unreadCount}
@@ -175,26 +267,29 @@ export default function Header() {
                 </div>
               )}
             </div>
-            <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg">
-              <GraduationCap size={18} className="text-gray-600 dark:text-gray-400" />
+
+            <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg hidden sm:block">
+              <Settings size={20} className="text-gray-600 dark:text-gray-400" />
             </button>
-            <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg">
-              <Settings size={18} className="text-gray-600 dark:text-gray-400" />
+            <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg hidden sm:block">
+              <Grid size={20} className="text-gray-600 dark:text-gray-400" />
             </button>
-            <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg">
-              <Grid size={18} className="text-gray-600 dark:text-gray-400" />
-            </button>
+
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center ml-2 cursor-pointer hover:bg-blue-600 transition-colors"
+                className="w-9 h-9 rounded-full bg-blue-500 flex items-center justify-center ml-2 cursor-pointer hover:bg-blue-600 transition-colors shadow-sm"
                 aria-expanded={dropdownOpen}
                 aria-haspopup="true"
               >
                 <span className="text-white font-semibold text-sm">{userInitial}</span>
               </button>
               {dropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 py-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+                <div className="absolute right-0 mt-2 w-48 py-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{user?.name}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
+                  </div>
                   {(user?.role === 'SUPERIOR_ADMIN' || user?.isSuperiorAdmin) && (
                     <>
                       <button
@@ -202,12 +297,11 @@ export default function Header() {
                           navigate('/platform-admin')
                           setDropdownOpen(false)
                         }}
-                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-left"
+                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
                       >
                         <Shield size={16} />
                         Platform Admin
                       </button>
-                      <hr className="border-gray-200 dark:border-gray-700 my-1" />
                     </>
                   )}
                   {user?.isAdmin && (
@@ -217,7 +311,7 @@ export default function Header() {
                           navigate('/admin')
                           setDropdownOpen(false)
                         }}
-                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-left"
+                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
                       >
                         <Shield size={16} />
                         Admin Panel
@@ -227,7 +321,7 @@ export default function Header() {
                   )}
                   <button
                     onClick={handleLogout}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-red-600 dark:text-red-400"
                   >
                     <LogOut size={16} />
                     Logout
@@ -237,11 +331,33 @@ export default function Header() {
             </div>
           </div>
         </div>
+
+        {/* Quick Access Bar (condensed) - visible only in project context */}
+        {isProjectContext && (
+          <QuickAccessBar
+            projectId={projectId}
+            pinnedIds={pinnedSet}
+            onTogglePin={handleTogglePin}
+          />
+        )}
       </div>
-      {/* Breadcrumbs */}
+
+      {/* Breadcrumbs - always visible */}
       <div className="px-6 py-1 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
         <Breadcrumbs />
       </div>
+
+      {/* Mega Menu Dropdown */}
+      <HeaderMegaMenu
+        isOpen={isMegaMenuOpen}
+        onClose={() => setIsMegaMenuOpen(false)}
+        activeCategory={activeCategory}
+        projectId={projectId}
+        pinnedIds={pinnedSet}
+        onTogglePin={handleTogglePin}
+      />
     </header>
   )
 }
+
+
