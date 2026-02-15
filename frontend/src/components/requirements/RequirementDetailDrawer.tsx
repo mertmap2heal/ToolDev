@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Edit2, Trash2, MessageSquare, Paperclip, Tag, ChevronRight, ChevronDown, Link2, FileText, Settings, AlertCircle, Zap, History, ExternalLink, Check, Bell, BellRing, GitPullRequest } from 'lucide-react'
+import { X, Edit2, Trash2, MessageSquare, Paperclip, Tag, ChevronRight, ChevronDown, Link2, FileText, Settings, AlertCircle, Zap, History, ExternalLink, Check, Bell, BellRing, GitPullRequest, Shield, Target, ClipboardCheck, Layers, BookOpen } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { requirementService, type RequirementSubscriptionSnapshot } from '../../services/requirement.service'
@@ -853,14 +853,58 @@ export default function RequirementDetailDrawer({
                           acc[t].push(link)
                           return acc
                         }, {})
-                        return Object.entries(byType).map(([linkType, linkList]) => (
+                        return Object.entries(byType).map(([linkType, linkList]) => {
+                          const linkTypeLabel = (() => {
+                            switch (linkType) {
+                              case 'allocated_to': return 'Allocated To'
+                              case 'mitigates': return 'Mitigates'
+                              case 'verified_by': return 'Verified By'
+                              case 'documented_in': return 'Documented In'
+                              case 'changes_via': return 'Change Requests'
+                              case 'tracked_by': return 'Tracked By'
+                              case 'implemented_by': return 'Implemented By'
+                              case 'cert_objective': return 'Certification Objectives'
+                              case 'complies_with': return 'Complies With'
+                              case 'related_interface': return 'Related Interfaces'
+                              case 'derived_from': return 'Derived From'
+                              case 'derived_to': return 'Derived To'
+                              case 'depends_on': return 'Depends On'
+                              case 'required_by': return 'Required By'
+                              case 'constrains': return 'Constrains'
+                              case 'constrained_by': return 'Constrained By'
+                              case 'conflicts_with': return 'Conflicts With'
+                              case 'supports': return 'Supports'
+                              case 'supported_by': return 'Supported By'
+                              case 'supersedes': return 'Supersedes'
+                              case 'superseded_by': return 'Superseded By'
+                              case 'refines': return 'Refines'
+                              case 'refined_by': return 'Refined By'
+                              case 'related_inverse': return 'Issues'
+                              case 'originates_from': return 'Change Requests'
+                              default: return linkType.replace(/_/g, ' ')
+                            }
+                          })()
+                          const linkTypeIcon = (() => {
+                            switch (linkType) {
+                              case 'allocated_to': return <Target size={16} className="text-green-600 dark:text-green-400" />
+                              case 'mitigates': return <Shield size={16} className="text-red-600 dark:text-red-400" />
+                              case 'verified_by': return <ClipboardCheck size={16} className="text-teal-600 dark:text-teal-400" />
+                              case 'documented_in': return <BookOpen size={16} className="text-sky-600 dark:text-sky-400" />
+                              case 'changes_via': return <GitPullRequest size={16} className="text-purple-600 dark:text-purple-400" />
+                              case 'tracked_by': return <AlertCircle size={16} className="text-orange-600 dark:text-orange-400" />
+                              case 'implemented_by': return <Layers size={16} className="text-indigo-600 dark:text-indigo-400" />
+                              case 'cert_objective': return <Shield size={16} className="text-indigo-600 dark:text-indigo-400" />
+                              case 'complies_with': return <Check size={16} className="text-emerald-600 dark:text-emerald-400" />
+                              case 'related_interface': return <Settings size={16} className="text-cyan-600 dark:text-cyan-400" />
+                              default: return <Link2 size={16} className="text-blue-600 dark:text-blue-400" />
+                            }
+                          })()
+                          return (
                           <div key={linkType}>
                             <div className="flex items-center gap-2 mb-3">
-                              <Link2 size={16} className="text-blue-600 dark:text-blue-400" />
-                              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                {linkType === 'related_inverse' ? 'Issues' :
-                                  linkType === 'originates_from' ? 'Change Requests' :
-                                    linkType.replace(/_/g, ' ')} ({linkList.length})
+                              {linkTypeIcon}
+                              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
+                                {linkTypeLabel} ({linkList.length})
                               </h3>
                             </div>
                             <div className="space-y-2">
@@ -879,7 +923,7 @@ export default function RequirementDetailDrawer({
                                   link.targetId.slice(0, 8)
                                 ) : link.targetId.slice(0, 8);
 
-                                const title = targetItem ? (targetItem.title || targetItem.name) : `${link.targetType} (${link.targetId.slice(0, 8)})`;
+                                const title = targetItem ? (targetItem.title || targetItem.name) : `${link.targetType?.replace(/_/g, ' ')} (${link.targetId.slice(0, 8)})`;
 
                                 const getIcon = () => {
                                   switch (link.targetType) {
@@ -887,9 +931,21 @@ export default function RequirementDetailDrawer({
                                     case 'function': return <Settings size={16} className="text-green-500" />
                                     case 'issue': return <AlertCircle size={16} className="text-orange-500" />
                                     case 'change_request': return <GitPullRequest size={16} className="text-purple-500" />
+                                    case 'pbs_component': return <Target size={16} className="text-green-500" />
+                                    case 'hazard': return <Shield size={16} className="text-red-500" />
+                                    case 'risk': return <Shield size={16} className="text-amber-500" />
+                                    case 'test_case': return <ClipboardCheck size={16} className="text-teal-500" />
+                                    case 'test_plan': return <ClipboardCheck size={16} className="text-teal-600" />
+                                    case 'document': return <BookOpen size={16} className="text-sky-500" />
+                                    case 'interface': return <Settings size={16} className="text-cyan-500" />
+                                    case 'task': return <Layers size={16} className="text-indigo-500" />
+                                    case 'cert_objective': return <Shield size={16} className="text-indigo-500" />
+                                    case 'compliance_rule': return <Check size={16} className="text-emerald-500" />
                                     default: return <Link2 size={16} className="text-gray-500" />
                                   }
                                 }
+
+                                const targetTypeLabel = link.targetType?.replace(/_/g, ' ')
 
                                 const deepLink = buildDeepLink(projectId, { type: link.targetType as any, id: link.targetId })
                                 return (
@@ -905,6 +961,9 @@ export default function RequirementDetailDrawer({
                                         <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
                                           {displayId}
                                         </span>
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 capitalize font-medium">
+                                          {targetTypeLabel}
+                                        </span>
                                         {link.isSuspect && (
                                           <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
                                             <AlertCircle size={10} /> Suspect
@@ -914,6 +973,11 @@ export default function RequirementDetailDrawer({
                                       <div className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                                         {title}
                                       </div>
+                                      {link.rationale && (
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 italic truncate">
+                                          "{link.rationale}"
+                                        </p>
+                                      )}
                                     </div>
                                     <button
                                       type="button"
@@ -928,7 +992,7 @@ export default function RequirementDetailDrawer({
                               })}
                             </div>
                           </div>
-                        ))
+                        )})
                       })()
                     )}
 
