@@ -260,6 +260,37 @@ export default function RequirementDetailDrawer({
     enabled: isOpen && !!projectId,
   })
 
+  const { data: testPlans = [] } = useQuery({
+    queryKey: ['test-plans', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const response = await verificationService.getTestPlans(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: isOpen && !!projectId,
+  })
+
+  const { data: testCases = [] } = useQuery({
+    queryKey: ['test-cases', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const response = await verificationService.getTestCases(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: isOpen && !!projectId,
+  })
+
+  const { data: verificationLinks = [] } = useQuery({
+    queryKey: ['verification-links', projectId, requirement?.id],
+    queryFn: async () => {
+      if (!projectId || !requirement?.id) return []
+      // Fetch links where requirement is the TARGET
+      const response = await linkService.getLinks(projectId, { targetId: requirement.id, targetType: 'requirement' })
+      return response.success && response.data ? response.data : []
+    },
+    enabled: isOpen && !!projectId && !!requirement?.id && LINKAGE_V1,
+  })
+
   const { data: issues = [] } = useQuery({
     queryKey: ['issues', projectId],
     queryFn: async () => {
@@ -405,6 +436,23 @@ export default function RequirementDetailDrawer({
       return newSet
     })
   }
+
+  // Filter verification links
+  const linkedTestPlans = verificationLinks
+    .filter(l => l.sourceType === 'test_plan')
+    .map(l => {
+      const plan: any = testPlans.find((p: any) => p.id === l.sourceId)
+      return { ...l, plan }
+    })
+    .filter(l => l.plan)
+
+  const linkedTestCases = verificationLinks
+    .filter(l => l.sourceType === 'test_case')
+    .map(l => {
+      const testCase: any = testCases.find((tc: any) => tc.id === l.sourceId)
+      return { ...l, testCase }
+    })
+    .filter(l => l.testCase)
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -785,7 +833,7 @@ export default function RequirementDetailDrawer({
               <div className="space-y-6">
                 {LINKAGE_V1 ? (
                   <>
-                    {links.length > 0 ? (
+                    {links.length > 0 && (
                       (() => {
                         const byType = links.reduce<Record<string, typeof links>>((acc, link) => {
                           const t = link.linkType || 'trace'
@@ -870,9 +918,97 @@ export default function RequirementDetailDrawer({
                           </div>
                         ))
                       })()
-                    ) : (
+                    )}
+
+                    {/* Verification Links Section */}
+                    {(linkedTestPlans.length > 0 || linkedTestCases.length > 0) && (
+                      <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700">
+                        <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-4">Verification</h3>
+
+                        {linkedTestPlans.length > 0 && (
+                          <div className="mb-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <FileText size={16} className="text-teal-600 dark:text-teal-400" />
+                              <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Test Plans ({linkedTestPlans.length})</h4>
+                            </div>
+                            <div className="space-y-2">
+                              {linkedTestPlans.map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-teal-500/50 dark:hover:border-teal-500/50 transition-all shadow-sm group"
+                                >
+                                  <div className="mt-1 flex-shrink-0 p-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/20 group-hover:bg-teal-100 dark:group-hover:bg-teal-900/30 transition-colors">
+                                    <FileText size={16} className="text-teal-600 dark:text-teal-400" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                        {item.plan.key || 'PLAN'}
+                                      </span>
+                                    </div>
+                                    <div className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+                                      {item.plan.name}
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(`/verification?tab=test-plans&planId=${item.plan.id}`)}
+                                    className="mt-1 p-2 text-gray-400 dark:text-gray-500 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/40 rounded-lg transition-all"
+                                    title="Open Test Plan"
+                                  >
+                                    <ExternalLink size={16} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {linkedTestCases.length > 0 && (
+                          <div>
+                            <div className="flex items-center gap-2 mb-3">
+                              <Check size={16} className="text-emerald-600 dark:text-emerald-400" />
+                              <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Test Cases ({linkedTestCases.length})</h4>
+                            </div>
+                            <div className="space-y-2">
+                              {linkedTestCases.map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-emerald-500/50 dark:hover:border-emerald-500/50 transition-all shadow-sm group"
+                                >
+                                  <div className="mt-1 flex-shrink-0 p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/30 transition-colors">
+                                    <Check size={16} className="text-emerald-600 dark:text-emerald-400" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                        {item.testCase.key || 'CASE'}
+                                      </span>
+                                    </div>
+                                    <div className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                                      {item.testCase.title}
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(`/verification?tab=test-cases&caseId=${item.testCase.id}`)}
+                                    className="mt-1 p-2 text-gray-400 dark:text-gray-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 rounded-lg transition-all"
+                                    title="Open Test Case"
+                                  >
+                                    <ExternalLink size={16} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {links.length === 0 && linkedTestPlans.length === 0 && linkedTestCases.length === 0 && (
                       <p className="text-sm text-gray-500 dark:text-gray-400">No linked items</p>
                     )}
+
                   </>
                 ) : (
                   <>

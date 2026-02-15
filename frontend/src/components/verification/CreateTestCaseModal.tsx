@@ -1,8 +1,11 @@
 import { useState, useRef } from 'react'
-import { X, Plus, Trash2, GripVertical, ChevronUp, ChevronDown, Upload, File } from 'lucide-react'
+import { X, Plus, Trash2, ChevronUp, ChevronDown, Upload, File, Layers, Link as LinkIcon, CheckSquare, Square, Search } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
+import { requirementService } from '../../services/requirement.service'
+import { functionService } from '../../services/function.service'
 import CustomSectionEditor from './CustomSectionEditor'
+import clsx from 'clsx'
 
 interface CreateTestCaseModalProps {
   isOpen: boolean
@@ -22,6 +25,8 @@ interface Criterion {
 }
 
 export default function CreateTestCaseModal({ isOpen, onClose, projectId }: CreateTestCaseModalProps) {
+  const [activeTab, setActiveTab] = useState<'general' | 'steps' | 'verifies' | 'attachments' | 'custom'>('general')
+
   const [formData, setFormData] = useState({
     key: '',
     title: '',
@@ -32,152 +37,140 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
     linkedMethodId: '',
     ownerUserId: '',
   })
+
   const [steps, setSteps] = useState<Step[]>([{ id: '1', text: '' }])
   const [criteria, setCriteria] = useState<Criterion[]>([])
   const [attachments, setAttachments] = useState<File[]>([])
   const [selectedSetups, setSelectedSetups] = useState<string[]>([])
-  const [sectionOrder, setSectionOrder] = useState<string[]>([
-    'title',
-    'key',
-    'objective',
-    'preconditions',
-    'steps',
-    'expectedResults',
-    'passFailCriteria',
-    'moc',
-    'method',
-    'setups',
-    'owner',
-    'attachments',
-    'custom-sections',
-  ])
   const [customSections, setCustomSections] = useState<Array<{ id: string; title: string; content: string; orderIndex: number }>>([])
-  const [draggedSection, setDraggedSection] = useState<string | null>(null)
+  const [selectedLinks, setSelectedLinks] = useState<{ type: 'requirement' | 'function'; id: string }[]>([])
+  const [linkSearchTerm, setLinkSearchTerm] = useState('')
+
   const [errors, setErrors] = useState<Record<string, string>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const queryClient = useQueryClient()
 
-  // Fetch MoCs
+  // Queries
   const { data: mocs = [] } = useQuery({
     queryKey: ['mocs'],
     queryFn: async () => {
-      const response = await verificationService.getMocs()
-      return response.success && response.data ? response.data : []
+      const res = await verificationService.getMocs()
+      return res.success ? res.data : []
     },
     enabled: isOpen,
   })
 
-  // Fetch Methods
   const { data: methods = [] } = useQuery({
     queryKey: ['methods', projectId],
     queryFn: async () => {
-      const response = await verificationService.getMethods(projectId)
-      return response.success && response.data ? response.data : []
+      const res = await verificationService.getMethods(projectId)
+      return res.success ? res.data : []
     },
-    enabled: isOpen && !!projectId,
+    enabled: isOpen,
   })
 
-  // Fetch Setups
   const { data: setups = [] } = useQuery({
     queryKey: ['setups', projectId],
     queryFn: async () => {
-      const response = await verificationService.getSetups(projectId)
-      return response.success && response.data ? response.data : []
+      const res = await verificationService.getSetups(projectId)
+      return res.success ? res.data : []
     },
-    enabled: isOpen && !!projectId,
+    enabled: isOpen,
+  })
+
+  const { data: requirements = [] } = useQuery({
+    queryKey: ['requirements', projectId],
+    queryFn: async () => {
+      const res = await requirementService.getRequirements(projectId)
+      return res.success ? res.data : []
+    },
+    enabled: isOpen,
+  })
+
+  const { data: functions = [] } = useQuery({
+    queryKey: ['functions', projectId],
+    queryFn: async () => {
+      const res = await functionService.getFunctions(projectId)
+      return res.success ? res.data : []
+    },
+    enabled: isOpen,
+  })
+
+  const verifyTargets = [
+    ...requirements.map((r: any) => ({ ...r, type: 'requirement', label: r.title, identifier: r.requirementId })),
+    ...functions.map((f: any) => ({ ...f, type: 'function', label: f.name, identifier: f.functionId })),
+  ].filter(target => {
+    if (!linkSearchTerm) return true
+    const term = linkSearchTerm.toLowerCase()
+    return (
+      (target.label?.toLowerCase() || '').includes(term) ||
+      (target.identifier?.toLowerCase() || '').includes(term)
+    )
   })
 
   const createTestCaseMutation = useMutation({
-    mutationFn: (data: any) => verificationService.createTestCase(projectId, data),
-    onSuccess: async (response) => {
-      if (response.success && response.data) {
-        const testCaseId = (response.data as { id: string }).id
+    mutationFn: async (data: any) => {
+      // 1. Create Test Case
+      const response = await verificationService.createTestCase(projectId, data)
+      if (!response.success || !response.data) throw new Error(response.error || 'Failed to create test case')
 
-        // Link test setups
-        if (selectedSetups.length > 0) {
-          for (const setupId of selectedSetups) {
-            try {
-              await verificationService.linkSetup(projectId, testCaseId, setupId)
-            } catch (error) {
-              console.error('Failed to link setup:', error)
-            }
-          }
-        }
+      const testCaseId = (response.data as { id: string }).id
 
-        // Upload attachments and create evidence
-        if (attachments.length > 0) {
-          for (const file of attachments) {
-            try {
-              // Convert file to base64
-              const base64 = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader()
-                reader.onload = () => {
-                  const result = reader.result as string
-                  resolve(result)
-                }
-                reader.onerror = reject
-                reader.readAsDataURL(file)
-              })
-
-              // Create evidence record
-              const evidenceResponse = await verificationService.createEvidence(projectId, {
-                evidenceType: 'OTHER',
-                title: file.name,
-                description: `Attachment for test case ${formData.title}`,
-                storageRef: base64,
-              })
-
-              if (evidenceResponse.success && evidenceResponse.data) {
-                // Link evidence to test case
-                await verificationService.linkEvidence(projectId, (evidenceResponse.data as { id: string }).id, {
-                  linkedEntityType: 'TEST_CASE',
-                  linkedEntityId: testCaseId,
-                  relation: 'SUPPORTING',
-                })
-              }
-            } catch (error) {
-              console.error('Failed to upload attachment:', error)
-            }
-          }
-        }
-
-        // Create custom sections
-        if (customSections.length > 0) {
-          for (let i = 0; i < customSections.length; i++) {
-            try {
-              await verificationService.createCustomSection(projectId, testCaseId, {
-                title: customSections[i].title,
-                content: customSections[i].content,
-                orderIndex: i,
-              })
-            } catch (error) {
-              console.error('Failed to create custom section:', error)
-            }
-          }
-        }
-
-        queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
-        queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
-        onClose()
-        resetForm()
-      } else {
-        setErrors({ submit: response.error || 'Failed to create test case' })
+      // 2. Link setups
+      for (const setupId of selectedSetups) {
+        await verificationService.linkSetup(projectId, testCaseId, setupId)
       }
+
+      // 3. Link Verification Elements (Requirements/Functions)
+      for (const link of selectedLinks) {
+        await verificationService.linkTestCaseVerificationElement(projectId, testCaseId, link.type, link.id)
+      }
+
+      // 4. Attachments
+      for (const file of attachments) {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(file)
+        })
+
+        const evidenceRes = await verificationService.createEvidence(projectId, {
+          evidenceType: 'OTHER',
+          title: file.name,
+          description: `Attachment for test case ${formData.title}`,
+          storageRef: base64,
+        })
+
+        if (evidenceRes.success && evidenceRes.data) {
+          await verificationService.linkEvidence(projectId, (evidenceRes.data as { id: string }).id, {
+            linkedEntityType: 'TEST_CASE',
+            linkedEntityId: testCaseId,
+            relation: 'SUPPORTING',
+          })
+        }
+      }
+
+      // 5. Custom Sections
+      for (let i = 0; i < customSections.length; i++) {
+        await verificationService.createCustomSection(projectId, testCaseId, {
+          title: customSections[i].title,
+          content: customSections[i].content,
+          orderIndex: i,
+        })
+      }
+
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
+      onClose()
+      resetForm()
     },
     onError: (error: any) => {
-      console.error('Create test case error:', error)
-      let errorMessage = 'Failed to create test case.'
-
-      if (error?.error) {
-        errorMessage = error.error
-      } else if (error?.message) {
-        errorMessage = error.message
-      } else if (error?.response?.data?.error) {
-        errorMessage = error.response.data.error
-      }
-
-      setErrors({ submit: errorMessage })
+      setErrors({ submit: error.message || 'Failed to create test case' })
     },
   })
 
@@ -197,19 +190,17 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
     setAttachments([])
     setSelectedSetups([])
     setCustomSections([])
+    setSelectedLinks([])
     setErrors({})
+    setActiveTab('general')
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    setErrors({})
 
-    const newErrors: Record<string, string> = {}
     if (!formData.title.trim()) {
-      newErrors.title = 'Title is required'
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors)
+      setErrors({ title: 'Title is required' })
       return
     }
 
@@ -221,30 +212,21 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
       ownerUserId: formData.ownerUserId?.trim() || undefined,
     }
 
-    if (formData.key.trim()) {
-      submitData.key = formData.key.trim()
-    }
+    if (formData.key.trim()) submitData.key = formData.key.trim()
 
-    // Convert steps array to array of strings
+    // Steps
     const stepTexts = steps.filter((s) => s.text.trim()).map((s) => s.text.trim())
-    if (stepTexts.length > 0) {
-      submitData.steps = stepTexts
-    }
+    if (stepTexts.length > 0) submitData.steps = stepTexts
 
-    // Convert criteria to string (comma-separated checked items)
+    // Criteria
     const checkedCriteria = criteria.filter((c) => c.checked && c.text.trim()).map((c) => c.text.trim())
     const allCriteria = criteria.filter((c) => c.text.trim()).map((c) => c.text.trim())
     if (allCriteria.length > 0) {
       submitData.passFailCriteria = checkedCriteria.length > 0 ? checkedCriteria.join(', ') : allCriteria.join(', ')
     }
 
-    if (formData.linkedMocCode) {
-      submitData.linkedMocCode = parseInt(formData.linkedMocCode, 10)
-    }
-
-    if (formData.linkedMethodId) {
-      submitData.linkedMethodId = formData.linkedMethodId
-    }
+    if (formData.linkedMocCode) submitData.linkedMocCode = parseInt(formData.linkedMocCode, 10)
+    if (formData.linkedMethodId) submitData.linkedMethodId = formData.linkedMethodId
 
     createTestCaseMutation.mutate(submitData)
   }
@@ -252,754 +234,470 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
     if (errors[field]) {
-      setErrors((prev) => {
-        const newErrors = { ...prev }
-        delete newErrors[field]
-        return newErrors
-      })
+      const newErrors = { ...errors }
+      delete newErrors[field]
+      setErrors(newErrors)
     }
   }
 
-  const addStep = () => {
-    setSteps([...steps, { id: Date.now().toString(), text: '' }])
-  }
-
-  const removeStep = (id: string) => {
-    if (steps.length > 1) {
-      setSteps(steps.filter((s) => s.id !== id))
+  const toggleLink = (type: 'requirement' | 'function', id: string) => {
+    const exists = selectedLinks.some(l => l.type === type && l.id === id)
+    if (exists) {
+      setSelectedLinks(selectedLinks.filter(l => !(l.type === type && l.id === id)))
+    } else {
+      setSelectedLinks([...selectedLinks, { type, id }])
     }
   }
 
-  const updateStep = (id: string, text: string) => {
-    setSteps(steps.map((s) => (s.id === id ? { ...s, text } : s)))
-  }
+  // Helpers for Steps
+  const addStep = () => setSteps([...steps, { id: Date.now().toString(), text: '' }])
+  const removeStep = (id: string) => steps.length > 1 && setSteps(steps.filter((s) => s.id !== id))
+  const updateStep = (id: string, text: string) => setSteps(steps.map((s) => (s.id === id ? { ...s, text } : s)))
 
-  const addCriterion = () => {
-    setCriteria([...criteria, { id: Date.now().toString(), text: '', checked: false }])
-  }
+  // Helpers for Criteria
+  const addCriterion = () => setCriteria([...criteria, { id: Date.now().toString(), text: '', checked: false }])
+  const removeCriterion = (id: string) => setCriteria(criteria.filter((c) => c.id !== id))
+  const updateCriterion = (id: string, updates: Partial<Criterion>) => setCriteria(criteria.map((c) => (c.id === id ? { ...c, ...updates } : c)))
 
-  const removeCriterion = (id: string) => {
-    setCriteria(criteria.filter((c) => c.id !== id))
-  }
-
-  const updateCriterion = (id: string, updates: Partial<Criterion>) => {
-    setCriteria(criteria.map((c) => (c.id === id ? { ...c, ...updates } : c)))
-  }
-
+  // Helpers for Attachments
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     setAttachments([...attachments, ...files])
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
-  }
-
-  const handleFileDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    const files = Array.from(e.dataTransfer.files)
-    setAttachments([...attachments, ...files])
-  }
-
-  const removeAttachment = (index: number) => {
-    setAttachments(attachments.filter((_, i) => i !== index))
-  }
-
-  const moveSection = (index: number, direction: 'up' | 'down') => {
-    const newOrder = [...sectionOrder]
-    if (direction === 'up' && index > 0) {
-      ;[newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]]
-    } else if (direction === 'down' && index < newOrder.length - 1) {
-      ;[newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]]
-    }
-    setSectionOrder(newOrder)
-  }
-
-  const renderSection = (sectionId: string) => {
-    const index = sectionOrder.indexOf(sectionId)
-
-    switch (sectionId) {
-      case 'title':
-        return (
-          <div key={sectionId} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Title <span className="text-red-500">*</span>
-              </label>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'up')}
-                  disabled={index === 0}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronUp size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'down')}
-                  disabled={index === sectionOrder.length - 1}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronDown size={16} />
-                </button>
-              </div>
-            </div>
-            <input
-              type="text"
-              value={formData.title}
-              onChange={(e) => handleChange('title', e.target.value)}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.title ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-              } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
-              placeholder="Enter test case title"
-            />
-            {errors.title && <p className="mt-1 text-sm text-red-500">{errors.title}</p>}
-          </div>
-        )
-
-      case 'key':
-        return (
-          <div key={sectionId} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Key</label>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'up')}
-                  disabled={index === 0}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronUp size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'down')}
-                  disabled={index === sectionOrder.length - 1}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronDown size={16} />
-                </button>
-              </div>
-            </div>
-            <input
-              type="text"
-              value={formData.key}
-              onChange={(e) => handleChange('key', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              placeholder="Auto-generated if left empty"
-            />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Leave empty to auto-generate a unique key</p>
-          </div>
-        )
-
-      case 'objective':
-        return (
-          <div key={sectionId} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Objective</label>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'up')}
-                  disabled={index === 0}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronUp size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'down')}
-                  disabled={index === sectionOrder.length - 1}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronDown size={16} />
-                </button>
-              </div>
-            </div>
-            <textarea
-              value={formData.objective}
-              onChange={(e) => handleChange('objective', e.target.value)}
-              rows={3}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-              placeholder="Enter test case objective"
-            />
-          </div>
-        )
-
-      case 'preconditions':
-        return (
-          <div key={sectionId} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preconditions</label>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'up')}
-                  disabled={index === 0}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronUp size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'down')}
-                  disabled={index === sectionOrder.length - 1}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronDown size={16} />
-                </button>
-              </div>
-            </div>
-            <textarea
-              value={formData.preconditions}
-              onChange={(e) => handleChange('preconditions', e.target.value)}
-              rows={3}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-              placeholder="Enter preconditions"
-            />
-          </div>
-        )
-
-      case 'steps':
-        return (
-          <div key={sectionId} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Test Steps</label>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={addStep}
-                  className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-                >
-                  <Plus size={14} />
-                  Add Step
-                </button>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => moveSection(index, 'up')}
-                    disabled={index === 0}
-                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                  >
-                    <ChevronUp size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveSection(index, 'down')}
-                    disabled={index === sectionOrder.length - 1}
-                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                  >
-                    <ChevronDown size={16} />
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {steps.map((step, idx) => (
-                <div key={step.id} className="flex items-start gap-2">
-                  <span className="mt-2 text-sm text-gray-500 dark:text-gray-400 font-medium min-w-[24px]">
-                    {idx + 1}.
-                  </span>
-                  <input
-                    type="text"
-                    value={step.text}
-                    onChange={(e) => updateStep(step.id, e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    placeholder={`Step ${idx + 1}`}
-                  />
-                  {steps.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeStep(step.id)}
-                      className="mt-2 p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )
-
-      case 'expectedResults':
-        return (
-          <div key={sectionId} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Expected Results</label>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'up')}
-                  disabled={index === 0}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronUp size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'down')}
-                  disabled={index === sectionOrder.length - 1}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronDown size={16} />
-                </button>
-              </div>
-            </div>
-            <textarea
-              value={formData.expectedResults}
-              onChange={(e) => handleChange('expectedResults', e.target.value)}
-              rows={4}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-              placeholder="Enter expected results"
-            />
-          </div>
-        )
-
-      case 'passFailCriteria':
-        return (
-          <div key={sectionId} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Pass/Fail Criteria</label>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={addCriterion}
-                  className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-                >
-                  <Plus size={14} />
-                  Add Criterion
-                </button>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => moveSection(index, 'up')}
-                    disabled={index === 0}
-                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                  >
-                    <ChevronUp size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveSection(index, 'down')}
-                    disabled={index === sectionOrder.length - 1}
-                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                  >
-                    <ChevronDown size={16} />
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {criteria.length === 0 ? (
-                <p className="text-sm text-gray-500 dark:text-gray-400">No criteria added yet</p>
-              ) : (
-                criteria.map((criterion) => (
-                  <div key={criterion.id} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={criterion.checked}
-                      onChange={(e) => updateCriterion(criterion.id, { checked: e.target.checked })}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <input
-                      type="text"
-                      value={criterion.text}
-                      onChange={(e) => updateCriterion(criterion.id, { text: e.target.value })}
-                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      placeholder="Enter criterion"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeCriterion(criterion.id)}
-                      className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )
-
-      case 'moc':
-        return (
-          <div key={sectionId} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Means of Compliance (MoC)
-              </label>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'up')}
-                  disabled={index === 0}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronUp size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'down')}
-                  disabled={index === sectionOrder.length - 1}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronDown size={16} />
-                </button>
-              </div>
-            </div>
-            <select
-              value={formData.linkedMocCode}
-              onChange={(e) => handleChange('linkedMocCode', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            >
-              <option value="">Select MoC (optional)</option>
-              {mocs.map((moc: any) => (
-                <option key={moc.code} value={moc.code}>
-                  {moc.code}: {moc.description}
-                </option>
-              ))}
-            </select>
-          </div>
-        )
-
-      case 'method':
-        return (
-          <div key={sectionId} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Verification Method</label>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'up')}
-                  disabled={index === 0}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronUp size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'down')}
-                  disabled={index === sectionOrder.length - 1}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronDown size={16} />
-                </button>
-              </div>
-            </div>
-            <select
-              value={formData.linkedMethodId}
-              onChange={(e) => handleChange('linkedMethodId', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            >
-              <option value="">Select Method (optional)</option>
-              {methods.map((method: any) => (
-                <option key={method.id} value={method.id}>
-                  {method.name} ({method.methodType})
-                </option>
-              ))}
-            </select>
-          </div>
-        )
-
-      case 'setups':
-        return (
-          <div key={sectionId} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Test Setups</label>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'up')}
-                  disabled={index === 0}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronUp size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'down')}
-                  disabled={index === sectionOrder.length - 1}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronDown size={16} />
-                </button>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {setups.length === 0 ? (
-                <p className="text-sm text-gray-500 dark:text-gray-400">No test setups available</p>
-              ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {setups.map((setup: any) => (
-                    <div key={setup.id} className="flex items-center gap-2 p-2 border border-gray-200 dark:border-gray-600 rounded-lg">
-                      <input
-                        type="checkbox"
-                        checked={selectedSetups.includes(setup.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedSetups([...selectedSetups, setup.id])
-                          } else {
-                            setSelectedSetups(selectedSetups.filter((id) => id !== setup.id))
-                          }
-                        }}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <div className="flex-1">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">{setup.name}</div>
-                        {setup.description && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400">{setup.description}</div>
-                        )}
-                        {setup.environmentType && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            Type: {setup.environmentType}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )
-
-      case 'owner':
-        return (
-          <div key={sectionId} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Owner User ID</label>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'up')}
-                  disabled={index === 0}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronUp size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'down')}
-                  disabled={index === sectionOrder.length - 1}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronDown size={16} />
-                </button>
-              </div>
-            </div>
-            <input
-              type="text"
-              value={formData.ownerUserId}
-              onChange={(e) => handleChange('ownerUserId', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              placeholder="Enter owner user ID (optional)"
-            />
-          </div>
-        )
-
-      case 'attachments':
-        return (
-          <div key={sectionId} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Attachments</label>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'up')}
-                  disabled={index === 0}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronUp size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'down')}
-                  disabled={index === sectionOrder.length - 1}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronDown size={16} />
-                </button>
-              </div>
-            </div>
-            <div
-              onDrop={handleFileDrop}
-              onDragOver={(e) => e.preventDefault()}
-              className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 mb-4"
-            >
-              <label className="flex flex-col items-center justify-center cursor-pointer">
-                <Upload className="text-gray-400 mb-2" size={32} />
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Click to upload or drag and drop
-                </span>
-                <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">Files will be attached as evidence</span>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-              </label>
-            </div>
-            {attachments.length > 0 && (
-              <div className="space-y-2">
-                {attachments.map((file, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600"
-                  >
-                    <div className="flex items-center gap-3 flex-1">
-                      <File className="text-gray-400" size={20} />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-gray-900 dark:text-white truncate">{file.name}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {(file.size / 1024).toFixed(1)} KB
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeAttachment(idx)}
-                      className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )
-
-      case 'custom-sections':
-        return (
-          <div key={sectionId} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Custom Sections
-              </label>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'up')}
-                  disabled={index === 0}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronUp size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveSection(index, 'down')}
-                  disabled={index === sectionOrder.length - 1}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30"
-                >
-                  <ChevronDown size={16} />
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              {customSections.map((section, idx) => (
-                <CustomSectionEditor
-                  key={section.id}
-                  section={section}
-                  projectId={projectId}
-                  onUpdate={(updated) => {
-                    const newSections = [...customSections]
-                    newSections[idx] = { ...newSections[idx], ...updated }
-                    setCustomSections(newSections)
-                  }}
-                  onDelete={() => {
-                    setCustomSections(customSections.filter((_, i) => i !== idx))
-                  }}
-                  onImageUpload={async (file) => {
-                    // For temporary sections (not yet created), use base64
-                    // Images will be uploaded when section is created
-                    return new Promise((resolve, reject) => {
-                      const reader = new FileReader()
-                      reader.onload = () => resolve(reader.result as string)
-                      reader.onerror = reject
-                      reader.readAsDataURL(file)
-                    })
-                  }}
-                />
-              ))}
-
-              <button
-                type="button"
-                onClick={() => {
-                  const newSection = {
-                    id: `temp-${Date.now()}`,
-                    title: '',
-                    content: '',
-                    orderIndex: customSections.length,
-                  }
-                  setCustomSections([...customSections, newSection])
-                }}
-                className="w-full px-4 py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400 hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center justify-center gap-2"
-              >
-                <Plus size={16} />
-                Add Custom Section
-              </button>
-            </div>
-          </div>
-        )
-
-      default:
-        return null
-    }
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[95vw] h-[95vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Create New Test Case</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <X size={20} className="text-gray-600 dark:text-gray-400" />
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Create Test Case</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+            <X size={20} className="text-gray-500" />
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-4xl mx-auto space-y-4">
-            {sectionOrder.map((sectionId) => renderSection(sectionId))}
+        {/* Tabs */}
+        <div className="flex border-b border-gray-200 dark:border-gray-700 px-6 overflow-x-auto">
+          {[
+            { id: 'general', label: 'General', icon: Layers },
+            { id: 'steps', label: 'Steps & Criteria', icon: clsx },
+            { id: 'verifies', label: 'Verifies', count: selectedLinks.length },
+            { id: 'attachments', label: 'Setups & Attachments', count: attachments.length + selectedSetups.length },
+            { id: 'custom', label: 'Custom Sections', count: customSections.length },
+          ].map((tab: any) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={clsx(
+                'px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap',
+                activeTab === tab.id
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+              )}
+            >
+              {tab.label}
+              {tab.count > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs">{tab.count}</span>
+              )}
+            </button>
+          ))}
+        </div>
 
-            {/* Error Message */}
-            {errors.submit && (
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <p className="text-sm text-red-600 dark:text-red-400">{errors.submit}</p>
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <form id="create-case-form" onSubmit={handleSubmit} className="space-y-6">
+
+            {/* General Tab */}
+            {activeTab === 'general' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Title <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.title}
+                    onChange={(e) => handleChange('title', e.target.value)}
+                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.title ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                      } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
+                    placeholder="Enter test case title"
+                  />
+                  {errors.title && <p className="mt-1 text-sm text-red-500">{errors.title}</p>}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Key</label>
+                    <input
+                      type="text"
+                      value={formData.key}
+                      onChange={(e) => handleChange('key', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="Auto-generated if empty"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Owner</label>
+                    <input
+                      type="text"
+                      value={formData.ownerUserId}
+                      onChange={(e) => handleChange('ownerUserId', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="User ID"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Objective</label>
+                  <textarea
+                    rows={3}
+                    value={formData.objective}
+                    onChange={(e) => handleChange('objective', e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                    placeholder="Enter objective"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Preconditions</label>
+                  <textarea
+                    rows={2}
+                    value={formData.preconditions}
+                    onChange={(e) => handleChange('preconditions', e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                    placeholder="Enter preconditions"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">MoC</label>
+                    <select
+                      value={formData.linkedMocCode}
+                      onChange={(e) => handleChange('linkedMocCode', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="">Select MoC</option>
+                      {mocs.map((moc: any) => (
+                        <option key={moc.code} value={moc.code}>
+                          {moc.code}: {moc.description}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Method</label>
+                    <select
+                      value={formData.linkedMethodId}
+                      onChange={(e) => handleChange('linkedMethodId', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="">Select Method</option>
+                      {methods.map((method: any) => (
+                        <option key={method.id} value={method.id}>
+                          {method.name} ({method.methodType})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
             )}
-          </div>
 
-          {/* Actions */}
-          <div className="flex items-center justify-end gap-4 pt-6 border-t border-gray-200 dark:border-gray-700 mt-6 max-w-4xl mx-auto">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
-              disabled={createTestCaseMutation.isPending}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={createTestCaseMutation.isPending}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {createTestCaseMutation.isPending ? 'Creating...' : 'Create Test Case'}
-            </button>
-          </div>
-        </form>
+            {/* Steps Tab */}
+            {activeTab === 'steps' && (
+              <div className="space-y-6">
+                {/* Steps */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Test Steps</label>
+                    <button
+                      type="button"
+                      onClick={addStep}
+                      className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                    >
+                      <Plus size={14} /> Add Step
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {steps.map((step, idx) => (
+                      <div key={step.id} className="flex items-start gap-2">
+                        <span className="mt-2 text-sm text-gray-500 font-medium min-w-[24px]">{idx + 1}.</span>
+                        <input
+                          type="text"
+                          value={step.text}
+                          onChange={(e) => updateStep(step.id, e.target.value)}
+                          className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          placeholder={`Step ${idx + 1}`}
+                        />
+                        {steps.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeStep(step.id)}
+                            className="mt-2 p-1 text-red-600 hover:bg-red-50 rounded"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Expected Results */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expected Results</label>
+                  <textarea
+                    rows={3}
+                    value={formData.expectedResults}
+                    onChange={(e) => handleChange('expectedResults', e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                    placeholder="Enter expected results"
+                  />
+                </div>
+
+                {/* Criteria */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Pass/Fail Criteria</label>
+                    <button
+                      type="button"
+                      onClick={addCriterion}
+                      className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                    >
+                      <Plus size={14} /> Add Criterion
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {criteria.length === 0 ? (
+                      <p className="text-sm text-gray-500 italic">No criteria added.</p>
+                    ) : (
+                      criteria.map((c) => (
+                        <div key={c.id} className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={c.checked}
+                            onChange={(e) => updateCriterion(c.id, { checked: e.target.checked })}
+                            className="w-4 h-4 text-blue-600 rounded"
+                          />
+                          <input
+                            type="text"
+                            value={c.text}
+                            onChange={(e) => updateCriterion(c.id, { text: e.target.value })}
+                            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            placeholder="Criterion"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeCriterion(c.id)}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Verifies Tab */}
+            {activeTab === 'verifies' && (
+              <div className="space-y-4">
+                <div className="flex flex-col gap-4 mb-2">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Select requirements or functions this test case verifies.
+                  </p>
+
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                    <input
+                      type="text"
+                      placeholder="Search requirements or functions..."
+                      value={linkSearchTerm}
+                      onChange={(e) => setLinkSearchTerm(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                {verifyTargets.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
+                    No matching requirements or functions found.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2 max-h-[400px] overflow-y-auto pr-2">
+                    {verifyTargets.map((target: any) => {
+                      const isSelected = selectedLinks.some(l => l.type === target.type && l.id === target.id)
+                      return (
+                        <div
+                          key={`${target.type}-${target.id}`}
+                          onClick={() => toggleLink(target.type, target.id)}
+                          className={clsx(
+                            "cursor-pointer flex items-center p-3 rounded-lg border transition-colors",
+                            isSelected
+                              ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                              : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+                          )}
+                        >
+                          <div className={clsx("mr-3", isSelected ? "text-blue-600 dark:text-blue-400" : "text-gray-400")}>
+                            {isSelected ? <CheckSquare size={20} /> : <Square size={20} />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={clsx(
+                                "text-xs px-2 py-0.5 rounded font-medium flex-shrink-0",
+                                target.type === 'requirement'
+                                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                                  : "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                              )}>
+                                {target.type === 'requirement' ? 'REQ' : 'FUNC'}
+                              </span>
+                              <span className="font-mono text-xs text-gray-500 dark:text-gray-400">{target.identifier}</span>
+                            </div>
+                            <div className="text-sm text-gray-900 dark:text-white truncate" title={target.label}>{target.label}</div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Attachments Tab */}
+            {activeTab === 'attachments' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Test Setups</h3>
+                  <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-2">
+                    {setups.map((setup: any) => (
+                      <div key={setup.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+                        <input
+                          type="checkbox"
+                          checked={selectedSetups.includes(setup.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedSetups([...selectedSetups, setup.id])
+                            else setSelectedSetups(selectedSetups.filter((id) => id !== setup.id))
+                          }}
+                          className="w-4 h-4 text-blue-600 rounded"
+                        />
+                        <div className="text-sm text-gray-900 dark:text-white">{setup.name}</div>
+                      </div>
+                    ))}
+                    {setups.length === 0 && <p className="text-sm text-gray-500 p-2">No setups available.</p>}
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Attachments</h3>
+                  <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                    <Upload className="mx-auto text-gray-400 mb-2" size={24} />
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Click to upload files</p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={handleFileSelect}
+                    />
+                  </div>
+                  {attachments.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      {attachments.map((file, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                          <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{file.name}</span>
+                          <button type="button" onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))} className="text-red-500 hover:text-red-700">
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Custom Sections Tab */}
+            {activeTab === 'custom' && (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Custom Fields</h3>
+                  <button
+                    type="button"
+                    onClick={() => setCustomSections([...customSections, { id: Date.now().toString(), title: `Section ${customSections.length + 1}`, content: '', orderIndex: customSections.length }])}
+                    className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    + Add Section
+                  </button>
+                </div>
+
+                {customSections.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4">No custom sections added.</p>
+                ) : (
+                  customSections.map((section, idx) => (
+                    <div key={section.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 relative">
+                      <button
+                        type="button"
+                        onClick={() => setCustomSections(customSections.filter((_, i) => i !== idx))}
+                        className="absolute top-2 right-2 text-gray-400 hover:text-red-500"
+                      >
+                        <X size={16} />
+                      </button>
+                      <input
+                        type="text"
+                        value={section.title}
+                        onChange={(e) => {
+                          const newSections = [...customSections]
+                          newSections[idx].title = e.target.value
+                          setCustomSections(newSections)
+                        }}
+                        className="block w-full text-sm font-medium border-none p-0 mb-2 focus:ring-0 bg-transparent"
+                        placeholder="Section Title"
+                      />
+                      <textarea
+                        rows={2}
+                        value={section.content}
+                        onChange={(e) => {
+                          const newSections = [...customSections]
+                          newSections[idx].content = e.target.value
+                          setCustomSections(newSections)
+                        }}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700"
+                        placeholder="Content..."
+                      />
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+          </form>
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-gray-800/50">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="create-case-form"
+            disabled={createTestCaseMutation.isPending}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {createTestCaseMutation.isPending ? 'Creating...' : 'Create Test Case'}
+          </button>
+        </div>
       </div>
     </div>
   )
