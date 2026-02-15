@@ -71,7 +71,7 @@ export const lifecycleService = {
       const response = await apiClient.get<LifecycleSummary[]>(
         `/lifecycle/library?projectId=${projectId}&itemType=${encodeURIComponent(itemType)}`
       )
-      if (response.success && response.data) {
+      if (response.success && response.data && response.data.length > 0) {
         return { success: true, data: response.data }
       }
     } catch {

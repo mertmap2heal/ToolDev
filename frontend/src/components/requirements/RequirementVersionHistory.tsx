@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { X, History, ChevronDown, ChevronRight, ArrowLeftRight, Clock, User, FileText, Tag, Trash2, RotateCcw, Plus, AlertCircle, GitPullRequest, ExternalLink } from 'lucide-react'
+import { X, History, ChevronDown, ChevronRight, ArrowLeftRight, Clock, User, FileText, Tag, Trash2, RotateCcw, Plus, AlertCircle, GitPullRequest, ExternalLink, Check, FileStack, Unlink } from 'lucide-react'
 import { versionService, VersionComparison, AuditEvent } from '../../services/version.service'
 import type { Requirement, RequirementVersion } from 'shared/types/engineering.types'
 import { format } from 'date-fns'
@@ -102,6 +102,14 @@ export default function RequirementVersionHistory({
         return { icon: AlertCircle, label: 'Issue Linked', color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-900/20', border: 'border-indigo-200 dark:border-indigo-800' }
       case 'CHANGE_REQUEST_LINKED':
         return { icon: GitPullRequest, label: 'Change Request Linked', color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-900/20', border: 'border-purple-200 dark:border-purple-800' }
+      case 'TEST_CASE_LINKED':
+        return { icon: Check, label: 'Test Case Linked', color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-900/20', border: 'border-emerald-200 dark:border-emerald-800' }
+      case 'TEST_CASE_UNLINKED':
+        return { icon: Unlink, label: 'Test Case Unlinked', color: 'text-gray-500', bg: 'bg-gray-50 dark:bg-gray-900/20', border: 'border-gray-200 dark:border-gray-800' }
+      case 'TEST_PLAN_LINKED':
+        return { icon: FileStack, label: 'Test Plan Linked', color: 'text-teal-500', bg: 'bg-teal-50 dark:bg-teal-900/20', border: 'border-teal-200 dark:border-teal-800' }
+      case 'TEST_PLAN_UNLINKED':
+        return { icon: Unlink, label: 'Test Plan Unlinked', color: 'text-gray-500', bg: 'bg-gray-50 dark:bg-gray-900/20', border: 'border-gray-200 dark:border-gray-800' }
       default:
         return { icon: FileText, label: action, color: 'text-gray-500', bg: 'bg-gray-50 dark:bg-gray-900/20', border: 'border-gray-200 dark:border-gray-800' }
     }
@@ -460,28 +468,47 @@ export default function RequirementVersionHistory({
                             )}
 
                             {/* Link Details */}
-                            {(event.action === 'ISSUE_LINKED' || event.action === 'CHANGE_REQUEST_LINKED') && event.newValue && (
+                            {(event.action === 'ISSUE_LINKED' || event.action === 'CHANGE_REQUEST_LINKED' || event.action === 'TEST_CASE_LINKED' || event.action === 'TEST_PLAN_LINKED') && event.newValue && (
                               <div className="mt-3 flex items-start gap-3 bg-white/50 dark:bg-gray-800/50 p-2 rounded border border-white/20">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2">
                                     <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                                      {event.newValue.issueKey || event.newValue.crId || 'LINKED'}
+                                      {event.newValue.issueKey || event.newValue.crId || event.newValue.testCaseKey || event.newValue.testPlanKey || 'LINKED'}
                                     </span>
                                     <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                      {event.newValue.title}
+                                      {event.newValue.title || event.newValue.name}
                                     </span>
                                   </div>
                                 </div>
                                 <a
-                                  href={event.action === 'ISSUE_LINKED'
-                                    ? `/projects/${projectId}/issues/${event.newValue.issueId || event.newValue.id}`
-                                    : `/projects/${projectId}/change-requests/${event.newValue.id}?changeRequestId=${event.newValue.id}`}
+                                  href={
+                                    event.action === 'ISSUE_LINKED' ? `/projects/${projectId}/issues/${event.newValue.issueId || event.newValue.id}` :
+                                      event.action === 'CHANGE_REQUEST_LINKED' ? `/projects/${projectId}/change-requests/${event.newValue.id}?changeRequestId=${event.newValue.id}` :
+                                        event.action === 'TEST_CASE_LINKED' ? `/verification?tab=test-cases&caseId=${event.newValue.testCaseId}` :
+                                          event.action === 'TEST_PLAN_LINKED' ? `/verification?tab=test-plans&planId=${event.newValue.testPlanId}` :
+                                            '#'
+                                  }
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="text-blue-500 hover:text-blue-600 transition-colors"
                                 >
                                   <ExternalLink size={14} />
                                 </a>
+                              </div>
+                            )}
+
+                            {(event.action === 'TEST_CASE_UNLINKED' || event.action === 'TEST_PLAN_UNLINKED') && event.oldValue && (
+                              <div className="mt-3 flex items-start gap-3 bg-white/50 dark:bg-gray-800/50 p-2 rounded border border-white/20 opacity-75">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 decoration-slate-500 line-through">
+                                      {event.oldValue.testCaseKey || event.oldValue.testPlanKey || 'UNLINKED'}
+                                    </span>
+                                    <span className="text-sm font-medium text-gray-500 dark:text-white truncate line-through decoration-slate-500">
+                                      {event.oldValue.title || event.oldValue.name}
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
                             )}
                           </div>

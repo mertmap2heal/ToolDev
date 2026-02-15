@@ -17,6 +17,10 @@ export type LinkageAuditAction =
   | 'REQUIREMENT_PERMANENTLY_DELETED'
   | 'ISSUE_LINKED'
   | 'CHANGE_REQUEST_LINKED'
+  | 'TEST_CASE_LINKED'
+  | 'TEST_CASE_UNLINKED'
+  | 'TEST_PLAN_LINKED'
+  | 'TEST_PLAN_UNLINKED'
 
 /**
  * Audit service for requirements linkage events.
