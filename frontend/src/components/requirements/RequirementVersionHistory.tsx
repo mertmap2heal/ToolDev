@@ -87,31 +87,31 @@ export default function RequirementVersionHistory({
     return labels[field] || field
   }
 
-  // Get icon and color for audit action
+  // Get icon and label for audit action
   const getActionDisplay = (action: string) => {
     switch (action) {
       case 'REQUIREMENT_DELETED_SOFT':
-        return { icon: Trash2, label: 'Moved to Trash', color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/20', border: 'border-orange-200 dark:border-orange-800' }
+        return { icon: Trash2, label: 'moved to trash', color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/20', border: 'border-orange-200 dark:border-orange-800' }
       case 'REQUIREMENT_RESTORED':
-        return { icon: RotateCcw, label: 'Restored', color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-900/20', border: 'border-green-200 dark:border-green-800' }
+        return { icon: RotateCcw, label: 'restored requirement', color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-900/20', border: 'border-green-200 dark:border-green-800' }
       case 'REQUIREMENT_CREATED':
-        return { icon: Plus, label: 'Created', color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-200 dark:border-blue-800' }
+        return { icon: Plus, label: 'created requirement', color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-200 dark:border-blue-800' }
       case 'REQUIREMENT_PERMANENTLY_DELETED':
-        return { icon: Trash2, label: 'Permanently Deleted', color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200 dark:border-red-800' }
+        return { icon: Trash2, label: 'permanently deleted', color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200 dark:border-red-800' }
       case 'ISSUE_LINKED':
-        return { icon: AlertCircle, label: 'Issue Linked', color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-900/20', border: 'border-indigo-200 dark:border-indigo-800' }
+        return { icon: AlertCircle, label: 'linked issue', color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-900/20', border: 'border-indigo-200 dark:border-indigo-800' }
       case 'CHANGE_REQUEST_LINKED':
-        return { icon: GitPullRequest, label: 'Change Request Linked', color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-900/20', border: 'border-purple-200 dark:border-purple-800' }
+        return { icon: GitPullRequest, label: 'linked change request', color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-900/20', border: 'border-purple-200 dark:border-purple-800' }
       case 'TEST_CASE_LINKED':
-        return { icon: Check, label: 'Test Case Linked', color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-900/20', border: 'border-emerald-200 dark:border-emerald-800' }
+        return { icon: Check, label: 'linked test case', color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-900/20', border: 'border-emerald-200 dark:border-emerald-800' }
       case 'TEST_CASE_UNLINKED':
-        return { icon: Unlink, label: 'Test Case Unlinked', color: 'text-gray-500', bg: 'bg-gray-50 dark:bg-gray-900/20', border: 'border-gray-200 dark:border-gray-800' }
+        return { icon: Unlink, label: 'unlinked test case', color: 'text-gray-500', bg: 'bg-gray-50 dark:bg-gray-900/20', border: 'border-gray-200 dark:border-gray-800' }
       case 'TEST_PLAN_LINKED':
-        return { icon: FileStack, label: 'Test Plan Linked', color: 'text-teal-500', bg: 'bg-teal-50 dark:bg-teal-900/20', border: 'border-teal-200 dark:border-teal-800' }
+        return { icon: FileStack, label: 'linked test plan', color: 'text-teal-500', bg: 'bg-teal-50 dark:bg-teal-900/20', border: 'border-teal-200 dark:border-teal-800' }
       case 'TEST_PLAN_UNLINKED':
-        return { icon: Unlink, label: 'Test Plan Unlinked', color: 'text-gray-500', bg: 'bg-gray-50 dark:bg-gray-900/20', border: 'border-gray-200 dark:border-gray-800' }
+        return { icon: Unlink, label: 'unlinked test plan', color: 'text-gray-500', bg: 'bg-gray-50 dark:bg-gray-900/20', border: 'border-gray-200 dark:border-gray-800' }
       default:
-        return { icon: FileText, label: action, color: 'text-gray-500', bg: 'bg-gray-50 dark:bg-gray-900/20', border: 'border-gray-200 dark:border-gray-800' }
+        return { icon: FileText, label: action.toLowerCase().replace(/_/g, ' '), color: 'text-gray-500', bg: 'bg-gray-50 dark:bg-gray-900/20', border: 'border-gray-200 dark:border-gray-800' }
     }
   }
 
@@ -439,78 +439,64 @@ export default function RequirementVersionHistory({
 
                       return (
                         <div key={`audit-${event.id}`} className="relative pl-10">
-                          <div className={`absolute left-2 w-4 h-4 ${actionDisplay.color} rounded-full border-2 border-white dark:border-gray-800 flex items-center justify-center`}>
-                            <ActionIcon size={8} className="text-white" />
+                          <div className={`absolute left-2 w-4 h-4 ${actionDisplay.bg} rounded-full border-2 border-white dark:border-gray-800 flex items-center justify-center`}>
+                            <div className={`w-1.5 h-1.5 rounded-full ${actionDisplay.color.replace('text-', 'bg-')}`} />
                           </div>
-                          <div className={`rounded-lg p-4 border ${actionDisplay.bg} ${actionDisplay.border}`}>
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <ActionIcon size={16} className={actionDisplay.color} />
-                                <span className={`text-xs font-medium ${actionDisplay.color}`}>
-                                  {actionDisplay.label}
-                                </span>
-                                {event.performedByUser && (
-                                  <span className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
-                                    <User size={12} />
-                                    {event.performedByUser.name}
+
+                          <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center flex-wrap gap-x-1.5 text-sm text-gray-900 dark:text-white">
+                                  <span className="font-medium text-gray-900 dark:text-white">
+                                    {event.performedByUser?.name || 'System'}
                                   </span>
+                                  <span className={`${actionDisplay.color} flex items-center gap-1`}>
+                                    <ActionIcon size={14} className="inline-block" />
+                                    {actionDisplay.label}
+                                  </span>
+
+                                  {/* Inline Entity Details if available */}
+                                  {(event.action === 'ISSUE_LINKED' || event.action === 'CHANGE_REQUEST_LINKED' || event.action === 'TEST_CASE_LINKED' || event.action === 'TEST_PLAN_LINKED') && event.newValue && (
+                                    <a
+                                      href={
+                                        event.action === 'ISSUE_LINKED' ? `/projects/${projectId}/issues/${event.newValue.issueId || event.newValue.id}` :
+                                          event.action === 'CHANGE_REQUEST_LINKED' ? `/projects/${projectId}/change-requests/${event.newValue.id}?changeRequestId=${event.newValue.id}` :
+                                            event.action === 'TEST_CASE_LINKED' ? `/verification?tab=test-cases&caseId=${event.newValue.testCaseId}` :
+                                              event.action === 'TEST_PLAN_LINKED' ? `/verification?tab=test-plans&planId=${event.newValue.testPlanId}` :
+                                                '#'
+                                      }
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                                    >
+                                      {event.newValue.issueKey || event.newValue.crId || event.newValue.testCaseKey || event.newValue.testPlanKey}
+                                      <span className="opacity-75 font-normal">
+                                        {event.newValue.title || event.newValue.name}
+                                      </span>
+                                    </a>
+                                  )}
+
+                                  {(event.action === 'TEST_CASE_UNLINKED' || event.action === 'TEST_PLAN_UNLINKED') && event.oldValue && (
+                                    <span className="inline-flex items-center gap-1 text-gray-500 dark:text-gray-400 line-through">
+                                      {event.oldValue.testCaseKey || event.oldValue.testPlanKey}
+                                      <span className="opacity-75">
+                                        {event.oldValue.title || event.oldValue.name}
+                                      </span>
+                                    </span>
+                                  )}
+                                </div>
+
+                                {event.newValue?.reason && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                    "{event.newValue.reason}"
+                                  </p>
                                 )}
                               </div>
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
+
+                              <span className="text-xs text-gray-400 shrink-0 whitespace-nowrap">
                                 {format(item.date, 'PPp')}
                               </span>
                             </div>
-
-                            {event.newValue?.reason && (
-                              <p className="text-xs text-gray-600 dark:text-gray-400 mt-2 italic">
-                                Reason: "{event.newValue.reason}"
-                              </p>
-                            )}
-
-                            {/* Link Details */}
-                            {(event.action === 'ISSUE_LINKED' || event.action === 'CHANGE_REQUEST_LINKED' || event.action === 'TEST_CASE_LINKED' || event.action === 'TEST_PLAN_LINKED') && event.newValue && (
-                              <div className="mt-3 flex items-start gap-3 bg-white/50 dark:bg-gray-800/50 p-2 rounded border border-white/20">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                                      {event.newValue.issueKey || event.newValue.crId || event.newValue.testCaseKey || event.newValue.testPlanKey || 'LINKED'}
-                                    </span>
-                                    <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                      {event.newValue.title || event.newValue.name}
-                                    </span>
-                                  </div>
-                                </div>
-                                <a
-                                  href={
-                                    event.action === 'ISSUE_LINKED' ? `/projects/${projectId}/issues/${event.newValue.issueId || event.newValue.id}` :
-                                      event.action === 'CHANGE_REQUEST_LINKED' ? `/projects/${projectId}/change-requests/${event.newValue.id}?changeRequestId=${event.newValue.id}` :
-                                        event.action === 'TEST_CASE_LINKED' ? `/verification?tab=test-cases&caseId=${event.newValue.testCaseId}` :
-                                          event.action === 'TEST_PLAN_LINKED' ? `/verification?tab=test-plans&planId=${event.newValue.testPlanId}` :
-                                            '#'
-                                  }
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-500 hover:text-blue-600 transition-colors"
-                                >
-                                  <ExternalLink size={14} />
-                                </a>
-                              </div>
-                            )}
-
-                            {(event.action === 'TEST_CASE_UNLINKED' || event.action === 'TEST_PLAN_UNLINKED') && event.oldValue && (
-                              <div className="mt-3 flex items-start gap-3 bg-white/50 dark:bg-gray-800/50 p-2 rounded border border-white/20 opacity-75">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 decoration-slate-500 line-through">
-                                      {event.oldValue.testCaseKey || event.oldValue.testPlanKey || 'UNLINKED'}
-                                    </span>
-                                    <span className="text-sm font-medium text-gray-500 dark:text-white truncate line-through decoration-slate-500">
-                                      {event.oldValue.title || event.oldValue.name}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
                           </div>
                         </div>
                       )
