@@ -182,6 +182,9 @@ export default function CreateRequirementModal({
   const [quickLinksHazards, setQuickLinksHazards] = useState<string[]>([])
   const [quickLinksRisks, setQuickLinksRisks] = useState<string[]>([])
   const [quickLinksLabels, setQuickLinksLabels] = useState<Record<string, string>>({})
+  // Premium Traceability
+  const [sourceDocumentInput, setSourceDocumentInput] = useState('')
+  const [linkRationale, setLinkRationale] = useState('')
 
   const queryClient = useQueryClient()
   const { statuses } = useStatusDefinitionsStore()
@@ -499,6 +502,23 @@ export default function CreateRequirementModal({
     }))
   }
 
+  const handleAddSourceDocument = () => {
+    if (sourceDocumentInput.trim() && !formData.relatedDocuments?.includes(sourceDocumentInput.trim())) {
+      setFormData((prev) => ({
+        ...prev,
+        relatedDocuments: [...(prev.relatedDocuments || []), sourceDocumentInput.trim()],
+      }))
+      setSourceDocumentInput('')
+    }
+  }
+
+  const handleRemoveSourceDocument = (doc: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      relatedDocuments: prev.relatedDocuments?.filter((d) => d !== doc) || [],
+    }))
+  }
+
 
   const addCustomTypeMutation = useMutation({
     mutationFn: (typeName: string) => requirementService.addCustomRequirementType(projectId, typeName),
@@ -618,6 +638,7 @@ export default function CreateRequirementModal({
             targetType: 'requirement',
             targetId: submitData.parentId,
             linkType: 'derived_from',
+            rationale: linkRationale || undefined,
           })
         }
         const linkPromises: Promise<any>[] = []
@@ -629,6 +650,7 @@ export default function CreateRequirementModal({
               targetType: 'pbs_component',
               targetId,
               linkType: 'allocated_to',
+              rationale: linkRationale || undefined,
             })
           )
         )
@@ -640,6 +662,7 @@ export default function CreateRequirementModal({
               targetType: 'interface',
               targetId,
               linkType: 'related_interface',
+              rationale: linkRationale || undefined,
             })
           )
         )
@@ -651,6 +674,7 @@ export default function CreateRequirementModal({
               targetType: 'hazard',
               targetId,
               linkType: 'mitigates',
+              rationale: linkRationale || undefined,
             })
           )
         )
@@ -662,6 +686,7 @@ export default function CreateRequirementModal({
               targetType: 'risk',
               targetId,
               linkType: 'mitigates',
+              rationale: linkRationale || undefined,
             })
           )
         )
@@ -1293,6 +1318,59 @@ export default function CreateRequirementModal({
             {/* Traceability Tab */}
             {activeTab === 'traceability' && (
               <div className="space-y-6">
+                {/* Source Documents */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                    Source Documents / References
+                  </label>
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={sourceDocumentInput}
+                      onChange={(e) => setSourceDocumentInput(e.target.value)}
+                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g. SOW Section 3.1, Architecture Doc v2"
+                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSourceDocument())}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddSourceDocument}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                  {formData.relatedDocuments && formData.relatedDocuments.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      {formData.relatedDocuments.map((doc, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
+                          <span className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                            <FileText size={14} className="text-gray-400" />
+                            {doc}
+                          </span>
+                          <button type="button" onClick={() => handleRemoveSourceDocument(doc)} className="text-gray-400 hover:text-red-500">
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Link Rationale */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                    Link Rationale <span className="text-gray-400 font-normal ml-1">(Optional)</span>
+                  </label>
+                  <textarea
+                    value={linkRationale}
+                    onChange={(e) => setLinkRationale(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                    rows={2}
+                    placeholder="Explain the rationale for these parent/component allocations..."
+                  />
+                </div>
+
                 {/* Parent Requirement */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
