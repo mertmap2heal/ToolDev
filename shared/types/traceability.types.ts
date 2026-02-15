@@ -14,6 +14,20 @@ export type LinkType =
   | 'copy'
   | 'trace'
   | 'allocate'
+  | 'parent_of'
+  | 'child_of'
+  | 'derives_from'
+  | 'derived_to'
+  | 'refined_by'
+  | 'depends_on'
+  | 'required_by'
+  | 'constrains'
+  | 'constrained_by'
+  | 'conflicts_with'
+  | 'supports'
+  | 'supported_by'
+  | 'supersedes'
+  | 'superseded_by'
 
 export interface TraceLink {
   id: string

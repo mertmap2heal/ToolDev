@@ -18,6 +18,11 @@ const MEANINGFUL_LINK_TYPES = [
   'complies_with',
   'cert_objective',
   'verifies', // legacy
+  'derives_from',
+  'refines',
+  'constrains',
+  'depends_on',
+  'supersedes',
 ]
 
 const MEANINGFUL_FIELDS = [

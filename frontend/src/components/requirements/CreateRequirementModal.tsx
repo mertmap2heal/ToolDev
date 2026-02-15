@@ -185,6 +185,10 @@ export default function CreateRequirementModal({
   // Premium Traceability
   const [sourceDocumentInput, setSourceDocumentInput] = useState('')
   const [linkRationale, setLinkRationale] = useState('')
+  const [traceLinks, setTraceLinks] = useState<{ targetId: string; targetType: string; linkType: string; rationale: string; targetDisplayId?: string }[]>([])
+  const [selectedRelationshipTarget, setSelectedRelationshipTarget] = useState('')
+  const [selectedRelationshipType, setSelectedRelationshipType] = useState('derives_from')
+  const [relationshipRationale, setRelationshipRationale] = useState('')
 
   // Premium Fields
   const [thresholdValue, setThresholdValue] = useState('')
@@ -497,6 +501,9 @@ export default function CreateRequirementModal({
     setCustomAttributeKey('')
     setCustomAttributeValue('')
     setLinkRationale('')
+    setTraceLinks([])
+    setSelectedRelationshipTarget('')
+    setRelationshipRationale('')
   }
 
   const handleAddTag = () => {
@@ -531,6 +538,28 @@ export default function CreateRequirementModal({
       ...prev,
       relatedDocuments: prev.relatedDocuments?.filter((d) => d !== doc) || [],
     }))
+  }
+
+  const handleAddTraceLink = () => {
+    if (!selectedRelationshipTarget) return
+    const target = availableParents.find(p => p.id === selectedRelationshipTarget)
+    if (!target) return
+
+    const newLink = {
+      targetId: selectedRelationshipTarget,
+      targetType: 'requirement',
+      linkType: selectedRelationshipType,
+      rationale: relationshipRationale,
+      targetDisplayId: target.requirementId || target.id.substring(0, 8)
+    }
+
+    setTraceLinks(prev => [...prev, newLink])
+    setSelectedRelationshipTarget('')
+    setRelationshipRationale('')
+  }
+
+  const handleRemoveTraceLink = (targetId: string, linkType: string) => {
+    setTraceLinks(prev => prev.filter(l => !(l.targetId === targetId && l.linkType === linkType)))
   }
 
 
@@ -658,6 +687,12 @@ export default function CreateRequirementModal({
       objectiveValue: formData.requirementType === 'performance' ? objectiveValue : undefined,
       customAttributes: formData.customAttributes,
       rationale: linkRationale || formData.rationale,
+      links: traceLinks.map(l => ({
+        targetId: l.targetId,
+        targetType: l.targetType,
+        linkType: l.linkType,
+        rationale: l.rationale || undefined
+      }))
     }
     if (LIFECYCLE_V1 && applicableLifecycle) {
       submitData.lifecycleId = applicableLifecycle.lifecycleId
@@ -1446,10 +1481,10 @@ export default function CreateRequirementModal({
                   />
                 </div>
 
-                {/* Parent Requirement */}
+                {/* Parent Requirement / Decomposition */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                    Parent Requirement
+                    Decomposition / Parent (Hierarchy)
                   </label>
                   <select
                     value={formData.parentId || ''}
@@ -1463,6 +1498,126 @@ export default function CreateRequirementModal({
                       </option>
                     ))}
                   </select>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Determines the structural position in the requirement tree.
+                  </p>
+                </div>
+
+                {/* Advanced Semantic Relationships */}
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-6">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <LinkIcon size={16} className="text-blue-500" />
+                    Advanced Relationships
+                  </h3>
+
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase">
+                          Target Requirement
+                        </label>
+                        <select
+                          value={selectedRelationshipTarget}
+                          onChange={(e) => setSelectedRelationshipTarget(e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-sm"
+                        >
+                          <option value="">Select requirement...</option>
+                          {availableParents.map((req) => (
+                            <option key={req.id} value={req.id}>
+                              [{req.requirementId || 'No ID'}] {req.title.substring(0, 40)}{req.title.length > 40 ? '...' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase">
+                          Relationship Type
+                        </label>
+                        <select
+                          value={selectedRelationshipType}
+                          onChange={(e) => setSelectedRelationshipType(e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-sm"
+                        >
+                          <optgroup label="Derivation & Refinement">
+                            <option value="derives_from">Derives From</option>
+                            <option value="derived_to">Derived To</option>
+                            <option value="refines">Refines</option>
+                            <option value="refined_by">Refined By</option>
+                          </optgroup>
+                          <optgroup label="Dependency & Constraint">
+                            <option value="depends_on">Depends On</option>
+                            <option value="required_by">Required By</option>
+                            <option value="constrains">Constrains</option>
+                            <option value="constrained_by">Constrained By</option>
+                          </optgroup>
+                          <optgroup label="Logic & Support">
+                            <option value="conflicts_with">Conflicts With</option>
+                            <option value="supports">Supports</option>
+                            <option value="supported_by">Supported By</option>
+                            <option value="supersedes">Supersedes</option>
+                            <option value="superseded_by">Superseded By</option>
+                          </optgroup>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase">
+                        Relationship Rationale
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={relationshipRationale}
+                          onChange={(e) => setRelationshipRationale(e.target.value)}
+                          placeholder="Why is this relationship established?"
+                          className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddTraceLink}
+                          disabled={!selectedRelationshipTarget}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50"
+                        >
+                          <Plus size={16} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {traceLinks.length > 0 && (
+                      <div className="space-y-2 mt-2">
+                        {traceLinks.map((link, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-2 bg-blue-50/50 dark:bg-blue-900/10 rounded border border-blue-100 dark:border-blue-900/30 text-sm">
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-blue-700 dark:text-blue-400 uppercase text-[10px]">
+                                  {link.linkType.replace(/_/g, ' ')}
+                                </span>
+                                <span className="text-gray-700 dark:text-gray-300">
+                                  {link.targetDisplayId}
+                                </span>
+                              </div>
+                              {link.rationale && (
+                                <span className="text-xs text-gray-500 dark:text-gray-400 italic">
+                                  "{link.rationale}"
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveTraceLink(link.targetId, link.linkType)}
+                              className="text-gray-400 hover:text-red-500"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-left">
+                    Define formal semantic links to other requirements for full lifecycle traceability.
+                  </p>
                 </div>
 
                 {/* PBS Component Assignment */}

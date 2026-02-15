@@ -26,7 +26,6 @@ const MEANINGFUL_FIELDS = [
   'owner',
   'rationale',
   'assumptions',
-  'assumptions',
   'linkedMocCode',
   'thresholdValue',
   'objectiveValue',
@@ -581,6 +580,7 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
       thresholdValue,
       objectiveValue,
       customAttributes,
+      links,
     } = req.body
 
     if (!title) {
@@ -687,6 +687,23 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
         moc: true,
       },
     })
+
+    // Create additional trace links if provided
+    if (links && Array.isArray(links) && links.length > 0) {
+      for (const link of links) {
+        await traceabilityService.createTraceLink(
+          projectId,
+          'requirement',
+          requirement.id,
+          link.targetType,
+          link.targetId,
+          link.linkType,
+          undefined,
+          link.rationale,
+          req.userId
+        )
+      }
+    }
 
     await linkageAuditService.log({
       projectId,
@@ -1305,7 +1322,7 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
       projectId,
       entityType: 'REQUIREMENT',
       entityId: requirement.id,
-      action: 'REQUIREMENT_DELETED_SOFT',
+      action: 'REQUIREMENT_DELETED_SOFT' as any,
       oldValue: { status: requirement.status },
       newValue: { deletedAt: deletedRequirement.deletedAt, reason: deletedRequirement.deleteReason },
       performedByUserId: req.userId,

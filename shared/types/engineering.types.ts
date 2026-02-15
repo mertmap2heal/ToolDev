@@ -567,6 +567,12 @@ export interface CreateRequirementDto {
   verificationNotes?: string
   lifecycleId?: string
   statusId?: string
+  links?: {
+    targetId: string
+    targetType: string
+    linkType: string
+    rationale?: string
+  }[]
 }
 
 export interface UpdateRequirementDto {
