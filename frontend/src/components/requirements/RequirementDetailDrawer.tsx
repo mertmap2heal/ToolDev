@@ -7,11 +7,12 @@ import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
 import { useLifecycleStore } from '../../store/lifecycleStore'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
-import { LifecycleFlowViewer } from '../lifecycle/LifecycleFlowViewer'
+import { RequirementLifecycleVisual } from '../lifecycle/RequirementLifecycleVisual'
 import { changeRequestService } from '../../services/changeRequest.service'
 import { linkService } from '../../services/link.service'
 import { LINKAGE_V1, LIFECYCLE_V1 } from '../../config/featureFlags'
 import { lifecycleService } from '../../services/lifecycle.service'
+import { verificationService } from '../../services/verification.service'
 
 import { buildDeepLink } from '../../linkage/buildDeepLink'
 import ImpactAnalysis from './ImpactAnalysis'
@@ -123,14 +124,26 @@ function LifecycleApprovalsTab({
     <div className="space-y-6">
       {lifecycle && (
         <div>
-          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Lifecycle</h3>
-          <p className="text-base text-gray-900 dark:text-white">{lifecycle.name} v{lifecycle.version}</p>
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Lifecycle</h3>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-base text-gray-900 dark:text-white">{lifecycle.name} v{lifecycle.version}</p>
+          </div>
+          {lifecycle.steps && (
+            <RequirementLifecycleVisual
+              steps={lifecycle.steps}
+              statuses={statuses}
+              currentStatusId={currentStatusId}
+              className="mb-6"
+            />
+          )}
         </div>
       )}
-      <div>
-        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Current Status</h3>
-        <p className="text-base text-gray-900 dark:text-white">{requirement.status || '—'}</p>
-      </div>
+      {!lifecycle && (
+        <div>
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Current Status</h3>
+          <p className="text-base text-gray-900 dark:text-white">{requirement.status || '—'}</p>
+        </div>
+      )}
       {statusHistory.length > 0 && (
         <div>
           <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Status History</h3>
@@ -625,9 +638,8 @@ export default function RequirementDetailDrawer({
                   if (lifecycle && lifecycle.steps && lifecycle.steps.length > 0) {
                     return (
                       <div className="mb-6">
-                        <LifecycleFlowViewer
+                        <RequirementLifecycleVisual
                           steps={lifecycle.steps}
-                          transitionRules={lifecycle.transitionRules || []}
                           statuses={statuses}
                           currentStatusId={displayRequirement.statusId}
                         />

@@ -5,6 +5,7 @@ import {
   CheckCircle,
   Settings,
   FileCode,
+  Play,
 } from 'lucide-react'
 import ProjectNavigation from '../../components/projects/ProjectNavigation'
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
@@ -19,6 +20,7 @@ const MAIN_TABS = [
   { id: 'overview', label: 'Overview', icon: BarChart3 },
   { id: 'plans', label: 'Test Plans', icon: FileText },
   { id: 'cases', label: 'Test Cases', icon: CheckCircle },
+  { id: 'runs', label: 'Test Runs', icon: Play },
   { id: 'setups', label: 'Test Setups', icon: Settings },
   { id: 'results', label: 'Test Results', icon: CheckCircle },
 ]

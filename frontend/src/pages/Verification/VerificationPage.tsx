@@ -23,6 +23,7 @@ import CreateTestSetupModal from '../../components/verification/CreateTestSetupM
 import CreateTestResultModal from '../../components/verification/CreateTestResultModal'
 import ListExporter from '../../components/verification/ListExporter'
 import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
+import TestRunList from '../../components/verification/TestRunList'
 import ExportWithTemplateModal from '../../components/verification/ExportWithTemplateModal'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 
@@ -146,9 +147,9 @@ export default function VerificationPage() {
   const tabParam = searchParams.get('tab') || 'overview'
   const focusType = searchParams.get('focusType')
   const focusId = searchParams.get('focusId')
-  const activeTab = (['overview', 'plans', 'cases', 'setups', 'results'].includes(tabParam)
+  const activeTab = (['overview', 'plans', 'cases', 'runs', 'setups', 'results'].includes(tabParam)
     ? tabParam
-    : 'overview') as 'overview' | 'plans' | 'cases' | 'setups' | 'results'
+    : 'overview') as 'overview' | 'plans' | 'cases' | 'runs' | 'setups' | 'results'
   const useTemplateId = searchParams.get('useTemplateId')
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -1049,6 +1050,10 @@ export default function VerificationPage() {
             </div>
           )}
         </div>
+      )}
+
+      {activeTab === 'runs' && (
+        <TestRunList />
       )}
 
       {activeTab === 'setups' && (
