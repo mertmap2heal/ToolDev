@@ -155,7 +155,7 @@ export default function RequirementsPBSTree({
     const [dragOverId, setDragOverId] = useState<string | null>(null)
     const [pbsSynced, setPbsSynced] = useState(false)
 
-    // Sync localStorage PBS data to components on first load
+    // Check if we need to sync to backend (for linkage purposes) - but assume local execution is truth
     useEffect(() => {
         if (!projectId || pbsSynced) return
 
@@ -163,8 +163,9 @@ export default function RequirementsPBSTree({
             try {
                 const pbsData = await loadPBSAsync(projectId)
                 if (pbsData.nodes.length > 0) {
+                    // We still sync to backend so that Requirement <-> Component linkage works in DB
                     await componentService.syncPBSToComponents(projectId, pbsData.nodes)
-                    queryClient.invalidateQueries({ queryKey: ['components', projectId] })
+                    // But we DON'T invalidate/refetch components for display, we use local data
                 }
             } catch (err) {
                 console.warn('Failed to sync PBS data:', err)
@@ -174,16 +175,57 @@ export default function RequirementsPBSTree({
         }
 
         syncPBS()
-    }, [projectId, pbsSynced, queryClient])
+    }, [projectId, pbsSynced])
 
-    // Fetch component tree
+    // Fetch local PBS data for display
     const { data: componentTree = [] } = useQuery({
-        queryKey: ['components', projectId],
+        queryKey: ['pbs-local', projectId],
         queryFn: async () => {
-            const response = await componentService.getComponentTree(projectId)
-            return response.success && response.data ? response.data : []
+            const pbsData = await loadPBSAsync(projectId)
+
+            // Map PBSNode[] to ComponentTreeNode[]
+            // We need to build the tree structure from flat list
+            const nodes = pbsData.nodes
+            const nodeMap = new Map<string, any>()
+            const rootNodes: any[] = []
+
+            // First pass: create component objects
+            nodes.forEach(node => {
+                nodeMap.set(node.id, {
+                    id: node.id,
+                    projectId: projectId!,
+                    parentId: node.parentId,
+                    name: node.name,
+                    description: node.description,
+                    sortOrder: node.orderIndex,
+                    createdAt: node.createdAt,
+                    updatedAt: node.updatedAt,
+                    children: []
+                })
+            })
+
+            // Second pass: build tree
+            nodes.forEach(node => {
+                const component = nodeMap.get(node.id)
+                if (node.parentId && nodeMap.has(node.parentId)) {
+                    nodeMap.get(node.parentId).children.push(component)
+                } else {
+                    rootNodes.push(component)
+                }
+            })
+
+            // Sort by orderIndex
+            const sortNodes = (n: any[]) => {
+                n.sort((a, b) => a.sortOrder - b.sortOrder)
+                n.forEach(child => {
+                    if (child.children.length > 0) sortNodes(child.children)
+                })
+            }
+            sortNodes(rootNodes)
+
+            return rootNodes
         },
-        enabled: !!projectId && pbsSynced,
+        enabled: !!projectId,
     })
 
     // Auto-expand root nodes on first load
@@ -191,13 +233,21 @@ export default function RequirementsPBSTree({
         if (componentTree.length > 0) {
             setExpandedNodes(prev => {
                 const next = new Set(prev)
-                for (const node of componentTree) {
-                    next.add(node.id)
+                // Recursive expand function
+                const expandAll = (nodes: any[]) => {
+                    for (const node of nodes) {
+                        next.add(node.id)
+                        if (node.children && node.children.length > 0) {
+                            expandAll(node.children)
+                        }
+                    }
                 }
+                // Expand everything by default since local trees are usually small/navigable
+                expandAll(componentTree)
                 return next
             })
         }
-    }, [componentTree])
+    }, [componentTree.length]) // Only run when tree size changes (loaded)
 
     // Mutation for drag-and-drop component reassignment
     const assignComponentMutation = useMutation({
