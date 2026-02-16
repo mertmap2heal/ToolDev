@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
-import { X, Upload, AlertTriangle, CheckCircle, FileJson } from 'lucide-react'
+import { X, Upload, AlertTriangle, CheckCircle, FileJson, FileText } from 'lucide-react'
+import Papa from 'papaparse'
 import clsx from 'clsx'
 import type { PBSNode, PBSChangeLogEntry } from './types'
 import { PBS_TYPES, PBS_STATUSES } from './types'
@@ -135,6 +136,119 @@ function validateImportData(data: unknown): ValidationResult {
   }
 }
 
+function validateCSVData(rows: any[]): ValidationResult {
+  const errors: string[] = []
+  const warnings: string[] = []
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { valid: false, errors: ['CSV file is empty'], warnings: [], data: null }
+  }
+
+  // Check headers
+  const requiredHeaders = ['PBS ID', 'Name', 'Type', 'Status', 'Path']
+  const firstRow = rows[0]
+  const missingHeaders = requiredHeaders.filter(h => !(h in firstRow))
+
+  if (missingHeaders.length > 0) {
+    return { valid: false, errors: [`Missing headers: ${missingHeaders.join(', ')}`], warnings: [], data: null }
+  }
+
+  const nodes: PBSNode[] = []
+  // Map to store generated IDs for paths: "System / Subsystem" -> UUID
+  const pathToIdMap = new Map<string, string>()
+  const rootNodes: PBSNode[] = []
+
+  // First pass: Generate IDs for all paths and create nodes
+  rows.forEach((row, index) => {
+    const pathStr = (row['Path'] || '').trim()
+    const name = (row['Name'] || '').trim()
+    const pbsCode = (row['PBS ID'] || '').trim()
+
+    if (!pathStr) {
+      warnings.push(`Row ${index + 1}: Missing path, skipping`)
+      return
+    }
+
+    if (!name) {
+      warnings.push(`Row ${index + 1}: Missing name, skipping`)
+      return
+    }
+
+    // Generate specific ID for this node's path
+    // We use the full path to uniquely identify it in the hierarchy
+    const nodeId = crypto.randomUUID()
+    pathToIdMap.set(pathStr, nodeId)
+
+    // Determine parent path
+    const pathParts = pathStr.split(' / ')
+    const parentPath = pathParts.length > 1 ? pathParts.slice(0, -1).join(' / ') : null
+
+    const type = PBS_TYPES.includes(row['Type']) ? row['Type'] : 'System'
+    if (row['Type'] && !PBS_TYPES.includes(row['Type'])) {
+      warnings.push(`Row ${index + 1}: Invalid type "${row['Type']}", defaulting to "System"`)
+    }
+
+    const status = PBS_STATUSES.includes(row['Status']) ? row['Status'] : 'Draft'
+    if (row['Status'] && !PBS_STATUSES.includes(row['Status'])) {
+      warnings.push(`Row ${index + 1}: Invalid status "${row['Status']}", defaulting to "Draft"`)
+    }
+
+    nodes.push({
+      id: nodeId,
+      parentId: null, // Will resolve in second pass
+      name,
+      pbsCode: pbsCode || `PBS-${index + 1}`,
+      type: type as any,
+      status: status as any,
+      description: '',
+      tags: [],
+      attributes: [],
+      relationships: [],
+      attachments: [],
+      orderIndex: index,
+      revision: 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      // Store temp path for second pass
+      _tempPath: pathStr,
+      _tempParentPath: parentPath
+    } as any)
+  })
+
+  // Second pass: Resolve parent references
+  nodes.forEach(node => {
+    const anyNode = node as any
+    if (anyNode._tempParentPath) {
+      const parentId = pathToIdMap.get(anyNode._tempParentPath)
+      if (parentId) {
+        node.parentId = parentId
+      } else {
+        // Parent not found in CSV - treat as root or warn?
+        // For now, treat as root if parent path is missing (maybe top of imported tree)
+        // But if it had a path like "Root / Child", "Root" should exist
+        warnings.push(`Node "${node.name}": Parent at path "${anyNode._tempParentPath}" not found in CSV. verify export contains all ancestors.`)
+      }
+    }
+    // Clean up temp props
+    delete anyNode._tempPath
+    delete anyNode._tempParentPath
+  })
+
+  if (nodes.length === 0) {
+    return { valid: false, errors: ['No valid nodes found in CSV'], warnings, data: null }
+  }
+
+  return {
+    valid: true,
+    errors,
+    warnings,
+    data: {
+      nodes,
+      changeLog: [] // CSV import doesn't preserve changelog
+    }
+  }
+}
+
 export default function ImportModal({
   isOpen,
   currentNodeCount,
@@ -154,6 +268,28 @@ export default function ImportModal({
     if (!selectedFile) return
 
     setIsProcessing(true)
+    if (selectedFile.name.endsWith('.csv')) {
+      Papa.parse(selectedFile, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          const result = validateCSVData(results.data)
+          setValidation(result)
+          setIsProcessing(false)
+        },
+        error: (error) => {
+          setValidation({
+            valid: false,
+            errors: [`Failed to parse CSV: ${error.message}`],
+            warnings: [],
+            data: null,
+          })
+          setIsProcessing(false)
+        }
+      })
+      return
+    }
+
     const reader = new FileReader()
 
     reader.onload = (e) => {
@@ -245,20 +381,20 @@ export default function ImportModal({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".json,application/json"
+                accept=".json,application/json,.csv,text/csv"
                 onChange={(e) => handleFileSelect(e.target.files?.[0] ?? null)}
                 className="hidden"
               />
               {file ? (
                 <div className="flex items-center justify-center gap-2 text-blue-600 dark:text-blue-400">
-                  <FileJson size={24} />
+                  {file.name.endsWith('.csv') ? <FileText size={24} /> : <FileJson size={24} />}
                   <span className="font-medium">{file.name}</span>
                 </div>
               ) : (
                 <div className="text-gray-500 dark:text-gray-400">
                   <Upload size={32} className="mx-auto mb-2" />
-                  <p className="text-sm">Click to select a JSON file</p>
-                  <p className="text-xs mt-1">Exported from PBS Export JSON</p>
+                  <p className="text-sm">Click to select a JSON or CSV file</p>
+                  <p className="text-xs mt-1">Exported from PBS Export</p>
                 </div>
               )}
             </div>
