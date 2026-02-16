@@ -1312,6 +1312,16 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
             }).catch(e => {
               console.error(`Failed to delete linked requirement/item ${item.id}:`, e)
             })
+          } else if (item.type === 'test_case') {
+            // Hard delete verification test case
+            await prisma.verTestCase.delete({ where: { id: item.id } }).catch(e => {
+              console.error(`Failed to delete linked test case ${item.id}:`, e)
+            })
+          } else if (item.type === 'pbs_component') {
+            // Hard delete PBS component
+            await prisma.component.delete({ where: { id: item.id } }).catch(e => {
+              console.error(`Failed to delete linked PBS component ${item.id}:`, e)
+            })
           }
         } catch (error) {
           console.error(`Error processing linked item deletion for ${item.type}:${item.id}`, error)
