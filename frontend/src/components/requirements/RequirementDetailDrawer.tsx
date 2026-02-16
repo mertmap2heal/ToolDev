@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { X, Edit2, Trash2, MessageSquare, Paperclip, Tag, ChevronRight, ChevronDown, Link2, FileText, Settings, AlertCircle, Zap, History, ExternalLink, Check, Bell, BellRing, GitPullRequest, Shield, Target, ClipboardCheck, Layers, BookOpen } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -197,6 +197,12 @@ export default function RequirementDetailDrawer({
   const [isImpactAnalysisOpen, setIsImpactAnalysisOpen] = useState(false)
   const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+
+  // Resizable drawer width
+  const [drawerWidth, setDrawerWidth] = useState<number>(512) // 32rem = 512px
+  const drawerResizing = useRef(false)
+  const drawerStartX = useRef(0)
+  const drawerStartWidth = useRef(0)
 
   const { lifecycles } = useLifecycleStore()
   const { statuses } = useStatusDefinitionsStore()
@@ -560,15 +566,49 @@ export default function RequirementDetailDrawer({
     return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
   }
 
+  // Drawer resize handler (drag left edge to widen)
+  const handleDrawerResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    drawerResizing.current = true
+    drawerStartX.current = e.clientX
+    drawerStartWidth.current = drawerWidth
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!drawerResizing.current) return
+      const delta = drawerStartX.current - e.clientX // inverted: dragging left = wider
+      const newWidth = Math.max(384, Math.min(900, drawerStartWidth.current + delta))
+      setDrawerWidth(newWidth)
+    }
+
+    const handleMouseUp = () => {
+      drawerResizing.current = false
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }, [drawerWidth])
+
   return (
     <div
       className={clsx(
-        'flex flex-col transition-all duration-300 ease-in-out overflow-hidden relative',
+        'flex flex-col overflow-hidden relative',
         isOpen && displayRequirement
-          ? 'h-[calc(100%-1rem)] m-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm w-[32rem] flex-shrink-0'
-          : 'w-0 min-w-0 h-full'
+          ? 'h-[calc(100%-1rem)] m-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm flex-shrink-0'
+          : 'w-0 min-w-0 h-full transition-all duration-300 ease-in-out'
       )}
+      style={isOpen && displayRequirement ? { width: drawerWidth, minWidth: 384 } : undefined}
     >
+      {/* Resize handle on left edge */}
+      {isOpen && displayRequirement && (
+        <div
+          className="absolute top-0 left-0 w-2 h-full cursor-col-resize hover:bg-blue-400/50 active:bg-blue-500 transition-colors z-20 group"
+          onMouseDown={handleDrawerResizeStart}
+        >
+          <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[1px] bg-gray-200 dark:bg-gray-700 group-hover:bg-blue-400 transition-colors" />
+        </div>
+      )}
       {toastMessage && (
         <div className="absolute top-3 right-3 z-10 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 shadow-sm">
           {toastMessage}
