@@ -13,6 +13,7 @@
     "prisma:studio": "prisma studio",
     "check-db": "tsx src/scripts/check-and-fix-projects.ts",
     "seed:users": "tsx src/scripts/seed-users.ts",
+    "seed:mocs": "tsx prisma/seed-mocs.ts",
     "db:push": "prisma db push --accept-data-loss",
     "db:gen": "prisma generate",
     "test": "vitest run"
