@@ -1,5 +1,5 @@
 export type ArtifactType = 'requirement' | 'function' | 'parameter' | 'architecture' | 'verification';
-export type LinkType = 'satisfies' | 'implements' | 'verifies' | 'derives' | 'refines' | 'copy' | 'trace' | 'allocate';
+export type LinkType = 'satisfies' | 'implements' | 'verifies' | 'derives' | 'refines' | 'copy' | 'trace' | 'allocate' | 'parent_of' | 'child_of' | 'derives_from' | 'derived_to' | 'refined_by' | 'depends_on' | 'required_by' | 'constrains' | 'constrained_by' | 'conflicts_with' | 'supports' | 'supported_by' | 'supersedes' | 'superseded_by';
 export interface TraceLink {
     id: string;
     projectId: string;
@@ -15,6 +15,12 @@ export interface TraceLink {
     isSuspect?: boolean;
     lastChecked?: string;
     createdAt: string;
+    targetTitle?: string;
+    targetDescription?: string;
+    targetDisplayId?: string;
+    sourceTitle?: string;
+    sourceDescription?: string;
+    sourceDisplayId?: string;
 }
 export interface CreateTraceLinkDto {
     sourceType: ArtifactType;

@@ -445,7 +445,6 @@ model Issue {
   systemNotes   IssueSystemNote[]
   subscriptions IssueSubscription[]
   links         IssueLink[]         @relation("IssueToLink")
-  linkedBy      IssueLink[]         @relation("LinkedIssue")
 
   @@index([projectId])
   @@index([issueKey])
@@ -529,7 +528,6 @@ model IssueLink {
   createdAt             DateTime @default(now())
 
   issue       Issue  @relation("IssueToLink", fields: [issueId], references: [id], onDelete: Cascade)
-  linkedIssue Issue? @relation("LinkedIssue", fields: [linkedId], references: [id], onDelete: Cascade)
 
   @@index([issueId])
   @@index([linkedId])

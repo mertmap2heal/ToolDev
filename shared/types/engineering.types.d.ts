@@ -35,6 +35,9 @@ export interface Requirement {
     verificationDate?: string;
     verificationNotes?: string | null;
     linkedMocCode?: number | null;
+    thresholdValue?: string | null;
+    objectiveValue?: string | null;
+    customAttributes?: Record<string, any> | null;
     isLocked: boolean;
     lockedByUserId?: string | null;
     lockedAt?: string | null;
@@ -517,6 +520,9 @@ export interface CreateRequirementDto {
     rationale?: string;
     assumptions?: string;
     linkedMocCode?: string;
+    thresholdValue?: string;
+    objectiveValue?: string;
+    customAttributes?: Record<string, any>;
     dependencies?: string[];
     conflicts?: string[];
     stakeholders?: string[];
@@ -525,6 +531,12 @@ export interface CreateRequirementDto {
     verificationNotes?: string;
     lifecycleId?: string;
     statusId?: string;
+    links?: {
+        targetId: string;
+        targetType: string;
+        linkType: string;
+        rationale?: string;
+    }[];
 }
 export interface UpdateRequirementDto {
     requirementId?: string;
@@ -550,6 +562,9 @@ export interface UpdateRequirementDto {
     complexity?: ComplexityLevel;
     rationale?: string;
     assumptions?: string;
+    thresholdValue?: string;
+    objectiveValue?: string;
+    customAttributes?: Record<string, any>;
     dependencies?: string[];
     conflicts?: string[];
     stakeholders?: string[];
