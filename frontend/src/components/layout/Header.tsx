@@ -13,6 +13,7 @@ import { CATEGORIES, type ModuleCategory } from '../../config/ModuleConfiguratio
 import HeaderMegaMenu from '../navigation/HeaderMegaMenu'
 import QuickAccessBar from '../navigation/QuickAccessBar'
 import clsx from 'clsx'
+import FeedbackModal from '../common/FeedbackModal'
 
 // Custom hook since usehooks-ts might not be available
 function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T) => void] {
@@ -64,6 +65,7 @@ export default function Header() {
   const [activeCategory, setActiveCategory] = useLocalStorage<ModuleCategory>('mega-menu-category', 'system')
   const [pinnedIds, setPinnedIds] = useLocalStorage<string[]>('mega-menu-pinned', DEFAULT_PINNED_IDS)
   const [isMegaMenuOpen, setIsMegaMenuOpen] = useState(false)
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false)
 
   const pinnedSet = new Set(pinnedIds)
 
@@ -202,7 +204,11 @@ export default function Header() {
 
           {/* Right: Icons */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg relative hidden sm:block">
+            <button
+              onClick={() => setIsFeedbackModalOpen(true)}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg relative hidden sm:block"
+              aria-label="Send Feedback"
+            >
               <HelpCircle size={20} className="text-gray-600 dark:text-gray-400" />
             </button>
             <div className="relative" ref={bellRef}>
@@ -355,6 +361,11 @@ export default function Header() {
         projectId={projectId}
         pinnedIds={pinnedSet}
         onTogglePin={handleTogglePin}
+      />
+
+      <FeedbackModal
+        isOpen={isFeedbackModalOpen}
+        onClose={() => setIsFeedbackModalOpen(false)}
       />
     </header>
   )

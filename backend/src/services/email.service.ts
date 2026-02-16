@@ -7,15 +7,15 @@ const pass = (process.env.SMTP_PASS ?? '').trim().replace(/^["']|["']$/g, '')
 const transporter =
   host.toLowerCase() === 'smtp.gmail.com' && user && pass
     ? nodemailer.createTransport({
-        service: 'gmail',
-        auth: { user, pass },
-      })
+      service: 'gmail',
+      auth: { user, pass },
+    })
     : nodemailer.createTransport({
-        host: host || undefined,
-        port: parseInt(process.env.SMTP_PORT ?? '587', 10),
-        secure: process.env.SMTP_SECURE === 'true',
-        auth: user && pass ? { user, pass } : undefined,
-      })
+      host: host || undefined,
+      port: parseInt(process.env.SMTP_PORT ?? '587', 10),
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: user && pass ? { user, pass } : undefined,
+    })
 
 const APP_URL = process.env.APP_URL ?? 'http://localhost:3000'
 const FROM_NAME = process.env.INVITE_FROM_NAME ?? 'Engineering Tool'
@@ -194,4 +194,68 @@ This is an automated message; please do not reply.
     text,
     html,
   })
+}
+
+export interface SendFeedbackEmailParams {
+  name: string
+  email: string
+  message: string
+  attachments?: {
+    filename: string
+    content: string | Buffer
+    encoding?: string
+  }[]
+}
+
+export async function sendFeedbackEmail({
+  name,
+  email,
+  message,
+  attachments = [],
+}: SendFeedbackEmailParams): Promise<void> {
+  const subject = `Feedback from ${name} - ${new Date().toLocaleDateString()}`
+  const text = `
+Feedback from: ${name} (${email})
+
+Message:
+${message}
+
+--
+Sent from Engineering Tool
+`.trim()
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>New Feedback</title></head>
+<body style="font-family: sans-serif; line-height: 1.5; color: #333;">
+  <h3>New Feedback Received</h3>
+  <p><strong>From:</strong> ${name} (<a href="mailto:${email}">${email}</a>)</p>
+  <div style="background: #f9f9f9; padding: 15px; border-left: 4px solid #007bff; margin: 20px 0;">
+    <p style="white-space: pre-wrap; margin: 0;">${message}</p>
+  </div>
+  <p style="color:#666;font-size:0.9em;">Sent from Engineering Tool</p>
+</body>
+</html>
+`.trim()
+
+  try {
+    console.log(`[EmailService] Sending feedback email to mmertcaferoglu@gmail.com from ${user || 'noreply'}`)
+    await transporter.sendMail({
+      from: FROM_NAME.includes('@') ? FROM_NAME : `"${FROM_NAME}" <${user || 'noreply@localhost'}>`,
+      to: 'mmertcaferoglu@gmail.com',
+      subject,
+      text,
+      html,
+      attachments: attachments.map(att => ({
+        filename: att.filename,
+        content: att.content,
+        encoding: att.encoding
+      }))
+    })
+    console.log('[EmailService] Feedback email sent successfully')
+  } catch (error) {
+    console.error('[EmailService] Failed to send feedback email:', error)
+    throw error
+  }
 }

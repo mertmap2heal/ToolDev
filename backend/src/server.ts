@@ -5,6 +5,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { PrismaClient } from '@prisma/client'
 import routes from './routes/index.js'
+import feedbackRoutes from './routes/feedback.routes.js'
 
 dotenv.config()
 
@@ -62,6 +63,7 @@ app.get('/api/v1', (req, res) => {
 })
 
 app.use('/api/v1', routes)
+app.use('/api/v1/feedback', feedbackRoutes)
 
 // Global error handler: return JSON 500 for any unhandled errors
 app.use(async (err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
