@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { Bell, Search, HelpCircle, Settings, Grid, GraduationCap, LogOut, Loader2, Shield, Menu, Sun, Moon } from 'lucide-react'
+import GlobalSearch from '../search/GlobalSearch'
 import Logo from '../Logo'
 import Breadcrumbs from './Breadcrumbs'
 import { authService } from '../../services/auth.service'
@@ -84,6 +85,19 @@ export default function Header() {
   const [pinnedIds, setPinnedIds] = useLocalStorage<string[]>('mega-menu-pinned', DEFAULT_PINNED_IDS)
   const [isMegaMenuOpen, setIsMegaMenuOpen] = useState(false)
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+
+  // Global Ctrl+K shortcut to open search
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        setIsSearchOpen(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   const pinnedSet = new Set(pinnedIds)
 
@@ -205,19 +219,18 @@ export default function Header() {
             )}
           </div>
 
-          {/* Center: Search */}
+          {/* Center: Search (opens command palette) */}
           <div className="hidden lg:flex flex-1 max-w-md mx-3">
-            <div className="relative w-full">
-              <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
-              <input
-                type="text"
-                placeholder="Search"
-                className="w-full pl-8 pr-4 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
-              />
-              <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-gray-400">
+            <button
+              onClick={() => setIsSearchOpen(true)}
+              className="relative w-full flex items-center pl-8 pr-4 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-gray-400 text-xs hover:border-blue-400 dark:hover:border-blue-500 transition-colors cursor-text"
+            >
+              <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2" size={14} />
+              Search anything…
+              <span className="ml-auto text-[10px] font-mono bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded">
                 Ctrl+K
               </span>
-            </div>
+            </button>
           </div>
 
           {/* Right: Icons */}
@@ -390,6 +403,8 @@ export default function Header() {
         isOpen={isFeedbackModalOpen}
         onClose={() => setIsFeedbackModalOpen(false)}
       />
+
+      <GlobalSearch open={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
     </header>
   )
 }

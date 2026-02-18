@@ -45,6 +45,7 @@ import platformAdminRoutes from './platformAdmin.routes'
 import organizationRoutes from './organization.routes'
 import adminRoutes from './admin.routes'
 import lifecycleRoutes from './lifecycle.routes'
+import searchRoutes from './search.routes'
 
 const router = Router()
 
@@ -95,5 +96,6 @@ router.use('/task-analytics', taskAnalyticsRoutes)
 router.use('/compliance', complianceRoutes)
 router.use('/certification', certificationRoutes)
 router.use('/lifecycle', lifecycleRoutes)
+router.use('/search', searchRoutes)
 
 export default router
