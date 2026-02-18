@@ -115,7 +115,7 @@ export default function ArchivePage() {
                   <Archive size={24} className="text-gray-600 dark:text-gray-300" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Trash</h2>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">Trash</h2>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     Items are permanently deleted after 7 days
                   </p>
@@ -153,7 +153,7 @@ export default function ArchivePage() {
             {/* Toolbar */}
             <div className="flex items-center gap-4">
               <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
                 <input
                   type="text"
                   value={searchQuery}

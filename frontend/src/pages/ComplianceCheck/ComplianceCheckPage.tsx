@@ -124,7 +124,7 @@ export default function ComplianceCheckPage() {
     <div className="space-y-6">
 
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Compliance Check</h1>
+        <h1 className="text-lg font-bold text-gray-900 dark:text-white">Compliance Check</h1>
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
           Run and track compliance checks against requirements, standards, and regulations.
         </p>
@@ -154,7 +154,7 @@ export default function ComplianceCheckPage() {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Rules</h2>
             <button
               onClick={() => setCreateModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus size={16} />
               Add rule
@@ -211,7 +211,7 @@ export default function ComplianceCheckPage() {
             <button
               onClick={() => runChecksMutation.mutate()}
               disabled={runChecksMutation.isPending || rules.length === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <Play size={16} />
               {runChecksMutation.isPending ? 'Running…' : 'Run check'}
