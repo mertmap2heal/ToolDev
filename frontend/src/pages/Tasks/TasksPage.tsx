@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react'
-import { useParams, useLocation, useSearchParams, Link } from 'react-router-dom'
+import { useParams, useLocation, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus,
   List,
   LayoutGrid,
   Calendar,
-  ChevronRight,
   Search,
   Filter,
   X,
