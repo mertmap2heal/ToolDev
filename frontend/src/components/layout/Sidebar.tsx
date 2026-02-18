@@ -1,7 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import {
   Home,
-  Building2,
   ClipboardCheck,
   Sparkles,
   RefreshCw,
@@ -13,7 +12,6 @@ import { useAIGuideStore } from '../../store/aiGuideStore'
 
 const menuItems = [
   { icon: Home, label: 'Home', path: '/' },
-  { icon: Building2, label: 'Organization', path: '/organization' },
   { icon: Package, label: 'Inventory Management', path: '/inventory' },
   { icon: CheckSquare, label: 'Tasks', path: '/tasks' },
   { icon: ClipboardCheck, label: 'Audit', path: '/audit' },

@@ -6,6 +6,7 @@ import {
   Shield,
   Settings,
   User,
+  Building2,
   Briefcase,
   CheckSquare,
   Clock,
@@ -280,6 +281,7 @@ export default function UserMenu({ onOpenFeedback }: UserMenuProps) {
         <div className="py-1.5 border-b border-gray-100 dark:border-gray-700/60">
           <MenuSectionLabel>Quick Access</MenuSectionLabel>
           <MenuItem icon={User} label="My Profile" shortcut="" onClick={() => handleNavigate('/settings')} />
+          <MenuItem icon={Building2} label="My Organization" onClick={() => handleNavigate('/organization')} />
           <MenuItem icon={CheckSquare} label="My Tasks" badge={null} onClick={() => handleNavigate('/tasks/my-tasks')} />
           <MenuItem icon={Briefcase} label="My Projects" onClick={() => handleNavigate('/')} />
           <MenuItem icon={Activity} label="Activity & Audit" onClick={() => handleNavigate('/tasks/reports')} />
