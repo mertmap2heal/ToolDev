@@ -2,7 +2,6 @@ import { Link, useLocation } from 'react-router-dom'
 import {
   Home,
   Building2,
-  User,
   ClipboardCheck,
   Sparkles,
   RefreshCw,
@@ -20,7 +19,6 @@ const menuItems = [
   { icon: ClipboardCheck, label: 'Audit', path: '/audit' },
   { icon: RefreshCw, label: 'Lifecycle Management', path: '/lifecycle' },
   { icon: Sparkles, label: 'AI Guide', path: '/ai-guide', isSpecial: true },
-  { icon: User, label: 'User', path: '/user' },
 ]
 
 export default function Sidebar() {

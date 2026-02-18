@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { Bell, Search, HelpCircle, Settings, Grid, GraduationCap, LogOut, Loader2, Shield, Menu, Sun, Moon } from 'lucide-react'
+import { Bell, Search, Loader2, Menu } from 'lucide-react'
+import UserMenu from './UserMenu'
 import GlobalSearch from '../search/GlobalSearch'
 import Logo from '../Logo'
 import Breadcrumbs from './Breadcrumbs'
-import { authService } from '../../services/auth.service'
 import { useAuthStore } from '../../store/authStore'
 import { notificationService } from '../../services/notification.service'
 import { projectService } from '../../services/project.service'
@@ -15,7 +15,6 @@ import HeaderMegaMenu from '../navigation/HeaderMegaMenu'
 import QuickAccessBar from '../navigation/QuickAccessBar'
 import clsx from 'clsx'
 import FeedbackModal from '../common/FeedbackModal'
-import { useThemeStore } from '../../store/themeStore'
 
 // Custom hook since usehooks-ts might not be available
 function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T) => void] {
@@ -49,33 +48,14 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T) => voi
 
 const DEFAULT_PINNED_IDS = ['requirements', 'issues', 'change-requests', 'verification']
 
-function ThemeToggleButton() {
-  const { theme, toggleTheme } = useThemeStore()
-  return (
-    <button
-      onClick={toggleTheme}
-      className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
-      title={theme === 'midnight' ? 'Switch to Light mode' : 'Switch to Midnight mode'}
-    >
-      {theme === 'midnight' ? (
-        <Sun size={16} className="text-yellow-400" />
-      ) : (
-        <Moon size={16} className="text-gray-600" />
-      )}
-    </button>
-  )
-}
-
 export default function Header() {
-  const [dropdownOpen, setDropdownOpen] = useState(false)
   const [bellOpen, setBellOpen] = useState(false)
-  const dropdownRef = useRef<HTMLDivElement>(null)
   const bellRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
   const location = useLocation()
   const { projectId } = useParams<{ projectId: string }>()
   const queryClient = useQueryClient()
-  const { user, logout } = useAuthStore()
+  const { user } = useAuthStore()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [notificationsLoading, setNotificationsLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -127,9 +107,6 @@ export default function Header() {
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setDropdownOpen(false)
-      }
       if (bellRef.current && !bellRef.current.contains(event.target as Node)) {
         setBellOpen(false)
       }
@@ -179,14 +156,6 @@ export default function Header() {
     }
   }
 
-  const handleLogout = () => {
-    authService.logout()
-    logout()
-    setDropdownOpen(false)
-    navigate('/login', { replace: true })
-  }
-
-  const userInitial = user?.name?.charAt(0)?.toUpperCase() || 'M'
   const isProjectContext = !!projectId
 
   return (
@@ -235,13 +204,6 @@ export default function Header() {
 
           {/* Right: Icons */}
           <div className="flex items-center gap-1 flex-shrink-0">
-            <button
-              onClick={() => setIsFeedbackModalOpen(true)}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md relative hidden sm:block"
-              aria-label="Send Feedback"
-            >
-              <HelpCircle size={16} className="text-gray-600 dark:text-gray-400" />
-            </button>
             <div className="relative" ref={bellRef}>
               <button
                 onClick={() => setBellOpen(!bellOpen)}
@@ -305,72 +267,7 @@ export default function Header() {
               )}
             </div>
 
-            <ThemeToggleButton />
-            <button
-              onClick={() => navigate('/settings')}
-              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md hidden sm:block"
-              title="Settings"
-            >
-              <Settings size={16} className="text-gray-600 dark:text-gray-400" />
-            </button>
-            <button className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md hidden sm:block">
-              <Grid size={16} className="text-gray-600 dark:text-gray-400" />
-            </button>
-
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="w-7 h-7 rounded-full bg-blue-500 flex items-center justify-center ml-1 cursor-pointer hover:bg-blue-600 transition-colors shadow-sm"
-                aria-expanded={dropdownOpen}
-                aria-haspopup="true"
-              >
-                <span className="text-white font-semibold text-xs">{userInitial}</span>
-              </button>
-              {dropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 py-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                  <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{user?.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
-                  </div>
-                  {(user?.role === 'SUPERIOR_ADMIN' || user?.isSuperiorAdmin) && (
-                    <>
-                      <button
-                        onClick={() => {
-                          navigate('/platform-admin')
-                          setDropdownOpen(false)
-                        }}
-                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
-                      >
-                        <Shield size={16} />
-                        Platform Admin
-                      </button>
-                    </>
-                  )}
-                  {user?.isAdmin && (
-                    <>
-                      <button
-                        onClick={() => {
-                          navigate('/admin')
-                          setDropdownOpen(false)
-                        }}
-                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
-                      >
-                        <Shield size={16} />
-                        Admin Panel
-                      </button>
-                      <hr className="border-gray-200 dark:border-gray-700 my-1" />
-                    </>
-                  )}
-                  <button
-                    onClick={handleLogout}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 text-red-600 dark:text-red-400"
-                  >
-                    <LogOut size={16} />
-                    Logout
-                  </button>
-                </div>
-              )}
-            </div>
+            <UserMenu onOpenFeedback={() => setIsFeedbackModalOpen(true)} />
           </div>
         </div>
 
