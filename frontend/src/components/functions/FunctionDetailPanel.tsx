@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import FunctionTraceabilityTab from './FunctionTraceabilityTab'
 import {
   Edit2,
   Trash2,
@@ -522,90 +523,7 @@ export default function FunctionDetailPanel({
         )}
 
         {activeTab === 'links' && (
-          <div className="space-y-6">
-            {/* Issues */}
-            <section>
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <AlertCircle size={13} className="text-orange-500" />
-                  Issues ({linkedIssues.length})
-                </h4>
-                <button
-                  onClick={() => onRaiseIssue(func.id)}
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-                >
-                  <Plus size={12} /> Raise Issue
-                </button>
-              </div>
-              {linkedIssues.length === 0 ? (
-                <p className="text-sm text-gray-400 dark:text-gray-500 italic p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">No linked issues.</p>
-              ) : (
-                <div className="space-y-2">
-                  {linkedIssues.map(issue => (
-                    <div key={issue.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700/50 hover:border-gray-200 dark:hover:border-gray-600 transition-colors">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{issue.title}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                            issue.priority === 'critical' ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300' :
-                            issue.priority === 'high' ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300' :
-                            issue.priority === 'medium' ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300' :
-                            'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300'
-                          }`}>
-                            {issue.priority}
-                          </span>
-                          <span className="mx-1.5">·</span>
-                          {issue.status}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => window.location.href = `/projects/${projectId}/issues`}
-                        className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
-                      >
-                        <ExternalLink size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* Change Requests */}
-            <section>
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <GitBranch size={13} className="text-green-500" />
-                  Change Requests ({linkedCRs.length})
-                </h4>
-                <button
-                  onClick={() => onCreateChangeRequest(func.id, `${func.functionId}: ${func.name}`)}
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-                >
-                  <Plus size={12} /> Create CR
-                </button>
-              </div>
-              {linkedCRs.length === 0 ? (
-                <p className="text-sm text-gray-400 dark:text-gray-500 italic p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">No change requests.</p>
-              ) : (
-                <div className="space-y-2">
-                  {linkedCRs.map(cr => (
-                    <div key={cr.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700/50 hover:border-gray-200 dark:hover:border-gray-600 transition-colors">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{cr.title}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{cr.status}</p>
-                      </div>
-                      <button
-                        onClick={() => window.location.href = `/projects/${projectId}/change-requests`}
-                        className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
-                      >
-                        <ExternalLink size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          </div>
+          <FunctionTraceabilityTab funcId={func.id} projectId={projectId} />
         )}
 
         {activeTab === 'hierarchy' && (
