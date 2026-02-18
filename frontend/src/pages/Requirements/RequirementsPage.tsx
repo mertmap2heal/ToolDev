@@ -1523,7 +1523,7 @@ export default function RequirementsPage() {
               >
                 {isPBSPanelOpen ? <PanelLeftClose size={16} className="text-gray-500" /> : <PanelLeft size={16} className="text-gray-500" />}
               </button>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Requirements</h2>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Requirements</h2>
               {selectedComponentId && (
                 <button
                   onClick={() => setSelectedComponentId(null)}
@@ -1574,7 +1574,7 @@ export default function RequirementsPage() {
                         e.target.value = 'bulk-action'
                       }
                     }}
-                    className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
                     defaultValue="bulk-action"
                   >
                     <option value="bulk-action">Bulk Actions...</option>
@@ -1698,10 +1698,10 @@ export default function RequirementsPage() {
                   setIsCreateModalOpen(true)
                 }}
                 disabled={isBaselineView}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-colors"
+                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-colors"
               >
                 <Plus size={16} />
-                <span>Create Requirement</span>
+                <span className="text-sm">Create Requirement</span>
               </button>
             </div>
           </div>
@@ -1710,7 +1710,7 @@ export default function RequirementsPage() {
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
             <div className="flex items-center gap-4">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
                 <input
                   type="text"
                   placeholder="Search all fields (title, description, ID, requirement type, owner, tags, criteria...)"
@@ -1731,15 +1731,15 @@ export default function RequirementsPage() {
               <button
                 onClick={() => setGroupByType(!groupByType)}
                 className={clsx(
-                  "px-4 py-2 rounded-lg border transition-colors flex items-center gap-2 whitespace-nowrap",
+                  "px-3 py-2 rounded-lg border transition-colors flex items-center gap-2 whitespace-nowrap",
                   groupByType
                     ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-600"
                     : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600"
                 )}
                 title="Group requirements by type"
               >
-                <Grid3X3 size={18} />
-                <span className="text-sm font-medium">Group by Type</span>
+                <Grid3X3 size={16} />
+                <span className="text-sm">Group by Type</span>
               </button>
             </div>
           </div>
@@ -1751,13 +1751,13 @@ export default function RequirementsPage() {
               className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
             >
               <div className="flex items-center gap-2">
-                <Filter size={18} className="text-gray-600 dark:text-gray-400" />
+                <Filter size={16} className="text-gray-600 dark:text-gray-400" />
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Filters</span>
               </div>
               {isFiltersExpanded ? (
-                <ChevronUp size={18} className="text-gray-600 dark:text-gray-400" />
+                <ChevronUp size={16} className="text-gray-600 dark:text-gray-400" />
               ) : (
-                <ChevronDown size={18} className="text-gray-600 dark:text-gray-400" />
+                <ChevronDown size={16} className="text-gray-600 dark:text-gray-400" />
               )}
             </button>
             {isFiltersExpanded && (
