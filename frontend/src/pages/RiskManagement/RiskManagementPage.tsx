@@ -295,7 +295,7 @@ export default function RiskManagementPage() {
 
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Risk Management</h1>
+            <h1 className="text-lg font-bold text-gray-900 dark:text-white">Risk Management</h1>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
               Identify, assess, and monitor program, technical, and compliance risks
             </p>
@@ -327,7 +327,7 @@ export default function RiskManagementPage() {
           <div className="relative flex-1 min-w-[200px] max-w-md">
             <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              size={18}
+              size={16}
             />
             <input
               type="text"
@@ -348,7 +348,7 @@ export default function RiskManagementPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsCreateOpen(true)}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors text-sm"
             >
               <Plus size={16} />
               Create Risk
@@ -356,7 +356,7 @@ export default function RiskManagementPage() {
             <button
               onClick={() => setMatrixView(!matrixView)}
               className={clsx(
-                'px-4 py-2 border rounded-lg flex items-center gap-2 transition-colors',
+                'px-3 py-2 border rounded-lg flex items-center gap-2 transition-colors text-sm',
                 matrixView
                   ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600 text-blue-700 dark:text-blue-300'
                   : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
@@ -421,15 +421,15 @@ export default function RiskManagementPage() {
             className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
           >
             <div className="flex items-center gap-2">
-              <Filter size={18} className="text-gray-600 dark:text-gray-400" />
+              <Filter size={16} className="text-gray-600 dark:text-gray-400" />
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
               </span>
             </div>
             {isFiltersExpanded ? (
-              <ChevronUp size={18} className="text-gray-600 dark:text-gray-400" />
+              <ChevronUp size={16} className="text-gray-600 dark:text-gray-400" />
             ) : (
-              <ChevronDown size={18} className="text-gray-600 dark:text-gray-400" />
+              <ChevronDown size={16} className="text-gray-600 dark:text-gray-400" />
             )}
           </button>
           {isFiltersExpanded && (

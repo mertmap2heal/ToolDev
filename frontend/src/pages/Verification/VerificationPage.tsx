@@ -488,7 +488,7 @@ export default function VerificationPage() {
       {/* Search */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
           <input
             type="text"
             placeholder={`Search ${activeTab}...`}
@@ -587,7 +587,7 @@ export default function VerificationPage() {
             <div className="relative" ref={columnSelectorOpen.type === 'plans' ? columnSelectorRef : null}>
               <button
                 onClick={() => setColumnSelectorOpen({ type: columnSelectorOpen.type === 'plans' ? null : 'plans' })}
-                className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg"
+                className="flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm"
               >
                 <Columns size={16} />
                 Columns
@@ -614,9 +614,9 @@ export default function VerificationPage() {
                           className="text-gray-600 dark:text-gray-400"
                         >
                           {planColumns.has(col.key) ? (
-                            <CheckSquare size={18} className="text-blue-600" />
+                            <CheckSquare size={16} className="text-blue-600" />
                           ) : (
-                            <Square size={18} />
+                            <Square size={16} />
                           )}
                         </button>
                         <span className="text-sm text-gray-700 dark:text-gray-300">{col.label}</span>
@@ -629,14 +629,14 @@ export default function VerificationPage() {
             <button
               onClick={() => setShowTestPlansExport(true)}
               disabled={testPlans.length === 0}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Upload size={16} />
               Export
             </button>
             <button
               onClick={() => setIsCreatePlanOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+              className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
             >
               <Plus size={16} />
               Create Test Plan
@@ -816,7 +816,7 @@ export default function VerificationPage() {
             <div className="relative" ref={columnSelectorOpen.type === 'cases' ? columnSelectorRef : null}>
               <button
                 onClick={() => setColumnSelectorOpen({ type: columnSelectorOpen.type === 'cases' ? null : 'cases' })}
-                className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg"
+                className="flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm"
               >
                 <Columns size={16} />
                 Columns
@@ -843,9 +843,9 @@ export default function VerificationPage() {
                           className="text-gray-600 dark:text-gray-400"
                         >
                           {caseColumns.has(col.key) ? (
-                            <CheckSquare size={18} className="text-blue-600" />
+                            <CheckSquare size={16} className="text-blue-600" />
                           ) : (
-                            <Square size={18} />
+                            <Square size={16} />
                           )}
                         </button>
                         <span className="text-sm text-gray-700 dark:text-gray-300">{col.label}</span>
@@ -858,14 +858,14 @@ export default function VerificationPage() {
             <button
               onClick={() => setShowTestCasesExport(true)}
               disabled={testCases.length === 0}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Upload size={16} />
               Export
             </button>
             <button
               onClick={() => setIsCreateCaseOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+              className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
             >
               <Plus size={16} />
               Create Test Case
@@ -1062,7 +1062,7 @@ export default function VerificationPage() {
             <div className="relative" ref={columnSelectorOpen.type === 'setups' ? columnSelectorRef : null}>
               <button
                 onClick={() => setColumnSelectorOpen({ type: columnSelectorOpen.type === 'setups' ? null : 'setups' })}
-                className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg"
+                className="flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm"
               >
                 <Columns size={16} />
                 Columns
@@ -1089,9 +1089,9 @@ export default function VerificationPage() {
                           className="text-gray-600 dark:text-gray-400"
                         >
                           {setupColumns.has(col.key) ? (
-                            <CheckSquare size={18} className="text-blue-600" />
+                            <CheckSquare size={16} className="text-blue-600" />
                           ) : (
-                            <Square size={18} />
+                            <Square size={16} />
                           )}
                         </button>
                         <span className="text-sm text-gray-700 dark:text-gray-300">{col.label}</span>
@@ -1103,7 +1103,7 @@ export default function VerificationPage() {
             </div>
             <button
               onClick={() => setIsCreateSetupOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+              className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
             >
               <Plus size={16} />
               Create Test Setup
@@ -1255,7 +1255,7 @@ export default function VerificationPage() {
             <div className="relative" ref={columnSelectorOpen.type === 'results' ? columnSelectorRef : null}>
               <button
                 onClick={() => setColumnSelectorOpen({ type: columnSelectorOpen.type === 'results' ? null : 'results' })}
-                className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg"
+                className="flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm"
               >
                 <Columns size={16} />
                 Columns
@@ -1282,9 +1282,9 @@ export default function VerificationPage() {
                           className="text-gray-600 dark:text-gray-400"
                         >
                           {resultColumns.has(col.key) ? (
-                            <CheckSquare size={18} className="text-blue-600" />
+                            <CheckSquare size={16} className="text-blue-600" />
                           ) : (
-                            <Square size={18} />
+                            <Square size={16} />
                           )}
                         </button>
                         <span className="text-sm text-gray-700 dark:text-gray-300">{col.label}</span>
@@ -1296,7 +1296,7 @@ export default function VerificationPage() {
             </div>
             <button
               onClick={() => setIsCreateResultOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+              className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
             >
               <Plus size={16} />
               Create Test Result

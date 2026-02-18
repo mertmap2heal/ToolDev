@@ -113,7 +113,7 @@ export default function LifecycleManagementPage() {
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
         {/* Header */}
         <div className="p-6 pb-4">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-lg font-bold text-gray-900 dark:text-white">
             Lifecycle Management
           </h1>
         </div>
@@ -135,7 +135,7 @@ export default function LifecycleManagementPage() {
                 )}
                 title={tab.description}
               >
-                <Icon size={18} />
+                <Icon size={16} />
                 <span>{tab.label}</span>
               </button>
             )
@@ -147,7 +147,7 @@ export default function LifecycleManagementPage() {
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
         <div className="flex items-center gap-4 mb-4">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
             <input
               type="text"
               placeholder={`Search ${activeTabData.label.toLowerCase()}...`}
@@ -166,9 +166,9 @@ export default function LifecycleManagementPage() {
           </div>
           <button
             onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
-            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300"
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 text-gray-700 dark:text-gray-300 text-sm"
           >
-            <Filter size={18} />
+            <Filter size={16} />
             <span>Filters</span>
             {isFiltersExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>

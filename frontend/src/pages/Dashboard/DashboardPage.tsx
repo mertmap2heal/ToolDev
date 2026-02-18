@@ -85,7 +85,7 @@ export default function DashboardPage() {
       {/* Overview Stats Section */}
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Projects</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Projects</h2>
           <a href="#" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
             Give feedback
           </a>

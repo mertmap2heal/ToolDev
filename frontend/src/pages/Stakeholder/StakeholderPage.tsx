@@ -242,7 +242,7 @@ function StakeholdersContent() {
 
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Stakeholders</h1>
+            <h1 className="text-lg font-bold text-gray-900 dark:text-white">Stakeholders</h1>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
               Program governance, roles, committees, and approval authority
             </p>
@@ -251,7 +251,7 @@ function StakeholdersContent() {
 
         <div className="flex flex-wrap items-center gap-4">
           <div className="relative flex-1 min-w-[200px] max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input
               type="text"
               placeholder="Search stakeholder, group, request…"
@@ -274,7 +274,7 @@ function StakeholdersContent() {
             <button
               type="button"
               onClick={() => setCreateOpen((o) => !o)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm"
+              className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm"
             >
               Create
               <ChevronDown size={16} />

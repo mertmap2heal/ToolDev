@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, ChevronRight } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { functionService } from '../../services/function.service'
@@ -74,11 +74,11 @@ export default function CreateFunctionModal({ isOpen, onClose, projectId, parent
   })
 
   // When parentId prop changes, update formData
-  useState(() => {
+  useEffect(() => {
     if (parentId !== undefined) {
       setFormData(prev => ({ ...prev, parentId: parentId || null }))
     }
-  })
+  }, [parentId])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()

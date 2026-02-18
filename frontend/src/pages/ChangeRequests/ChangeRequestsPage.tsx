@@ -208,7 +208,7 @@ export default function ChangeRequestsPage() {
           {/* Header / Toolbar */}
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Change Requests</h2>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">Change Requests</h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 Manage and track changes to requirements and design artifacts.
               </p>
@@ -220,7 +220,7 @@ export default function ChangeRequestsPage() {
               </button>
               <button
                 onClick={() => setIsCreateModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
+                className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
               >
                 <Plus size={16} />
                 New Change Request

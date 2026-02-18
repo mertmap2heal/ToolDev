@@ -3,16 +3,9 @@ import { useParams } from 'react-router-dom'
 import {
   Plus,
   Settings,
-  Download,
-  BarChart3,
   FolderTree,
-  AlertCircle,
   Shield,
   Layers,
-  Box,
-  Filter,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react'
 
 import FunctionTreePanel from '../../components/functions/FunctionTreePanel'
@@ -180,10 +173,10 @@ export default function SystemFunctionsPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
-              <Settings size={18} className="text-blue-600 dark:text-blue-400" />
+              <Settings size={16} className="text-blue-600 dark:text-blue-400" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white">Functions</h1>
+              <h1 className="text-lg font-bold text-gray-900 dark:text-white">Functions</h1>
               <p className="text-xs text-gray-500 dark:text-gray-400">Functional Breakdown Structure</p>
             </div>
           </div>
@@ -226,9 +219,9 @@ export default function SystemFunctionsPage() {
 
             <button
               onClick={handleAddRoot}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors text-sm font-medium"
+              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors text-sm font-medium"
             >
-              <Plus size={15} />
+              <Plus size={16} />
               <span>New Function</span>
             </button>
           </div>
