@@ -18,7 +18,6 @@ import {
   RefreshCw,
   Trash2,
   ChevronDown,
-  MoreHorizontal,
   FileText,
   Workflow,
   Bell,
@@ -90,7 +89,6 @@ export default function TasksPage() {
   const [showStatsBar, setShowStatsBar] = useState(true)
   const [showQuickFilters, setShowQuickFilters] = useState(false)
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
-  const [showMoreMenu, setShowMoreMenu] = useState(false)
 
   // Determine view type from URL path for global task routes
   useEffect(() => {
@@ -190,50 +188,6 @@ export default function TasksPage() {
               <RefreshCw size={14} />
             </button>
 
-            {/* More Tools dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowMoreMenu(!showMoreMenu)}
-                className={`p-1.5 rounded-lg transition-colors ${
-                  showMoreMenu
-                    ? 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200'
-                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-                title="More tools"
-              >
-                <MoreHorizontal size={14} />
-              </button>
-              {showMoreMenu && (
-                <>
-                  <div className="fixed inset-0 z-30" onClick={() => setShowMoreMenu(false)} />
-                  <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-40 py-1">
-                    <p className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Task Tools</p>
-                    {[
-                      { icon: UserCheck, label: 'My Tasks', path: '/tasks/my-tasks' },
-                      { icon: BarChart3, label: 'Reports', path: `/tasks/reports?projectId=${routeProjectId}` },
-                      { icon: FileText, label: 'Templates', path: '/tasks/templates' },
-                      { icon: Workflow, label: 'Workflows', path: '/tasks/workflows' },
-                      { icon: Clock, label: 'Time Tracking', path: '/tasks/time-tracking' },
-                      { icon: Bell, label: 'Notifications', path: '/tasks/notifications' },
-                      { icon: Settings2, label: 'Settings', path: '/tasks/settings' },
-                    ].map((item) => {
-                      const Icon = item.icon
-                      return (
-                        <button
-                          key={item.path}
-                          onClick={() => { navigate(item.path); setShowMoreMenu(false) }}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                        >
-                          <Icon size={13} className="text-gray-400 dark:text-gray-500" />
-                          {item.label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
-
             <CSVImportExport projectId={projectId} />
             <button
               onClick={() => setShowCreateModal(true)}
@@ -243,6 +197,36 @@ export default function TasksPage() {
               New Task
             </button>
           </div>
+        </div>
+
+        {/* ─── Task Tools Quick Nav ─── */}
+        <div className="flex items-center gap-1 mb-4 py-2 px-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-x-auto">
+          {[
+            { icon: UserCheck, label: 'My Tasks', path: '/tasks/my-tasks' },
+            { icon: BarChart3, label: 'Reports', path: `/tasks/reports?projectId=${routeProjectId}` },
+            { icon: FileText, label: 'Templates', path: '/tasks/templates' },
+            { icon: Workflow, label: 'Workflows', path: '/tasks/workflows' },
+            { icon: Clock, label: 'Time Tracking', path: '/tasks/time-tracking' },
+            { icon: Bell, label: 'Notifications', path: '/tasks/notifications' },
+            { icon: Settings2, label: 'Settings', path: '/tasks/settings' },
+          ].map((item) => {
+            const Icon = item.icon
+            const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/')
+            return (
+              <button
+                key={item.path}
+                onClick={() => navigate(item.path)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
+                  isActive
+                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                <Icon size={13} className="shrink-0" />
+                {item.label}
+              </button>
+            )
+          })}
         </div>
 
         {/* ─── Stats KPI Bar ─── */}
