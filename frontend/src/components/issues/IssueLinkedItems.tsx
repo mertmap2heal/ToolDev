@@ -81,6 +81,14 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
     return `#${link.linkedId.slice(0, 8)}`
   }
 
+  const getLinkTitle = (link: IssueLink) => {
+    if (link.linkedType === 'requirement') {
+      const req = requirements.find((r: any) => r.id === link.linkedId)
+      return req?.title || link.linkedRequirementKey || 'Linked Requirement'
+    }
+    return (link as any).linkedTitle || `Linked ${link.linkedType}`
+  }
+
   return (
     <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">

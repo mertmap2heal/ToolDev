@@ -1,17 +1,25 @@
 import { useState, useEffect, useMemo } from 'react'
-import { X, Plus, Trash2 } from 'lucide-react'
+import { X, Plus, Trash2, Layers, Activity, Tag, FileText, Link as LinkIcon } from 'lucide-react'
+import clsx from 'clsx'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { requirementService } from '../../services/requirement.service'
 import { projectService } from '../../services/project.service'
 import { componentService } from '../../services/component.service'
+import { verificationService } from '../../services/verification.service'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import { useLifecycleStore } from '../../store/lifecycleStore'
-import { LIFECYCLE_V1 } from '../../config/featureFlags'
-import { lifecycleService } from '../../services/lifecycle.service'
+import { LIFECYCLE_V1, LIFECYCLE_SELECT_V1 } from '../../config/featureFlags'
+import { lifecycleService, type LifecycleSummary } from '../../services/lifecycle.service'
 import RichTextEditor from '../common/RichTextEditor'
 import { authService } from '../../services/auth.service'
 import type { Requirement, UpdateRequirementDto, RequirementType } from 'shared/types/engineering.types'
 import type { ComponentTreeNode } from 'shared/types/project.types'
+
+interface Moc {
+  code?: string | number
+  name?: string
+  description?: string
+}
 
 interface EditRequirementModalProps {
   isOpen: boolean
@@ -53,6 +61,15 @@ export default function EditRequirementModal({
   const [sourceTypes, setSourceTypes] = useState<string[]>(sources)
   const [tagInput, setTagInput] = useState('')
   const [allowedTransitions, setAllowedTransitions] = useState<Array<{ toStatusId: string; toStatusName: string }>>([])
+  const [activeTab, setActiveTab] = useState<'general' | 'analysis' | 'traceability' | 'properties'>('general')
+  const [thresholdValue, setThresholdValue] = useState('')
+  const [objectiveValue, setObjectiveValue] = useState('')
+  const [customAttributeKey, setCustomAttributeKey] = useState('')
+  const [customAttributeValue, setCustomAttributeValue] = useState('')
+  const [sourceDocumentInput, setSourceDocumentInput] = useState('')
+  const [availableLifecycles, setAvailableLifecycles] = useState<LifecycleSummary[]>([])
+  const [applicableLifecycle, setApplicableLifecycle] = useState<{ lifecycleId: string; defaultStatusId: string; statusName: string } | null>(null)
+  const [lifecycleStatuses, setLifecycleStatuses] = useState<{ id: string; name: string }[]>([])
 
   const queryClient = useQueryClient()
   const { statuses } = useStatusDefinitionsStore()
@@ -163,6 +180,55 @@ export default function EditRequirementModal({
     return result
   }, [componentTree])
 
+  // Fetch MOCs
+  const { data: mocs = [] } = useQuery<Moc[]>({
+    queryKey: ['mocs'],
+    queryFn: async () => {
+      const response = await verificationService.getMocs()
+      return (response.success && response.data ? response.data : []) as Moc[]
+    },
+    enabled: isOpen,
+  })
+
+  // Fetch lifecycles (LIFECYCLE_SELECT_V1)
+  useEffect(() => {
+    if (!isOpen || !projectId) {
+      setApplicableLifecycle(null)
+      return
+    }
+    if (LIFECYCLE_SELECT_V1) {
+      lifecycleService.getLifecycles(projectId, 'Requirement').then((result) => {
+        if (result.success && result.data) {
+          setAvailableLifecycles(result.data)
+          // Pre-select the requirement's current lifecycle
+          if (requirement?.lifecycleId) {
+            const lc = result.data.find(l => l.id === requirement.lifecycleId)
+            if (lc) {
+              const statusName = lifecycleService.getStatusName(lc.defaultStatusId)
+              const statuses = lifecycleService.getLifecycleStatuses(lc.id)
+              setLifecycleStatuses(statuses)
+              setApplicableLifecycle({
+                lifecycleId: lc.id,
+                defaultStatusId: lc.defaultStatusId,
+                statusName: statusName || lc.defaultStatusId,
+              })
+            }
+          } else if (result.data.length === 1) {
+            const lc = result.data[0]
+            const statusName = lifecycleService.getStatusName(lc.defaultStatusId)
+            const statuses = lifecycleService.getLifecycleStatuses(lc.id)
+            setLifecycleStatuses(statuses)
+            setApplicableLifecycle({
+              lifecycleId: lc.id,
+              defaultStatusId: lc.defaultStatusId,
+              statusName: statusName || lc.defaultStatusId,
+            })
+          }
+        }
+      })
+    }
+  }, [LIFECYCLE_SELECT_V1, isOpen, projectId, requirement?.lifecycleId])
+
   useEffect(() => {
     if (Array.isArray(customTypesData) && customTypesData.length > 0) {
       const customTypeNames = customTypesData.map((t: { typeName: string }) => t.typeName)
@@ -198,10 +264,15 @@ export default function EditRequirementModal({
         verificationMethod: requirement.verificationMethod,
         acceptanceCriteria: requirement.acceptanceCriteria,
         source: requirement.source,
-        relatedDocuments: requirement.relatedDocuments,
+        relatedDocuments: requirement.relatedDocuments || [],
         tags: requirement.tags || [],
         componentId: requirement.componentId || undefined,
+        thresholdValue: requirement.thresholdValue ?? undefined,
+        objectiveValue: requirement.objectiveValue ?? undefined,
+        customAttributes: requirement.customAttributes ?? undefined,
       })
+      setThresholdValue(requirement.thresholdValue || '')
+      setObjectiveValue(requirement.objectiveValue || '')
       setErrors({})
 
       // Add current requirementType to available types if it's not in the predefined list
@@ -329,6 +400,43 @@ export default function EditRequirementModal({
     }))
   }
 
+  const handleAddSourceDocument = () => {
+    if (sourceDocumentInput.trim() && !formData.relatedDocuments?.includes(sourceDocumentInput.trim())) {
+      setFormData((prev) => ({
+        ...prev,
+        relatedDocuments: [...(prev.relatedDocuments || []), sourceDocumentInput.trim()],
+      }))
+      setSourceDocumentInput('')
+    }
+  }
+
+  const handleRemoveSourceDocument = (doc: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      relatedDocuments: prev.relatedDocuments?.filter((d) => d !== doc) || [],
+    }))
+  }
+
+  const handleAddCustomAttribute = () => {
+    if (!customAttributeKey.trim() || !customAttributeValue.trim()) return
+    const currentAttrs = formData.customAttributes || {}
+    setFormData((prev) => ({
+      ...prev,
+      customAttributes: { ...currentAttrs, [customAttributeKey.trim()]: customAttributeValue.trim() },
+    }))
+    setCustomAttributeKey('')
+    setCustomAttributeValue('')
+  }
+
+  const handleRemoveCustomAttribute = (key: string) => {
+    const currentAttrs = { ...(formData.customAttributes || {}) }
+    delete currentAttrs[key]
+    setFormData((prev) => ({
+      ...prev,
+      customAttributes: currentAttrs,
+    }))
+  }
+
   // Helper function to check if HTML content is empty (strips HTML tags before checking)
   const isHtmlEmpty = (html: string | undefined | null): boolean => {
     if (!html) return true
@@ -382,6 +490,22 @@ export default function EditRequirementModal({
       source: formData.source || undefined,
       tags: formData.tags && formData.tags.length > 0 ? formData.tags : undefined,
       componentId: formData.componentId || undefined,
+      // Extended fields
+      thresholdValue: thresholdValue || undefined,
+      objectiveValue: objectiveValue || undefined,
+      customAttributes: formData.customAttributes && Object.keys(formData.customAttributes).length > 0 ? formData.customAttributes : undefined,
+      dependencies: formData.dependencies && formData.dependencies.length > 0 ? formData.dependencies : undefined,
+      conflicts: formData.conflicts && formData.conflicts.length > 0 ? formData.conflicts : undefined,
+      rationale: formData.rationale || undefined,
+      assumptions: formData.assumptions || undefined,
+      stakeholders: formData.stakeholders && formData.stakeholders.length > 0 ? formData.stakeholders : undefined,
+      verificationStatus: formData.verificationStatus || undefined,
+      verificationDate: formData.verificationDate || undefined,
+      verificationNotes: formData.verificationNotes || undefined,
+      requirementType: formData.requirementType || undefined,
+      requirementLevel: formData.requirementLevel || undefined,
+      risk: formData.risk || undefined,
+      complexity: formData.complexity || undefined,
     }
 
     console.log('Submitting requirement update:', requirement.id, submitData)
@@ -422,584 +546,854 @@ export default function EditRequirementModal({
   })
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-black dark:bg-opacity-70 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto m-4" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between z-10">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Edit Requirement
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <X size={20} className="text-gray-600 dark:text-gray-400" />
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Edit Requirement</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+            <X size={20} className="text-gray-500" />
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Requirement ID */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-              ID
-            </label>
-            <input
-              type="text"
-              value={formData.requirementId || ''}
-              onChange={(e) => handleChange('requirementId', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              placeholder="e.g., REQ-001, REQ-SYS-001"
-            />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
-              ID must be unique within the project
-            </p>
-          </div>
-
-          {/* Title */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-              Title <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={formData.title || ''}
-              onChange={(e) => handleChange('title', e.target.value)}
-              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.title
-                ? 'border-red-500'
-                : 'border-gray-300 dark:border-gray-600'
-                } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
-              placeholder="Enter requirement title"
-            />
-            {errors.title && (
-              <p className="mt-1 text-sm text-red-500">{errors.title}</p>
-            )}
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-              Description <span className="text-red-500">*</span>
-            </label>
-            <RichTextEditor
-              content={formData.description || ''}
-              onChange={(content) => handleChange('description', content)}
-              placeholder="Enter requirement description with formatting..."
-              minHeight="120px"
-              className={errors.description ? 'ring-2 ring-red-500 rounded-lg' : ''}
-            />
-            {errors.description && (
-              <p className="mt-1 text-sm text-red-500">{errors.description}</p>
-            )}
-          </div>
-
-          {/* Parent Requirement */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-              Parent Requirement
-            </label>
-            <select
-              value={formData.parentId || ''}
-              onChange={(e) => {
-                // Preserve empty string to clear parent (backend converts '' to null)
-                // Only convert to undefined if we want to keep the current value unchanged
-                // For now, always update - empty string means clear, non-empty means set
-                const newParentId = e.target.value === '' ? '' : e.target.value || undefined
-                handleChange('parentId', newParentId)
-              }}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            >
-              <option value="">None (Top-level requirement)</option>
-              {availableParents.map((req) => (
-                <option key={req.id} value={req.id}>
-                  {req.requirementId || req.id.substring(0, 8)} - {req.title}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* PBS Component Assignment */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-              PBS Component
-            </label>
-            <select
-              value={formData.componentId || ''}
-              onChange={(e) => handleChange('componentId', e.target.value || undefined)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            >
-              <option value="">Unassigned</option>
-              {flatComponents.map((comp) => (
-                <option key={comp.id} value={comp.id}>
-                  {'\u00A0'.repeat(comp.depth * 3)}{comp.name}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
-              Assign this requirement to a PBS component
-            </p>
-          </div>
-
-          {/* Priority and Status */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                Priority
-              </label>
-              <select
-                value={formData.priority || 'medium'}
-                onChange={(e) => handleChange('priority', e.target.value as any)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                Status {LIFECYCLE_V1 && '(allowed transitions only)'}
-              </label>
-              {LIFECYCLE_V1 ? (
-                <select
-                  value={formData.statusId || formData.status || ''}
-                  onChange={(e) => {
-                    const opt = e.target.options[e.target.selectedIndex]
-                    const toStatusId = opt.value
-                    const toStatusName = opt.text
-                    if (toStatusId) {
-                      handleChange('statusId', toStatusId)
-                      handleChange('status', toStatusName)
-                    }
-                  }}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value={formData.statusId || requirement?.statusId || ''}>
-                    {formData.status || requirement?.status || 'Current'}
-                  </option>
-                  {allowedTransitions.map((t) => (
-                    <option key={t.toStatusId} value={t.toStatusId}>
-                      {t.toStatusName}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <select
-                  value={formData.status || ''}
-                  onChange={(e) => handleChange('status', e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="">Select status</option>
-                  {availableStatuses.map((status) => (
-                    <option key={status.id} value={status.name}>
-                      {status.name}
-                    </option>
-                  ))}
-                </select>
+        {/* Tabs */}
+        <div className="flex border-b border-gray-200 dark:border-gray-700 px-6 overflow-x-auto">
+          {[
+            { id: 'general', label: 'General', icon: Layers },
+            { id: 'analysis', label: 'Analysis', icon: Activity },
+            { id: 'traceability', label: 'Traceability', icon: LinkIcon },
+            { id: 'properties', label: 'Properties', icon: Tag, count: formData.tags?.length },
+          ].map((tab: any) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as any)}
+              className={clsx(
+                'px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap',
+                activeTab === tab.id
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
               )}
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
-                {LIFECYCLE_V1 ? 'Only allowed transitions from lifecycle' : 'Status from lifecycle for Requirements'}
-              </p>
-            </div>
-          </div>
+            >
+              <tab.icon size={16} />
+              {tab.label}
+              {tab.count > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs">{tab.count}</span>
+              )}
+            </button>
+          ))}
+        </div>
 
-          {/* Owner and Source */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                Owner
-              </label>
-              <select
-                value={formData.owner || ''}
-                onChange={(e) => handleChange('owner', e.target.value || undefined)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value="">Select owner</option>
-                {adminUsers.map((user) => (
-                  <option key={user.id} value={user.name || user.email}>
-                    {user.name || user.email}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                Source/Origin
-              </label>
-              <div className="flex gap-2">
-                <select
-                  value={formData.source || ''}
-                  onChange={(e) => handleChange('source', e.target.value || undefined)}
-                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="">Select source</option>
-                  {sourceTypes.map((source) => (
-                    <option key={source} value={source}>
-                      {source}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => setShowAddSource(!showAddSource)}
-                  className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2"
-                >
-                  <Plus size={16} />
-                  <span>Add Source</span>
-                </button>
-              </div>
-              {showAddSource && (
-                <div className="mt-2 flex gap-2">
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <form id="edit-req-form" onSubmit={handleSubmit} className="space-y-6">
+
+            {/* ══════════════ General Tab ══════════════ */}
+            {activeTab === 'general' && (
+              <div className="space-y-6">
+                {/* Requirement ID */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                    ID
+                  </label>
                   <input
                     type="text"
-                    value={customSource}
-                    onChange={(e) => setCustomSource(e.target.value)}
-                    placeholder="Enter new source type name"
-                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    value={formData.requirementId || ''}
+                    onChange={(e) => handleChange('requirementId', e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="e.g., REQ-001, REQ-SYS-001"
                   />
-                  <button
-                    type="button"
-                    onClick={handleAddSource}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-                  >
-                    Add
-                  </button>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
+                    ID must be unique within the project
+                  </p>
                 </div>
-              )}
-            </div>
-          </div>
 
-          {/* Verification Method */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-              Verification Method
-            </label>
-            <select
-              value={formData.verificationMethod || ''}
-              onChange={(e) => handleChange('verificationMethod', e.target.value || undefined)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            >
-              <option value="">Select verification method</option>
-              {verificationMethods.map((method) => (
-                <option key={method} value={method}>
-                  {method}
-                </option>
-              ))}
-            </select>
-          </div>
+                {/* Title */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                    Title <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.title || ''}
+                    onChange={(e) => handleChange('title', e.target.value)}
+                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.title
+                      ? 'border-red-500'
+                      : 'border-gray-300 dark:border-gray-600'
+                      } bg-white dark:bg-gray-700 text-gray-900 dark:text-white`}
+                    placeholder="Enter requirement title"
+                  />
+                  {errors.title && (
+                    <p className="mt-1 text-sm text-red-500">{errors.title}</p>
+                  )}
+                </div>
 
-          {/* Acceptance Criteria */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-              Acceptance Criteria
-            </label>
-            <RichTextEditor
-              content={formData.acceptanceCriteria || ''}
-              onChange={(content) => handleChange('acceptanceCriteria', content)}
-              placeholder="Enter acceptance criteria..."
-              minHeight="100px"
-            />
-          </div>
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                    Description <span className="text-red-500">*</span>
+                  </label>
+                  <RichTextEditor
+                    content={formData.description || ''}
+                    onChange={(content) => handleChange('description', content)}
+                    placeholder="Enter requirement description with formatting..."
+                    minHeight="120px"
+                    className={errors.description ? 'ring-2 ring-red-500 rounded-lg' : ''}
+                  />
+                  {errors.description && (
+                    <p className="mt-1 text-sm text-red-500">{errors.description}</p>
+                  )}
+                </div>
 
-          {/* MBSE/UML Fields */}
-          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
-              Classification
-            </h3>
+                {/* Lifecycle Model Selection (LIFECYCLE_SELECT_V1) */}
+                {LIFECYCLE_SELECT_V1 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Lifecycle Model
+                    </label>
+                    <select
+                      value={applicableLifecycle?.lifecycleId || formData.lifecycleId || ''}
+                      onChange={(e) => {
+                        const selectedId = e.target.value
+                        const lc = availableLifecycles.find(l => l.id === selectedId)
+                        if (lc) {
+                          const statusName = lifecycleService.getStatusName(lc.defaultStatusId)
+                          const sts = lifecycleService.getLifecycleStatuses(lc.id)
+                          setLifecycleStatuses(sts)
+                          setApplicableLifecycle({
+                            lifecycleId: lc.id,
+                            defaultStatusId: lc.defaultStatusId,
+                            statusName: statusName || lc.defaultStatusId,
+                          })
+                          handleChange('lifecycleId', lc.id)
+                        }
+                      }}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      disabled={availableLifecycles.length === 0}
+                    >
+                      <option value="" disabled>
+                        {availableLifecycles.length === 0 ? 'No applicable lifecycles found' : 'Select a lifecycle...'}
+                      </option>
+                      {availableLifecycles.map((lc) => (
+                        <option key={lc.id} value={lc.id}>
+                          {lc.name} (v{lc.version})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
-            {/* Requirement Type */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                Requirement Type
-              </label>
-              <div className="space-y-2">
-                <div className="flex gap-2">
+                {/* Priority and Status */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Priority
+                    </label>
+                    <select
+                      value={formData.priority || 'medium'}
+                      onChange={(e) => handleChange('priority', e.target.value as any)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                      <option value="critical">Critical</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Status {LIFECYCLE_V1 && '(allowed transitions only)'}
+                    </label>
+                    {LIFECYCLE_V1 ? (
+                      <select
+                        value={formData.statusId || formData.status || ''}
+                        onChange={(e) => {
+                          const opt = e.target.options[e.target.selectedIndex]
+                          const toStatusId = opt.value
+                          const toStatusName = opt.text
+                          if (toStatusId) {
+                            handleChange('statusId', toStatusId)
+                            handleChange('status', toStatusName)
+                          }
+                        }}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value={formData.statusId || requirement?.statusId || ''}>
+                          {formData.status || requirement?.status || 'Current'}
+                        </option>
+                        {allowedTransitions.map((t) => (
+                          <option key={t.toStatusId} value={t.toStatusId}>
+                            {t.toStatusName}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <select
+                        value={formData.status || ''}
+                        onChange={(e) => handleChange('status', e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="">Select status</option>
+                        {availableStatuses.map((status) => (
+                          <option key={status.id} value={status.name}>
+                            {status.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
+                      {LIFECYCLE_V1 ? 'Only allowed transitions from lifecycle' : 'Status from lifecycle for Requirements'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Owner and Source */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Owner
+                    </label>
+                    <select
+                      value={formData.owner || ''}
+                      onChange={(e) => handleChange('owner', e.target.value || undefined)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="">Select owner</option>
+                      {adminUsers.map((user) => (
+                        <option key={user.id} value={user.name || user.email}>
+                          {user.name || user.email}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Source/Origin
+                    </label>
+                    <div className="flex gap-2">
+                      <select
+                        value={formData.source || ''}
+                        onChange={(e) => handleChange('source', e.target.value || undefined)}
+                        className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="">Select source</option>
+                        {sourceTypes.map((source) => (
+                          <option key={source} value={source}>
+                            {source}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddSource(!showAddSource)}
+                        className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2"
+                      >
+                        <Plus size={16} />
+                        <span>Add Source</span>
+                      </button>
+                    </div>
+                    {showAddSource && (
+                      <div className="mt-2 flex gap-2">
+                        <input
+                          type="text"
+                          value={customSource}
+                          onChange={(e) => setCustomSource(e.target.value)}
+                          placeholder="Enter new source type name"
+                          className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddSource}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ══════════════ Analysis Tab ══════════════ */}
+            {activeTab === 'analysis' && (
+              <div className="space-y-6">
+                {/* Means of Compliance (MoC) */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                    Means of Compliance (MoC)
+                  </label>
                   <select
-                    value={formData.requirementType || ''}
-                    onChange={(e) => handleChange('requirementType', e.target.value || undefined)}
-                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    value={formData.linkedMocCode || requirement?.linkedMocCode || ''}
+                    onChange={(e) => handleChange('linkedMocCode' as any, e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   >
-                    <option value="">Select requirement type</option>
-                    {availableRequirementTypes.map((type) => (
-                      <option key={type} value={type}>
-                        {type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                    <option value="">Select MoC</option>
+                    {mocs.map((moc: any) => (
+                      <option key={moc.code} value={moc.code}>
+                        {moc.code}: {moc.name} - {moc.description}
                       </option>
                     ))}
                   </select>
-                  <button
-                    type="button"
-                    onClick={() => setShowAddRequirementType(!showAddRequirementType)}
-                    className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2"
-                  >
-                    <Plus size={16} />
-                    <span>Add Type</span>
-                  </button>
                 </div>
-                {showAddRequirementType && (
-                  <div className="flex gap-2">
+
+                {/* Verification Method */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                    Verification Method
+                  </label>
+                  <select
+                    value={formData.verificationMethod || ''}
+                    onChange={(e) => handleChange('verificationMethod', e.target.value || undefined)}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  >
+                    <option value="">Select verification method</option>
+                    {verificationMethods.map((method) => (
+                      <option key={method} value={method}>
+                        {method}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Acceptance Criteria */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                    Acceptance Criteria
+                  </label>
+                  <RichTextEditor
+                    content={formData.acceptanceCriteria || ''}
+                    onChange={(content) => handleChange('acceptanceCriteria', content)}
+                    placeholder="Enter acceptance criteria..."
+                    minHeight="100px"
+                  />
+                </div>
+
+                {/* MBSE/UML Classification */}
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
+                    Classification
+                  </h3>
+
+                  {/* Requirement Type */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Requirement Type
+                    </label>
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <select
+                          value={formData.requirementType || ''}
+                          onChange={(e) => handleChange('requirementType', e.target.value || undefined)}
+                          className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        >
+                          <option value="">Select requirement type</option>
+                          {availableRequirementTypes.map((type) => (
+                            <option key={type} value={type}>
+                              {type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddRequirementType(!showAddRequirementType)}
+                          className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2"
+                        >
+                          <Plus size={16} />
+                          <span>Add Type</span>
+                        </button>
+                      </div>
+                      {showAddRequirementType && (
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={customRequirementType}
+                            onChange={(e) => setCustomRequirementType(e.target.value)}
+                            placeholder="Enter new requirement type"
+                            className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                handleAddRequirementType()
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={handleAddRequirementType}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      )}
+                      {customTypesData.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {customTypesData.map((customType) => (
+                            <div
+                              key={customType.id}
+                              className="flex items-center gap-1 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-sm"
+                            >
+                              <span>{customType.typeName.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</span>
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteRequirementType(customType.typeName, e)}
+                                className="ml-1 p-0.5 hover:bg-blue-200 dark:hover:bg-blue-800 rounded"
+                                title="Delete requirement type"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Requirement Level */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Requirement Level
+                    </label>
+                    <select
+                      value={formData.requirementLevel || ''}
+                      onChange={(e) => handleChange('requirementLevel', e.target.value || undefined)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="">Select requirement level</option>
+                      <option value="system">System</option>
+                      <option value="subsystem">Subsystem</option>
+                      <option value="component">Component</option>
+                      <option value="interface">Interface</option>
+                    </select>
+                  </div>
+
+                  {/* Risk and Complexity */}
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                        Risk Level
+                      </label>
+                      <select
+                        value={formData.risk || ''}
+                        onChange={(e) => handleChange('risk', e.target.value || undefined)}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="">Select risk level</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                        Complexity
+                      </label>
+                      <select
+                        value={formData.complexity || ''}
+                        onChange={(e) => handleChange('complexity', e.target.value || undefined)}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="">Select complexity</option>
+                        <option value="simple">Simple</option>
+                        <option value="moderate">Moderate</option>
+                        <option value="complex">Complex</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Rationale */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Rationale
+                    </label>
+                    <textarea
+                      value={formData.rationale || ''}
+                      onChange={(e) => handleChange('rationale', e.target.value || undefined)}
+                      placeholder="Explain why this requirement exists..."
+                      rows={3}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                    />
+                  </div>
+
+                  {/* Assumptions */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Assumptions
+                    </label>
+                    <textarea
+                      value={formData.assumptions || ''}
+                      onChange={(e) => handleChange('assumptions', e.target.value || undefined)}
+                      placeholder="List any assumptions related to this requirement..."
+                      rows={2}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                    />
+                  </div>
+
+                  {/* Dependencies */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Dependencies
+                    </label>
                     <input
                       type="text"
-                      value={customRequirementType}
-                      onChange={(e) => setCustomRequirementType(e.target.value)}
-                      placeholder="Enter new requirement type"
-                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault()
-                          handleAddRequirementType()
-                        }
+                      value={formData.dependencies?.join(', ') || ''}
+                      onChange={(e) => {
+                        const deps = e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+                        handleChange('dependencies', deps.length > 0 ? deps : undefined)
                       }}
+                      placeholder="Enter dependencies separated by commas"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+
+                  {/* Conflicts */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Conflicts
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.conflicts?.join(', ') || ''}
+                      onChange={(e) => {
+                        const conflicts = e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+                        handleChange('conflicts', conflicts.length > 0 ? conflicts : undefined)
+                      }}
+                      placeholder="Enter conflicts separated by commas"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+
+                  {/* Key Performance Parameters (KPP) */}
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <Activity size={16} className="text-blue-500" />
+                      Key Performance Parameters (KPP)
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 text-left uppercase">
+                          Threshold Value
+                        </label>
+                        <input
+                          type="text"
+                          value={thresholdValue}
+                          onChange={(e) => setThresholdValue(e.target.value)}
+                          placeholder="Minimum acceptable"
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 text-left uppercase">
+                          Objective Value
+                        </label>
+                        <input
+                          type="text"
+                          value={objectiveValue}
+                          onChange={(e) => setObjectiveValue(e.target.value)}
+                          placeholder="Desired target"
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-left">
+                      Define quantitative performance targets for verification.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ══════════════ Traceability Tab ══════════════ */}
+            {activeTab === 'traceability' && (
+              <div className="space-y-6">
+                {/* Parent Requirement */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                    Parent Requirement
+                  </label>
+                  <select
+                    value={formData.parentId || ''}
+                    onChange={(e) => {
+                      const newParentId = e.target.value === '' ? '' : e.target.value || undefined
+                      handleChange('parentId', newParentId)
+                    }}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  >
+                    <option value="">None (Top-level requirement)</option>
+                    {availableParents.map((req) => (
+                      <option key={req.id} value={req.id}>
+                        {req.requirementId || req.id.substring(0, 8)} - {req.title}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
+                    Determines the structural position in the requirement tree.
+                  </p>
+                </div>
+
+                {/* PBS Component Assignment */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                    PBS Component
+                  </label>
+                  <select
+                    value={formData.componentId || ''}
+                    onChange={(e) => handleChange('componentId', e.target.value || undefined)}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  >
+                    <option value="">Unassigned</option>
+                    {flatComponents.map((comp) => (
+                      <option key={comp.id} value={comp.id}>
+                        {'\u00A0'.repeat(comp.depth * 3)}{comp.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
+                    Assign this requirement to a PBS component for allocation traceability.
+                  </p>
+                </div>
+
+                {/* Reference Documents */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                    Reference Documents
+                  </label>
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={sourceDocumentInput}
+                      onChange={(e) => setSourceDocumentInput(e.target.value)}
+                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="e.g. SOW Section 3.1, Architecture Doc v2"
+                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSourceDocument())}
                     />
                     <button
                       type="button"
-                      onClick={handleAddRequirementType}
+                      onClick={handleAddSourceDocument}
                       className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
                     >
-                      Add
+                      <Plus size={16} />
                     </button>
                   </div>
-                )}
-                {/* Custom types with delete buttons */}
-                {customTypesData.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {customTypesData.map((customType) => (
-                      <div
-                        key={customType.id}
-                        className="flex items-center gap-1 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-sm"
-                      >
-                        <span>{customType.typeName.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</span>
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteRequirementType(customType.typeName, e)}
-                          className="ml-1 p-0.5 hover:bg-blue-200 dark:hover:bg-blue-800 rounded"
-                          title="Delete requirement type"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Requirement Level */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                Requirement Level
-              </label>
-              <select
-                value={formData.requirementLevel || ''}
-                onChange={(e) => handleChange('requirementLevel', e.target.value || undefined)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value="">Select requirement level</option>
-                <option value="system">System</option>
-                <option value="subsystem">Subsystem</option>
-                <option value="component">Component</option>
-                <option value="interface">Interface</option>
-              </select>
-            </div>
-
-            {/* Risk and Complexity */}
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                  Risk Level
-                </label>
-                <select
-                  value={formData.risk || ''}
-                  onChange={(e) => handleChange('risk', e.target.value || undefined)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="">Select risk level</option>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="critical">Critical</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                  Complexity
-                </label>
-                <select
-                  value={formData.complexity || ''}
-                  onChange={(e) => handleChange('complexity', e.target.value || undefined)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="">Select complexity</option>
-                  <option value="simple">Simple</option>
-                  <option value="moderate">Moderate</option>
-                  <option value="complex">Complex</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Rationale */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                Rationale
-              </label>
-              <textarea
-                value={formData.rationale || ''}
-                onChange={(e) => handleChange('rationale', e.target.value || undefined)}
-                placeholder="Explain why this requirement exists..."
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-              />
-            </div>
-
-            {/* Assumptions */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                Assumptions
-              </label>
-              <textarea
-                value={formData.assumptions || ''}
-                onChange={(e) => handleChange('assumptions', e.target.value || undefined)}
-                placeholder="List any assumptions related to this requirement..."
-                rows={2}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-              />
-            </div>
-
-            {/* Stakeholders */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                Stakeholders
-              </label>
-              <input
-                type="text"
-                value={formData.stakeholders?.join(', ') || ''}
-                onChange={(e) => {
-                  const stakeholders = e.target.value.split(',').map(s => s.trim()).filter(Boolean)
-                  handleChange('stakeholders', stakeholders.length > 0 ? stakeholders : undefined)
-                }}
-                placeholder="Enter stakeholders separated by commas"
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-
-            {/* Verification Status */}
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                  Verification Status
-                </label>
-                <select
-                  value={formData.verificationStatus || ''}
-                  onChange={(e) => handleChange('verificationStatus', e.target.value || undefined)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="">Not Verified</option>
-                  <option value="verified">Verified</option>
-                  <option value="failed">Failed</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                  Verification Date
-                </label>
-                <input
-                  type="date"
-                  value={formData.verificationDate ? formData.verificationDate.split('T')[0] : ''}
-                  onChange={(e) => handleChange('verificationDate', e.target.value || undefined)}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                />
-              </div>
-            </div>
-
-            {/* Verification Notes */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                Verification Notes
-              </label>
-              <textarea
-                value={formData.verificationNotes || ''}
-                onChange={(e) => handleChange('verificationNotes', e.target.value || undefined)}
-                placeholder="Notes about verification..."
-                rows={2}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-              />
-            </div>
-          </div>
-
-          {/* Tags */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-              Tags
-            </label>
-            <div className="flex gap-2 mb-2">
-              <input
-                type="text"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    handleAddTag()
-                  }
-                }}
-                className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="Enter tag and press Enter"
-              />
-              <button
-                type="button"
-                onClick={handleAddTag}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-              >
-                <Plus size={16} />
-              </button>
-            </div>
-            {formData.tags && formData.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {formData.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-sm"
-                  >
-                    {tag}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveTag(tag)}
-                      className="hover:text-blue-600 dark:hover:text-blue-400"
-                    >
-                      <X size={14} />
-                    </button>
-                  </span>
-                ))}
+                  {formData.relatedDocuments && formData.relatedDocuments.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      {formData.relatedDocuments.map((doc, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
+                          <span className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                            <FileText size={14} className="text-gray-400" />
+                            {doc}
+                          </span>
+                          <button type="button" onClick={() => handleRemoveSourceDocument(doc)} className="text-gray-400 hover:text-red-500">
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
-          </div>
 
-          {/* Error Message */}
-          {errors.submit && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-              <p className="text-sm text-red-600 dark:text-red-400">{errors.submit}</p>
-            </div>
-          )}
+            {/* ══════════════ Properties Tab ══════════════ */}
+            {activeTab === 'properties' && (
+              <div className="space-y-6">
+                {/* Stakeholders */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                    Stakeholders
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.stakeholders?.join(', ') || ''}
+                    onChange={(e) => {
+                      const stakeholders = e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+                      handleChange('stakeholders', stakeholders.length > 0 ? stakeholders : undefined)
+                    }}
+                    placeholder="Enter stakeholders separated by commas"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
+                    People or groups with an interest in this requirement.
+                  </p>
+                </div>
 
-          {/* Actions */}
-          <div className="flex items-center justify-end gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
-              disabled={updateRequirementMutation.isPending}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={updateRequirementMutation.isPending}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {updateRequirementMutation.isPending ? 'Updating...' : 'Update Requirement'}
-            </button>
-          </div>
-        </form>
+                {/* Verification Status */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Verification Status
+                    </label>
+                    <select
+                      value={formData.verificationStatus || ''}
+                      onChange={(e) => handleChange('verificationStatus', e.target.value || undefined)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="">Not Verified</option>
+                      <option value="verified">Verified</option>
+                      <option value="failed">Failed</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Verification Date
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.verificationDate ? formData.verificationDate.split('T')[0] : ''}
+                      onChange={(e) => handleChange('verificationDate', e.target.value || undefined)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Verification Notes */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                    Verification Notes
+                  </label>
+                  <textarea
+                    value={formData.verificationNotes || ''}
+                    onChange={(e) => handleChange('verificationNotes', e.target.value || undefined)}
+                    placeholder="Notes about verification..."
+                    rows={2}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                  />
+                </div>
+
+                {/* Tags */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                    Tags
+                  </label>
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleAddTag()
+                        }
+                      }}
+                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      placeholder="Enter tag and press Enter"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddTag}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                  {formData.tags && formData.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {formData.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-sm"
+                        >
+                          {tag}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTag(tag)}
+                            className="hover:text-blue-600 dark:hover:text-blue-400"
+                          >
+                            <X size={14} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Custom Attributes */}
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <Layers size={16} className="text-blue-500" />
+                    Custom Attributes
+                  </h3>
+                  <div className="flex gap-2 mb-4">
+                    <input
+                      type="text"
+                      value={customAttributeKey}
+                      onChange={(e) => setCustomAttributeKey(e.target.value)}
+                      placeholder="Property name (e.g. Weight)"
+                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                    <input
+                      type="text"
+                      value={customAttributeValue}
+                      onChange={(e) => setCustomAttributeValue(e.target.value)}
+                      placeholder="Value"
+                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddCustomAttribute}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+
+                  {formData.customAttributes && Object.keys(formData.customAttributes).length > 0 && (
+                    <div className="space-y-2">
+                      {Object.entries(formData.customAttributes).map(([key, value]) => (
+                        <div key={key} className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 text-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-gray-700 dark:text-gray-300">{key}:</span>
+                            <span className="text-gray-600 dark:text-gray-400">{String(value)}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCustomAttribute(key)}
+                            className="text-gray-400 hover:text-red-500"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-left">
+                    Add project-specific metadata or extended requirement properties.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Error Message */}
+            {errors.submit && (
+              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <p className="text-sm text-red-600 dark:text-red-400">{errors.submit}</p>
+              </div>
+            )}
+          </form>
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-gray-800/50">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+            disabled={updateRequirementMutation.isPending}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="edit-req-form"
+            disabled={updateRequirementMutation.isPending}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {updateRequirementMutation.isPending ? 'Updating...' : 'Update Requirement'}
+          </button>
+        </div>
       </div>
     </div>
   )

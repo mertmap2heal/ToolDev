@@ -54,14 +54,14 @@ export default function MainLayout() {
   }, [navigate])
   
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--theme-bg)' }}>
       {user?.mustChangePassword && (
         <ForceChangePasswordModal onSuccess={handleForceChangePasswordSuccess} />
       )}
       <Sidebar />
       <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${isOpen ? '' : ''}`}>
         <Header />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-6 bg-gray-50 dark:bg-gray-950">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-6" style={{ backgroundColor: 'var(--theme-bg)' }}>
           <Outlet />
         </main>
       </div>

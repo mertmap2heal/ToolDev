@@ -865,7 +865,227 @@ export default function RequirementDetailDrawer({
                       <p className="text-sm text-gray-900 dark:text-white">{displayRequirement.verificationMethod}</p>
                     </div>
                   )}
+
+                  {/* Requirement Type */}
+                  {displayRequirement.requirementType && (
+                    <div>
+                      <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Requirement Type</h3>
+                      <p className="text-sm text-gray-900 dark:text-white capitalize">
+                        {displayRequirement.requirementType.split('_').join(' ')}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Requirement Level */}
+                  {displayRequirement.requirementLevel && (
+                    <div>
+                      <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Requirement Level</h3>
+                      <p className="text-sm text-gray-900 dark:text-white capitalize">{displayRequirement.requirementLevel}</p>
+                    </div>
+                  )}
+
+                  {/* Risk Level */}
+                  {displayRequirement.risk && (
+                    <div>
+                      <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Risk Level</h3>
+                      <span className={clsx(
+                        'inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize',
+                        displayRequirement.risk === 'critical' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
+                        displayRequirement.risk === 'high' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400' :
+                        displayRequirement.risk === 'medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400' :
+                        'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                      )}>
+                        {displayRequirement.risk}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Complexity */}
+                  {displayRequirement.complexity && (
+                    <div>
+                      <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Complexity</h3>
+                      <p className="text-sm text-gray-900 dark:text-white capitalize">{displayRequirement.complexity}</p>
+                    </div>
+                  )}
+
+                  {/* PBS Component */}
+                  {displayRequirement.componentId && (
+                    <div>
+                      <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">PBS Component</h3>
+                      <p className="text-sm text-gray-900 dark:text-white">
+                        {flatComponents.find(c => c.id === displayRequirement.componentId)?.name || displayRequirement.componentId}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* MoC */}
+                  {(displayRequirement.linkedMocCode || displayRequirement.moc) && (
+                    <div>
+                      <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Means of Compliance</h3>
+                      <p className="text-sm text-gray-900 dark:text-white">
+                        {displayRequirement.linkedMocCode || (displayRequirement.moc as any)?.code || '—'}
+                        {(displayRequirement.moc as any)?.name && ` - ${(displayRequirement.moc as any).name}`}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Verification Status */}
+                  {displayRequirement.verificationStatus && (
+                    <div>
+                      <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Verification Status</h3>
+                      <span className={clsx(
+                        'inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize',
+                        displayRequirement.verificationStatus === 'verified' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                        displayRequirement.verificationStatus === 'failed' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
+                        'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                      )}>
+                        {displayRequirement.verificationStatus}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Verification Date */}
+                  {displayRequirement.verificationDate && (
+                    <div>
+                      <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Verification Date</h3>
+                      <p className="text-sm text-gray-900 dark:text-white">
+                        {format(new Date(displayRequirement.verificationDate), 'PPP')}
+                      </p>
+                    </div>
+                  )}
                 </div>
+
+                {/* KPP Section */}
+                {(displayRequirement.thresholdValue || displayRequirement.objectiveValue) && (
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                      <Zap size={14} className="text-blue-500" />
+                      Key Performance Parameters
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      {displayRequirement.thresholdValue && (
+                        <div className="p-3 bg-amber-50 dark:bg-amber-900/10 rounded-lg border border-amber-200 dark:border-amber-800">
+                          <h4 className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-1 uppercase">Threshold</h4>
+                          <p className="text-sm text-gray-900 dark:text-white font-medium">{displayRequirement.thresholdValue}</p>
+                        </div>
+                      )}
+                      {displayRequirement.objectiveValue && (
+                        <div className="p-3 bg-green-50 dark:bg-green-900/10 rounded-lg border border-green-200 dark:border-green-800">
+                          <h4 className="text-xs font-medium text-green-700 dark:text-green-400 mb-1 uppercase">Objective</h4>
+                          <p className="text-sm text-gray-900 dark:text-white font-medium">{displayRequirement.objectiveValue}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Rationale */}
+                {displayRequirement.rationale && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Rationale</h3>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
+                      {displayRequirement.rationale}
+                    </p>
+                  </div>
+                )}
+
+                {/* Assumptions */}
+                {displayRequirement.assumptions && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Assumptions</h3>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
+                      {displayRequirement.assumptions}
+                    </p>
+                  </div>
+                )}
+
+                {/* Dependencies */}
+                {displayRequirement.dependencies && displayRequirement.dependencies.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Dependencies</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {displayRequirement.dependencies.map((dep, idx) => (
+                        <span key={idx} className="inline-flex px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded text-sm">
+                          {dep}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Conflicts */}
+                {displayRequirement.conflicts && displayRequirement.conflicts.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Conflicts</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {displayRequirement.conflicts.map((conflict, idx) => (
+                        <span key={idx} className="inline-flex px-2 py-1 bg-red-50 dark:bg-red-900/10 text-red-800 dark:text-red-300 rounded text-sm">
+                          {conflict}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Stakeholders */}
+                {displayRequirement.stakeholders && displayRequirement.stakeholders.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Stakeholders</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {displayRequirement.stakeholders.map((stakeholder, idx) => (
+                        <span key={idx} className="inline-flex px-2 py-1 bg-blue-50 dark:bg-blue-900/10 text-blue-800 dark:text-blue-300 rounded-full text-sm">
+                          {stakeholder}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Verification Notes */}
+                {displayRequirement.verificationNotes && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Verification Notes</h3>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
+                      {displayRequirement.verificationNotes}
+                    </p>
+                  </div>
+                )}
+
+                {/* Related Documents */}
+                {displayRequirement.relatedDocuments && displayRequirement.relatedDocuments.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                      <FileText size={14} className="text-gray-400" />
+                      Reference Documents
+                    </h3>
+                    <div className="space-y-1">
+                      {displayRequirement.relatedDocuments.map((doc, idx) => (
+                        <div key={idx} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded text-sm text-gray-700 dark:text-gray-300">
+                          <FileText size={14} className="text-gray-400 flex-shrink-0" />
+                          {doc}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Custom Attributes */}
+                {displayRequirement.customAttributes && Object.keys(displayRequirement.customAttributes).length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                      <Layers size={14} className="text-blue-500" />
+                      Custom Attributes
+                    </h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {Object.entries(displayRequirement.customAttributes).map(([key, value]) => (
+                        <div key={key} className="px-3 py-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700 text-sm">
+                          <span className="font-semibold text-gray-700 dark:text-gray-300">{key}:</span>{' '}
+                          <span className="text-gray-600 dark:text-gray-400">{String(value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Timestamps */}
                 <div className="pt-4 border-t border-gray-200 dark:border-gray-700">

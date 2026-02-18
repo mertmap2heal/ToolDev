@@ -73,6 +73,7 @@ import CreateCompanyAdminPage from './pages/PlatformAdmin/CreateCompanyAdminPage
 import CompanyLimitsPage from './pages/PlatformAdmin/CompanyLimitsPage'
 import AuditLogsPage from './pages/PlatformAdmin/AuditLogsPage'
 import OrganizationPage from './pages/Organization/OrganizationPage'
+import SettingsPage from './pages/Settings/SettingsPage'
 
 function App() {
   return (
@@ -155,6 +156,7 @@ function App() {
             <Route path="exports" element={<ExportsPage />} />
               <Route path="settings" element={<SafetySettingsPage />} />
             </Route>
+            <Route path="settings" element={<SettingsPage />} />
             <Route path="lifecycle" element={<LifecycleManagementPage />} />
             <Route path="admin" element={<AdminRouteGuard />}>
               <Route index element={<AdminPage />} />

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { Bell, Search, HelpCircle, Settings, Grid, GraduationCap, LogOut, Loader2, Shield, Menu } from 'lucide-react'
+import { Bell, Search, HelpCircle, Settings, Grid, GraduationCap, LogOut, Loader2, Shield, Menu, Sun, Moon } from 'lucide-react'
 import Logo from '../Logo'
 import Breadcrumbs from './Breadcrumbs'
 import { authService } from '../../services/auth.service'
@@ -14,6 +14,7 @@ import HeaderMegaMenu from '../navigation/HeaderMegaMenu'
 import QuickAccessBar from '../navigation/QuickAccessBar'
 import clsx from 'clsx'
 import FeedbackModal from '../common/FeedbackModal'
+import { useThemeStore } from '../../store/themeStore'
 
 // Custom hook since usehooks-ts might not be available
 function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T) => void] {
@@ -46,6 +47,23 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T) => voi
 }
 
 const DEFAULT_PINNED_IDS = ['requirements', 'issues', 'change-requests', 'verification']
+
+function ThemeToggleButton() {
+  const { theme, toggleTheme } = useThemeStore()
+  return (
+    <button
+      onClick={toggleTheme}
+      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+      title={theme === 'midnight' ? 'Switch to Light mode' : 'Switch to Midnight mode'}
+    >
+      {theme === 'midnight' ? (
+        <Sun size={20} className="text-yellow-400" />
+      ) : (
+        <Moon size={20} className="text-gray-600" />
+      )}
+    </button>
+  )
+}
 
 export default function Header() {
   const [dropdownOpen, setDropdownOpen] = useState(false)
@@ -274,7 +292,12 @@ export default function Header() {
               )}
             </div>
 
-            <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg hidden sm:block">
+            <ThemeToggleButton />
+            <button
+              onClick={() => navigate('/settings')}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg hidden sm:block"
+              title="Settings"
+            >
               <Settings size={20} className="text-gray-600 dark:text-gray-400" />
             </button>
             <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg hidden sm:block">

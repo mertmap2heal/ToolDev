@@ -31,8 +31,8 @@ export default function Sidebar() {
 
   return (
     <div
-      className="text-gray-300 dark:text-gray-400 flex flex-col border-r border-gray-700 w-12"
-      style={{ backgroundColor: '#1E1E1E' }}
+      className="text-gray-500 dark:text-gray-400 flex flex-col border-r w-12"
+      style={{ backgroundColor: 'var(--theme-sidebar)', borderColor: 'var(--theme-border)' }}
     >
       <nav className="flex-1 p-2 overflow-y-auto flex flex-col gap-1">
         {menuItems.map((item) => {
@@ -52,8 +52,8 @@ export default function Sidebar() {
                 className={clsx(
                   'w-full flex items-center justify-center p-2 rounded-lg transition-colors',
                   isActive
-                    ? 'bg-gray-800 text-white'
-                    : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                    ? 'bg-gray-300 dark:bg-gray-800 text-gray-900 dark:text-white'
+                    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
                 )}
               >
                 <Icon size={20} />
@@ -70,8 +70,8 @@ export default function Sidebar() {
               className={clsx(
                 'w-full flex items-center justify-center p-2 rounded-lg transition-colors',
                 isActive
-                  ? 'bg-gray-800 text-white'
-                  : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                  ? 'bg-gray-300 dark:bg-gray-800 text-gray-900 dark:text-white'
+                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
               )}
             >
               <Icon size={20} />
