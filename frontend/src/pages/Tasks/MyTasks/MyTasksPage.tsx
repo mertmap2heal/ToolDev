@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '../../../store/authStore'
-import TaskNavigation from '../../../components/tasks/TaskNavigation'
 import TaskListView from '../../../components/tasks/TaskListView'
 import TaskDetailDrawer from '../../../components/tasks/TaskDetailDrawer'
 import {
@@ -75,7 +74,6 @@ export default function MyTasksPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <TaskNavigation />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Header */}
         <div className="flex items-start justify-between mb-6">

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import TaskNavigation from '../../../components/tasks/TaskNavigation'
 import {
   Workflow,
   Plus,
@@ -98,7 +97,6 @@ export default function TaskWorkflowsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <TaskNavigation />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Header */}
         <div className="flex items-start justify-between mb-5">
