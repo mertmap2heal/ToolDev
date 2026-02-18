@@ -406,31 +406,148 @@ export default function TasksPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <TaskNavigation />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center justify-between mb-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-4">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Tasks</h2>
-            {projectId && (
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Filtered by project</p>
-            )}
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">All Tasks</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              {projectId ? 'Filtered by project' : 'Across all projects'}
+            </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <ViewSwitcher viewType={viewType} onChange={setViewType} />
+            <button onClick={handleRefresh} className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors" title="Refresh">
+              <RefreshCw size={13} />
+            </button>
             <CSVImportExport projectId={projectId} />
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm"
+            >
+              <Plus size={13} /> New Task
+            </button>
           </div>
         </div>
-        {viewType === 'list' ? (
-          <TaskListView onTaskSelect={setSelectedTask} projectId={projectId} />
-        ) : viewType === 'board' ? (
-          <TaskBoardView onTaskSelect={setSelectedTask} projectId={projectId} />
-        ) : (
-          <TaskCalendarView onTaskSelect={setSelectedTask} projectId={projectId} />
+
+        {/* Stats Bar */}
+        {showStatsBar && <div className="mb-4"><StatsBar stats={stats} loading={statsLoading} /></div>}
+
+        {/* Search + Filter Controls */}
+        <div className="flex items-center gap-2 mb-4">
+          <div className="relative flex-1">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search tasks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-1.5 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <X size={12} />
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => setShowQuickFilters(!showQuickFilters)}
+            className={`flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-medium rounded-lg border transition-colors ${
+              showQuickFilters || quickStatusFilter !== 'ALL' || quickPriorityFilter !== 'ALL'
+                ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            <Filter size={11} />
+            Filters
+            {(quickStatusFilter !== 'ALL' || quickPriorityFilter !== 'ALL') && (
+              <span className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+            )}
+          </button>
+          <button
+            onClick={() => { setShowBulkActions(!showBulkActions); if (showBulkActions) { setSelectedTaskIds([]) } }}
+            className={`flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-medium rounded-lg border transition-colors ${
+              showBulkActions
+                ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400'
+            }`}
+          >
+            <CheckSquare size={11} />
+            Bulk
+          </button>
+        </div>
+
+        {/* Quick Filters */}
+        {showQuickFilters && (
+          <QuickFiltersRow
+            statusFilter={quickStatusFilter}
+            priorityFilter={quickPriorityFilter}
+            onStatusChange={setQuickStatusFilter}
+            onPriorityChange={setQuickPriorityFilter}
+            stats={stats}
+          />
         )}
+
+        {/* Bulk Actions Bar */}
+        {showBulkActions && selectedTaskIds.length > 0 && (
+          <BulkActionsBar
+            count={selectedTaskIds.length}
+            onStatusChange={handleBulkStatusChange}
+            onPriorityChange={handleBulkPriorityChange}
+            onDelete={handleBulkDelete}
+            onClear={() => { setSelectedTaskIds([]); setShowBulkActions(false) }}
+            isLoading={bulkUpdateMutation.isPending || bulkDeleteMutation.isPending}
+            menuOpen={bulkMenuOpen}
+            onMenuToggle={() => setBulkMenuOpen(!bulkMenuOpen)}
+          />
+        )}
+
+        {/* Task Views */}
+        {viewType === 'list' ? (
+          <TaskListView
+            onTaskSelect={setSelectedTask}
+            projectId={projectId}
+            externalSearch={searchQuery}
+            externalStatusFilter={quickStatusFilter !== 'ALL' ? quickStatusFilter : undefined}
+            externalPriorityFilter={quickPriorityFilter !== 'ALL' ? quickPriorityFilter : undefined}
+            selectable={showBulkActions}
+            selectedIds={selectedTaskIds}
+            onSelectionChange={setSelectedTaskIds}
+          />
+        ) : viewType === 'board' ? (
+          <TaskBoardView
+            onTaskSelect={setSelectedTask}
+            projectId={projectId}
+            externalStatusFilter={quickStatusFilter !== 'ALL' ? quickStatusFilter : undefined}
+            externalPriorityFilter={quickPriorityFilter !== 'ALL' ? quickPriorityFilter : undefined}
+          />
+        ) : (
+          <TaskCalendarView
+            onTaskSelect={setSelectedTask}
+            projectId={projectId}
+            externalStatusFilter={quickStatusFilter !== 'ALL' ? quickStatusFilter : undefined}
+            externalPriorityFilter={quickPriorityFilter !== 'ALL' ? quickPriorityFilter : undefined}
+          />
+        )}
+
         {selectedTask && (
           <TaskDetailDrawer
             task={selectedTask}
             isOpen={!!selectedTask}
             onClose={() => setSelectedTask(null)}
-            onUpdate={(updatedTask) => setSelectedTask(updatedTask)}
+            onUpdate={(updatedTask) => {
+              setSelectedTask(updatedTask)
+              queryClient.invalidateQueries({ queryKey: ['tasks'] })
+              queryClient.invalidateQueries({ queryKey: ['task-stats'] })
+            }}
+          />
+        )}
+
+        {showCreateModal && (
+          <CreateTaskModal
+            isOpen={showCreateModal}
+            onClose={() => setShowCreateModal(false)}
+            projectId={projectId}
           />
         )}
       </div>
