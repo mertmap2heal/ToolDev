@@ -17,14 +17,14 @@ export default function LifecycleStatusPage() {
         {/* Header */}
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Lifecycle Status</h2>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Lifecycle Status</h2>
             {projectId && <SafetyLinkPanel variant="by-phase" count={3} />}
           </div>
 
           {/* Search Bar */}
           <div className="mb-4">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
               <input
                 type="text"
                 value={searchQuery}

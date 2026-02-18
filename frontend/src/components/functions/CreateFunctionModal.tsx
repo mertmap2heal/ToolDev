@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { X, ChevronRight } from 'lucide-react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { X, ChevronRight, Wand2, ClipboardList, TestTube2 } from 'lucide-react'
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import { functionService } from '../../services/function.service'
+import { verificationService } from '../../services/verification.service'
 import type { CreateSystemFunctionDto, SystemFunction, FunctionCriticality } from 'shared/types/engineering.types'
 
 interface CreateFunctionModalProps {
@@ -27,8 +28,28 @@ export default function CreateFunctionModal({ isOpen, onClose, projectId, parent
     allocatedTo: null,
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [useAutoId, setUseAutoId] = useState(true)
 
   const queryClient = useQueryClient()
+
+  // Fetch test plans and test cases for verification method
+  const { data: testPlans = [] } = useQuery({
+    queryKey: ['test-plans', projectId],
+    queryFn: async () => {
+      const res = await verificationService.getTestPlans(projectId)
+      return (res.success && res.data ? res.data : []) as Array<{ id: string; key: string; name: string; status: string }>
+    },
+    enabled: !!projectId && isOpen,
+  })
+
+  const { data: testCases = [] } = useQuery({
+    queryKey: ['test-cases', projectId],
+    queryFn: async () => {
+      const res = await verificationService.getTestCases(projectId)
+      return (res.success && res.data ? res.data : []) as Array<{ id: string; key: string; title: string; status: string }>
+    },
+    enabled: !!projectId && isOpen,
+  })
 
   const createFunctionMutation = useMutation({
     mutationFn: (data: CreateSystemFunctionDto) => functionService.createFunction(projectId, data),
@@ -84,8 +105,8 @@ export default function CreateFunctionModal({ isOpen, onClose, projectId, parent
     e.preventDefault()
 
     const newErrors: Record<string, string> = {}
-    if (!formData.functionId?.trim()) {
-      newErrors.functionId = 'Function ID is required'
+    if (!useAutoId && !formData.functionId?.trim()) {
+      newErrors.functionId = 'Function ID is required when manual entry is enabled'
     }
     if (!formData.name.trim()) {
       newErrors.name = 'Function name is required'
@@ -97,7 +118,7 @@ export default function CreateFunctionModal({ isOpen, onClose, projectId, parent
     }
 
     const submitData: CreateSystemFunctionDto = {
-      functionId: formData.functionId?.trim().toUpperCase() || '',
+      functionId: useAutoId ? '' : (formData.functionId?.trim().toUpperCase() || ''),
       name: formData.name.trim(),
       description: formData.description?.trim() || '',
       status: formData.status || 'draft',
@@ -173,17 +194,37 @@ export default function CreateFunctionModal({ isOpen, onClose, projectId, parent
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 text-left">
-                Function ID <span className="text-red-500">*</span>
+                Function ID
               </label>
-              <input
-                type="text"
-                value={formData.functionId || ''}
-                onChange={(e) => handleChange('functionId', e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.functionId ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                } bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm`}
-                placeholder="e.g., FUNC-01"
-              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setUseAutoId(!useAutoId)}
+                  className={`flex-shrink-0 p-2 rounded-lg border transition-colors ${
+                    useAutoId
+                      ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400'
+                      : 'border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:border-gray-400'
+                  }`}
+                  title={useAutoId ? 'Auto-generated (click to enter manually)' : 'Manual entry (click to auto-generate)'}
+                >
+                  <Wand2 size={16} />
+                </button>
+                {useAutoId ? (
+                  <div className="flex-1 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500 text-sm italic">
+                    Auto-generated (e.g. FUNC-001)
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={formData.functionId || ''}
+                    onChange={(e) => handleChange('functionId', e.target.value)}
+                    className={`flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      errors.functionId ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                    } bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm`}
+                    placeholder="e.g., FUNC-01"
+                  />
+                )}
+              </div>
               {errors.functionId && <p className="mt-1 text-xs text-red-500">{errors.functionId}</p>}
             </div>
 
@@ -258,13 +299,38 @@ export default function CreateFunctionModal({ isOpen, onClose, projectId, parent
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
               >
                 <option value="">Select method</option>
-                <option value="Test">Test</option>
-                <option value="Analysis">Analysis</option>
-                <option value="Inspection">Inspection</option>
-                <option value="Demonstration">Demonstration</option>
-                <option value="Review">Review</option>
-                <option value="Simulation">Simulation</option>
+                <optgroup label="Standard Methods">
+                  <option value="Analysis">Analysis</option>
+                  <option value="Inspection">Inspection</option>
+                  <option value="Demonstration">Demonstration</option>
+                  <option value="Review">Review</option>
+                  <option value="Simulation">Simulation</option>
+                </optgroup>
+                {testPlans.length > 0 && (
+                  <optgroup label="Test Plans">
+                    {testPlans.map((tp: any) => (
+                      <option key={tp.id} value={`TP::${tp.id}::${tp.key}`}>
+                        {tp.key} — {tp.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {testCases.length > 0 && (
+                  <optgroup label="Test Cases">
+                    {testCases.map((tc: any) => (
+                      <option key={tc.id} value={`TC::${tc.id}::${tc.key}`}>
+                        {tc.key} — {tc.title}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
+              {formData.verificationMethod && (formData.verificationMethod.startsWith('TP::') || formData.verificationMethod.startsWith('TC::')) && (
+                <p className="mt-1 text-[11px] text-blue-500 dark:text-blue-400 flex items-center gap-1 text-left">
+                  {formData.verificationMethod.startsWith('TP::') ? <ClipboardList size={11} /> : <TestTube2 size={11} />}
+                  Linked to {formData.verificationMethod.startsWith('TP::') ? 'Test Plan' : 'Test Case'}: {formData.verificationMethod.split('::')[2]}
+                </p>
+              )}
             </div>
           </div>
 

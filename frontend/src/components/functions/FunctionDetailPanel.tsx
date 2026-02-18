@@ -16,9 +16,12 @@ import {
   Cpu,
   Plus,
   ExternalLink,
+  ClipboardList,
+  TestTube2,
 } from 'lucide-react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import { functionService } from '../../services/function.service'
+import { verificationService } from '../../services/verification.service'
 import ParameterTextRenderer from './ParameterTextRenderer'
 import type { SystemFunction, FunctionCriticality } from 'shared/types/engineering.types'
 import type { Issue } from 'shared/types/engineering.types'
@@ -59,10 +62,6 @@ const CRITICALITY_OPTIONS: { value: FunctionCriticality; label: string; color: s
   { value: 'critical', label: 'Critical', color: 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300' },
 ]
 
-const VERIFICATION_METHODS = [
-  'Test', 'Analysis', 'Inspection', 'Demonstration', 'Review', 'Simulation',
-]
-
 export default function FunctionDetailPanel({
   func,
   allFunctions,
@@ -79,6 +78,41 @@ export default function FunctionDetailPanel({
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState<Partial<SystemFunction>>({})
   const [activeTab, setActiveTab] = useState<'details' | 'links' | 'hierarchy'>('details')
+
+  // Fetch test plans and test cases for verification method
+  const { data: testPlans = [] } = useQuery({
+    queryKey: ['test-plans', projectId],
+    queryFn: async () => {
+      const res = await verificationService.getTestPlans(projectId)
+      return (res.success && res.data ? res.data : []) as Array<{ id: string; key: string; name: string; status: string }>
+    },
+    enabled: !!projectId,
+  })
+
+  const { data: testCases = [] } = useQuery({
+    queryKey: ['test-cases', projectId],
+    queryFn: async () => {
+      const res = await verificationService.getTestCases(projectId)
+      return (res.success && res.data ? res.data : []) as Array<{ id: string; key: string; title: string; status: string }>
+    },
+    enabled: !!projectId,
+  })
+
+  // Parse verification method to detect linked test plans/cases
+  const parseVerificationMethod = (method?: string) => {
+    if (!method) return { type: 'none' as const, label: '—' }
+    if (method.startsWith('TP::')) {
+      const parts = method.split('::')
+      const plan = testPlans.find((p: any) => p.id === parts[1])
+      return { type: 'test-plan' as const, id: parts[1], key: parts[2], label: plan ? `${plan.key} — ${plan.name}` : parts[2] }
+    }
+    if (method.startsWith('TC::')) {
+      const parts = method.split('::')
+      const tc = testCases.find((c: any) => c.id === parts[1])
+      return { type: 'test-case' as const, id: parts[1], key: parts[2], label: tc ? `${tc.key} — ${tc.title}` : parts[2] }
+    }
+    return { type: 'standard' as const, label: method }
+  }
 
   const level = func.level ?? 0
   const levelStyle = LEVEL_STYLES[Math.min(level, LEVEL_STYLES.length - 1)]
@@ -373,12 +407,54 @@ export default function FunctionDetailPanel({
                       className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                     >
                       <option value="">Select method</option>
-                      {VERIFICATION_METHODS.map(m => (
-                        <option key={m} value={m}>{m}</option>
-                      ))}
+                      <optgroup label="Standard Methods">
+                        <option value="Analysis">Analysis</option>
+                        <option value="Inspection">Inspection</option>
+                        <option value="Demonstration">Demonstration</option>
+                        <option value="Review">Review</option>
+                        <option value="Simulation">Simulation</option>
+                      </optgroup>
+                      {testPlans.length > 0 && (
+                        <optgroup label="Test Plans">
+                          {testPlans.map((tp: any) => (
+                            <option key={tp.id} value={`TP::${tp.id}::${tp.key}`}>
+                              {tp.key} — {tp.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {testCases.length > 0 && (
+                        <optgroup label="Test Cases">
+                          {testCases.map((tc: any) => (
+                            <option key={tc.id} value={`TC::${tc.id}::${tc.key}`}>
+                              {tc.key} — {tc.title}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
                     </select>
                   ) : (
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{func.verificationMethod || '—'}</p>
+                    (() => {
+                      const vm = parseVerificationMethod(func.verificationMethod)
+                      if (vm.type === 'none') return <p className="text-sm font-medium text-gray-900 dark:text-white">—</p>
+                      if (vm.type === 'test-plan') return (
+                        <div className="flex items-center gap-1.5">
+                          <ClipboardList size={14} className="text-blue-500 flex-shrink-0" />
+                          <p className="text-sm font-medium text-blue-600 dark:text-blue-400 cursor-pointer hover:underline" title={`Test Plan: ${vm.label}`}>
+                            {vm.label}
+                          </p>
+                        </div>
+                      )
+                      if (vm.type === 'test-case') return (
+                        <div className="flex items-center gap-1.5">
+                          <TestTube2 size={14} className="text-purple-500 flex-shrink-0" />
+                          <p className="text-sm font-medium text-purple-600 dark:text-purple-400 cursor-pointer hover:underline" title={`Test Case: ${vm.label}`}>
+                            {vm.label}
+                          </p>
+                        </div>
+                      )
+                      return <p className="text-sm font-medium text-gray-900 dark:text-white">{vm.label}</p>
+                    })()
                   )}
                 </div>
 

@@ -22,23 +22,33 @@ export const createFunction = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    if (!functionId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Function ID is required',
+    // Auto-generate functionId if not provided
+    let resolvedFunctionId = functionId?.trim()?.toUpperCase() || ''
+    if (!resolvedFunctionId) {
+      const count = await prisma.systemFunction.count({ where: { projectId } })
+      const nextNum = count + 1
+      let candidate = `FUNC-${String(nextNum).padStart(3, '0')}`
+      // Ensure uniqueness by incrementing if collision
+      let exists = await prisma.systemFunction.findUnique({ where: { functionId: candidate } })
+      let attempt = nextNum
+      while (exists) {
+        attempt++
+        candidate = `FUNC-${String(attempt).padStart(3, '0')}`
+        exists = await prisma.systemFunction.findUnique({ where: { functionId: candidate } })
+      }
+      resolvedFunctionId = candidate
+    } else {
+      // Check if user-provided functionId already exists
+      const existingFunction = await prisma.systemFunction.findUnique({
+        where: { functionId: resolvedFunctionId },
       })
-    }
 
-    // Check if functionId already exists
-    const existingFunction = await prisma.systemFunction.findUnique({
-      where: { functionId },
-    })
-
-    if (existingFunction) {
-      return res.status(400).json({
-        success: false,
-        error: 'Function ID already exists. Please use a different ID.',
-      })
+      if (existingFunction) {
+        return res.status(400).json({
+          success: false,
+          error: 'Function ID already exists. Please use a different ID.',
+        })
+      }
     }
 
     // Calculate level from parent if parentId is provided
@@ -65,7 +75,7 @@ export const createFunction = async (req: AuthRequest, res: Response) => {
     const function_ = await prisma.systemFunction.create({
       data: {
         projectId,
-        functionId,
+        functionId: resolvedFunctionId,
         name,
         description: description || '',
         sourceReqId,
