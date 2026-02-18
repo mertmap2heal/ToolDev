@@ -14,6 +14,10 @@ import { format } from 'date-fns'
 interface TaskBoardViewProps {
   onTaskSelect?: (task: Task) => void
   projectId?: string
+  /** Parent-managed status filter */
+  externalStatusFilter?: TaskStatus | 'ALL'
+  /** Parent-managed priority filter */
+  externalPriorityFilter?: TaskPriority | 'ALL'
 }
 
 interface TaskCardProps {
@@ -74,7 +78,7 @@ function TaskCard({ task, onSelect }: TaskCardProps) {
   )
 }
 
-export default function TaskBoardView({ onTaskSelect, projectId: propProjectId }: TaskBoardViewProps) {
+export default function TaskBoardView({ onTaskSelect, projectId: propProjectId, externalStatusFilter, externalPriorityFilter }: TaskBoardViewProps) {
   const { projectId: paramProjectId } = useParams<{ projectId?: string }>()
   const projectId = propProjectId || paramProjectId
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -101,12 +105,14 @@ export default function TaskBoardView({ onTaskSelect, projectId: propProjectId }
   })
 
   const { data: tasksData, isLoading: tasksLoading } = useQuery({
-    queryKey: ['tasks', projectId],
+    queryKey: ['tasks', projectId, externalStatusFilter, externalPriorityFilter],
     queryFn: async () => {
       const response = await taskService.getTasks({
         projectId: projectId || undefined,
         page: 1,
         pageSize: 1000, // Get all tasks for board view
+        status: externalStatusFilter && externalStatusFilter !== 'ALL' ? externalStatusFilter : undefined,
+        priority: externalPriorityFilter && externalPriorityFilter !== 'ALL' ? externalPriorityFilter : undefined,
       })
       if (response.success && response.data) {
         return response.data.items

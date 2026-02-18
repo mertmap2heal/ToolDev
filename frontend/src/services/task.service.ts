@@ -4,6 +4,8 @@ import type {
   CreateTaskDto,
   UpdateTaskDto,
   ListTasksFilters,
+  TaskStatus,
+  TaskPriority,
 } from 'shared/types/task.types'
 import type { ApiResponse, PaginatedResponse as ApiPaginatedResponse } from 'shared/types/api.types'
 
@@ -199,11 +201,15 @@ export const taskService = {
     projectId?: string
     startDate?: string
     endDate?: string
+    status?: TaskStatus
+    priority?: TaskPriority
   }): Promise<ApiResponse<any[]>> {
     const params = new URLSearchParams()
     if (data.projectId) params.append('project_id', data.projectId)
     if (data.startDate) params.append('start_date', data.startDate)
     if (data.endDate) params.append('end_date', data.endDate)
+    if (data.status) params.append('status', data.status)
+    if (data.priority) params.append('priority', data.priority)
     const queryString = params.toString()
     return apiClient.get<any[]>(`/tasks/calendar${queryString ? `?${queryString}` : ''}`)
   },

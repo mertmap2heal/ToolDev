@@ -11,12 +11,36 @@ import { format } from 'date-fns'
 interface TaskListViewProps {
   onTaskSelect?: (task: Task) => void
   projectId?: string
+  /** Parent-managed search query — hides internal search when provided */
+  externalSearch?: string
+  /** Parent-managed status filter */
+  externalStatusFilter?: TaskStatus | 'ALL'
+  /** Parent-managed priority filter */
+  externalPriorityFilter?: TaskPriority | 'ALL'
+  /** Enable row-level checkboxes for bulk selection */
+  selectable?: boolean
+  /** Currently selected task IDs (controlled) */
+  selectedIds?: string[]
+  /** Callback when selection changes */
+  onSelectionChange?: (ids: string[]) => void
+  /** Hide the internal toolbar (search + create button) when parent provides its own */
+  hideToolbar?: boolean
 }
 
-export default function TaskListView({ onTaskSelect, projectId: propProjectId }: TaskListViewProps) {
+export default function TaskListView({
+  onTaskSelect,
+  projectId: propProjectId,
+  externalSearch,
+  externalStatusFilter,
+  externalPriorityFilter,
+  selectable = false,
+  selectedIds = [],
+  onSelectionChange,
+  hideToolbar = false,
+}: TaskListViewProps) {
   const { projectId: paramProjectId } = useParams<{ projectId?: string }>()
   const projectId = propProjectId || paramProjectId
-  const [searchQuery, setSearchQuery] = useState('')
+  const [internalSearch, setInternalSearch] = useState('')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [filters, setFilters] = useState<ListTasksFilters>({
     projectId: projectId || undefined,
@@ -25,13 +49,18 @@ export default function TaskListView({ onTaskSelect, projectId: propProjectId }:
   })
   const queryClient = useQueryClient()
 
+  // Use external search when provided, otherwise internal
+  const searchQuery = externalSearch !== undefined ? externalSearch : internalSearch
+
   const { data, isLoading } = useQuery({
-    queryKey: ['tasks', projectId, searchQuery, filters],
+    queryKey: ['tasks', projectId, searchQuery, filters, externalStatusFilter, externalPriorityFilter],
     queryFn: async () => {
       const response = await taskService.getTasks({
         ...filters,
         projectId: projectId || undefined,
         search: searchQuery || undefined,
+        status: externalStatusFilter && externalStatusFilter !== 'ALL' ? externalStatusFilter : filters.status,
+        priority: externalPriorityFilter && externalPriorityFilter !== 'ALL' ? externalPriorityFilter : filters.priority,
       })
       if (response.success && response.data) {
         return response.data
@@ -100,6 +129,23 @@ export default function TaskListView({ onTaskSelect, projectId: propProjectId }:
     updateTaskMutation.mutate({ taskId, updates: { priority: newPriority } })
   }
 
+  const toggleTaskSelection = (taskId: string) => {
+    if (!onSelectionChange) return
+    const next = selectedIds.includes(taskId)
+      ? selectedIds.filter((id) => id !== taskId)
+      : [...selectedIds, taskId]
+    onSelectionChange(next)
+  }
+
+  const toggleSelectAll = () => {
+    if (!onSelectionChange) return
+    if (selectedIds.length === tasks.length) {
+      onSelectionChange([])
+    } else {
+      onSelectionChange(tasks.map((t) => t.id))
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -110,36 +156,38 @@ export default function TaskListView({ onTaskSelect, projectId: propProjectId }:
 
   return (
     <div className="space-y-4">
-      {/* Search and Create */}
-      <div className="flex gap-4">
-        <div className="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder="Search tasks..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-              >
-                <X size={16} />
-              </button>
-            )}
+      {/* Search and Create — hidden when parent provides its own toolbar */}
+      {!hideToolbar && (
+        <div className="flex gap-4">
+          <div className="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Search tasks..."
+                value={internalSearch}
+                onChange={(e) => setInternalSearch(e.target.value)}
+                className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+              {internalSearch && (
+                <button
+                  onClick={() => setInternalSearch('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
           </div>
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors"
+          >
+            <Plus size={18} />
+            Create Task
+          </button>
         </div>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors"
-        >
-          <Plus size={18} />
-          Create Task
-        </button>
-      </div>
+      )}
 
       {/* Filters */}
       <TaskFilters filters={filters} onFiltersChange={setFilters} />
@@ -150,6 +198,16 @@ export default function TaskListView({ onTaskSelect, projectId: propProjectId }:
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
               <tr>
+                {selectable && (
+                  <th scope="col" className="px-3 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={tasks.length > 0 && selectedIds.length === tasks.length}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500"
+                    />
+                  </th>
+                )}
                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Title
                 </th>
@@ -173,7 +231,7 @@ export default function TaskListView({ onTaskSelect, projectId: propProjectId }:
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {tasks.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={selectable ? 7 : 6} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                     No tasks found. Create your first task to get started.
                   </td>
                 </tr>
@@ -181,9 +239,21 @@ export default function TaskListView({ onTaskSelect, projectId: propProjectId }:
                 tasks.map((task) => (
                   <tr
                     key={task.id}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                    className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer ${
+                      selectable && selectedIds.includes(task.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                    }`}
                     onClick={() => onTaskSelect?.(task)}
                   >
+                    {selectable && (
+                      <td className="px-3 py-3 w-10" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(task.id)}
+                          onChange={() => toggleTaskSelection(task.id)}
+                          className="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500"
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         {task.blocked && (

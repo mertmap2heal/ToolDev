@@ -3,14 +3,18 @@ import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-reac
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { taskService } from '../../services/task.service'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns'
-import type { Task } from 'shared/types/task.types'
+import type { Task, TaskStatus, TaskPriority } from 'shared/types/task.types'
 
 interface TaskCalendarViewProps {
   onTaskSelect?: (task: Task) => void
   projectId?: string
+  /** Parent-managed status filter */
+  externalStatusFilter?: TaskStatus | 'ALL'
+  /** Parent-managed priority filter */
+  externalPriorityFilter?: TaskPriority | 'ALL'
 }
 
-export default function TaskCalendarView({ onTaskSelect, projectId: propProjectId }: TaskCalendarViewProps) {
+export default function TaskCalendarView({ onTaskSelect, projectId: propProjectId, externalStatusFilter, externalPriorityFilter }: TaskCalendarViewProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const queryClient = useQueryClient()
 
@@ -18,12 +22,14 @@ export default function TaskCalendarView({ onTaskSelect, projectId: propProjectI
   const monthEnd = endOfMonth(currentMonth)
 
   const { data: calendarData, isLoading } = useQuery({
-    queryKey: ['calendar-tasks', propProjectId, monthStart.toISOString(), monthEnd.toISOString()],
+    queryKey: ['calendar-tasks', propProjectId, monthStart.toISOString(), monthEnd.toISOString(), externalStatusFilter, externalPriorityFilter],
     queryFn: async () => {
       const response = await taskService.getCalendarTasks({
         projectId: propProjectId || undefined,
         startDate: monthStart.toISOString(),
         endDate: monthEnd.toISOString(),
+        status: externalStatusFilter && externalStatusFilter !== 'ALL' ? externalStatusFilter : undefined,
+        priority: externalPriorityFilter && externalPriorityFilter !== 'ALL' ? externalPriorityFilter : undefined,
       })
       if (response.success && response.data) {
         return response.data
