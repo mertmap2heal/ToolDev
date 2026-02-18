@@ -226,6 +226,8 @@ export interface BaselineComparison {
   }
 }
 
+export type FunctionCriticality = 'low' | 'medium' | 'high' | 'critical'
+
 export interface SystemFunction {
   id: string
   projectId: string
@@ -236,6 +238,14 @@ export interface SystemFunction {
   status?: 'draft' | 'work-in-progress' | 'in-review' | 'done'
   owner?: string
   verificationMethod?: string
+  parentId?: string | null
+  level: number
+  sortOrder: number
+  criticality?: FunctionCriticality
+  pbsComponentId?: string | null
+  allocatedTo?: string | null
+  children?: SystemFunction[]
+  parent?: SystemFunction | null
   createdAt: string
   updatedAt: string
 }
@@ -266,6 +276,12 @@ export interface CreateSystemFunctionDto {
   status?: 'draft' | 'work-in-progress' | 'in-review' | 'done'
   owner?: string
   verificationMethod?: string
+  parentId?: string | null
+  level?: number
+  sortOrder?: number
+  criticality?: FunctionCriticality
+  pbsComponentId?: string | null
+  allocatedTo?: string | null
 }
 
 export interface CreateArchitectureDto {

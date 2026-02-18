@@ -29,4 +29,11 @@ export const functionService = {
   async deleteFunction(projectId: string, functionId: string): Promise<ApiResponse<void>> {
     return apiClient.delete<void>(`/functions/${projectId}/${functionId}`)
   },
+
+  async moveFunction(projectId: string, functionId: string, newParentId: string | null, newSortOrder: number): Promise<ApiResponse<SystemFunction>> {
+    return apiClient.put<SystemFunction>(`/functions/${projectId}/${functionId}/move`, {
+      newParentId,
+      newSortOrder,
+    })
+  },
 }

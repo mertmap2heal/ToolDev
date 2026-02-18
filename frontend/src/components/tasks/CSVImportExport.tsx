@@ -86,15 +86,15 @@ export default function CSVImportExport({ projectId, currentFilters }: CSVImport
       {/* Export */}
       <button
         onClick={() => setIsExportOpen(true)}
-        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 transition-colors"
+        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm"
       >
-        <Download size={16} />
+        <Download size={13} />
         Export CSV
       </button>
 
       {/* Import */}
-      <label className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 cursor-pointer transition-colors">
-        <Upload size={16} />
+      <label className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer transition-colors shadow-sm">
+        <Upload size={13} />
         Import CSV
         <input
           type="file"

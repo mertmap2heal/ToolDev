@@ -6,6 +6,7 @@ import {
   getFunction,
   updateFunction,
   deleteFunction,
+  moveFunction,
 } from '../controllers/function.controller'
 
 const router = Router()
@@ -16,6 +17,7 @@ router.post('/:projectId', createFunction)
 router.get('/:projectId', getFunctions)
 router.get('/:projectId/:id', getFunction)
 router.put('/:projectId/:id', updateFunction)
+router.put('/:projectId/:id/move', moveFunction)
 router.delete('/:projectId/:id', deleteFunction)
 
 export default router

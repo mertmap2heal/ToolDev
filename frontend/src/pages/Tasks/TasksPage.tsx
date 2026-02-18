@@ -31,6 +31,12 @@ import TaskCalendarView from '../../components/tasks/TaskCalendarView'
 import TaskDetailDrawer from '../../components/tasks/TaskDetailDrawer'
 import CSVImportExport from '../../components/tasks/CSVImportExport'
 import CreateTaskModal from '../../components/tasks/CreateTaskModal'
+import TasksReportsPage from './Reports/TasksReportsPage'
+import TaskTemplatesPage from './Templates/TaskTemplatesPage'
+import TaskWorkflowsPage from './Workflows/TaskWorkflowsPage'
+import TimeTrackingPage from './TimeTracking/TimeTrackingPage'
+import TaskNotificationsPage from './Notifications/TaskNotificationsPage'
+import TaskSettingsPage from './Settings/TaskSettingsPage'
 import { taskService } from '../../services/task.service'
 import { projectService } from '../../services/project.service'
 import { apiClient } from '../../services/api'
@@ -89,6 +95,7 @@ export default function TasksPage() {
   const [showStatsBar, setShowStatsBar] = useState(true)
   const [showQuickFilters, setShowQuickFilters] = useState(false)
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
+  const [selectedTool, setSelectedTool] = useState<'tasks' | 'reports' | 'templates' | 'workflows' | 'time-tracking' | 'notifications' | 'settings'>('tasks')
 
   // Determine view type from URL path for global task routes
   useEffect(() => {
@@ -202,20 +209,20 @@ export default function TasksPage() {
         {/* ─── Task Tools Quick Nav ─── */}
         <div className="flex items-center gap-1 mb-4 py-2 px-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-x-auto">
           {[
-            { icon: UserCheck, label: 'My Tasks', path: '/tasks/my-tasks' },
-            { icon: BarChart3, label: 'Reports', path: `/tasks/reports?projectId=${routeProjectId}` },
-            { icon: FileText, label: 'Templates', path: '/tasks/templates' },
-            { icon: Workflow, label: 'Workflows', path: '/tasks/workflows' },
-            { icon: Clock, label: 'Time Tracking', path: '/tasks/time-tracking' },
-            { icon: Bell, label: 'Notifications', path: '/tasks/notifications' },
-            { icon: Settings2, label: 'Settings', path: '/tasks/settings' },
+            { id: 'tasks', icon: List, label: 'Tasks' },
+            { id: 'reports', icon: BarChart3, label: 'Reports' },
+            { id: 'templates', icon: FileText, label: 'Templates' },
+            { id: 'workflows', icon: Workflow, label: 'Workflows' },
+            { id: 'time-tracking', icon: Clock, label: 'Time Tracking' },
+            { id: 'notifications', icon: Bell, label: 'Notifications' },
+            { id: 'settings', icon: Settings2, label: 'Settings' },
           ].map((item) => {
             const Icon = item.icon
-            const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/')
+            const isActive = selectedTool === item.id
             return (
               <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
+                key={item.id}
+                onClick={() => setSelectedTool(item.id as any)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
                   isActive
                     ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
@@ -230,12 +237,15 @@ export default function TasksPage() {
         </div>
 
         {/* ─── Stats KPI Bar ─── */}
-        {showStatsBar && (
+        {selectedTool === 'tasks' && showStatsBar && (
           <StatsBar stats={stats} loading={statsLoading} />
         )}
 
-        {/* ─── Toolbar: View Switcher + Quick Filters + Bulk Actions ─── */}
-        <div className="flex items-center justify-between gap-3 mb-4 mt-4">
+        {/* ─── TASKS TAB ─── */}
+        {selectedTool === 'tasks' && (
+          <>
+            {/* Toolbar: View Switcher + Quick Filters + Bulk Actions */}
+            <div className="flex items-center justify-between gap-3 mb-4 mt-4">
           <div className="flex items-center gap-2">
             {/* View Switcher */}
             <ViewSwitcher viewType={viewType} onChange={setViewType} />
@@ -381,6 +391,26 @@ export default function TasksPage() {
             projectId={projectId}
           />
         )}
+          </>
+        )}
+
+        {/* ─── REPORTS TAB ─── */}
+        {selectedTool === 'reports' && <TasksReportsPage />}
+
+        {/* ─── TEMPLATES TAB ─── */}
+        {selectedTool === 'templates' && <TaskTemplatesPage />}
+
+        {/* ─── WORKFLOWS TAB ─── */}
+        {selectedTool === 'workflows' && <TaskWorkflowsPage />}
+
+        {/* ─── TIME TRACKING TAB ─── */}
+        {selectedTool === 'time-tracking' && <TimeTrackingPage />}
+
+        {/* ─── NOTIFICATIONS TAB ─── */}
+        {selectedTool === 'notifications' && <TaskNotificationsPage />}
+
+        {/* ─── SETTINGS TAB ─── */}
+        {selectedTool === 'settings' && <TaskSettingsPage />}
       </div>
     )
   }
