@@ -3,7 +3,6 @@ import {
   Home,
   Building2,
   User,
-  Settings,
   ClipboardCheck,
   Sparkles,
   RefreshCw,
@@ -22,7 +21,6 @@ const menuItems = [
   { icon: RefreshCw, label: 'Lifecycle Management', path: '/lifecycle' },
   { icon: Sparkles, label: 'AI Guide', path: '/ai-guide', isSpecial: true },
   { icon: User, label: 'User', path: '/user' },
-  { icon: Settings, label: 'Settings', path: '/settings' },
 ]
 
 export default function Sidebar() {
