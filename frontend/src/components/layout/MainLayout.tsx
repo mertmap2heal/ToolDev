@@ -61,7 +61,7 @@ export default function MainLayout() {
       <Sidebar />
       <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${isOpen ? '' : ''}`}>
         <Header />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-6" style={{ backgroundColor: 'var(--theme-bg)' }}>
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4" style={{ backgroundColor: 'var(--theme-bg)' }}>
           <Outlet />
         </main>
       </div>

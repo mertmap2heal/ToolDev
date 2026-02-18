@@ -21,16 +21,16 @@ export default function QuickAccessBar({ projectId, pinnedIds, onTogglePin }: Qu
     }
 
     return (
-        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-            <div className="text-xs font-medium text-gray-400 uppercase tracking-wider min-w-fit">Quick Access:</div>
-            <div className="flex flex-wrap gap-2">
+        <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+            <div className="text-[10px] font-medium text-gray-400 uppercase tracking-wider min-w-fit">Quick Access:</div>
+            <div className="flex flex-wrap gap-1.5">
                 {pinnedModules.map((module) => (
                     <div key={module.id} className="group relative">
                         <button
                             onClick={() => handleNavigation(module.route)}
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs text-gray-600 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-200 dark:hover:border-blue-800 transition-colors"
+                            className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[11px] text-gray-600 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-200 dark:hover:border-blue-800 transition-colors"
                         >
-                            <module.icon size={12} />
+                            <module.icon size={10} />
                             <span className="font-medium">{module.label}</span>
                         </button>
                         <button

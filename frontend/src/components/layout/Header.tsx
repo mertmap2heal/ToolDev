@@ -53,13 +53,13 @@ function ThemeToggleButton() {
   return (
     <button
       onClick={toggleTheme}
-      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+      className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
       title={theme === 'midnight' ? 'Switch to Light mode' : 'Switch to Midnight mode'}
     >
       {theme === 'midnight' ? (
-        <Sun size={20} className="text-yellow-400" />
+        <Sun size={16} className="text-yellow-400" />
       ) : (
-        <Moon size={20} className="text-gray-600" />
+        <Moon size={16} className="text-gray-600" />
       )}
     </button>
   )
@@ -177,22 +177,22 @@ export default function Header() {
 
   return (
     <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 relative z-30">
-      <div className="px-6 py-2">
-        <div className="flex items-center justify-between gap-4">
+      <div className="px-4 py-1">
+        <div className="flex items-center justify-between gap-3">
           {/* Left: Logo + Navigation Categories */}
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-6">
             <Link to="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity flex-shrink-0">
               <Logo size="sm" showText={true} />
             </Link>
 
             {isProjectContext && (
-              <nav className="hidden md:flex items-center gap-1">
+              <nav className="hidden md:flex items-center gap-0.5">
                 {CATEGORIES.map((category) => (
                   <button
                     key={category.id}
                     onClick={() => handleCategoryClick(category.id)}
                     className={clsx(
-                      'px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
+                      'px-2 py-1 text-xs font-medium rounded-md transition-colors',
                       activeCategory === category.id && isMegaMenuOpen
                         ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
                         : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200'
@@ -206,13 +206,13 @@ export default function Header() {
           </div>
 
           {/* Center: Search */}
-          <div className="hidden lg:flex flex-1 max-w-md mx-4">
+          <div className="hidden lg:flex flex-1 max-w-md mx-3">
             <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+              <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
               <input
                 type="text"
                 placeholder="Search"
-                className="w-full pl-10 pr-4 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
+                className="w-full pl-8 pr-4 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
               />
               <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-gray-400">
                 Ctrl+K
@@ -221,24 +221,24 @@ export default function Header() {
           </div>
 
           {/* Right: Icons */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1 flex-shrink-0">
             <button
               onClick={() => setIsFeedbackModalOpen(true)}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg relative hidden sm:block"
+              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md relative hidden sm:block"
               aria-label="Send Feedback"
             >
-              <HelpCircle size={20} className="text-gray-600 dark:text-gray-400" />
+              <HelpCircle size={16} className="text-gray-600 dark:text-gray-400" />
             </button>
             <div className="relative" ref={bellRef}>
               <button
                 onClick={() => setBellOpen(!bellOpen)}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg relative"
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md relative"
                 aria-expanded={bellOpen}
                 aria-label="Notifications"
               >
-                <Bell size={20} className="text-gray-600 dark:text-gray-400" />
+                <Bell size={16} className="text-gray-600 dark:text-gray-400" />
                 {unreadCount > 0 && (
-                  <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-medium bg-red-500 text-white rounded-full">
+                  <span className="absolute top-0.5 right-0.5 min-w-[14px] h-[14px] px-0.5 flex items-center justify-center text-[8px] font-medium bg-red-500 text-white rounded-full">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
@@ -295,23 +295,23 @@ export default function Header() {
             <ThemeToggleButton />
             <button
               onClick={() => navigate('/settings')}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg hidden sm:block"
+              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md hidden sm:block"
               title="Settings"
             >
-              <Settings size={20} className="text-gray-600 dark:text-gray-400" />
+              <Settings size={16} className="text-gray-600 dark:text-gray-400" />
             </button>
-            <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg hidden sm:block">
-              <Grid size={20} className="text-gray-600 dark:text-gray-400" />
+            <button className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md hidden sm:block">
+              <Grid size={16} className="text-gray-600 dark:text-gray-400" />
             </button>
 
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="w-9 h-9 rounded-full bg-blue-500 flex items-center justify-center ml-2 cursor-pointer hover:bg-blue-600 transition-colors shadow-sm"
+                className="w-7 h-7 rounded-full bg-blue-500 flex items-center justify-center ml-1 cursor-pointer hover:bg-blue-600 transition-colors shadow-sm"
                 aria-expanded={dropdownOpen}
                 aria-haspopup="true"
               >
-                <span className="text-white font-semibold text-sm">{userInitial}</span>
+                <span className="text-white font-semibold text-xs">{userInitial}</span>
               </button>
               {dropdownOpen && (
                 <div className="absolute right-0 mt-2 w-48 py-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
@@ -372,7 +372,7 @@ export default function Header() {
       </div>
 
       {/* Breadcrumbs - always visible */}
-      <div className="px-6 py-1 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+      <div className="px-4 py-0.5 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
         <Breadcrumbs />
       </div>
 

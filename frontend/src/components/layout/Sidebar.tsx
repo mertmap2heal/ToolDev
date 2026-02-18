@@ -31,10 +31,10 @@ export default function Sidebar() {
 
   return (
     <div
-      className="text-gray-500 dark:text-gray-400 flex flex-col border-r w-12"
+      className="text-gray-500 dark:text-gray-400 flex flex-col border-r w-10"
       style={{ backgroundColor: 'var(--theme-sidebar)', borderColor: 'var(--theme-border)' }}
     >
-      <nav className="flex-1 p-2 overflow-y-auto flex flex-col gap-1">
+      <nav className="flex-1 p-1 overflow-y-auto flex flex-col gap-0.5">
         {menuItems.map((item) => {
           const Icon = item.icon
           const isActive =
@@ -50,13 +50,13 @@ export default function Sidebar() {
                 onClick={toggleAIGuide}
                 title={item.label}
                 className={clsx(
-                  'w-full flex items-center justify-center p-2 rounded-lg transition-colors',
+                  'w-full flex items-center justify-center p-1.5 rounded-md transition-colors',
                   isActive
                     ? 'bg-gray-300 dark:bg-gray-800 text-gray-900 dark:text-white'
                     : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
                 )}
               >
-                <Icon size={20} />
+                <Icon size={16} />
               </button>
             )
           }
@@ -68,13 +68,13 @@ export default function Sidebar() {
               to={href}
               title={item.label}
               className={clsx(
-                'w-full flex items-center justify-center p-2 rounded-lg transition-colors',
+                'w-full flex items-center justify-center p-1.5 rounded-md transition-colors',
                 isActive
                   ? 'bg-gray-300 dark:bg-gray-800 text-gray-900 dark:text-white'
                   : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
               )}
             >
-              <Icon size={20} />
+              <Icon size={16} />
             </Link>
           )
         })}

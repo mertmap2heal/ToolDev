@@ -63,7 +63,7 @@ export default function Breadcrumbs({ items }: BreadcrumbsProps) {
   const breadcrumbItems = generateBreadcrumbs()
 
   return (
-    <nav className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+    <nav className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
       {breadcrumbItems.map((item, index) => (
         <div key={index} className="flex items-center gap-2">
           {item.path ? (
