@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useLocation, useSearchParams } from 'react-router-dom'
+import { useParams, useLocation, useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus,
@@ -18,6 +18,12 @@ import {
   RefreshCw,
   Trash2,
   ChevronDown,
+  MoreHorizontal,
+  FileText,
+  Workflow,
+  Bell,
+  Settings2,
+  UserCheck,
 } from 'lucide-react'
 
 import TaskNavigation from '../../components/tasks/TaskNavigation'
@@ -69,6 +75,7 @@ interface TaskStats {
 export default function TasksPage() {
   const { projectId: routeProjectId } = useParams<{ projectId?: string }>()
   const location = useLocation()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
 
@@ -84,6 +91,7 @@ export default function TasksPage() {
   const [showStatsBar, setShowStatsBar] = useState(true)
   const [showQuickFilters, setShowQuickFilters] = useState(false)
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
+  const [showMoreMenu, setShowMoreMenu] = useState(false)
 
   // Determine view type from URL path for global task routes
   useEffect(() => {
@@ -182,6 +190,51 @@ export default function TasksPage() {
             >
               <RefreshCw size={14} />
             </button>
+
+            {/* More Tools dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowMoreMenu(!showMoreMenu)}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  showMoreMenu
+                    ? 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200'
+                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+                title="More tools"
+              >
+                <MoreHorizontal size={14} />
+              </button>
+              {showMoreMenu && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setShowMoreMenu(false)} />
+                  <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-40 py-1">
+                    <p className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Task Tools</p>
+                    {[
+                      { icon: UserCheck, label: 'My Tasks', path: '/tasks/my-tasks' },
+                      { icon: BarChart3, label: 'Reports', path: `/tasks/reports?projectId=${routeProjectId}` },
+                      { icon: FileText, label: 'Templates', path: '/tasks/templates' },
+                      { icon: Workflow, label: 'Workflows', path: '/tasks/workflows' },
+                      { icon: Clock, label: 'Time Tracking', path: '/tasks/time-tracking' },
+                      { icon: Bell, label: 'Notifications', path: '/tasks/notifications' },
+                      { icon: Settings2, label: 'Settings', path: '/tasks/settings' },
+                    ].map((item) => {
+                      const Icon = item.icon
+                      return (
+                        <button
+                          key={item.path}
+                          onClick={() => { navigate(item.path); setShowMoreMenu(false) }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                          <Icon size={13} className="text-gray-400 dark:text-gray-500" />
+                          {item.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
             <CSVImportExport projectId={projectId} />
             <button
               onClick={() => setShowCreateModal(true)}

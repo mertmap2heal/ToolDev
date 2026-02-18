@@ -5,7 +5,6 @@ import {
   Sparkles,
   RefreshCw,
   Package,
-  CheckSquare,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { useAIGuideStore } from '../../store/aiGuideStore'
@@ -13,7 +12,6 @@ import { useAIGuideStore } from '../../store/aiGuideStore'
 const menuItems = [
   { icon: Home, label: 'Home', path: '/' },
   { icon: Package, label: 'Inventory Management', path: '/inventory' },
-  { icon: CheckSquare, label: 'Tasks', path: '/tasks' },
   { icon: ClipboardCheck, label: 'Audit', path: '/audit' },
   { icon: RefreshCw, label: 'Lifecycle Management', path: '/lifecycle' },
   { icon: Sparkles, label: 'AI Guide', path: '/ai-guide', isSpecial: true },
@@ -34,8 +32,7 @@ export default function Sidebar() {
           const isActive =
             location.pathname === item.path ||
             (item.path === '/' && location.pathname === '/') ||
-            (item.path === '/inventory' && location.pathname.startsWith('/inventory')) ||
-            (item.path === '/tasks' && location.pathname.startsWith('/tasks'))
+            (item.path === '/inventory' && location.pathname.startsWith('/inventory'))
 
           if (item.isSpecial && item.path === '/ai-guide') {
             return (
