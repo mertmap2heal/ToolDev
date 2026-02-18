@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import TaskNavigation from '../../../components/tasks/TaskNavigation'
 import {
   Settings2,
@@ -7,10 +7,6 @@ import {
   CheckCircle2,
   Palette,
   Bell,
-  Clock,
-  Shield,
-  ListFilter,
-  Tag,
   Zap,
   LayoutGrid,
 } from 'lucide-react'
@@ -51,8 +47,18 @@ const DEFAULT_SETTINGS: TaskSettings = {
   maxAttachmentSize: 10,
 }
 
+const STORAGE_KEY = 'task-settings'
+
+function loadSettings(): TaskSettings {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored) return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) }
+  } catch { /* ignore parse errors */ }
+  return DEFAULT_SETTINGS
+}
+
 export default function TaskSettingsPage() {
-  const [settings, setSettings] = useState<TaskSettings>(DEFAULT_SETTINGS)
+  const [settings, setSettings] = useState<TaskSettings>(loadSettings)
   const [saved, setSaved] = useState(false)
 
   const update = <K extends keyof TaskSettings>(key: K, value: TaskSettings[K]) => {
@@ -61,13 +67,14 @@ export default function TaskSettingsPage() {
   }
 
   const handleSave = () => {
-    // In a real implementation this would POST to an API
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
 
   const handleReset = () => {
     setSettings(DEFAULT_SETTINGS)
+    localStorage.removeItem(STORAGE_KEY)
     setSaved(false)
   }
 

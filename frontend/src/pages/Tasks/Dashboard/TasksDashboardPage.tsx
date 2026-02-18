@@ -12,10 +12,7 @@ import {
   TrendingUp,
   BarChart3,
   Users,
-  Briefcase,
   ArrowUpRight,
-  ArrowDownRight,
-  CalendarDays,
 } from 'lucide-react'
 import { apiClient } from '../../../services/api'
 import { format, subDays, subMonths } from 'date-fns'

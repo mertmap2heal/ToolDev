@@ -1,18 +1,14 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import TaskNavigation from '../../../components/tasks/TaskNavigation'
 import {
   FileText,
   Plus,
-  Copy,
   Trash2,
   Edit2,
   Play,
   Search,
   Tag,
-  ChevronDown,
-  ChevronUp,
-  CheckCircle2,
-  AlertTriangle,
   Clock,
   MoreVertical,
   X,
@@ -41,11 +37,14 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 export default function TaskTemplatesPage() {
   const queryClient = useQueryClient()
+  const [searchParams] = useSearchParams()
+  const projectId = searchParams.get('projectId') || undefined
   const [search, setSearch] = useState('')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editTemplate, setEditTemplate] = useState<TaskTemplate | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [createForm, setCreateForm] = useState({ name: '', description: '', defaultPriority: 'MEDIUM', estimatedMinutes: 60 })
+  const [editForm, setEditForm] = useState({ name: '', description: '', defaultPriority: 'MEDIUM', estimatedMinutes: 60 })
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
 
   const { data: templates, isLoading } = useQuery<TaskTemplate[]>({
@@ -71,8 +70,17 @@ export default function TaskTemplatesPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['task-templates'] }),
   })
 
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<TaskTemplate> }) =>
+      apiClient.patch(`/task-templates/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['task-templates'] })
+      setEditTemplate(null)
+    },
+  })
+
   const createFromTemplateMutation = useMutation({
-    mutationFn: async (id: string) => apiClient.post(`/task-templates/${id}/create-task`),
+    mutationFn: async (id: string) => apiClient.post(`/task-templates/${id}/create-task`, { project_id: projectId }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   })
 
@@ -162,7 +170,16 @@ export default function TaskTemplatesPage() {
                       {activeMenu === template.id && (
                         <div className="absolute right-0 top-6 z-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 w-36">
                           <button
-                            onClick={() => { setEditTemplate(template); setActiveMenu(null) }}
+                            onClick={() => {
+                              setEditForm({
+                                name: template.name || '',
+                                description: template.description || '',
+                                defaultPriority: template.defaultPriority || 'MEDIUM',
+                                estimatedMinutes: template.estimatedMinutes || 60,
+                              })
+                              setEditTemplate(template)
+                              setActiveMenu(null)
+                            }}
                             className="w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
                           >
                             <Edit2 size={11} /> Edit
@@ -278,6 +295,78 @@ export default function TaskTemplatesPage() {
                 className="px-4 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors"
               >
                 Create Template
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Template Modal */}
+      {editTemplate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setEditTemplate(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Edit Template</h3>
+              <button onClick={() => setEditTemplate(null)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-semibold text-gray-500 uppercase mb-1 block">Name</label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full px-3 py-2 text-xs bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                  placeholder="Template name"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-gray-500 uppercase mb-1 block">Description</label>
+                <textarea
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  className="w-full px-3 py-2 text-xs bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white resize-none"
+                  rows={3}
+                  placeholder="Describe the template"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-semibold text-gray-500 uppercase mb-1 block">Priority</label>
+                  <select
+                    value={editForm.defaultPriority}
+                    onChange={(e) => setEditForm({ ...editForm, defaultPriority: e.target.value })}
+                    className="w-full px-3 py-2 text-xs bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                  >
+                    <option value="LOW">Low</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="HIGH">High</option>
+                    <option value="CRITICAL">Critical</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-gray-500 uppercase mb-1 block">Est. Minutes</label>
+                  <input
+                    type="number"
+                    value={editForm.estimatedMinutes}
+                    onChange={(e) => setEditForm({ ...editForm, estimatedMinutes: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 text-xs bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+                    min={1}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => setEditTemplate(null)} className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-800 dark:text-gray-400">Cancel</button>
+              <button
+                onClick={() => updateMutation.mutate({
+                  id: editTemplate.id,
+                  data: { name: editForm.name, description: editForm.description, defaultPriority: editForm.defaultPriority, estimatedMinutes: editForm.estimatedMinutes },
+                })}
+                disabled={!editForm.name || updateMutation.isPending}
+                className="px-4 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors"
+              >
+                {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>

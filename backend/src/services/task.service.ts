@@ -334,6 +334,7 @@ export class TaskService {
   async listTasks(filters: ListTasksFilters): Promise<{ tasks: any[]; total: number }> {
     const {
       projectId,
+      assignedToUserId,
       search,
       status,
       priority,
@@ -356,6 +357,10 @@ export class TaskService {
 
     if (projectId) {
       where.projectId = projectId
+    }
+
+    if (assignedToUserId) {
+      where.assignedToUserId = assignedToUserId
     }
 
     if (status) {

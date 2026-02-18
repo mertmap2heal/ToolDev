@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useAuthStore } from '../../../store/authStore'
 import TaskNavigation from '../../../components/tasks/TaskNavigation'
 import TaskListView from '../../../components/tasks/TaskListView'
 import TaskDetailDrawer from '../../../components/tasks/TaskDetailDrawer'
@@ -47,6 +48,7 @@ export default function MyTasksPage() {
   const [searchParams] = useSearchParams()
   const projectId = searchParams.get('projectId') || undefined
   const queryClient = useQueryClient()
+  const { user } = useAuthStore()
 
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [statusFilter, setStatusFilter] = useState<TaskStatus | 'ALL'>('ALL')
@@ -54,15 +56,17 @@ export default function MyTasksPage() {
   const [showFilters, setShowFilters] = useState(false)
   const [searchQuery] = useState('')
 
-  // Fetch personal stats
+  // Fetch personal stats — scoped to current user
   const { data: statsData, isLoading: statsLoading } = useQuery({
-    queryKey: ['my-task-stats', projectId],
+    queryKey: ['my-task-stats', projectId, user?.id],
     queryFn: async () => {
       const params = new URLSearchParams()
       if (projectId) params.append('project_id', projectId)
+      if (user?.id) params.append('user_id', user.id)
       const res = await apiClient.get<TaskStats>(`/task-analytics/statistics?${params.toString()}`)
       return res.data
     },
+    enabled: !!user?.id,
     refetchInterval: 30000,
   })
 
@@ -196,6 +200,7 @@ export default function MyTasksPage() {
         <TaskListView
           onTaskSelect={setSelectedTask}
           projectId={projectId}
+          assigneeId={user?.id}
           externalSearch={searchQuery}
           externalStatusFilter={statusFilter}
           externalPriorityFilter={priorityFilter}

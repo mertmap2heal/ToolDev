@@ -15,6 +15,7 @@ export const taskService = {
     
     if (filters) {
       if (filters.projectId) params.append('project_id', filters.projectId)
+      if (filters.assignedToUserId) params.append('assigned_to', filters.assignedToUserId)
       if (filters.search) params.append('search', filters.search)
       if (filters.status) params.append('status', filters.status)
       if (filters.priority) params.append('priority', filters.priority)

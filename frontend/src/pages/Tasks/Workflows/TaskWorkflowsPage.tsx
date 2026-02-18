@@ -4,20 +4,12 @@ import {
   Workflow,
   Plus,
   Play,
-  Pause,
-  Trash2,
-  Edit2,
-  ChevronRight,
   Zap,
   GitBranch,
   CheckCircle2,
   Clock,
-  AlertTriangle,
-  MoreVertical,
   X,
   ArrowRight,
-  ToggleLeft,
-  ToggleRight,
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../../../services/api'
@@ -35,9 +27,9 @@ interface AutomationRule {
 interface AutomationRun {
   id: string
   ruleId: string
-  taskId: string
+  taskId?: string
   status: string
-  executedAt: string
+  triggeredAt: string
   rule?: { name?: string }
 }
 
@@ -279,7 +271,7 @@ export default function TaskWorkflowsPage() {
                           {run.status.toUpperCase()}
                         </span>
                       </td>
-                      <td className="px-5 py-3 text-right text-xs text-gray-500">{new Date(run.executedAt).toLocaleString()}</td>
+                      <td className="px-5 py-3 text-right text-xs text-gray-500">{new Date(run.triggeredAt).toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>

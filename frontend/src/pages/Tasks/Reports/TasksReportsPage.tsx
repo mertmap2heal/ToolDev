@@ -6,14 +6,11 @@ import {
   TrendingUp,
   Users,
   Briefcase,
-  Download,
-  CalendarDays,
   AlertTriangle,
   CheckCircle2,
   Clock,
   ArrowUp,
   ArrowDown,
-  Minus,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '../../../services/api'

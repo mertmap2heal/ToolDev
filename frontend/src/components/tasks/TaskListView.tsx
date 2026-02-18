@@ -11,6 +11,8 @@ import { format } from 'date-fns'
 interface TaskListViewProps {
   onTaskSelect?: (task: Task) => void
   projectId?: string
+  /** Filter tasks by assigned user ID */
+  assigneeId?: string
   /** Parent-managed search query — hides internal search when provided */
   externalSearch?: string
   /** Parent-managed status filter */
@@ -30,6 +32,7 @@ interface TaskListViewProps {
 export default function TaskListView({
   onTaskSelect,
   projectId: propProjectId,
+  assigneeId,
   externalSearch,
   externalStatusFilter,
   externalPriorityFilter,
@@ -53,11 +56,12 @@ export default function TaskListView({
   const searchQuery = externalSearch !== undefined ? externalSearch : internalSearch
 
   const { data, isLoading } = useQuery({
-    queryKey: ['tasks', projectId, searchQuery, filters, externalStatusFilter, externalPriorityFilter],
+    queryKey: ['tasks', projectId, assigneeId, searchQuery, filters, externalStatusFilter, externalPriorityFilter],
     queryFn: async () => {
       const response = await taskService.getTasks({
         ...filters,
         projectId: projectId || undefined,
+        assignedToUserId: assigneeId || undefined,
         search: searchQuery || undefined,
         status: externalStatusFilter && externalStatusFilter !== 'ALL' ? externalStatusFilter : filters.status,
         priority: externalPriorityFilter && externalPriorityFilter !== 'ALL' ? externalPriorityFilter : filters.priority,

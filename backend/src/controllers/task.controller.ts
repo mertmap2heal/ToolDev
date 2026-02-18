@@ -32,6 +32,7 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
   try {
     const {
       project_id,
+      assigned_to,
       search,
       status,
       priority,
@@ -53,6 +54,7 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
 
     const filters = {
       projectId: project_id as string | undefined,
+      assignedToUserId: assigned_to as string | undefined,
       search: search as string | undefined,
       status: status as string | undefined,
       priority: priority as string | undefined,
