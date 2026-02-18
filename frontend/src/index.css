@@ -42,6 +42,37 @@ html[data-theme="midnight"] {
   background-color: var(--theme-bg);
 }
 
+/* ── Settings form input ── */
+.settings-input {
+  @apply w-full px-3 py-1.5 text-xs rounded-lg border transition-colors;
+  background-color: var(--theme-bg);
+  border-color: var(--theme-border);
+  color: var(--theme-text);
+}
+.settings-input:focus {
+  @apply outline-none ring-2 ring-blue-500/30 border-blue-500;
+}
+.settings-input::placeholder {
+  color: var(--theme-text-muted);
+  opacity: 0.6;
+}
+
+/* ── Accessibility: reduce motion ── */
+html.reduce-motion * {
+  animation-duration: 0.001ms !important;
+  transition-duration: 0.001ms !important;
+}
+
+/* ── Accessibility: high contrast ── */
+html.high-contrast {
+  --theme-text: #000000;
+  --theme-border: #000000;
+}
+html.high-contrast[data-theme="midnight"] {
+  --theme-text: #ffffff;
+  --theme-border: #e2e8f0;
+}
+
 body {
   margin: 0;
   min-width: 320px;

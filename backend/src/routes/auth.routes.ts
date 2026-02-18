@@ -5,6 +5,7 @@ import {
   forgotPassword,
   getCurrentUser,
   changeMyPassword,
+  updateMyProfile,
   getUsers,
   createAdminUser,
   resetUserPassword,
@@ -20,6 +21,7 @@ router.post('/login', login)
 router.post('/forgot-password', forgotPassword)
 router.get('/me', authenticateToken, getCurrentUser)
 router.patch('/me/password', authenticateToken, changeMyPassword)
+router.patch('/me/profile', authenticateToken, updateMyProfile)
 router.get('/users', authenticateToken, getUsers)
 router.post('/users', authenticateToken, createAdminUser)
 router.put('/users/:userId/password', authenticateToken, resetUserPassword)

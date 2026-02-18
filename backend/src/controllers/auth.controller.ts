@@ -358,6 +358,48 @@ export const changeMyPassword = async (req: AuthRequest, res: Response) => {
   }
 }
 
+/** Authenticated user: update own profile (name, company). */
+export const updateMyProfile = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+
+    const { name, company } = req.body
+    const data: Record<string, any> = {}
+    if (name !== undefined) {
+      const trimmed = String(name).trim()
+      if (trimmed.length < 1) {
+        return res.status(400).json({ success: false, error: 'Name cannot be empty' })
+      }
+      data.name = trimmed
+    }
+    if (company !== undefined) {
+      data.company = company === '' ? null : company
+    }
+
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ success: false, error: 'No fields to update' })
+    }
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data,
+      select: { id: true, email: true, name: true, company: true, avatarUrl: true, createdAt: true, role: true },
+    })
+
+    res.json({ success: true, data: user })
+  } catch (error) {
+    const err = error as Error
+    console.error('Update profile error:', err)
+    res.status(500).json({
+      success: false,
+      error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
+    })
+  }
+}
+
 /** Admin only: set a new password for a user. */
 export const resetUserPassword = async (req: AuthRequest, res: Response) => {
   try {
