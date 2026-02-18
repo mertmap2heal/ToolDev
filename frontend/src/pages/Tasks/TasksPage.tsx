@@ -167,15 +167,6 @@ export default function TasksPage() {
   if (routeProjectId) {
     return (
       <div className="flex flex-col min-h-0">
-        {/* ─── Breadcrumb ─── */}
-        <nav className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 mb-4">
-          <Link to="/" className="hover:text-gray-800 dark:hover:text-gray-200 transition-colors">Home</Link>
-          <ChevronRight size={10} />
-          <Link to={`/projects/${routeProjectId}`} className="hover:text-gray-800 dark:hover:text-gray-200 transition-colors">{projectName}</Link>
-          <ChevronRight size={10} />
-          <span className="text-gray-800 dark:text-gray-200 font-medium">Tasks</span>
-        </nav>
-
         {/* ─── Header ─── */}
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
