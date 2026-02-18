@@ -1,10 +1,11 @@
 /**
  * Enterprise linkage types for Requirements module.
- * Excludes function and parameter per spec.
+ * Now includes function for full cross-module traceability.
  */
 
 export type EntityType =
   | 'requirement'
+  | 'function'
   | 'pbs_component'
   | 'interface'
   | 'issue'

@@ -13,8 +13,10 @@ import { cmAdapter } from './adapters/cmAdapter'
 import { complianceAdapter } from './adapters/complianceAdapter'
 import { certificationAdapter } from './adapters/certificationAdapter'
 import { archiveAdapter } from './adapters/archiveAdapter'
+import { functionAdapter } from './adapters/functionAdapter'
 
 const ADAPTER_MAP: Record<string, { buildDeepLink: (projectId: string, ref: EntityRef) => string }> = {
+  function: functionAdapter,
   pbs_component: pbsAdapter,
   interface: interfaceAdapter,
   issue: issueAdapter,

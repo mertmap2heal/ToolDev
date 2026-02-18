@@ -228,29 +228,47 @@ export const traceabilityService = {
     })
 
     // 4. For standard links (Req <-> Req, Req <-> Function), fetch Entity details to populate titles
-    // Collect IDs of requirements involved in links
+    // Collect IDs of requirements and functions involved in links
     const reqIdsToFetch = new Set<string>()
+    const funcIdsToFetch = new Set<string>()
     links.forEach(l => {
       if (l.sourceType === 'requirement') reqIdsToFetch.add(l.sourceId)
       if (l.targetType === 'requirement') reqIdsToFetch.add(l.targetId)
+      if (l.sourceType === 'function') funcIdsToFetch.add(l.sourceId)
+      if (l.targetType === 'function') funcIdsToFetch.add(l.targetId)
     })
 
     // Fetch titles
-    const reqDetails = await prisma.requirement.findMany({
-      where: { id: { in: Array.from(reqIdsToFetch) } },
-      select: { id: true, title: true, requirementId: true } // Minimal fetch
-    })
+    const [reqDetails, funcDetails] = await Promise.all([
+      reqIdsToFetch.size > 0
+        ? prisma.requirement.findMany({
+            where: { id: { in: Array.from(reqIdsToFetch) } },
+            select: { id: true, title: true, requirementId: true }
+          })
+        : [],
+      funcIdsToFetch.size > 0
+        ? prisma.systemFunction.findMany({
+            where: { id: { in: Array.from(funcIdsToFetch) } },
+            select: { id: true, name: true, functionId: true }
+          })
+        : [],
+    ])
 
     const reqMap = new Map(reqDetails.map(r => [r.id, r]))
+    const funcMap = new Map(funcDetails.map(f => [f.id, f]))
 
     const allLinks = [...links, ...issueLinksDirect, ...issueLinksInverse, ...Array.from(uniqueCrLinks.values())]
 
     return allLinks.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((link) => {
       const isReqSource = link.sourceType === 'requirement'
       const isReqTarget = link.targetType === 'requirement'
+      const isFuncSource = link.sourceType === 'function'
+      const isFuncTarget = link.targetType === 'function'
 
       const sReq = isReqSource ? reqMap.get(link.sourceId) : null
       const tReq = isReqTarget ? reqMap.get(link.targetId) : null
+      const sFunc = isFuncSource ? funcMap.get(link.sourceId) : null
+      const tFunc = isFuncTarget ? funcMap.get(link.targetId) : null
 
       return {
         id: link.id,
@@ -267,10 +285,20 @@ export const traceabilityService = {
         isSuspect: link.isSuspect || false,
         lastChecked: link.lastChecked?.toISOString(),
         createdAt: link.createdAt.toISOString(),
-        targetTitle: link.targetTitle || (tReq ? tReq.title : undefined),
-        targetDisplayId: link.targetDisplayId || (tReq ? (tReq.requirementId || tReq.id.substring(0, 8)) : undefined),
-        sourceTitle: sReq ? sReq.title : undefined,
-        sourceDisplayId: sReq ? (sReq.requirementId || sReq.id.substring(0, 8)) : undefined
+        targetTitle:
+          link.targetTitle ||
+          (tReq ? tReq.title : undefined) ||
+          (tFunc ? tFunc.name : undefined),
+        targetDisplayId:
+          link.targetDisplayId ||
+          (tReq ? (tReq.requirementId || tReq.id.substring(0, 8)) : undefined) ||
+          (tFunc ? (tFunc.functionId || tFunc.id.substring(0, 8)) : undefined),
+        sourceTitle:
+          (sReq ? sReq.title : undefined) ||
+          (sFunc ? sFunc.name : undefined),
+        sourceDisplayId:
+          (sReq ? (sReq.requirementId || sReq.id.substring(0, 8)) : undefined) ||
+          (sFunc ? (sFunc.functionId || sFunc.id.substring(0, 8)) : undefined),
       }
     })
   },
