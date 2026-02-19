@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { X, Plus, Trash2, Layers, Activity, Tag, FileText, Link as LinkIcon } from 'lucide-react'
+import { X, Plus, Trash2, Layers, Activity, Tag, FileText, Link as LinkIcon, Shield, Target, GitBranch, CheckCircle2, AlertTriangle, ClipboardCheck, BarChart3 } from 'lucide-react'
 import clsx from 'clsx'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { requirementService } from '../../services/requirement.service'
@@ -70,6 +70,8 @@ export default function EditRequirementModal({
   const [availableLifecycles, setAvailableLifecycles] = useState<LifecycleSummary[]>([])
   const [applicableLifecycle, setApplicableLifecycle] = useState<{ lifecycleId: string; defaultStatusId: string; statusName: string } | null>(null)
   const [lifecycleStatuses, setLifecycleStatuses] = useState<{ id: string; name: string }[]>([])
+  const [isDerivedRequirement, setIsDerivedRequirement] = useState(false)
+  const [derivationRationale, setDerivationRationale] = useState('')
 
   const queryClient = useQueryClient()
   const { statuses } = useStatusDefinitionsStore()
@@ -273,6 +275,8 @@ export default function EditRequirementModal({
       })
       setThresholdValue(requirement.thresholdValue || '')
       setObjectiveValue(requirement.objectiveValue || '')
+      setIsDerivedRequirement(requirement.customAttributes?.isDerived === true)
+      setDerivationRationale(requirement.customAttributes?.derivationRationale || '')
       setErrors({})
 
       // Add current requirementType to available types if it's not in the predefined list
@@ -493,7 +497,10 @@ export default function EditRequirementModal({
       // Extended fields
       thresholdValue: thresholdValue || undefined,
       objectiveValue: objectiveValue || undefined,
-      customAttributes: formData.customAttributes && Object.keys(formData.customAttributes).length > 0 ? formData.customAttributes : undefined,
+      customAttributes: {
+        ...(formData.customAttributes || {}),
+        ...(isDerivedRequirement ? { isDerived: true, derivationRationale: derivationRationale || undefined } : {}),
+      },
       dependencies: formData.dependencies && formData.dependencies.length > 0 ? formData.dependencies : undefined,
       conflicts: formData.conflicts && formData.conflicts.length > 0 ? formData.conflicts : undefined,
       rationale: formData.rationale || undefined,
@@ -559,8 +566,7 @@ export default function EditRequirementModal({
         {/* Tabs */}
         <div className="flex border-b border-gray-200 dark:border-gray-700 px-6 overflow-x-auto">
           {[
-            { id: 'general', label: 'General', icon: Layers },
-            { id: 'analysis', label: 'Analysis', icon: Activity },
+            { id: 'general', label: 'Overview', icon: Layers },
             { id: 'traceability', label: 'Traceability', icon: LinkIcon },
             { id: 'properties', label: 'Properties', icon: Tag, count: formData.tags?.length },
           ].map((tab: any) => (
@@ -588,7 +594,7 @@ export default function EditRequirementModal({
         <div className="flex-1 overflow-y-auto p-6">
           <form id="edit-req-form" onSubmit={handleSubmit} className="space-y-6">
 
-            {/* ══════════════ General Tab ══════════════ */}
+            {/* General Tab (Overview) */}
             {activeTab === 'general' && (
               <div className="space-y-6">
                 {/* Requirement ID */}
@@ -812,49 +818,6 @@ export default function EditRequirementModal({
                     )}
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* ══════════════ Analysis Tab ══════════════ */}
-            {activeTab === 'analysis' && (
-              <div className="space-y-6">
-                {/* Means of Compliance (MoC) */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                    Means of Compliance (MoC)
-                  </label>
-                  <select
-                    value={formData.linkedMocCode || requirement?.linkedMocCode || ''}
-                    onChange={(e) => handleChange('linkedMocCode' as any, e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  >
-                    <option value="">Select MoC</option>
-                    {mocs.map((moc: any) => (
-                      <option key={moc.code} value={moc.code}>
-                        {moc.code}: {moc.name} - {moc.description}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Verification Method */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                    Verification Method
-                  </label>
-                  <select
-                    value={formData.verificationMethod || ''}
-                    onChange={(e) => handleChange('verificationMethod', e.target.value || undefined)}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  >
-                    <option value="">Select verification method</option>
-                    {verificationMethods.map((method) => (
-                      <option key={method} value={method}>
-                        {method}
-                      </option>
-                    ))}
-                  </select>
-                </div>
 
                 {/* Acceptance Criteria */}
                 <div>
@@ -869,7 +832,55 @@ export default function EditRequirementModal({
                   />
                 </div>
 
-                {/* MBSE/UML Classification */}
+                {/* Means of Compliance (MoC) and Verification Method */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Means of Compliance (MoC)
+                    </label>
+                    <select
+                      value={formData.linkedMocCode || requirement?.linkedMocCode || ''}
+                      onChange={(e) => handleChange('linkedMocCode', e.target.value)}
+                      className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.linkedMocCode
+                        ? 'border-red-500 dark:border-red-500'
+                        : 'border-gray-300 dark:border-gray-600'
+                        }`}
+                    >
+                      <option value="">Select MoC</option>
+                      {mocs.map((moc: any) => (
+                        <option key={moc.code} value={moc.code}>
+                          {moc.code}: {moc.name} - {moc.description}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.linkedMocCode && (
+                      <p className="mt-1 text-sm text-red-500">{errors.linkedMocCode}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Verification Method
+                    </label>
+                    <select
+                      value={formData.verificationMethod || ''}
+                      onChange={(e) => handleChange('verificationMethod', e.target.value || undefined)}
+                      className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.verificationMethod ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                        }`}
+                    >
+                      <option value="">Select verification method</option>
+                      {verificationMethods.map((method) => (
+                        <option key={method} value={method}>
+                          {method}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.verificationMethod && (
+                      <p className="mt-1 text-sm text-red-500">{errors.verificationMethod}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Classification Section */}
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                   <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
                     Classification
@@ -1031,42 +1042,53 @@ export default function EditRequirementModal({
                     />
                   </div>
 
-                  {/* Dependencies */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                      Dependencies
+                  {/* Derived Requirement Flag (DO-178C §6.3.4) */}
+                  <div className={clsx(
+                    'mt-4 border rounded-lg p-4',
+                    isDerivedRequirement
+                      ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-300 dark:border-amber-700'
+                      : 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'
+                  )}>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isDerivedRequirement}
+                        onChange={(e) => setIsDerivedRequirement(e.target.checked)}
+                        className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500"
+                      />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle size={14} className="text-amber-600 dark:text-amber-400" />
+                          <span className="text-sm font-medium text-gray-900 dark:text-white">
+                            Derived Requirement
+                          </span>
+                          <span className="text-[10px] uppercase bg-amber-100 dark:bg-amber-800 text-amber-600 dark:text-amber-300 px-1.5 py-0.5 rounded font-bold">
+                            DO-178C §6.3.4
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Check if this requirement is not directly traceable to a parent but is necessary for implementation.
+                        </p>
+                      </div>
                     </label>
-                    <input
-                      type="text"
-                      value={formData.dependencies?.join(', ') || ''}
-                      onChange={(e) => {
-                        const deps = e.target.value.split(',').map(s => s.trim()).filter(Boolean)
-                        handleChange('dependencies', deps.length > 0 ? deps : undefined)
-                      }}
-                      placeholder="Enter dependencies separated by commas"
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                  </div>
-
-                  {/* Conflicts */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                      Conflicts
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.conflicts?.join(', ') || ''}
-                      onChange={(e) => {
-                        const conflicts = e.target.value.split(',').map(s => s.trim()).filter(Boolean)
-                        handleChange('conflicts', conflicts.length > 0 ? conflicts : undefined)
-                      }}
-                      placeholder="Enter conflicts separated by commas"
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
+                    {isDerivedRequirement && (
+                      <div className="mt-3 pl-7">
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                          Derivation Rationale <span className="text-red-500">*</span>
+                        </label>
+                        <textarea
+                          value={derivationRationale}
+                          onChange={(e) => setDerivationRationale(e.target.value)}
+                          placeholder="Explain why this requirement was derived..."
+                          rows={2}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Key Performance Parameters (KPP) */}
-                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-6">
                     <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                       <Activity size={16} className="text-blue-500" />
                       Key Performance Parameters (KPP)
