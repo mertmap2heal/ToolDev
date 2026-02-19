@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Edit2, Trash2, MessageSquare, Paperclip, Tag, ChevronRight, ChevronDown, Link2, FileText, Settings, AlertCircle, Zap, History, ExternalLink, Check, Bell, BellRing, GitPullRequest, Shield, Target, ClipboardCheck, Layers, BookOpen } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { X, Edit2, Trash2, MessageSquare, Paperclip, Tag, ChevronRight, ChevronDown, Link2, FileText, Settings, AlertCircle, Zap, History, ExternalLink, Check, Bell, BellRing, GitPullRequest, Shield, Target, ClipboardCheck, Layers, BookOpen, LayoutGrid, List } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { requirementService, type RequirementSubscriptionSnapshot } from '../../services/requirement.service'
@@ -20,6 +20,7 @@ import ImpactAnalysis from './ImpactAnalysis'
 import RequirementVersionHistory from './RequirementVersionHistory'
 import RequirementReviewPanel from './RequirementReviewPanel'
 import ReviewStatusBadge from './ReviewStatusBadge'
+import { VisualLinksGraph } from './VisualLinksGraph'
 import type { Requirement, RequirementComment } from 'shared/types/engineering.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
@@ -192,6 +193,7 @@ export default function RequirementDetailDrawer({
   onDelete,
 }: RequirementDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'hierarchy' | 'links' | 'comments' | 'reviews' | 'lifecycle-status'>('overview')
+  const [linksViewMode, setLinksViewMode] = useState<'list' | 'visual'>('list')
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview']))
   const [newComment, setNewComment] = useState('')
   const [isImpactAnalysisOpen, setIsImpactAnalysisOpen] = useState(false)
@@ -497,6 +499,38 @@ export default function RequirementDetailDrawer({
   const subscriberPreview = subscriptionSnapshot?.preview ?? []
   const subscriberOverflow = Math.max(0, subscriberCount - subscriberPreview.length)
   const subscriptionDisabled = subscriptionLoading || subscriptionMutation.isPending
+
+  const enrichedLinks = useMemo(() => {
+    return allLinks.map((link) => {
+      const targetItem: any =
+        link.targetType === 'requirement' ? requirements.find((r: any) => r.id === link.targetId) :
+          link.targetType === 'function' ? functions.find((f: any) => f.id === link.targetId) :
+            link.targetType === 'issue' ? issues.find((i: any) => i.id === link.targetId) :
+              link.targetType === 'change_request' ? changeRequests.find((cr: any) => cr.id === link.targetId) :
+                link.targetType === 'pbs_component' ? flatComponents.find((c) => c.id === link.targetId) :
+                  link.targetType === 'test_plan' ? testPlans.find((p: any) => p.id === link.targetId) :
+                    link.targetType === 'test_case' ? testCases.find((tc: any) => tc.id === link.targetId) :
+                      null;
+
+      const displayId = targetItem ? (
+        targetItem.requirementId ||
+        targetItem.functionId ||
+        targetItem.issueKey ||
+        targetItem.crId ||
+        targetItem.name ||
+        link.targetId.slice(0, 8)
+      ) : link.targetId.slice(0, 8);
+
+      const title = targetItem ? (targetItem.title || targetItem.name) : `${link.targetType?.replace(/_/g, ' ')} (${link.targetId.slice(0, 8)})`;
+
+      return {
+        ...link,
+        targetItem,
+        displayId,
+        targetTitle: title
+      }
+    })
+  }, [allLinks, requirements, functions, issues, changeRequests, flatComponents, testPlans, testCases])
 
   const isLocked = displayRequirement?.isLocked
   const isLockedByCurrentUser = displayRequirement?.lockedByUserId === currentUserId
@@ -1174,302 +1208,342 @@ export default function RequirementDetailDrawer({
 
             {activeTab === 'links' && (
               <div className="space-y-6">
-                {LINKAGE_V1 ? (
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Linked Items</h3>
+                  <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                    <button
+                      onClick={() => setLinksViewMode('list')}
+                      className={clsx(
+                        "p-1.5 rounded-md transition-all",
+                        linksViewMode === 'list'
+                          ? "bg-white dark:bg-gray-600 shadow text-blue-600 dark:text-blue-400"
+                          : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                      )}
+                      title="List View"
+                    >
+                      <List size={16} />
+                    </button>
+                    <button
+                      onClick={() => setLinksViewMode('visual')}
+                      className={clsx(
+                        "p-1.5 rounded-md transition-all",
+                        linksViewMode === 'visual'
+                          ? "bg-white dark:bg-gray-600 shadow text-blue-600 dark:text-blue-400"
+                          : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                      )}
+                      title="Visual View"
+                    >
+                      <LayoutGrid size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                {linksViewMode === 'visual' ? (
+                  <VisualLinksGraph
+                    requirement={displayRequirement}
+                    links={enrichedLinks}
+                    projectId={projectId}
+                  />
+                ) : (
                   <>
-                    {allLinks.length > 0 && (
-                      (() => {
-                        const byType = allLinks.reduce<Record<string, typeof allLinks>>((acc, link) => {
-                          const t = link.linkType || 'trace'
-                          if (!acc[t]) acc[t] = []
-                          acc[t].push(link)
-                          return acc
-                        }, {})
-                        return Object.entries(byType).map(([linkType, linkList]) => {
-                          const linkTypeLabel = (() => {
-                            switch (linkType) {
-                              case 'allocated_to': return 'Allocated To'
-                              case 'mitigates': return 'Mitigates'
-                              case 'verified_by': return 'Verified By'
-                              case 'documented_in': return 'Documented In'
-                              case 'changes_via': return 'Change Requests'
-                              case 'tracked_by': return 'Tracked By'
-                              case 'implemented_by': return 'Implemented By'
-                              case 'cert_objective': return 'Certification Objectives'
-                              case 'complies_with': return 'Complies With'
-                              case 'related_interface': return 'Related Interfaces'
-                              case 'derived_from': return 'Derived From'
-                              case 'derived_to': return 'Derived To'
-                              case 'depends_on': return 'Depends On'
-                              case 'required_by': return 'Required By'
-                              case 'constrains': return 'Constrains'
-                              case 'constrained_by': return 'Constrained By'
-                              case 'conflicts_with': return 'Conflicts With'
-                              case 'supports': return 'Supports'
-                              case 'supported_by': return 'Supported By'
-                              case 'supersedes': return 'Supersedes'
-                              case 'superseded_by': return 'Superseded By'
-                              case 'refines': return 'Refines'
-                              case 'refined_by': return 'Refined By'
-                              case 'related_inverse': return 'Issues'
-                              case 'originates_from': return 'Change Requests'
-                              default: return linkType.replace(/_/g, ' ')
-                            }
+                    {LINKAGE_V1 ? (
+                      <>
+                        {allLinks.length > 0 && (
+                          (() => {
+                            const byType = allLinks.reduce<Record<string, typeof allLinks>>((acc, link) => {
+                              const t = link.linkType || 'trace'
+                              if (!acc[t]) acc[t] = []
+                              acc[t].push(link)
+                              return acc
+                            }, {})
+                            return Object.entries(byType).map(([linkType, linkList]) => {
+                              const linkTypeLabel = (() => {
+                                switch (linkType) {
+                                  case 'allocated_to': return 'Allocated To'
+                                  case 'mitigates': return 'Mitigates'
+                                  case 'verified_by': return 'Verified By'
+                                  case 'documented_in': return 'Documented In'
+                                  case 'changes_via': return 'Change Requests'
+                                  case 'tracked_by': return 'Tracked By'
+                                  case 'implemented_by': return 'Implemented By'
+                                  case 'cert_objective': return 'Certification Objectives'
+                                  case 'complies_with': return 'Complies With'
+                                  case 'related_interface': return 'Related Interfaces'
+                                  case 'derived_from': return 'Derived From'
+                                  case 'derived_to': return 'Derived To'
+                                  case 'depends_on': return 'Depends On'
+                                  case 'required_by': return 'Required By'
+                                  case 'constrains': return 'Constrains'
+                                  case 'constrained_by': return 'Constrained By'
+                                  case 'conflicts_with': return 'Conflicts With'
+                                  case 'supports': return 'Supports'
+                                  case 'supported_by': return 'Supported By'
+                                  case 'supersedes': return 'Supersedes'
+                                  case 'superseded_by': return 'Superseded By'
+                                  case 'refines': return 'Refines'
+                                  case 'refined_by': return 'Refined By'
+                                  case 'related_inverse': return 'Issues'
+                                  case 'originates_from': return 'Change Requests'
+                                  default: return linkType.replace(/_/g, ' ')
+                                }
+                              })()
+                              const linkTypeIcon = (() => {
+                                switch (linkType) {
+                                  case 'allocated_to': return <Target size={16} className="text-green-600 dark:text-green-400" />
+                                  case 'mitigates': return <Shield size={16} className="text-red-600 dark:text-red-400" />
+                                  case 'verified_by': return <ClipboardCheck size={16} className="text-teal-600 dark:text-teal-400" />
+                                  case 'documented_in': return <BookOpen size={16} className="text-sky-600 dark:text-sky-400" />
+                                  case 'changes_via': return <GitPullRequest size={16} className="text-purple-600 dark:text-purple-400" />
+                                  case 'tracked_by': return <AlertCircle size={16} className="text-orange-600 dark:text-orange-400" />
+                                  case 'implemented_by': return <Layers size={16} className="text-indigo-600 dark:text-indigo-400" />
+                                  case 'cert_objective': return <Shield size={16} className="text-indigo-600 dark:text-indigo-400" />
+                                  case 'complies_with': return <Check size={16} className="text-emerald-600 dark:text-emerald-400" />
+                                  case 'related_interface': return <Settings size={16} className="text-cyan-600 dark:text-cyan-400" />
+                                  default: return <Link2 size={16} className="text-blue-600 dark:text-blue-400" />
+                                }
+                              })()
+                              return (
+                                <div key={linkType}>
+                                  <div className="flex items-center gap-2 mb-3">
+                                    {linkTypeIcon}
+                                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
+                                      {linkTypeLabel} ({linkList.length})
+                                    </h3>
+                                  </div>
+                                  <div className="space-y-2">
+                                    {linkList.map((link) => {
+                                      const targetItem: any =
+                                        link.targetType === 'requirement' ? requirements.find((r: any) => r.id === link.targetId) :
+                                          link.targetType === 'function' ? functions.find((f: any) => f.id === link.targetId) :
+                                            link.targetType === 'issue' ? issues.find((i: any) => i.id === link.targetId) :
+                                              link.targetType === 'change_request' ? changeRequests.find((cr: any) => cr.id === link.targetId) :
+                                                link.targetType === 'pbs_component' ? flatComponents.find((c) => c.id === link.targetId) : null;
+
+                                      const displayId = targetItem ? (
+                                        targetItem.requirementId ||
+                                        targetItem.functionId ||
+                                        targetItem.issueKey ||
+                                        targetItem.crId ||
+                                        targetItem.name ||
+                                        link.targetId.slice(0, 8)
+                                      ) : link.targetId.slice(0, 8);
+
+                                      const title = targetItem ? (targetItem.title || targetItem.name) : `${link.targetType?.replace(/_/g, ' ')} (${link.targetId.slice(0, 8)})`;
+
+                                      const getIcon = () => {
+                                        switch (link.targetType) {
+                                          case 'requirement': return <FileText size={16} className="text-blue-500" />
+                                          case 'function': return <Settings size={16} className="text-green-500" />
+                                          case 'issue': return <AlertCircle size={16} className="text-orange-500" />
+                                          case 'change_request': return <GitPullRequest size={16} className="text-purple-500" />
+                                          case 'pbs_component': return <Target size={16} className="text-green-500" />
+                                          case 'hazard': return <Shield size={16} className="text-red-500" />
+                                          case 'risk': return <Shield size={16} className="text-amber-500" />
+                                          case 'test_case': return <ClipboardCheck size={16} className="text-teal-500" />
+                                          case 'test_plan': return <ClipboardCheck size={16} className="text-teal-600" />
+                                          case 'document': return <BookOpen size={16} className="text-sky-500" />
+                                          case 'interface': return <Settings size={16} className="text-cyan-500" />
+                                          case 'task': return <Layers size={16} className="text-indigo-500" />
+                                          case 'cert_objective': return <Shield size={16} className="text-indigo-500" />
+                                          case 'compliance_rule': return <Check size={16} className="text-emerald-500" />
+                                          default: return <Link2 size={16} className="text-gray-500" />
+                                        }
+                                      }
+
+                                      const targetTypeLabel = link.targetType?.replace(/_/g, ' ')
+
+                                      const deepLink = buildDeepLink(projectId, { type: link.targetType as any, id: link.targetId })
+                                      return (
+                                        <div
+                                          key={link.id}
+                                          className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-blue-500/50 dark:hover:border-blue-500/50 transition-all shadow-sm group"
+                                        >
+                                          <div className="mt-1 flex-shrink-0 p-1.5 rounded-lg bg-gray-50 dark:bg-gray-700/50 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 transition-colors">
+                                            {getIcon()}
+                                          </div>
+                                          <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2 mb-1">
+                                              <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                                {displayId}
+                                              </span>
+                                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 capitalize font-medium">
+                                                {targetTypeLabel}
+                                              </span>
+                                              {link.isSuspect && (
+                                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                                                  <AlertCircle size={10} /> Suspect
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                              {title}
+                                            </div>
+                                            {link.rationale && (
+                                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 italic truncate">
+                                                "{link.rationale}"
+                                              </p>
+                                            )}
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => navigate(deepLink)}
+                                            className="mt-1 p-2 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/40 rounded-lg transition-all"
+                                            title="Open linked item"
+                                          >
+                                            <ExternalLink size={16} />
+                                          </button>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              )
+                            })
                           })()
-                          const linkTypeIcon = (() => {
-                            switch (linkType) {
-                              case 'allocated_to': return <Target size={16} className="text-green-600 dark:text-green-400" />
-                              case 'mitigates': return <Shield size={16} className="text-red-600 dark:text-red-400" />
-                              case 'verified_by': return <ClipboardCheck size={16} className="text-teal-600 dark:text-teal-400" />
-                              case 'documented_in': return <BookOpen size={16} className="text-sky-600 dark:text-sky-400" />
-                              case 'changes_via': return <GitPullRequest size={16} className="text-purple-600 dark:text-purple-400" />
-                              case 'tracked_by': return <AlertCircle size={16} className="text-orange-600 dark:text-orange-400" />
-                              case 'implemented_by': return <Layers size={16} className="text-indigo-600 dark:text-indigo-400" />
-                              case 'cert_objective': return <Shield size={16} className="text-indigo-600 dark:text-indigo-400" />
-                              case 'complies_with': return <Check size={16} className="text-emerald-600 dark:text-emerald-400" />
-                              case 'related_interface': return <Settings size={16} className="text-cyan-600 dark:text-cyan-400" />
-                              default: return <Link2 size={16} className="text-blue-600 dark:text-blue-400" />
-                            }
-                          })()
-                          return (
-                            <div key={linkType}>
-                              <div className="flex items-center gap-2 mb-3">
-                                {linkTypeIcon}
-                                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
-                                  {linkTypeLabel} ({linkList.length})
-                                </h3>
-                              </div>
-                              <div className="space-y-2">
-                                {linkList.map((link) => {
-                                  const targetItem: any =
-                                    link.targetType === 'requirement' ? requirements.find((r: any) => r.id === link.targetId) :
-                                      link.targetType === 'function' ? functions.find((f: any) => f.id === link.targetId) :
-                                        link.targetType === 'issue' ? issues.find((i: any) => i.id === link.targetId) :
-                                          link.targetType === 'change_request' ? changeRequests.find((cr: any) => cr.id === link.targetId) :
-                                            link.targetType === 'pbs_component' ? flatComponents.find((c) => c.id === link.targetId) : null;
+                        )}
 
-                                  const displayId = targetItem ? (
-                                    targetItem.requirementId ||
-                                    targetItem.functionId ||
-                                    targetItem.issueKey ||
-                                    targetItem.crId ||
-                                    targetItem.name ||
-                                    link.targetId.slice(0, 8)
-                                  ) : link.targetId.slice(0, 8);
+                        {/* Verification Links Section */}
+                        {(linkedTestPlans.length > 0 || linkedTestCases.length > 0) && (
+                          <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700">
+                            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-4">Verification</h3>
 
-                                  const title = targetItem ? (targetItem.title || targetItem.name) : `${link.targetType?.replace(/_/g, ' ')} (${link.targetId.slice(0, 8)})`;
-
-                                  const getIcon = () => {
-                                    switch (link.targetType) {
-                                      case 'requirement': return <FileText size={16} className="text-blue-500" />
-                                      case 'function': return <Settings size={16} className="text-green-500" />
-                                      case 'issue': return <AlertCircle size={16} className="text-orange-500" />
-                                      case 'change_request': return <GitPullRequest size={16} className="text-purple-500" />
-                                      case 'pbs_component': return <Target size={16} className="text-green-500" />
-                                      case 'hazard': return <Shield size={16} className="text-red-500" />
-                                      case 'risk': return <Shield size={16} className="text-amber-500" />
-                                      case 'test_case': return <ClipboardCheck size={16} className="text-teal-500" />
-                                      case 'test_plan': return <ClipboardCheck size={16} className="text-teal-600" />
-                                      case 'document': return <BookOpen size={16} className="text-sky-500" />
-                                      case 'interface': return <Settings size={16} className="text-cyan-500" />
-                                      case 'task': return <Layers size={16} className="text-indigo-500" />
-                                      case 'cert_objective': return <Shield size={16} className="text-indigo-500" />
-                                      case 'compliance_rule': return <Check size={16} className="text-emerald-500" />
-                                      default: return <Link2 size={16} className="text-gray-500" />
-                                    }
-                                  }
-
-                                  const targetTypeLabel = link.targetType?.replace(/_/g, ' ')
-
-                                  const deepLink = buildDeepLink(projectId, { type: link.targetType as any, id: link.targetId })
-                                  return (
+                            {linkedTestPlans.length > 0 && (
+                              <div className="mb-4">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <FileText size={16} className="text-teal-600 dark:text-teal-400" />
+                                  <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Test Plans ({linkedTestPlans.length})</h4>
+                                </div>
+                                <div className="space-y-2">
+                                  {linkedTestPlans.map((item) => (
                                     <div
-                                      key={link.id}
-                                      className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-blue-500/50 dark:hover:border-blue-500/50 transition-all shadow-sm group"
+                                      key={item.id}
+                                      className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-teal-500/50 dark:hover:border-teal-500/50 transition-all shadow-sm group"
                                     >
-                                      <div className="mt-1 flex-shrink-0 p-1.5 rounded-lg bg-gray-50 dark:bg-gray-700/50 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 transition-colors">
-                                        {getIcon()}
+                                      <div className="mt-1 flex-shrink-0 p-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/20 group-hover:bg-teal-100 dark:group-hover:bg-teal-900/30 transition-colors">
+                                        <FileText size={16} className="text-teal-600 dark:text-teal-400" />
                                       </div>
                                       <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2 mb-1">
                                           <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                                            {displayId}
+                                            {item.plan.key || 'PLAN'}
                                           </span>
-                                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 capitalize font-medium">
-                                            {targetTypeLabel}
-                                          </span>
-                                          {link.isSuspect && (
-                                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                                              <AlertCircle size={10} /> Suspect
-                                            </span>
-                                          )}
                                         </div>
-                                        <div className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                                          {title}
+                                        <div className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+                                          {item.plan.name}
                                         </div>
-                                        {link.rationale && (
-                                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 italic truncate">
-                                            "{link.rationale}"
-                                          </p>
-                                        )}
                                       </div>
                                       <button
                                         type="button"
-                                        onClick={() => navigate(deepLink)}
-                                        className="mt-1 p-2 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/40 rounded-lg transition-all"
-                                        title="Open linked item"
+                                        onClick={() => navigate(`/verification?tab=test-plans&planId=${item.plan.id}`)}
+                                        className="mt-1 p-2 text-gray-400 dark:text-gray-500 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/40 rounded-lg transition-all"
+                                        title="Open Test Plan"
                                       >
                                         <ExternalLink size={16} />
                                       </button>
                                     </div>
-                                  )
-                                })}
-                              </div>
-                            </div>
-                          )
-                        })
-                      })()
-                    )}
-
-                    {/* Verification Links Section */}
-                    {(linkedTestPlans.length > 0 || linkedTestCases.length > 0) && (
-                      <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700">
-                        <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-4">Verification</h3>
-
-                        {linkedTestPlans.length > 0 && (
-                          <div className="mb-4">
-                            <div className="flex items-center gap-2 mb-3">
-                              <FileText size={16} className="text-teal-600 dark:text-teal-400" />
-                              <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Test Plans ({linkedTestPlans.length})</h4>
-                            </div>
-                            <div className="space-y-2">
-                              {linkedTestPlans.map((item) => (
-                                <div
-                                  key={item.id}
-                                  className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-teal-500/50 dark:hover:border-teal-500/50 transition-all shadow-sm group"
-                                >
-                                  <div className="mt-1 flex-shrink-0 p-1.5 rounded-lg bg-teal-50 dark:bg-teal-900/20 group-hover:bg-teal-100 dark:group-hover:bg-teal-900/30 transition-colors">
-                                    <FileText size={16} className="text-teal-600 dark:text-teal-400" />
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                                        {item.plan.key || 'PLAN'}
-                                      </span>
-                                    </div>
-                                    <div className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
-                                      {item.plan.name}
-                                    </div>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => navigate(`/verification?tab=test-plans&planId=${item.plan.id}`)}
-                                    className="mt-1 p-2 text-gray-400 dark:text-gray-500 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/40 rounded-lg transition-all"
-                                    title="Open Test Plan"
-                                  >
-                                    <ExternalLink size={16} />
-                                  </button>
+                                  ))}
                                 </div>
-                              ))}
-                            </div>
+                              </div>
+                            )}
+
+                            {linkedTestCases.length > 0 && (
+                              <div>
+                                <div className="flex items-center gap-2 mb-3">
+                                  <Check size={16} className="text-emerald-600 dark:text-emerald-400" />
+                                  <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Test Cases ({linkedTestCases.length})</h4>
+                                </div>
+                                <div className="space-y-2">
+                                  {linkedTestCases.map((item) => (
+                                    <div
+                                      key={item.id}
+                                      className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-emerald-500/50 dark:hover:border-emerald-500/50 transition-all shadow-sm group"
+                                    >
+                                      <div className="mt-1 flex-shrink-0 p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/30 transition-colors">
+                                        <Check size={16} className="text-emerald-600 dark:text-emerald-400" />
+                                      </div>
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                            {item.testCase.key || 'CASE'}
+                                          </span>
+                                        </div>
+                                        <div className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                                          {item.testCase.title}
+                                        </div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => navigate(`/verification?tab=test-cases&caseId=${item.testCase.id}`)}
+                                        className="mt-1 p-2 text-gray-400 dark:text-gray-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 rounded-lg transition-all"
+                                        title="Open Test Case"
+                                      >
+                                        <ExternalLink size={16} />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
 
-                        {linkedTestCases.length > 0 && (
+                        {links.length === 0 && linkedTestPlans.length === 0 && linkedTestCases.length === 0 && (
+                          <p className="text-sm text-gray-500 dark:text-gray-400">No linked items</p>
+                        )}
+
+                      </>
+                    ) : (
+                      <>
+                        {linkedFunctions.length > 0 && (
                           <div>
                             <div className="flex items-center gap-2 mb-3">
-                              <Check size={16} className="text-emerald-600 dark:text-emerald-400" />
-                              <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Test Cases ({linkedTestCases.length})</h4>
+                              <Settings size={16} className="text-blue-600 dark:text-blue-400" />
+                              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Linked Functions ({linkedFunctions.length})</h3>
                             </div>
                             <div className="space-y-2">
-                              {linkedTestCases.map((item) => (
-                                <div
-                                  key={item.id}
-                                  className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-emerald-500/50 dark:hover:border-emerald-500/50 transition-all shadow-sm group"
-                                >
-                                  <div className="mt-1 flex-shrink-0 p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/30 transition-colors">
-                                    <Check size={16} className="text-emerald-600 dark:text-emerald-400" />
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                                        {item.testCase.key || 'CASE'}
-                                      </span>
-                                    </div>
-                                    <div className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                                      {item.testCase.title}
-                                    </div>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => navigate(`/verification?tab=test-cases&caseId=${item.testCase.id}`)}
-                                    className="mt-1 p-2 text-gray-400 dark:text-gray-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 rounded-lg transition-all"
-                                    title="Open Test Case"
-                                  >
-                                    <ExternalLink size={16} />
-                                  </button>
+                              {linkedFunctions.map((func) => (
+                                <div key={func.id} className="p-3 bg-blue-50/50 dark:bg-blue-900/10 rounded-lg border border-blue-200 dark:border-blue-800">
+                                  <div className="font-mono text-xs text-gray-500 dark:text-gray-400 mb-1">{func.functionId || func.id.substring(0, 8)}</div>
+                                  <div className="text-sm font-medium text-gray-900 dark:text-white">{func.name}</div>
                                 </div>
                               ))}
                             </div>
                           </div>
                         )}
-                      </div>
-                    )}
-
-                    {links.length === 0 && linkedTestPlans.length === 0 && linkedTestCases.length === 0 && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400">No linked items</p>
-                    )}
-
-                  </>
-                ) : (
-                  <>
-                    {linkedFunctions.length > 0 && (
-                      <div>
-                        <div className="flex items-center gap-2 mb-3">
-                          <Settings size={16} className="text-blue-600 dark:text-blue-400" />
-                          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Linked Functions ({linkedFunctions.length})</h3>
-                        </div>
-                        <div className="space-y-2">
-                          {linkedFunctions.map((func) => (
-                            <div key={func.id} className="p-3 bg-blue-50/50 dark:bg-blue-900/10 rounded-lg border border-blue-200 dark:border-blue-800">
-                              <div className="font-mono text-xs text-gray-500 dark:text-gray-400 mb-1">{func.functionId || func.id.substring(0, 8)}</div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">{func.name}</div>
+                        {linkedIssues.length > 0 && (
+                          <div>
+                            <div className="flex items-center gap-2 mb-3">
+                              <AlertCircle size={16} className="text-yellow-600 dark:text-yellow-400" />
+                              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Linked Issues ({linkedIssues.length})</h3>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {linkedIssues.length > 0 && (
-                      <div>
-                        <div className="flex items-center gap-2 mb-3">
-                          <AlertCircle size={16} className="text-yellow-600 dark:text-yellow-400" />
-                          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Linked Issues ({linkedIssues.length})</h3>
-                        </div>
-                        <div className="space-y-2">
-                          {linkedIssues.map((issue) => (
-                            <div key={issue.id} className="p-3 bg-yellow-50/50 dark:bg-yellow-900/10 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">{issue.title}</div>
+                            <div className="space-y-2">
+                              {linkedIssues.map((issue) => (
+                                <div key={issue.id} className="p-3 bg-yellow-50/50 dark:bg-yellow-900/10 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                                  <div className="text-sm font-medium text-gray-900 dark:text-white">{issue.title}</div>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {linkedChangeRequests.length > 0 && (
-                      <div>
-                        <div className="flex items-center gap-2 mb-3">
-                          <FileText size={16} className="text-purple-600 dark:text-purple-400" />
-                          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Linked Change Requests ({linkedChangeRequests.length})</h3>
-                        </div>
-                        <div className="space-y-2">
-                          {linkedChangeRequests.map((cr) => (
-                            <div key={cr.id} className="p-3 bg-purple-50/50 dark:bg-purple-900/10 rounded-lg border border-purple-200 dark:border-purple-800">
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">{cr.title}</div>
+                          </div>
+                        )}
+                        {linkedChangeRequests.length > 0 && (
+                          <div>
+                            <div className="flex items-center gap-2 mb-3">
+                              <FileText size={16} className="text-purple-600 dark:text-purple-400" />
+                              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Linked Change Requests ({linkedChangeRequests.length})</h3>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {linkedFunctions.length === 0 && linkedIssues.length === 0 && linkedChangeRequests.length === 0 && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400">No linked items</p>
+                            <div className="space-y-2">
+                              {linkedChangeRequests.map((cr) => (
+                                <div key={cr.id} className="p-3 bg-purple-50/50 dark:bg-purple-900/10 rounded-lg border border-purple-200 dark:border-purple-800">
+                                  <div className="text-sm font-medium text-gray-900 dark:text-white">{cr.title}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {linkedFunctions.length === 0 && linkedIssues.length === 0 && linkedChangeRequests.length === 0 && (
+                          <p className="text-sm text-gray-500 dark:text-gray-400">No linked items</p>
+                        )}
+                      </>
                     )}
                   </>
                 )}
