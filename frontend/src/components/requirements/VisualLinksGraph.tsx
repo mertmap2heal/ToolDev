@@ -40,17 +40,23 @@ const nodeHeight = 80;
 
 const getLinkTypeLabel = (linkType: string) => {
     switch (linkType) {
-        case 'derived_from': return '<<derived from>>';
+        case 'derived_from': return '<<deriveReqt>>'; // SysML standard
         case 'derived_to': return '<<derived to>>';
-        case 'satisfies': return '<<satisfies>>';
+        case 'satisfies': return '<<satisfy>>';       // SysML standard
         case 'satisfied_by': return '<<satisfied by>>';
-        case 'verifies': return '<<verifies>>';
+        case 'verifies': return '<<verify>>';         // SysML standard
         case 'verified_by': return '<<verified by>>';
-        case 'refines': return '<<refines>>';
+        case 'refines': return '<<refine>>';          // SysML standard
         case 'refined_by': return '<<refined by>>';
-        case 'traces_to': return '<<traces to>>';
-        case 'traces_from': return '<<traces from>>';
-        case 'copies': return '<<copies>>';
+        case 'traces_to': return '<<trace>>';         // SysML standard
+        case 'traces_from': return '<<traced from>>';
+        case 'copies': return '<<copy>>';             // SysML standard
+        case 'copied_from': return '<<copied from>>';
+        case 'allocate': return '<<allocate>>';       // SysML standard
+        case 'allocated_to': return '<<allocated to>>';
+        case 'mitigates': return '<<mitigates>>';     // Safety standard
+        case 'mitigated_by': return '<<mitigated by>>';
+        case 'related_to': return '<<related>>';
         default: return `<<${linkType.replace(/_/g, ' ')}>>`;
     }
 };

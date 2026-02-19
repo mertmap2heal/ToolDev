@@ -315,6 +315,10 @@ export default function RequirementDetailDrawer({
 
   // Inverse relationship map
   const INVERSE_LINK_TYPES: Record<string, string> = {
+    'satisfies': 'satisfied_by',
+    'satisfied_by': 'satisfies',
+    'verifies': 'verified_by',
+    'verified_by': 'verifies',
     'derives_from': 'derived_to',
     'derived_to': 'derives_from',
     'refines': 'refined_by',
@@ -329,10 +333,16 @@ export default function RequirementDetailDrawer({
     'supersedes': 'superseded_by',
     'superseded_by': 'supersedes',
     'mitigates': 'mitigated_by',
-    'satisfies': 'satisfied_by',
+    'mitigated_by': 'mitigates',
     'related_to': 'related_to',
-    'verified_by': 'verifies',
-    'verifies': 'verified_by',
+    'allocate': 'allocated_to',
+    'allocated_to': 'allocate',
+    'trace': 'traced_from',
+    'traced_from': 'trace',
+    'implements': 'implemented_by',
+    'implemented_by': 'implements',
+    'copy': 'copied_from',
+    'copied_from': 'copy',
   }
 
   // Combine outgoing and normalized incoming links

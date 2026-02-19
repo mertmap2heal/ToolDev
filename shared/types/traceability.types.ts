@@ -7,27 +7,37 @@ export type ArtifactType =
 
 export type LinkType =
   | 'satisfies'
+  | 'satisfied_by'
   | 'implements'
+  | 'implemented_by'
   | 'verifies'
+  | 'verified_by'
   | 'derives'
+  | 'derived_from' // SysML: deriveReqt (source is derived from target)
+  | 'derived_to'   // Inverse of derived_from
   | 'refines'
+  | 'refined_by'
   | 'copy'
+  | 'copied_from'
   | 'trace'
+  | 'traced_from' // Inverse of trace
+  | 'traced_to'
   | 'allocate'
+  | 'allocated_to'
   | 'parent_of'
   | 'child_of'
-  | 'derives_from'
-  | 'derived_to'
-  | 'refined_by'
   | 'depends_on'
   | 'required_by'
   | 'constrains'
   | 'constrained_by'
   | 'conflicts_with'
+  | 'mitigates'      // ARP4754A Safety
+  | 'mitigated_by'
   | 'supports'
   | 'supported_by'
   | 'supersedes'
   | 'superseded_by'
+  | 'related_to'
 
 export interface TraceLink {
   id: string
