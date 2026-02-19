@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import RichTextEditor from '../common/RichTextEditor'
 import { X, Plus, Trash2, ChevronDown, ChevronRight, Layers, FileText, Link as LinkIcon, Tag, Activity, FileCheck, Shield, Target, GitBranch, CheckCircle2, AlertTriangle, ClipboardCheck, BarChart3, Info, ArrowRight } from 'lucide-react'
 import clsx from 'clsx'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -946,8 +947,7 @@ export default function CreateRequirementModal({
         {/* Tabs */}
         <div className="flex border-b border-gray-200 dark:border-gray-700 px-6 overflow-x-auto">
           {[
-            { id: 'general', label: 'General', icon: Layers },
-            { id: 'analysis', label: 'Analysis', icon: Activity },
+            { id: 'general', label: 'Overview', icon: Layers },
             { id: 'traceability', label: 'Traceability', icon: LinkIcon },
             { id: 'properties', label: 'Properties', icon: Tag, count: formData.tags?.length },
           ].map((tab: any) => (
@@ -1059,16 +1059,14 @@ export default function CreateRequirementModal({
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
                     Description <span className="text-red-500">*</span>
                   </label>
-                  <textarea
-                    value={formData.description || ''}
-                    onChange={(e) => handleChange('description', e.target.value)}
-                    placeholder="Enter requirement description..."
-                    rows={6}
-                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.description
-                      ? 'border-red-500'
-                      : 'border-gray-300 dark:border-gray-600'
-                      } bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none`}
-                  />
+                  <div className={`rounded-lg border ${errors.description ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}>
+                    <RichTextEditor
+                      content={formData.description || ''}
+                      onChange={(content) => handleChange('description', content)}
+                      placeholder="Enter requirement description..."
+                      minHeight="150px"
+                    />
+                  </div>
                   {errors.description && (
                     <p className="mt-1 text-sm text-red-500">{errors.description}</p>
                   )}
@@ -1265,61 +1263,6 @@ export default function CreateRequirementModal({
                     )}
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* Analysis Tab */}
-            {activeTab === 'analysis' && (
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                    Means of Compliance (MoC) <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formData.linkedMocCode || ''}
-                    onChange={(e) => handleChange('linkedMocCode', e.target.value)}
-                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.linkedMocCode
-                      ? 'border-red-500 dark:border-red-500'
-                      : 'border-gray-300 dark:border-gray-600'
-                      }`}
-                  >
-                    <option value="">Select MoC (required)</option>
-                    {mocs.map((moc: any) => (
-                      <option key={moc.code} value={moc.code}>
-                        {moc.code}: {moc.name} - {moc.description}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.linkedMocCode && (
-                    <p className="mt-1 text-sm text-red-500">{errors.linkedMocCode}</p>
-                  )}
-                </div>
-
-                {/* Verification Method */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                    Verification Method
-                    {mocs.find((m: any) => String(m.code) === String(formData.linkedMocCode))?.name === 'Test' && (
-                      <span className="text-red-500 ml-1">*</span>
-                    )}
-                  </label>
-                  <select
-                    value={formData.verificationMethod || ''}
-                    onChange={(e) => handleChange('verificationMethod', e.target.value || undefined)}
-                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.verificationMethod ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                      }`}
-                  >
-                    <option value="">Select verification method</option>
-                    {verificationMethods.map((method) => (
-                      <option key={method} value={method}>
-                        {method}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.verificationMethod && (
-                    <p className="mt-1 text-sm text-red-500">{errors.verificationMethod}</p>
-                  )}
-                </div>
 
                 {/* Acceptance Criteria */}
                 <div>
@@ -1335,7 +1278,58 @@ export default function CreateRequirementModal({
                   />
                 </div>
 
-                {/* MBSE/UML Fields */}
+                {/* Means of Compliance (MoC) and Verification Method */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Means of Compliance (MoC) <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.linkedMocCode || ''}
+                      onChange={(e) => handleChange('linkedMocCode', e.target.value)}
+                      className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.linkedMocCode
+                        ? 'border-red-500 dark:border-red-500'
+                        : 'border-gray-300 dark:border-gray-600'
+                        }`}
+                    >
+                      <option value="">Select MoC (required)</option>
+                      {mocs.map((moc: any) => (
+                        <option key={moc.code} value={moc.code}>
+                          {moc.code}: {moc.name} - {moc.description}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.linkedMocCode && (
+                      <p className="mt-1 text-sm text-red-500">{errors.linkedMocCode}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Verification Method
+                      {mocs.find((m: any) => String(m.code) === String(formData.linkedMocCode))?.name === 'Test' && (
+                        <span className="text-red-500 ml-1">*</span>
+                      )}
+                    </label>
+                    <select
+                      value={formData.verificationMethod || ''}
+                      onChange={(e) => handleChange('verificationMethod', e.target.value || undefined)}
+                      className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.verificationMethod ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                        }`}
+                    >
+                      <option value="">Select verification method</option>
+                      {verificationMethods.map((method) => (
+                        <option key={method} value={method}>
+                          {method}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.verificationMethod && (
+                      <p className="mt-1 text-sm text-red-500">{errors.verificationMethod}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Classification */}
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                   <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
                     Classification
