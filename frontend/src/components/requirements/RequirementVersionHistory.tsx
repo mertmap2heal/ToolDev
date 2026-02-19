@@ -25,6 +25,8 @@ export default function RequirementVersionHistory({
   const [selectedVersions, setSelectedVersions] = useState<number[]>([])
   const [expandedVersion, setExpandedVersion] = useState<number | null>(null)
   const [isComparing, setIsComparing] = useState(false)
+  const [filter, setFilter] = useState<string>('all');
+  const [isExporting, setIsExporting] = useState(false);
 
   // Fetch version history
   const { data: historyData, isLoading } = useQuery({
@@ -188,7 +190,7 @@ export default function RequirementVersionHistory({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[800px] max-h-[85vh] flex flex-col">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[900px] max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-3">
@@ -216,6 +218,48 @@ export default function RequirementVersionHistory({
             <span className="text-sm text-gray-600 dark:text-gray-400">
               {versions.length + auditEvents.length} event{versions.length + auditEvents.length !== 1 ? 's' : ''} recorded
             </span>
+            <select value={filter} onChange={e => setFilter(e.target.value)} className="ml-4 px-2 py-1 rounded border border-gray-300 text-sm">
+              <option value="all">All</option>
+              <option value="version">Versions</option>
+              <option value="audit">Audit Events</option>
+              <option value="linked">Linked Artifacts</option>
+              <option value="edit">Edits</option>
+              <option value="delete">Deletes</option>
+              <option value="restore">Restores</option>
+            </select>
+            <button
+              onClick={async () => {
+                setIsExporting(true);
+                // Export logic (CSV)
+                const timeline = [
+                  ...versions.map(v => ({ type: 'version', data: v, date: new Date(v.createdAt) })),
+                  ...auditEvents.map(e => ({ type: 'audit', data: e, date: new Date(e.performedAt) }))
+                ].sort((a, b) => b.date.getTime() - a.date.getTime());
+                const csvRows = [
+                  'Type,Date,User,Action,Title,Reason,Details',
+                  ...timeline.map(item => {
+                    if (item.type === 'version') {
+                      return `Version,${item.date.toISOString()},${item.data.changedByName || ''},Edit,${item.data.title},${item.data.changeReason || ''},Version ${item.data.version}`;
+                    } else {
+                      const e = item.data;
+                      return `Audit,${item.date.toISOString()},${e.performedByUser?.name || 'System'},${e.action},${e.newValue?.title || ''},${e.newValue?.reason || ''},${JSON.stringify(e.newValue)}`;
+                    }
+                  })
+                ];
+                const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `requirement_version_history_${requirement.requirementId || requirement.id}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setIsExporting(false);
+              }}
+              className="ml-4 px-3 py-1.5 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
+              disabled={isExporting}
+            >
+              Export CSV
+            </button>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -342,16 +386,26 @@ export default function RequirementVersionHistory({
                   </div>
                 </div>
 
-                {/* Merge and sort versions and audit events by date */}
+                {/* Merge and sort versions and audit events by date, with filtering */}
                 {(() => {
-                  const timeline: Array<{ type: 'version' | 'audit'; data: any; date: Date }> = [
+                  let timeline: Array<{ type: 'version' | 'audit'; data: any; date: Date }> = [
                     ...versions.map(v => ({ type: 'version' as const, data: v, date: new Date(v.createdAt) })),
                     ...auditEvents.map(e => ({ type: 'audit' as const, data: e, date: new Date(e.performedAt) })),
-                  ].sort((a, b) => b.date.getTime() - a.date.getTime())
-
+                  ].sort((a, b) => b.date.getTime() - a.date.getTime());
+                  if (filter !== 'all') {
+                    timeline = timeline.filter(item => {
+                      if (filter === 'version') return item.type === 'version';
+                      if (filter === 'audit') return item.type === 'audit';
+                      if (filter === 'linked') return item.type === 'audit' && ['ISSUE_LINKED','CHANGE_REQUEST_LINKED','TEST_CASE_LINKED','TEST_PLAN_LINKED'].includes(item.data.action);
+                      if (filter === 'edit') return item.type === 'version';
+                      if (filter === 'delete') return item.type === 'audit' && ['REQUIREMENT_DELETED_SOFT','REQUIREMENT_PERMANENTLY_DELETED'].includes(item.data.action);
+                      if (filter === 'restore') return item.type === 'audit' && item.data.action === 'REQUIREMENT_RESTORED';
+                      return true;
+                    });
+                  }
                   return timeline.map((item, index) => {
                     if (item.type === 'version') {
-                      const version = item.data as RequirementVersion
+                      const version = item.data as RequirementVersion;
                       return (
                         <div key={`version-${version.id}`} className="relative pl-10">
                           <div className="absolute left-2 w-4 h-4 bg-gray-300 dark:bg-gray-600 rounded-full border-2 border-white dark:border-gray-800" />
@@ -372,7 +426,6 @@ export default function RequirementVersionHistory({
                                 {format(item.date, 'PPp')}
                               </span>
                             </div>
-
                             <div
                               className="cursor-pointer"
                               onClick={() => toggleExpanded(version.version)}
@@ -386,13 +439,11 @@ export default function RequirementVersionHistory({
                                 <p className="font-medium text-gray-900 dark:text-white">{version.title}</p>
                               </div>
                             </div>
-
                             {version.changeReason && (
                               <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 italic">
                                 "{version.changeReason}"
                               </p>
                             )}
-
                             {expandedVersion === version.version && (
                               <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600 space-y-2">
                                 <div className="grid grid-cols-2 gap-2 text-sm">
@@ -430,19 +481,17 @@ export default function RequirementVersionHistory({
                             )}
                           </div>
                         </div>
-                      )
+                      );
                     } else {
                       // Audit event
-                      const event = item.data as AuditEvent
-                      const actionDisplay = getActionDisplay(event.action)
-                      const ActionIcon = actionDisplay.icon
-
+                      const event = item.data as AuditEvent;
+                      const actionDisplay = getActionDisplay(event.action);
+                      const ActionIcon = actionDisplay.icon;
                       return (
                         <div key={`audit-${event.id}`} className="relative pl-10">
                           <div className={`absolute left-2 w-4 h-4 ${actionDisplay.bg} rounded-full border-2 border-white dark:border-gray-800 flex items-center justify-center`}>
                             <div className={`w-1.5 h-1.5 rounded-full ${actionDisplay.color.replace('text-', 'bg-')}`} />
                           </div>
-
                           <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
                             <div className="flex items-start justify-between gap-4">
                               <div className="flex-1 min-w-0">
@@ -454,7 +503,6 @@ export default function RequirementVersionHistory({
                                     <ActionIcon size={14} className="inline-block" />
                                     {actionDisplay.label}
                                   </span>
-
                                   {/* Inline Entity Details if available */}
                                   {(event.action === 'ISSUE_LINKED' || event.action === 'CHANGE_REQUEST_LINKED' || event.action === 'TEST_CASE_LINKED' || event.action === 'TEST_PLAN_LINKED') && event.newValue && (
                                     <a
@@ -475,7 +523,6 @@ export default function RequirementVersionHistory({
                                       </span>
                                     </a>
                                   )}
-
                                   {(event.action === 'TEST_CASE_UNLINKED' || event.action === 'TEST_PLAN_UNLINKED') && event.oldValue && (
                                     <span className="inline-flex items-center gap-1 text-gray-500 dark:text-gray-400 line-through">
                                       {event.oldValue.testCaseKey || event.oldValue.testPlanKey}
@@ -485,23 +532,21 @@ export default function RequirementVersionHistory({
                                     </span>
                                   )}
                                 </div>
-
                                 {event.newValue?.reason && (
                                   <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                                     "{event.newValue.reason}"
                                   </p>
                                 )}
                               </div>
-
                               <span className="text-xs text-gray-400 shrink-0 whitespace-nowrap">
                                 {format(item.date, 'PPp')}
                               </span>
                             </div>
                           </div>
                         </div>
-                      )
+                      );
                     }
-                  })
+                  });
                 })()}
               </div>
             </div>
