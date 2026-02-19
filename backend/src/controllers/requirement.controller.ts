@@ -1617,13 +1617,17 @@ export const createRequirementComment = async (req: AuthRequest, res: Response) 
       })
     }
 
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+    })
+
     const comment = await prisma.requirementComment.create({
       data: {
         requirementId: requirement.id,
         projectId,
         content: content.trim(),
         authorId: req.userId,
-        authorName: undefined,
+        authorName: user?.name || 'Unknown',
       },
     })
 
