@@ -891,9 +891,9 @@ export default function RequirementDetailDrawer({
                       <span className={clsx(
                         'inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize',
                         displayRequirement.risk === 'critical' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
-                        displayRequirement.risk === 'high' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400' :
-                        displayRequirement.risk === 'medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400' :
-                        'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                          displayRequirement.risk === 'high' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400' :
+                            displayRequirement.risk === 'medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400' :
+                              'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
                       )}>
                         {displayRequirement.risk}
                       </span>
@@ -936,8 +936,8 @@ export default function RequirementDetailDrawer({
                       <span className={clsx(
                         'inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize',
                         displayRequirement.verificationStatus === 'verified' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
-                        displayRequirement.verificationStatus === 'failed' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
-                        'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                          displayRequirement.verificationStatus === 'failed' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
+                            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
                       )}>
                         {displayRequirement.verificationStatus}
                       </span>
@@ -1494,61 +1494,99 @@ export default function RequirementDetailDrawer({
             )}
 
             {activeTab === 'comments' && (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {/* Comment Form */}
-                <div>
-                  <textarea
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    rows={3}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-                    placeholder="Add a comment..."
+                <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                    <MessageSquare size={16} className="text-blue-500" />
+                    New Comment
+                  </h3>
+                  <RichTextEditor
+                    content={newComment}
+                    onChange={setNewComment}
+                    placeholder="Write a comment..."
+                    className="min-h-[120px] bg-white dark:bg-gray-800"
                   />
-                  <button
-                    onClick={() => {
-                      if (newComment.trim()) {
-                        createCommentMutation.mutate(newComment.trim())
-                      }
-                    }}
-                    disabled={!newComment.trim() || createCommentMutation.isPending}
-                    className="mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {createCommentMutation.isPending ? 'Adding...' : 'Add Comment'}
-                  </button>
+                  <div className="flex justify-end mt-3">
+                    <button
+                      onClick={() => {
+                        if (newComment.trim() && newComment !== '<p><br></p>') {
+                          createCommentMutation.mutate(newComment.trim())
+                        }
+                      }}
+                      disabled={!newComment.trim() || newComment === '<p><br></p>' || createCommentMutation.isPending}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors flex items-center gap-2"
+                    >
+                      {createCommentMutation.isPending ? 'Posting...' : 'Post Comment'}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Comments List */}
                 <div className="space-y-4">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                    Comments <span className="text-gray-500 font-normal">({displayRequirement.comments?.length || 0})</span>
+                  </h3>
+
                   {displayRequirement.comments && displayRequirement.comments.length > 0 ? (
-                    displayRequirement.comments.map((comment) => (
-                      <div key={comment.id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                        <div className="flex items-start justify-between mb-2">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">
-                              {comment.authorName || 'Anonymous'}
-                            </div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {format(new Date(comment.createdAt), 'PPpp')}
+                    <div className="space-y-4">
+                      {displayRequirement.comments.map((comment) => (
+                        <div key={comment.id} className="flex gap-4 group">
+                          {/* Avatar */}
+                          <div className="flex-shrink-0">
+                            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-sm">
+                              {getInitials(comment.authorName || 'Anonymous')}
                             </div>
                           </div>
-                          <button
-                            onClick={() => {
-                              if (window.confirm('Are you sure you want to delete this comment?')) {
-                                deleteCommentMutation.mutate(comment.id)
-                              }
-                            }}
-                            className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                          >
-                            <X size={16} />
-                          </button>
+
+                          {/* Content Bubble */}
+                          <div className="flex-1 min-w-0">
+                            <div className="bg-white dark:bg-gray-700/50 rounded-2xl rounded-tl-none border border-gray-100 dark:border-gray-700 p-4 shadow-sm relative hover:border-blue-200 dark:hover:border-blue-700/30 transition-colors">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                                    {comment.authorName || 'Anonymous'}
+                                  </span>
+                                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                                    {format(new Date(comment.createdAt), 'PP p')}
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    if (window.confirm('Are you sure you want to delete this comment?')) {
+                                      deleteCommentMutation.mutate(comment.id)
+                                    }
+                                  }}
+                                  className="text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                                  title="Delete comment"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+
+                              <div className="prose prose-sm dark:prose-invert max-w-none">
+                                <RichTextEditor
+                                  content={comment.content}
+                                  onChange={() => { }}
+                                  editable={false}
+                                  className="border-none p-0 min-h-0 bg-transparent"
+                                />
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                          {comment.content}
-                        </p>
-                      </div>
-                    ))
+                      ))}
+                    </div>
                   ) : (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">No comments yet</p>
+                    <div className="text-center py-12 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
+                      <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 mb-3">
+                        <MessageSquare size={24} className="text-gray-400 dark:text-gray-500" />
+                      </div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">No comments yet</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        Start the discussion by adding a comment above.
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>
