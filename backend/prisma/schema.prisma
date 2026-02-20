@@ -8,6 +8,8 @@ datasource db {
 }
 
 model User {
+    auditLogs AuditLog[]
+    verEvidenceLinks VerEvidenceLink[]
   id                           String    @id @default(uuid())
   email                        String    @unique
   inviteEmail                  String?   @unique
@@ -22,6 +24,7 @@ model User {
   updatedAt                    DateTime  @updatedAt
 
   projects         ProjectMember[]
+  ownedProjects    Project[] @relation("ownedProjects")
   notifications    Notification[]
   engineeringRoles UserEngineeringRole[]
   requirementSubscriptions RequirementSubscription[]
@@ -94,19 +97,20 @@ model Organization {
 }
 
 model Project {
-  id                   String    @id @default(uuid())
-  name                 String
-  description          String?
-  domain               String
-  companyName          String?
-  progress             Float     @default(0)
-  status               String    @default("active")
-  deadline             DateTime?
+    projectAnalytics ProjectAnalytics?
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  domain      String
+  companyName String?
+  progress    Float    @default(0)
+  status      String   @default("active")
+  deadline    DateTime?
   strictLifecycleGates Boolean?  @default(false)
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
-  userId               String
-
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      String
+  user        User     @relation("ownedProjects", fields: [userId], references: [id])
   teamMembers            ProjectMember[]
   requirements           Requirement[]
   functions              SystemFunction[]
@@ -128,6 +132,7 @@ model Project {
   verTestResults         VerTestResult[]
   tasks                  Task[]
   taskSavedViews         TaskSavedView[]
+  auditLogs   AuditLog[]
   boardColumns           BoardColumn[]
   taskTemplates          TaskTemplate[]
   verMethods             VerMethod[]
@@ -418,6 +423,7 @@ model Document {
   name      String
   type      String
   content   String?
+  sections  Json?
   fileUrl   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -541,7 +547,6 @@ model IssueLink {
   issue       Issue  @relation("IssueToLink", fields: [issueId], references: [id], onDelete: Cascade)
 
   @@index([issueId])
-  @@index([linkedId])
   @@index([linkedType, linkedId])
 }
 
@@ -588,7 +593,6 @@ model ChangeRequest {
   updatedBy      String?
   
   createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
 
   project     Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   attachments ChangeRequestAttachment[]
@@ -920,7 +924,7 @@ model Item {
   category         ItemCategory?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   project          Project?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
   barcodes         BarcodeDefinition[]
-  lots             Lot[]
+  // lots field removed: no Lot model defined
   serialNumbers    SerialNumber[]
   balances         InventoryBalance[]
   ledgerEntries    InventoryLedger[]
@@ -933,7 +937,8 @@ model Item {
   transferLines    TransferLine[]
   adjustmentLines  AdjustmentLine[]
   cycleCountLines  CycleCountLine[]
-  costLayers       InventoryCostLayer[]
+  // costLayers field removed: no InventoryCostLayer model defined
+
 
   @@index([sku])
   @@index([projectId])
@@ -1034,7 +1039,7 @@ model Location {
   cycleCountLines CycleCountLine[]
   serialNumbers   SerialNumber[]
   reservations    Reservation[]
-  costLayers      InventoryCostLayer[]
+  // costLayers field removed: no InventoryCostLayer model defined
   poLines         PurchaseOrderLine[]
 
   @@unique([warehouseId, code])
@@ -1078,23 +1083,6 @@ model BarcodeDefinition {
   @@index([isPrimary])
 }
 
-// Traceability
-model Project {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  domain      String
-  companyName String?
-  progress    Int      @default(0)
-  status      String   @default("active")
-  deadline    DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  members     ProjectMember[]
-  auditLogs   AuditLog[]
-}
 
 model AuditLog {
   id          String   @id @default(uuid())
@@ -1116,16 +1104,7 @@ model ProjectAnalytics {
   overdueTasks Int    @default(0)
   lastCalculated DateTime @default(now())
 }
-  adjustmentLines AdjustmentLine[]
-  cycleCountLines CycleCountLine[]
-  costLayers      InventoryCostLayer[]
-  allocations     ReservationAllocation[]
 
-  @@unique([itemId, lotCode])
-  @@index([itemId])
-  @@index([lotCode])
-  @@index([expiryDate])
-}
 
 model SerialNumber {
   id                String   @id @default(uuid())
@@ -1182,7 +1161,6 @@ model InventoryLedger {
   toLocationId   String?
   qtyDelta       Decimal
   uomId          String
-  lotId          String?
   serialId       String?
   unitCost       Decimal?
   metadataJson   String? // JSON string for additional data
@@ -1192,7 +1170,6 @@ model InventoryLedger {
   item         Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
   fromLocation Location?     @relation("LedgerFromLocation", fields: [fromLocationId], references: [id], onDelete: SetNull)
   toLocation   Location?     @relation("LedgerToLocation", fields: [toLocationId], references: [id], onDelete: SetNull)
-  lot          Lot?          @relation(fields: [lotId], references: [id], onDelete: SetNull)
   serial       SerialNumber? @relation(fields: [serialId], references: [id], onDelete: SetNull)
   uom          Uom           @relation(fields: [uomId], references: [id])
 
@@ -1230,17 +1207,14 @@ model Reservation {
 model ReservationAllocation {
   id            String   @id @default(uuid())
   reservationId String
-  lotId         String?
   serialId      String?
   qty           Decimal
   createdAt     DateTime @default(now())
 
   reservation Reservation   @relation(fields: [reservationId], references: [id], onDelete: Cascade)
-  lot         Lot?          @relation(fields: [lotId], references: [id], onDelete: SetNull)
   serial      SerialNumber? @relation(fields: [serialId], references: [id], onDelete: SetNull)
 
   @@index([reservationId])
-  @@index([lotId])
   @@index([serialId])
 }
 
@@ -1315,7 +1289,6 @@ model GoodsReceiptLine {
   itemId         String
   qtyReceived    Decimal
   locationId     String
-  lotId          String?
   serialId       String?
   unitCost       Decimal?
   createdAt      DateTime @default(now())
@@ -1325,12 +1298,10 @@ model GoodsReceiptLine {
   poLine       PurchaseOrderLine? @relation(fields: [poLineId], references: [id], onDelete: SetNull)
   item         Item               @relation(fields: [itemId], references: [id])
   location     Location           @relation(fields: [locationId], references: [id])
-  lot          Lot?               @relation(fields: [lotId], references: [id], onDelete: SetNull)
   serial       SerialNumber?      @relation(fields: [serialId], references: [id], onDelete: SetNull)
 
   @@index([goodsReceiptId])
   @@index([itemId])
-  @@index([lotId])
   @@index([serialId])
 }
 
@@ -1403,7 +1374,6 @@ model ShipmentLine {
   itemId         String
   qtyShipped     Decimal
   fromLocationId String
-  lotId          String?
   serialId       String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -1412,12 +1382,10 @@ model ShipmentLine {
   soLine       SalesOrderLine @relation(fields: [soLineId], references: [id], onDelete: Cascade)
   item         Item           @relation(fields: [itemId], references: [id])
   fromLocation Location       @relation(fields: [fromLocationId], references: [id])
-  lot          Lot?           @relation(fields: [lotId], references: [id], onDelete: SetNull)
   serial       SerialNumber?  @relation(fields: [serialId], references: [id], onDelete: SetNull)
 
   @@index([shipmentId])
   @@index([itemId])
-  @@index([lotId])
   @@index([serialId])
 }
 
@@ -1451,7 +1419,6 @@ model TransferLine {
   qty             Decimal
   fromLocationId  String
   toLocationId    String
-  lotId           String?
   serialId        String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1460,7 +1427,6 @@ model TransferLine {
   item          Item          @relation(fields: [itemId], references: [id])
   fromLocation  Location      @relation("TransferFromLocation", fields: [fromLocationId], references: [id])
   toLocation    Location      @relation("TransferToLocation", fields: [toLocationId], references: [id])
-  lot           Lot?          @relation(fields: [lotId], references: [id], onDelete: SetNull)
   serial        SerialNumber? @relation(fields: [serialId], references: [id], onDelete: SetNull)
 
   @@index([transferOrderId])
@@ -1491,7 +1457,6 @@ model AdjustmentLine {
   itemId            String
   locationId        String
   qtyDelta          Decimal // Positive for increase, negative for decrease
-  lotId             String?
   serialId          String?
   unitCost          Decimal?
   createdAt         DateTime @default(now())
@@ -1500,7 +1465,6 @@ model AdjustmentLine {
   stockAdjustment StockAdjustment @relation(fields: [stockAdjustmentId], references: [id], onDelete: Cascade)
   item            Item            @relation(fields: [itemId], references: [id])
   location        Location        @relation(fields: [locationId], references: [id])
-  lot             Lot?            @relation(fields: [lotId], references: [id], onDelete: SetNull)
   serial          SerialNumber?   @relation(fields: [serialId], references: [id], onDelete: SetNull)
 
   @@index([stockAdjustmentId])
@@ -1537,7 +1501,6 @@ model CycleCountLine {
   expectedQty  Decimal
   countedQty   Decimal
   varianceQty  Decimal // Computed: countedQty - expectedQty
-  lotId        String?
   serialId     String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -1545,32 +1508,10 @@ model CycleCountLine {
   cycleCount CycleCount    @relation(fields: [cycleCountId], references: [id], onDelete: Cascade)
   item       Item          @relation(fields: [itemId], references: [id])
   location   Location      @relation(fields: [locationId], references: [id])
-  lot        Lot?          @relation(fields: [lotId], references: [id], onDelete: SetNull)
   serial     SerialNumber? @relation(fields: [serialId], references: [id], onDelete: SetNull)
 
   @@index([cycleCountId])
   @@index([itemId])
-}
-
-// FIFO Cost Layers
-model InventoryCostLayer {
-  id          String   @id @default(uuid())
-  itemId      String
-  locationId  String
-  lotId       String?
-  qty         Decimal
-  unitCost    Decimal
-  receivedAt  DateTime @default(now())
-  consumedQty Decimal  @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  item     Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
-  lot      Lot?     @relation(fields: [lotId], references: [id], onDelete: SetNull)
-
-  @@index([itemId, locationId, receivedAt])
-  @@index([lotId])
 }
 
 // Support Tables
@@ -2222,7 +2163,9 @@ model VerEvidence {
 
 // Polymorphic Evidence Linking
 model VerEvidenceLink {
-  id               String   @id @default(uuid())
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
   evidenceId       String
   linkedEntityType String // TEST_RUN, TEST_RUN_RESULT, TEST_CASE, TEST_SETUP, METHOD, REVIEW, NONCONFORMITY
   linkedEntityId   String
@@ -2778,8 +2721,6 @@ model CertMeeting {
   type      String   // TCB | TC | Internal
   attendees String[] @default([])
   summary   String   @default("")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
   project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   actionItems  CertActionItem[]

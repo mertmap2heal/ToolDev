@@ -4,6 +4,8 @@ import { useParams } from 'react-router-dom'
 export default function ProjectLandingPage() {
   const { projectId } = useParams<{ projectId: string }>()
 
+  console.log('[DEBUG] ProjectLandingPage rendering. Path:', window.location.pathname, 'projectId:', projectId)
+
   return (
     <div className="space-y-6">
 

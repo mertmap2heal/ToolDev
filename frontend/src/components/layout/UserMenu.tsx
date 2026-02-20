@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import type { LucideIcon } from 'lucide-react'
 import {
   LogOut,
@@ -122,6 +122,7 @@ export default function UserMenu({ onOpenFeedback }: UserMenuProps) {
   const [copiedEmail, setCopiedEmail] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
+  const { projectId } = useParams<{ projectId: string }>()
   const { user, logout } = useAuthStore()
   const { theme, setTheme } = useThemeStore()
 
@@ -322,22 +323,20 @@ export default function UserMenu({ onOpenFeedback }: UserMenuProps) {
             <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
               <button
                 onClick={() => setTheme('light')}
-                className={`p-1 rounded-md transition-colors ${
-                  theme === 'light'
-                    ? 'bg-white dark:bg-gray-600 shadow-sm text-yellow-500'
-                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
-                }`}
+                className={`p-1 rounded-md transition-colors ${theme === 'light'
+                  ? 'bg-white dark:bg-gray-600 shadow-sm text-yellow-500'
+                  : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                  }`}
                 title="Light"
               >
                 <Sun size={12} />
               </button>
               <button
                 onClick={() => setTheme('midnight')}
-                className={`p-1 rounded-md transition-colors ${
-                  theme === 'midnight'
-                    ? 'bg-white dark:bg-gray-600 shadow-sm text-blue-400'
-                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
-                }`}
+                className={`p-1 rounded-md transition-colors ${theme === 'midnight'
+                  ? 'bg-white dark:bg-gray-600 shadow-sm text-blue-400'
+                  : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                  }`}
                 title="Midnight"
               >
                 <Moon size={12} />
@@ -350,11 +349,17 @@ export default function UserMenu({ onOpenFeedback }: UserMenuProps) {
         <div className="py-1.5 border-b border-gray-100 dark:border-gray-700/60">
           <MenuSectionLabel>Help & Resources</MenuSectionLabel>
           <MenuItem icon={HelpCircle} label="Send Feedback" onClick={() => { onOpenFeedback(); setOpen(false); setView('main') }} />
-          <MenuItem icon={Zap} label="What's New" badge={{ text: 'v2.4', color: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-300' }} onClick={() => {}} />
+          <MenuItem icon={Zap} label="What's New" badge={{ text: 'v2.4', color: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-300' }} onClick={() => { }} />
           <MenuItem
             icon={ExternalLink}
             label="Documentation"
-            onClick={() => window.open('https://docs.example.com', '_blank')}
+            onClick={() => {
+              if (projectId) {
+                handleNavigate(`/projects/${projectId}/documentation`)
+              } else {
+                window.open('https://docs.example.com', '_blank')
+              }
+            }}
           />
         </div>
 
@@ -406,9 +411,8 @@ export default function UserMenu({ onOpenFeedback }: UserMenuProps) {
             <button
               key={opt.value}
               onClick={() => handleSetStatus(opt.value)}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
-                status === opt.value ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${status === opt.value ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''
+                }`}
             >
               <Circle size={10} className={`${opt.color} fill-current`} />
               <span className="text-xs text-gray-700 dark:text-gray-300 flex-1">{opt.label}</span>

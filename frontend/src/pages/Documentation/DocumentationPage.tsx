@@ -22,12 +22,13 @@ import type {
   ArtifactReferenceBlock,
 } from './types'
 import {
-  MOCK_DOCUMENTS,
   MOCK_TEMPLATES,
   MOCK_EVIDENCE_PACKS,
   MOCK_EXPORT_PROFILES,
   MOCK_EXPORT_HISTORY,
 } from './mockData'
+import { useEffect } from 'react';
+import { documentationService } from '../../services/documentation.service';
 import PlannedFeatureModal from './PlannedFeatureModal'
 import CreateDocumentModal from './modals/CreateDocumentModal'
 import ExportModal from './modals/ExportModal'
@@ -103,8 +104,19 @@ function getNextProfileId(profiles: ExportProfile[]): string {
 export default function DocumentationPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [activeTab, setActiveTab] = useState<TabId>('documents')
+
+  console.log('[DEBUG] DocumentationPage rendering. Path:', window.location.pathname, 'projectId:', projectId)
   const [searchQuery, setSearchQuery] = useState('')
-  const [documents, setDocuments] = useState<Document[]>(MOCK_DOCUMENTS)
+  const [documents, setDocuments] = useState<Document[]>([])
+  // Fetch documents from backend on mount or projectId change
+  useEffect(() => {
+    if (!projectId) return;
+    documentationService.listDocuments(projectId).then((res) => {
+      if (res.success && Array.isArray(res.data)) {
+        setDocuments(res.data);
+      }
+    });
+  }, [projectId]);
   const [templates, setTemplates] = useState<Template[]>(MOCK_TEMPLATES)
   const [evidencePacks, setEvidencePacks] = useState<EvidencePack[]>(MOCK_EVIDENCE_PACKS)
   const [exportProfiles, setExportProfiles] = useState<ExportProfile[]>(MOCK_EXPORT_PROFILES)
@@ -133,9 +145,13 @@ export default function DocumentationPage() {
     setTimeout(() => setToastMessage(null), 3000)
   }, [])
 
-  const handleCreateDocument = (doc: Omit<Document, 'id'> & { id: string }) => {
-    setDocuments((prev) => [doc as Document, ...prev])
-    setIsCreateDocumentOpen(false)
+  const handleCreateDocument = async (doc: Omit<Document, 'id'> & { id: string }) => {
+    if (!projectId) return;
+    const res = await documentationService.createDocument(projectId, doc);
+    if (res.success && res.data) {
+      setDocuments((prev) => [res.data, ...prev]);
+      setIsCreateDocumentOpen(false);
+    }
   }
 
   const handleDuplicateDocument = (doc: Document) => {
@@ -152,8 +168,12 @@ export default function DocumentationPage() {
     setDocuments((prev) => [copy, ...prev])
   }
 
-  const handleUpdateDocument = (doc: Document) => {
-    setDocuments((prev) => prev.map((d) => (d.id === doc.id ? doc : d)))
+  const handleUpdateDocument = async (doc: Document) => {
+    if (!projectId) return;
+    const res = await documentationService.updateDocument(projectId, doc.id, doc);
+    if (res.success && res.data) {
+      setDocuments((prev) => prev.map((d) => (d.id === doc.id ? res.data : d)));
+    }
   }
 
   const handleInsertArtifactBlock = (block: ArtifactReferenceBlock) => {

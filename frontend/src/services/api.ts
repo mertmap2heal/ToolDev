@@ -41,8 +41,9 @@ class ApiClient {
             window.dispatchEvent(new CustomEvent('token-expired'))
           }
         }
-        // When user no longer has access to a project (e.g. removed from project), redirect to dashboard
-        if (error.response?.status === 404 && error.config?.url?.match(/^\/projects\/[^/]+/)) {
+        // When user no longer has access to a project (e.g. removed from project) or project doesn't exist
+        // Only redirect on exact project match, not sub-resources like /projects/:id/documents
+        if (error.response?.status === 404 && error.config?.url?.match(/^\/projects\/[^/]+$/)) {
           window.location.href = '/'
         }
         return Promise.reject(error)

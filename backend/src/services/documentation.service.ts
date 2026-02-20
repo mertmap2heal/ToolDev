@@ -10,8 +10,8 @@ interface DocumentGenerationRequest {
 
 export const documentationService = {
   async generateDocument(request: DocumentGenerationRequest): Promise<string> {
-    const { projectId, format, sections = ['all'] } = request
-
+    // ...existing code...
+    const { projectId, format, sections = ['all'] } = request;
     const project = await prisma.project.findUnique({
       where: { id: projectId },
       include: {
@@ -21,39 +21,52 @@ export const documentationService = {
         verifications: true,
         traceLinks: true,
       },
-    })
+    });
+    if (!project) throw new Error('Project not found');
+    let content = '';
+    if (sections.includes('all') || sections.includes('overview')) content += generateOverview(project);
+    if (sections.includes('all') || sections.includes('requirements')) content += generateRequirementsSection(project.requirements);
+    if (sections.includes('all') || sections.includes('functions')) content += generateFunctionsSection(project.functions);
+    if (sections.includes('all') || sections.includes('architecture')) content += generateArchitectureSection(project.architectures);
+    if (sections.includes('all') || sections.includes('verification')) content += generateVerificationSection(project.verifications);
+    if (sections.includes('all') || sections.includes('traceability')) content += generateTraceabilitySection(project.traceLinks);
+    return content;
+  },
 
-    if (!project) {
-      throw new Error('Project not found')
-    }
+  // List all documents for a project
+  async listDocuments(projectId: string) {
+    return prisma.document.findMany({ where: { projectId } });
+  },
 
-    let content = ''
+  // Get a single document
+  async getDocument(projectId: string, id: string) {
+    return prisma.document.findFirst({ where: { projectId, id } });
+  },
 
-    if (sections.includes('all') || sections.includes('overview')) {
-      content += generateOverview(project)
-    }
+  // Create a new document
+  async createDocument(projectId: string, docData: any) {
+    return prisma.document.create({
+      data: {
+        ...docData,
+        projectId,
+      },
+    });
+  },
 
-    if (sections.includes('all') || sections.includes('requirements')) {
-      content += generateRequirementsSection(project.requirements)
-    }
+  // Update a document
+  async updateDocument(projectId: string, id: string, docData: any) {
+    return prisma.document.update({
+      where: { id },
+      data: {
+        ...docData,
+        projectId,
+      },
+    });
+  },
 
-    if (sections.includes('all') || sections.includes('functions')) {
-      content += generateFunctionsSection(project.functions)
-    }
-
-    if (sections.includes('all') || sections.includes('architecture')) {
-      content += generateArchitectureSection(project.architectures)
-    }
-
-    if (sections.includes('all') || sections.includes('verification')) {
-      content += generateVerificationSection(project.verifications)
-    }
-
-    if (sections.includes('all') || sections.includes('traceability')) {
-      content += generateTraceabilitySection(project.traceLinks)
-    }
-
-    return content
+  // Delete a document
+  async deleteDocument(projectId: string, id: string) {
+    return prisma.document.delete({ where: { id } });
   },
 }
 
