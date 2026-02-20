@@ -32,16 +32,6 @@ export default function MainLayout() {
   }
 
   useEffect(() => {
-    if (authService.getToken() && !user) {
-      authService.getCurrentUser().then((res) => {
-        if (res.success && res.data) {
-          setUser(res.data)
-        }
-      })
-    }
-  }, [user, setUser])
-
-  useEffect(() => {
     const handleTokenExpired = () => {
       navigate('/login', { replace: true })
     }
@@ -52,7 +42,7 @@ export default function MainLayout() {
       window.removeEventListener('token-expired', handleTokenExpired)
     }
   }, [navigate])
-  
+
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--theme-bg)' }}>
       {user?.mustChangePassword && (

@@ -26,6 +26,7 @@ const mainMenuItems = [
   { icon: Package, label: 'Inventory Management', path: '/inventory' },
   { icon: ClipboardCheck, label: 'Audit', path: '/audit' },
   { icon: RefreshCw, label: 'Lifecycle Management', path: '/lifecycle' },
+  { icon: BarChart3, label: 'Data Flow Visualization', path: '/platform-admin/data-flow' },
   { icon: Sparkles, label: 'AI Guide', path: '/ai-guide', isSpecial: true },
 ]
 

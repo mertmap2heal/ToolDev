@@ -72,6 +72,7 @@ import CompaniesPage from './pages/PlatformAdmin/CompaniesPage'
 import CreateCompanyAdminPage from './pages/PlatformAdmin/CreateCompanyAdminPage'
 import CompanyLimitsPage from './pages/PlatformAdmin/CompanyLimitsPage'
 import AuditLogsPage from './pages/PlatformAdmin/AuditLogsPage'
+import DataFlowAdminPanel from './pages/PlatformAdmin/DataFlowAdminPanel'
 import OrganizationPage from './pages/Organization/OrganizationPage'
 import SettingsPage from './pages/Settings/SettingsPage'
 
@@ -93,6 +94,7 @@ function App() {
               <Route path="companies" element={<CompaniesPage />} />
               <Route path="limits" element={<CompanyLimitsPage />} />
               <Route path="audit-logs" element={<AuditLogsPage />} />
+              <Route path="data-flow" element={<DataFlowAdminPanel />} />
             </Route>
           </Route>
           <Route element={<MainLayout />}>

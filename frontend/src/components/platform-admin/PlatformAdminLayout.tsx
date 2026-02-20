@@ -12,6 +12,7 @@ const navItems = [
   { icon: Building2, label: 'Companies', path: '/platform-admin/companies' },
   { icon: Users, label: 'Company limits', path: '/platform-admin/limits' },
   { icon: FileText, label: 'Global audit logs', path: '/platform-admin/audit-logs' },
+  { icon: Building2, label: 'Data flow', path: '/platform-admin/data-flow' },
 ]
 
 export default function PlatformAdminLayout() {
@@ -55,11 +56,10 @@ export default function PlatformAdminLayout() {
         <nav className="flex-1 p-2 space-y-1">
           <Link
             to="/platform-admin"
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              location.pathname === '/platform-admin' || location.pathname === '/platform-admin/'
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${location.pathname === '/platform-admin' || location.pathname === '/platform-admin/'
                 ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                 : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-            }`}
+              }`}
           >
             <Building2 size={18} />
             Overview
@@ -71,11 +71,10 @@ export default function PlatformAdminLayout() {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive
                     ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
+                  }`}
               >
                 <Icon size={18} />
                 {item.label}
