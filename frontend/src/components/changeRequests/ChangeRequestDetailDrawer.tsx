@@ -1,3 +1,4 @@
+import React, { useState } from 'react'
 import { X, Edit2, Trash2, Paperclip, ChevronRight, ChevronDown, Link2, FileText, AlertCircle, Settings, ExternalLink } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'

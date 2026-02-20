@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { X, Plus, Trash2, Layers, Activity, Tag, FileText, Link as LinkIcon, Shield, Target, GitBranch, CheckCircle2, AlertTriangle, ClipboardCheck, BarChart3 } from 'lucide-react'
+import { X, Plus, Trash2, ChevronDown, ChevronRight, Layers, FileText, Link as LinkIcon, Tag, Activity, FileCheck, Shield, Target, GitBranch, CheckCircle2, AlertTriangle, ClipboardCheck, BarChart3, Info, ArrowRight } from 'lucide-react'
 import clsx from 'clsx'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { requirementService } from '../../services/requirement.service'
@@ -12,8 +12,23 @@ import { LIFECYCLE_V1, LIFECYCLE_SELECT_V1 } from '../../config/featureFlags'
 import { lifecycleService, type LifecycleSummary } from '../../services/lifecycle.service'
 import RichTextEditor from '../common/RichTextEditor'
 import { authService } from '../../services/auth.service'
+import { linkService } from '../../services/link.service'
 import type { Requirement, UpdateRequirementDto, RequirementType } from 'shared/types/engineering.types'
 import type { ComponentTreeNode } from 'shared/types/project.types'
+import { stakeholderAdapter } from '../../linkage/adapters/stakeholderAdapter'
+import { pbsAdapter } from '../../linkage/adapters/pbsAdapter'
+import { interfaceAdapter } from '../../linkage/adapters/interfaceAdapter'
+import { hazardAdapter } from '../../linkage/adapters/hazardAdapter'
+import { riskAdapter } from '../../linkage/adapters/riskAdapter'
+import { documentAdapter } from '../../linkage/adapters/documentAdapter'
+import { verificationAdapter } from '../../linkage/adapters/verificationAdapter'
+import { changeRequestAdapter } from '../../linkage/adapters/changeRequestAdapter'
+import { certificationAdapter } from '../../linkage/adapters/certificationAdapter'
+import { complianceAdapter } from '../../linkage/adapters/complianceAdapter'
+import { taskAdapter } from '../../linkage/adapters/taskAdapter'
+import { issueAdapter } from '../../linkage/adapters/issueAdapter'
+import { requirementAdapter } from '../../linkage/adapters/requirementAdapter'
+import { LINKAGE_V1 } from '../../config/featureFlags'
 
 interface Moc {
   code?: string | number
@@ -44,6 +59,104 @@ const defaultRequirementTypes = [
 const verificationMethods = ['Test', 'Analysis', 'Inspection', 'Demonstration', 'Review']
 const sources = ['Customer', 'Regulatory', 'Internal', 'Derived', 'Standard']
 
+interface QuickLinkAdapter {
+  search: (query: string, projectId: string) => Promise<{ id: string; label: string }[]>
+}
+
+function QuickLinkSelector({
+  label,
+  projectId,
+  adapter,
+  selectedIds,
+  selectedLabels,
+  onToggle,
+}: {
+  label: string
+  projectId: string
+  adapter: QuickLinkAdapter
+  selectedIds: string[]
+  selectedLabels: Record<string, string>
+  onToggle: (id: string, label: string) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<{ id: string; label: string }[]>([])
+  const [showDropdown, setShowDropdown] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    adapter.search(query, projectId).then((r) => {
+      if (!cancelled) setResults((r as { id: string; label: string }[]).slice(0, 20))
+    })
+    return () => { cancelled = true }
+  }, [query, projectId])
+
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{label}</label>
+      {selectedIds.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {selectedIds.map((id) => {
+            const itemLabel = selectedLabels[id] || results.find((r) => r.id === id)?.label || id.slice(0, 8)
+            return (
+              <span
+                key={id}
+                className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded text-xs"
+              >
+                {itemLabel}
+                <button type="button" onClick={() => onToggle(id, itemLabel)} className="ml-0.5 hover:text-red-600 dark:hover:text-red-400">
+                  <X size={12} />
+                </button>
+              </span>
+            )
+          })}
+        </div>
+      )}
+      <div className="relative">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setShowDropdown(true)
+          }}
+          onFocus={() => setShowDropdown(true)}
+          onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+          placeholder="Search..."
+          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+        />
+        {showDropdown && results.length > 0 && (
+          <div
+            className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-48 overflow-y-auto"
+          >
+            {results.map((item) => {
+              const isSelected = selectedIds.includes(item.id)
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    onToggle(item.id, item.label)
+                  }}
+                  className={clsx(
+                    'w-full text-left px-4 py-2 text-sm flex items-center justify-between',
+                    isSelected
+                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                      : 'text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700'
+                  )}
+                >
+                  <span>{item.label}</span>
+                  {isSelected && <CheckCircle2 size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function EditRequirementModal({
   isOpen,
   onClose,
@@ -72,6 +185,37 @@ export default function EditRequirementModal({
   const [lifecycleStatuses, setLifecycleStatuses] = useState<{ id: string; name: string }[]>([])
   const [isDerivedRequirement, setIsDerivedRequirement] = useState(false)
   const [derivationRationale, setDerivationRationale] = useState('')
+
+  // Quick Links (LINKAGE_V1)
+  const [quickLinksPbs, setQuickLinksPbs] = useState<string[]>([])
+  const [quickLinksInterfaces, setQuickLinksInterfaces] = useState<string[]>([])
+  const [quickLinksHazards, setQuickLinksHazards] = useState<string[]>([])
+  const [quickLinksRisks, setQuickLinksRisks] = useState<string[]>([])
+  const [quickLinksLabels, setQuickLinksLabels] = useState<Record<string, string>>({})
+  // Enterprise Traceability (INCOSE / DO-178C / DO-254)
+  const [quickLinksVerification, setQuickLinksVerification] = useState<string[]>([])
+  const [quickLinksDocuments, setQuickLinksDocuments] = useState<string[]>([])
+  const [quickLinksChangeRequests, setQuickLinksChangeRequests] = useState<string[]>([])
+  const [quickLinksIssues, setQuickLinksIssues] = useState<string[]>([])
+  const [quickLinksTasks, setQuickLinksTasks] = useState<string[]>([])
+  const [quickLinksCertification, setQuickLinksCertification] = useState<string[]>([])
+  const [quickLinksCompliance, setQuickLinksCompliance] = useState<string[]>([])
+  // Section collapse state for traceability sections
+  const [traceSection, setTraceSection] = useState<Record<string, boolean>>({
+    origin: true,
+    relationships: false,
+    allocation: true,
+    verification: true,
+    safety: false,
+    certification: false,
+  })
+  // Premium Traceability
+  const [linkRationale, setLinkRationale] = useState('')
+  const [traceLinks, setTraceLinks] = useState<{ targetId: string; targetType: string; linkType: string; rationale: string; targetDisplayId?: string }[]>([])
+  const [quickLinksRequirements, setQuickLinksRequirements] = useState<string[]>([])
+  const [selectedRelationshipType, setSelectedRelationshipType] = useState('derives_from')
+  const [relationshipRationale, setRelationshipRationale] = useState('')
+
 
   const queryClient = useQueryClient()
   const { statuses } = useStatusDefinitionsStore()
@@ -449,6 +593,29 @@ export default function EditRequirementModal({
     return !textContent || textContent.length === 0
   }
 
+  const handleBatchAddTraceLinks = () => {
+    if (quickLinksRequirements.length === 0) return
+    const newLinks = quickLinksRequirements
+      .filter(id => !traceLinks.some(l => l.targetId === id && l.linkType === selectedRelationshipType))
+      .map(id => {
+        const label = quickLinksLabels[id] || id.slice(0, 8)
+        return {
+          targetId: id,
+          targetType: 'requirement',
+          linkType: selectedRelationshipType,
+          rationale: relationshipRationale,
+          targetDisplayId: label,
+        }
+      })
+    setTraceLinks(prev => [...prev, ...newLinks])
+    setQuickLinksRequirements([])
+    setRelationshipRationale('')
+  }
+
+  const handleRemoveTraceLink = (targetId: string, linkType: string) => {
+    setTraceLinks(prev => prev.filter(l => !(l.targetId === targetId && l.linkType === linkType)))
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -520,6 +687,168 @@ export default function EditRequirementModal({
     updateRequirementMutation.mutate(submitData, {
       onSuccess: (response) => {
         console.log('Update successful:', response)
+
+        // Trace links logic
+        if (response.success && response.data && LINKAGE_V1) {
+          const updatedReq = response.data
+          const linkPromises: Promise<any>[] = []
+
+          quickLinksPbs.forEach((targetId) =>
+            linkPromises.push(
+              linkService.createLink(projectId, {
+                sourceType: 'requirement',
+                sourceId: updatedReq.id,
+                targetType: 'pbs_component',
+                targetId,
+                linkType: 'allocated_to',
+                rationale: linkRationale || undefined,
+              })
+            )
+          )
+          quickLinksInterfaces.forEach((targetId) =>
+            linkPromises.push(
+              linkService.createLink(projectId, {
+                sourceType: 'requirement',
+                sourceId: updatedReq.id,
+                targetType: 'interface',
+                targetId,
+                linkType: 'related_interface',
+                rationale: linkRationale || undefined,
+              })
+            )
+          )
+          quickLinksHazards.forEach((targetId) =>
+            linkPromises.push(
+              linkService.createLink(projectId, {
+                sourceType: 'requirement',
+                sourceId: updatedReq.id,
+                targetType: 'hazard',
+                targetId,
+                linkType: 'mitigates',
+                rationale: linkRationale || undefined,
+              })
+            )
+          )
+          quickLinksRisks.forEach((targetId) =>
+            linkPromises.push(
+              linkService.createLink(projectId, {
+                sourceType: 'requirement',
+                sourceId: updatedReq.id,
+                targetType: 'risk',
+                targetId,
+                linkType: 'mitigates',
+                rationale: linkRationale || undefined,
+              })
+            )
+          )
+          quickLinksVerification.forEach((targetId) =>
+            linkPromises.push(
+              linkService.createLink(projectId, {
+                sourceType: 'requirement',
+                sourceId: updatedReq.id,
+                targetType: 'test_case',
+                targetId,
+                linkType: 'verified_by',
+                rationale: linkRationale || undefined,
+              })
+            )
+          )
+          quickLinksDocuments.forEach((targetId) =>
+            linkPromises.push(
+              linkService.createLink(projectId, {
+                sourceType: 'requirement',
+                sourceId: updatedReq.id,
+                targetType: 'document',
+                targetId,
+                linkType: 'documented_in',
+                rationale: linkRationale || undefined,
+              })
+            )
+          )
+          quickLinksChangeRequests.forEach((targetId) =>
+            linkPromises.push(
+              linkService.createLink(projectId, {
+                sourceType: 'requirement',
+                sourceId: updatedReq.id,
+                targetType: 'change_request',
+                targetId,
+                linkType: 'changes_via',
+                rationale: linkRationale || undefined,
+              })
+            )
+          )
+          quickLinksIssues.forEach((targetId) =>
+            linkPromises.push(
+              linkService.createLink(projectId, {
+                sourceType: 'requirement',
+                sourceId: updatedReq.id,
+                targetType: 'issue',
+                targetId,
+                linkType: 'tracked_by',
+                rationale: linkRationale || undefined,
+              })
+            )
+          )
+          quickLinksTasks.forEach((targetId) =>
+            linkPromises.push(
+              linkService.createLink(projectId, {
+                sourceType: 'requirement',
+                sourceId: updatedReq.id,
+                targetType: 'task',
+                targetId,
+                linkType: 'implemented_by',
+                rationale: linkRationale || undefined,
+              })
+            )
+          )
+          quickLinksCertification.forEach((targetId) =>
+            linkPromises.push(
+              linkService.createLink(projectId, {
+                sourceType: 'requirement',
+                sourceId: updatedReq.id,
+                targetType: 'cert_objective',
+                targetId,
+                linkType: 'cert_objective',
+                rationale: linkRationale || undefined,
+              })
+            )
+          )
+          quickLinksCompliance.forEach((targetId) =>
+            linkPromises.push(
+              linkService.createLink(projectId, {
+                sourceType: 'requirement',
+                sourceId: updatedReq.id,
+                targetType: 'compliance_rule',
+                targetId,
+                linkType: 'complies_with',
+                rationale: linkRationale || undefined,
+              })
+            )
+          )
+
+          traceLinks.forEach((link) => {
+            linkPromises.push(
+              linkService.createLink(projectId, {
+                sourceType: 'requirement',
+                sourceId: updatedReq.id,
+                targetType: link.targetType,
+                targetId: link.targetId,
+                linkType: link.linkType,
+                rationale: link.rationale || undefined,
+              })
+            )
+          })
+
+          if (linkPromises.length > 0) {
+            Promise.allSettled(linkPromises).then(() => {
+              queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+              queryClient.invalidateQueries({ queryKey: ['links'] })
+              onClose()
+            })
+            return
+          }
+        }
+
       },
       onError: (error) => {
         console.error('Update mutation error:', error)
@@ -1042,49 +1371,41 @@ export default function EditRequirementModal({
                     />
                   </div>
 
-                  {/* Derived Requirement Flag (DO-178C §6.3.4) */}
-                  <div className={clsx(
-                    'mt-4 border rounded-lg p-4',
-                    isDerivedRequirement
-                      ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-300 dark:border-amber-700'
-                      : 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'
-                  )}>
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={isDerivedRequirement}
-                        onChange={(e) => setIsDerivedRequirement(e.target.checked)}
-                        className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500"
-                      />
+                  {/* KPPs Section (Premium) */}
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-6">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <Activity size={16} className="text-blue-500" />
+                      Key Performance Parameters (KPP)
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle size={14} className="text-amber-600 dark:text-amber-400" />
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">
-                            Derived Requirement
-                          </span>
-                          <span className="text-[10px] uppercase bg-amber-100 dark:bg-amber-800 text-amber-600 dark:text-amber-300 px-1.5 py-0.5 rounded font-bold">
-                            DO-178C §6.3.4
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Check if this requirement is not directly traceable to a parent but is necessary for implementation.
-                        </p>
-                      </div>
-                    </label>
-                    {isDerivedRequirement && (
-                      <div className="mt-3 pl-7">
-                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                          Derivation Rationale <span className="text-red-500">*</span>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 text-left uppercase">
+                          Threshold Value
                         </label>
-                        <textarea
-                          value={derivationRationale}
-                          onChange={(e) => setDerivationRationale(e.target.value)}
-                          placeholder="Explain why this requirement was derived..."
-                          rows={2}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        <input
+                          type="text"
+                          value={thresholdValue}
+                          onChange={(e) => setThresholdValue(e.target.value)}
+                          placeholder="Minimum acceptable"
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         />
                       </div>
-                    )}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 text-left uppercase">
+                          Objective Value
+                        </label>
+                        <input
+                          type="text"
+                          value={objectiveValue}
+                          onChange={(e) => setObjectiveValue(e.target.value)}
+                          placeholder="Desired target"
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-left">
+                      Define quantitative performance targets for verification.
+                    </p>
                   </div>
 
                   {/* Key Performance Parameters (KPP) */}
@@ -1127,97 +1448,633 @@ export default function EditRequirementModal({
               </div>
             )}
 
-            {/* ══════════════ Traceability Tab ══════════════ */}
+            {/* ═══════════════════════════════════════════════════════
+                Traceability Tab — Enterprise (INCOSE / DO-178C / DO-254)
+                Full lifecycle traceability per ISO/IEC/IEEE 29148,
+                INCOSE SE Handbook 4.2.3, and DO-178C §6.3.4
+               ═══════════════════════════════════════════════════════ */}
             {activeTab === 'traceability' && (
-              <div className="space-y-6">
-                {/* Parent Requirement */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                    Parent Requirement
-                  </label>
-                  <select
-                    value={formData.parentId || ''}
-                    onChange={(e) => {
-                      const newParentId = e.target.value === '' ? '' : e.target.value || undefined
-                      handleChange('parentId', newParentId)
-                    }}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  >
-                    <option value="">None (Top-level requirement)</option>
-                    {availableParents.map((req) => (
-                      <option key={req.id} value={req.id}>
-                        {req.requirementId || req.id.substring(0, 8)} - {req.title}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
-                    Determines the structural position in the requirement tree.
-                  </p>
-                </div>
-
-                {/* PBS Component Assignment */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                    PBS Component
-                  </label>
-                  <select
-                    value={formData.componentId || ''}
-                    onChange={(e) => handleChange('componentId', e.target.value || undefined)}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  >
-                    <option value="">Unassigned</option>
-                    {flatComponents.map((comp) => (
-                      <option key={comp.id} value={comp.id}>
-                        {'\u00A0'.repeat(comp.depth * 3)}{comp.name}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
-                    Assign this requirement to a PBS component for allocation traceability.
-                  </p>
-                </div>
-
-                {/* Reference Documents */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                    Reference Documents
-                  </label>
-                  <div className="flex gap-2 mb-2">
-                    <input
-                      type="text"
-                      value={sourceDocumentInput}
-                      onChange={(e) => setSourceDocumentInput(e.target.value)}
-                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      placeholder="e.g. SOW Section 3.1, Architecture Doc v2"
-                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSourceDocument())}
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddSourceDocument}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-                    >
-                      <Plus size={16} />
-                    </button>
+              <div className="space-y-4">
+                {/* ── Traceability Coverage Indicator ── */}
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <BarChart3 size={16} className="text-blue-600 dark:text-blue-400" />
+                    <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+                      Traceability Coverage
+                    </h3>
+                    <span className="text-[10px] uppercase bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-300 px-2 py-0.5 rounded-full font-bold">
+                      INCOSE / DO-178C
+                    </span>
                   </div>
-                  {formData.relatedDocuments && formData.relatedDocuments.length > 0 && (
-                    <div className="flex flex-col gap-2">
-                      {formData.relatedDocuments.map((doc, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
-                          <span className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                            <FileText size={14} className="text-gray-400" />
-                            {doc}
-                          </span>
-                          <button type="button" onClick={() => handleRemoveSourceDocument(doc)} className="text-gray-400 hover:text-red-500">
-                            <X size={14} />
+                  <div className="grid grid-cols-4 gap-2 text-xs">
+                    {[
+                      { label: 'Source / Parent', filled: !!formData.parentId || traceLinks.some(l => l.linkType === 'derives_from') || (formData.relatedDocuments?.length ?? 0) > 0, icon: GitBranch },
+                      { label: 'Verification', filled: quickLinksVerification.length > 0, icon: ClipboardCheck },
+                      { label: 'Allocation', filled: quickLinksPbs.length > 0 || !!formData.componentId, icon: Target },
+                      { label: 'Compliance', filled: quickLinksCompliance.length > 0 || quickLinksCertification.length > 0, icon: Shield },
+                    ].map((badge) => (
+                      <div
+                        key={badge.label}
+                        className={clsx(
+                          'flex items-center gap-1.5 px-2 py-1.5 rounded border',
+                          badge.filled
+                            ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 text-green-700 dark:text-green-400'
+                            : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500'
+                        )}
+                      >
+                        {badge.filled ? <CheckCircle2 size={12} /> : <badge.icon size={12} />}
+                        <span>{badge.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ── Derived Requirement Flag (DO-178C §6.3.4) ── */}
+                <div className={clsx(
+                  'border rounded-lg p-4',
+                  isDerivedRequirement
+                    ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-300 dark:border-amber-700'
+                    : 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'
+                )}>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isDerivedRequirement}
+                      onChange={(e) => setIsDerivedRequirement(e.target.checked)}
+                      className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500"
+                    />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle size={14} className="text-amber-600 dark:text-amber-400" />
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                          Derived Requirement
+                        </span>
+                        <span className="text-[10px] uppercase bg-amber-100 dark:bg-amber-800 text-amber-600 dark:text-amber-300 px-1.5 py-0.5 rounded font-bold">
+                          DO-178C §6.3.4
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Mark if this requirement originates from the design process rather than a higher-level source.
+                        Derived requirements require additional safety assessment per DO-178C.
+                      </p>
+                    </div>
+                  </label>
+                  {isDerivedRequirement && (
+                    <div className="mt-3 ml-7">
+                      <label className="block text-xs font-medium text-amber-800 dark:text-amber-300 mb-1 uppercase">
+                        Derivation Rationale
+                      </label>
+                      <textarea
+                        value={derivationRationale}
+                        onChange={(e) => setDerivationRationale(e.target.value)}
+                        className="w-full px-3 py-2 border border-amber-300 dark:border-amber-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none text-sm"
+                        rows={2}
+                        placeholder="Explain why this requirement was derived and which design decision it supports..."
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* ═══════ Section 1: Origin & Upward Traceability ═══════ */}
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setTraceSection(prev => ({ ...prev, origin: !prev.origin }))}
+                    className="flex items-center gap-2 w-full text-left px-4 py-3 bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    {traceSection.origin ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <GitBranch size={16} className="text-blue-500" />
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Origin & Upward Traceability</span>
+                    <span className="text-[10px] text-gray-400 font-normal ml-auto uppercase">INCOSE 4.2.3</span>
+                    {((formData.parentId ? 1 : 0) + (formData.relatedDocuments?.length || 0) + quickLinksDocuments.length) > 0 && (
+                      <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 rounded-full">
+                        {(formData.parentId ? 1 : 0) + (formData.relatedDocuments?.length || 0) + quickLinksDocuments.length}
+                      </span>
+                    )}
+                  </button>
+                  {traceSection.origin && (
+                    <div className="p-4 space-y-4 border-t border-gray-200 dark:border-gray-700">
+                      {/* Reference Documents */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                          Reference Documents
+                        </label>
+                        <div className="flex gap-2 mb-2">
+                          <input
+                            type="text"
+                            value={sourceDocumentInput}
+                            onChange={(e) => setSourceDocumentInput(e.target.value)}
+                            className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            placeholder="e.g. SOW Section 3.1, Architecture Doc v2"
+                            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSourceDocument())}
+                          />
+                          <button
+                            type="button"
+                            onClick={handleAddSourceDocument}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                          >
+                            <Plus size={16} />
                           </button>
                         </div>
-                      ))}
+                        {formData.relatedDocuments && formData.relatedDocuments.length > 0 && (
+                          <div className="flex flex-col gap-2">
+                            {formData.relatedDocuments.map((doc, idx) => (
+                              <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
+                                <span className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                                  <FileText size={14} className="text-gray-400" />
+                                  {doc}
+                                </span>
+                                <button type="button" onClick={() => handleRemoveSourceDocument(doc)} className="text-gray-400 hover:text-red-500">
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Linked Documents (from Document module) */}
+                      {LINKAGE_V1 && (
+                        <QuickLinkSelector
+                          label="Linked Documents (documented_in)"
+                          projectId={projectId}
+                          adapter={documentAdapter}
+                          selectedIds={quickLinksDocuments}
+                          selectedLabels={quickLinksLabels}
+                          onToggle={(id, label) => {
+                            setQuickLinksDocuments(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+                            setQuickLinksLabels(prev => { const next = { ...prev }; if (quickLinksDocuments.includes(id)) delete next[id]; else next[id] = label; return next })
+                          }}
+                        />
+                      )}
+
+                      {/* Parent Requirement / Decomposition */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                          Decomposition / Parent (Hierarchy)
+                        </label>
+                        <select
+                          value={formData.parentId || ''}
+                          onChange={(e) => handleChange('parentId', e.target.value || undefined)}
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        >
+                          <option value="">None (Top-level requirement)</option>
+                          {availableParents.map((req) => (
+                            <option key={req.id} value={req.id}>
+                              {req.requirementId || req.id.substring(0, 8)} - {req.title}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          Determines the structural position in the requirement tree.
+                        </p>
+                      </div>
+
+                      {/* Link Rationale */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                          Link Rationale <span className="text-gray-400 font-normal ml-1">(Optional)</span>
+                        </label>
+                        <textarea
+                          value={linkRationale}
+                          onChange={(e) => setLinkRationale(e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                          rows={2}
+                          placeholder="Explain the rationale for these parent/component allocations..."
+                        />
+                      </div>
+
+
+                    </div>
+                  )}
+                </div>
+
+                {/* ═══════ Section 2: Requirement Relationships (Lateral) ═══════ */}
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setTraceSection(prev => ({ ...prev, relationships: !prev.relationships }))}
+                    className="flex items-center gap-2 w-full text-left px-4 py-3 bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    {traceSection.relationships ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <LinkIcon size={16} className="text-purple-500" />
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Requirement Relationships</span>
+                    <span className="text-[10px] text-gray-400 font-normal ml-auto uppercase">ISO 29148</span>
+                    {traceLinks.length > 0 && (
+                      <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-300 rounded-full">
+                        {traceLinks.length}
+                      </span>
+                    )}
+                  </button>
+                  {traceSection.relationships && (
+                    <div className="p-4 space-y-4 border-t border-gray-200 dark:border-gray-700">
+                      {/* Step 1: Choose Relationship Type */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase">
+                          Relationship Type
+                        </label>
+                        <select
+                          value={selectedRelationshipType}
+                          onChange={(e) => setSelectedRelationshipType(e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                        >
+                          <optgroup label="Derivation & Refinement">
+                            <option value="derives_from">Derives From</option>
+                            <option value="derived_to">Derived To</option>
+                            <option value="refines">Refines</option>
+                            <option value="refined_by">Refined By</option>
+                          </optgroup>
+                          <optgroup label="Dependency & Constraint">
+                            <option value="depends_on">Depends On</option>
+                            <option value="required_by">Required By</option>
+                            <option value="constrains">Constrains</option>
+                            <option value="constrained_by">Constrained By</option>
+                          </optgroup>
+                          <optgroup label="Logic & Support">
+                            <option value="conflicts_with">Conflicts With</option>
+                            <option value="supports">Supports</option>
+                            <option value="supported_by">Supported By</option>
+                            <option value="supersedes">Supersedes</option>
+                            <option value="superseded_by">Superseded By</option>
+                          </optgroup>
+                        </select>
+                      </div>
+
+                      {/* Step 2: Rationale (Optional) */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase">
+                          Relationship Rationale <span className="text-gray-400 normal-case">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={relationshipRationale}
+                          onChange={(e) => setRelationshipRationale(e.target.value)}
+                          placeholder="Why is this relationship established?"
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                        />
+                      </div>
+
+                      {/* Step 3: Search & Auto-Add Target Requirements */}
+                      <QuickLinkSelector
+                        label={`Target Requirements (${selectedRelationshipType.replace(/_/g, ' ')})`}
+                        projectId={projectId}
+                        adapter={requirementAdapter}
+                        selectedIds={[]} // Don't show tags, add directly to list
+                        selectedLabels={{}}
+                        onToggle={(id, label) => {
+                          // Check if already linked
+                          if (traceLinks.some(l => l.targetId === id && l.linkType === selectedRelationshipType)) {
+                            return
+                          }
+                          // Add directly
+                          const newLink = {
+                            targetId: id,
+                            targetType: 'requirement',
+                            linkType: selectedRelationshipType,
+                            rationale: relationshipRationale,
+                            targetDisplayId: label || id.slice(0, 8),
+                          }
+                          setTraceLinks(prev => [...prev, newLink])
+                          // Optional: Clear rationale after add? Keeping it might be useful for batch adding with same rationale.
+                        }}
+                      />
+                      {traceLinks.length > 0 && (
+                        <div className="space-y-3 mt-4">
+                          <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                            Pending Relationships ({traceLinks.length})
+                          </h4>
+                          {traceLinks.map((link, idx) => (
+                            <div key={idx} className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border border-purple-100 dark:border-purple-900/30 shadow-sm hover:border-purple-300 dark:hover:border-purple-700 transition-colors group">
+                              <div className="flex items-center gap-3 flex-1 overflow-hidden">
+                                {/* Source (Implicit) */}
+                                <div className="flex flex-col items-center min-w-[60px] opacity-70">
+                                  <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-1">
+                                    <FileText size={14} className="text-gray-500" />
+                                  </div>
+                                  <span className="text-[10px] text-gray-500 font-medium">This Req</span>
+                                </div>
+
+                                {/* Connection Line */}
+                                <div className="flex-1 flex items-center justify-center relative px-2">
+                                  <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                                    <div className="w-full border-t border-purple-200 dark:border-purple-800"></div>
+                                  </div>
+                                  <div className="relative flex justify-center">
+                                    <span className="bg-white dark:bg-gray-800 px-2 text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-tight">
+                                      {link.linkType.replace(/_/g, ' ')}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Target */}
+                                <div className="flex flex-col min-w-[120px] max-w-[200px]">
+                                  <div className="flex items-center gap-1.5 mb-0.5">
+                                    <LinkIcon size={12} className="text-purple-500" />
+                                    <span className="text-xs font-bold text-gray-900 dark:text-white truncate" title={link.targetDisplayId}>
+                                      {link.targetDisplayId}
+                                    </span>
+                                  </div>
+                                  {link.rationale ? (
+                                    <span className="text-[10px] text-gray-500 dark:text-gray-400 italic truncate" title={link.rationale}>
+                                      "{link.rationale}"
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-gray-400 dark:text-gray-600">No rationale</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveTraceLink(link.targetId, link.linkType)}
+                                className="ml-3 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                                title="Remove link"
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-500 dark:text-gray-400 text-left mt-2">
+                        Define formal semantic links to other requirements for full lifecycle traceability.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* ═══════ Section 3: Allocation & Implementation ═══════ */}
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setTraceSection(prev => ({ ...prev, allocation: !prev.allocation }))}
+                    className="flex items-center gap-2 w-full text-left px-4 py-3 bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    {traceSection.allocation ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <Target size={16} className="text-green-500" />
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Allocation & Implementation</span>
+                    <span className="text-[10px] text-gray-400 font-normal ml-auto uppercase">INCOSE 4.2.5</span>
+                    {(quickLinksPbs.length + quickLinksInterfaces.length + quickLinksTasks.length + quickLinksIssues.length + (formData.componentId ? 1 : 0)) > 0 && (
+                      <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300 rounded-full">
+                        {quickLinksPbs.length + quickLinksInterfaces.length + quickLinksTasks.length + quickLinksIssues.length + (formData.componentId ? 1 : 0)}
+                      </span>
+                    )}
+                  </button>
+                  {traceSection.allocation && (
+                    <div className="p-4 space-y-4 border-t border-gray-200 dark:border-gray-700">
+                      {/* PBS Component Assignment */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                          PBS Component
+                        </label>
+                        <select
+                          value={formData.componentId || ''}
+                          onChange={(e) => handleChange('componentId', e.target.value || undefined)}
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        >
+                          <option value="">Unassigned</option>
+                          {flatComponents.map((comp) => (
+                            <option key={comp.id} value={comp.id}>
+                              {'\u00A0'.repeat(comp.depth * 3)}{comp.name}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
+                          Assign this requirement to a PBS component for allocation traceability.
+                        </p>
+                      </div>
+
+                      {/* PBS Quick Links */}
+                      {LINKAGE_V1 && (
+                        <QuickLinkSelector
+                          label="Allocate to PBS (allocated_to)"
+                          projectId={projectId}
+                          adapter={pbsAdapter}
+                          selectedIds={quickLinksPbs}
+                          selectedLabels={quickLinksLabels}
+                          onToggle={(id, label) => {
+                            setQuickLinksPbs(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+                            setQuickLinksLabels(prev => { const next = { ...prev }; if (quickLinksPbs.includes(id)) delete next[id]; else next[id] = label; return next })
+                          }}
+                        />
+                      )}
+
+                      {/* Interfaces */}
+                      {LINKAGE_V1 && (
+                        <QuickLinkSelector
+                          label="Related Interfaces (related_interface)"
+                          projectId={projectId}
+                          adapter={interfaceAdapter}
+                          selectedIds={quickLinksInterfaces}
+                          selectedLabels={quickLinksLabels}
+                          onToggle={(id, label) => {
+                            setQuickLinksInterfaces(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+                            setQuickLinksLabels(prev => { const next = { ...prev }; if (quickLinksInterfaces.includes(id)) delete next[id]; else next[id] = label; return next })
+                          }}
+                        />
+                      )}
+
+                      {/* Tasks / Work Items */}
+                      {LINKAGE_V1 && (
+                        <QuickLinkSelector
+                          label="Tasks / Work Items (implemented_by)"
+                          projectId={projectId}
+                          adapter={taskAdapter}
+                          selectedIds={quickLinksTasks}
+                          selectedLabels={quickLinksLabels}
+                          onToggle={(id, label) => {
+                            setQuickLinksTasks(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+                            setQuickLinksLabels(prev => { const next = { ...prev }; if (quickLinksTasks.includes(id)) delete next[id]; else next[id] = label; return next })
+                          }}
+                        />
+                      )}
+
+                      {/* Issues / Problem Reports */}
+                      {LINKAGE_V1 && (
+                        <QuickLinkSelector
+                          label="Issues / Problem Reports (tracked_by)"
+                          projectId={projectId}
+                          adapter={issueAdapter}
+                          selectedIds={quickLinksIssues}
+                          selectedLabels={quickLinksLabels}
+                          onToggle={(id, label) => {
+                            setQuickLinksIssues(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+                            setQuickLinksLabels(prev => { const next = { ...prev }; if (quickLinksIssues.includes(id)) delete next[id]; else next[id] = label; return next })
+                          }}
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* ═══════ Section 4: Verification & Validation (DO-178C Table A-7) ═══════ */}
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => setTraceSection(prev => ({ ...prev, verification: !prev.verification }))}
+                    className="flex items-center gap-2 w-full text-left px-4 py-3 bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    {traceSection.verification ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <ClipboardCheck size={16} className="text-teal-500" />
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Verification & Validation</span>
+                    <span className="text-[10px] text-gray-400 font-normal ml-auto uppercase">DO-178C A-7</span>
+                    {quickLinksVerification.length > 0 && (
+                      <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-teal-100 dark:bg-teal-900 text-teal-600 dark:text-teal-300 rounded-full">
+                        {quickLinksVerification.length}
+                      </span>
+                    )}
+                  </button>
+                  {traceSection.verification && (
+                    <div className="p-4 space-y-4 border-t border-gray-200 dark:border-gray-700">
+                      <div className="flex items-start gap-2 p-3 bg-teal-50 dark:bg-teal-900/10 border border-teal-200 dark:border-teal-800 rounded-lg">
+                        <Info size={14} className="text-teal-600 dark:text-teal-400 mt-0.5 shrink-0" />
+                        <p className="text-xs text-teal-700 dark:text-teal-300">
+                          DO-178C Table A-7 requires bidirectional traceability between requirements and verification activities.
+                          Link test plans and test cases to establish forward traceability for coverage analysis.
+                        </p>
+                      </div>
+
+                      {LINKAGE_V1 ? (
+                        <QuickLinkSelector
+                          label="Test Plans & Test Cases (verified_by)"
+                          projectId={projectId}
+                          adapter={verificationAdapter}
+                          selectedIds={quickLinksVerification}
+                          selectedLabels={quickLinksLabels}
+                          onToggle={(id, label) => {
+                            setQuickLinksVerification(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+                            setQuickLinksLabels(prev => { const next = { ...prev }; if (quickLinksVerification.includes(id)) delete next[id]; else next[id] = label; return next })
+                          }}
+                        />
+                      ) : (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+                          Enable the Linkage feature flag to link verification artifacts.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* ═══════ Section 5: Safety & Risk ═══════ */}
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setTraceSection(prev => ({ ...prev, safety: !prev.safety }))}
+                    className="flex items-center gap-2 w-full text-left px-4 py-3 bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    {traceSection.safety ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <Shield size={16} className="text-red-500" />
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Safety & Risk</span>
+                    <span className="text-[10px] text-gray-400 font-normal ml-auto uppercase">ARP4754A / ARP4761</span>
+                    {(quickLinksHazards.length + quickLinksRisks.length) > 0 && (
+                      <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 rounded-full">
+                        {quickLinksHazards.length + quickLinksRisks.length}
+                      </span>
+                    )}
+                  </button>
+                  {traceSection.safety && (
+                    <div className="p-4 space-y-4 border-t border-gray-200 dark:border-gray-700">
+                      {LINKAGE_V1 ? (
+                        <>
+                          <QuickLinkSelector
+                            label="Hazards (mitigates)"
+                            projectId={projectId}
+                            adapter={hazardAdapter}
+                            selectedIds={quickLinksHazards}
+                            selectedLabels={quickLinksLabels}
+                            onToggle={(id, label) => {
+                              setQuickLinksHazards(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+                              setQuickLinksLabels(prev => { const next = { ...prev }; if (quickLinksHazards.includes(id)) delete next[id]; else next[id] = label; return next })
+                            }}
+                          />
+                          <QuickLinkSelector
+                            label="Risks (mitigates)"
+                            projectId={projectId}
+                            adapter={riskAdapter}
+                            selectedIds={quickLinksRisks}
+                            selectedLabels={quickLinksLabels}
+                            onToggle={(id, label) => {
+                              setQuickLinksRisks(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+                              setQuickLinksLabels(prev => { const next = { ...prev }; if (quickLinksRisks.includes(id)) delete next[id]; else next[id] = label; return next })
+                            }}
+                          />
+                        </>
+                      ) : (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+                          Enable the Linkage feature flag to link safety and risk artifacts.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* ═══════ Section 6: Certification & Change Management ═══════ */}
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setTraceSection(prev => ({ ...prev, certification: !prev.certification }))}
+                    className="flex items-center gap-2 w-full text-left px-4 py-3 bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    {traceSection.certification ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <FileCheck size={16} className="text-indigo-500" />
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Certification, Compliance & Change Mgmt</span>
+                    <span className="text-[10px] text-gray-400 font-normal ml-auto uppercase">DO-178C / DO-254</span>
+                    {(quickLinksCertification.length + quickLinksCompliance.length + quickLinksChangeRequests.length) > 0 && (
+                      <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 rounded-full">
+                        {quickLinksCertification.length + quickLinksCompliance.length + quickLinksChangeRequests.length}
+                      </span>
+                    )}
+                  </button>
+                  {traceSection.certification && (
+                    <div className="p-4 space-y-4 border-t border-gray-200 dark:border-gray-700">
+                      {LINKAGE_V1 ? (
+                        <>
+                          <QuickLinkSelector
+                            label="Certification Objectives (cert_objective)"
+                            projectId={projectId}
+                            adapter={certificationAdapter}
+                            selectedIds={quickLinksCertification}
+                            selectedLabels={quickLinksLabels}
+                            onToggle={(id, label) => {
+                              setQuickLinksCertification(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+                              setQuickLinksLabels(prev => { const next = { ...prev }; if (quickLinksCertification.includes(id)) delete next[id]; else next[id] = label; return next })
+                            }}
+                          />
+                          <QuickLinkSelector
+                            label="Change Requests (changes_via)"
+                            projectId={projectId}
+                            adapter={changeRequestAdapter}
+                            selectedIds={quickLinksChangeRequests}
+                            selectedLabels={quickLinksLabels}
+                            onToggle={(id, label) => {
+                              setQuickLinksChangeRequests(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+                              setQuickLinksLabels(prev => { const next = { ...prev }; if (quickLinksChangeRequests.includes(id)) delete next[id]; else next[id] = label; return next })
+                            }}
+                          />
+                          <QuickLinkSelector
+                            label="Compliance Rules / Standards (complies_with)"
+                            projectId={projectId}
+                            adapter={complianceAdapter}
+                            selectedIds={quickLinksCompliance}
+                            selectedLabels={quickLinksLabels}
+                            onToggle={(id, label) => {
+                              setQuickLinksCompliance(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+                              setQuickLinksLabels(prev => { const next = { ...prev }; if (quickLinksCompliance.includes(id)) delete next[id]; else next[id] = label; return next })
+                            }}
+                          />
+                        </>
+                      ) : (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+                          Enable the Linkage feature flag to link certification, compliance, and change request artifacts.
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
             )}
 
+            
             {/* ══════════════ Properties Tab ══════════════ */}
             {activeTab === 'properties' && (
               <div className="space-y-6">

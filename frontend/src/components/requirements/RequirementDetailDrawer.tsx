@@ -786,23 +786,163 @@ export default function RequirementDetailDrawer({
           <div className="overflow-y-auto flex-1 px-4 py-4">
             {activeTab === 'overview' && (
               <div className="space-y-6">
-                {/* Lifecycle Flow */}
-                {displayRequirement.lifecycleId && (() => {
-                  const lifecycle = lifecycles.find(l => l.id === displayRequirement.lifecycleId)
+                {/* ID and Title */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">ID</h3>
+                    <p className="text-sm text-gray-900 dark:text-white font-mono">
+                      {displayRequirement.requirementId || displayRequirement.id.substring(0, 8)}
+                    </p>
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Title</h3>
+                    <p className="text-sm text-gray-900 dark:text-white">{displayRequirement.title}</p>
+                  </div>
+                </div>
 
-                  if (lifecycle && lifecycle.steps && lifecycle.steps.length > 0) {
-                    return (
-                      <div className="mb-6">
-                        <RequirementLifecycleVisual
-                          steps={lifecycle.steps}
-                          statuses={statuses}
-                          currentStatusId={displayRequirement.statusId}
-                        />
-                      </div>
-                    )
-                  }
-                  return null
-                })()}
+                {/* Description */}
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Description</h3>
+                  <RichTextEditor
+                    content={displayRequirement.description || ''}
+                    onChange={() => { }}
+                    editable={false}
+                    className="max-w-none"
+                  />
+                </div>
+
+                {/* Lifecycle Model, Priority, Status */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Lifecycle Model</h3>
+                    <p className="text-sm text-gray-900 dark:text-white">
+                      {displayRequirement.lifecycleId
+                        ? lifecycles.find(l => l.id === displayRequirement.lifecycleId)?.name || 'Unknown'
+                        : 'None'}
+                    </p>
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Priority</h3>
+                    <span className={clsx('inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize', getPriorityColor(displayRequirement.priority))}>
+                      {displayRequirement.priority}
+                    </span>
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Status</h3>
+                    <p className="text-sm text-gray-900 dark:text-white">{displayRequirement.status || '—'}</p>
+                  </div>
+                </div>
+
+                {/* Owner and Source */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Owner</h3>
+                    <p className="text-sm text-gray-900 dark:text-white">{displayRequirement.owner || '—'}</p>
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Source/Origin</h3>
+                    <p className="text-sm text-gray-900 dark:text-white">{displayRequirement.source || '—'}</p>
+                  </div>
+                </div>
+
+                {/* Acceptance Criteria */}
+                {displayRequirement.acceptanceCriteria && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Acceptance Criteria</h3>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                      {displayRequirement.acceptanceCriteria}
+                    </p>
+                  </div>
+                )}
+
+                {/* Means of Compliance and Verification Method */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Means of Compliance (MoC)</h3>
+                    <p className="text-sm text-gray-900 dark:text-white">
+                      {displayRequirement.linkedMocCode || (displayRequirement.moc as any)?.code || '—'}
+                      {(displayRequirement.moc as any)?.name && ` - ${(displayRequirement.moc as any).name}`}
+                    </p>
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Verification Method</h3>
+                    <p className="text-sm text-gray-900 dark:text-white">{displayRequirement.verificationMethod || '—'}</p>
+                  </div>
+                </div>
+
+                {/* Classification Section */}
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">Classification</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Requirement Type</h3>
+                      <p className="text-sm text-gray-900 dark:text-white capitalize">
+                        {displayRequirement.requirementType?.split('_').join(' ') || '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Requirement Level</h3>
+                      <p className="text-sm text-gray-900 dark:text-white capitalize">{displayRequirement.requirementLevel || '—'}</p>
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Risk Level</h3>
+                      <span className={clsx('inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize',
+                        displayRequirement.risk === 'critical' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
+                          displayRequirement.risk === 'high' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400' :
+                            displayRequirement.risk === 'medium' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400' :
+                              'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400')}
+                      >
+                        {displayRequirement.risk || '—'}
+                      </span>
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Complexity</h3>
+                      <p className="text-sm text-gray-900 dark:text-white capitalize">{displayRequirement.complexity || '—'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Rationale and Assumptions */}
+                {displayRequirement.rationale && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Rationale</h3>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
+                      {displayRequirement.rationale}
+                    </p>
+                  </div>
+                )}
+                {displayRequirement.assumptions && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Assumptions</h3>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
+                      {displayRequirement.assumptions}
+                    </p>
+                  </div>
+                )}
+
+                {/* KPP Section */}
+                {(displayRequirement.thresholdValue || displayRequirement.objectiveValue) && (
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                      <Zap size={14} className="text-blue-500" />
+                      Key Performance Parameters
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      {displayRequirement.thresholdValue && (
+                        <div className="p-3 bg-amber-50 dark:bg-amber-900/10 rounded-lg border border-amber-200 dark:border-amber-800">
+                          <h4 className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-1 uppercase">Threshold</h4>
+                          <p className="text-sm text-gray-900 dark:text-white font-medium">{displayRequirement.thresholdValue}</p>
+                        </div>
+                      )}
+                      {displayRequirement.objectiveValue && (
+                        <div className="p-3 bg-green-50 dark:bg-green-900/10 rounded-lg border border-green-200 dark:border-green-800">
+                          <h4 className="text-xs font-medium text-green-700 dark:text-green-400 mb-1 uppercase">Objective</h4>
+                          <p className="text-sm text-gray-900 dark:text-white font-medium">{displayRequirement.objectiveValue}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Tags */}
                 {displayRequirement.tags && displayRequirement.tags.length > 0 && (
@@ -823,17 +963,6 @@ export default function RequirementDetailDrawer({
                     </div>
                   </div>
                 )}
-
-                {/* Description */}
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Description</h3>
-                  <RichTextEditor
-                    content={displayRequirement.description || ''}
-                    onChange={() => { }}
-                    editable={false}
-                    className="max-w-none"
-                  />
-                </div>
 
                 {/* Acceptance Criteria */}
                 {displayRequirement.acceptanceCriteria && (

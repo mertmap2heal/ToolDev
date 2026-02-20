@@ -73,11 +73,11 @@ export type LinkStatus = 'active' | 'suspect' | 'removed'
 export interface Link {
   id: string
   projectId: string
-  sourceType: ArtifactType
+  sourceType: EntityType
   sourceId: string
-  targetType: ArtifactType
+  targetType: EntityType
   targetId: string
-  linkType: TraceLinkType
+  linkType: LinkType
   status: 'active' | 'suspect'
   rationale?: string
   createdAt: string

@@ -615,6 +615,7 @@ export interface UpdateRequirementDto {
   complexity?: ComplexityLevel
   rationale?: string
   assumptions?: string
+  linkedMocCode?: string
 
   // Premium / Extended Fields
   thresholdValue?: string
