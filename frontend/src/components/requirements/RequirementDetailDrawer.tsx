@@ -555,6 +555,11 @@ export default function RequirementDetailDrawer({
   })
   const linkedChangeRequests = changeRequests.filter((cr) => {
     if (!displayRequirement) return false
+
+    // Check actual requirement links first
+    const hasDirectLink = cr.requirementLinks?.some(link => link.requirement.id === displayRequirement.id)
+    if (hasDirectLink) return true
+
     return cr.title.toLowerCase().includes(displayRequirement.id.toLowerCase()) ||
       cr.description.toLowerCase().includes(displayRequirement.id.toLowerCase())
   })

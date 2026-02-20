@@ -598,6 +598,10 @@ export default function RequirementsPage() {
     // Find change requests linked to this requirement
     const linkedChangeRequests = changeRequests
       .filter((cr) => {
+        // Check actual requirement links first
+        const hasDirectLink = cr.requirementLinks?.some(link => link.requirement.id === requirementId)
+        if (hasDirectLink) return true
+
         // This would need to be enhanced with actual traceability links
         return cr.title.toLowerCase().includes(requirementId.toLowerCase()) ||
           cr.description.toLowerCase().includes(requirementId.toLowerCase())

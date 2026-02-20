@@ -30,6 +30,7 @@ import PBSValidation from './PBSValidation'
 import RenameModal from './RenameModal'
 import ImportModal from './ImportModal'
 import PBSPrintView from './PBSPrintView'
+import PBSToolsMenu from './PBSToolsMenu'
 
 const SAVE_DEBOUNCE_MS = 600
 
@@ -259,11 +260,11 @@ export default function PBSPage() {
 
   const undo = useCallback(() => {
     if (history.past.length === 0) return
-    
+
     isUndoRedoRef.current = true
     const newPast = history.past.slice(0, -1)
     const previousNodes = history.past[history.past.length - 1]
-    
+
     setHistory({
       past: newPast,
       future: [nodes, ...history.future],
@@ -274,11 +275,11 @@ export default function PBSPage() {
 
   const redo = useCallback(() => {
     if (history.future.length === 0) return
-    
+
     isUndoRedoRef.current = true
     const newFuture = history.future.slice(1)
     const nextNodes = history.future[0]
-    
+
     setHistory({
       past: [...history.past, nodes],
       future: newFuture,
@@ -544,39 +545,14 @@ export default function PBSPage() {
               </>
             )}
           </div>
-          <button
-            type="button"
-            onClick={exportCSV}
-            className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-          >
-            <Download size={16} />
-            Export CSV
-          </button>
-          <button
-            type="button"
-            onClick={exportJSON}
-            className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-          >
-            <Download size={16} />
-            Export JSON
-          </button>
-          <button
-            type="button"
-            onClick={() => setImportModalOpen(true)}
-            className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
-          >
-            <Upload size={16} />
-            Import
-          </button>
-          <button
-            type="button"
-            onClick={() => setPrintViewOpen(true)}
-            disabled={nodes.length === 0}
-            className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Printer size={16} />
-            Print
-          </button>
+
+          <PBSToolsMenu
+            onExportCSV={exportCSV}
+            onExportJSON={exportJSON}
+            onImport={() => setImportModalOpen(true)}
+            onPrint={() => setPrintViewOpen(true)}
+            hasNodes={nodes.length > 0}
+          />
         </div>
       </div>
 
