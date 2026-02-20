@@ -16,6 +16,7 @@ import * as customOptionController from '../controllers/verification/customOptio
 import * as testResultController from '../controllers/verification/testResult.controller'
 import * as customSectionController from '../controllers/verification/customSection.controller'
 import * as templateController from '../controllers/verification/template.controller'
+import * as runIngestionController from '../controllers/verificationV2/runIngestion.controller'
 import { reportService } from '../services/verification/report.service'
 import { exportTemplateService } from '../services/verification/exportTemplate.service'
 import { Response } from 'express'
@@ -157,6 +158,10 @@ router.delete('/test-results/:projectId/:id', testResultController.deleteTestRes
 router.post('/test-results/:projectId/:id/link', testResultController.linkTestResult)
 router.post('/test-results/:projectId/:id/unlink', testResultController.unlinkTestResult)
 router.get('/test-results/:projectId/:id/download', testResultController.downloadTestResult)
+
+// N.1) Test Runs (Automated Ingestion)
+router.post('/runs/ingest/:projectId', runIngestionController.ingestAutomatedResult)
+router.get('/test-runs/:projectId', runIngestionController.getTestRuns)
 
 // Reports
 router.get('/reports/test-case/:projectId/:id', async (req: AuthRequest, res: Response) => {

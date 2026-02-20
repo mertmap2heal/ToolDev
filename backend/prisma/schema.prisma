@@ -140,6 +140,9 @@ model Project {
   verTestCases           VerTestCase[]
   verTestPlans           VerTestPlan[]
   verTestRuns            VerTestRun[]
+  verTestProcedures      VerTestProcedure[]
+  verTestEnvironments    VerTestEnvironment[]
+  verTestLogs            VerTestLog[]
   verEvidence            VerEvidence[]
   verReviews             VerReview[]
   verNonconformities     VerNonconformity[]
@@ -2000,6 +2003,57 @@ model VerTestSetup {
   @@index([status])
 }
 
+// Test Procedure (Automation Script)
+model VerTestProcedure {
+  id              String   @id @default(uuid())
+  projectId       String
+  testCaseId      String   @unique
+  scriptContent   String?  @db.Text
+  scriptVersion   String   @default("1.0")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testCase        VerTestCase  @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+// Test Environment (HIL Bench / Software Build context)
+model VerTestEnvironment {
+  id                 String   @id @default(uuid())
+  projectId          String
+  name               String
+  description        String?
+  hardwareVersion    String?
+  softwareBuild      String?
+  hilBenchConfig     Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  project            Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testRuns           VerTestRun[]
+
+  @@index([projectId])
+}
+
+// Test Log (Raw Output)
+model VerTestLog {
+  id                 String   @id @default(uuid())
+  testRunId          String   @unique
+  projectId          String
+  stdoutText         String?  @db.Text
+  jsonResult         Json?
+  storageRef         String?  
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  project            Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testRun            VerTestRun   @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
 // Test Case Definitions
 model VerTestCase {
   id               String   @id @default(uuid())
@@ -2016,6 +2070,8 @@ model VerTestCase {
   ownerUserId      String?
   status           String   @default("DRAFT") // DRAFT, REVIEWED, APPROVED, READY
   version          String   @default("1.0")
+  isSuspect        Boolean  @default(false)
+  invalidatedAt    DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -2027,6 +2083,7 @@ model VerTestCase {
   runResults     VerTestRunResult[]
   reverifyTasks  VerReverifyTask[]
   customSections VerTestCaseCustomSection[]
+  procedure      VerTestProcedure?
 
   @@unique([projectId, key])
   @@index([projectId])
@@ -2105,14 +2162,18 @@ model VerTestRun {
   startedAt        DateTime?
   endedAt          DateTime?
   status           String    @default("PLANNED") // PLANNED, IN_PROGRESS, COMPLETED, ABORTED
+  environmentId    String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  project  Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  testPlan VerTestPlan?       @relation(fields: [testPlanId], references: [id], onDelete: SetNull)
-  results  VerTestRunResult[]
+  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testPlan    VerTestPlan?       @relation(fields: [testPlanId], references: [id], onDelete: SetNull)
+  environment VerTestEnvironment? @relation(fields: [environmentId], references: [id], onDelete: SetNull)
+  results     VerTestRunResult[]
+  testLog     VerTestLog?
 
   @@index([projectId])
+  @@index([environmentId])
   @@index([testPlanId])
   @@index([status])
 }
@@ -2128,6 +2189,8 @@ model VerTestRunResult {
   actualResults           Json? // JSON or text
   notes                   String?   @db.Text
   executedAt              DateTime?
+  isSuspect               Boolean   @default(false)
+  invalidatedAt           DateTime?
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 

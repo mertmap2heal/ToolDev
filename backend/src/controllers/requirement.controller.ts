@@ -1286,6 +1286,28 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
         },
         data: { isSuspect: true },
       })
+
+      // DO-178C Impact Analysis - Mark linked VerTestCases as suspect
+      const testCaseLinks = await prisma.traceLink.findMany({
+        where: {
+          projectId,
+          targetId: requirement.id,
+          targetType: 'requirement',
+          sourceType: 'test_case'
+        },
+        select: { sourceId: true }
+      })
+
+      if (testCaseLinks.length > 0) {
+        const testCaseIds = testCaseLinks.map(l => l.sourceId)
+        await prisma.verTestCase.updateMany({
+          where: { id: { in: testCaseIds }, projectId },
+          data: {
+            isSuspect: true,
+            invalidatedAt: new Date()
+          }
+        })
+      }
     }
 
     await linkageAuditService.log({

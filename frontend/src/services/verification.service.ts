@@ -130,5 +130,6 @@ export const verificationService = {
   removeCustomOption: (projectId: string, id: string) => apiClient.delete(`/verification/custom-options/${projectId}/${id}`),
   createTestPlan: (projectId: string, data: unknown) => apiClient.post(`/verification/test-plans/${projectId}`, data),
   createTestResult: (projectId: string, data: unknown) => apiClient.post(`/verification/test-results/${projectId}`, data),
+  getTestRuns: (projectId: string) => apiClient.get(`/verification/test-runs/${projectId}`),
   exportWithTemplate: (projectId: string, data: unknown) => apiClient.post(`/verification/export-with-template/${projectId}`, data),
 }

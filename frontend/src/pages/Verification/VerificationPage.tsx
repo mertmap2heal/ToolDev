@@ -6,6 +6,7 @@ import {
   X,
   Plus,
   AlertCircle,
+  AlertTriangle,
   RefreshCw,
   Upload,
   Edit2,
@@ -927,7 +928,15 @@ export default function VerificationPage() {
                       )}
                       {caseColumns.has('title') && (
                         <td className="px-4 py-3">
-                          <div className="font-medium text-gray-900 dark:text-white">{case_.title}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-900 dark:text-white">{case_.title}</span>
+                            {case_.isSuspect && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800" title="DO-178C Impact Analysis: Upstream requirement changed. Verification is suspect.">
+                                <AlertTriangle size={10} />
+                                Suspect
+                              </span>
+                            )}
+                          </div>
                           {caseColumns.has('objective') && case_.objective && (
                             <div className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-1">{case_.objective}</div>
                           )}
