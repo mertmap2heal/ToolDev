@@ -91,7 +91,7 @@ app.use(async (err: Error, _req: express.Request, res: express.Response, _next: 
 if (process.env.NODE_ENV !== 'test') {
   console.log('Server: binding to port', PORT, '...')
   // Start real-time server
-  const io = setupRealtime(server)
+  const io = setupRealtime(server, prisma)
   server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`)
 

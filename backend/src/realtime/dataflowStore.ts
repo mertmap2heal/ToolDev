@@ -3,12 +3,17 @@
 import { SchemaParser } from '../services/schemaParser.js';
 import path from 'path';
 
-export type DataView = 'INFRA' | 'APP' | 'TRACE' | 'DATA' | 'SCHEMA';
+export type FlowView = 'INFRA' | 'APP' | 'TRACE' | 'DATA' | 'SCHEMA';
 
 export interface DataFlowState {
   nodes: any[];
   edges: any[];
 }
+
+// Global Initialization from Core Schema
+const prismaPath = path.join(process.cwd(), 'prisma', 'schema.prisma');
+const prismaModels = SchemaParser.parseSchema(prismaPath);
+const schemaState: DataFlowState = SchemaParser.generateFlowData(prismaModels);
 
 const infraState: DataFlowState = {
   nodes: [
@@ -53,28 +58,27 @@ const traceState: DataFlowState = {
 };
 
 const dataState: DataFlowState = {
-  nodes: [
-    { id: 'db-user', type: 'custom', position: { x: 0, y: 0 }, data: { label: 'User Store', type: 'db', status: 'online', metadata: { model: 'User', records: 1250 }, metrics: { latency: 5, load: 10, errors: 0 } } },
-    { id: 'db-project', type: 'custom', position: { x: 300, y: 0 }, data: { label: 'Project Store', type: 'db', status: 'online', metadata: { model: 'Project', records: 45 }, metrics: { latency: 8, load: 15, errors: 0 } } },
-    { id: 'db-requirement', type: 'custom', position: { x: 600, y: 0 }, data: { label: 'Requirement Store', type: 'db', status: 'online', metadata: { model: 'Requirement', records: 890 }, metrics: { latency: 150, load: 70, errors: 0 } } },
-    { id: 'db-task', type: 'custom', position: { x: 300, y: 200 }, data: { label: 'Task Store', type: 'db', status: 'online', metadata: { model: 'Task', records: 156 }, metrics: { latency: 12, load: 20, errors: 0 } } },
-    { id: 'db-item', type: 'custom', position: { x: 600, y: 200 }, data: { label: 'Inventory Items', type: 'db', status: 'online', metadata: { model: 'Item', records: 3421 }, metrics: { latency: 20, load: 45, errors: 0 } } },
-  ],
-  edges: [
-    { id: 'de-user-proj', source: 'db-user', target: 'db-project', animated: true, label: 'owns_projects' },
-    { id: 'de-proj-req', source: 'db-project', target: 'db-requirement', animated: true, label: 'contains_reqs' },
-    { id: 'de-proj-task', source: 'db-project', target: 'db-task', animated: true, label: 'project_tasks' },
-    { id: 'de-proj-item', source: 'db-project', target: 'db-item', animated: true, label: 'project_inventory' },
-    { id: 'de-req-task', source: 'db-requirement', target: 'db-task', animated: true, label: 'linked_to' },
-  ],
+  nodes: prismaModels.map((m, i) => ({
+    id: `db-${m.name.toLowerCase()}`,
+    type: 'custom',
+    position: { x: (i % 4) * 300, y: Math.floor(i / 4) * 200 },
+    data: { 
+      label: `${m.name} Store`, 
+      type: 'db', 
+      status: 'online', 
+      metadata: { model: m.name, records: 0 }, 
+      metrics: { latency: 5, load: 10, errors: 0 } 
+    }
+  })),
+  edges: schemaState.edges.map(e => ({
+    ...e,
+    id: `de-${e.id.split('-').slice(1).join('-')}`,
+    source: `db-${e.source.split('-')[1]}`,
+    target: `db-${e.target.split('-')[1]}`,
+  })),
 };
 
-// Initialize SCHEMA state from real prisma file
-const prismaPath = path.join(process.cwd(), 'prisma', 'schema.prisma');
-const prismaModels = SchemaParser.parseSchema(prismaPath);
-const schemaState: DataFlowState = SchemaParser.generateFlowData(prismaModels);
-
-const views: Record<DataView, DataFlowState> = {
+const views: Record<FlowView, DataFlowState> = {
   INFRA: infraState,
   APP: appState,
   TRACE: traceState,
@@ -82,14 +86,14 @@ const views: Record<DataView, DataFlowState> = {
   SCHEMA: schemaState,
 };
 
-export function getDataFlowState(view: DataView = 'INFRA') {
+export function getDataFlowState(view: FlowView = 'INFRA') {
   return views[view];
 }
 
-export function updateDataFlowState(view: DataView, newState: Partial<DataFlowState>) {
+export function updateDataFlowState(view: FlowView, newState: Partial<DataFlowState>) {
   views[view] = { ...views[view], ...newState };
 }
 
-export function getAllViews(): Record<DataView, DataFlowState> {
+export function getAllViews(): Record<FlowView, DataFlowState> {
   return views;
 }
