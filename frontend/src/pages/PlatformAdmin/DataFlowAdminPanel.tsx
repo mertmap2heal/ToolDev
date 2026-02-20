@@ -28,9 +28,14 @@ import {
   ChevronRight,
   RefreshCw,
   Plus,
-  Radio
+  Radio,
+  AlertTriangle,
+  Fingerprint
 } from 'lucide-react';
 import WarRoomTerminal from './WarRoomTerminal';
+import ArchitectureAuditor from './ArchitectureAuditor';
+import CommandCenterSidebar from './CommandCenterSidebar';
+import { ReactFlowProvider, useReactFlow } from 'reactflow';
 
 // --- Custom Node Component ---
 const CustomNode = ({ data, selected }: { data: any, selected: boolean }) => {
@@ -107,31 +112,16 @@ const CustomNode = ({ data, selected }: { data: any, selected: boolean }) => {
   );
 };
 
-// --- Monitoring Panel ---
-const MonitoringPanel: React.FC<{ logs: { id: string, time: string, msg: string, type: 'info' | 'warn' | 'error' }[] }> = ({ logs }) => (
-  <div className="h-full flex flex-col bg-[#0d1117] border-l border-gray-800">
-    <div className="p-4 border-b border-gray-800 flex items-center gap-2 bg-[#161b22]">
-      <Terminal size={18} className="text-blue-400" />
-      <h3 className="text-sm font-semibold text-gray-200">System Trace Logs</h3>
+
+
+// --- Impact Inspector (Future Task) ---
+const ImpactInspector: React.FC<{ selectedId: string }> = ({ selectedId }) => (
+  <div className="p-4 bg-gray-950/20 border-t border-gray-800">
+    <div className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center gap-2">
+      <Fingerprint size={12} className="text-purple-400" />
+      Impact Radius: {selectedId}
     </div>
-    <div className="flex-1 overflow-y-auto p-4 space-y-3 font-mono text-[11px]">
-      {logs.length === 0 ? (
-        <div className="text-gray-600 italic">Listening for system events...</div>
-      ) : (
-        logs.map((log) => (
-          <div key={log.id} className="flex gap-2 group">
-            <span className="text-gray-600 shrink-0">[{log.time}]</span>
-            <span className={
-              log.type === 'error' ? 'text-red-400' :
-                log.type === 'warn' ? 'text-amber-400' :
-                  'text-blue-300'
-            }>
-              {log.msg}
-            </span>
-          </div>
-        ))
-      )}
-    </div>
+    <div className="text-[9px] text-gray-400 italic">Tracing downstream dependencies...</div>
   </div>
 );
 
@@ -235,7 +225,53 @@ const DataFlowAdminPanel: React.FC = () => {
   const [logs, setLogs] = useState<{ id: string, time: string, msg: string, type: 'info' | 'warn' | 'error' }[]>([]);
   const [adminLogs, setAdminLogs] = useState<any[]>([]);
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
+  const [isAuditorOpen, setIsAuditorOpen] = useState(false);
+  const [auditFindings, setAuditFindings] = useState<any[]>([]);
+  const [adminKpis, setAdminKpis] = useState({
+    healthScore: 100,
+    avgLatency: 0,
+    avgLoad: 0,
+    totalErrors: 0,
+    totalNodes: 0,
+    activeViews: 0
+  });
+  const [activeUsers, setActiveUsers] = useState([
+    { id: '1', name: 'Admin Alpha', entity: 'System', location: 'London' },
+    { id: '2', name: 'Eng Beta', entity: 'SupplyChain', location: 'New York' }
+  ]);
   const [selectedElement, setSelectedElement] = useState<{ id: string, type: 'node' | 'edge' } | null>(null);
+
+  const selectedNodeData = useMemo(() => {
+    if (!selectedElement || selectedElement.type !== 'node') return null;
+    const node = nodes.find(n => n.id === selectedElement.id);
+    if (!node) return null;
+
+    const upstream = edges
+      .filter(e => e.target === node.id)
+      .map(e => e.source);
+
+    const downstream = edges
+      .filter(e => e.source === node.id)
+      .map(e => e.target);
+
+    return {
+      id: node.id,
+      label: node.data.label,
+      type: node.data.type,
+      upstream,
+      downstream
+    };
+  }, [selectedElement, nodes, edges]);
+
+  const { setCenter } = useReactFlow();
+
+  const handleFocusNode = useCallback((nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (node) {
+      setCenter(node.position.x + 100, node.position.y + 50, { zoom: 1.5, duration: 1000 });
+      setSelectedElement({ id: nodeId, type: 'node' });
+    }
+  }, [nodes, setCenter]);
 
   const addLog = useCallback((msg: string, type: 'info' | 'warn' | 'error' = 'info') => {
     setLogs((prev) => [
@@ -243,6 +279,13 @@ const DataFlowAdminPanel: React.FC = () => {
       ...prev.slice(0, 49)
     ]);
   }, []);
+
+  const handleCommand = useCallback((cmd: string) => {
+    addLog(`Executing command: ${cmd}`, 'info');
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('admin:command', { command: cmd });
+    }
+  }, [addLog]);
 
   useEffect(() => {
     const socket = io('/', {
@@ -274,6 +317,21 @@ const DataFlowAdminPanel: React.FC = () => {
 
     socket.on('admin:log', (log) => {
       setAdminLogs((prev) => [...prev, log].slice(-100));
+    });
+
+    socket.on('admin:audit', (payload) => {
+      setAuditFindings(payload.findings);
+      if (payload.findings.length > 0 && !isAuditorOpen) {
+        addLog(`Architecture Auditor detected ${payload.findings.length} issues`, 'warn');
+      }
+    });
+
+    socket.on('admin:kpi', (payload) => {
+      setAdminKpis(payload);
+    });
+
+    socket.on('admin:users', (users) => {
+      setActiveUsers(users);
     });
 
     return () => {
@@ -455,8 +513,16 @@ const DataFlowAdminPanel: React.FC = () => {
         </div>
       </div>
 
-      <div className="w-80 shrink-0 h-full shadow-2xl z-20">
-        <MonitoringPanel logs={logs} />
+      {/* Side Profile / Monitoring */}
+      <div className="w-96 shrink-0 h-full shadow-2xl z-20">
+        <CommandCenterSidebar
+          kpis={adminKpis}
+          logs={logs}
+          activeUsers={activeUsers}
+          selectedNode={selectedNodeData}
+          onCommand={handleCommand}
+          onFocusNode={handleFocusNode}
+        />
       </div>
 
       <WarRoomTerminal
@@ -465,11 +531,35 @@ const DataFlowAdminPanel: React.FC = () => {
         isOpen={isTerminalOpen}
         onToggle={() => setIsTerminalOpen(!isTerminalOpen)}
       />
+
+      <ArchitectureAuditor
+        findings={auditFindings}
+        isOpen={isAuditorOpen}
+        onClose={() => setIsAuditorOpen(false)}
+        onFocusNode={handleFocusNode}
+      />
+
+      {/* Auditor Toggle Button (Fixed Position) */}
+      {!isAuditorOpen && auditFindings.length > 0 && (
+        <button
+          onClick={() => setIsAuditorOpen(true)}
+          className="absolute top-24 right-84 p-3 bg-amber-500 hover:bg-amber-600 text-white rounded-full shadow-2xl z-40 animate-pulse transition-all active:scale-90 flex items-center gap-2 group"
+        >
+          <AlertTriangle size={20} />
+          <span className="max-w-0 overflow-hidden group-hover:max-w-[100px] transition-all text-xs font-bold whitespace-nowrap">
+            {auditFindings.length} Alerts
+          </span>
+        </button>
+      )}
     </div>
   );
 };
 
-export default DataFlowAdminPanel;
+export default () => (
+  <ReactFlowProvider>
+    <DataFlowAdminPanel />
+  </ReactFlowProvider>
+);
 
 // --- CSS Animations ---
 if (typeof document !== 'undefined') {
