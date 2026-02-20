@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
 import { projectService } from '../../services/project.service'
 import {
   Plus,
@@ -15,6 +14,7 @@ import {
   Undo2,
   Redo2,
   Printer,
+  Save,
 } from 'lucide-react'
 import clsx from 'clsx'
 import type { PBSNode, PBSChangeLogEntry, SaveStatus } from './types'
@@ -219,18 +219,7 @@ export default function PBSPage() {
     return () => { cancelled = true }
   }, [projectId, nodes, changeLog, saveStatus])
 
-  useEffect(() => {
-    if (saveStatus === 'unsaved') {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-      saveTimeoutRef.current = setTimeout(() => {
-        persist()
-        saveTimeoutRef.current = null
-      }, SAVE_DEBOUNCE_MS)
-    }
-    return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-    }
-  }, [nodes, changeLog, saveStatus, persist])
+  // Auto-save logic removed. Using explicit save flow instead.
 
   const markUnsaved = useCallback(() => {
     setSaveStatus('unsaved')
@@ -443,27 +432,36 @@ export default function PBSPage() {
 
   return (
     <div className="space-y-6">
-      <ProjectNavigation />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
           Product Breakdown Structure
         </h2>
         <div className="flex items-center gap-3 flex-wrap">
-          <span
-            className={clsx(
-              'text-sm flex items-center gap-1.5',
-              saveStatus === 'saved' && 'text-gray-500 dark:text-gray-400',
-              saveStatus === 'saving' && 'text-amber-600 dark:text-amber-400',
-              saveStatus === 'unsaved' && 'text-amber-600 dark:text-amber-400'
+          <div className="flex items-center gap-2">
+            {saveStatus === 'unsaved' ? (
+              <button
+                type="button"
+                onClick={persist}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+              >
+                <Save size={14} />
+                Save Changes
+              </button>
+            ) : (
+              <span
+                className={clsx(
+                  'text-sm flex items-center gap-1.5 px-2 py-1 rounded-md border',
+                  saveStatus === 'saved' && 'bg-gray-50 text-gray-600 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700',
+                  saveStatus === 'saving' && 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800'
+                )}
+              >
+                {saveStatus === 'saved' && <Check size={14} />}
+                {saveStatus === 'saving' && <Loader2 size={14} className="animate-spin" />}
+                {saveStatus === 'saved' && 'Saved'}
+                {saveStatus === 'saving' && 'Saving…'}
+              </span>
             )}
-          >
-            {saveStatus === 'saved' && <Check size={14} />}
-            {saveStatus === 'saving' && <Loader2 size={14} className="animate-spin" />}
-            {saveStatus === 'unsaved' && <AlertCircle size={14} />}
-            {saveStatus === 'saved' && 'Saved'}
-            {saveStatus === 'saving' && 'Saving…'}
-            {saveStatus === 'unsaved' && 'Unsaved changes'}
-          </span>
+          </div>
           <div className="flex items-center border-l border-gray-300 dark:border-gray-600 pl-3 ml-1">
             <button
               type="button"
