@@ -1,5 +1,8 @@
 // In-memory store for multi-view data flow
 
+import { SchemaParser } from '../services/schemaParser.js';
+import path from 'path';
+
 export type DataView = 'INFRA' | 'APP' | 'TRACE' | 'DATA' | 'SCHEMA';
 
 export interface DataFlowState {
@@ -66,75 +69,10 @@ const dataState: DataFlowState = {
   ],
 };
 
-const schemaState: DataFlowState = {
-  nodes: [
-    // === CORE & ADMIN ===
-    { id: 's-user', type: 'schema', position: { x: 0, y: 0 }, data: { label: 'User', metrics: { latency: 5, load: 10, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'email', type: 'String', unique: true }, { name: 'role', type: 'String' }] } },
-    { id: 's-org', type: 'schema', position: { x: 0, y: 200 }, data: { label: 'Organization', metrics: { latency: 8, load: 5, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'companyKey', type: 'String', unique: true }, { name: 'name', type: 'String' }] } },
-    { id: 's-audit', type: 'schema', position: { x: 0, y: 400 }, data: { label: 'AuditLog', metrics: { latency: 15, load: 50, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'userId', type: 'UUID', fk: true }, { name: 'action', type: 'String' }] } },
-
-    // === ENGINEERING (LIFECYCLE) ===
-    { id: 's-project', type: 'schema', position: { x: 400, y: 0 }, data: { label: 'Project', metrics: { latency: 12, load: 20, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'name', type: 'String' }, { name: 'status', type: 'String' }] } },
-    { id: 's-req', type: 'schema', position: { x: 400, y: 250 }, data: { label: 'Requirement', metrics: { latency: 180, load: 85, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'projectId', type: 'UUID', fk: true }, { name: 'title', type: 'String' }, { name: 'status', type: 'String' }] } },
-    { id: 's-func', type: 'schema', position: { x: 400, y: 550 }, data: { label: 'SystemFunction', metrics: { latency: 25, load: 30, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'projectId', type: 'UUID', fk: true }, { name: 'name', type: 'String' }] } },
-    { id: 's-arch', type: 'schema', position: { x: 400, y: 800 }, data: { label: 'Architecture', metrics: { latency: 40, load: 15, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'projectId', type: 'UUID', fk: true }, { name: 'name', type: 'String' }] } },
-
-    // === EXECUTION (TASKS & ISSUES) ===
-    { id: 's-task', type: 'schema', position: { x: 800, y: 0 }, data: { label: 'Task', metrics: { latency: 15, load: 40, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'projectId', type: 'UUID', fk: true }, { name: 'title', type: 'String' }, { name: 'status', type: 'String' }] } },
-    { id: 's-issue', type: 'schema', position: { x: 800, y: 250 }, data: { label: 'Issue', metrics: { latency: 30, load: 55, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'projectId', type: 'UUID', fk: true }, { name: 'issueKey', type: 'String', unique: true }, { name: 'status', type: 'String' }] } },
-    { id: 's-cr', type: 'schema', position: { x: 800, y: 550 }, data: { label: 'ChangeRequest', metrics: { latency: 45, load: 10, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'crId', type: 'String', unique: true }, { name: 'status', type: 'String' }] } },
-
-    // === SUPPLY CHAIN (PURCHASING) ===
-    { id: 's-supplier', type: 'schema', position: { x: 1200, y: 0 }, data: { label: 'Supplier', metrics: { latency: 100, load: 5, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'code', type: 'String', unique: true }, { name: 'name', type: 'String' }] } },
-    { id: 's-po', type: 'schema', position: { x: 1200, y: 200 }, data: { label: 'PurchaseOrder', metrics: { latency: 150, load: 40, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'number', type: 'String', unique: true }, { name: 'status', type: 'String' }] } },
-    { id: 's-receipt', type: 'schema', position: { x: 1200, y: 450 }, data: { label: 'GoodsReceipt', metrics: { latency: 200, load: 60, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'number', type: 'String', unique: true }, { name: 'status', type: 'String' }] } },
-
-    // === COMMERCE (SALES) ===
-    { id: 's-customer', type: 'schema', position: { x: 1600, y: 0 }, data: { label: 'Customer', metrics: { latency: 50, load: 15, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'code', type: 'String', unique: true }, { name: 'name', type: 'String' }] } },
-    { id: 's-so', type: 'schema', position: { x: 1600, y: 200 }, data: { label: 'SalesOrder', metrics: { latency: 120, load: 50, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'number', type: 'String', unique: true }, { name: 'status', type: 'String' }] } },
-    { id: 's-shipment', type: 'schema', position: { x: 1600, y: 450 }, data: { label: 'Shipment', metrics: { latency: 300, load: 75, errors: 1 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'number', type: 'String', unique: true }, { name: 'status', type: 'String' }] } },
-
-    // === OPERATIONS (INVENTORY) ===
-    { id: 's-wh', type: 'schema', position: { x: 2000, y: 0 }, data: { label: 'Warehouse', metrics: { latency: 10, load: 30, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'code', type: 'String', unique: true }, { name: 'name', type: 'String' }] } },
-    { id: 's-loc', type: 'schema', position: { x: 2000, y: 250 }, data: { label: 'Location', metrics: { latency: 15, load: 40, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'warehouseId', type: 'UUID', fk: true }, { name: 'code', type: 'String' }] } },
-    { id: 's-item', type: 'schema', position: { x: 2000, y: 500 }, data: { label: 'Item', metrics: { latency: 25, load: 15, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'sku', type: 'String', unique: true }, { name: 'uomId', type: 'UUID', fk: true }] } },
-    { id: 's-balance', type: 'schema', position: { x: 2000, y: 750 }, data: { label: 'InventoryBalance', metrics: { latency: 40, load: 80, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'itemId', type: 'UUID', fk: true }, { name: 'locationId', type: 'UUID', fk: true }, { name: 'qtyOnHand', type: 'Decimal' }] } },
-
-    // === QUALITY (VERIFICATION) ===
-    { id: 's-ver-plan', type: 'schema', position: { x: 2400, y: 0 }, data: { label: 'VerTestPlan', metrics: { latency: 20, load: 10, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'projectId', type: 'UUID', fk: true }, { name: 'key', type: 'String', unique: true }] } },
-    { id: 's-ver-tc', type: 'schema', position: { x: 2400, y: 250 }, data: { label: 'VerTestCase', metrics: { latency: 35, load: 25, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'key', type: 'String', unique: true }, { name: 'status', type: 'String' }] } },
-    { id: 's-ver-run', type: 'schema', position: { x: 2400, y: 550 }, data: { label: 'VerTestRun', metrics: { latency: 500, load: 90, errors: 5 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'status', type: 'String' }, { name: 'startedAt', type: 'Date' }] } },
-
-    // === GOVERNANCE (CERT & COMPLIANCE) ===
-    { id: 's-cert-obj', type: 'schema', position: { x: 2800, y: 0 }, data: { label: 'CertObjective', metrics: { latency: 15, load: 5, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'objId', type: 'String', unique: true }, { name: 'status', type: 'String' }] } },
-    { id: 's-comp-rule', type: 'schema', position: { x: 2800, y: 250 }, data: { label: 'ComplianceRule', metrics: { latency: 25, load: 10, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'name', type: 'String' }, { name: 'standard', type: 'String' }] } },
-    { id: 's-comp-finding', type: 'schema', position: { x: 2800, y: 500 }, data: { label: 'ComplianceFinding', metrics: { latency: 60, load: 45, errors: 0 }, fields: [{ name: 'id', type: 'UUID', pk: true }, { name: 'runId', type: 'UUID', fk: true }, { name: 'status', type: 'String' }] } },
-  ],
-  edges: [
-    // Core Links
-    { id: 'se-user-audit', source: 's-user', target: 's-audit', animated: true },
-    { id: 'se-user-proj', source: 's-user', target: 's-project', animated: true },
-
-    // Lifecycle Chain
-    { id: 'se-proj-req', source: 's-project', target: 's-req', animated: true },
-    { id: 'se-req-func', source: 's-req', target: 's-func', animated: true },
-    { id: 'se-proj-task', source: 's-project', target: 's-task', animated: true },
-    { id: 'se-proj-issue', source: 's-project', target: 's-issue', animated: true },
-
-    // Value Stream Links
-    { id: 'se-po-item', source: 's-po', target: 's-item', animated: true },
-    { id: 'se-ship-so', source: 's-shipment', target: 's-so', animated: true },
-    { id: 'se-item-balance', source: 's-item', target: 's-balance', animated: true },
-    { id: 'se-loc-balance', source: 's-loc', target: 's-balance', animated: true },
-
-    // Verification & Cert
-    { id: 'se-req-tc', source: 's-req', target: 's-ver-tc', animated: true },
-    { id: 'se-ver-plan-tc', source: 's-ver-plan', target: 's-ver-tc', animated: true },
-    { id: 'se-tc-run', source: 's-ver-tc', target: 's-ver-run', animated: true },
-    { id: 'se-req-cert', source: 's-req', target: 's-cert-obj', animated: true },
-    { id: 'se-run-finding', source: 's-ver-run', target: 's-comp-finding', animated: true },
-  ],
-};
+// Initialize SCHEMA state from real prisma file
+const prismaPath = path.join(process.cwd(), 'prisma', 'schema.prisma');
+const prismaModels = SchemaParser.parseSchema(prismaPath);
+const schemaState: DataFlowState = SchemaParser.generateFlowData(prismaModels);
 
 const views: Record<DataView, DataFlowState> = {
   INFRA: infraState,
