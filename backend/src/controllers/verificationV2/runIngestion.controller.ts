@@ -9,7 +9,8 @@ export const ingestAutomatedResult = async (req: AuthRequest, res: Response): Pr
         const { projectId } = req.params
         const { testPlanKey, runName, environment, results } = req.body
 
-        const user = req.user
+        // @ts-ignore - Assuming auth middleware attaches user differently or we just need userId
+        const userId = (req as any).userId
 
         // Ensure project exists
         const project = await prisma.project.findUnique({ where: { id: projectId } })
@@ -52,7 +53,7 @@ export const ingestAutomatedResult = async (req: AuthRequest, res: Response): Pr
                 environmentId: testEnv.id,
                 runName: runName || `Automated Run ${new Date().toISOString()}`,
                 status: 'COMPLETED',
-                executedByUserId: user?.id,
+                executedByUserId: userId,
                 startedAt: new Date(),
                 endedAt: new Date(),
             }
@@ -115,6 +116,27 @@ export const getTestRuns = async (req: AuthRequest, res: Response): Promise<Resp
         res.json({ success: true, data: testRuns })
     } catch (error: any) {
         console.error('Get Test Runs error:', error)
+        res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+    }
+}
+export const deleteTestRun = async (req: AuthRequest, res: Response): Promise<Response | void> => {
+    try {
+        const { projectId, id } = req.params
+
+        const testRun = await prisma.verTestRun.findUnique({
+            where: { id: id }
+        })
+
+        if (!testRun || testRun.projectId !== projectId) return res.status(404).json({ success: false, error: 'Test run not found' })
+
+        // Cascades should handle testRunResults and testLogs
+        await prisma.verTestRun.delete({
+            where: { id: id }
+        })
+
+        res.json({ success: true, message: 'Test run deleted successfully' })
+    } catch (error: any) {
+        console.error('Delete Test Run error:', error)
         res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
     }
 }

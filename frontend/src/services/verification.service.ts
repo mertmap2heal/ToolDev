@@ -131,5 +131,7 @@ export const verificationService = {
   createTestPlan: (projectId: string, data: unknown) => apiClient.post(`/verification/test-plans/${projectId}`, data),
   createTestResult: (projectId: string, data: unknown) => apiClient.post(`/verification/test-results/${projectId}`, data),
   getTestRuns: (projectId: string) => apiClient.get(`/verification/test-runs/${projectId}`),
+  deleteTestRun: (projectId: string, id: string) => apiClient.delete(`/verification/test-runs/${projectId}/${id}`),
+  triggerTestRun: (projectId: string, data: unknown) => apiClient.post(`/verification/runs/ingest/${projectId}`, data),
   exportWithTemplate: (projectId: string, data: unknown) => apiClient.post(`/verification/export-with-template/${projectId}`, data),
 }

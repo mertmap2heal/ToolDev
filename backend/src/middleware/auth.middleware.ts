@@ -13,8 +13,10 @@ export const authenticateToken = (
   res: Response,
   next: NextFunction
 ) => {
+  console.log('[Auth] Checking token for:', req.method, req.url)
   const authHeader = req.headers['authorization']
   const token = authHeader && authHeader.split(' ')[1]
+  console.log('[Auth] Token found:', !!token)
 
   if (!token) {
     return res.status(401).json({ success: false, error: 'No token provided' })

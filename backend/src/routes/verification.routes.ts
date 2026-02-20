@@ -162,6 +162,7 @@ router.get('/test-results/:projectId/:id/download', testResultController.downloa
 // N.1) Test Runs (Automated Ingestion)
 router.post('/runs/ingest/:projectId', runIngestionController.ingestAutomatedResult)
 router.get('/test-runs/:projectId', runIngestionController.getTestRuns)
+router.delete('/test-runs/:projectId/:id', runIngestionController.deleteTestRun)
 
 // Reports
 router.get('/reports/test-case/:projectId/:id', async (req: AuthRequest, res: Response) => {
