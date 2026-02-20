@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { ArrowUp, ArrowDown } from 'lucide-react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -21,7 +22,7 @@ import CreateIssueModal from '../../components/issues/CreateIssueModal'
 import ReviewStatusBadge from '../../components/requirements/ReviewStatusBadge'
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import LockWarningModal from '../../components/requirements/LockWarningModal'
-import { requirementService } from '../../services/requirement.service'
+import { requirementService, type RequirementFilters } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
 import { changeRequestService } from '../../services/changeRequest.service'
@@ -100,11 +101,64 @@ export default function RequirementsPage() {
   const [requirementTypeFilter, setRequirementTypeFilter] = useState<string>('all')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
 
+  // Pagination & sorting state
+  const [currentPage, setCurrentPage] = useState<number>(1)
+  const [pageSize] = useState<number>(50)
+  const [sortBy, setSortBy] = useState<string>('createdAt')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [debouncedSearch, setDebouncedSearch] = useState<string>('')
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+      setCurrentPage(1) // Reset to page 1 on search change
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  // PBS Tree panel state (declared early — referenced by serverFilters and filter reset)
+  const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null)
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [statusFilter, priorityFilter, ownerFilter, sourceFilter, requirementTypeFilter, categoryFilter, selectedComponentId])
+
+  // Build server-side filter object
+  const serverFilters = useMemo<RequirementFilters>(() => {
+    const filters: RequirementFilters = {
+      page: currentPage,
+      pageSize,
+      sortBy,
+      sortOrder,
+    }
+    if (debouncedSearch) filters.search = debouncedSearch
+    if (statusFilter !== 'all') filters.status = statusFilter
+    if (priorityFilter !== 'all') filters.priority = priorityFilter
+    if (ownerFilter !== 'all') filters.owner = ownerFilter
+    if (sourceFilter !== 'all') filters.source = sourceFilter
+    if (requirementTypeFilter !== 'all') filters.requirementType = requirementTypeFilter
+    if (categoryFilter !== 'all') filters.category = categoryFilter
+    if (selectedComponentId) filters.componentId = selectedComponentId
+    return filters
+  }, [currentPage, pageSize, sortBy, sortOrder, debouncedSearch, statusFilter, priorityFilter, ownerFilter, sourceFilter, requirementTypeFilter, categoryFilter, selectedComponentId])
+
+  // Handle column sort toggle
+  const handleSort = useCallback((column: string) => {
+    setSortBy(prev => {
+      if (prev === column) {
+        setSortOrder(o => o === 'asc' ? 'desc' : 'asc')
+        return column
+      }
+      setSortOrder('asc')
+      return column
+    })
+  }, [])
+
   // Grouping by type
   const [groupByType, setGroupByType] = useState<boolean>(false)
 
-  // PBS Tree panel state
-  const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null)
   const [isPBSPanelOpen, setIsPBSPanelOpen] = useState<boolean>(true)
   const [pbsPanelWidth, setPbsPanelWidth] = useState<number>(280)
   const pbsResizing = useRef(false)
@@ -206,17 +260,35 @@ export default function RequirementsPage() {
   const queryClient = useQueryClient()
   const { statuses: statusDefinitions } = useStatusDefinitionsStore()
 
-  const { data: requirements = [], isLoading } = useQuery({
-    queryKey: ['requirements', projectId],
+  // Paginated requirements query
+  const { data: paginatedData, isLoading } = useQuery({
+    queryKey: ['requirements', projectId, serverFilters],
     queryFn: async () => {
       if (!projectId) throw new Error('Project ID required')
-      const response = await requirementService.getRequirements(projectId)
+      const response = await requirementService.getRequirements(projectId, serverFilters)
       if (response.success && response.data) {
         return response.data
       }
       throw new Error(response.error || 'Failed to load requirements')
     },
     enabled: !!projectId,
+    placeholderData: (prev) => prev, // Keep previous data while loading new page
+  })
+
+  const requirements = paginatedData?.items ?? []
+  const totalRequirements = paginatedData?.total ?? 0
+  const totalPages = paginatedData?.totalPages ?? 1
+
+  // All requirements (non-paginated) for features that need the full list
+  const { data: allRequirements = [] } = useQuery({
+    queryKey: ['requirements-all', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const response = await requirementService.getAllRequirements(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId,
+    staleTime: 30_000, // Cache for 30s to avoid excessive refetches
   })
 
   useEffect(() => {
@@ -617,95 +689,16 @@ export default function RequirementsPage() {
     })
   }
 
-  // Filter requirements with enhanced full-text search
-  const filteredRequirements = useMemo(() => {
-    return requirements.filter((req) => {
-      // Enhanced search filter - searches across all text fields
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase()
-        const searchableFields = [
-          req.title,
-          req.description,
-          req.requirementId,
-          req.owner,
-          req.source,
-          req.acceptanceCriteria,
-          req.verificationMethod,
-          req.stage,
-          ...(req.tags || []),
-          ...(req.relatedDocuments || []),
-        ]
-        const matchesSearch = searchableFields.some(
-          (field) => field && field.toLowerCase().includes(query)
-        )
-        if (!matchesSearch) return false
-      }
+  // Server-side filtering/pagination means requirements are already filtered.
+  // filteredRequirements is now just the server-returned items for backward compat.
+  const filteredRequirements = requirements
 
-      // Status filter
-      if (statusFilter !== 'all' && req.status !== statusFilter) {
-        return false
-      }
-
-      // Priority filter
-      if (priorityFilter !== 'all' && req.priority !== priorityFilter) {
-        return false
-      }
-
-
-      // Owner filter
-      if (ownerFilter !== 'all') {
-        if (ownerFilter === 'unassigned' && req.owner) {
-          return false
-        }
-        if (ownerFilter !== 'unassigned' && req.owner !== ownerFilter) {
-          return false
-        }
-      }
-
-      // Source filter
-      if (sourceFilter !== 'all') {
-        if (sourceFilter === 'unassigned' && req.source) {
-          return false
-        }
-        if (sourceFilter !== 'unassigned' && req.source !== sourceFilter) {
-          return false
-        }
-      }
-
-      // Requirement Type filter
-      if (requirementTypeFilter !== 'all') {
-        if (requirementTypeFilter === 'unassigned' && req.requirementType) {
-          return false
-        }
-        if (requirementTypeFilter !== 'unassigned' && req.requirementType !== requirementTypeFilter) {
-          return false
-        }
-      }
-
-      // Category filter
-      if (categoryFilter !== 'all') {
-        if (categoryFilter === 'unassigned' && req.category) {
-          return false
-        }
-        if (categoryFilter !== 'unassigned' && req.category !== categoryFilter) {
-          return false
-        }
-      }
-
-      // Component filter (PBS tree selection)
-      if (selectedComponentId !== null) {
-        if (req.componentId !== selectedComponentId) {
-          return false
-        }
-      }
-
-      return true
-    })
-  }, [requirements, searchQuery, statusFilter, priorityFilter, ownerFilter, sourceFilter, requirementTypeFilter, categoryFilter, selectedComponentId])
-
+  // With server-side pagination, root requirements come pre-paginated.
+  // Children are already included inline from the server.
   const hierarchyRequirements = useMemo(() => {
-    return buildHierarchy(filteredRequirements)
-  }, [filteredRequirements])
+    // requirements from server already have parentId=null (roots) with children included
+    return requirements
+  }, [requirements])
 
   // Group requirements by type
   const groupedRequirements = useMemo(() => {
@@ -792,27 +785,27 @@ export default function RequirementsPage() {
     return typeNames[type] || type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, ' ')
   }
 
-  // Get unique values for filters (must be defined before renderRequirementRow uses them)
+  // Use allRequirements (non-paginated) for filter dropdown options
   const uniqueStatuses = useMemo(() =>
-    Array.from(new Set(requirements.map((r) => r.status).filter(Boolean))),
-    [requirements]
+    Array.from(new Set(allRequirements.map((r) => r.status).filter(Boolean))),
+    [allRequirements]
   )
 
   const uniqueRequirementTypes = useMemo(() =>
-    Array.from(new Set(requirements.map((r) => r.requirementType).filter(Boolean))),
-    [requirements]
+    Array.from(new Set(allRequirements.map((r) => r.requirementType).filter(Boolean))),
+    [allRequirements]
   )
   const uniqueOwners = useMemo(() =>
-    Array.from(new Set(requirements.map((r) => r.owner).filter(Boolean))),
-    [requirements]
+    Array.from(new Set(allRequirements.map((r) => r.owner).filter(Boolean))),
+    [allRequirements]
   )
   const uniqueSources = useMemo(() =>
-    Array.from(new Set(requirements.map((r) => r.source).filter(Boolean))),
-    [requirements]
+    Array.from(new Set(allRequirements.map((r) => r.source).filter(Boolean))),
+    [allRequirements]
   )
   const uniqueCategories = useMemo(() =>
-    Array.from(new Set(requirements.map((r) => r.category).filter(Boolean))),
-    [requirements]
+    Array.from(new Set(allRequirements.map((r) => r.category).filter(Boolean))),
+    [allRequirements]
   )
 
   const getStatusColorForRequirement = (req: Requirement) => {
@@ -1908,13 +1901,19 @@ export default function RequirementsPage() {
                       />
                     </th>
                     {requirementColumns.has('requirementId') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        ID
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('requirementId')}>
+                        <span className="inline-flex items-center gap-1">
+                          ID
+                          {sortBy === 'requirementId' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                        </span>
                       </th>
                     )}
                     {requirementColumns.has('title') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Title
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('title')}>
+                        <span className="inline-flex items-center gap-1">
+                          Title
+                          {sortBy === 'title' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                        </span>
                       </th>
                     )}
                     {requirementColumns.has('description') && (
@@ -1923,33 +1922,51 @@ export default function RequirementsPage() {
                       </th>
                     )}
                     {requirementColumns.has('priority') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Priority
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('priority')}>
+                        <span className="inline-flex items-center gap-1">
+                          Priority
+                          {sortBy === 'priority' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                        </span>
                       </th>
                     )}
                     {requirementColumns.has('status') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Status
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('status')}>
+                        <span className="inline-flex items-center gap-1">
+                          Status
+                          {sortBy === 'status' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                        </span>
                       </th>
                     )}
                     {requirementColumns.has('owner') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Owner
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('owner')}>
+                        <span className="inline-flex items-center gap-1">
+                          Owner
+                          {sortBy === 'owner' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                        </span>
                       </th>
                     )}
                     {requirementColumns.has('category') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Category
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('category')}>
+                        <span className="inline-flex items-center gap-1">
+                          Category
+                          {sortBy === 'category' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                        </span>
                       </th>
                     )}
                     {requirementColumns.has('source') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Source
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('source')}>
+                        <span className="inline-flex items-center gap-1">
+                          Source
+                          {sortBy === 'source' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                        </span>
                       </th>
                     )}
                     {requirementColumns.has('requirementType') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Type
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('requirementType')}>
+                        <span className="inline-flex items-center gap-1">
+                          Type
+                          {sortBy === 'requirementType' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                        </span>
                       </th>
                     )}
                     {requirementColumns.has('verificationMethod') && (
@@ -1963,18 +1980,27 @@ export default function RequirementsPage() {
                       </th>
                     )}
                     {requirementColumns.has('stage') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Stage
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('stage')}>
+                        <span className="inline-flex items-center gap-1">
+                          Stage
+                          {sortBy === 'stage' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                        </span>
                       </th>
                     )}
                     {requirementColumns.has('createdAt') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Created
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('createdAt')}>
+                        <span className="inline-flex items-center gap-1">
+                          Created
+                          {sortBy === 'createdAt' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                        </span>
                       </th>
                     )}
                     {requirementColumns.has('updatedAt') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Updated
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('updatedAt')}>
+                        <span className="inline-flex items-center gap-1">
+                          Updated
+                          {sortBy === 'updatedAt' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                        </span>
                       </th>
                     )}
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-24">
@@ -1999,7 +2025,7 @@ export default function RequirementsPage() {
                         return (
                           <tr>
                             <td colSpan={getTotalColumnCount()} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                              {requirements.length === 0
+                              {totalRequirements === 0
                                 ? 'No requirements found. Click "Create Requirement" to get started.'
                                 : 'No requirements match your search or filter criteria.'}
                             </td>
@@ -2050,7 +2076,7 @@ export default function RequirementsPage() {
                         return (
                           <tr>
                             <td colSpan={getTotalColumnCount()} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                              {requirements.length === 0
+                              {totalRequirements === 0
                                 ? 'No requirements found. Click "Create Requirement" to get started.'
                                 : 'No requirements match your search or filter criteria.'}
                             </td>
@@ -2069,6 +2095,67 @@ export default function RequirementsPage() {
               </table>
             </div>
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg mt-2">
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                Showing {((currentPage - 1) * pageSize) + 1}–{Math.min(currentPage * pageSize, totalRequirements)} of {totalRequirements} requirements
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className="px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                >
+                  ««
+                </button>
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                >
+                  ‹ Prev
+                </button>
+                {(() => {
+                  const pages: number[] = []
+                  const maxVisible = 7
+                  let start = Math.max(1, currentPage - Math.floor(maxVisible / 2))
+                  let end = Math.min(totalPages, start + maxVisible - 1)
+                  if (end - start + 1 < maxVisible) {
+                    start = Math.max(1, end - maxVisible + 1)
+                  }
+                  for (let i = start; i <= end; i++) pages.push(i)
+                  return pages.map(p => (
+                    <button
+                      key={p}
+                      onClick={() => setCurrentPage(p)}
+                      className={`px-3 py-1 text-sm rounded border ${p === currentPage
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                        }`}
+                    >
+                      {p}
+                    </button>
+                  ))
+                })()}
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                >
+                  Next ›
+                </button>
+                <button
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className="px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                >
+                  »»
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Modals - Render outside scrollable container */}
           {isCreateModalOpen && projectId && (
@@ -2156,7 +2243,7 @@ export default function RequirementsPage() {
 
           {isExportOpen && projectId && (
             <ExportBuilder
-              requirements={filteredRequirements}
+              requirements={allRequirements}
               projectName={projectId}
               projectId={projectId}
               onClose={() => setIsExportOpen(false)}

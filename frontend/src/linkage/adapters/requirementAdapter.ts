@@ -3,7 +3,7 @@ import type { EntitySummary } from 'shared/types/linkage.types'
 
 export const requirementAdapter = {
   async search(query: string, projectId: string): Promise<EntitySummary[]> {
-    const response = await requirementService.getRequirements(projectId)
+    const response = await requirementService.getAllRequirements(projectId)
     const requirements = response.success && response.data ? response.data : []
     const q = query.toLowerCase().trim()
     const filtered = q

@@ -246,7 +246,7 @@ export default function RequirementDetailDrawer({
     queryKey: ['requirements', projectId],
     queryFn: async () => {
       if (!projectId) return []
-      const response = await requirementService.getRequirements(projectId)
+      const response = await requirementService.getAllRequirements(projectId)
       return response.success && response.data ? response.data : []
     },
     enabled: isOpen && !!projectId && LINKAGE_V1,

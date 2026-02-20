@@ -238,10 +238,172 @@ export const getRequirements = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
 
+    // Parse pagination params
+    const page = Math.max(1, parseInt(req.query.page as string) || 1)
+    const pageSize = Math.min(200, Math.max(1, parseInt(req.query.pageSize as string) || 50))
+    const sortBy = (req.query.sortBy as string) || 'createdAt'
+    const sortOrder = (req.query.sortOrder as string) === 'asc' ? 'asc' : 'desc'
+
+    // Parse filter params
+    const search = req.query.search as string | undefined
+    const status = req.query.status as string | undefined
+    const priority = req.query.priority as string | undefined
+    const owner = req.query.owner as string | undefined
+    const requirementType = req.query.requirementType as string | undefined
+    const category = req.query.category as string | undefined
+    const source = req.query.source as string | undefined
+    const componentId = req.query.componentId as string | undefined
+
+    // Build where clause — paginate only root-level requirements
+    const where: any = {
+      projectId,
+      deletedAt: null,
+      parentId: null, // Only root-level for pagination
+    }
+
+    // Filter conditions
+    if (status) where.status = status
+    if (priority) where.priority = priority
+    if (owner === 'unassigned') {
+      where.owner = null
+    } else if (owner) {
+      where.owner = owner
+    }
+    if (requirementType === 'unassigned') {
+      where.requirementType = null
+    } else if (requirementType) {
+      where.requirementType = requirementType
+    }
+    if (category === 'unassigned') {
+      where.category = null
+    } else if (category) {
+      where.category = category
+    }
+    if (source === 'unassigned') {
+      where.source = null
+    } else if (source) {
+      where.source = source
+    }
+    if (componentId) where.componentId = componentId
+
+    // Full-text search across multiple fields
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { requirementId: { contains: search, mode: 'insensitive' } },
+        { owner: { contains: search, mode: 'insensitive' } },
+        { source: { contains: search, mode: 'insensitive' } },
+        { acceptanceCriteria: { contains: search, mode: 'insensitive' } },
+        { tags: { has: search } },
+      ]
+    }
+
+    // Validate sortBy against allowed columns
+    const allowedSortColumns = [
+      'createdAt', 'updatedAt', 'title', 'requirementId',
+      'priority', 'status', 'owner', 'requirementType', 'category', 'source', 'stage',
+    ]
+    const safeSortBy = allowedSortColumns.includes(sortBy) ? sortBy : 'createdAt'
+
+    // Count total matching root requirements
+    const total = await prisma.requirement.count({ where })
+
+    // Fetch paginated root requirements with children included
+    const requirements = await prisma.requirement.findMany({
+      where,
+      include: {
+        parent: {
+          select: {
+            id: true,
+            requirementId: true,
+            title: true,
+          },
+        },
+        children: {
+          where: { deletedAt: null },
+          include: {
+            parent: {
+              select: { id: true, requirementId: true, title: true },
+            },
+            children: {
+              where: { deletedAt: null },
+              select: {
+                id: true,
+                requirementId: true,
+                title: true,
+                priority: true,
+                status: true,
+              },
+            },
+            component: {
+              select: { id: true, name: true },
+            },
+            comments: { orderBy: { createdAt: 'desc' } },
+            attachments: { orderBy: { createdAt: 'desc' } },
+            _count: { select: { changeRequestLinks: true } },
+          },
+          orderBy: [
+            { requirementId: 'asc' },
+            { createdAt: 'desc' },
+          ],
+        },
+        component: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        comments: {
+          orderBy: { createdAt: 'desc' },
+        },
+        attachments: {
+          orderBy: { createdAt: 'desc' },
+        },
+        _count: {
+          select: {
+            changeRequestLinks: true,
+          },
+        },
+      },
+      orderBy: { [safeSortBy]: sortOrder },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    })
+
+    const totalPages = Math.ceil(total / pageSize)
+
+    res.json({
+      success: true,
+      data: {
+        items: requirements,
+        total,
+        page,
+        pageSize,
+        totalPages,
+      },
+    })
+  } catch (error) {
+    console.error('Get requirements error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    })
+  }
+}
+
+/**
+ * Get ALL requirements for a project without pagination.
+ * Used by Export, Diagram, Traceability Matrix, etc.
+ */
+export const getAllRequirements = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+
     const requirements = await prisma.requirement.findMany({
       where: {
         projectId,
-        deletedAt: null, // Only active requirements
+        deletedAt: null,
       },
       include: {
         parent: {
@@ -290,7 +452,7 @@ export const getRequirements = async (req: AuthRequest, res: Response) => {
       data: requirements,
     })
   } catch (error) {
-    console.error('Get requirements error:', error)
+    console.error('Get all requirements error:', error)
     res.status(500).json({
       success: false,
       error: 'Internal server error',

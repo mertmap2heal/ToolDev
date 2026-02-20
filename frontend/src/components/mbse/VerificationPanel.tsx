@@ -37,7 +37,7 @@ export default function VerificationPanel({
   const { data: requirements = [], isLoading: loadingReqs, refetch } = useQuery({
     queryKey: ['requirements', projectId],
     queryFn: async () => {
-      const response = await requirementService.getRequirements(projectId)
+      const response = await requirementService.getAllRequirements(projectId)
       return response.success && response.data ? response.data : []
     },
     enabled: !!projectId,

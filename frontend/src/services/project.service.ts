@@ -51,4 +51,24 @@ export const projectService = {
   async declineInvitation(projectId: string): Promise<ApiResponse<{ message: string }>> {
     return apiClient.post<{ message: string }>(`/projects/${projectId}/invitations/decline`, {})
   },
+
+  async getProjectAuditLogs(projectId: string) {
+    return apiClient.get(`/projects/${projectId}/audit-logs`)
+  },
+
+  async getProjectAnalytics(projectId: string) {
+    return apiClient.get(`/projects/${projectId}/analytics`)
+  },
+
+  async bulkUpdateProjects(ids: string[], updates: Record<string, any>) {
+    return apiClient.post('/projects/bulk-update', { ids, updates })
+  },
+
+  async exportProjects() {
+    return apiClient.get('/projects/export')
+  },
+
+  async importProjects(projects: any[]) {
+    return apiClient.post('/projects/import', { projects })
+  },
 }

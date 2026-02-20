@@ -1,6 +1,6 @@
 import { apiClient } from './api'
 import type { Requirement, CreateRequirementDto, UpdateRequirementDto, RequirementComment, BulkImportRequest, BulkImportResult } from 'shared/types/engineering.types'
-import type { ApiResponse } from 'shared/types/api.types'
+import type { ApiResponse, PaginatedResponse } from 'shared/types/api.types'
 
 export type RequirementSubscriptionSnapshot = {
   subscribed: boolean
@@ -8,9 +8,46 @@ export type RequirementSubscriptionSnapshot = {
   preview: Array<{ id: string; name: string; avatarUrl: string | null }>
 }
 
+export interface RequirementFilters {
+  page?: number
+  pageSize?: number
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
+  search?: string
+  status?: string
+  priority?: string
+  owner?: string
+  requirementType?: string
+  category?: string
+  source?: string
+  componentId?: string
+}
+
 export const requirementService = {
-  async getRequirements(projectId: string): Promise<ApiResponse<Requirement[]>> {
-    const response = await apiClient.get<Requirement[]>(`/requirements/${projectId}`)
+  async getRequirements(projectId: string, filters?: RequirementFilters): Promise<ApiResponse<PaginatedResponse<Requirement>>> {
+    const params = new URLSearchParams()
+
+    if (filters) {
+      if (filters.page) params.append('page', String(filters.page))
+      if (filters.pageSize) params.append('pageSize', String(filters.pageSize))
+      if (filters.sortBy) params.append('sortBy', filters.sortBy)
+      if (filters.sortOrder) params.append('sortOrder', filters.sortOrder)
+      if (filters.search) params.append('search', filters.search)
+      if (filters.status) params.append('status', filters.status)
+      if (filters.priority) params.append('priority', filters.priority)
+      if (filters.owner) params.append('owner', filters.owner)
+      if (filters.requirementType) params.append('requirementType', filters.requirementType)
+      if (filters.category) params.append('category', filters.category)
+      if (filters.source) params.append('source', filters.source)
+      if (filters.componentId) params.append('componentId', filters.componentId)
+    }
+
+    const queryString = params.toString()
+    return apiClient.get<PaginatedResponse<Requirement>>(`/requirements/${projectId}${queryString ? `?${queryString}` : ''}`)
+  },
+
+  async getAllRequirements(projectId: string): Promise<ApiResponse<Requirement[]>> {
+    const response = await apiClient.get<Requirement[]>(`/requirements/${projectId}/all`)
     if (response.success && response.data && !Array.isArray(response.data)) {
       return {
         ...response,
@@ -118,3 +155,4 @@ export const requirementService = {
   updateRequirementComponent: (projectId: string, requirementId: string, componentId: string | null): Promise<ApiResponse<{ success: boolean; data: any }>> =>
     apiClient.patch<{ success: boolean; data: any }>(`/requirements/${projectId}/${requirementId}/component`, { componentId }),
 }
+

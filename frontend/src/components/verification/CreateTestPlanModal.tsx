@@ -45,7 +45,7 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
   const { data: requirements = [] } = useQuery({
     queryKey: ['requirements', projectId],
     queryFn: async () => {
-      const res = await requirementService.getRequirements(projectId)
+      const res = await requirementService.getAllRequirements(projectId)
       return res.success ? res.data : []
     },
     enabled: isOpen,

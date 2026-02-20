@@ -66,7 +66,7 @@ export default function ObjectiveDetailDrawer({
   const loadRequirementsForLink = useCallback(async () => {
     if (!projectId) return
     setLoadingRequirements(true)
-    const res = await requirementService.getRequirements(projectId)
+    const res = await requirementService.getAllRequirements(projectId)
     setLoadingRequirements(false)
     if (res.success && res.data) setRequirementsForLink(res.data)
     else setRequirementsForLink([])

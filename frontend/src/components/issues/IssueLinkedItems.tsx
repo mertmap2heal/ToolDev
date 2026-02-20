@@ -23,7 +23,7 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
   const { data: requirementsData } = useQuery({
     queryKey: ['requirements', projectId],
     queryFn: async () => {
-      const response = await requirementService.getRequirements(projectId)
+      const response = await requirementService.getAllRequirements(projectId)
       return response.success && Array.isArray(response.data) ? response.data : []
     },
     enabled: linkType === 'requirement',

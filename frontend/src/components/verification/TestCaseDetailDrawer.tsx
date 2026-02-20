@@ -825,7 +825,7 @@ function VerifiesElementsSection({ testCaseId, projectId }: { testCaseId?: strin
   const { data: requirements = [] } = useQuery({
     queryKey: ['requirements', projectId],
     queryFn: async () => {
-      const response = await requirementService.getRequirements(projectId)
+      const response = await requirementService.getAllRequirements(projectId)
       return response.success && response.data ? response.data : []
     },
     enabled: !!projectId,

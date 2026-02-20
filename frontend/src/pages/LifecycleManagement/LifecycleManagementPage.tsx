@@ -227,7 +227,7 @@ function LifecycleItemCount({ lifecycle }: { lifecycle: any }) {
                 totalCount += response.data.length
               }
             } else if (itemType === 'Requirement') {
-              const response = await requirementService.getRequirements(project.id)
+              const response = await requirementService.getAllRequirements(project.id)
               if (response.success && response.data) {
                 totalCount += response.data.length
               }
@@ -2361,7 +2361,7 @@ function ViewLifecycleModal({ lifecycleId, lifecycle, onClose }: { lifecycleId: 
                 })
               }
             } else if (itemType === 'Requirement') {
-              const response = await requirementService.getRequirements(project.id)
+              const response = await requirementService.getAllRequirements(project.id)
               if (response.success && response.data) {
                 response.data.forEach((item: any) => {
                   items.push({

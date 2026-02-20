@@ -51,7 +51,7 @@ export default function BaselineManager({ projectId, onClose }: BaselineManagerP
   const { data: requirements = [], isLoading: loadingRequirements } = useQuery({
     queryKey: ['requirements', projectId],
     queryFn: async () => {
-      const response = await requirementService.getRequirements(projectId)
+      const response = await requirementService.getAllRequirements(projectId)
       return response.success && response.data ? response.data : []
     },
     enabled: !!projectId && isCreateModalOpen,

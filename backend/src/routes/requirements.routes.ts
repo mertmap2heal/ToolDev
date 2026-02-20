@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
 import {
   getRequirements,
+  getAllRequirements,
   getRequirement,
   getAuditEvents,
   createRequirement,
@@ -41,6 +42,7 @@ router.delete('/:projectId/custom-types/:typeId', deleteCustomRequirementType)
 router.post('/:projectId/migrate-category-to-type', migrateCategoryToRequirementType)
 
 router.get('/:projectId', getRequirements)
+router.get('/:projectId/all', getAllRequirements)
 router.get('/:projectId/audit', getAuditEvents)
 router.get('/:projectId/:requirementId', getRequirement)
 router.get('/:projectId/:requirementId/children', getRequirementChildren)

@@ -1,3 +1,58 @@
+// --- Enterprise Features ---
+export const getProjectAuditLogs = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id: projectId } = req.params;
+    const logs = await prisma.auditLog.findMany({
+      where: { projectId },
+      orderBy: { createdAt: 'desc' },
+      include: { user: true },
+    });
+    res.json({ success: true, data: logs });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to fetch audit logs.' });
+  }
+};
+
+export const getProjectAnalytics = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id: projectId } = req.params;
+    const analytics = await prisma.projectAnalytics.findUnique({ where: { projectId } });
+    res.json({ success: true, data: analytics });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to fetch analytics.' });
+  }
+};
+
+export const bulkUpdateProjects = async (req: AuthRequest, res: Response) => {
+  try {
+    const { ids, updates } = req.body;
+    if (!Array.isArray(ids) || !updates) return res.status(400).json({ success: false, error: 'Invalid payload.' });
+    const result = await prisma.project.updateMany({ where: { id: { in: ids } }, data: updates });
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Bulk update failed.' });
+  }
+};
+
+export const exportProjects = async (req: AuthRequest, res: Response) => {
+  try {
+    const projects = await prisma.project.findMany();
+    res.json({ success: true, data: projects });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Export failed.' });
+  }
+};
+
+export const importProjects = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projects } = req.body;
+    if (!Array.isArray(projects)) return res.status(400).json({ success: false, error: 'Invalid payload.' });
+    const created = await prisma.project.createMany({ data: projects });
+    res.json({ success: true, data: created });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Import failed.' });
+  }
+};
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { PrismaClient } from '@prisma/client'

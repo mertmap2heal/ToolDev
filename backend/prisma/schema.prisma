@@ -1079,21 +1079,43 @@ model BarcodeDefinition {
 }
 
 // Traceability
-model Lot {
-  id              String    @id @default(uuid())
-  itemId          String
-  lotCode         String
-  manufactureDate DateTime?
-  expiryDate      DateTime?
-  notes           String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+model Project {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  domain      String
+  companyName String?
+  progress    Int      @default(0)
+  status      String   @default("active")
+  deadline    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  members     ProjectMember[]
+  auditLogs   AuditLog[]
+}
 
-  item            Item                    @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  ledgerEntries   InventoryLedger[]
-  receiptLines    GoodsReceiptLine[]
-  shipmentLines   ShipmentLine[]
-  transferLines   TransferLine[]
+model AuditLog {
+  id          String   @id @default(uuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id])
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  action      String
+  details     String?
+  createdAt   DateTime @default(now())
+}
+
+model ProjectAnalytics {
+  id          String   @id @default(uuid())
+  projectId   String  @unique
+  project     Project @relation(fields: [projectId], references: [id])
+  totalTasks  Int     @default(0)
+  completedTasks Int  @default(0)
+  overdueTasks Int    @default(0)
+  lastCalculated DateTime @default(now())
+}
   adjustmentLines AdjustmentLine[]
   cycleCountLines CycleCountLine[]
   costLayers      InventoryCostLayer[]
