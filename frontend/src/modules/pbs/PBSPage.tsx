@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { projectService } from '../../services/project.service'
+import { requirementService } from '../../services/requirement.service'
 import {
   Plus,
   Download,
@@ -15,6 +16,9 @@ import {
   Redo2,
   Printer,
   Save,
+  FileText,
+  PanelRight,
+  PanelRightClose,
 } from 'lucide-react'
 import clsx from 'clsx'
 import type { PBSNode, PBSChangeLogEntry, SaveStatus } from './types'
@@ -31,6 +35,7 @@ import RenameModal from './RenameModal'
 import ImportModal from './ImportModal'
 import PBSPrintView from './PBSPrintView'
 import PBSToolsMenu from './PBSToolsMenu'
+import RequirementsPBSTree from '../../components/requirements/RequirementsPBSTree'
 
 const SAVE_DEBOUNCE_MS = 600
 
@@ -57,6 +62,12 @@ export default function PBSPage() {
   const PANEL_MAX = 600
   const PANEL_DEFAULT = 320
   const [leftPanelWidth, setLeftPanelWidth] = useState(PANEL_DEFAULT)
+  const [isRequirementsPanelOpen, setIsRequirementsPanelOpen] = useState(true)
+  const [selectedComponentIdForReqs, setSelectedComponentIdForReqs] = useState<string | null>(null)
+  const REQS_PANEL_WIDTH_KEY = `pbs::reqs-panel-width::${projectId ?? 'default'}`
+  const REQS_PANEL_MIN = 260
+  const REQS_PANEL_MAX = 500
+  const [requirementsPanelWidth, setRequirementsPanelWidth] = useState(300)
 
   useEffect(() => {
     if (focusType === 'pbs_component' && focusId && nodes.some((n) => n.id === focusId)) {
@@ -79,6 +90,26 @@ export default function PBSPage() {
 
   useEffect(() => {
     try {
+      const stored = localStorage.getItem(REQS_PANEL_WIDTH_KEY)
+      if (stored) {
+        const w = parseInt(stored, 10)
+        if (!Number.isNaN(w) && w >= REQS_PANEL_MIN && w <= REQS_PANEL_MAX) setRequirementsPanelWidth(w)
+      }
+    } catch {
+      // ignore
+    }
+  }, [projectId, REQS_PANEL_WIDTH_KEY])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(REQS_PANEL_WIDTH_KEY, String(requirementsPanelWidth))
+    } catch {
+      // ignore
+    }
+  }, [requirementsPanelWidth, REQS_PANEL_WIDTH_KEY])
+
+  useEffect(() => {
+    try {
       localStorage.setItem(PANEL_WIDTH_KEY, String(leftPanelWidth))
     } catch {
       // ignore
@@ -86,6 +117,31 @@ export default function PBSPage() {
   }, [leftPanelWidth, PANEL_WIDTH_KEY])
 
   const resizeContainerRef = useRef<HTMLDivElement>(null)
+  const reqsResizeContainerRef = useRef<HTMLDivElement>(null)
+  const handleReqsResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      const container = reqsResizeContainerRef.current
+      const onMove = (moveEvent: MouseEvent) => {
+        const containerRect = container?.getBoundingClientRect()
+        if (!containerRect) return
+        const rawWidth = containerRect.right - moveEvent.clientX
+        const newWidth = Math.min(REQS_PANEL_MAX, Math.max(REQS_PANEL_MIN, rawWidth))
+        setRequirementsPanelWidth(newWidth)
+      }
+      const onUp = () => {
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+      }
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
+    },
+    [REQS_PANEL_MIN, REQS_PANEL_MAX]
+  )
   const handleResizeStart = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault()
@@ -128,6 +184,16 @@ export default function PBSPage() {
       return response.success && response.data ? response.data : null
     },
     enabled: !!projectId,
+  })
+
+  const { data: requirements = [] } = useQuery({
+    queryKey: ['requirements', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const response = await requirementService.getAllRequirements(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId && isRequirementsPanelOpen,
   })
   const projectDisplayName =
     (projectData?.name != null && String(projectData.name).trim() !== '')
@@ -544,6 +610,21 @@ export default function PBSPage() {
             )}
           </div>
 
+          <button
+            type="button"
+            onClick={() => setIsRequirementsPanelOpen((o) => !o)}
+            className={clsx(
+              'inline-flex gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors',
+              isRequirementsPanelOpen
+                ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+                : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+            )}
+            title={isRequirementsPanelOpen ? 'Hide requirements' : 'Show requirements'}
+          >
+            {isRequirementsPanelOpen ? <PanelRightClose size={16} /> : <PanelRight size={16} />}
+            <FileText size={16} />
+            Requirements
+          </button>
           <PBSToolsMenu
             onExportCSV={exportCSV}
             onExportJSON={exportJSON}
@@ -603,7 +684,10 @@ export default function PBSPage() {
         >
           <div className="w-0.5 h-8 bg-gray-300 dark:bg-gray-600 rounded-full group-hover:bg-blue-500 dark:group-hover:bg-blue-400 transition-colors" />
         </div>
-        <div className="flex-1 min-w-0 flex flex-col rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+        <div
+          ref={reqsResizeContainerRef}
+          className="flex-1 min-w-0 flex flex-col rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden"
+        >
           {nodes.length === 0 ? (
             // Empty state (e.g. user deleted all nodes) — restore project root
             <div className="flex-1 flex flex-col items-center justify-center p-8 overflow-y-auto">
@@ -656,9 +740,36 @@ export default function PBSPage() {
               changeLog={changeLog}
               onUpdate={handlers.updateNode}
               pbsCodeEditable={false}
+              projectId={projectId}
             />
           )}
         </div>
+        {isRequirementsPanelOpen && projectId && (
+          <>
+            <div
+              role="separator"
+              aria-label="Resize requirements panel"
+              onMouseDown={handleReqsResizeStart}
+              className="shrink-0 w-2 cursor-col-resize flex items-center justify-center group hover:bg-blue-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <div className="w-0.5 h-8 bg-gray-300 dark:bg-gray-600 rounded-full group-hover:bg-blue-500 dark:group-hover:bg-blue-400" />
+            </div>
+            <div
+              className="shrink-0 flex flex-col bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
+              style={{ width: requirementsPanelWidth }}
+            >
+              <RequirementsPBSTree
+                projectId={projectId}
+                requirements={requirements}
+                selectedComponentId={selectedComponentIdForReqs}
+                onComponentSelect={(id) => {
+                  setSelectedComponentIdForReqs(id)
+                  if (id) setSelectedId(id)
+                }}
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {/* Rename Modal */}

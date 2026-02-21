@@ -26,8 +26,20 @@ interface FlatTreeItem {
     requirement?: Requirement
 }
 
+/** Collect all node IDs in the tree recursively */
+function collectNodeIds(nodes: ComponentTreeNode[]): Set<string> {
+    const ids = new Set<string>()
+    function walk(n: ComponentTreeNode) {
+        ids.add(n.id)
+        if (n.children) n.children.forEach(walk)
+    }
+    nodes.forEach(walk)
+    return ids
+}
+
 /**
  * Flatten the component tree + requirements into a list for rendering.
+ * Requirements whose componentId points to a missing/orphaned PBS node are shown as Unassigned.
  */
 function buildFlatTree(
     tree: ComponentTreeNode[],
@@ -36,12 +48,13 @@ function buildFlatTree(
     searchQuery: string
 ): FlatTreeItem[] {
     const items: FlatTreeItem[] = []
+    const validComponentIds = collectNodeIds(tree)
 
-    // Build a map of componentId -> requirements
+    // Build a map of componentId -> requirements; treat orphaned componentIds as unassigned
     const reqsByComponent = new Map<string, Requirement[]>()
     const unassigned: Requirement[] = []
     for (const req of requirements) {
-        if (req.componentId) {
+        if (req.componentId && validComponentIds.has(req.componentId)) {
             const list = reqsByComponent.get(req.componentId) || []
             list.push(req)
             reqsByComponent.set(req.componentId, list)
@@ -255,6 +268,8 @@ export default function RequirementsPBSTree({
             requirementService.updateRequirementComponent(projectId, requirementId, componentId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+            queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+            queryClient.invalidateQueries({ queryKey: ['links', projectId] })
         },
         onError: (error: any) => {
             console.error('Failed to assign component:', error)

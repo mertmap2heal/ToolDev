@@ -2534,6 +2534,33 @@ export const updateRequirementComponent = async (req: AuthRequest, res: Response
       },
     })
 
+    // Sync allocated_to trace link so Traceability Matrix and lifecycle gates stay consistent
+    const existingAllocLinks = await prisma.traceLink.findMany({
+      where: {
+        projectId,
+        sourceType: 'requirement',
+        sourceId: requirementId,
+        targetType: 'pbs_component',
+        linkType: 'allocated_to',
+      },
+    })
+    for (const link of existingAllocLinks) {
+      await traceabilityService.deleteTraceLink(projectId, link.id, req.userId)
+    }
+    if (componentId) {
+      await traceabilityService.createTraceLink(
+        projectId,
+        'requirement',
+        requirementId,
+        'pbs_component',
+        componentId,
+        'allocated_to',
+        undefined,
+        'Auto-linked from PBS component assignment',
+        req.userId
+      )
+    }
+
     const changes = buildRequirementChangeSummary(requirement, updated as any)
     await notifyRequirementSubscribers({
       projectId,

@@ -121,15 +121,22 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     enabled: !!projectId,
   })
 
+  // Filter linkage targets by type when adapter returns mixed types (e.g. verification: test_plan + test_case)
+  const filteredTargets = useMemo(() => {
+    if (!LINKAGE_V1) return []
+    return linkageTargets.filter((t) => (t as EntitySummary).type === linkageTargetType)
+  }, [LINKAGE_V1, linkageTargets, linkageTargetType])
+
   // Build a map of source -> target links based on matrix type
   const linkMap = useMemo(() => {
     const map = new Map<string, Map<string, { linked: boolean; suspect: boolean; linkId?: string }>>()
 
     if (LINKAGE_V1) {
       // LINKAGE_V1: requirements vs selected target type (PBS, interfaces, etc.)
+      const targets = filteredTargets
       requirements.forEach((req) => {
         map.set(req.id, new Map())
-        linkageTargets.forEach((t) => {
+        targets.forEach((t) => {
           map.get(req.id)?.set(t.id, { linked: false, suspect: false })
         })
       })
@@ -210,7 +217,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     }
 
     return map
-  }, [requirements, functions, traceLinks, matrixType, LINKAGE_V1, linkageTargetType, linkageTargets])
+  }, [requirements, functions, traceLinks, matrixType, LINKAGE_V1, linkageTargetType, linkageTargets, filteredTargets])
 
   // Calculate coverage statistics
   const stats = useMemo(() => {
@@ -243,7 +250,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     targetsWithLinks = linkedTargets.size
 
     const targetCount = LINKAGE_V1
-      ? linkageTargets.length
+      ? filteredTargets.length
       : matrixType === 'requirements-functions'
         ? functions.length
         : requirements.length
@@ -258,7 +265,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
       sourceCoverage: requirements.length > 0 ? Math.round((sourcesWithLinks / requirements.length) * 100) : 0,
       targetCoverage: targetCount > 0 ? Math.round((targetsWithLinks / targetCount) * 100) : 0,
     }
-  }, [linkMap, requirements.length, functions.length, matrixType, LINKAGE_V1, linkageTargets.length])
+  }, [linkMap, requirements.length, functions.length, matrixType, LINKAGE_V1, filteredTargets.length])
 
   // Filter requirements based on filter settings
   const filteredRequirements = useMemo(() => {
@@ -279,10 +286,10 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
 
   // Get target items based on matrix type or linkage target
   const targetItems = useMemo(() => {
-    if (LINKAGE_V1) return linkageTargets
+    if (LINKAGE_V1) return filteredTargets
     if (matrixType === 'requirements-functions') return functions
     return requirements
-  }, [LINKAGE_V1, matrixType, functions, requirements, linkageTargets])
+  }, [LINKAGE_V1, matrixType, functions, requirements, filteredTargets])
 
   // Get cell status
   const getCellStatus = (sourceId: string, targetId: string): CellStatus => {

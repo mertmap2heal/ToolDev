@@ -1,5 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
-import { Box, FileText, Link2, Paperclip, History, Upload, Download, Trash2, AlertTriangle, type LucideIcon } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
+import { Box, FileText, Link2, Paperclip, History, Upload, Download, Trash2, AlertTriangle, ListChecks, type LucideIcon } from 'lucide-react'
 import clsx from 'clsx'
 import { format } from 'date-fns'
 import type { PBSNode, PBSType, PBSStatus, PBSChangeLogEntry, PBSRelationType, PBSRelationship, PBSAttachment } from './types'
@@ -13,14 +15,17 @@ import {
 } from './types'
 import { generateId, nowISO } from './utils'
 import { getNodePath } from './treeUtils'
+import { requirementService } from '../../services/requirement.service'
+import type { Requirement } from 'shared/types/engineering.types'
 
-type TabId = 'overview' | 'attributes' | 'relationships' | 'attachments' | 'changelog'
+type TabId = 'overview' | 'attributes' | 'relationships' | 'attachments' | 'requirements' | 'changelog'
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: 'overview', label: 'Overview', icon: Box },
   { id: 'attributes', label: 'Attributes', icon: FileText },
   { id: 'relationships', label: 'Relationships', icon: Link2 },
   { id: 'attachments', label: 'Attachments', icon: Paperclip },
+  { id: 'requirements', label: 'Requirements', icon: ListChecks },
   { id: 'changelog', label: 'Change Log', icon: History },
 ]
 
@@ -30,6 +35,7 @@ interface PBSNodeEditorProps {
   changeLog: PBSChangeLogEntry[]
   onUpdate: (updates: Partial<PBSNode>) => void
   pbsCodeEditable?: boolean
+  projectId?: string
 }
 
 export default function PBSNodeEditor({
@@ -38,6 +44,7 @@ export default function PBSNodeEditor({
   changeLog,
   onUpdate,
   pbsCodeEditable = false,
+  projectId,
 }: PBSNodeEditorProps) {
   const [activeTab, setActiveTab] = useState<TabId>('overview')
 
@@ -81,6 +88,9 @@ export default function PBSNodeEditor({
         )}
         {activeTab === 'attachments' && (
           <AttachmentsTab node={node} onUpdate={onUpdate} />
+        )}
+        {activeTab === 'requirements' && projectId && (
+          <RequirementsTab projectId={projectId} componentId={node.id} componentName={node.name} />
         )}
         {activeTab === 'changelog' && <ChangeLogTab entries={nodeChangeLog} />}
       </div>
@@ -844,6 +854,76 @@ function AttachmentsTab({
           Consider using external storage for large files.
         </p>
       </div>
+    </div>
+  )
+}
+
+function RequirementsTab({
+  projectId,
+  componentId,
+  componentName,
+}: {
+  projectId: string
+  componentId: string
+  componentName: string
+}) {
+  const navigate = useNavigate()
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['requirements-by-component', projectId, componentId],
+    queryFn: async () => {
+      const response = await requirementService.getRequirements(projectId, {
+        componentId,
+        pageSize: 100,
+      })
+      if (!response.success || !response.data) return []
+      const paginated = response.data as { items?: Requirement[] }
+      return paginated.items ?? []
+    },
+    enabled: !!projectId && !!componentId,
+  })
+  const requirements: Requirement[] = data ?? []
+
+  if (isLoading) {
+    return (
+      <div className="text-sm text-gray-500 dark:text-gray-400">Loading linked requirements…</div>
+    )
+  }
+  if (error) {
+    return (
+      <div className="text-sm text-amber-600 dark:text-amber-400">
+        Failed to load requirements
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        Requirements allocated to <span className="font-medium text-gray-900 dark:text-white">{componentName}</span>
+      </p>
+      {requirements.length === 0 ? (
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          No requirements allocated to this component. Use the Requirements panel on the right to drag and drop.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {requirements.map((req) => (
+            <li
+              key={req.id}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors"
+              onClick={() => navigate(`/projects/${projectId}/requirements?requirementId=${req.id}`)}
+            >
+              <FileText size={14} className="text-blue-500 shrink-0" />
+              <span className="font-mono text-xs text-gray-500 dark:text-gray-400 shrink-0">
+                {req.requirementId ?? req.id.slice(0, 8)}
+              </span>
+              <span className="text-sm text-gray-900 dark:text-white truncate" title={req.title}>
+                {req.title}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

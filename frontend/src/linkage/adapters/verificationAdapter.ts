@@ -26,7 +26,6 @@ async function fetchVerificationEntities(projectId: string): Promise<EntitySumma
     )
   }
 
-  console.log('Verification Adapter: Returning', results)
   return results
 }
 
