@@ -1739,27 +1739,6 @@ export default function RequirementsPage() {
                 <span className="text-sm">Quality</span>
               </button>
               </div>
-              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
-              {/* MoC coverage badge */}
-              {(() => {
-                const total = allRequirements.length
-                const mocsAssigned = allRequirements.filter(r => r.linkedMocCode != null).length
-                const pct = total > 0 ? Math.round((mocsAssigned / total) * 100) : 0
-                return (
-                  <button
-                    onClick={() => setIsQualityPanelOpen(true)}
-                    title="MoC assignment rate. Click to open Quality panel."
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors text-sm"
-                  >
-                    <span className="font-medium">MoC:</span>
-                    <span className={pct >= 90 ? 'text-green-600 dark:text-green-400' : pct >= 50 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400'}>
-                      {mocsAssigned}/{total}
-                    </span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">({pct}%)</span>
-                  </button>
-                )
-              })()}
-              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
               <div className="relative" ref={columnSelectorRef}>
                 <button
                   onClick={() => setColumnSelectorOpen(!columnSelectorOpen)}
