@@ -3,10 +3,12 @@ import { ChevronRight, ChevronDown, Package, FileText, Search, FolderOpen, Inbox
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { componentService } from '../../services/component.service'
 import { requirementService } from '../../services/requirement.service'
+import { linkService } from '../../services/link.service'
 import { loadPBSAsync } from '../../modules/pbs/storage'
 import type { ComponentTreeNode } from 'shared/types/project.types'
 import clsx from 'clsx'
 import type { Requirement } from 'shared/types/engineering.types'
+import { LINKAGE_V1 } from '../../config/featureFlags'
 
 interface LinkLike {
   id?: string
@@ -22,17 +24,27 @@ interface LinkLike {
   linkType?: string
 }
 
+export interface LinkedElementClickPayload {
+  targetType: string
+  targetId: string
+  sourceType: string
+  sourceId: string
+  isOutgoing: boolean
+  link: LinkLike
+}
+
 interface RequirementsPBSTreeProps {
   projectId: string
   requirements: Requirement[]
   selectedComponentId: string | null
   onComponentSelect: (componentId: string | null) => void
   links?: LinkLike[]
+  onLinkedElementClick?: (payload: LinkedElementClickPayload) => void
 }
 
 interface FlatTreeItem {
   id: string
-  type: 'component' | 'requirement' | 'unassigned' | 'linked_element'
+  type: 'component' | 'requirement' | 'unassigned' | 'linked_element' | 'no_linked_elements'
   name: string
   depth: number
   parentComponentId: string | null
@@ -124,7 +136,7 @@ function buildFlatTree(
             // Add requirements under this component (with optional linked elements)
             for (const req of reqs) {
               if (searchQuery && !(req.requirementId || req.title).toLowerCase().includes(lowerQuery)) continue
-              const reqLinks = getLinksForRequirement(links, req.id)
+              const reqLinks = getLinksForRequirement(links, req)
               const hasLinkedElements = reqLinks.length > 0
               items.push({
                 id: `req-${req.id}`,
@@ -136,22 +148,34 @@ function buildFlatTree(
                 requirementId: req.requirementId || undefined,
                 requirement: req,
               })
-              if (hasLinkedElements && expandedReqs.has(req.id)) {
-                for (const link of reqLinks) {
-                  const isOutgoing = link.sourceType === 'requirement' && link.sourceId === req.id
-                  const label = isOutgoing
-                    ? (link.targetLabel ?? link.targetTitle ?? link.targetDisplayId ?? `${link.targetType}:${link.targetId.slice(0, 8)}`)
-                    : (link.sourceTitle ?? link.sourceDisplayId ?? `${link.sourceType}:${link.sourceId.slice(0, 8)}`)
-                  const targetType = isOutgoing ? link.targetType : link.sourceType
+              if (expandedReqs.has(req.id)) {
+                if (hasLinkedElements) {
+                  for (const link of reqLinks) {
+                    const isOutgoing = link.sourceType === 'requirement' && link.sourceId === req.id
+                    const label = isOutgoing
+                      ? (link.targetLabel ?? link.targetTitle ?? link.targetDisplayId ?? `${link.targetType}:${link.targetId.slice(0, 8)}`)
+                      : (link.sourceTitle ?? link.sourceDisplayId ?? `${link.sourceType}:${link.sourceId.slice(0, 8)}`)
+                    const targetType = isOutgoing ? link.targetType : link.sourceType
+                    items.push({
+                      id: link.id ?? `link-${link.sourceType}-${link.targetType}-${link.targetId}`,
+                      type: 'linked_element',
+                      name: label,
+                      depth: depth + 2,
+                      parentComponentId: node.id,
+                      hasChildren: false,
+                      link: { ...link, _displayTargetType: targetType },
+                    })
+                  }
+                } else {
                   items.push({
-                    id: link.id ?? `link-${link.sourceType}-${link.targetType}-${link.targetId}`,
-                    type: 'linked_element',
-                    name: label,
+                    id: `no-links-${req.id}`,
+                    type: 'no_linked_elements',
+                    name: links.length > 0 ? 'No linked elements (IDs may not match)' : 'No links loaded yet',
                     depth: depth + 2,
                     parentComponentId: node.id,
                     hasChildren: false,
-                    link: { ...link, _displayTargetType: targetType },
-                  })
+                    requirement: req,
+                  } as FlatTreeItem)
                 }
               }
             }
@@ -179,7 +203,7 @@ function buildFlatTree(
 
         if (expandedNodes.has('unassigned')) {
             for (const req of filteredUnassigned) {
-              const reqLinks = getLinksForRequirement(links, req.id)
+              const reqLinks = getLinksForRequirement(links, req)
               const hasLinkedElements = reqLinks.length > 0
               items.push({
                 id: `req-${req.id}`,
@@ -191,22 +215,34 @@ function buildFlatTree(
                 requirementId: req.requirementId || undefined,
                 requirement: req,
               })
-              if (hasLinkedElements && expandedReqs.has(req.id)) {
-                for (const link of reqLinks) {
-                  const isOutgoing = link.sourceType === 'requirement' && link.sourceId === req.id
-                  const label = isOutgoing
-                    ? (link.targetLabel ?? link.targetTitle ?? link.targetDisplayId ?? `${link.targetType}:${link.targetId.slice(0, 8)}`)
-                    : (link.sourceTitle ?? link.sourceDisplayId ?? `${link.sourceType}:${link.sourceId.slice(0, 8)}`)
-                  const targetType = isOutgoing ? link.targetType : link.sourceType
+              if (expandedReqs.has(req.id)) {
+                if (hasLinkedElements) {
+                  for (const link of reqLinks) {
+                    const isOutgoing = link.sourceType === 'requirement' && link.sourceId === req.id
+                    const label = isOutgoing
+                      ? (link.targetLabel ?? link.targetTitle ?? link.targetDisplayId ?? `${link.targetType}:${link.targetId.slice(0, 8)}`)
+                      : (link.sourceTitle ?? link.sourceDisplayId ?? `${link.sourceType}:${link.sourceId.slice(0, 8)}`)
+                    const targetType = isOutgoing ? link.targetType : link.sourceType
+                    items.push({
+                      id: link.id ?? `link-${link.sourceType}-${link.targetType}-${link.targetId}`,
+                      type: 'linked_element',
+                      name: label,
+                      depth: 2,
+                      parentComponentId: null,
+                      hasChildren: false,
+                      link: { ...link, _displayTargetType: targetType },
+                    })
+                  }
+                } else {
                   items.push({
-                    id: link.id ?? `link-${link.sourceType}-${link.targetType}-${link.targetId}`,
-                    type: 'linked_element',
-                    name: label,
+                    id: `no-links-${req.id}`,
+                    type: 'no_linked_elements',
+                    name: links.length > 0 ? 'No linked elements (IDs may not match)' : 'No links loaded yet',
                     depth: 2,
                     parentComponentId: null,
                     hasChildren: false,
-                    link: { ...link, _displayTargetType: targetType },
-                  })
+                    requirement: req,
+                  } as FlatTreeItem)
                 }
               }
             }
@@ -217,10 +253,17 @@ function buildFlatTree(
 }
 
 /** Get all links for a requirement (outgoing + incoming), excluding allocated_to->pbs_component */
-function getLinksForRequirement(links: LinkLike[], reqId: string): LinkLike[] {
+function getLinksForRequirement(links: LinkLike[], req: { id: string; requirementId?: string | null }): LinkLike[] {
+  const norm = (s: string | null | undefined) => String(s ?? '').trim().toLowerCase()
+  const reqIdNorm = norm(req.id)
+  const reqDisplayNorm = norm(req.requirementId)
+  const matchId = (id: string) => {
+    const idNorm = norm(id)
+    return idNorm && (idNorm === reqIdNorm || idNorm === reqDisplayNorm)
+  }
   return links.filter((l) => {
     if (l.linkType === 'allocated_to' && (l.targetType === 'pbs_component' || l.sourceType === 'pbs_component')) return false
-    return (l.sourceType === 'requirement' && l.sourceId === reqId) || (l.targetType === 'requirement' && l.targetId === reqId)
+    return (l.sourceType === 'requirement' && matchId(l.sourceId)) || (l.targetType === 'requirement' && matchId(l.targetId))
   })
 }
 
@@ -230,10 +273,33 @@ export default function RequirementsPBSTree({
   selectedComponentId,
   onComponentSelect,
   links = [],
+  onLinkedElementClick,
 }: RequirementsPBSTreeProps) {
   const queryClient = useQueryClient()
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['unassigned']))
   const [expandedReqs, setExpandedReqs] = useState<Set<string>>(new Set())
+
+  // Fetch links via linkService (same as Requirement Detail Drawer) - always use our fetch, never parent
+  const { data: fetchedLinks = [] } = useQuery({
+    queryKey: ['links', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const response = await linkService.getLinks(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId && !!LINKAGE_V1,
+  })
+  const effectiveLinks = LINKAGE_V1 ? fetchedLinks : []
+
+  // Debug: log when links loaded but no requirement matches (helps diagnose ID mismatch)
+  useEffect(() => {
+    if (effectiveLinks.length > 0 && requirements.length > 0) {
+      const reqLinks = effectiveLinks.filter((l) => l.sourceType === 'requirement' || l.targetType === 'requirement')
+      const sampleReqIds = [...new Set(reqLinks.flatMap((l) => (l.sourceType === 'requirement' ? [l.sourceId] : []).concat(l.targetType === 'requirement' ? [l.targetId] : [])))].slice(0, 5)
+      const sampleReqIdsFromReqs = requirements.slice(0, 5).map((r) => ({ id: r.id, reqId: r.requirementId }))
+      console.debug('[PBS Tree] Links:', effectiveLinks.length, 'requirement IDs in links:', sampleReqIds, 'req ids from data:', sampleReqIdsFromReqs)
+    }
+  }, [effectiveLinks, requirements])
   const [searchQuery, setSearchQuery] = useState('')
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [pbsSynced, setPbsSynced] = useState(false)
@@ -269,53 +335,54 @@ export default function RequirementsPBSTree({
         syncPBS()
     }, [projectId, pbsSynced])
 
-    // Fetch local PBS data for display
+    // Fetch component tree: PBS local storage first; fall back to backend when PBS is empty
     const { data: componentTree = [] } = useQuery({
-        queryKey: ['pbs-local', projectId],
+        queryKey: ['pbs-local-or-backend', projectId],
         queryFn: async () => {
             const pbsData = await loadPBSAsync(projectId)
-
-            // Map PBSNode[] to ComponentTreeNode[]
-            // We need to build the tree structure from flat list
             const nodes = pbsData.nodes
-            const nodeMap = new Map<string, any>()
-            const rootNodes: any[] = []
 
-            // First pass: create component objects
-            nodes.forEach(node => {
-                nodeMap.set(node.id, {
-                    id: node.id,
-                    projectId: projectId!,
-                    parentId: node.parentId,
-                    name: node.name,
-                    description: node.description,
-                    sortOrder: node.orderIndex,
-                    createdAt: node.createdAt,
-                    updatedAt: node.updatedAt,
-                    children: []
+            // If PBS has nodes, use local structure (requirements use componentIds synced from PBS)
+            if (nodes.length > 0) {
+                const nodeMap = new Map<string, any>()
+                const rootNodes: any[] = []
+                nodes.forEach(node => {
+                    nodeMap.set(node.id, {
+                        id: node.id,
+                        projectId: projectId!,
+                        parentId: node.parentId,
+                        name: node.name,
+                        description: node.description,
+                        sortOrder: node.orderIndex,
+                        createdAt: node.createdAt,
+                        updatedAt: node.updatedAt,
+                        children: []
+                    })
                 })
-            })
-
-            // Second pass: build tree
-            nodes.forEach(node => {
-                const component = nodeMap.get(node.id)
-                if (node.parentId && nodeMap.has(node.parentId)) {
-                    nodeMap.get(node.parentId).children.push(component)
-                } else {
-                    rootNodes.push(component)
+                nodes.forEach(node => {
+                    const component = nodeMap.get(node.id)
+                    if (node.parentId && nodeMap.has(node.parentId)) {
+                        nodeMap.get(node.parentId).children.push(component)
+                    } else {
+                        rootNodes.push(component)
+                    }
+                })
+                const sortNodes = (n: any[]) => {
+                    n.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+                    n.forEach(child => {
+                        if (child.children?.length) sortNodes(child.children)
+                    })
                 }
-            })
-
-            // Sort by orderIndex
-            const sortNodes = (n: any[]) => {
-                n.sort((a, b) => a.sortOrder - b.sortOrder)
-                n.forEach(child => {
-                    if (child.children.length > 0) sortNodes(child.children)
-                })
+                sortNodes(rootNodes)
+                return rootNodes
             }
-            sortNodes(rootNodes)
 
-            return rootNodes
+            // PBS empty: use backend component tree so requirements appear under their assigned components
+            const response = await componentService.getComponentTree(projectId!)
+            if (response.success && response.data && response.data.length > 0) {
+                return response.data
+            }
+            return []
         },
         enabled: !!projectId,
     })
@@ -400,9 +467,25 @@ export default function RequirementsPBSTree({
     }, [assignComponentMutation])
 
   const flatItems = useMemo(
-    () => buildFlatTree(componentTree, requirements, expandedNodes, expandedReqs, searchQuery, links),
-    [componentTree, requirements, expandedNodes, expandedReqs, searchQuery, links]
+    () => buildFlatTree(componentTree, requirements, expandedNodes, expandedReqs, searchQuery, effectiveLinks),
+    [componentTree, requirements, expandedNodes, expandedReqs, searchQuery, effectiveLinks]
   )
+
+  // Auto-expand requirements that have linked elements so they're visible by default
+  useEffect(() => {
+    if (!LINKAGE_V1 || effectiveLinks.length === 0) return
+    const toExpand = new Set<string>()
+    for (const req of requirements) {
+      if (getLinksForRequirement(effectiveLinks, req).length > 0) toExpand.add(req.id)
+    }
+    if (toExpand.size > 0) {
+      setExpandedReqs((prev) => {
+        const next = new Set(prev)
+        toExpand.forEach((id) => next.add(id))
+        return next
+      })
+    }
+  }, [requirements, effectiveLinks])
 
     // Count requirements per component
     const reqCounts = useMemo(() => {
@@ -458,7 +541,8 @@ export default function RequirementsPBSTree({
 
                     if (item.type === 'requirement') {
                       const req = item.requirement!
-                      const hasLinkedElements = item.hasChildren
+                      const reqLinks = getLinksForRequirement(effectiveLinks, req)
+                      const hasLinkedElements = reqLinks.length > 0
                       const isReqExpanded = expandedReqs.has(req.id)
                       return (
                         <div
@@ -470,13 +554,14 @@ export default function RequirementsPBSTree({
                         >
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); hasLinkedElements && toggleReq(req.id) }}
+                            onClick={(e) => { e.stopPropagation(); toggleReq(req.id) }}
                             className={clsx(
                               'flex-shrink-0 w-4 h-4 flex items-center justify-center rounded transition-colors',
-                              hasLinkedElements ? 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600' : 'invisible'
+                              'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
                             )}
+                            title={hasLinkedElements ? `${reqLinks.length} linked` : 'Expand for linked elements'}
                           >
-                            {hasLinkedElements ? (isReqExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />) : <span className="w-3" />}
+                            {isReqExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                           </button>
                           <FileText className="w-3.5 h-3.5 text-blue-400 dark:text-blue-500 flex-shrink-0 opacity-70 group-hover:opacity-100 transition-opacity" />
                           <span className="text-gray-400 dark:text-gray-500 font-mono text-[10px] flex-shrink-0">
@@ -486,8 +571,20 @@ export default function RequirementsPBSTree({
                             {item.name}
                           </span>
                           {hasLinkedElements && !isReqExpanded && (
-                            <span className="flex-shrink-0 text-[10px] text-gray-400 dark:text-gray-500">+{getLinksForRequirement(links, req.id).length}</span>
+                            <span className="flex-shrink-0 text-[10px] text-gray-400 dark:text-gray-500">+{reqLinks.length}</span>
                           )}
+                        </div>
+                      )
+                    }
+
+                    if (item.type === 'no_linked_elements') {
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-2 px-3 py-1 mx-2 text-xs text-gray-400 dark:text-gray-500 italic"
+                          style={{ paddingLeft: `${item.depth * 16 + 12}px` }}
+                        >
+                          <span>{item.name}</span>
                         </div>
                       )
                     }
@@ -495,6 +592,9 @@ export default function RequirementsPBSTree({
                     if (item.type === 'linked_element') {
                       const link = item.link!
                       const displayType = (link as { _displayTargetType?: string })._displayTargetType ?? link.targetType
+                      const isOutgoing = link.sourceType === 'requirement' && link.sourceId
+                      const entityType = isOutgoing ? link.targetType : link.sourceType
+                      const entityId = isOutgoing ? link.targetId : link.sourceId
                       const Icon = displayType === 'function' ? Settings
                         : displayType === 'issue' ? AlertCircle
                         : displayType === 'change_request' ? GitPullRequest
@@ -502,15 +602,35 @@ export default function RequirementsPBSTree({
                         : displayType === 'use_case' ? Layers
                         : displayType === 'test_plan' || displayType === 'test_case' ? ClipboardList
                         : Link2
+                      const handleClick = () => {
+                        onLinkedElementClick?.({
+                          targetType: entityType,
+                          targetId: entityId,
+                          sourceType: link.sourceType,
+                          sourceId: link.sourceId,
+                          isOutgoing: !!isOutgoing,
+                          link,
+                        })
+                      }
                       return (
                         <div
                           key={item.id}
-                          className="flex items-center gap-2 px-3 py-1 mx-2 text-xs rounded-md bg-gray-50/50 dark:bg-gray-800/50 border-l-2 border-gray-200 dark:border-gray-700 ml-4"
+                          role="button"
+                          tabIndex={0}
+                          onClick={handleClick}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick() } }}
+                          className={clsx(
+                            'flex items-center gap-2 px-3 py-1 mx-2 text-xs rounded-md border-l-2 ml-4 transition-colors',
+                            onLinkedElementClick
+                              ? 'cursor-pointer bg-gray-50/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 hover:bg-blue-50/80 dark:hover:bg-blue-900/20 hover:border-blue-200 dark:hover:border-blue-800'
+                              : 'bg-gray-50/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'
+                          )}
                           style={{ paddingLeft: `${item.depth * 16 + 8}px` }}
+                          title={onLinkedElementClick ? 'Click to preview' : undefined}
                         >
                           <Icon className="w-3 h-3 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                          <span className="text-gray-500 dark:text-gray-400 font-mono text-[10px] flex-shrink-0 capitalize">{String(displayType).replace('_', ' ')}</span>
-                          <span className="text-gray-600 dark:text-gray-300 truncate" title={item.name}>{item.name}</span>
+                          <span className="text-gray-500 dark:text-gray-400 font-mono text-[10px] flex-shrink-0 capitalize">{String(displayType).replace(/_/g, ' ')}</span>
+                          <span className="text-gray-600 dark:text-gray-300 truncate">{item.name}</span>
                         </div>
                       )
                     }

@@ -15,7 +15,7 @@ import ExportBuilder from '../../components/requirements/ExportBuilder'
 import ImportWizard from '../../components/requirements/ImportWizard'
 import RequirementDiagramsModal from '../../components/requirements/RequirementDiagramsModal'
 import RequirementQualityPanel from '../../components/requirements/RequirementQualityPanel'
-import RequirementsPBSTree from '../../components/requirements/RequirementsPBSTree'
+import RequirementsPBSTree, { type LinkedElementClickPayload } from '../../components/requirements/RequirementsPBSTree'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import CreateIssueModal from '../../components/issues/CreateIssueModal'
 import ReviewStatusBadge from '../../components/requirements/ReviewStatusBadge'
@@ -29,6 +29,7 @@ import { traceabilityService } from '../../services/traceability.service'
 import { linkService } from '../../services/link.service'
 import { baselineService } from '../../services/baseline.service'
 import { LINKAGE_V1, LIFECYCLE_V1 } from '../../config/featureFlags'
+import { buildDeepLink } from '../../linkage/buildDeepLink'
 import ChangeStatusPopover, { getStatusColorClasses } from '../../components/requirements/ChangeStatusPopover'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import type { Requirement, UpdateRequirementDto } from 'shared/types/engineering.types'
@@ -1550,6 +1551,21 @@ export default function RequirementsPage() {
     document.addEventListener('mouseup', handleMouseUp)
   }, [pbsPanelWidth])
 
+  const handleLinkedElementClick = useCallback((payload: LinkedElementClickPayload) => {
+    if (!projectId) return
+    const { targetType, targetId } = payload
+    if (targetType === 'requirement') {
+      const req = allRequirements.find((r) => r.id === targetId || r.requirementId === targetId)
+      if (req) {
+        setDetailRequirement(req)
+      } else {
+        navigate(`/projects/${projectId}/requirements?requirementId=${targetId}`)
+      }
+    } else {
+      navigate(buildDeepLink(projectId, { type: targetType, id: targetId }))
+    }
+  }, [projectId, allRequirements, navigate])
+
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col">
       <div className="flex-shrink-0 pr-6">
@@ -1562,10 +1578,11 @@ export default function RequirementsPage() {
             <div style={{ width: pbsPanelWidth, minWidth: 200 }} className="flex-shrink-0 h-full">
               <RequirementsPBSTree
                 projectId={projectId}
-                requirements={requirements}
+                requirements={allRequirements}
                 selectedComponentId={selectedComponentId}
                 onComponentSelect={setSelectedComponentId}
                 links={LINKAGE_V1 ? links : []}
+                onLinkedElementClick={handleLinkedElementClick}
               />
             </div>
             {/* Resize handle */}

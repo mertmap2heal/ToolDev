@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { projectService } from '../../services/project.service'
 import { requirementService } from '../../services/requirement.service'
@@ -42,12 +42,15 @@ import PBSToolsMenu from './PBSToolsMenu'
 import RequirementsPBSTree from '../../components/requirements/RequirementsPBSTree'
 import FunctionsPBSTree from '../../components/functions/FunctionsPBSTree'
 import { LINKAGE_V1 } from '../../config/featureFlags'
+import { buildDeepLink } from '../../linkage/buildDeepLink'
+import type { LinkedElementClickPayload } from '../../components/requirements/RequirementsPBSTree'
 
 const SAVE_DEBOUNCE_MS = 600
 
 export default function PBSPage() {
   const params = useParams()
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const projectId = params.projectId ?? undefined
   const focusType = searchParams.get('focusType')
   const focusId = searchParams.get('focusId')
@@ -506,6 +509,19 @@ export default function PBSPage() {
     URL.revokeObjectURL(url)
   }, [nodes, projectKey])
 
+  const handleLinkedElementClick = useCallback(
+    (payload: LinkedElementClickPayload) => {
+      if (!projectId) return
+      const { targetType, targetId } = payload
+      if (targetType === 'requirement') {
+        navigate(`/projects/${projectId}/requirements?requirementId=${targetId}`)
+      } else {
+        navigate(buildDeepLink(projectId, { type: targetType, id: targetId }))
+      }
+    },
+    [projectId, navigate]
+  )
+
   const exportJSON = useCallback(() => {
     const json = JSON.stringify({ nodes, changeLog }, null, 2)
     const blob = new Blob([json], { type: 'application/json' })
@@ -884,6 +900,7 @@ export default function PBSPage() {
                     if (id) setSelectedId(id)
                   }}
                   links={LINKAGE_V1 ? links : []}
+                  onLinkedElementClick={handleLinkedElementClick}
                 />
               ) : (
                 <FunctionsPBSTree
