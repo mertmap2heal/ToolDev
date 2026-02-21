@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { ArrowUp, ArrowDown } from 'lucide-react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
-import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, AlertTriangle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft, Target, BarChart3 } from 'lucide-react'
+import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, AlertTriangle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft, BarChart3 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 import CreateRequirementModal from '../../components/requirements/CreateRequirementModal'
@@ -13,9 +13,8 @@ import SuspectLinksReview from '../../components/requirements/SuspectLinksReview
 import BaselineManager from '../../components/requirements/BaselineManager'
 import ExportBuilder from '../../components/requirements/ExportBuilder'
 import ImportWizard from '../../components/requirements/ImportWizard'
-import RequirementDiagram from '../../components/requirements/RequirementDiagram'
+import RequirementDiagramsModal from '../../components/requirements/RequirementDiagramsModal'
 import RequirementQualityPanel from '../../components/requirements/RequirementQualityPanel'
-import AllocationTable from '../../components/requirements/AllocationTable'
 import RequirementsPBSTree from '../../components/requirements/RequirementsPBSTree'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import CreateIssueModal from '../../components/issues/CreateIssueModal'
@@ -79,7 +78,6 @@ export default function RequirementsPage() {
   const [isExportOpen, setIsExportOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [isDiagramOpen, setIsDiagramOpen] = useState(false)
-  const [isAllocationTableOpen, setIsAllocationTableOpen] = useState(false)
   const [isQualityPanelOpen, setIsQualityPanelOpen] = useState(false)
   const [isChangeRequestModalOpen, setIsChangeRequestModalOpen] = useState(false)
   const [selectedRequirementForChangeRequest, setSelectedRequirementForChangeRequest] = useState<Requirement | null>(null)
@@ -1675,14 +1673,6 @@ export default function RequirementsPage() {
                 <span className="text-sm">Matrix</span>
               </button>
               <button
-                onClick={() => setIsAllocationTableOpen(true)}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-                title="View Allocation Table"
-              >
-                <Target size={16} />
-                <span className="text-sm">Allocation</span>
-              </button>
-              <button
                 onClick={() => setIsSuspectReviewOpen(true)}
                 className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
                 title="Review Suspect Links"
@@ -2451,18 +2441,11 @@ export default function RequirementsPage() {
           )}
 
           {isDiagramOpen && projectId && (
-            <RequirementDiagram
+            <RequirementDiagramsModal
+              projectId={projectId}
               requirements={requirements}
               traceLinks={traceLinks}
-              projectId={projectId}
               onClose={() => setIsDiagramOpen(false)}
-            />
-          )}
-
-          {isAllocationTableOpen && projectId && (
-            <AllocationTable
-              projectId={projectId}
-              onClose={() => setIsAllocationTableOpen(false)}
             />
           )}
 

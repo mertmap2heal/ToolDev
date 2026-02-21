@@ -323,7 +323,10 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
-      if (LINKAGE_V1) queryClient.invalidateQueries({ queryKey: ['linkage-targets', projectId, linkageTargetType] })
+      if (LINKAGE_V1) {
+        queryClient.invalidateQueries({ queryKey: ['links', projectId] })
+        queryClient.invalidateQueries({ queryKey: ['linkage-targets', projectId, linkageTargetType] })
+      }
       setShowLinkDialog(false)
       setSelectedReq(null)
       setSelectedFunc(null)
@@ -345,6 +348,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+      if (LINKAGE_V1) queryClient.invalidateQueries({ queryKey: ['links', projectId] })
       setSelectedReq(null)
       setSelectedFunc(null)
     },

@@ -37,6 +37,8 @@ interface RequirementDiagramProps {
   traceLinks?: TraceLink[]
   projectId?: string
   onClose: () => void
+  /** When true, renders without modal overlay (for use inside RequirementDiagramsModal) */
+  embedded?: boolean
 }
 
 /**
@@ -49,6 +51,7 @@ export default function RequirementDiagram({
   traceLinks: initialTraceLinks = [],
   projectId,
   onClose,
+  embedded = false,
 }: RequirementDiagramProps) {
   const diagramRef = useRef<HTMLDivElement>(null)
   
@@ -716,9 +719,11 @@ export default function RequirementDiagram({
 
   const linkTypes: LinkType[] = ['satisfies', 'implements', 'verifies', 'derives', 'refines', 'copy', 'trace', 'allocate']
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[98vw] h-[95vh] flex flex-col">
+  const content = (
+    <div className={clsx(
+      'bg-white dark:bg-gray-800 flex flex-col',
+      embedded ? 'rounded-none w-full h-full' : 'rounded-lg shadow-xl w-[98vw] h-[95vh]'
+    )}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
           <div>
@@ -755,12 +760,14 @@ export default function RequirementDiagram({
                 </>
               )}
             </button>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-            >
-              <X size={20} className="text-gray-600 dark:text-gray-400" />
-            </button>
+            {!embedded && (
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              >
+                <X size={20} className="text-gray-600 dark:text-gray-400" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -1026,6 +1033,15 @@ export default function RequirementDiagram({
           </div>
         </div>
       </div>
+  )
+
+  if (embedded) {
+    return content
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      {content}
     </div>
   )
 }
