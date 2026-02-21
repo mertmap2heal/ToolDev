@@ -1565,6 +1565,7 @@ export default function RequirementsPage() {
                 requirements={requirements}
                 selectedComponentId={selectedComponentId}
                 onComponentSelect={setSelectedComponentId}
+                links={LINKAGE_V1 ? links : []}
               />
             </div>
             {/* Resize handle */}

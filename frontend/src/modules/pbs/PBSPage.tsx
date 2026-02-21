@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { projectService } from '../../services/project.service'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
+import { linkService } from '../../services/link.service'
 import {
   Plus,
   Download,
@@ -40,6 +41,7 @@ import PBSPrintView from './PBSPrintView'
 import PBSToolsMenu from './PBSToolsMenu'
 import RequirementsPBSTree from '../../components/requirements/RequirementsPBSTree'
 import FunctionsPBSTree from '../../components/functions/FunctionsPBSTree'
+import { LINKAGE_V1 } from '../../config/featureFlags'
 
 const SAVE_DEBOUNCE_MS = 600
 
@@ -209,6 +211,16 @@ export default function PBSPage() {
       return response.success && response.data ? response.data : []
     },
     enabled: !!projectId && isRequirementsPanelOpen,
+  })
+
+  const { data: links = [] } = useQuery({
+    queryKey: ['links', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const response = await linkService.getLinks(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId && isRequirementsPanelOpen && LINKAGE_V1,
   })
   const projectDisplayName =
     (projectData?.name != null && String(projectData.name).trim() !== '')
@@ -871,6 +883,7 @@ export default function PBSPage() {
                     setSelectedComponentIdForReqs(id)
                     if (id) setSelectedId(id)
                   }}
+                  links={LINKAGE_V1 ? links : []}
                 />
               ) : (
                 <FunctionsPBSTree

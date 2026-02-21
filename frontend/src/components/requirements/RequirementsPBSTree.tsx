@@ -1,29 +1,46 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
-import { ChevronRight, ChevronDown, Package, FileText, Search, FolderOpen, Inbox } from 'lucide-react'
+import { ChevronRight, ChevronDown, Package, FileText, Search, FolderOpen, Inbox, Settings, AlertCircle, GitPullRequest, Layers, ClipboardList, Link2 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { componentService } from '../../services/component.service'
 import { requirementService } from '../../services/requirement.service'
 import { loadPBSAsync } from '../../modules/pbs/storage'
 import type { ComponentTreeNode } from 'shared/types/project.types'
+import clsx from 'clsx'
 import type { Requirement } from 'shared/types/engineering.types'
 
+interface LinkLike {
+  id?: string
+  sourceType: string
+  sourceId: string
+  targetType: string
+  targetId: string
+  targetLabel?: string
+  targetTitle?: string
+  targetDisplayId?: string
+  sourceTitle?: string
+  sourceDisplayId?: string
+  linkType?: string
+}
+
 interface RequirementsPBSTreeProps {
-    projectId: string
-    requirements: Requirement[]
-    selectedComponentId: string | null
-    onComponentSelect: (componentId: string | null) => void
+  projectId: string
+  requirements: Requirement[]
+  selectedComponentId: string | null
+  onComponentSelect: (componentId: string | null) => void
+  links?: LinkLike[]
 }
 
 interface FlatTreeItem {
-    id: string
-    type: 'component' | 'requirement' | 'unassigned'
-    name: string
-    depth: number
-    parentComponentId: string | null
-    hasChildren: boolean
-    requirementId?: string // display ID for requirements
-    componentId?: string
-    requirement?: Requirement
+  id: string
+  type: 'component' | 'requirement' | 'unassigned' | 'linked_element'
+  name: string
+  depth: number
+  parentComponentId: string | null
+  hasChildren: boolean
+  requirementId?: string
+  componentId?: string
+  requirement?: Requirement
+  link?: LinkLike
 }
 
 /** Collect all node IDs in the tree recursively */
@@ -38,14 +55,17 @@ function collectNodeIds(nodes: ComponentTreeNode[]): Set<string> {
 }
 
 /**
- * Flatten the component tree + requirements into a list for rendering.
+ * Flatten the component tree + requirements + linked elements into a list for rendering.
  * Requirements whose componentId points to a missing/orphaned PBS node are shown as Unassigned.
+ * When expanded, requirements show linked elements (functions, issues, change requests, etc.) under them.
  */
 function buildFlatTree(
-    tree: ComponentTreeNode[],
-    requirements: Requirement[],
-    expandedNodes: Set<string>,
-    searchQuery: string
+  tree: ComponentTreeNode[],
+  requirements: Requirement[],
+  expandedNodes: Set<string>,
+  expandedReqs: Set<string>,
+  searchQuery: string,
+  links: LinkLike[]
 ): FlatTreeItem[] {
     const items: FlatTreeItem[] = []
     const validComponentIds = collectNodeIds(tree)
@@ -101,22 +121,42 @@ function buildFlatTree(
                 }
             }
 
-            // Add requirements under this component
+            // Add requirements under this component (with optional linked elements)
             for (const req of reqs) {
-                if (searchQuery && !(req.requirementId || req.title).toLowerCase().includes(lowerQuery)) continue
-                items.push({
-                    id: `req-${req.id}`,
-                    type: 'requirement',
-                    name: req.title,
-                    depth: depth + 1,
+              if (searchQuery && !(req.requirementId || req.title).toLowerCase().includes(lowerQuery)) continue
+              const reqLinks = getLinksForRequirement(links, req.id)
+              const hasLinkedElements = reqLinks.length > 0
+              items.push({
+                id: `req-${req.id}`,
+                type: 'requirement',
+                name: req.title,
+                depth: depth + 1,
+                parentComponentId: node.id,
+                hasChildren: hasLinkedElements,
+                requirementId: req.requirementId || undefined,
+                requirement: req,
+              })
+              if (hasLinkedElements && expandedReqs.has(req.id)) {
+                for (const link of reqLinks) {
+                  const isOutgoing = link.sourceType === 'requirement' && link.sourceId === req.id
+                  const label = isOutgoing
+                    ? (link.targetLabel ?? link.targetTitle ?? link.targetDisplayId ?? `${link.targetType}:${link.targetId.slice(0, 8)}`)
+                    : (link.sourceTitle ?? link.sourceDisplayId ?? `${link.sourceType}:${link.sourceId.slice(0, 8)}`)
+                  const targetType = isOutgoing ? link.targetType : link.sourceType
+                  items.push({
+                    id: link.id ?? `link-${link.sourceType}-${link.targetType}-${link.targetId}`,
+                    type: 'linked_element',
+                    name: label,
+                    depth: depth + 2,
                     parentComponentId: node.id,
                     hasChildren: false,
-                    requirementId: req.requirementId || undefined,
-                    requirement: req,
-                })
+                    link: { ...link, _displayTargetType: targetType },
+                  })
+                }
+              }
             }
+          }
         }
-    }
 
     for (const root of tree) {
         addComponent(root, 0)
@@ -139,16 +179,36 @@ function buildFlatTree(
 
         if (expandedNodes.has('unassigned')) {
             for (const req of filteredUnassigned) {
-                items.push({
-                    id: `req-${req.id}`,
-                    type: 'requirement',
-                    name: req.title,
-                    depth: 1,
+              const reqLinks = getLinksForRequirement(links, req.id)
+              const hasLinkedElements = reqLinks.length > 0
+              items.push({
+                id: `req-${req.id}`,
+                type: 'requirement',
+                name: req.title,
+                depth: 1,
+                parentComponentId: null,
+                hasChildren: hasLinkedElements,
+                requirementId: req.requirementId || undefined,
+                requirement: req,
+              })
+              if (hasLinkedElements && expandedReqs.has(req.id)) {
+                for (const link of reqLinks) {
+                  const isOutgoing = link.sourceType === 'requirement' && link.sourceId === req.id
+                  const label = isOutgoing
+                    ? (link.targetLabel ?? link.targetTitle ?? link.targetDisplayId ?? `${link.targetType}:${link.targetId.slice(0, 8)}`)
+                    : (link.sourceTitle ?? link.sourceDisplayId ?? `${link.sourceType}:${link.sourceId.slice(0, 8)}`)
+                  const targetType = isOutgoing ? link.targetType : link.sourceType
+                  items.push({
+                    id: link.id ?? `link-${link.sourceType}-${link.targetType}-${link.targetId}`,
+                    type: 'linked_element',
+                    name: label,
+                    depth: 2,
                     parentComponentId: null,
                     hasChildren: false,
-                    requirementId: req.requirementId || undefined,
-                    requirement: req,
-                })
+                    link: { ...link, _displayTargetType: targetType },
+                  })
+                }
+              }
             }
         }
     }
@@ -156,17 +216,36 @@ function buildFlatTree(
     return items
 }
 
+/** Get all links for a requirement (outgoing + incoming), excluding allocated_to->pbs_component */
+function getLinksForRequirement(links: LinkLike[], reqId: string): LinkLike[] {
+  return links.filter((l) => {
+    if (l.linkType === 'allocated_to' && (l.targetType === 'pbs_component' || l.sourceType === 'pbs_component')) return false
+    return (l.sourceType === 'requirement' && l.sourceId === reqId) || (l.targetType === 'requirement' && l.targetId === reqId)
+  })
+}
+
 export default function RequirementsPBSTree({
-    projectId,
-    requirements,
-    selectedComponentId,
-    onComponentSelect,
+  projectId,
+  requirements,
+  selectedComponentId,
+  onComponentSelect,
+  links = [],
 }: RequirementsPBSTreeProps) {
-    const queryClient = useQueryClient()
-    const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['unassigned']))
-    const [searchQuery, setSearchQuery] = useState('')
-    const [dragOverId, setDragOverId] = useState<string | null>(null)
-    const [pbsSynced, setPbsSynced] = useState(false)
+  const queryClient = useQueryClient()
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['unassigned']))
+  const [expandedReqs, setExpandedReqs] = useState<Set<string>>(new Set())
+  const [searchQuery, setSearchQuery] = useState('')
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const [pbsSynced, setPbsSynced] = useState(false)
+
+  const toggleReq = useCallback((reqId: string) => {
+    setExpandedReqs((prev) => {
+      const next = new Set(prev)
+      if (next.has(reqId)) next.delete(reqId)
+      else next.add(reqId)
+      return next
+    })
+  }, [])
 
     // Check if we need to sync to backend (for linkage purposes) - but assume local execution is truth
     useEffect(() => {
@@ -320,10 +399,10 @@ export default function RequirementsPBSTree({
         })
     }, [assignComponentMutation])
 
-    const flatItems = useMemo(
-        () => buildFlatTree(componentTree, requirements, expandedNodes, searchQuery),
-        [componentTree, requirements, expandedNodes, searchQuery]
-    )
+  const flatItems = useMemo(
+    () => buildFlatTree(componentTree, requirements, expandedNodes, expandedReqs, searchQuery, links),
+    [componentTree, requirements, expandedNodes, expandedReqs, searchQuery, links]
+  )
 
     // Count requirements per component
     const reqCounts = useMemo(() => {
@@ -378,24 +457,62 @@ export default function RequirementsPBSTree({
                     const isExpanded = nodeId ? expandedNodes.has(nodeId) : false
 
                     if (item.type === 'requirement') {
-                        // Requirement row - indented, smaller
-                        return (
-                            <div
-                                key={item.id}
-                                className="group flex items-center gap-2 px-3 py-1.5 mx-2 text-sm rounded-lg cursor-grab hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border border-transparent hover:border-gray-100 dark:hover:border-gray-700"
-                                style={{ paddingLeft: `${item.depth * 16 + 12}px` }}
-                                draggable
-                                onDragStart={(e) => handleDragStart(e, item.requirement!.id)}
-                            >
-                                <FileText className="w-3.5 h-3.5 text-blue-400 dark:text-blue-500 flex-shrink-0 opacity-70 group-hover:opacity-100 transition-opacity" />
-                                <span className="text-gray-400 dark:text-gray-500 font-mono text-[10px] flex-shrink-0">
-                                    {item.requirementId || '—'}
-                                </span>
-                                <span className="text-gray-600 dark:text-gray-300 truncate group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors" title={item.name}>
-                                    {item.name}
-                                </span>
-                            </div>
-                        )
+                      const req = item.requirement!
+                      const hasLinkedElements = item.hasChildren
+                      const isReqExpanded = expandedReqs.has(req.id)
+                      return (
+                        <div
+                          key={item.id}
+                          className="group flex items-center gap-2 px-3 py-1.5 mx-2 text-sm rounded-lg cursor-grab hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border border-transparent hover:border-gray-100 dark:hover:border-gray-700"
+                          style={{ paddingLeft: `${item.depth * 16 + 12}px` }}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, req.id)}
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); hasLinkedElements && toggleReq(req.id) }}
+                            className={clsx(
+                              'flex-shrink-0 w-4 h-4 flex items-center justify-center rounded transition-colors',
+                              hasLinkedElements ? 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600' : 'invisible'
+                            )}
+                          >
+                            {hasLinkedElements ? (isReqExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />) : <span className="w-3" />}
+                          </button>
+                          <FileText className="w-3.5 h-3.5 text-blue-400 dark:text-blue-500 flex-shrink-0 opacity-70 group-hover:opacity-100 transition-opacity" />
+                          <span className="text-gray-400 dark:text-gray-500 font-mono text-[10px] flex-shrink-0">
+                            {item.requirementId || '—'}
+                          </span>
+                          <span className="text-gray-600 dark:text-gray-300 truncate group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors" title={item.name}>
+                            {item.name}
+                          </span>
+                          {hasLinkedElements && !isReqExpanded && (
+                            <span className="flex-shrink-0 text-[10px] text-gray-400 dark:text-gray-500">+{getLinksForRequirement(links, req.id).length}</span>
+                          )}
+                        </div>
+                      )
+                    }
+
+                    if (item.type === 'linked_element') {
+                      const link = item.link!
+                      const displayType = (link as { _displayTargetType?: string })._displayTargetType ?? link.targetType
+                      const Icon = displayType === 'function' ? Settings
+                        : displayType === 'issue' ? AlertCircle
+                        : displayType === 'change_request' ? GitPullRequest
+                        : displayType === 'requirement' ? FileText
+                        : displayType === 'use_case' ? Layers
+                        : displayType === 'test_plan' || displayType === 'test_case' ? ClipboardList
+                        : Link2
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-2 px-3 py-1 mx-2 text-xs rounded-md bg-gray-50/50 dark:bg-gray-800/50 border-l-2 border-gray-200 dark:border-gray-700 ml-4"
+                          style={{ paddingLeft: `${item.depth * 16 + 8}px` }}
+                        >
+                          <Icon className="w-3 h-3 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                          <span className="text-gray-500 dark:text-gray-400 font-mono text-[10px] flex-shrink-0 capitalize">{String(displayType).replace('_', ' ')}</span>
+                          <span className="text-gray-600 dark:text-gray-300 truncate" title={item.name}>{item.name}</span>
+                        </div>
+                      )
                     }
 
                     if (item.type === 'unassigned') {
