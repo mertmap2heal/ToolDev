@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { projectService } from '../../services/project.service'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
@@ -185,6 +185,7 @@ export default function PBSPage() {
   const lastNodesRef = useRef<string>('')
 
   const projectKey = projectId ?? 'default'
+  const queryClient = useQueryClient()
 
   const { data: projectData, isLoading: projectLoading } = useQuery({
     queryKey: ['project', projectId],
@@ -285,9 +286,12 @@ export default function PBSPage() {
   const persist = useCallback(() => {
     setSaveStatus('saving')
     savePBSAsync(projectId, { nodes, changeLog })
-      .then(() => setSaveStatus('saved'))
+      .then(() => {
+        setSaveStatus('saved')
+        queryClient.invalidateQueries({ queryKey: ['pbs-nodes', projectId] })
+      })
       .catch(() => setSaveStatus('unsaved'))
-  }, [projectId, nodes, changeLog])
+  }, [projectId, nodes, changeLog, queryClient])
 
   // Storage quota warning (run after persist and when data size changes)
   useEffect(() => {

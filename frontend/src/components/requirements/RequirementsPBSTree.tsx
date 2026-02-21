@@ -325,7 +325,7 @@ export default function RequirementsPBSTree({
     })
   }, [])
 
-    // Sync PBS local storage to backend so both sources stay aligned, then refetch component tree
+    // Sync PBS local storage to backend so requirement/function componentIds stay valid
     useEffect(() => {
         if (!projectId || pbsSynced) return
 
@@ -334,7 +334,6 @@ export default function RequirementsPBSTree({
                 const pbsData = await loadPBSAsync(projectId)
                 if (pbsData.nodes.length > 0) {
                     await componentService.syncPBSToComponents(projectId, pbsData.nodes)
-                    queryClient.invalidateQueries({ queryKey: ['component-tree', projectId] })
                 }
             } catch (err) {
                 console.warn('Failed to sync PBS data:', err)
@@ -344,12 +343,50 @@ export default function RequirementsPBSTree({
         }
 
         syncPBS()
-    }, [projectId, pbsSynced, queryClient])
+    }, [projectId, pbsSynced])
 
-    // Use backend component tree as single source of truth so requirements (with componentId) always match
+    // Use PBS menu (local storage) as source so PBS Components panel matches PBS page exactly
     const { data: componentTree = [] } = useQuery({
-        queryKey: ['component-tree', projectId],
+        queryKey: ['pbs-nodes', projectId],
         queryFn: async () => {
+            const pbsData = await loadPBSAsync(projectId)
+            const nodes = pbsData.nodes
+
+            if (nodes.length > 0) {
+                const nodeMap = new Map<string, any>()
+                const rootNodes: any[] = []
+                nodes.forEach(node => {
+                    nodeMap.set(node.id, {
+                        id: node.id,
+                        projectId: projectId!,
+                        parentId: node.parentId,
+                        name: node.name,
+                        description: node.description,
+                        sortOrder: node.orderIndex ?? 0,
+                        createdAt: node.createdAt,
+                        updatedAt: node.updatedAt,
+                        children: []
+                    })
+                })
+                nodes.forEach(node => {
+                    const component = nodeMap.get(node.id)
+                    if (node.parentId && nodeMap.has(node.parentId)) {
+                        nodeMap.get(node.parentId).children.push(component)
+                    } else {
+                        rootNodes.push(component)
+                    }
+                })
+                const sortNodes = (n: any[]) => {
+                    n.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+                    n.forEach(child => {
+                        if (child.children?.length) sortNodes(child.children)
+                    })
+                }
+                sortNodes(rootNodes)
+                return rootNodes
+            }
+
+            // PBS empty: fall back to backend so requirements with componentIds still display
             const response = await componentService.getComponentTree(projectId!)
             return response.success && response.data ? response.data : []
         },
