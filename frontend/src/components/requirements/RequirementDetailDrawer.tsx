@@ -313,14 +313,18 @@ export default function RequirementDetailDrawer({
     enabled: isOpen && !!projectId && !!requirement?.id && LINKAGE_V1,
   })
 
-  // Inverse relationship map
+  // Inverse relationship map for bidirectional traceability (INCOSE/MBSE aligned)
+  // SysML: Satisfy, DeriveReqt, Verify, Refine, Allocate, Copy, Trace; ARP4754A: mitigates
   const INVERSE_LINK_TYPES: Record<string, string> = {
     'satisfies': 'satisfied_by',
     'satisfied_by': 'satisfies',
     'verifies': 'verified_by',
     'verified_by': 'verifies',
+    'validates': 'validated_by',
+    'validated_by': 'validates',
+    'derived_from': 'derived_to',
+    'derived_to': 'derived_from',
     'derives_from': 'derived_to',
-    'derived_to': 'derives_from',
     'refines': 'refined_by',
     'refined_by': 'refines',
     'depends_on': 'required_by',
@@ -335,6 +339,7 @@ export default function RequirementDetailDrawer({
     'mitigates': 'mitigated_by',
     'mitigated_by': 'mitigates',
     'related_to': 'related_to',
+    'related_interface': 'related_interface',
     'allocate': 'allocated_to',
     'allocated_to': 'allocate',
     'trace': 'traced_from',
@@ -343,6 +348,19 @@ export default function RequirementDetailDrawer({
     'implemented_by': 'implements',
     'copy': 'copied_from',
     'copied_from': 'copy',
+    'documented_in': 'documents',
+    'documents': 'documented_in',
+    'changes_via': 'originates_from',
+    'originates_from': 'changes_via',
+    'originates_from_inverse': 'changes_via',
+    'tracked_by': 'tracks',
+    'tracks': 'tracked_by',
+    'complies_with': 'complied_by',
+    'complied_by': 'complies_with',
+    'cert_objective': 'certified_by',
+    'certified_by': 'cert_objective',
+    'archived_as': 'archives',
+    'archives': 'archived_as',
   }
 
   // Combine outgoing and normalized incoming links
@@ -1404,17 +1422,31 @@ export default function RequirementDetailDrawer({
                               const linkTypeLabel = (() => {
                                 switch (linkType) {
                                   case 'allocated_to': return 'Allocated To'
+                                  case 'allocate': return 'Allocates'
                                   case 'mitigates': return 'Mitigates'
+                                  case 'mitigated_by': return 'Mitigated By'
                                   case 'verified_by': return 'Verified By'
+                                  case 'verifies': return 'Verifies'
+                                  case 'validated_by': return 'Validated By'
+                                  case 'validates': return 'Validates'
                                   case 'documented_in': return 'Documented In'
+                                  case 'documents': return 'Documents'
                                   case 'changes_via': return 'Change Requests'
+                                  case 'originates_from':
+                                  case 'originates_from_inverse': return 'Change Requests'
                                   case 'tracked_by': return 'Tracked By'
+                                  case 'tracks': return 'Tracks'
                                   case 'implemented_by': return 'Implemented By'
+                                  case 'implements': return 'Implements'
                                   case 'cert_objective': return 'Certification Objectives'
+                                  case 'certified_by': return 'Certified By'
                                   case 'complies_with': return 'Complies With'
+                                  case 'complied_by': return 'Complied By'
                                   case 'related_interface': return 'Related Interfaces'
                                   case 'derived_from': return 'Derived From'
                                   case 'derived_to': return 'Derived To'
+                                  case 'satisfies': return 'Satisfies'
+                                  case 'satisfied_by': return 'Satisfied By'
                                   case 'depends_on': return 'Depends On'
                                   case 'required_by': return 'Required By'
                                   case 'constrains': return 'Constrains'
@@ -1426,23 +1458,49 @@ export default function RequirementDetailDrawer({
                                   case 'superseded_by': return 'Superseded By'
                                   case 'refines': return 'Refines'
                                   case 'refined_by': return 'Refined By'
+                                  case 'related_to': return 'Related To'
+                                  case 'archived_as': return 'Archived As'
+                                  case 'archives': return 'Archives'
+                                  case 'trace': return 'Traces To'
+                                  case 'traced_from': return 'Traced From'
+                                  case 'copy': return 'Copy'
+                                  case 'copied_from': return 'Copied From'
                                   case 'related_inverse': return 'Issues'
-                                  case 'originates_from': return 'Change Requests'
-                                  default: return linkType.replace(/_/g, ' ')
+                                  default: return linkType.replace(/_/g, ' ').replace(/^inverse_/, '')
                                 }
                               })()
                               const linkTypeIcon = (() => {
                                 switch (linkType) {
-                                  case 'allocated_to': return <Target size={16} className="text-green-600 dark:text-green-400" />
-                                  case 'mitigates': return <Shield size={16} className="text-red-600 dark:text-red-400" />
-                                  case 'verified_by': return <ClipboardCheck size={16} className="text-teal-600 dark:text-teal-400" />
-                                  case 'documented_in': return <BookOpen size={16} className="text-sky-600 dark:text-sky-400" />
-                                  case 'changes_via': return <GitPullRequest size={16} className="text-purple-600 dark:text-purple-400" />
-                                  case 'tracked_by': return <AlertCircle size={16} className="text-orange-600 dark:text-orange-400" />
-                                  case 'implemented_by': return <Layers size={16} className="text-indigo-600 dark:text-indigo-400" />
-                                  case 'cert_objective': return <Shield size={16} className="text-indigo-600 dark:text-indigo-400" />
-                                  case 'complies_with': return <Check size={16} className="text-emerald-600 dark:text-emerald-400" />
+                                  case 'allocated_to':
+                                  case 'allocate': return <Target size={16} className="text-green-600 dark:text-green-400" />
+                                  case 'mitigates':
+                                  case 'mitigated_by': return <Shield size={16} className="text-red-600 dark:text-red-400" />
+                                  case 'verified_by':
+                                  case 'verifies':
+                                  case 'validated_by':
+                                  case 'validates': return <ClipboardCheck size={16} className="text-teal-600 dark:text-teal-400" />
+                                  case 'documented_in':
+                                  case 'documents': return <BookOpen size={16} className="text-sky-600 dark:text-sky-400" />
+                                  case 'changes_via':
+                                  case 'originates_from':
+                                  case 'originates_from_inverse': return <GitPullRequest size={16} className="text-purple-600 dark:text-purple-400" />
+                                  case 'tracked_by':
+                                  case 'tracks': return <AlertCircle size={16} className="text-orange-600 dark:text-orange-400" />
+                                  case 'implemented_by':
+                                  case 'implements': return <Layers size={16} className="text-indigo-600 dark:text-indigo-400" />
+                                  case 'cert_objective':
+                                  case 'certified_by': return <Shield size={16} className="text-indigo-600 dark:text-indigo-400" />
+                                  case 'complies_with':
+                                  case 'complied_by': return <Check size={16} className="text-emerald-600 dark:text-emerald-400" />
                                   case 'related_interface': return <Settings size={16} className="text-cyan-600 dark:text-cyan-400" />
+                                  case 'derived_from':
+                                  case 'derived_to':
+                                  case 'satisfies':
+                                  case 'satisfied_by':
+                                  case 'refines':
+                                  case 'refined_by':
+                                  case 'trace':
+                                  case 'traced_from': return <Link2 size={16} className="text-blue-600 dark:text-blue-400" />
                                   default: return <Link2 size={16} className="text-blue-600 dark:text-blue-400" />
                                 }
                               })()
@@ -1461,13 +1519,17 @@ export default function RequirementDetailDrawer({
                                           link.targetType === 'function' ? functions.find((f: any) => f.id === link.targetId) :
                                             link.targetType === 'issue' ? issues.find((i: any) => i.id === link.targetId) :
                                               link.targetType === 'change_request' ? changeRequests.find((cr: any) => cr.id === link.targetId) :
-                                                link.targetType === 'pbs_component' ? flatComponents.find((c) => c.id === link.targetId) : null;
+                                                link.targetType === 'pbs_component' ? flatComponents.find((c) => c.id === link.targetId) :
+                                                  link.targetType === 'test_plan' ? testPlans.find((p: any) => p.id === link.targetId) :
+                                                    link.targetType === 'test_case' ? testCases.find((tc: any) => tc.id === link.targetId) :
+                                                      null;
 
                                       const displayId = targetItem ? (
                                         targetItem.requirementId ||
                                         targetItem.functionId ||
                                         targetItem.issueKey ||
                                         targetItem.crId ||
+                                        targetItem.key ||
                                         targetItem.name ||
                                         link.targetId.slice(0, 8)
                                       ) : link.targetId.slice(0, 8);

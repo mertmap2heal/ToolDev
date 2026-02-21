@@ -40,24 +40,36 @@ const nodeHeight = 80;
 
 const getLinkTypeLabel = (linkType: string) => {
     switch (linkType) {
-        case 'derived_from': return '<<deriveReqt>>'; // SysML standard
+        case 'derived_from': return '<<deriveReqt>>'; // SysML
         case 'derived_to': return '<<derived to>>';
-        case 'satisfies': return '<<satisfy>>';       // SysML standard
+        case 'satisfies': return '<<satisfy>>';       // SysML
         case 'satisfied_by': return '<<satisfied by>>';
-        case 'verifies': return '<<verify>>';         // SysML standard
+        case 'verifies': return '<<verify>>';         // SysML
         case 'verified_by': return '<<verified by>>';
-        case 'refines': return '<<refine>>';          // SysML standard
+        case 'validates': return '<<validate>>';
+        case 'validated_by': return '<<validated by>>';
+        case 'refines': return '<<refine>>';          // SysML
         case 'refined_by': return '<<refined by>>';
-        case 'traces_to': return '<<trace>>';         // SysML standard
+        case 'trace': return '<<trace>>';             // SysML
+        case 'traced_from': return '<<traced from>>';
+        case 'traces_to': return '<<trace>>';
         case 'traces_from': return '<<traced from>>';
-        case 'copies': return '<<copy>>';             // SysML standard
+        case 'copy': return '<<copy>>';               // SysML
         case 'copied_from': return '<<copied from>>';
-        case 'allocate': return '<<allocate>>';       // SysML standard
+        case 'allocate': return '<<allocate>>';       // SysML
         case 'allocated_to': return '<<allocated to>>';
-        case 'mitigates': return '<<mitigates>>';     // Safety standard
+        case 'mitigates': return '<<mitigates>>';     // ARP4754A Safety
         case 'mitigated_by': return '<<mitigated by>>';
+        case 'documented_in': return '<<documented in>>';
+        case 'documents': return '<<documents>>';
+        case 'changes_via': return '<<changes via>>';
+        case 'originates_from':
+        case 'originates_from_inverse': return '<<changes via>>';
+        case 'tracked_by': return '<<tracked by>>';
+        case 'tracks': return '<<tracks>>';
+        case 'related_interface': return '<<related interface>>';
         case 'related_to': return '<<related>>';
-        default: return `<<${linkType.replace(/_/g, ' ')}>>`;
+        default: return `<<${linkType.replace(/^inverse_/, '').replace(/_/g, ' ')}>>`;
     }
 };
 
