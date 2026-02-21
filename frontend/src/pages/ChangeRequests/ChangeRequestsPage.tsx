@@ -5,9 +5,11 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import { changeRequestService } from '../../services/changeRequest.service'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import ChangeRequestDetailDrawer from '../../components/changeRequests/ChangeRequestDetailDrawer'
-import { format } from 'date-fns'
+import { format, isValid } from 'date-fns'
 import clsx from 'clsx'
 import type { ChangeRequest } from 'shared/types/engineering.types'
+
+const stripHtml = (html: string): string => (html || '').replace(/<[^>]*>/g, '').trim()
 
 import RequirementDetailDrawer from '../../components/requirements/RequirementDetailDrawer'
 import { requirementService } from '../../services/requirement.service'
@@ -69,7 +71,7 @@ export default function ChangeRequestsPage() {
   const reqIdMap = useMemo(() => {
     const map: Record<string, string> = {}
     requirements.forEach(req => {
-      map[req.id] = req.requirementId || req.id
+      map[req.id] = req.requirementId || req.id.substring(0, 8)
     })
     return map
   }, [requirements])
@@ -397,18 +399,20 @@ export default function ChangeRequestsPage() {
                           {cr.crId || <span className="text-gray-300">-</span>}
                         </td>
                         <td className="px-4 py-3 max-w-md">
-                          <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{cr.description}</div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{stripHtml(cr.title)}</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{stripHtml(cr.description)}</div>
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 min-w-[7rem]">
                           {cr.requirementLinks && cr.requirementLinks.length > 0 ? (
                             <div className="flex flex-col gap-1">
                               {cr.requirementLinks.map(link => (
                                 <button
                                   key={link.requirement.id}
                                   onClick={(e) => handleReqClick(e, link.requirement.id)}
-                                  className="text-left font-mono text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+                                  className="text-left font-mono text-xs font-medium bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2 py-1 rounded hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors whitespace-nowrap"
+                                  title={link.requirement.requirementId || reqIdMap[link.requirement.id] || link.requirement.id}
                                 >
-                                  {link.requirement.requirementId || link.requirement.id.substring(0, 8)}
+                                  {link.requirement.requirementId || reqIdMap[link.requirement.id] || link.requirement.id.substring(0, 8)}
                                 </button>
                               ))}
                             </div>
@@ -418,9 +422,10 @@ export default function ChangeRequestsPage() {
                               {cr.sourceType === 'requirement' && cr.sourceId ? (
                                 <button
                                   onClick={(e) => handleReqClick(e, cr.sourceId!)}
-                                  className="text-left font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                                  className="text-left font-mono text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap"
+                                  title={cr.sourceDisplayId || reqIdMap[cr.sourceId] || cr.sourceId}
                                 >
-                                  {reqIdMap[cr.sourceId] || cr.sourceId.substring(0, 8)}
+                                  {cr.sourceDisplayId || reqIdMap[cr.sourceId] || cr.sourceId.substring(0, 8)}
                                 </button>
                               ) : (
                                 <span className="font-mono text-xs text-gray-400">{cr.sourceId ? cr.sourceId.substring(0, 8) : '-'}</span>
@@ -443,7 +448,9 @@ export default function ChangeRequestsPage() {
                           {cr.requestedBy || 'Unknown'}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                          {format(new Date(cr.updatedAt), 'MMM d, yyyy')}
+                          {cr.updatedAt && isValid(new Date(cr.updatedAt))
+                            ? format(new Date(cr.updatedAt), 'MMM d, yyyy')
+                            : '-'}
                         </td>
                       </tr>
                     ))}
@@ -466,6 +473,7 @@ export default function ChangeRequestsPage() {
           isOpen={isDrawerOpen}
           changeRequest={selectedChangeRequest}
           projectId={projectId!}
+          requirementIdMap={reqIdMap}
           onClose={() => setIsDrawerOpen(false)}
           onEdit={() => {
             setIsCreateModalOpen(true)

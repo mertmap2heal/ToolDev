@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react'
-import { X, Search, Check } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { X, Search, Check, Upload, File, Trash2 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { issueService } from '../../services/issue.service'
 import { functionService } from '../../services/function.service'
 import { parameterService } from '../../services/parameter.service'
 import { requirementService } from '../../services/requirement.service'
 import { useAuthStore } from '../../store/authStore'
-import type { CreateIssueDto, SystemFunction, Parameter } from 'shared/types/engineering.types'
+import type { CreateIssueDto, IssueType, SystemFunction, Parameter } from 'shared/types/engineering.types'
 
 interface CreateIssueModalProps {
   isOpen: boolean
@@ -49,6 +49,9 @@ export default function CreateIssueModal({
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [sourceSearchQuery, setSourceSearchQuery] = useState('')
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [uploadingFiles, setUploadingFiles] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [showSourceDropdown, setShowSourceDropdown] = useState(false)
   const queryClient = useQueryClient()
   const { user } = useAuthStore()
@@ -136,8 +139,24 @@ export default function CreateIssueModal({
   })
 
   const createIssueMutation = useMutation({
-    mutationFn: (data: CreateIssueDto) => issueService.createIssue(projectId, data),
-    onSuccess: (response) => {
+    mutationFn: ({ data, files }: { data: CreateIssueDto; files: File[] }) =>
+      issueService.createIssue(projectId, data).then((res) => ({ ...res, _files: files })),
+    onSuccess: async (response) => {
+      const filesToUpload = (response as { success: boolean; data?: { id: string }; _files?: File[] })._files ?? []
+      if (response.success && response.data && filesToUpload.length > 0) {
+        setUploadingFiles(true)
+        try {
+          await Promise.all(
+            filesToUpload.map((file) =>
+              issueService.uploadAttachment(projectId, response.data!.id, file)
+            )
+          )
+        } catch (error) {
+          console.error('Error uploading files:', error)
+        } finally {
+          setUploadingFiles(false)
+        }
+      }
       if (response.success) {
         queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
         // Invalidate links and requirements to show the new link in other views
@@ -162,6 +181,7 @@ export default function CreateIssueModal({
           relatedFunctionIds: [],
           relatedParameterIds: [],
         })
+        setSelectedFiles([])
         setErrors({})
         setSourceSearchQuery('')
       } else {
@@ -208,12 +228,13 @@ export default function CreateIssueModal({
       relatedFunctionIds: formData.relatedFunctionIds || [],
       relatedParameterIds: formData.relatedParameterIds || [],
       sourceRequirementId: initialSourceType === 'requirement' && initialSourceId ? initialSourceId : undefined,
+      issueType: formData.issueType,
     }
 
-    createIssueMutation.mutate(submitData)
+    createIssueMutation.mutate({ data: submitData, files: selectedFiles })
   }
 
-  const handleChange = (field: keyof CreateIssueDto, value: string | string[]) => {
+  const handleChange = (field: keyof CreateIssueDto, value: string | string[] | undefined) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
     if (errors[field]) {
       setErrors((prev) => {
@@ -271,6 +292,33 @@ export default function CreateIssueModal({
     }
   }
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    setSelectedFiles((prev) => [...prev, ...files])
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
+  }
+
+  const ISSUE_TYPE_OPTIONS: { value: IssueType; label: string }[] = [
+    { value: 'specification_error', label: 'Specification Error' },
+    { value: 'design_error', label: 'Design Error' },
+    { value: 'coding_error', label: 'Coding Error' },
+    { value: 'documentation_error', label: 'Documentation Error' },
+    { value: 'interface_error', label: 'Interface Error' },
+    { value: 'other', label: 'Other' },
+  ]
+
   // Reset form when modal closes or initial source changes
   useEffect(() => {
     if (isOpen) {
@@ -282,6 +330,7 @@ export default function CreateIssueModal({
         relatedFunctionIds: initialSourceType === 'function' && initialSourceId ? [initialSourceId] : [],
         relatedParameterIds: initialSourceType === 'parameter' && initialSourceId ? [initialSourceId] : [],
       })
+      setSelectedFiles([])
       setErrors({})
       setSourceSearchQuery('')
       setShowSourceDropdown(false)
@@ -363,6 +412,28 @@ export default function CreateIssueModal({
             {errors.description && (
               <p className="mt-1 text-sm text-red-500">{errors.description}</p>
             )}
+          </div>
+
+          {/* Problem Report Classification */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+              Classification
+            </label>
+            <select
+              value={formData.issueType || ''}
+              onChange={(e) => handleChange('issueType', e.target.value ? (e.target.value as IssueType) : undefined)}
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              <option value="">Select type (optional)</option>
+              {ISSUE_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Problem report classification (DO-178C style)
+            </p>
           </div>
 
           {/* Link Source - hidden when source is pre-selected (e.g. from requirements actions) */}
@@ -487,6 +558,63 @@ export default function CreateIssueModal({
           </div>
           )}
 
+          {/* Attachments */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+              Attachments
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                onChange={handleFileSelect}
+                className="hidden"
+                id="issue-file-upload"
+                accept=".pdf,.doc,.docx,.txt,.xls,.xlsx,.png,.jpg,.jpeg,.gif"
+              />
+              <label
+                htmlFor="issue-file-upload"
+                className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer transition-colors"
+              >
+                <Upload size={16} />
+                <span className="text-sm">Select Files</span>
+              </label>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                PDF, DOC, XLS, Images (max 10MB per file)
+              </span>
+            </div>
+            {selectedFiles.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {selectedFiles.map((file, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <File size={16} className="text-gray-500 dark:text-gray-400 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{file.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{formatFileSize(file.size)}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFile(index)}
+                      className="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex-shrink-0"
+                      title="Remove file"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Attach evidence or supporting materials for this issue
+            </p>
+          </div>
+
           {/* Priority */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
@@ -540,10 +668,22 @@ export default function CreateIssueModal({
             </button>
             <button
               type="submit"
-              disabled={createIssueMutation.isPending}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={createIssueMutation.isPending || uploadingFiles}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {createIssueMutation.isPending ? 'Creating...' : 'Create Issue'}
+              {uploadingFiles ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Uploading files...</span>
+                </>
+              ) : createIssueMutation.isPending ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Creating...</span>
+                </>
+              ) : (
+                'Create Issue'
+              )}
             </button>
           </div>
         </form>

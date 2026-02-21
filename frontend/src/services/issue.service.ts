@@ -65,4 +65,29 @@ export const issueService = {
   async createProjectLabel(projectId: string, data: { name: string; color?: string }): Promise<ApiResponse<IssueLabel>> {
     return apiClient.post<IssueLabel>(`/issues/${projectId}/labels`, data)
   },
+
+  async uploadAttachment(projectId: string, issueId: string, file: File): Promise<ApiResponse<any>> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = async () => {
+        const fileData = reader.result as string
+        const result = await apiClient.post<any>(`/issues/${projectId}/${issueId}/attachments`, {
+          fileName: file.name,
+          fileData,
+          mimeType: file.type,
+        })
+        resolve(result)
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  },
+
+  async getAttachments(projectId: string, issueId: string): Promise<ApiResponse<any[]>> {
+    return apiClient.get<any[]>(`/issues/${projectId}/${issueId}/attachments`)
+  },
+
+  async deleteAttachment(projectId: string, issueId: string, attachmentId: string): Promise<ApiResponse<void>> {
+    return apiClient.delete<void>(`/issues/${projectId}/${issueId}/attachments/${attachmentId}`)
+  },
 }

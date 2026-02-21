@@ -302,6 +302,7 @@ export interface Issue {
   description: string
   priority: 'low' | 'medium' | 'high' | 'critical'
   status: 'open' | 'in-progress' | 'resolved' | 'closed'
+  issueType?: string // Problem Report classification
   owner?: string
   assigneeId?: string
   assignee?: {
@@ -334,8 +335,22 @@ export interface Issue {
   comments?: IssueComment[]
   systemNotes?: IssueSystemNote[]
   links?: IssueLink[]
+  attachments?: IssueAttachment[]
   subscribers?: IssueSubscriber[]
   participants?: IssueParticipant[]
+}
+
+export interface IssueAttachment {
+  id: string
+  issueId: string
+  projectId: string
+  fileName: string
+  fileUrl: string
+  fileSize?: number
+  mimeType?: string
+  uploadedBy?: string
+  uploadedByName?: string
+  createdAt: string
 }
 
 export interface IssueComment {
@@ -424,11 +439,21 @@ export interface IssueActivity {
   createdAt: string
 }
 
+/** Problem Report classification (DO-178C style) */
+export type IssueType =
+  | 'specification_error'
+  | 'design_error'
+  | 'coding_error'
+  | 'documentation_error'
+  | 'interface_error'
+  | 'other'
+
 export interface CreateIssueDto {
   title: string
   description: string
   priority: 'low' | 'medium' | 'high' | 'critical'
   status?: Issue['status']
+  issueType?: IssueType
   owner?: string
   assigneeId?: string
   relatedFunctionIds?: string[]
@@ -517,6 +542,8 @@ export interface ChangeRequest {
   description: string
   sourceType: 'function' | 'issue' | 'parameter' | 'requirement'
   sourceId: string
+  /** Human-readable ID of source requirement, populated by backend when sourceType is 'requirement' */
+  sourceDisplayId?: string
   priority: 'low' | 'medium' | 'high' | 'critical'
   status: 'pending' | 'approved' | 'rejected' | 'in-review'
   requestedBy?: string
@@ -539,6 +566,8 @@ export interface CreateChangeRequestDto {
   description: string
   sourceType: 'function' | 'issue' | 'parameter' | 'requirement' | 'test-plan' | 'test-case' | 'test-setup' | 'test-result'
   sourceId: string
+  /** Additional impacted requirement IDs for impact analysis */
+  impactedRequirementIds?: string[]
   priority: 'low' | 'medium' | 'high' | 'critical'
   requestedBy?: string
   owner?: string

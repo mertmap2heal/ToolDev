@@ -16,6 +16,9 @@ import {
   deleteIssueLink,
   getProjectLabels,
   createProjectLabel,
+  uploadIssueAttachment,
+  getIssueAttachments,
+  deleteIssueAttachment,
 } from '../controllers/issue.controller'
 
 const router = Router()
@@ -44,6 +47,11 @@ router.delete('/:projectId/:id/subscribe', unsubscribeFromIssue)
 // Links
 router.post('/:projectId/:id/links', createIssueLink)
 router.delete('/:projectId/links/:linkId', deleteIssueLink)
+
+// Attachments
+router.post('/:projectId/:id/attachments', uploadIssueAttachment)
+router.get('/:projectId/:id/attachments', getIssueAttachments)
+router.delete('/:projectId/:id/attachments/:attachmentId', deleteIssueAttachment)
 
 // Labels
 router.get('/:projectId/labels', getProjectLabels)

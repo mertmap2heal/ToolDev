@@ -442,6 +442,7 @@ model Issue {
   description         String
   priority            String   @default("medium")
   status              String   @default("open")
+  issueType           String?  // Problem Report classification: specification_error, design_error, coding_error, documentation_error, interface_error, other
   owner               String?
   assigneeId          String?
   createdBy           String?
@@ -465,6 +466,7 @@ model Issue {
   systemNotes   IssueSystemNote[]
   subscriptions IssueSubscription[]
   links         IssueLink[]         @relation("IssueToLink")
+  attachments   IssueAttachment[]
 
   @@index([projectId])
   @@index([issueKey])
@@ -523,6 +525,24 @@ model IssueSubscription {
 
   @@unique([issueId, userId])
   @@index([userId])
+}
+
+model IssueAttachment {
+  id              String   @id @default(uuid())
+  issueId         String
+  projectId       String
+  fileName        String
+  fileUrl         String
+  fileSize        Int?
+  mimeType        String?
+  uploadedBy      String?
+  uploadedByName  String?
+  createdAt       DateTime @default(now())
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
+  @@index([projectId])
 }
 
 model IssueLabel {

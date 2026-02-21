@@ -25,6 +25,7 @@ export const createChangeRequest = async (req: AuthRequest, res: Response) => {
       description,
       sourceType,
       sourceId,
+      impactedRequirementIds,
       priority,
       requestedBy,
       owner,
@@ -63,6 +64,14 @@ export const createChangeRequest = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    const requirementIdsToLink = new Set<string>()
+    if (sourceType === 'requirement' && sourceId) {
+      requirementIdsToLink.add(sourceId)
+    }
+    if (Array.isArray(impactedRequirementIds)) {
+      impactedRequirementIds.forEach((id: string) => requirementIdsToLink.add(id))
+    }
+
     const changeRequest = await prisma.changeRequest.create({
       data: {
         projectId,
@@ -79,11 +88,11 @@ export const createChangeRequest = async (req: AuthRequest, res: Response) => {
         justification: justification || null,
         createdBy: req.userId || 'system',
         updatedBy: req.userId || 'system',
-        requirementLinks: sourceType === 'requirement' ? {
-          create: {
-            requirementId: sourceId,
-            relationshipType: 'originates_from'
-          }
+        requirementLinks: requirementIdsToLink.size > 0 ? {
+          create: Array.from(requirementIdsToLink).map((reqId) => ({
+            requirementId: reqId,
+            relationshipType: reqId === sourceId ? 'originates_from' : 'relates_to'
+          }))
         } : undefined,
       },
       include: {
@@ -154,9 +163,38 @@ export const getChangeRequests = async (req: AuthRequest, res: Response) => {
       orderBy: { createdAt: 'desc' },
     })
 
+    // For CRs with sourceType=requirement where source isn't in requirementLinks, fetch display ID
+    const sourceIdsToResolve = changeRequests
+      .filter(
+        (cr) =>
+          cr.sourceType === 'requirement' &&
+          cr.sourceId &&
+          !cr.requirementLinks?.some((l) => l.requirement.id === cr.sourceId)
+      )
+      .map((cr) => cr.sourceId)
+    const uniqueSourceIds = [...new Set(sourceIdsToResolve)]
+    let sourceDisplayIdMap: Record<string, string> = {}
+    if (uniqueSourceIds.length > 0) {
+      const sourceReqs = await prisma.requirement.findMany({
+        where: { id: { in: uniqueSourceIds }, projectId, deletedAt: null },
+        select: { id: true, requirementId: true },
+      })
+      sourceDisplayIdMap = Object.fromEntries(
+        sourceReqs.map((r) => [r.id, r.requirementId || r.id.substring(0, 8)])
+      )
+    }
+
+    const data = changeRequests.map((cr) => {
+      const base = { ...cr }
+      if (cr.sourceType === 'requirement' && cr.sourceId && sourceDisplayIdMap[cr.sourceId]) {
+        ;(base as any).sourceDisplayId = sourceDisplayIdMap[cr.sourceId]
+      }
+      return base
+    })
+
     res.json({
       success: true,
-      data: changeRequests,
+      data,
     })
   } catch (error: any) {
     console.error('Get change requests error:', error)
@@ -199,9 +237,24 @@ export const getChangeRequest = async (req: AuthRequest, res: Response) => {
       })
     }
 
+    let sourceDisplayId: string | undefined
+    if (
+      changeRequest.sourceType === 'requirement' &&
+      changeRequest.sourceId &&
+      !changeRequest.requirementLinks?.some((l) => l.requirement.id === changeRequest.sourceId)
+    ) {
+      const reqEntity = await prisma.requirement.findFirst({
+        where: { id: changeRequest.sourceId, projectId, deletedAt: null },
+        select: { requirementId: true },
+      })
+      sourceDisplayId = reqEntity?.requirementId || changeRequest.sourceId.substring(0, 8)
+    }
+
+    const data = { ...changeRequest, ...(sourceDisplayId && { sourceDisplayId }) }
+
     res.json({
       success: true,
-      data: changeRequest,
+      data,
     })
   } catch (error: any) {
     console.error('Get change request error:', error)

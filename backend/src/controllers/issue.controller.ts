@@ -2,8 +2,17 @@ import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { PrismaClient } from '@prisma/client'
 import { linkageAuditService } from '../services/linkageAudit.service'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
 const prisma = new PrismaClient()
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const issueUploadsDir = path.join(__dirname, '../../uploads/issues')
+if (!fs.existsSync(issueUploadsDir)) {
+  fs.mkdirSync(issueUploadsDir, { recursive: true })
+}
 
 // Helper to create system notes
 const createSystemNote = async (
@@ -35,6 +44,7 @@ export const createIssue = async (req: AuthRequest, res: Response) => {
       title,
       description,
       priority,
+      issueType,
       owner,
       assigneeId,
       relatedFunctionIds,
@@ -76,10 +86,11 @@ export const createIssue = async (req: AuthRequest, res: Response) => {
         title,
         description,
         priority: priority || 'medium',
+        issueType: issueType || null,
         owner: owner || '',
         assigneeId,
-        createdBy: req.user?.userId,
-        updatedBy: req.user?.userId,
+        createdBy: req.userId,
+        updatedBy: req.userId,
         relatedFunctionIds: relatedFunctionIds || [],
         relatedParameterIds: relatedParameterIds || [],
         labelIds: labelIds || [],
@@ -90,11 +101,11 @@ export const createIssue = async (req: AuthRequest, res: Response) => {
     })
 
     // Subscribe creator automatically
-    if (req.user?.userId) {
+    if (req.userId) {
       await prisma.issueSubscription.create({
         data: {
           issueId: issue.id,
-          userId: req.user.userId,
+          userId: req.userId,
         },
       }).catch(() => { }) // Ignore if already subscribed
     }
@@ -117,18 +128,17 @@ export const createIssue = async (req: AuthRequest, res: Response) => {
         },
       })
 
-      // Create system note
+      const userName = req.userId ? (await prisma.user.findUnique({ where: { id: req.userId }, select: { name: true } }))?.name : undefined
       await createSystemNote(
         issue.id,
         projectId,
         'link_added',
         null,
         `Requirement: ${requirement?.requirementId || sourceRequirementId}`,
-        req.user?.userId,
-        req.user?.name
+        req.userId || undefined,
+        userName || 'Unknown'
       )
 
-      // Log linkage for Requirement version history
       await linkageAuditService.log({
         projectId,
         entityType: 'REQUIREMENT',
@@ -139,7 +149,7 @@ export const createIssue = async (req: AuthRequest, res: Response) => {
           issueKey: issue.issueKey,
           title: issue.title
         },
-        performedByUserId: req.user?.userId,
+        performedByUserId: req.userId || undefined,
       })
     }
 
@@ -245,6 +255,12 @@ export const getIssue = async (req: AuthRequest, res: Response) => {
       where: { issueId: id },
     })
 
+    // Fetch attachments
+    const attachments = await prisma.issueAttachment.findMany({
+      where: { issueId: id },
+      orderBy: { createdAt: 'desc' },
+    })
+
     // Fetch subscribers
     const subscriptions = await prisma.issueSubscription.findMany({
       where: { issueId: id },
@@ -288,6 +304,7 @@ export const getIssue = async (req: AuthRequest, res: Response) => {
         assignee,
         labels,
         links,
+        attachments,
         subscribers,
         participants,
       },
@@ -763,6 +780,104 @@ export const createProjectLabel = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ success: false, error: 'Label already exists' })
     }
     console.error('Create label error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+}
+
+export const uploadIssueAttachment = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id: issueId } = req.params
+    const { fileName, fileData, mimeType } = req.body
+
+    if (!fileName || !fileData) {
+      return res.status(400).json({ success: false, error: 'fileName and fileData are required' })
+    }
+
+    const issue = await prisma.issue.findFirst({
+      where: { id: issueId, projectId },
+    })
+    if (!issue) {
+      return res.status(404).json({ success: false, error: 'Issue not found' })
+    }
+
+    let fileUrl: string
+    let fileSize: number
+
+    if (fileData.startsWith('data:')) {
+      const base64Data = fileData.split(',')[1]
+      const buffer = Buffer.from(base64Data, 'base64')
+      fileSize = buffer.length
+      if (fileSize > 1024 * 1024) {
+        const fileExtension = path.extname(fileName)
+        const uniqueFileName = `${issueId}-${Date.now()}${fileExtension}`
+        const filePath = path.join(issueUploadsDir, uniqueFileName)
+        fs.writeFileSync(filePath, buffer)
+        fileUrl = `/uploads/issues/${uniqueFileName}`
+      } else {
+        fileUrl = fileData
+      }
+    } else {
+      const buffer = Buffer.from(fileData, 'base64')
+      fileSize = buffer.length
+      const fileExtension = path.extname(fileName)
+      const uniqueFileName = `${issueId}-${Date.now()}${fileExtension}`
+      const filePath = path.join(issueUploadsDir, uniqueFileName)
+      fs.writeFileSync(filePath, buffer)
+      fileUrl = `/uploads/issues/${uniqueFileName}`
+    }
+
+    const user = req.userId ? await prisma.user.findUnique({ where: { id: req.userId }, select: { name: true } }) : null
+    const attachment = await prisma.issueAttachment.create({
+      data: {
+        issueId,
+        projectId,
+        fileName,
+        fileUrl,
+        fileSize,
+        mimeType: mimeType || 'application/octet-stream',
+        uploadedBy: req.userId || null,
+        uploadedByName: user?.name || null,
+      },
+    })
+
+    res.status(201).json({ success: true, data: attachment })
+  } catch (error: any) {
+    console.error('Upload issue attachment error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+}
+
+export const getIssueAttachments = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id: issueId } = req.params
+    const attachments = await prisma.issueAttachment.findMany({
+      where: { issueId, projectId },
+      orderBy: { createdAt: 'desc' },
+    })
+    res.json({ success: true, data: attachments })
+  } catch (error: any) {
+    console.error('Get issue attachments error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+}
+
+export const deleteIssueAttachment = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id: issueId, attachmentId } = req.params
+    const attachment = await prisma.issueAttachment.findFirst({
+      where: { id: attachmentId, issueId, projectId },
+    })
+    if (!attachment) {
+      return res.status(404).json({ success: false, error: 'Attachment not found' })
+    }
+    if (attachment.fileUrl.startsWith('/uploads/')) {
+      const filePath = path.join(__dirname, '../..', attachment.fileUrl)
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+    }
+    await prisma.issueAttachment.delete({ where: { id: attachmentId } })
+    res.json({ success: true })
+  } catch (error: any) {
+    console.error('Delete issue attachment error:', error)
     res.status(500).json({ success: false, error: 'Internal server error' })
   }
 }

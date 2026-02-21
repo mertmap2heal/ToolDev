@@ -49,6 +49,7 @@ export default function CreateChangeRequestModal({
     risk: undefined,
     effort: undefined,
     justification: '',
+    impactedRequirementIds: [],
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [sourceSearchQuery, setSourceSearchQuery] = useState('')
@@ -64,7 +65,10 @@ export default function CreateChangeRequestModal({
   )
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [uploadingFiles, setUploadingFiles] = useState(false)
+  const [impactedSearchQuery, setImpactedSearchQuery] = useState('')
+  const [showImpactedDropdown, setShowImpactedDropdown] = useState(false)
   const sourceDropdownRef = useRef<HTMLDivElement>(null)
+  const impactedDropdownRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
 
@@ -102,7 +106,7 @@ export default function CreateChangeRequestModal({
       const response = await requirementService.getAllRequirements(projectId)
       return response.success && response.data ? response.data : []
     },
-    enabled: isOpen && !initialSourceType,
+    enabled: isOpen,
   })
 
   // Fetch current user for Requested By
@@ -166,19 +170,23 @@ export default function CreateChangeRequestModal({
     )
   })
 
-  // Handle click outside to close dropdown
+  // Handle click outside to close dropdowns
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (sourceDropdownRef.current && !sourceDropdownRef.current.contains(event.target as Node)) {
+      const target = event.target as Node
+      if (sourceDropdownRef.current && !sourceDropdownRef.current.contains(target)) {
         setShowSourceDropdown(false)
+      }
+      if (impactedDropdownRef.current && !impactedDropdownRef.current.contains(target)) {
+        setShowImpactedDropdown(false)
       }
     }
 
-    if (showSourceDropdown) {
+    if (showSourceDropdown || showImpactedDropdown) {
       document.addEventListener('mousedown', handleClickOutside)
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [showSourceDropdown])
+  }, [showSourceDropdown, showImpactedDropdown])
 
   useEffect(() => {
     if (isOpen) {
@@ -219,6 +227,9 @@ export default function CreateChangeRequestModal({
       setShowSourceDropdown(false)
       setSelectedFiles([])
       setUploadingFiles(false)
+      setImpactedSearchQuery('')
+      setShowImpactedDropdown(false)
+      setFormData((prev) => ({ ...prev, impactedRequirementIds: [] }))
     }
   }, [isOpen, initialSourceType, initialSourceId, initialSourceName, initialSourceTitle, initialSourceDescription])
 
@@ -304,12 +315,20 @@ export default function CreateChangeRequestModal({
       risk: formData.risk || undefined,
       effort: formData.effort || undefined,
       justification: formData.justification?.trim() || undefined,
+      impactedRequirementIds:
+        (formData.impactedRequirementIds?.length ?? 0) > 0 ? formData.impactedRequirementIds : undefined,
     }
 
     createChangeRequestMutation.mutate(submitData)
   }
 
-  const handleChange = (field: keyof CreateChangeRequestDto, value: string | undefined) => {
+  const handleImpactedToggle = (req: Requirement) => {
+    const ids = formData.impactedRequirementIds ?? []
+    const next = ids.includes(req.id) ? ids.filter((id) => id !== req.id) : [...ids, req.id]
+    setFormData((prev) => ({ ...prev, impactedRequirementIds: next }))
+  }
+
+  const handleChange = (field: keyof CreateChangeRequestDto, value: string | string[] | undefined) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
     if (errors[field]) {
       setErrors((prev) => {
@@ -474,6 +493,100 @@ export default function CreateChangeRequestModal({
                 </div>
               </div>
             )}
+
+            {/* Impacted Requirements (impact analysis) */}
+            <div ref={impactedDropdownRef} className="relative">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Impacted Requirements
+              </label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                Select additional requirements that will be impacted by this change (optional)
+              </p>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search requirements..."
+                  value={impactedSearchQuery}
+                  onChange={(e) => {
+                    setImpactedSearchQuery(e.target.value)
+                    setShowImpactedDropdown(true)
+                  }}
+                  onFocus={() => setShowImpactedDropdown(true)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+              {showImpactedDropdown && (
+                <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {requirements
+                    .filter((r) => {
+                      const q = impactedSearchQuery.toLowerCase()
+                      return (
+                        !q ||
+                        r.title?.toLowerCase().includes(q) ||
+                        r.requirementId?.toLowerCase().includes(q) ||
+                        r.description?.toLowerCase().includes(q)
+                      )
+                    })
+                    .filter((r) => r.id !== formData.sourceId)
+                    .map((req) => {
+                      const isSelected = formData.impactedRequirementIds?.includes(req.id) ?? false
+                      return (
+                        <button
+                          key={req.id}
+                          type="button"
+                          onClick={() => handleImpactedToggle(req)}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
+                        >
+                          <div
+                            className={`w-5 h-5 border-2 rounded flex items-center justify-center flex-shrink-0 ${
+                              isSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-300 dark:border-gray-600'
+                            }`}
+                          >
+                            {isSelected && <Check size={14} className="text-white" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="font-medium text-gray-900 dark:text-white truncate block">
+                              {req.requirementId || req.id.slice(0, 8)}: {req.title}
+                            </span>
+                            {req.description && (
+                              <span className="text-xs text-gray-500 dark:text-gray-400 truncate block">
+                                {req.description}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  {requirements.filter((r) => r.id !== formData.sourceId).length === 0 && (
+                    <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">
+                      No other requirements available
+                    </div>
+                  )}
+                </div>
+              )}
+              {((formData.impactedRequirementIds?.length ?? 0) > 0) && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {requirements
+                    .filter((r) => formData.impactedRequirementIds?.includes(r.id))
+                    .map((req) => (
+                      <span
+                        key={req.id}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
+                      >
+                        {req.requirementId || req.id.slice(0, 8)}: {req.title}
+                        <button
+                          type="button"
+                          onClick={() => handleImpactedToggle(req)}
+                          className="hover:opacity-70"
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                </div>
+              )}
+            </div>
 
             {/* Title */}
             <div>

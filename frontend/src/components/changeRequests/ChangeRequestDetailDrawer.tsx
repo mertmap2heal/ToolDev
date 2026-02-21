@@ -4,13 +4,16 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { changeRequestService } from '../../services/changeRequest.service'
 import type { ChangeRequest } from 'shared/types/engineering.types'
-import { format } from 'date-fns'
+import { format, isValid } from 'date-fns'
 import clsx from 'clsx'
+
+const stripHtml = (html: string): string => (html || '').replace(/<[^>]*>/g, '').trim()
 
 interface ChangeRequestDetailDrawerProps {
     isOpen: boolean
     changeRequest: ChangeRequest | null
     projectId: string
+    requirementIdMap?: Record<string, string>
     onClose: () => void
     onEdit: (cr: ChangeRequest) => void
     onDelete: (cr: ChangeRequest) => void
@@ -20,6 +23,7 @@ export default function ChangeRequestDetailDrawer({
     isOpen,
     changeRequest,
     projectId,
+    requirementIdMap = {},
     onClose,
     onEdit,
     onDelete,
@@ -113,8 +117,8 @@ export default function ChangeRequestDetailDrawer({
                             {displayCR?.status || 'Pending'}
                         </span>
                     </div>
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white truncate" title={displayCR?.title}>
-                        {displayCR?.title || 'No Title'}
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white truncate" title={stripHtml(displayCR?.title || '')}>
+                        {stripHtml(displayCR?.title || '') || 'No Title'}
                     </h2>
                 </div>
                 <div className="flex items-center gap-1">
@@ -266,7 +270,7 @@ export default function ChangeRequestDetailDrawer({
                             {expandedSections.has('description') && (
                                 <div className="pl-6 text-sm text-gray-600 dark:text-gray-300 prose dark:prose-invert max-w-none">
                                     {displayCR.description ? (
-                                        <div className="whitespace-pre-wrap">{displayCR.description}</div>
+                                        <div className="whitespace-pre-wrap">{stripHtml(displayCR.description)}</div>
                                     ) : (
                                         <span className="text-gray-400 italic">No description provided</span>
                                     )}
@@ -291,12 +295,12 @@ export default function ChangeRequestDetailDrawer({
                                                 </div>
                                                 <div className="min-w-0 flex-1">
                                                     <div className="flex items-center gap-2 mb-1">
-                                                        <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                                                            {link.requirement.requirementId || link.requirement.id.substring(0, 8)}
+                                                        <span className="font-mono text-xs font-semibold px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 whitespace-nowrap">
+                                                            {link.requirement.requirementId || requirementIdMap[link.requirement.id] || link.requirement.id.substring(0, 8)}
                                                         </span>
                                                     </div>
                                                     <div className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                                                        {link.requirement.title}
+                                                        {stripHtml(link.requirement.title)}
                                                     </div>
                                                 </div>
                                                 <button
@@ -319,12 +323,16 @@ export default function ChangeRequestDetailDrawer({
                                         </div>
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-2 mb-1">
-                                                <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 uppercase">
+                                                <span className="font-mono text-xs font-semibold px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 uppercase whitespace-nowrap">
                                                     {displayCR.sourceType}
                                                 </span>
                                             </div>
-                                            <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                                {displayCR.sourceId ? displayCR.sourceId.substring(0, 8) : 'Unspecified Source'}
+                                            <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                                {displayCR.sourceType === 'requirement' && displayCR.sourceId
+                                                    ? (displayCR.sourceDisplayId || requirementIdMap[displayCR.sourceId] || displayCR.sourceId.substring(0, 8))
+                                                    : displayCR.sourceId
+                                                        ? displayCR.sourceId.substring(0, 8)
+                                                        : 'Unspecified Source'}
                                             </div>
                                         </div>
                                     </div>
@@ -354,7 +362,11 @@ export default function ChangeRequestDetailDrawer({
                                                 </div>
                                                 <div>
                                                     <p className="text-sm font-medium text-gray-900 dark:text-white truncate max-w-[200px]">{file.fileName}</p>
-                                                    <p className="text-xs text-gray-500">{format(new Date(file.createdAt), 'MMM d, yyyy')}</p>
+                                                    <p className="text-xs text-gray-500">
+                                                    {file.createdAt && isValid(new Date(file.createdAt))
+                                                        ? format(new Date(file.createdAt), 'MMM d, yyyy')
+                                                        : '-'}
+                                                </p>
                                                 </div>
                                             </div>
                                             <a
@@ -378,8 +390,8 @@ export default function ChangeRequestDetailDrawer({
             {displayCR && (
                 <div className="flex-none px-6 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
                     <div className="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
-                        <span>Created {format(new Date(displayCR.createdAt), 'MMM d, yyyy HH:mm')}</span>
-                        <span>Last updated {format(new Date(displayCR.updatedAt), 'MMM d, HH:mm')}</span>
+                        <span>Created {displayCR.createdAt && isValid(new Date(displayCR.createdAt)) ? format(new Date(displayCR.createdAt), 'MMM d, yyyy HH:mm') : '-'}</span>
+                        <span>Last updated {displayCR.updatedAt && isValid(new Date(displayCR.updatedAt)) ? format(new Date(displayCR.updatedAt), 'MMM d, HH:mm') : '-'}</span>
                     </div>
                 </div>
             )}
