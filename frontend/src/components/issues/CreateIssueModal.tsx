@@ -5,6 +5,7 @@ import { issueService } from '../../services/issue.service'
 import { functionService } from '../../services/function.service'
 import { parameterService } from '../../services/parameter.service'
 import { requirementService } from '../../services/requirement.service'
+import { useAuthStore } from '../../store/authStore'
 import type { CreateIssueDto, SystemFunction, Parameter } from 'shared/types/engineering.types'
 
 interface CreateIssueModalProps {
@@ -50,6 +51,7 @@ export default function CreateIssueModal({
   const [sourceSearchQuery, setSourceSearchQuery] = useState('')
   const [showSourceDropdown, setShowSourceDropdown] = useState(false)
   const queryClient = useQueryClient()
+  const { user } = useAuthStore()
 
   // Fetch functions
   const { data: functions = [] } = useQuery({
@@ -276,7 +278,7 @@ export default function CreateIssueModal({
         title: initialSourceTitle || '',
         description: initialSourceDescription || '',
         priority: 'medium',
-        owner: '',
+        owner: user?.name || '',
         relatedFunctionIds: initialSourceType === 'function' && initialSourceId ? [initialSourceId] : [],
         relatedParameterIds: initialSourceType === 'parameter' && initialSourceId ? [initialSourceId] : [],
       })
@@ -284,7 +286,7 @@ export default function CreateIssueModal({
       setSourceSearchQuery('')
       setShowSourceDropdown(false)
     }
-  }, [isOpen, initialSourceId, initialSourceType, initialSourceTitle, initialSourceDescription])
+  }, [isOpen, initialSourceId, initialSourceType, initialSourceTitle, initialSourceDescription, user?.name])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -502,7 +504,7 @@ export default function CreateIssueModal({
             </select>
           </div>
 
-          {/* Owner */}
+          {/* Owner - auto-assigned to current user */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
               Owner
@@ -510,10 +512,13 @@ export default function CreateIssueModal({
             <input
               type="text"
               value={formData.owner || ''}
-              onChange={(e) => handleChange('owner', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              placeholder="Enter owner name"
+              readOnly
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-white"
+              placeholder="Automatically assigned"
             />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Automatically pre-filled with your account name
+            </p>
           </div>
 
           {/* Error Message */}
