@@ -303,6 +303,7 @@ export const getRequirements = async (req: AuthRequest, res: Response) => {
     const allowedSortColumns = [
       'createdAt', 'updatedAt', 'title', 'requirementId',
       'priority', 'status', 'owner', 'requirementType', 'category', 'source', 'stage',
+      'requirementLevel', 'risk', 'complexity', 'verificationStatus', 'verificationDate', 'linkedMocCode', 'componentId',
     ]
     const safeSortBy = allowedSortColumns.includes(sortBy) ? sortBy : 'createdAt'
 

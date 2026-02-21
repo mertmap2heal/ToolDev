@@ -183,9 +183,18 @@ export default function RequirementsPage() {
     { key: 'category', label: 'Category', defaultVisible: false },
     { key: 'source', label: 'Source', defaultVisible: false },
     { key: 'requirementType', label: 'Type', defaultVisible: false },
+    { key: 'requirementLevel', label: 'Level', defaultVisible: false },
+    { key: 'risk', label: 'Risk', defaultVisible: false },
+    { key: 'complexity', label: 'Complexity', defaultVisible: false },
     { key: 'verificationMethod', label: 'Verification Method', defaultVisible: false },
+    { key: 'verificationStatus', label: 'Verification Status', defaultVisible: false },
+    { key: 'verificationDate', label: 'Verification Date', defaultVisible: false },
+    { key: 'linkedMocCode', label: 'MoC', defaultVisible: false },
     { key: 'acceptanceCriteria', label: 'Acceptance Criteria', defaultVisible: false },
     { key: 'stage', label: 'Stage', defaultVisible: false },
+    { key: 'rationale', label: 'Rationale', defaultVisible: false },
+    { key: 'component', label: 'Component', defaultVisible: false },
+    { key: 'reviewStatus', label: 'Review Status', defaultVisible: false },
     { key: 'createdAt', label: 'Created', defaultVisible: false },
     { key: 'updatedAt', label: 'Updated', defaultVisible: false },
   ]
@@ -1144,9 +1153,39 @@ export default function RequirementsPage() {
               {!req.requirementType && <span className="text-gray-400">—</span>}
             </td>
           )}
+          {requirementColumns.has('requirementLevel') && (
+            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+              {req.requirementLevel ? formatRequirementType(req.requirementLevel) : '—'}
+            </td>
+          )}
+          {requirementColumns.has('risk') && (
+            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+              {req.risk ? formatRequirementType(req.risk) : '—'}
+            </td>
+          )}
+          {requirementColumns.has('complexity') && (
+            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+              {req.complexity ? formatRequirementType(req.complexity) : '—'}
+            </td>
+          )}
           {requirementColumns.has('verificationMethod') && (
             <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
               {req.verificationMethod || '—'}
+            </td>
+          )}
+          {requirementColumns.has('verificationStatus') && (
+            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+              {req.verificationStatus ? formatRequirementType(req.verificationStatus) : '—'}
+            </td>
+          )}
+          {requirementColumns.has('verificationDate') && (
+            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+              {req.verificationDate ? format(new Date(req.verificationDate), 'MMM d, yyyy') : '—'}
+            </td>
+          )}
+          {requirementColumns.has('linkedMocCode') && (
+            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+              {(req as any).moc ? `${(req as any).moc.code}: ${(req as any).moc.name}` : req.linkedMocCode ?? '—'}
             </td>
           )}
           {requirementColumns.has('acceptanceCriteria') && (
@@ -1163,6 +1202,29 @@ export default function RequirementsPage() {
           {requirementColumns.has('stage') && (
             <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
               {req.stage || '—'}
+            </td>
+          )}
+          {requirementColumns.has('rationale') && (
+            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-md">
+              <p className="line-clamp-2" title={req.rationale ? String(req.rationale).replace(/<[^>]*>/g, '') : undefined}>
+                {req.rationale
+                  ? `${String(req.rationale).replace(/<[^>]*>/g, '').substring(0, 100)}${String(req.rationale).length > 100 ? '...' : ''}`
+                  : '—'}
+              </p>
+            </td>
+          )}
+          {requirementColumns.has('component') && (
+            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+              {(req as any).component?.name || '—'}
+            </td>
+          )}
+          {requirementColumns.has('reviewStatus') && (
+            <td className="px-4 py-3">
+              {req.reviewStatus ? (
+                <ReviewStatusBadge status={req.reviewStatus} size="sm" />
+              ) : (
+                <span className="text-gray-400">—</span>
+              )}
             </td>
           )}
           {requirementColumns.has('createdAt') && (
@@ -1973,9 +2035,51 @@ export default function RequirementsPage() {
                         </span>
                       </th>
                     )}
+                    {requirementColumns.has('requirementLevel') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('requirementLevel')}>
+                        <span className="inline-flex items-center gap-1">
+                          Level
+                          {sortBy === 'requirementLevel' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                        </span>
+                      </th>
+                    )}
+                    {requirementColumns.has('risk') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('risk')}>
+                        <span className="inline-flex items-center gap-1">
+                          Risk
+                          {sortBy === 'risk' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                        </span>
+                      </th>
+                    )}
+                    {requirementColumns.has('complexity') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('complexity')}>
+                        <span className="inline-flex items-center gap-1">
+                          Complexity
+                          {sortBy === 'complexity' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                        </span>
+                      </th>
+                    )}
                     {requirementColumns.has('verificationMethod') && (
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         Verification Method
+                      </th>
+                    )}
+                    {requirementColumns.has('verificationStatus') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Verification Status
+                      </th>
+                    )}
+                    {requirementColumns.has('verificationDate') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('verificationDate')}>
+                        <span className="inline-flex items-center gap-1">
+                          Verification Date
+                          {sortBy === 'verificationDate' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                        </span>
+                      </th>
+                    )}
+                    {requirementColumns.has('linkedMocCode') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        MoC
                       </th>
                     )}
                     {requirementColumns.has('acceptanceCriteria') && (
@@ -1989,6 +2093,24 @@ export default function RequirementsPage() {
                           Stage
                           {sortBy === 'stage' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                         </span>
+                      </th>
+                    )}
+                    {requirementColumns.has('rationale') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Rationale
+                      </th>
+                    )}
+                    {requirementColumns.has('component') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('componentId')}>
+                        <span className="inline-flex items-center gap-1">
+                          Component
+                          {sortBy === 'componentId' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                        </span>
+                      </th>
+                    )}
+                    {requirementColumns.has('reviewStatus') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Review Status
                       </th>
                     )}
                     {requirementColumns.has('createdAt') && (
