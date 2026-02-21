@@ -411,8 +411,64 @@ function RelationshipsTab({
         .map((r) => ({ ...r, sourceNode: n }))
     )
 
+  // INCOSE traceability: structural links derived from hierarchy (parent, siblings)
+  const parentNode = node.parentId ? allNodes.find((n) => n.id === node.parentId) : null
+  const siblings = allNodes.filter(
+    (n) => n.parentId === node.parentId && n.id !== node.id
+  )
+
   return (
     <div className="space-y-6 max-w-2xl">
+      {/* Structural links (INCOSE traceability: parent and siblings) */}
+      <div>
+        <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+          Structural links (INCOSE traceability)
+        </h4>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+          Parent and sibling relationships derived from the PBS hierarchy for traceability.
+        </p>
+        <div className="space-y-2">
+          {parentNode ? (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 shrink-0">
+                Part of (parent)
+              </span>
+              <span className="text-gray-400 dark:text-gray-500">→</span>
+              <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                {parentNode.pbsCode} — {parentNode.name}
+              </span>
+            </div>
+          ) : (
+            <div className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 text-sm text-gray-500 dark:text-gray-400">
+              Root component (no parent)
+            </div>
+          )}
+          {siblings.length > 0 && (
+            <div>
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 block mb-1">
+                Siblings ({siblings.length})
+              </span>
+              <div className="space-y-1">
+                {siblings.map((sib) => (
+                  <div
+                    key={sib.id}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50"
+                  >
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 shrink-0">
+                      Related (sibling)
+                    </span>
+                    <span className="text-gray-400 dark:text-gray-500">→</span>
+                    <span className="text-sm text-blue-600 dark:text-blue-400">
+                      {sib.pbsCode} — {sib.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Outgoing relationships */}
       <div>
         <div className="flex items-center justify-between mb-3">
