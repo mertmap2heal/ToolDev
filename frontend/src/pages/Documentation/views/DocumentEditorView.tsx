@@ -8,24 +8,15 @@ import {
   Pencil,
   Trash2,
   Search,
-  Heading1,
-  Heading2,
-  Heading3,
-  List,
-  ListOrdered,
-  Table as TableIcon,
-  Image as ImageIcon,
-  Link2,
-  FileCode,
   Save,
   Download,
   Package,
-  X,
   ExternalLink,
   AlertCircle,
 } from 'lucide-react'
 import clsx from 'clsx'
 import RichTextEditor from '../../../components/common/RichTextEditor'
+import DocumentEditorToolbar from '../components/DocumentEditorToolbar'
 import type {
   Document,
   DocumentSection,
@@ -96,10 +87,13 @@ export default function DocumentEditorView({
   const [outlineSearch, setOutlineSearch] = useState('')
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
+  const [editorInstance, setEditorInstance] = useState<import('@tiptap/core').Editor | null>(null)
+  const [toolbarTab, setToolbarTab] = useState<'home' | 'insert' | 'references'>('home')
 
   const { data: incomingLinks = [] } = useQuery({
     queryKey: ['document-trace-links', projectId, doc.id],
     queryFn: async () => {
+      if (!projectId) return []
       const res = await linkService.getLinks(projectId, { targetId: doc.id })
       return res.success && res.data ? res.data : []
     },
@@ -333,75 +327,14 @@ export default function DocumentEditorView({
 
       {/* Center: Editor */}
       <div className="lg:col-span-6 flex flex-col bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-        <div className="flex flex-wrap items-center gap-1 p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-          <button
-            onClick={() => {}}
-            className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
-            title="Heading 1"
-          >
-            <Heading1 size={16} />
-          </button>
-          <button
-            onClick={() => {}}
-            className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
-            title="Heading 2"
-          >
-            <Heading2 size={16} />
-          </button>
-          <button
-            onClick={() => {}}
-            className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
-            title="Heading 3"
-          >
-            <Heading3 size={16} />
-          </button>
-          <span className="w-px h-5 bg-gray-300 dark:bg-gray-600" />
-          <button
-            onClick={() => {}}
-            className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
-            title="Bullet list"
-          >
-            <List size={16} />
-          </button>
-          <button
-            onClick={() => {}}
-            className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
-            title="Numbered list"
-          >
-            <ListOrdered size={16} />
-          </button>
-          <button
-            onClick={() => {}}
-            className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
-            title="Table"
-          >
-            <TableIcon size={16} />
-          </button>
-          <button
-            onClick={onImagePlaceholder}
-            className="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
-            title="Image (placeholder)"
-          >
-            <ImageIcon size={16} />
-          </button>
-          <span className="w-px h-5 bg-gray-300 dark:bg-gray-600" />
-          <button
-            onClick={onOpenArtifactPicker}
-            className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-            title="Insert Artifact Reference"
-          >
-            <Link2 size={14} />
-            Insert Artifact Reference
-          </button>
-          <button
-            onClick={onInsertGeneratedSection}
-            className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-            title="Insert Generated Section"
-          >
-            <FileCode size={14} />
-            Insert Generated Section
-          </button>
-        </div>
+        <DocumentEditorToolbar
+          editor={editorInstance}
+          activeTab={toolbarTab}
+          onTabChange={setToolbarTab}
+          onOpenArtifactPicker={onOpenArtifactPicker}
+          onInsertGeneratedSection={onInsertGeneratedSection}
+          onImagePlaceholder={onImagePlaceholder}
+        />
         <div className="flex-1 overflow-y-auto p-4">
           {!currentSectionId ? (
             <p className="text-gray-500 dark:text-gray-400 text-sm">Select a section from the outline.</p>
@@ -435,6 +368,8 @@ export default function DocumentEditorView({
                 placeholder="Section content…"
                 minHeight="200px"
                 className="min-h-[200px]"
+                hideToolbar
+                onEditorReady={setEditorInstance}
               />
             </div>
           )}
@@ -472,7 +407,7 @@ export default function DocumentEditorView({
                     </div>
                   </div>
                   <a
-                    href={buildDeepLink(projectId, { type: link.sourceType, id: link.sourceId })}
+                    href={buildDeepLink(projectId ?? '', { type: link.sourceType, id: link.sourceId })}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 shrink-0"

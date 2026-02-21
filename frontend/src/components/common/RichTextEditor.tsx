@@ -31,6 +31,7 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import { useCallback, useEffect, useRef } from 'react'
+import type { Editor } from '@tiptap/core'
 
 interface RichTextEditorProps {
   content: string
@@ -40,6 +41,10 @@ interface RichTextEditorProps {
   minHeight?: string
   editable?: boolean
   onImageUpload?: (file: File) => Promise<string> // Returns image URL
+  /** Hide built-in toolbar when using external toolbar (e.g. DocumentEditorToolbar) */
+  hideToolbar?: boolean
+  /** Called when editor instance is ready, for use with external toolbar */
+  onEditorReady?: (editor: Editor) => void
 }
 
 /**
@@ -54,6 +59,8 @@ export default function RichTextEditor({
   minHeight = '150px',
   editable = true,
   onImageUpload,
+  hideToolbar = false,
+  onEditorReady,
 }: RichTextEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const editor = useEditor({
@@ -121,6 +128,13 @@ export default function RichTextEditor({
     }
   }, [editable, editor])
 
+  // Notify parent when editor is ready for external toolbar
+  useEffect(() => {
+    if (editor && onEditorReady) {
+      onEditorReady(editor)
+    }
+  }, [editor, onEditorReady])
+
   const setLink = useCallback(() => {
     if (!editor) return
 
@@ -186,7 +200,7 @@ export default function RichTextEditor({
   return (
     <div className={clsx('rich-text-editor', className)}>
       {/* Toolbar */}
-      {editable && (
+      {editable && !hideToolbar && (
         <div className="flex flex-wrap gap-1 p-2 border border-b-0 border-gray-300 dark:border-gray-600 rounded-t-lg bg-gray-50 dark:bg-gray-800">
           {/* Undo/Redo */}
           <div className="flex items-center gap-0.5 pr-2 border-r border-gray-300 dark:border-gray-600">
