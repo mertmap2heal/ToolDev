@@ -21,6 +21,8 @@ export interface RequirementFilters {
   category?: string
   source?: string
   componentId?: string
+  verificationStatus?: string
+  reviewStatus?: string
 }
 
 export const requirementService = {
@@ -40,6 +42,8 @@ export const requirementService = {
       if (filters.category) params.append('category', filters.category)
       if (filters.source) params.append('source', filters.source)
       if (filters.componentId) params.append('componentId', filters.componentId)
+      if (filters.verificationStatus) params.append('verificationStatus', filters.verificationStatus)
+      if (filters.reviewStatus) params.append('reviewStatus', filters.reviewStatus)
     }
 
     const queryString = params.toString()

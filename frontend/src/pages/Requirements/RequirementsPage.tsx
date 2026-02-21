@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { ArrowUp, ArrowDown } from 'lucide-react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
-import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft } from 'lucide-react'
+import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, AlertTriangle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft, Target, BarChart3 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 import CreateRequirementModal from '../../components/requirements/CreateRequirementModal'
@@ -100,6 +100,8 @@ export default function RequirementsPage() {
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [requirementTypeFilter, setRequirementTypeFilter] = useState<string>('all')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [verificationStatusFilter, setVerificationStatusFilter] = useState<string>('all')
+  const [reviewStatusFilter, setReviewStatusFilter] = useState<string>('all')
 
   // Pagination & sorting state
   const [currentPage, setCurrentPage] = useState<number>(1)
@@ -123,7 +125,7 @@ export default function RequirementsPage() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [statusFilter, priorityFilter, ownerFilter, sourceFilter, requirementTypeFilter, categoryFilter, selectedComponentId])
+  }, [statusFilter, priorityFilter, ownerFilter, sourceFilter, requirementTypeFilter, categoryFilter, selectedComponentId, verificationStatusFilter, reviewStatusFilter])
 
   // Build server-side filter object
   const serverFilters = useMemo<RequirementFilters>(() => {
@@ -141,8 +143,10 @@ export default function RequirementsPage() {
     if (requirementTypeFilter !== 'all') filters.requirementType = requirementTypeFilter
     if (categoryFilter !== 'all') filters.category = categoryFilter
     if (selectedComponentId) filters.componentId = selectedComponentId
+    if (verificationStatusFilter !== 'all') filters.verificationStatus = verificationStatusFilter
+    if (reviewStatusFilter !== 'all') filters.reviewStatus = reviewStatusFilter
     return filters
-  }, [currentPage, pageSize, sortBy, sortOrder, debouncedSearch, statusFilter, priorityFilter, ownerFilter, sourceFilter, requirementTypeFilter, categoryFilter, selectedComponentId])
+  }, [currentPage, pageSize, sortBy, sortOrder, debouncedSearch, statusFilter, priorityFilter, ownerFilter, sourceFilter, requirementTypeFilter, categoryFilter, selectedComponentId, verificationStatusFilter, reviewStatusFilter])
 
   // Handle column sort toggle
   const handleSort = useCallback((column: string) => {
@@ -1593,13 +1597,14 @@ export default function RequirementsPage() {
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {selectedRequirements.size > 0 && (
-                <div className="flex items-center gap-2 mr-4">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">
-                    {selectedRequirements.size} selected
-                  </span>
-                  <select
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      {selectedRequirements.size} selected
+                    </span>
+                    <select
                     onChange={(e) => {
                       const action = e.target.value
                       if (action && action !== 'bulk-action') {
@@ -1641,8 +1646,12 @@ export default function RequirementsPage() {
                     <option value="create-issue">Create Issue(s)</option>
                     <option value="bulk-delete">Delete Selected</option>
                   </select>
-                </div>
+                  </div>
+                  <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
+                </>
               )}
+              {/* Traceability group */}
+              <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsTraceMatrixOpen(true)}
                 className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
@@ -1652,21 +1661,25 @@ export default function RequirementsPage() {
                 <span className="text-sm">Matrix</span>
               </button>
               <button
+                onClick={() => setIsAllocationTableOpen(true)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+                title="View Allocation Table"
+              >
+                <Target size={16} />
+                <span className="text-sm">Allocation</span>
+              </button>
+              <button
                 onClick={() => setIsSuspectReviewOpen(true)}
                 className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
                 title="Review Suspect Links"
               >
-                <AlertCircle size={16} />
+                <AlertTriangle size={16} />
                 <span className="text-sm">Suspect</span>
               </button>
-              <button
-                onClick={() => setIsBaselineManagerOpen(true)}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-                title="Manage Baselines"
-              >
-                <Archive size={16} />
-                <span className="text-sm">Baselines</span>
-              </button>
+              </div>
+              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
+              {/* Data group */}
+              <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsImportOpen(true)}
                 className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
@@ -1683,6 +1696,56 @@ export default function RequirementsPage() {
                 <Upload size={16} />
                 <span className="text-sm">Export</span>
               </button>
+              </div>
+              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
+              {/* View group */}
+              <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsBaselineManagerOpen(true)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+                title="Manage Baselines"
+              >
+                <Archive size={16} />
+                <span className="text-sm">Baselines</span>
+              </button>
+              <button
+                onClick={() => setIsDiagramOpen(true)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+                title="View Requirement Diagram"
+              >
+                <GitBranch size={16} />
+                <span className="text-sm">Diagram</span>
+              </button>
+              <button
+                onClick={() => setIsQualityPanelOpen(true)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+                title="Requirement Quality Analysis"
+              >
+                <BarChart3 size={16} />
+                <span className="text-sm">Quality</span>
+              </button>
+              </div>
+              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
+              {/* MoC coverage badge */}
+              {(() => {
+                const total = allRequirements.length
+                const mocsAssigned = allRequirements.filter(r => r.linkedMocCode != null).length
+                const pct = total > 0 ? Math.round((mocsAssigned / total) * 100) : 0
+                return (
+                  <button
+                    onClick={() => setIsQualityPanelOpen(true)}
+                    title="MoC assignment rate. Click to open Quality panel."
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors text-sm"
+                  >
+                    <span className="font-medium">MoC:</span>
+                    <span className={pct >= 90 ? 'text-green-600 dark:text-green-400' : pct >= 50 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400'}>
+                      {mocsAssigned}/{total}
+                    </span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">({pct}%)</span>
+                  </button>
+                )
+              })()}
+              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
               <div className="relative" ref={columnSelectorRef}>
                 <button
                   onClick={() => setColumnSelectorOpen(!columnSelectorOpen)}
@@ -1691,6 +1754,7 @@ export default function RequirementsPage() {
                 >
                   <Columns size={16} />
                   <span className="text-sm">Columns</span>
+                  <ChevronDown size={14} className={clsx('ml-0.5 transition-transform', columnSelectorOpen && 'rotate-180')} />
                 </button>
                 {columnSelectorOpen && (
                   <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
@@ -1727,30 +1791,7 @@ export default function RequirementsPage() {
                 )}
               </div>
               {projectId && <SafetyLinkPanel variant="linked" count={3} />}
-              <button
-                onClick={() => setIsDiagramOpen(true)}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-                title="View Requirement Diagram"
-              >
-                <FileText size={16} />
-                <span className="text-sm">Diagram</span>
-              </button>
-              <button
-                onClick={() => setIsAllocationTableOpen(true)}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-                title="View Allocation Table"
-              >
-                <Grid3X3 size={16} />
-                <span className="text-sm">Allocation</span>
-              </button>
-              <button
-                onClick={() => setIsQualityPanelOpen(true)}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-                title="Requirement Quality Analysis"
-              >
-                <AlertCircle size={16} />
-                <span className="text-sm">Quality</span>
-              </button>
+              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
               <button
                 onClick={() => {
                   setParentRequirement(null)
@@ -1939,6 +1980,41 @@ export default function RequirementsPage() {
                       <option value="security">Security</option>
                       <option value="usability">Usability</option>
                       <option value="other">Other</option>
+                    </select>
+                  </div>
+
+                  {/* Verification Status Filter */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Verification Status
+                    </label>
+                    <select
+                      value={verificationStatusFilter}
+                      onChange={(e) => setVerificationStatusFilter(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="all">All</option>
+                      <option value="not_verified">Not Verified</option>
+                      <option value="verified">Verified</option>
+                      <option value="failed">Failed</option>
+                    </select>
+                  </div>
+
+                  {/* Review Status Filter */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                      Review Status
+                    </label>
+                    <select
+                      value={reviewStatusFilter}
+                      onChange={(e) => setReviewStatusFilter(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="all">All</option>
+                      <option value="draft">Draft</option>
+                      <option value="under_review">Under Review</option>
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
                     </select>
                   </div>
                 </div>

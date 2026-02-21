@@ -1,5 +1,5 @@
 export type ArtifactType = 'requirement' | 'function' | 'parameter' | 'architecture' | 'verification';
-export type LinkType = 'satisfies' | 'implements' | 'verifies' | 'derives' | 'refines' | 'copy' | 'trace' | 'allocate' | 'parent_of' | 'child_of' | 'derives_from' | 'derived_to' | 'refined_by' | 'depends_on' | 'required_by' | 'constrains' | 'constrained_by' | 'conflicts_with' | 'supports' | 'supported_by' | 'supersedes' | 'superseded_by';
+export type LinkType = 'satisfies' | 'satisfied_by' | 'implements' | 'implemented_by' | 'verifies' | 'verified_by' | 'derives' | 'derived_from' | 'derived_to' | 'refines' | 'refined_by' | 'copy' | 'copied_from' | 'trace' | 'traced_from' | 'traced_to' | 'allocate' | 'allocated_to' | 'parent_of' | 'child_of' | 'depends_on' | 'required_by' | 'constrains' | 'constrained_by' | 'conflicts_with' | 'mitigates' | 'mitigated_by' | 'supports' | 'supported_by' | 'supersedes' | 'superseded_by' | 'related_to';
 export interface TraceLink {
     id: string;
     projectId: string;

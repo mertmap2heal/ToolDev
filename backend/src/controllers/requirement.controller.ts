@@ -253,6 +253,8 @@ export const getRequirements = async (req: AuthRequest, res: Response) => {
     const category = req.query.category as string | undefined
     const source = req.query.source as string | undefined
     const componentId = req.query.componentId as string | undefined
+    const verificationStatus = req.query.verificationStatus as string | undefined
+    const reviewStatus = req.query.reviewStatus as string | undefined
 
     // Build where clause — paginate only root-level requirements
     const where: any = {
@@ -285,6 +287,8 @@ export const getRequirements = async (req: AuthRequest, res: Response) => {
       where.source = source
     }
     if (componentId) where.componentId = componentId
+    if (verificationStatus) where.verificationStatus = verificationStatus
+    if (reviewStatus) where.reviewStatus = reviewStatus
 
     // Full-text search across multiple fields
     if (search) {
