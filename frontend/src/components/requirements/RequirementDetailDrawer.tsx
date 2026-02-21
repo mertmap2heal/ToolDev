@@ -363,23 +363,28 @@ export default function RequirementDetailDrawer({
     'archives': 'archived_as',
   }
 
-  // Combine outgoing and normalized incoming links
-  const allLinks = [
-    ...links,
-    ...incomingLinks.map(link => ({
-      ...link,
-      // Swap source and target for display from this requirement's perspective
-      targetId: link.sourceId,
-      targetType: link.sourceType,
-      sourceId: link.targetId,
-      sourceType: link.targetType,
-      // Invert the relationship type
-      linkType: INVERSE_LINK_TYPES[link.linkType] || `inverse_${link.linkType}`,
-      // Pass original Source Title as Target Title for display
-      targetTitle: (link as any).sourceTitle || `Source ${link.sourceId.substring(0, 8)}`, // Fallback if sourceTitle missing
-      targetDisplayId: (link as any).sourceDisplayId || (link as any).sourceId,
-    }))
-  ]
+  // Combine outgoing and normalized incoming links, deduplicating by physical link id
+  // (same RequirementChangeRequestLink can appear as Req->CR in links and CR->Req in incomingLinks)
+  const normalizedIncoming = incomingLinks.map(link => ({
+    ...link,
+    // Swap source and target for display from this requirement's perspective
+    targetId: link.sourceId,
+    targetType: link.sourceType,
+    sourceId: link.targetId,
+    sourceType: link.targetType,
+    // Invert the relationship type
+    linkType: INVERSE_LINK_TYPES[link.linkType] || `inverse_${link.linkType}`,
+    // Pass original Source Title as Target Title for display
+    targetTitle: (link as any).sourceTitle || `Source ${link.sourceId.substring(0, 8)}`, // Fallback if sourceTitle missing
+    targetDisplayId: (link as any).sourceDisplayId || (link as any).sourceId,
+  }))
+  const seenIds = new Set(links.map((l: any) => l.id))
+  const dedupedIncoming = normalizedIncoming.filter((l: any) => {
+    if (seenIds.has(l.id)) return false
+    seenIds.add(l.id)
+    return true
+  })
+  const allLinks = [...links, ...dedupedIncoming]
 
   // Filter verification links from the combined lists if needed, or keeping them separates
   // The original code used verificationLinks for test plans/cases. 
