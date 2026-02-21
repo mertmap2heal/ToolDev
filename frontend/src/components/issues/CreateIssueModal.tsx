@@ -13,6 +13,7 @@ interface CreateIssueModalProps {
   projectId: string
   initialSourceType?: 'function' | 'parameter' | 'requirement'
   initialSourceId?: string
+  initialSourceName?: string
   initialSourceTitle?: string
   initialSourceDescription?: string
 }
@@ -33,6 +34,7 @@ export default function CreateIssueModal({
   projectId,
   initialSourceType,
   initialSourceId,
+  initialSourceName,
   initialSourceTitle,
   initialSourceDescription,
 }: CreateIssueModalProps) {
@@ -361,7 +363,18 @@ export default function CreateIssueModal({
             )}
           </div>
 
-          {/* Link Source */}
+          {/* Link Source - hidden when source is pre-selected (e.g. from requirements actions) */}
+          {initialSourceType && initialSourceId ? (
+            <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Source
+              </label>
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                <span className="font-medium capitalize">{initialSourceType.replace(/-/g, ' ')}:</span>{' '}
+                {initialSourceName || initialSourceId}
+              </div>
+            </div>
+          ) : (
           <div className="source-dropdown-container">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
               Link Source
@@ -470,6 +483,7 @@ export default function CreateIssueModal({
               </div>
             )}
           </div>
+          )}
 
           {/* Priority */}
           <div>

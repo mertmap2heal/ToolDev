@@ -2511,11 +2511,11 @@ export default function RequirementsPage() {
               sourceType={selectedRequirementForChangeRequest ? 'requirement' : undefined}
               sourceId={selectedRequirementForChangeRequest?.id}
               sourceName={selectedRequirementForChangeRequest?.title}
-              sourceTitle={selectedRequirementForChangeRequest ? (suspectLinksForCR ? `Suspect Links Review (${suspectLinksForCR.length} links)` : selectedRequirementForChangeRequest.title) : undefined}
+              sourceTitle={suspectLinksForCR?.length ? `Suspect Links Review (${suspectLinksForCR.length} links)` : undefined}
               sourceDescription={
                 suspectLinksForCR?.length
                   ? `Created from Suspect Links Review. Impacted traceability: ${suspectLinksForCR.map((r) => `${r.sourceType}:${r.sourceId.substring(0, 8)} -> ${r.targetType}:${r.targetId.substring(0, 8)}`).join('; ')}`
-                  : selectedRequirementForChangeRequest?.description
+                  : undefined
               }
             />
           )}
@@ -2529,8 +2529,9 @@ export default function RequirementsPage() {
             projectId={projectId || ''}
             initialSourceType="requirement"
             initialSourceId={selectedRequirementForIssue?.id}
-            initialSourceTitle={selectedRequirementForIssue ? `Issue for ${selectedRequirementForIssue.requirementId || selectedRequirementForIssue.title}` : ''}
-            initialSourceDescription={selectedRequirementForIssue ? `Issue created from requirement: ${selectedRequirementForIssue.title}\n\n${selectedRequirementForIssue.description}` : ''}
+            initialSourceName={selectedRequirementForIssue ? `${selectedRequirementForIssue.requirementId || selectedRequirementForIssue.id.slice(0, 8)}: ${selectedRequirementForIssue.title}` : undefined}
+            initialSourceTitle={undefined}
+            initialSourceDescription={undefined}
           />
         </div>
 
