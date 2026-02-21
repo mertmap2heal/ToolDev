@@ -6,11 +6,19 @@ const router = Router()
 
 router.use(authenticateToken)
 
-// Get all trace links for a project
+// Get all trace links for a project (supports ?sourceId= &targetId= &sourceType= &targetType= for filtering)
 router.get('/:projectId', async (req, res) => {
   try {
     const { projectId } = req.params
-    const links = await traceabilityService.getTraceLinks(projectId)
+    const filters = req.query?.sourceId || req.query?.targetId || req.query?.sourceType || req.query?.targetType
+      ? {
+          sourceId: req.query.sourceId as string | undefined,
+          targetId: req.query.targetId as string | undefined,
+          sourceType: req.query.sourceType as string | undefined,
+          targetType: req.query.targetType as string | undefined,
+        }
+      : undefined
+    const links = await traceabilityService.getTraceLinks(projectId, filters)
 
     res.json({
       success: true,

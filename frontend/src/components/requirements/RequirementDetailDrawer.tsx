@@ -1433,7 +1433,9 @@ export default function RequirementDetailDrawer({
                                   case 'documents': return 'Documents'
                                   case 'changes_via': return 'Change Requests'
                                   case 'originates_from':
-                                  case 'originates_from_inverse': return 'Change Requests'
+                                  case 'originates_from_inverse':
+                                  case 'relates_to':
+                                  case 'relates_to_inverse': return 'Change Requests'
                                   case 'tracked_by': return 'Tracked By'
                                   case 'tracks': return 'Tracks'
                                   case 'implemented_by': return 'Implemented By'
@@ -1483,7 +1485,9 @@ export default function RequirementDetailDrawer({
                                   case 'documents': return <BookOpen size={16} className="text-sky-600 dark:text-sky-400" />
                                   case 'changes_via':
                                   case 'originates_from':
-                                  case 'originates_from_inverse': return <GitPullRequest size={16} className="text-purple-600 dark:text-purple-400" />
+                                  case 'originates_from_inverse':
+                                  case 'relates_to':
+                                  case 'relates_to_inverse': return <GitPullRequest size={16} className="text-purple-600 dark:text-purple-400" />
                                   case 'tracked_by':
                                   case 'tracks': return <AlertCircle size={16} className="text-orange-600 dark:text-orange-400" />
                                   case 'implemented_by':

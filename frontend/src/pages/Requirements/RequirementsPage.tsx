@@ -457,6 +457,8 @@ export default function RequirementsPage() {
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['change-requests', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['requirement-links', projectId] })
       setSelectedRequirements(new Set())
       if (result.failed > 0) {
         alert(`Created ${result.successful} change request(s). ${result.failed} failed to create.`)

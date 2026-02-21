@@ -273,10 +273,13 @@ export default function CreateChangeRequestModal({
       queryClient.invalidateQueries({ queryKey: ['change-requests', projectId] })
       queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
 
-      // Invalidate specific requirement queries if created from a requirement
-      if (initialSourceType === 'requirement' && initialSourceId) {
-        queryClient.invalidateQueries({ queryKey: ['requirement-links', projectId, initialSourceId] })
-        queryClient.invalidateQueries({ queryKey: ['requirement', projectId, initialSourceId] })
+      // Invalidate requirement links so the Links tab shows the new CR (links come from traceability which includes CR links)
+      const sourceType = response.data?.sourceType ?? initialSourceType
+      const sourceId = response.data?.sourceId ?? initialSourceId
+      if (sourceType === 'requirement' && sourceId) {
+        queryClient.invalidateQueries({ queryKey: ['requirement-links', projectId, sourceId] })
+        queryClient.invalidateQueries({ queryKey: ['requirement-links', projectId] })
+        queryClient.invalidateQueries({ queryKey: ['requirement', projectId, sourceId] })
       }
 
       onClose()

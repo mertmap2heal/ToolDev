@@ -54,7 +54,7 @@ function applyFilters(links: Link[], filters?: LinkFilters): Link[] {
  */
 export const linkService = {
   async getLinks(projectId: string, filters?: LinkFilters): Promise<ApiResponse<Link[]>> {
-    const response = await traceabilityService.getTraceLinks(projectId)
+    const response = await traceabilityService.getTraceLinks(projectId, filters)
     if (!response.success || !response.data) return response as unknown as ApiResponse<Link[]>
     let links = response.data.map(traceLinkToLink)
     links = filterByLinkageV1(links)

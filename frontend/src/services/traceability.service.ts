@@ -7,8 +7,16 @@ import type { ApiResponse } from 'shared/types/api.types'
  * trace links between artifacts including suspect link detection.
  */
 export const traceabilityService = {
-  async getTraceLinks(projectId: string): Promise<ApiResponse<TraceLink[]>> {
-    return apiClient.get<TraceLink[]>(`/traceability/${projectId}`)
+  async getTraceLinks(
+    projectId: string,
+    filters?: { sourceId?: string; targetId?: string; sourceType?: string; targetType?: string }
+  ): Promise<ApiResponse<TraceLink[]>> {
+    const params = filters
+      ? Object.fromEntries(
+          Object.entries(filters).filter(([, v]) => v != null && v !== '')
+        )
+      : undefined
+    return apiClient.get<TraceLink[]>(`/traceability/${projectId}`, { params })
   },
 
   async getTraceabilityGraph(projectId: string): Promise<ApiResponse<TraceabilityGraph>> {
