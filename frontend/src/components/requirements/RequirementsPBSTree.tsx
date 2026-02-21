@@ -52,6 +52,7 @@ interface FlatTreeItem {
   hasChildren: boolean
   requirementId?: string
   componentId?: string
+  componentDisplayId?: string // pbsCode or shortened id for display
   requirement?: Requirement
   link?: LinkLike
 }
@@ -124,6 +125,7 @@ function buildFlatTree(
             parentComponentId: null,
             hasChildren,
             componentId: node.id,
+            componentDisplayId: (node as { pbsCode?: string }).pbsCode || node.id.slice(0, 8),
         })
 
         if (expandedNodes.has(node.id)) {
@@ -361,6 +363,7 @@ export default function RequirementsPBSTree({
                         projectId: projectId!,
                         parentId: node.parentId,
                         name: node.name,
+                        pbsCode: node.pbsCode,
                         description: node.description,
                         sortOrder: node.orderIndex ?? 0,
                         createdAt: node.createdAt,
@@ -683,6 +686,7 @@ export default function RequirementsPBSTree({
 
                     // Component row
                     const count = reqCounts.get(item.componentId!) || 0
+                    const displayId = item.componentDisplayId || item.componentId!.slice(0, 8)
                     return (
                         <div
                             key={item.id}
@@ -708,6 +712,9 @@ export default function RequirementsPBSTree({
                                 <span className="w-4 flex-shrink-0" />
                             )}
                             <Package className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-blue-500' : 'text-amber-500/80 dark:text-amber-400/80'}`} />
+                            <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 flex-shrink-0" title={item.componentId}>
+                                {displayId}
+                            </span>
                             <span className="truncate flex-1" title={item.name}>
                                 {item.name}
                             </span>

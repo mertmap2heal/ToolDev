@@ -47,7 +47,11 @@ function createNewNode(parentId: string | null, nodes: PBSNode[]): PBSNode {
   const siblingCodes = siblings.map((n) => n.pbsCode)
   const pbsCode = generatePbsCode(parent?.pbsCode ?? null, siblingCodes)
   const orderIndex = siblings.length
-  const id = generateId()
+  const existingIds = new Set(nodes.map((n) => n.id))
+  let id = generateId()
+  while (existingIds.has(id)) {
+    id = generateId()
+  }
   const now = nowISO()
   return {
     ...DEFAULT_NODE,

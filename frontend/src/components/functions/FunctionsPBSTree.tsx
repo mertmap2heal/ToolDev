@@ -23,6 +23,7 @@ interface FlatTreeItem {
   hasChildren: boolean
   functionId?: string
   componentId?: string
+  componentDisplayId?: string
   function?: SystemFunction
 }
 
@@ -84,6 +85,7 @@ function buildFlatTree(
       parentComponentId: null,
       hasChildren,
       componentId: node.id,
+      componentDisplayId: (node as { pbsCode?: string }).pbsCode || node.id.slice(0, 8),
     })
 
     if (expandedNodes.has(node.id)) {
@@ -185,19 +187,20 @@ export default function FunctionsPBSTree({
       if (nodes.length > 0) {
         const nodeMap = new Map<string, any>()
         const rootNodes: any[] = []
-        nodes.forEach(node => {
-          nodeMap.set(node.id, {
-            id: node.id,
-            projectId: projectId!,
-            parentId: node.parentId,
-            name: node.name,
-            description: node.description,
-            sortOrder: node.orderIndex ?? 0,
-            createdAt: node.createdAt,
-            updatedAt: node.updatedAt,
-            children: []
-          })
+      nodes.forEach(node => {
+        nodeMap.set(node.id, {
+          id: node.id,
+          projectId: projectId!,
+          parentId: node.parentId,
+          name: node.name,
+          pbsCode: node.pbsCode,
+          description: node.description,
+          sortOrder: node.orderIndex ?? 0,
+          createdAt: node.createdAt,
+          updatedAt: node.updatedAt,
+          children: []
         })
+      })
         nodes.forEach(node => {
           const component = nodeMap.get(node.id)
           if (node.parentId && nodeMap.has(node.parentId)) {
@@ -414,6 +417,9 @@ export default function FunctionsPBSTree({
                 <span className="w-4 flex-shrink-0" />
               )}
               <Package className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-indigo-500' : 'text-amber-500/80 dark:text-amber-400/80'}`} />
+              <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 flex-shrink-0" title={item.componentId}>
+                {item.componentDisplayId || item.componentId!.slice(0, 8)}
+              </span>
               <span className="truncate flex-1" title={item.name}>{item.name}</span>
               {count > 0 && (
                 <span

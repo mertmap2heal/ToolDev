@@ -293,9 +293,14 @@ function TreeNodeRow({
             className="flex-1 min-w-0 px-1.5 py-0.5 text-sm font-medium bg-white dark:bg-gray-700 border border-blue-500 rounded outline-none text-gray-900 dark:text-white"
           />
         ) : (
-          <span className="text-sm truncate flex-1 font-medium text-gray-900 dark:text-white">
-            <HighlightedText text={node.name} query={searchQuery} />
-          </span>
+          <>
+            <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 flex-shrink-0" title={node.id}>
+              {node.pbsCode}
+            </span>
+            <span className="text-sm truncate flex-1 font-medium text-gray-900 dark:text-white">
+              <HighlightedText text={node.name} query={searchQuery} />
+            </span>
+          </>
         )}
         <span
           className={clsx(
