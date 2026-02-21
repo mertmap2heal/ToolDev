@@ -483,21 +483,19 @@ export default function RequirementsPBSTree({
     [componentTree, requirements, expandedNodes, expandedReqs, searchQuery, linksByReqId]
   )
 
-  // Auto-expand requirements that have linked elements so they're visible by default (run once when links load)
+  // Auto-expand requirements that have linked elements on first load only (so collapse stays collapsed)
+  const hasAutoExpandedRef = useRef(false)
   useEffect(() => {
-    if (!LINKAGE_V1) return
+    if (!LINKAGE_V1 || hasAutoExpandedRef.current) return
     const toExpand = new Set<string>()
     for (const req of requirements) {
       if ((linksByReqId.get(req.id) ?? []).length > 0) toExpand.add(req.id)
     }
     if (toExpand.size === 0) return
+    hasAutoExpandedRef.current = true
     setExpandedReqs((prev) => {
-      let changed = false
       const next = new Set(prev)
-      toExpand.forEach((id) => {
-        if (!next.has(id)) { next.add(id); changed = true }
-      })
-      if (!changed) return prev
+      toExpand.forEach((id) => next.add(id))
       return next
     })
   }, [requirements, linksByReqId])
@@ -565,21 +563,20 @@ export default function RequirementsPBSTree({
                           className="group flex items-center mx-2 text-sm rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border border-transparent hover:border-gray-100 dark:hover:border-gray-700"
                           style={{ paddingLeft: `${item.depth * 16 + 12}px` }}
                         >
-                          <div
-                            role="button"
-                            tabIndex={0}
+                          <button
+                            type="button"
                             aria-label={isReqExpanded ? 'Collapse linked elements' : 'Expand linked elements'}
-                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleReq(req.id) }}
-                            onPointerDown={(e) => { e.stopPropagation() }}
-                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggleReq(req.id) } }}
+                            onClick={(e) => { e.stopPropagation(); toggleReq(req.id) }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
                             className={clsx(
-                              'flex-shrink-0 relative z-10 w-8 h-8 flex items-center justify-center rounded transition-colors cursor-pointer select-none touch-manipulation',
-                              'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                              'flex-shrink-0 relative z-20 w-8 h-8 flex items-center justify-center rounded transition-colors cursor-pointer select-none',
+                              'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500'
                             )}
-                            title={hasLinkedElements ? `${reqLinks.length} linked` : 'Expand for linked elements'}
+                            title={hasLinkedElements ? `${reqLinks.length} linked - click to ${isReqExpanded ? 'collapse' : 'expand'}` : 'Expand for linked elements'}
                           >
                             {isReqExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                          </div>
+                          </button>
                           <div
                             role={onRequirementClick ? 'button' : undefined}
                             tabIndex={onRequirementClick ? 0 : undefined}
