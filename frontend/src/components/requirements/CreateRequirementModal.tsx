@@ -706,7 +706,9 @@ export default function CreateRequirementModal({
       newErrors.description = 'Description is required'
     }
     if (!formData.linkedMocCode) {
-      newErrors.linkedMocCode = 'Means of Compliance (MoC) is required'
+      newErrors.linkedMocCode = mocs.length === 0
+        ? "Means of Compliance (MoC) is required. No MoC options are configured. Run 'npm run seed:mocs' in the backend directory to seed the data."
+        : 'Means of Compliance (MoC) is required'
     }
     const selectedMoc = mocs.find((m) => String(m.code) === String(formData.linkedMocCode))
     if (selectedMoc && /^Test$/i.test(selectedMoc.name ?? '')) {
@@ -978,25 +980,35 @@ export default function CreateRequirementModal({
             {activeTab === 'general' && (
               <div className="space-y-6">
                 {/* Template Selection */}
-                {templates.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                      Create from Template (optional)
-                    </label>
-                    <select
-                      value={selectedTemplate}
-                      onChange={(e) => setSelectedTemplate(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    >
-                      <option value="">No template (start from scratch)</option>
-                      {templates.map((template) => (
-                        <option key={template.id} value={template.id}>
-                          {template.name} {template.isDefault && '(Default)'}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                    Create from Template (optional)
+                  </label>
+                  <select
+                    value={selectedTemplate}
+                    onChange={(e) => setSelectedTemplate(e.target.value)}
+                    disabled={templates.length === 0}
+                    className={clsx(
+                      'w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                      'border-gray-300 dark:border-gray-600',
+                      templates.length === 0 && 'opacity-70 cursor-not-allowed'
+                    )}
+                  >
+                    <option value="">
+                      {templates.length === 0 ? 'No templates available' : 'No template (start from scratch)'}
+                    </option>
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name} {template.isDefault && '(Default)'}
+                      </option>
+                    ))}
+                  </select>
+                  {templates.length === 0 && (
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
+                      Create templates in Verification to pre-fill requirement fields.
+                    </p>
+                  )}
+                </div>
 
 
 
@@ -1099,9 +1111,13 @@ export default function CreateRequirementModal({
                           })
                         }
                       }}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       required={availableLifecycles.length > 0}
                       disabled={availableLifecycles.length === 0}
+                      className={clsx(
+                        'w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                        'border-gray-300 dark:border-gray-600',
+                        availableLifecycles.length === 0 && 'opacity-70 cursor-not-allowed'
+                      )}
                     >
                       <option value="" disabled>
                         {availableLifecycles.length === 0 ? 'No applicable lifecycles found' : 'Select a lifecycle...'}
@@ -1133,7 +1149,10 @@ export default function CreateRequirementModal({
                     <select
                       value={formData.priority}
                       onChange={(e) => handleChange('priority', e.target.value as any)}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className={clsx(
+                        'w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                        'border-gray-300 dark:border-gray-600'
+                      )}
                     >
                       <option value="low">Low</option>
                       <option value="medium">Medium</option>
@@ -1159,7 +1178,10 @@ export default function CreateRequirementModal({
                             setApplicableLifecycle(prev => prev ? ({ ...prev, defaultStatusId: s.id, statusName: s.name }) : null)
                           }
                         }}
-                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className={clsx(
+                          'w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                          'border-gray-300 dark:border-gray-600'
+                        )}
                       >
                         {lifecycleStatuses.length > 0 ? (
                           lifecycleStatuses.map((s) => (
@@ -1186,7 +1208,10 @@ export default function CreateRequirementModal({
                       <select
                         value={formData.status || initialStatus}
                         onChange={(e) => handleChange('status', e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className={clsx(
+                          'w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                          'border-gray-300 dark:border-gray-600'
+                        )}
                       >
                         {statuses.length > 0
                           ? statuses.map((s) => (
@@ -1207,15 +1232,29 @@ export default function CreateRequirementModal({
                     <select
                       value={formData.owner || ''}
                       onChange={(e) => handleChange('owner', e.target.value || undefined)}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      disabled={adminUsers.length === 0}
+                      className={clsx(
+                        'w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                        'border-gray-300 dark:border-gray-600',
+                        adminUsers.length === 0 && 'opacity-70 cursor-not-allowed'
+                      )}
                     >
-                      <option value="">Select owner</option>
+                      <option value="">
+                        {adminUsers.length === 0
+                          ? 'No users configured'
+                          : 'Select owner'}
+                      </option>
                       {adminUsers.map((user) => (
                         <option key={user.id} value={user.name || user.email}>
                           {user.name || user.email}
                         </option>
                       ))}
                     </select>
+                    {adminUsers.length === 0 && (
+                      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400 text-left">
+                        No platform users found. Contact your administrator.
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
@@ -1225,7 +1264,10 @@ export default function CreateRequirementModal({
                       <select
                         value={formData.source || ''}
                         onChange={(e) => handleChange('source', e.target.value || undefined)}
-                        className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className={clsx(
+                          'flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                          'border-gray-300 dark:border-gray-600'
+                        )}
                       >
                         <option value="">Select source</option>
                         {sourceTypes.map((source) => (
@@ -1287,19 +1329,30 @@ export default function CreateRequirementModal({
                     <select
                       value={formData.linkedMocCode || ''}
                       onChange={(e) => handleChange('linkedMocCode', e.target.value)}
-                      className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.linkedMocCode
-                        ? 'border-red-500 dark:border-red-500'
-                        : 'border-gray-300 dark:border-gray-600'
-                        }`}
+                      disabled={mocs.length === 0}
+                      className={clsx(
+                        'w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                        errors.linkedMocCode ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600',
+                        mocs.length === 0 && 'opacity-70 cursor-not-allowed'
+                      )}
                     >
-                      <option value="">Select MoC (required)</option>
+                      <option value="">
+                        {mocs.length === 0
+                          ? 'No MoC configured. Run npm run seed:mocs in backend.'
+                          : 'Select MoC (required)'}
+                      </option>
                       {mocs.map((moc: any) => (
                         <option key={moc.code} value={moc.code}>
                           {moc.code}: {moc.name} - {moc.description}
                         </option>
                       ))}
                     </select>
-                    {errors.linkedMocCode && (
+                    {mocs.length === 0 && (
+                      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400 text-left">
+                        Run &quot;npm run seed:mocs&quot; in the backend directory to populate MoC options.
+                      </p>
+                    )}
+                    {errors.linkedMocCode && mocs.length > 0 && (
                       <p className="mt-1 text-sm text-red-500">{errors.linkedMocCode}</p>
                     )}
                   </div>
@@ -1313,8 +1366,10 @@ export default function CreateRequirementModal({
                     <select
                       value={formData.verificationMethod || ''}
                       onChange={(e) => handleChange('verificationMethod', e.target.value || undefined)}
-                      className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.verificationMethod ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                        }`}
+                      className={clsx(
+                        'w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                        errors.verificationMethod ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+                      )}
                     >
                       <option value="">Select verification method</option>
                       {verificationMethods.map((method) => (
@@ -1345,7 +1400,10 @@ export default function CreateRequirementModal({
                         <select
                           value={formData.requirementType || ''}
                           onChange={(e) => handleChange('requirementType', e.target.value || undefined)}
-                          className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          className={clsx(
+                            'flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                            'border-gray-300 dark:border-gray-600'
+                          )}
                         >
                           <option value="">Select requirement type</option>
                           {availableRequirementTypes.map((type) => (
@@ -1419,7 +1477,10 @@ export default function CreateRequirementModal({
                     <select
                       value={formData.requirementLevel || ''}
                       onChange={(e) => handleChange('requirementLevel', e.target.value || undefined)}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className={clsx(
+                        'w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                        'border-gray-300 dark:border-gray-600'
+                      )}
                     >
                       <option value="">Select requirement level</option>
                       <option value="system">System</option>
@@ -1438,7 +1499,10 @@ export default function CreateRequirementModal({
                       <select
                         value={formData.risk || ''}
                         onChange={(e) => handleChange('risk', e.target.value || undefined)}
-                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className={clsx(
+                          'w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                          'border-gray-300 dark:border-gray-600'
+                        )}
                       >
                         <option value="">Select risk level</option>
                         <option value="low">Low</option>
@@ -1454,7 +1518,10 @@ export default function CreateRequirementModal({
                       <select
                         value={formData.complexity || ''}
                         onChange={(e) => handleChange('complexity', e.target.value || undefined)}
-                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        className={clsx(
+                          'w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                          'border-gray-300 dark:border-gray-600'
+                        )}
                       >
                         <option value="">Select complexity</option>
                         <option value="simple">Simple</option>
@@ -1700,7 +1767,10 @@ export default function CreateRequirementModal({
                         <select
                           value={formData.parentId || ''}
                           onChange={(e) => handleChange('parentId', e.target.value || undefined)}
-                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          className={clsx(
+                            'w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                            'border-gray-300 dark:border-gray-600'
+                          )}
                         >
                           <option value="">None (Top-level requirement)</option>
                           {availableParents.map((req) => (
@@ -1710,7 +1780,9 @@ export default function CreateRequirementModal({
                           ))}
                         </select>
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          Determines the structural position in the requirement tree.
+                          {availableParents.length === 0
+                            ? 'No parent requirements yet. Create requirements to build hierarchy.'
+                            : 'Determines the structural position in the requirement tree.'}
                         </p>
                       </div>
 
@@ -1760,7 +1832,10 @@ export default function CreateRequirementModal({
                         <select
                           value={selectedRelationshipType}
                           onChange={(e) => setSelectedRelationshipType(e.target.value)}
-                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                          className={clsx(
+                            'w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm',
+                            'border-gray-300 dark:border-gray-600'
+                          )}
                         >
                           <optgroup label="Derivation & Refinement">
                             <option value="derives_from">Derives From</option>
@@ -1914,9 +1989,16 @@ export default function CreateRequirementModal({
                         <select
                           value={formData.componentId || ''}
                           onChange={(e) => handleChange('componentId', e.target.value || undefined)}
-                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          disabled={flatComponents.length === 0}
+                          className={clsx(
+                            'w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                            'border-gray-300 dark:border-gray-600',
+                            flatComponents.length === 0 && 'opacity-70 cursor-not-allowed'
+                          )}
                         >
-                          <option value="">Unassigned</option>
+                          <option value="">
+                            {flatComponents.length === 0 ? 'No PBS components configured' : 'Unassigned'}
+                          </option>
                           {flatComponents.map((comp) => (
                             <option key={comp.id} value={comp.id}>
                               {'\u00A0'.repeat(comp.depth * 3)}{comp.name}
@@ -1924,7 +2006,9 @@ export default function CreateRequirementModal({
                           ))}
                         </select>
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 text-left">
-                          Assign this requirement to a PBS component for allocation traceability.
+                          {flatComponents.length === 0
+                            ? 'Add components in Product Breakdown Structure to assign requirements.'
+                            : 'Assign this requirement to a PBS component for allocation traceability.'}
                         </p>
                       </div>
 

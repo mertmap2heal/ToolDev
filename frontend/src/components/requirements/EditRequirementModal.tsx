@@ -1170,19 +1170,28 @@ export default function EditRequirementModal({
                     <select
                       value={formData.linkedMocCode || requirement?.linkedMocCode || ''}
                       onChange={(e) => handleChange('linkedMocCode', e.target.value)}
-                      className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.linkedMocCode
-                        ? 'border-red-500 dark:border-red-500'
-                        : 'border-gray-300 dark:border-gray-600'
-                        }`}
+                      disabled={mocs.length === 0}
+                      className={clsx(
+                        'w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                        errors.linkedMocCode ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600',
+                        mocs.length === 0 && 'opacity-70 cursor-not-allowed'
+                      )}
                     >
-                      <option value="">Select MoC</option>
+                      <option value="">
+                        {mocs.length === 0 ? 'No MoC configured. Run npm run seed:mocs in backend.' : 'Select MoC'}
+                      </option>
                       {mocs.map((moc: any) => (
                         <option key={moc.code} value={moc.code}>
                           {moc.code}: {moc.name} - {moc.description}
                         </option>
                       ))}
                     </select>
-                    {errors.linkedMocCode && (
+                    {mocs.length === 0 && (
+                      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400 text-left">
+                        Run &quot;npm run seed:mocs&quot; in the backend directory to populate MoC options.
+                      </p>
+                    )}
+                    {errors.linkedMocCode && mocs.length > 0 && (
                       <p className="mt-1 text-sm text-red-500">{errors.linkedMocCode}</p>
                     )}
                   </div>
@@ -1193,8 +1202,10 @@ export default function EditRequirementModal({
                     <select
                       value={formData.verificationMethod || ''}
                       onChange={(e) => handleChange('verificationMethod', e.target.value || undefined)}
-                      className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.verificationMethod ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                        }`}
+                      className={clsx(
+                        'w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                        errors.verificationMethod ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+                      )}
                     >
                       <option value="">Select verification method</option>
                       {verificationMethods.map((method) => (
