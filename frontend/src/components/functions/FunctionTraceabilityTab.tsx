@@ -27,19 +27,29 @@ export default function FunctionTraceabilityTab({ funcId, projectId }: FunctionT
   const queryClient = useQueryClient()
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState<Partial<CreateLinkDto>>({ sourceType: 'function', sourceId: funcId })
-  const { data: links = [] } = useQuery({
-    queryKey: ['function-trace-links', projectId, funcId],
+  const { data: outgoingLinks = [] } = useQuery({
+    queryKey: ['function-trace-links-outgoing', projectId, funcId],
     queryFn: async () => {
       const res = await linkService.getLinks(projectId, { sourceId: funcId })
       return res.success && res.data ? res.data : []
     },
     enabled: !!funcId && !!projectId,
   })
+  const { data: incomingLinks = [] } = useQuery({
+    queryKey: ['function-trace-links-incoming', projectId, funcId],
+    queryFn: async () => {
+      const res = await linkService.getLinks(projectId, { targetId: funcId })
+      return res.success && res.data ? res.data : []
+    },
+    enabled: !!funcId && !!projectId,
+  })
+  const links = [...outgoingLinks, ...incomingLinks]
 
   const createMutation = useMutation({
     mutationFn: (dto: CreateLinkDto) => linkService.createLink(projectId, dto),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['function-trace-links', projectId, funcId] })
+      queryClient.invalidateQueries({ queryKey: ['function-trace-links-outgoing', projectId, funcId] })
+      queryClient.invalidateQueries({ queryKey: ['function-trace-links-incoming', projectId, funcId] })
       setShowAdd(false)
       setForm({ sourceType: 'function', sourceId: funcId })
     },
@@ -48,7 +58,8 @@ export default function FunctionTraceabilityTab({ funcId, projectId }: FunctionT
   const deleteMutation = useMutation({
     mutationFn: (linkId: string) => linkService.deleteLink(projectId, linkId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['function-trace-links', projectId, funcId] })
+      queryClient.invalidateQueries({ queryKey: ['function-trace-links-outgoing', projectId, funcId] })
+      queryClient.invalidateQueries({ queryKey: ['function-trace-links-incoming', projectId, funcId] })
     },
   })
 
@@ -122,46 +133,57 @@ export default function FunctionTraceabilityTab({ funcId, projectId }: FunctionT
         <p className="text-sm text-gray-400 dark:text-gray-500 italic p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">No traceability links.</p>
       ) : (
         <div className="space-y-2">
-          {links.map(link => (
-            <div key={link.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700/50 hover:border-gray-200 dark:hover:border-gray-600 transition-colors">
-              <div className="min-w-0 flex-1">
+          {links.map(link => {
+            const isIncoming = link.targetId === funcId
+            const entityType = isIncoming ? link.sourceType : link.targetType
+            const entityId = isIncoming ? link.sourceId : link.targetId
+            const entityDisplayId = isIncoming ? link.sourceDisplayId : link.targetDisplayId
+            const entityTitle = isIncoming ? link.sourceTitle : link.targetTitle
+            const entityDescription = isIncoming ? link.sourceDescription : link.targetDescription
+            return (
+              <div key={link.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700/50 hover:border-gray-200 dark:hover:border-gray-600 transition-colors">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    {isIncoming && (
+                      <span className="text-[10px] uppercase text-amber-600 dark:text-amber-400 font-medium">Incoming</span>
+                    )}
+                    <span className="text-xs font-mono text-gray-500 dark:text-gray-400">{link.linkType}</span>
+                    <span className="text-xs px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                      {entityType}
+                    </span>
+                    <span className="text-xs font-mono text-blue-600 dark:text-blue-400">
+                      {entityDisplayId || entityId}
+                    </span>
+                    <span className="text-xs text-gray-700 dark:text-gray-300 truncate">
+                      {entityTitle || entityDescription || ''}
+                    </span>
+                    {link.isSuspect && (
+                      <span className="ml-2 text-xs text-orange-600 dark:text-orange-400 font-semibold">Suspect</span>
+                    )}
+                  </div>
+                </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono text-gray-500 dark:text-gray-400">{link.linkType}</span>
-                  <span className="text-xs px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                    {link.targetType}
-                  </span>
-                  <span className="text-xs font-mono text-blue-600 dark:text-blue-400">
-                    {link.targetDisplayId || link.targetId}
-                  </span>
-                  <span className="text-xs text-gray-700 dark:text-gray-300 truncate">
-                    {link.targetTitle || link.targetDescription || ''}
-                  </span>
-                  {link.isSuspect && (
-                    <span className="ml-2 text-xs text-orange-600 dark:text-orange-400 font-semibold">Suspect</span>
-                  )}
+                  <a
+                    href={buildDeepLink(projectId, { type: entityType, id: entityId })}
+                    className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Open linked entity"
+                  >
+                    <ExternalLink size={14} />
+                  </a>
+                  <button
+                    onClick={() => deleteMutation.mutate(link.id)}
+                    className="text-red-500 hover:text-red-700 dark:hover:text-red-400"
+                    title="Delete link"
+                    disabled={deleteMutation.isPending}
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <a
-                  href={buildDeepLink(projectId, { type: link.targetType, id: link.targetId })}
-                  className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="Open linked entity"
-                >
-                  <ExternalLink size={14} />
-                </a>
-                <button
-                  onClick={() => deleteMutation.mutate(link.id)}
-                  className="text-red-500 hover:text-red-700 dark:hover:text-red-400"
-                  title="Delete link"
-                  disabled={deleteMutation.isPending}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

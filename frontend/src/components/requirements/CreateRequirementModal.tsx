@@ -26,6 +26,7 @@ import { complianceAdapter } from '../../linkage/adapters/complianceAdapter'
 import { taskAdapter } from '../../linkage/adapters/taskAdapter'
 import { issueAdapter } from '../../linkage/adapters/issueAdapter'
 import { requirementAdapter } from '../../linkage/adapters/requirementAdapter'
+import { functionAdapter } from '../../linkage/adapters/functionAdapter'
 import { authService } from '../../services/auth.service'
 import type { CreateRequirementDto, Requirement, RequirementType } from 'shared/types/engineering.types'
 import type { ComponentTreeNode } from 'shared/types/project.types'
@@ -196,6 +197,7 @@ export default function CreateRequirementModal({
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
   // Quick Links (LINKAGE_V1)
   const [quickLinksPbs, setQuickLinksPbs] = useState<string[]>([])
+  const [quickLinksFunctions, setQuickLinksFunctions] = useState<string[]>([])
   const [quickLinksInterfaces, setQuickLinksInterfaces] = useState<string[]>([])
   const [quickLinksHazards, setQuickLinksHazards] = useState<string[]>([])
   const [quickLinksRisks, setQuickLinksRisks] = useState<string[]>([])
@@ -777,6 +779,18 @@ export default function CreateRequirementModal({
               targetType: 'pbs_component',
               targetId,
               linkType: 'allocated_to',
+              rationale: linkRationale || undefined,
+            })
+          )
+        )
+        quickLinksFunctions.forEach((targetId) =>
+          linkPromises.push(
+            linkService.createLink(projectId, {
+              sourceType: 'requirement',
+              sourceId: createdReq.id,
+              targetType: 'function',
+              targetId,
+              linkType: 'satisfied_by',
               rationale: linkRationale || undefined,
             })
           )
@@ -1621,7 +1635,7 @@ export default function CreateRequirementModal({
                     {[
                       { label: 'Source / Parent', filled: !!formData.parentId || traceLinks.some(l => l.linkType === 'derives_from') || (formData.relatedDocuments?.length ?? 0) > 0, icon: GitBranch },
                       { label: 'Verification', filled: quickLinksVerification.length > 0, icon: ClipboardCheck },
-                      { label: 'Allocation', filled: quickLinksPbs.length > 0 || !!formData.componentId, icon: Target },
+                      { label: 'Allocation', filled: quickLinksPbs.length > 0 || quickLinksFunctions.length > 0 || !!formData.componentId, icon: Target },
                       { label: 'Compliance', filled: quickLinksCompliance.length > 0 || quickLinksCertification.length > 0, icon: Shield },
                     ].map((badge) => (
                       <div
@@ -1973,9 +1987,9 @@ export default function CreateRequirementModal({
                     <Target size={16} className="text-green-500" />
                     <span className="text-sm font-semibold text-gray-900 dark:text-white">Allocation & Implementation</span>
                     <span className="text-[10px] text-gray-400 font-normal ml-auto uppercase">INCOSE 4.2.5</span>
-                    {(quickLinksPbs.length + quickLinksInterfaces.length + quickLinksTasks.length + quickLinksIssues.length + (formData.componentId ? 1 : 0)) > 0 && (
+                    {(quickLinksPbs.length + quickLinksFunctions.length + quickLinksInterfaces.length + quickLinksTasks.length + quickLinksIssues.length + (formData.componentId ? 1 : 0)) > 0 && (
                       <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300 rounded-full">
-                        {quickLinksPbs.length + quickLinksInterfaces.length + quickLinksTasks.length + quickLinksIssues.length + (formData.componentId ? 1 : 0)}
+                        {quickLinksPbs.length + quickLinksFunctions.length + quickLinksInterfaces.length + quickLinksTasks.length + quickLinksIssues.length + (formData.componentId ? 1 : 0)}
                       </span>
                     )}
                   </button>
@@ -2023,6 +2037,21 @@ export default function CreateRequirementModal({
                           onToggle={(id, label) => {
                             setQuickLinksPbs(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
                             setQuickLinksLabels(prev => { const next = { ...prev }; if (quickLinksPbs.includes(id)) delete next[id]; else next[id] = label; return next })
+                          }}
+                        />
+                      )}
+
+                      {/* Satisfied by Function (INCOSE satisfied_by) */}
+                      {LINKAGE_V1 && (
+                        <QuickLinkSelector
+                          label="Satisfied by Function (satisfied_by)"
+                          projectId={projectId}
+                          adapter={functionAdapter}
+                          selectedIds={quickLinksFunctions}
+                          selectedLabels={quickLinksLabels}
+                          onToggle={(id, label) => {
+                            setQuickLinksFunctions(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+                            setQuickLinksLabels(prev => { const next = { ...prev }; if (quickLinksFunctions.includes(id)) delete next[id]; else next[id] = label; return next })
                           }}
                         />
                       )}
