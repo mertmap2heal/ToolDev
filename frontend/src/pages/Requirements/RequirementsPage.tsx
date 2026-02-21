@@ -381,6 +381,18 @@ export default function RequirementsPage() {
     enabled: !!projectId && LINKAGE_V1,
   })
 
+  // Linked safety items count (requirements linked to hazard, safety_requirement, safety_analysis, safety_evidence)
+  const SAFETY_ENTITY_TYPES = ['hazard', 'safety_requirement', 'safety_analysis', 'safety_evidence']
+  const linkedSafetyCount = useMemo(() => {
+    if (!LINKAGE_V1 || !links.length) return 0
+    const safetyLinks = links.filter(
+      (l) =>
+        (l.sourceType === 'requirement' && SAFETY_ENTITY_TYPES.includes(l.targetType as string)) ||
+        (l.targetType === 'requirement' && SAFETY_ENTITY_TYPES.includes(l.sourceType as string))
+    )
+    return safetyLinks.length
+  }, [links])
+
   const deleteRequirementMutation = useMutation({
     mutationFn: ({ requirementId, reason, childrenToDelete, linkedItemsToDelete }: { requirementId: string; reason?: string; childrenToDelete?: string[], linkedItemsToDelete?: { type: string, id: string }[] }) => {
       if (!projectId) throw new Error('Project ID required')
@@ -1771,18 +1783,16 @@ export default function RequirementsPage() {
                       {REQUIREMENT_COLUMNS.map((col) => (
                         <label
                           key={col.key}
+                          onClick={() => toggleColumn(col.key)}
                           className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded cursor-pointer"
                         >
-                          <button
-                            onClick={() => toggleColumn(col.key)}
-                            className="text-gray-600 dark:text-gray-400"
-                          >
+                          <span className="text-gray-600 dark:text-gray-400 flex-shrink-0">
                             {requirementColumns.has(col.key) ? (
                               <CheckSquare size={18} className="text-blue-600" />
                             ) : (
                               <Square size={18} />
                             )}
-                          </button>
+                          </span>
                           <span className="text-sm text-gray-700 dark:text-gray-300">{col.label}</span>
                         </label>
                       ))}
@@ -1790,7 +1800,7 @@ export default function RequirementsPage() {
                   </div>
                 )}
               </div>
-              {projectId && <SafetyLinkPanel variant="linked" count={3} />}
+              {projectId && <SafetyLinkPanel variant="linked" count={linkedSafetyCount} />}
               <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
               <button
                 onClick={() => {
