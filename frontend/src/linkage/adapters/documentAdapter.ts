@@ -1,36 +1,46 @@
-import { MOCK_DOCUMENTS } from '../../pages/Documentation/mockData'
+import { documentationService } from '../../services/documentation.service'
 import type { EntityRef, EntitySummary } from 'shared/types/linkage.types'
 
-function filterDocuments(query: string) {
-  const q = query.toLowerCase().trim()
-  if (!q) return MOCK_DOCUMENTS
-  return MOCK_DOCUMENTS.filter(
-    (d) =>
-      d.title.toLowerCase().includes(q) ||
-      d.id.toLowerCase().includes(q) ||
-      (d.tags && d.tags.some((t) => t.toLowerCase().includes(q)))
-  )
+interface DocLike {
+  id: string
+  title?: string
+  name?: string
+  type?: string
+  tags?: string[]
 }
 
 export const documentAdapter = {
-  async search(query: string, _projectId: string): Promise<EntitySummary[]> {
-    const filtered = filterDocuments(query)
+  async search(query: string, projectId: string): Promise<EntitySummary[]> {
+    const res = await documentationService.listDocuments(projectId)
+    if (!res.success || !res.data) return []
+    const docs = res.data as DocLike[]
+    const q = query.toLowerCase().trim()
+    const filtered = q
+      ? docs.filter(
+          (d) =>
+            (d.title || d.name || '').toLowerCase().includes(q) ||
+            (d.id || '').toLowerCase().includes(q) ||
+            (d.type || '').toLowerCase().includes(q) ||
+            (d.tags?.some((t) => t.toLowerCase().includes(q)) ?? false)
+        )
+      : docs
     return filtered.slice(0, 50).map((d) => ({
       id: d.id,
       type: 'document' as const,
-      label: `${d.id} - ${d.title}`,
-      description: d.type,
+      label: `${d.id} - ${d.title ?? d.name ?? 'Document'}`,
+      description: d.type || '',
     }))
   },
 
-  async getById(id: string, _projectId: string): Promise<EntitySummary | null> {
-    const doc = MOCK_DOCUMENTS.find((d) => d.id === id)
-    if (!doc) return null
+  async getById(id: string, projectId: string): Promise<EntitySummary | null> {
+    const res = await documentationService.getDocument(projectId, id)
+    if (!res.success || !res.data) return null
+    const d = res.data as DocLike
     return {
-      id: doc.id,
+      id: d.id,
       type: 'document',
-      label: `${doc.id} - ${doc.title}`,
-      description: doc.type,
+      label: `${d.id} - ${d.title ?? d.name ?? 'Document'}`,
+      description: d.type || '',
     }
   },
 

@@ -918,6 +918,7 @@ export default function CreateRequirementModal({
         )
         await Promise.allSettled(linkPromises)
         queryClient.invalidateQueries({ queryKey: ['traceability', projectId] })
+        queryClient.invalidateQueries({ queryKey: ['document-trace-links'] })
       }
     } catch {
       // Errors handled by mutation onError

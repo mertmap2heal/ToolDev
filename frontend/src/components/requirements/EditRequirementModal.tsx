@@ -858,6 +858,7 @@ export default function EditRequirementModal({
               queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
               queryClient.invalidateQueries({ queryKey: ['links'] })
               queryClient.invalidateQueries({ queryKey: ['traceability', projectId] })
+              queryClient.invalidateQueries({ queryKey: ['document-trace-links'] })
               onClose()
             })
             return

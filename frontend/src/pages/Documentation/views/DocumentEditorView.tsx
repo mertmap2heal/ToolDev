@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
   ChevronUp,
   ChevronDown,
@@ -20,6 +21,8 @@ import {
   Download,
   Package,
   X,
+  ExternalLink,
+  AlertCircle,
 } from 'lucide-react'
 import clsx from 'clsx'
 import RichTextEditor from '../../../components/common/RichTextEditor'
@@ -31,6 +34,8 @@ import type {
   LinkedArtifacts,
 } from '../types'
 import { DOC_STATUSES } from '../mockData'
+import { linkService } from '../../../services/link.service'
+import { buildDeepLink } from '../../../linkage/buildDeepLink'
 
 const ROUTES: Record<string, string> = {
   requirements: 'requirements',
@@ -91,6 +96,15 @@ export default function DocumentEditorView({
   const [outlineSearch, setOutlineSearch] = useState('')
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
+
+  const { data: incomingLinks = [] } = useQuery({
+    queryKey: ['document-trace-links', projectId, doc.id],
+    queryFn: async () => {
+      const res = await linkService.getLinks(projectId, { targetId: doc.id })
+      return res.success && res.data ? res.data : []
+    },
+    enabled: !!projectId && !!doc.id,
+  })
 
   const currentSection = sections.find((s) => s.id === currentSectionId)
   const isArtifactBlock = currentSection?.type === 'artifact_block'
@@ -429,6 +443,48 @@ export default function DocumentEditorView({
 
       {/* Right: Metadata & Actions */}
       <div className="lg:col-span-3 flex flex-col gap-4 overflow-y-auto">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1.5">
+            <AlertCircle size={14} className="text-blue-500" />
+            Linked from Requirements ({incomingLinks.length})
+          </h3>
+          {incomingLinks.length === 0 ? (
+            <p className="text-xs text-gray-500 dark:text-gray-400 italic">No requirement links yet. Link this document in the requirement&#39;s Traceability tab under Linked Documents (documented_in).</p>
+          ) : (
+            <div className="space-y-2">
+              {incomingLinks.map((link) => (
+                <div
+                  key={link.id}
+                  className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700/50"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-mono text-gray-500 dark:text-gray-400">{link.linkType}</span>
+                      <span className="text-xs font-mono text-blue-600 dark:text-blue-400 truncate">
+                        {link.sourceDisplayId || link.sourceId}
+                      </span>
+                      <span className="text-xs text-gray-700 dark:text-gray-300 truncate">
+                        {link.sourceTitle || link.sourceDescription || ''}
+                      </span>
+                      {link.isSuspect && (
+                        <span className="text-[10px] text-orange-600 dark:text-orange-400 font-semibold">Suspect</span>
+                      )}
+                    </div>
+                  </div>
+                  <a
+                    href={buildDeepLink(projectId, { type: link.sourceType, id: link.sourceId })}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 shrink-0"
+                    title="Open linked requirement"
+                  >
+                    <ExternalLink size={14} />
+                  </a>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
           <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Metadata</h3>
           <p className="text-xs text-gray-500 dark:text-gray-400">Status</p>

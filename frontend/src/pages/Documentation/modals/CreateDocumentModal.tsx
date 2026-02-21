@@ -6,7 +6,7 @@ import { DOC_TYPES } from '../mockData'
 interface CreateDocumentModalProps {
   isOpen: boolean
   onClose: () => void
-  onCreate: (doc: Omit<Document, 'id'> & { id: string }) => void
+  onCreate: (doc: Omit<Document, 'id'> & { id: string }) => Promise<boolean>
   nextId: string
   templates: Template[]
 }
@@ -33,7 +33,8 @@ export default function CreateDocumentModal({
     }
   }, [isOpen, onClose])
 
-  const handleCreate = () => {
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const handleCreate = async () => {
     const template = templates.find((t) => t.id === templateId)
     const sections = template
       ? template.sectionBlueprint.map((bp, i) => ({
@@ -45,23 +46,31 @@ export default function CreateDocumentModal({
           status: 'Draft' as const,
         }))
       : [{ id: `sec-${Date.now()}`, title: 'Untitled Section', content: '', orderIndex: 0, type: 'text' as const, status: 'Draft' as const }]
-    onCreate({
+    const doc = {
       id: nextId,
       title: title || 'Untitled Document',
       type,
-      status: 'Draft',
+      status: 'Draft' as const,
       version: 'v0.1',
       owner: owner || '—',
       lastUpdated: new Date().toISOString().slice(0, 10),
-      source: 'Manual',
+      source: 'Manual' as const,
       tags: [],
       sections,
-    })
-    setTitle('')
-    setType('SRS')
-    setOwner('')
-    setTemplateId('')
-    onClose()
+    }
+    setIsSubmitting(true)
+    try {
+      const success = await onCreate(doc)
+      if (success) {
+        setTitle('')
+        setType('SRS')
+        setOwner('')
+        setTemplateId('')
+        onClose()
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   if (!isOpen) return null
@@ -147,9 +156,10 @@ export default function CreateDocumentModal({
           </button>
           <button
             onClick={handleCreate}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            disabled={isSubmitting}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Create
+            {isSubmitting ? 'Creating…' : 'Create'}
           </button>
         </div>
       </div>

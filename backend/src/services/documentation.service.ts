@@ -35,39 +35,66 @@ export const documentationService = {
 
   // List all documents for a project
   async listDocuments(projectId: string) {
-    return prisma.document.findMany({ where: { projectId } });
+    const docs = await prisma.document.findMany({ where: { projectId } });
+    return docs.map(mapPrismaToFrontend);
   },
 
   // Get a single document
   async getDocument(projectId: string, id: string) {
-    return prisma.document.findFirst({ where: { projectId, id } });
+    const doc = await prisma.document.findFirst({ where: { projectId, id } });
+    return doc ? mapPrismaToFrontend(doc) : null;
   },
 
-  // Create a new document
+  // Create a new document (frontend sends title, status, version, owner, sections, etc.)
   async createDocument(projectId: string, docData: any) {
-    return prisma.document.create({
-      data: {
-        ...docData,
-        projectId,
-      },
-    });
+    const data = mapFrontendToPrisma(docData, projectId);
+    const doc = await prisma.document.create({ data });
+    return mapPrismaToFrontend(doc);
   },
 
   // Update a document
   async updateDocument(projectId: string, id: string, docData: any) {
-    return prisma.document.update({
-      where: { id },
-      data: {
-        ...docData,
-        projectId,
-      },
-    });
+    const data = mapFrontendToPrisma(docData, projectId);
+    const doc = await prisma.document.update({ where: { id }, data });
+    return mapPrismaToFrontend(doc);
   },
 
   // Delete a document
   async deleteDocument(projectId: string, id: string) {
     return prisma.document.delete({ where: { id } });
   },
+}
+
+/** Map frontend Document shape to Prisma (title→name, pick valid fields only) */
+function mapFrontendToPrisma(doc: any, projectId: string) {
+  const name = doc.title ?? doc.name ?? 'Untitled Document';
+  return {
+    id: doc.id,
+    projectId,
+    name,
+    type: doc.type ?? 'SRS',
+    content: doc.content ?? null,
+    sections: doc.sections ?? null,
+    fileUrl: doc.fileUrl ?? null,
+  };
+}
+
+/** Map Prisma Document to frontend shape (name→title, add defaults) */
+function mapPrismaToFrontend(row: any) {
+  const sections = Array.isArray(row.sections) ? row.sections : [];
+  return {
+    id: row.id,
+    title: row.name,
+    type: row.type,
+    status: row.status ?? 'Draft',
+    version: row.version ?? 'v0.1',
+    owner: row.owner ?? '—',
+    lastUpdated: row.updatedAt ? new Date(row.updatedAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+    source: row.source ?? 'Manual',
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    sections,
+    linkedArtifacts: row.linkedArtifacts,
+  };
 }
 
 function generateOverview(project: any): string {

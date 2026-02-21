@@ -145,13 +145,18 @@ export default function DocumentationPage() {
     setTimeout(() => setToastMessage(null), 3000)
   }, [])
 
-  const handleCreateDocument = async (doc: Omit<Document, 'id'> & { id: string }) => {
-    if (!projectId) return;
-    const res = await documentationService.createDocument(projectId, doc);
-    if (res.success && res.data) {
-      setDocuments((prev) => [res.data, ...prev]);
-      setIsCreateDocumentOpen(false);
+  const handleCreateDocument = async (doc: Omit<Document, 'id'> & { id: string }): Promise<boolean> => {
+    if (!projectId) {
+      showToast('No project selected')
+      return false
     }
+    const res = await documentationService.createDocument(projectId, doc)
+    if (res.success && res.data) {
+      setDocuments((prev) => [res.data, ...prev])
+      return true
+    }
+    showToast(res.error || 'Failed to create document')
+    return false
   }
 
   const handleDuplicateDocument = (doc: Document) => {
