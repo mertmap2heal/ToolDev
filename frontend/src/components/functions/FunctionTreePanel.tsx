@@ -273,11 +273,11 @@ export default function FunctionTreePanel({
     <div className="h-full flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
       {/* Header */}
       <div className="flex-shrink-0 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <FolderTree size={18} className="text-blue-600 dark:text-blue-400" />
-            <h3 className="font-semibold text-gray-900 dark:text-white text-sm">Function Hierarchy</h3>
-          </div>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <FolderTree size={16} className="text-blue-600 dark:text-blue-400" />
+            Function Hierarchy
+          </h3>
           <div className="flex items-center gap-1">
             <button
               onClick={toggleAll}

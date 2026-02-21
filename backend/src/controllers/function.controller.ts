@@ -2,6 +2,7 @@ import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { PrismaClient } from '@prisma/client'
 import { extractParameters } from '../utils/parameterExtractor'
+import { traceabilityService } from '../services/traceability.service'
 
 const prisma = new PrismaClient()
 
@@ -501,6 +502,91 @@ export const moveFunction = async (req: AuthRequest, res: Response) => {
     })
   } catch (error) {
     console.error('Move function error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    })
+  }
+}
+
+/**
+ * Update the PBS component assignment for a function (drag-and-drop) — same logic as requirements
+ */
+export const updateFunctionComponent = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id: functionId } = req.params
+    const { componentId } = req.body
+
+    const function_ = await prisma.systemFunction.findFirst({
+      where: {
+        projectId,
+        id: functionId,
+      },
+    })
+
+    if (!function_) {
+      return res.status(404).json({
+        success: false,
+        error: 'Function not found',
+      })
+    }
+
+    if (componentId) {
+      const component = await prisma.component.findFirst({
+        where: {
+          id: componentId,
+          projectId,
+        },
+      })
+
+      if (!component) {
+        return res.status(400).json({
+          success: false,
+          error: 'Component not found in this project',
+        })
+      }
+    }
+
+    const updated = await prisma.systemFunction.update({
+      where: { id: functionId },
+      data: {
+        pbsComponentId: componentId || null,
+      },
+    })
+
+    // Sync allocated_to trace link (same as requirements)
+    const existingAllocLinks = await prisma.traceLink.findMany({
+      where: {
+        projectId,
+        sourceType: 'function',
+        sourceId: functionId,
+        targetType: 'pbs_component',
+        linkType: 'allocated_to',
+      },
+    })
+    for (const link of existingAllocLinks) {
+      await traceabilityService.deleteTraceLink(projectId, link.id, req.userId)
+    }
+    if (componentId) {
+      await traceabilityService.createTraceLink(
+        projectId,
+        'function',
+        functionId,
+        'pbs_component',
+        componentId,
+        'allocated_to',
+        undefined,
+        'Auto-linked from PBS component assignment',
+        req.userId
+      )
+    }
+
+    res.json({
+      success: true,
+      data: updated,
+    })
+  } catch (error) {
+    console.error('Update function component error:', error)
     res.status(500).json({
       success: false,
       error: 'Internal server error',

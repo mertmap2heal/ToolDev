@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { projectService } from '../../services/project.service'
 import { requirementService } from '../../services/requirement.service'
+import { functionService } from '../../services/function.service'
 import {
   Plus,
   Download,
@@ -19,6 +20,8 @@ import {
   FileText,
   PanelRight,
   PanelRightClose,
+  Box,
+  Layers,
 } from 'lucide-react'
 import clsx from 'clsx'
 import type { PBSNode, PBSChangeLogEntry, SaveStatus } from './types'
@@ -36,6 +39,7 @@ import ImportModal from './ImportModal'
 import PBSPrintView from './PBSPrintView'
 import PBSToolsMenu from './PBSToolsMenu'
 import RequirementsPBSTree from '../../components/requirements/RequirementsPBSTree'
+import FunctionsPBSTree from '../../components/functions/FunctionsPBSTree'
 
 const SAVE_DEBOUNCE_MS = 600
 
@@ -63,6 +67,7 @@ export default function PBSPage() {
   const PANEL_DEFAULT = 320
   const [leftPanelWidth, setLeftPanelWidth] = useState(PANEL_DEFAULT)
   const [isRequirementsPanelOpen, setIsRequirementsPanelOpen] = useState(true)
+  const [rightPanelTab, setRightPanelTab] = useState<'requirements' | 'functions'>('requirements')
   const [selectedComponentIdForReqs, setSelectedComponentIdForReqs] = useState<string | null>(null)
   const REQS_PANEL_WIDTH_KEY = `pbs::reqs-panel-width::${projectId ?? 'default'}`
   const REQS_PANEL_MIN = 260
@@ -191,6 +196,16 @@ export default function PBSPage() {
     queryFn: async () => {
       if (!projectId) return []
       const response = await requirementService.getAllRequirements(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId && isRequirementsPanelOpen,
+  })
+
+  const { data: functions = [] } = useQuery({
+    queryKey: ['functions', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const response = await functionService.getFunctions(projectId)
       return response.success && response.data ? response.data : []
     },
     enabled: !!projectId && isRequirementsPanelOpen,
@@ -496,14 +511,53 @@ export default function PBSPage() {
   const duplicateNameWarning =
     selectedNode && siblingNames.filter((n) => n === selectedNode.name).length > 1
 
+  const stats = useMemo(() => {
+    const rootCount = nodes.filter((n) => !n.parentId).length
+    const nodeMap = new Map(nodes.map((n) => [n.id, n]))
+    let maxDepth = 0
+    const getDepth = (id: string, visited = new Set<string>()): number => {
+      if (visited.has(id)) return 0
+      visited.add(id)
+      const n = nodeMap.get(id)
+      if (!n || !n.parentId) return 1
+      return 1 + getDepth(n.parentId, visited)
+    }
+    nodes.forEach((n) => {
+      const d = getDepth(n.id)
+      if (d > maxDepth) maxDepth = d
+    })
+    return { total: nodes.length, rootCount, maxDepth }
+  }, [nodes])
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-          Product Breakdown Structure
-        </h2>
-        <div className="flex items-center gap-3 flex-wrap">
+    <div className="flex flex-col h-[calc(100vh-64px)]">
+      {/* Top bar - aligned with Functions page */}
+      <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
+              <Box size={16} className="text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-gray-900 dark:text-white">Product Breakdown Structure</h1>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Product breakdown structure</p>
+            </div>
+          </div>
+
           <div className="flex items-center gap-2">
+            {/* Stats summary - aligned with Functions */}
+            <div className="hidden lg:flex items-center gap-4 mr-4 text-xs text-gray-500 dark:text-gray-400">
+              <span className="flex items-center gap-1.5">
+                <Layers size={13} />
+                {stats.total} components
+              </span>
+              <span className="flex items-center gap-1.5">
+                <FolderTree size={13} />
+                {stats.maxDepth || 1} levels
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
             {saveStatus === 'unsaved' ? (
               <button
                 type="button"
@@ -632,30 +686,33 @@ export default function PBSPage() {
             onPrint={() => setPrintViewOpen(true)}
             hasNodes={nodes.length > 0}
           />
+          </div>
         </div>
       </div>
 
-      {duplicateNameWarning && (
-        <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-sm">
-          <AlertCircle size={16} />
-          Duplicate sibling name — consider renaming for clarity.
+      {(duplicateNameWarning || storageQuotaWarning) && (
+        <div className="flex-shrink-0 px-6 py-2 space-y-2">
+          {duplicateNameWarning && (
+            <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-sm">
+              <AlertCircle size={16} />
+              Duplicate sibling name — consider renaming for clarity.
+            </div>
+          )}
+          {storageQuotaWarning && (
+            <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-sm">
+              <AlertCircle size={16} />
+              {storageQuotaWarning}
+            </div>
+          )}
         </div>
       )}
 
       {/* Validation Warnings */}
       <PBSValidation nodes={nodes} onSelectNode={setSelectedId} />
 
-      {storageQuotaWarning && (
-        <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-sm">
-          <AlertCircle size={16} />
-          {storageQuotaWarning}
-        </div>
-      )}
-
       <div
         ref={resizeContainerRef}
-        className="flex min-h-[500px] gap-0"
-        style={{ height: 'calc(100vh - 280px)' }}
+        className="flex-1 flex overflow-hidden min-h-0"
       >
         <div
           className="shrink-0 flex flex-col gap-2"
@@ -680,58 +737,81 @@ export default function PBSPage() {
           role="separator"
           aria-label="Resize tree panel"
           onMouseDown={handleResizeStart}
-          className="shrink-0 w-2 cursor-col-resize flex items-center justify-center group hover:bg-blue-100 dark:hover:bg-gray-700 transition-colors"
-        >
-          <div className="w-0.5 h-8 bg-gray-300 dark:bg-gray-600 rounded-full group-hover:bg-blue-500 dark:group-hover:bg-blue-400 transition-colors" />
-        </div>
+          className="w-1 flex-shrink-0 cursor-col-resize bg-gray-100 dark:bg-gray-700 hover:bg-blue-300 dark:hover:bg-blue-600 transition-colors"
+        />
         <div
           ref={reqsResizeContainerRef}
           className="flex-1 min-w-0 flex flex-col rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden"
         >
           {nodes.length === 0 ? (
-            // Empty state (e.g. user deleted all nodes) — restore project root
-            <div className="flex-1 flex flex-col items-center justify-center p-8 overflow-y-auto">
-              <FolderTree size={56} className="text-gray-300 dark:text-gray-600 mb-6" />
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                Product structure is empty
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 max-w-md text-center">
-                Add the project root to get started. Children will appear under it.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  const root = createProjectRootNode(projectDisplayName)
-                  setNodes([root])
-                  setChangeLog([
-                    {
-                      id: crypto.randomUUID?.() ?? `cl-${Date.now()}`,
-                      nodeId: root.id,
-                      action: 'created',
-                      timestamp: nowISO(),
-                      details: 'Project root created',
-                    },
-                  ])
-                  markUnsaved()
-                  setSelectedId(root.id)
-                }}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-              >
-                <Plus size={16} />
-                Add project root ({projectDisplayName})
-              </button>
+            // Empty state (e.g. user deleted all nodes) — restore project root — aligned with Functions
+            <div className="flex-1 flex items-center justify-center bg-gray-50/50 dark:bg-gray-900/30 overflow-y-auto">
+              <div className="text-center max-w-md px-6">
+                <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center mx-auto mb-4">
+                  <Box size={28} className="text-blue-400 dark:text-blue-500" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  Product structure is empty
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 leading-relaxed">
+                  Add the project root to get started. Children will appear under it.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const root = createProjectRootNode(projectDisplayName)
+                    setNodes([root])
+                    setChangeLog([
+                      {
+                        id: crypto.randomUUID?.() ?? `cl-${Date.now()}`,
+                        nodeId: root.id,
+                        action: 'created',
+                        timestamp: nowISO(),
+                        details: 'Project root created',
+                      },
+                    ])
+                    markUnsaved()
+                    setSelectedId(root.id)
+                  }}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 mx-auto transition-colors text-sm font-medium"
+                >
+                  <Plus size={15} />
+                  Add project root ({projectDisplayName})
+                </button>
+              </div>
             </div>
           ) : !selectedNode ? (
-            // No selection state
-            <div className="flex flex-col items-start justify-center p-8 text-left">
-              <FolderTree size={48} className="text-gray-400 dark:text-gray-500 mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                Select a component
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 max-w-md">
-                Select a component in the tree to view or edit its details, or use the sidebar to add
-                new components and build your product structure.
-              </p>
+            // No selection state — aligned with Functions
+            <div className="flex-1 flex items-center justify-center bg-gray-50/50 dark:bg-gray-900/30">
+              <div className="text-center max-w-md px-6">
+                <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center mx-auto mb-4">
+                  <Box size={28} className="text-blue-400 dark:text-blue-500" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  Select a Component
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 leading-relaxed">
+                  Select a component in the tree on the left to view or edit its details, or use the sidebar to add new components and build your product structure.
+                </p>
+                <div className="grid grid-cols-2 gap-3 mt-6">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 text-left">
+                    <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Components</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{stats.total}</p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 text-left">
+                    <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Root Components</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{stats.rootCount}</p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 text-left">
+                    <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Hierarchy Depth</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{stats.maxDepth || 1}</p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 text-left">
+                    <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Selected</p>
+                    <p className="text-2xl font-bold text-gray-500 dark:text-gray-400 mt-1">—</p>
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (
             <PBSNodeEditor
@@ -750,23 +830,59 @@ export default function PBSPage() {
               role="separator"
               aria-label="Resize requirements panel"
               onMouseDown={handleReqsResizeStart}
-              className="shrink-0 w-2 cursor-col-resize flex items-center justify-center group hover:bg-blue-100 dark:hover:bg-gray-700 transition-colors"
-            >
-              <div className="w-0.5 h-8 bg-gray-300 dark:bg-gray-600 rounded-full group-hover:bg-blue-500 dark:group-hover:bg-blue-400" />
-            </div>
+              className="w-1 flex-shrink-0 cursor-col-resize bg-gray-100 dark:bg-gray-700 hover:bg-blue-300 dark:hover:bg-blue-600 transition-colors"
+            />
             <div
               className="shrink-0 flex flex-col bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
               style={{ width: requirementsPanelWidth }}
             >
-              <RequirementsPBSTree
-                projectId={projectId}
-                requirements={requirements}
-                selectedComponentId={selectedComponentIdForReqs}
-                onComponentSelect={(id) => {
-                  setSelectedComponentIdForReqs(id)
-                  if (id) setSelectedId(id)
-                }}
-              />
+              <div className="flex border-b border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setRightPanelTab('requirements')}
+                  className={clsx(
+                    'flex-1 px-4 py-2 text-sm font-medium transition-colors',
+                    rightPanelTab === 'requirements'
+                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-500'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  )}
+                >
+                  Requirements
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRightPanelTab('functions')}
+                  className={clsx(
+                    'flex-1 px-4 py-2 text-sm font-medium transition-colors',
+                    rightPanelTab === 'functions'
+                      ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-500'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  )}
+                >
+                  Functions
+                </button>
+              </div>
+              {rightPanelTab === 'requirements' ? (
+                <RequirementsPBSTree
+                  projectId={projectId}
+                  requirements={requirements}
+                  selectedComponentId={selectedComponentIdForReqs}
+                  onComponentSelect={(id) => {
+                    setSelectedComponentIdForReqs(id)
+                    if (id) setSelectedId(id)
+                  }}
+                />
+              ) : (
+                <FunctionsPBSTree
+                  projectId={projectId}
+                  functions={functions}
+                  selectedComponentId={selectedComponentIdForReqs}
+                  onComponentSelect={(id) => {
+                    setSelectedComponentIdForReqs(id)
+                    if (id) setSelectedId(id)
+                  }}
+                />
+              )}
             </div>
           </>
         )}

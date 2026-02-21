@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import {
   Plus,
   Settings,
@@ -23,10 +23,16 @@ import type { SystemFunction } from 'shared/types/engineering.types'
 
 export default function SystemFunctionsPage() {
   const { projectId } = useParams<{ projectId: string }>()
+  const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
 
-  // State
+  // State — sync from ?functionId= for deep links from PBS
+  const functionIdFromUrl = searchParams.get('functionId')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (functionIdFromUrl) setSelectedId(functionIdFromUrl)
+  }, [functionIdFromUrl])
   const [createModal, setCreateModal] = useState<{ open: boolean; parentId: string | null }>({ open: false, parentId: null })
   const [deleteModal, setDeleteModal] = useState<{ func: SystemFunction } | null>(null)
   const [raiseIssueTarget, setRaiseIssueTarget] = useState<string | null>(null)
@@ -247,8 +253,8 @@ export default function SystemFunctionsPage() {
           onMouseDown={handleResizeStart}
         />
 
-        {/* Right: Detail panel or empty state */}
-        <div className="flex-1 overflow-hidden">
+        {/* Right: Detail panel or empty state — aligned with PBS */}
+        <div className="flex-1 min-w-0 flex flex-col rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
           {isLoading ? (
             <div className="h-full flex items-center justify-center">
               <div className="flex flex-col items-center gap-3">

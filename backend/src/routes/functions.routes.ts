@@ -8,6 +8,7 @@ import {
   updateFunction,
   deleteFunction,
   moveFunction,
+  updateFunctionComponent,
 } from '../controllers/function.controller'
 
 const router = Router()
@@ -20,6 +21,7 @@ router.get('/:projectId', getFunctions)
 router.get('/:projectId/:id', getFunction)
 router.put('/:projectId/:id', updateFunction)
 router.put('/:projectId/:id/move', moveFunction)
+router.patch('/:projectId/:id/component', updateFunctionComponent)
 router.delete('/:projectId/:id', deleteFunction)
 
 export default router

@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Box, FileText, Link2, Paperclip, History, Upload, Download, Trash2, AlertTriangle, ListChecks, type LucideIcon } from 'lucide-react'
+import { Box, FileText, Link2, Paperclip, History, Upload, Download, Trash2, AlertTriangle, ListChecks, Settings, type LucideIcon } from 'lucide-react'
 import clsx from 'clsx'
 import { format } from 'date-fns'
 import type { PBSNode, PBSType, PBSStatus, PBSChangeLogEntry, PBSRelationType, PBSRelationship, PBSAttachment } from './types'
@@ -16,9 +16,10 @@ import {
 import { generateId, nowISO } from './utils'
 import { getNodePath } from './treeUtils'
 import { requirementService } from '../../services/requirement.service'
+import { functionService } from '../../services/function.service'
 import type { Requirement } from 'shared/types/engineering.types'
 
-type TabId = 'overview' | 'attributes' | 'relationships' | 'attachments' | 'requirements' | 'changelog'
+type TabId = 'overview' | 'attributes' | 'relationships' | 'attachments' | 'requirements' | 'functions' | 'changelog'
 
 const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: 'overview', label: 'Overview', icon: Box },
@@ -26,6 +27,7 @@ const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: 'relationships', label: 'Relationships', icon: Link2 },
   { id: 'attachments', label: 'Attachments', icon: Paperclip },
   { id: 'requirements', label: 'Requirements', icon: ListChecks },
+  { id: 'functions', label: 'Functions', icon: Settings },
   { id: 'changelog', label: 'Change Log', icon: History },
 ]
 
@@ -91,6 +93,9 @@ export default function PBSNodeEditor({
         )}
         {activeTab === 'requirements' && projectId && (
           <RequirementsTab projectId={projectId} componentId={node.id} componentName={node.name} />
+        )}
+        {activeTab === 'functions' && projectId && (
+          <FunctionsTab projectId={projectId} componentId={node.id} componentName={node.name} />
         )}
         {activeTab === 'changelog' && <ChangeLogTab entries={nodeChangeLog} />}
       </div>
@@ -975,6 +980,72 @@ function RequirementsTab({
               </span>
               <span className="text-sm text-gray-900 dark:text-white truncate" title={req.title}>
                 {req.title}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function FunctionsTab({
+  projectId,
+  componentId,
+  componentName,
+}: {
+  projectId: string
+  componentId: string
+  componentName: string
+}) {
+  const navigate = useNavigate()
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['functions-by-component', projectId, componentId],
+    queryFn: async () => {
+      const response = await functionService.getFunctions(projectId)
+      if (!response.success || !response.data) return []
+      return response.data.filter((f: { pbsComponentId?: string | null }) => f.pbsComponentId === componentId)
+    },
+    enabled: !!projectId && !!componentId,
+  })
+  const functions = data ?? []
+
+  if (isLoading) {
+    return (
+      <div className="text-sm text-gray-500 dark:text-gray-400">Loading allocated functions…</div>
+    )
+  }
+  if (error) {
+    return (
+      <div className="text-sm text-amber-600 dark:text-amber-400">
+        Failed to load functions
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        Functions allocated to <span className="font-medium text-gray-900 dark:text-white">{componentName}</span>
+      </p>
+      {functions.length === 0 ? (
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          No functions allocated to this component. Use the Functions tab in the panel on the right to drag and drop.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {functions.map((fn: { id: string; functionId?: string; name: string }) => (
+            <li
+              key={fn.id}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors"
+              onClick={() => navigate(`/projects/${projectId}/functions?functionId=${fn.id}`)}
+            >
+              <Settings size={14} className="text-indigo-500 shrink-0" />
+              <span className="font-mono text-xs text-gray-500 dark:text-gray-400 shrink-0">
+                {fn.functionId ?? fn.id.slice(0, 8)}
+              </span>
+              <span className="text-sm text-gray-900 dark:text-white truncate" title={fn.name}>
+                {fn.name}
               </span>
             </li>
           ))}

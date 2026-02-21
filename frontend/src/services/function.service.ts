@@ -36,4 +36,8 @@ export const functionService = {
       newSortOrder,
     })
   },
+
+  async updateFunctionComponent(projectId: string, functionId: string, componentId: string | null): Promise<ApiResponse<SystemFunction>> {
+    return apiClient.patch<SystemFunction>(`/functions/${projectId}/${functionId}/component`, { componentId })
+  },
 }
