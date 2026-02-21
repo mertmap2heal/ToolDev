@@ -201,11 +201,11 @@ export const getIssues = async (req: AuthRequest, res: Response) => {
       success: true,
       data: issues,
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Get issues error:', error)
     res.status(500).json({
       success: false,
-      error: 'Internal server error',
+      error: error?.message || 'Internal server error',
     })
   }
 }

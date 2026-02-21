@@ -78,9 +78,11 @@ export const traceabilityService = {
       if (filters?.targetId) whereDirect.linkedId = filters.targetId
 
       const results = await prisma.issueLink.findMany({ where: whereDirect, include: { issue: true } })
-      issueLinksDirect = results.map(l => ({
+      issueLinksDirect = results
+        .filter((l) => l.issue != null)
+        .map((l) => ({
         id: l.id,
-        projectId: l.issue.projectId,
+        projectId: l.issue!.projectId,
         sourceType: 'issue',
         sourceId: l.issueId,
         targetType: l.linkedType,
@@ -105,9 +107,11 @@ export const traceabilityService = {
       if (filters?.targetId) whereInverse.issueId = filters.targetId
 
       const results = await prisma.issueLink.findMany({ where: whereInverse, include: { issue: true } })
-      issueLinksInverse = results.map(l => ({
+      issueLinksInverse = results
+        .filter((l) => l.issue != null)
+        .map((l) => ({
         id: l.id,
-        projectId: l.issue.projectId,
+        projectId: l.issue!.projectId,
         sourceType: l.linkedType,
         sourceId: l.linkedId,
         targetType: 'issue',
@@ -120,9 +124,9 @@ export const traceabilityService = {
         rationale: undefined,
         confidence: undefined,
         lastChecked: undefined,
-        targetTitle: l.issue.title,
-        targetDescription: l.issue.description,
-        targetDisplayId: l.issue.issueKey || l.issue.id.substring(0, 8)
+        targetTitle: l.issue!.title,
+        targetDescription: l.issue!.description,
+        targetDisplayId: l.issue!.issueKey || l.issue!.id.substring(0, 8)
       }))
     }
 
@@ -147,9 +151,11 @@ export const traceabilityService = {
         }
 
         const results = await prisma.requirementChangeRequestLink.findMany({ where: whereCR, include: crInclude })
-        crLinks.push(...results.map(l => ({
+        crLinks.push(...results
+          .filter((l) => l.requirement != null && l.changeRequest != null)
+          .map((l) => ({
           id: l.id,
-          projectId: l.requirement.projectId,
+          projectId: l.requirement!.projectId,
           sourceType: 'requirement',
           sourceId: l.requirementId,
           targetType: 'change_request',
@@ -162,13 +168,13 @@ export const traceabilityService = {
           rationale: l.note,
           confidence: undefined,
           lastChecked: undefined,
-          targetTitle: l.changeRequest.title,
-          targetDescription: l.changeRequest.description,
-          targetDisplayId: l.changeRequest.crId || l.changeRequest.id.substring(0, 8)
+          targetTitle: l.changeRequest!.title,
+          targetDescription: l.changeRequest!.description,
+          targetDisplayId: l.changeRequest!.crId || l.changeRequest!.id.substring(0, 8)
         })))
       }
 
-      // Case B: CR -> Requirement (treat CR as source, if filter allows)
+      // Case B: CR -> Requirement (treat CR as source, if filter allows). Exclude soft-deleted requirements.
       // This is the "inverse" view if someone looks at a CR and wants to see linked Requirements
       if (!filters?.sourceType || filters.sourceType === 'change_request') {
         const whereCR: any = { changeRequest: { projectId } }
@@ -186,9 +192,11 @@ export const traceabilityService = {
         // Actually, if we are listing links for a CR, we want CR as source.
 
         const results = await prisma.requirementChangeRequestLink.findMany({ where: whereCR, include: crInclude })
-        crLinks.push(...results.map(l => ({
+        crLinks.push(...results
+          .filter((l) => l.requirement != null && l.changeRequest != null)
+          .map((l) => ({
           id: l.id,
-          projectId: l.changeRequest.projectId,
+          projectId: l.changeRequest!.projectId,
           sourceType: 'change_request',
           sourceId: l.changeRequestId,
           targetType: 'requirement',
@@ -201,9 +209,9 @@ export const traceabilityService = {
           rationale: l.note,
           confidence: undefined,
           lastChecked: undefined,
-          targetTitle: l.requirement.title,
-          targetDescription: l.requirement.description,
-          targetDisplayId: l.requirement.requirementId || l.requirement.id.substring(0, 8)
+          targetTitle: l.requirement!.title,
+          targetDescription: l.requirement!.description,
+          targetDisplayId: l.requirement!.requirementId || l.requirement!.id.substring(0, 8)
         })))
       }
     }

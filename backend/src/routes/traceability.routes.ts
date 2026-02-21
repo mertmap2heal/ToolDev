@@ -27,10 +27,10 @@ router.get('/:projectId', async (req, res) => {
       data: links,
     })
   } catch (error: any) {
-    console.error('Get trace links error:', error)
+    console.error('Get trace links error:', error?.message, error?.stack)
     res.status(500).json({
       success: false,
-      error: error.message || 'Internal server error',
+      error: error?.message || 'Internal server error',
     })
   }
 })

@@ -158,7 +158,7 @@ function buildFlatTree(
                       : (link.sourceTitle ?? link.sourceDisplayId ?? `${link.sourceType}:${link.sourceId.slice(0, 8)}`)
                     const targetType = isOutgoing ? link.targetType : link.sourceType
                     items.push({
-                      id: link.id ?? `link-${link.sourceType}-${link.targetType}-${link.targetId}`,
+                      id: `link-${req.id}-${link.id ?? `${link.sourceType}-${link.sourceId}-${link.targetType}-${link.targetId}`}`,
                       type: 'linked_element',
                       name: label,
                       depth: depth + 2,
@@ -225,7 +225,7 @@ function buildFlatTree(
                       : (link.sourceTitle ?? link.sourceDisplayId ?? `${link.sourceType}:${link.sourceId.slice(0, 8)}`)
                     const targetType = isOutgoing ? link.targetType : link.sourceType
                     items.push({
-                      id: link.id ?? `link-${link.sourceType}-${link.targetType}-${link.targetId}`,
+                      id: `link-${req.id}-${link.id ?? `${link.sourceType}-${link.sourceId}-${link.targetType}-${link.targetId}`}`,
                       type: 'linked_element',
                       name: label,
                       depth: 2,
@@ -292,6 +292,7 @@ export default function RequirementsPBSTree({
   const linksByReqId = useMemo(() => {
     const exclude = (l: LinkLike) =>
       l.linkType === 'allocated_to' && (l.targetType === 'pbs_component' || l.sourceType === 'pbs_component')
+    const keyOf = (l: LinkLike) => l.id ?? `${l.sourceType}-${l.sourceId}-${l.targetType}-${l.targetId}`
     const map = new Map<string, LinkLike[]>()
     const reqIds = requirements.map((r) => r.id)
     reqIds.forEach((reqId, i) => {
@@ -300,14 +301,13 @@ export default function RequirementsPBSTree({
       const outgoing = ((linkQueries[outIdx]?.data as LinkLike[] | undefined) ?? []).filter((l) => !exclude(l))
       const incoming = ((linkQueries[inIdx]?.data as LinkLike[] | undefined) ?? []).filter((l) => !exclude(l))
       const seen = new Set<string>()
-      const combined = [...outgoing]
-      incoming.forEach((l) => {
-        const key = l.id ?? `${l.sourceType}-${l.sourceId}-${l.targetType}-${l.targetId}`
-        if (!seen.has(key)) {
-          seen.add(key)
-          combined.push(l)
-        }
-      })
+      const combined: LinkLike[] = []
+      for (const l of [...outgoing, ...incoming]) {
+        const k = keyOf(l)
+        if (seen.has(k)) continue
+        seen.add(k)
+        combined.push(l)
+      }
       map.set(reqId, combined)
     })
     return map
@@ -483,20 +483,23 @@ export default function RequirementsPBSTree({
     [componentTree, requirements, expandedNodes, expandedReqs, searchQuery, linksByReqId]
   )
 
-  // Auto-expand requirements that have linked elements so they're visible by default
+  // Auto-expand requirements that have linked elements so they're visible by default (run once when links load)
   useEffect(() => {
     if (!LINKAGE_V1) return
     const toExpand = new Set<string>()
     for (const req of requirements) {
       if ((linksByReqId.get(req.id) ?? []).length > 0) toExpand.add(req.id)
     }
-    if (toExpand.size > 0) {
-      setExpandedReqs((prev) => {
-        const next = new Set(prev)
-        toExpand.forEach((id) => next.add(id))
-        return next
+    if (toExpand.size === 0) return
+    setExpandedReqs((prev) => {
+      let changed = false
+      const next = new Set(prev)
+      toExpand.forEach((id) => {
+        if (!next.has(id)) { next.add(id); changed = true }
       })
-    }
+      if (!changed) return prev
+      return next
+    })
   }, [requirements, linksByReqId])
 
     // Count requirements per component
@@ -559,31 +562,38 @@ export default function RequirementsPBSTree({
                       return (
                         <div
                           key={item.id}
-                          role={onRequirementClick ? 'button' : undefined}
-                          tabIndex={onRequirementClick ? 0 : undefined}
-                          onClick={() => onRequirementClick?.(req)}
-                          onKeyDown={(e) => { if (onRequirementClick && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onRequirementClick(req) } }}
-                          className={clsx(
-                            'group flex items-center gap-2 px-3 py-1.5 mx-2 text-sm rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border border-transparent hover:border-gray-100 dark:hover:border-gray-700',
-                            onRequirementClick ? 'cursor-pointer' : 'cursor-grab'
-                          )}
+                          className="group flex items-center mx-2 text-sm rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border border-transparent hover:border-gray-100 dark:hover:border-gray-700"
                           style={{ paddingLeft: `${item.depth * 16 + 12}px` }}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, req.id)}
-                          title={onRequirementClick ? 'Click to preview' : undefined}
                         >
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); toggleReq(req.id) }}
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            aria-label={isReqExpanded ? 'Collapse linked elements' : 'Expand linked elements'}
+                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); toggleReq(req.id) }}
+                            onPointerDown={(e) => { e.stopPropagation() }}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggleReq(req.id) } }}
                             className={clsx(
-                              'flex-shrink-0 w-4 h-4 flex items-center justify-center rounded transition-colors',
+                              'flex-shrink-0 relative z-10 w-8 h-8 flex items-center justify-center rounded transition-colors cursor-pointer select-none touch-manipulation',
                               'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
                             )}
                             title={hasLinkedElements ? `${reqLinks.length} linked` : 'Expand for linked elements'}
                           >
-                            {isReqExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                          </button>
-                          <FileText className="w-3.5 h-3.5 text-blue-400 dark:text-blue-500 flex-shrink-0 opacity-70 group-hover:opacity-100 transition-opacity" />
+                            {isReqExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          </div>
+                          <div
+                            role={onRequirementClick ? 'button' : undefined}
+                            tabIndex={onRequirementClick ? 0 : undefined}
+                            onClick={() => onRequirementClick?.(req)}
+                            onKeyDown={(e) => { if (onRequirementClick && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onRequirementClick(req) } }}
+                            className={clsx(
+                              'flex flex-1 min-w-0 items-center gap-2 px-2 py-1.5 rounded-lg',
+                              onRequirementClick ? 'cursor-pointer' : 'cursor-grab'
+                            )}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, req.id)}
+                            title={onRequirementClick ? 'Click to preview' : undefined}
+                          >
+                            <FileText className="w-3.5 h-3.5 text-blue-400 dark:text-blue-500 flex-shrink-0 opacity-70 group-hover:opacity-100 transition-opacity" />
                           <span className="text-gray-400 dark:text-gray-500 font-mono text-[10px] flex-shrink-0">
                             {item.requirementId || '—'}
                           </span>
@@ -593,6 +603,7 @@ export default function RequirementsPBSTree({
                           {hasLinkedElements && !isReqExpanded && (
                             <span className="flex-shrink-0 text-[10px] text-gray-400 dark:text-gray-500">+{reqLinks.length}</span>
                           )}
+                          </div>
                         </div>
                       )
                     }
