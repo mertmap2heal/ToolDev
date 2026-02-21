@@ -102,6 +102,7 @@ model Project {
   name        String
   description String?
   domain      String
+  slug        String   @unique
   companyName String?
   progress    Float    @default(0)
   status      String   @default("active")

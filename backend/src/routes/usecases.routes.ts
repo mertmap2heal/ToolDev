@@ -1,10 +1,12 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
+import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import * as useCaseController from '../controllers/usecase.controller'
 
 const router = Router()
 
 router.use(authenticateToken)
+router.param('projectId', projectIdParam)
 
 // Use Cases
 router.get('/:projectId', useCaseController.getUseCases)

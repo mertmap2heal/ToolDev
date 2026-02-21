@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
+import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import {
   createFunction,
   getFunctions,
@@ -12,6 +13,7 @@ import {
 const router = Router()
 
 router.use(authenticateToken)
+router.param('projectId', projectIdParam)
 
 router.post('/:projectId', createFunction)
 router.get('/:projectId', getFunctions)

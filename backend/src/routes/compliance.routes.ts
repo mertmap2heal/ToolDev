@@ -1,10 +1,12 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
+import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import * as ctrl from '../controllers/compliance.controller'
 
 const router = Router()
 
 router.use(authenticateToken)
+router.param('projectId', projectIdParam)
 
 router.get('/:projectId/rules', ctrl.getRules)
 router.post('/:projectId/rules', ctrl.createRule)

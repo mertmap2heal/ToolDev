@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
+import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import {
   createReview,
   startReview,
@@ -14,6 +15,7 @@ import {
 const router = Router()
 
 router.use(authenticateToken)
+router.param('projectId', projectIdParam)
 
 // Review management routes
 router.post('/:projectId/requirements/:requirementId/reviews', createReview)

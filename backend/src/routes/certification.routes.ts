@@ -1,10 +1,12 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
+import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import * as ctrl from '../controllers/certification'
 
 const router = Router()
 
 router.use(authenticateToken)
+router.param('projectId', projectIdParam)
 
 // Full state (for frontend hydration)
 router.get('/:projectId/state', ctrl.getFullState)

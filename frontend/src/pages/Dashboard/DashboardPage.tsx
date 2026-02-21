@@ -306,7 +306,7 @@ export default function DashboardPage() {
                       <tr
                         key={project.id}
                         className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
-                        onClick={() => window.location.href = `/projects/${project.id}`}
+                        onClick={() => window.location.href = `/projects/${project.slug ?? project.id}`}
                       >
                         <td className="px-4 py-3">
                           <input type="checkbox" className="w-4 h-4 text-blue-600 border-gray-300 rounded" checked={selectedProjectIds.includes(project.id)} onChange={e => handleSelectProject(project.id, e.target.checked)} onClick={e => e.stopPropagation()} />

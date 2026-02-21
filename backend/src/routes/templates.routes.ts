@@ -1,9 +1,11 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
+import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 
 const router = Router()
 
 router.use(authenticateToken)
+router.param('projectId', projectIdParam)
 
 // Placeholder routes for requirement templates
 // TODO: Implement requirement template functionality

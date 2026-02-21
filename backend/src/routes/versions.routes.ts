@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
+import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import {
   getRequirementVersions,
   getRequirementVersion,
@@ -10,6 +11,7 @@ import {
 const router = Router()
 
 router.use(authenticateToken)
+router.param('projectId', projectIdParam)
 
 // Get all versions for a requirement
 router.get('/:projectId/requirements/:requirementId', getRequirementVersions)

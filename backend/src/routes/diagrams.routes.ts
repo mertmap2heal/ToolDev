@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
+import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import {
   getDiagrams,
   getDiagram,
@@ -11,6 +12,8 @@ import {
 } from '../controllers/diagram.controller'
 
 const router = Router()
+
+router.param('projectId', projectIdParam)
 
 /**
  * Diagram Routes

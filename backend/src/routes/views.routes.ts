@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
+import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import {
   getSavedViews,
   createSavedView,
@@ -10,6 +11,7 @@ import {
 const router = Router()
 
 router.use(authenticateToken)
+router.param('projectId', projectIdParam)
 
 router.get('/:projectId', getSavedViews)
 router.post('/:projectId', createSavedView)

@@ -48,7 +48,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
             { description: { contains: q, mode: 'insensitive' } },
           ],
         },
-        select: { id: true, name: true, description: true, status: true },
+        select: { id: true, slug: true, name: true, description: true, status: true },
         take: perCategory,
       }),
 
@@ -266,7 +266,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
         title: p.name,
         subtitle: p.description?.slice(0, 120) ?? '',
         status: p.status,
-        route: `/projects/${p.id}`,
+        route: `/projects/${p.slug ?? p.id}`,
       }),
     )
 

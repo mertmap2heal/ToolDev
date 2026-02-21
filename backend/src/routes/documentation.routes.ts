@@ -1,10 +1,12 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
+import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import { documentationService } from '../services/documentation.service'
 
 const router = Router()
 
 router.use(authenticateToken)
+router.param('projectId', projectIdParam)
 
 // Generate documentation (existing)
 router.post('/generate', async (req, res) => {

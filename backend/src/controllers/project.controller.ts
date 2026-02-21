@@ -59,6 +59,25 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
+function slugFromName(name: string): string {
+  return (
+    name
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '') || 'project'
+  )
+}
+
+async function ensureUniqueSlug(baseSlug: string): Promise<string> {
+  let slug = baseSlug
+  let n = 1
+  while (await prisma.project.findUnique({ where: { slug } })) {
+    slug = `${baseSlug}-${++n}`
+  }
+  return slug
+}
+
 export const createProject = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId
@@ -78,11 +97,15 @@ export const createProject = async (req: AuthRequest, res: Response) => {
       })
     }
 
+    const baseSlug = slugFromName(domain)
+    const slug = await ensureUniqueSlug(baseSlug)
+
     const project = await prisma.project.create({
       data: {
         name,
         description,
         domain,
+        slug,
         companyName,
         deadline: deadline ? new Date(deadline) : null,
         userId,

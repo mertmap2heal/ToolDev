@@ -22,6 +22,7 @@ export interface Project {
   name: string
   description?: string
   domain: string
+  slug: string
   companyName?: string
   progress: number
   status: 'active' | 'completed' | 'archived'

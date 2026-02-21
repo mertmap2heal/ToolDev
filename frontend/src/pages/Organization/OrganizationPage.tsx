@@ -693,7 +693,7 @@ function ProjectsTab({
           {filtered.map((p) => (
             <button
               key={p.id}
-              onClick={() => navigate(`/projects/${p.id}`)}
+              onClick={() => navigate(`/projects/${p.slug ?? p.id}`)}
               className="text-left rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-md transition-all group"
             >
               <div className="flex items-start justify-between gap-2 mb-3">

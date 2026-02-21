@@ -26,10 +26,12 @@ describe('Requirement Soft Delete Workflow', () => {
         token = jwt.sign({ userId }, process.env.JWT_SECRET || 'secret')
 
         // 2. Create a test project
+        const slug = `test-project-${Date.now()}`
         const project = await prisma.project.create({
             data: {
                 name: `Test Project ${Date.now()}`,
-                key: `TP${Date.now()}`, // Ensure unique key
+                domain: slug,
+                slug,
                 description: 'Test project for delete workflow',
                 userId: userId,
             },

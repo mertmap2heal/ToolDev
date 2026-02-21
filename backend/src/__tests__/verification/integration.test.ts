@@ -11,7 +11,7 @@ describe('Verification Workflow Integration', () => {
 
   beforeAll(async () => {
     const project = await prisma.project.create({
-      data: { name: 'Integration Test', domain: 'test', userId: 'test-user' },
+      data: { name: 'Integration Test', domain: 'test', slug: 'integration-test', userId: 'test-user' },
     })
     projectId = project.id
     await prisma.verMoc.upsert({

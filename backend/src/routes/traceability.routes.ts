@@ -1,10 +1,12 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
+import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import { traceabilityService } from '../services/traceability.service'
 
 const router = Router()
 
 router.use(authenticateToken)
+router.param('projectId', projectIdParam)
 
 // Get all trace links for a project (supports ?sourceId= &targetId= &sourceType= &targetType= for filtering)
 router.get('/:projectId', async (req, res) => {

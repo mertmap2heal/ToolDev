@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
+import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import * as mocController from '../controllers/verification/moc.controller'
 import * as methodController from '../controllers/verification/method.controller'
 import * as setupController from '../controllers/verification/setup.controller'
@@ -25,6 +26,7 @@ import { AuthRequest } from '../middleware/auth.middleware'
 const router = Router()
 
 router.use(authenticateToken)
+router.param('projectId', projectIdParam)
 
 // A) MoC Endpoints
 router.get('/moc', mocController.getMocs)

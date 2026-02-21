@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
+import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import {
   getBaselines,
   getBaseline,
@@ -12,6 +13,7 @@ import {
 const router = Router()
 
 router.use(authenticateToken)
+router.param('projectId', projectIdParam)
 
 // Compare two baselines (must come before /:projectId/:baselineId to avoid route conflicts)
 router.get('/:projectId/compare', compareBaselines)
