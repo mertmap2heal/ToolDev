@@ -238,20 +238,20 @@ export const traceabilityService = {
       if (l.targetType === 'function') funcIdsToFetch.add(l.targetId)
     })
 
-    // Fetch titles
+    // Fetch titles (use Promise.resolve([]) for empty to avoid Promise.all issues)
     const [reqDetails, funcDetails] = await Promise.all([
       reqIdsToFetch.size > 0
         ? prisma.requirement.findMany({
-            where: { id: { in: Array.from(reqIdsToFetch) } },
+            where: { id: { in: Array.from(reqIdsToFetch) }, deletedAt: null },
             select: { id: true, title: true, requirementId: true }
           })
-        : [],
+        : Promise.resolve([]),
       funcIdsToFetch.size > 0
         ? prisma.systemFunction.findMany({
             where: { id: { in: Array.from(funcIdsToFetch) } },
             select: { id: true, name: true, functionId: true }
           })
-        : [],
+        : Promise.resolve([]),
     ])
 
     const reqMap = new Map(reqDetails.map(r => [r.id, r]))
@@ -259,7 +259,8 @@ export const traceabilityService = {
 
     const allLinks = [...links, ...issueLinksDirect, ...issueLinksInverse, ...Array.from(uniqueCrLinks.values())]
 
-    return allLinks.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((link) => {
+    const safeDate = (d: any) => (d ? new Date(d).getTime() : 0)
+    return allLinks.sort((a: any, b: any) => safeDate(b.createdAt) - safeDate(a.createdAt)).map((link) => {
       const isReqSource = link.sourceType === 'requirement'
       const isReqTarget = link.targetType === 'requirement'
       const isFuncSource = link.sourceType === 'function'
@@ -283,8 +284,8 @@ export const traceabilityService = {
         confidence: link.confidence || undefined,
         isAuto: link.isAuto,
         isSuspect: link.isSuspect || false,
-        lastChecked: link.lastChecked?.toISOString(),
-        createdAt: link.createdAt.toISOString(),
+        lastChecked: link.lastChecked != null ? new Date(link.lastChecked).toISOString() : undefined,
+        createdAt: link.createdAt != null ? new Date(link.createdAt).toISOString() : new Date().toISOString(),
         targetTitle:
           link.targetTitle ||
           (tReq ? tReq.title : undefined) ||

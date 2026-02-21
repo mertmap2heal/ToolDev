@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { ChevronRight, ChevronDown, Package, FileText, Search, FolderOpen, Inbox, Settings, AlertCircle, GitPullRequest, Layers, ClipboardList, Link2 } from 'lucide-react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query'
 import { componentService } from '../../services/component.service'
 import { requirementService } from '../../services/requirement.service'
 import { linkService } from '../../services/link.service'
@@ -77,7 +77,7 @@ function buildFlatTree(
   expandedNodes: Set<string>,
   expandedReqs: Set<string>,
   searchQuery: string,
-  links: LinkLike[]
+  getLinksForReq: (req: Requirement) => LinkLike[]
 ): FlatTreeItem[] {
     const items: FlatTreeItem[] = []
     const validComponentIds = collectNodeIds(tree)
@@ -136,7 +136,7 @@ function buildFlatTree(
             // Add requirements under this component (with optional linked elements)
             for (const req of reqs) {
               if (searchQuery && !(req.requirementId || req.title).toLowerCase().includes(lowerQuery)) continue
-              const reqLinks = getLinksForRequirement(links, req)
+              const reqLinks = getLinksForReq(req)
               const hasLinkedElements = reqLinks.length > 0
               items.push({
                 id: `req-${req.id}`,
@@ -170,7 +170,7 @@ function buildFlatTree(
                   items.push({
                     id: `no-links-${req.id}`,
                     type: 'no_linked_elements',
-                    name: links.length > 0 ? 'No linked elements (IDs may not match)' : 'No links loaded yet',
+                    name: 'No linked elements',
                     depth: depth + 2,
                     parentComponentId: node.id,
                     hasChildren: false,
@@ -203,7 +203,7 @@ function buildFlatTree(
 
         if (expandedNodes.has('unassigned')) {
             for (const req of filteredUnassigned) {
-              const reqLinks = getLinksForRequirement(links, req)
+              const reqLinks = getLinksForReq(req)
               const hasLinkedElements = reqLinks.length > 0
               items.push({
                 id: `req-${req.id}`,
@@ -237,7 +237,7 @@ function buildFlatTree(
                   items.push({
                     id: `no-links-${req.id}`,
                     type: 'no_linked_elements',
-                    name: links.length > 0 ? 'No linked elements (IDs may not match)' : 'No links loaded yet',
+                    name: 'No linked elements',
                     depth: 2,
                     parentComponentId: null,
                     hasChildren: false,
@@ -252,21 +252,6 @@ function buildFlatTree(
     return items
 }
 
-/** Get all links for a requirement (outgoing + incoming), excluding allocated_to->pbs_component */
-function getLinksForRequirement(links: LinkLike[], req: { id: string; requirementId?: string | null }): LinkLike[] {
-  const norm = (s: string | null | undefined) => String(s ?? '').trim().toLowerCase()
-  const reqIdNorm = norm(req.id)
-  const reqDisplayNorm = norm(req.requirementId)
-  const matchId = (id: string) => {
-    const idNorm = norm(id)
-    return idNorm && (idNorm === reqIdNorm || idNorm === reqDisplayNorm)
-  }
-  return links.filter((l) => {
-    if (l.linkType === 'allocated_to' && (l.targetType === 'pbs_component' || l.sourceType === 'pbs_component')) return false
-    return (l.sourceType === 'requirement' && matchId(l.sourceId)) || (l.targetType === 'requirement' && matchId(l.targetId))
-  })
-}
-
 export default function RequirementsPBSTree({
   projectId,
   requirements,
@@ -279,27 +264,52 @@ export default function RequirementsPBSTree({
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['unassigned']))
   const [expandedReqs, setExpandedReqs] = useState<Set<string>>(new Set())
 
-  // Fetch links via linkService (same as Requirement Detail Drawer) - always use our fetch, never parent
-  const { data: fetchedLinks = [] } = useQuery({
-    queryKey: ['links', projectId],
-    queryFn: async () => {
-      if (!projectId) return []
-      const response = await linkService.getLinks(projectId)
-      return response.success && response.data ? response.data : []
-    },
-    enabled: !!projectId && !!LINKAGE_V1,
+  // Fetch links per requirement using SAME API as Requirement Detail Drawer (sourceId + targetId)
+  // This ensures we get the exact same links the drawer shows
+  const linkQueries = useQueries({
+    queries: requirements.flatMap((req) => [
+      {
+        queryKey: ['requirement-links-out', projectId, req.id],
+        queryFn: async () => {
+          const r = await linkService.getLinks(projectId, { sourceId: req.id })
+          return r.success && r.data ? r.data : []
+        },
+        enabled: !!projectId && !!req.id && !!LINKAGE_V1,
+      },
+      {
+        queryKey: ['requirement-links-in', projectId, req.id],
+        queryFn: async () => {
+          const r = await linkService.getLinks(projectId, { targetId: req.id })
+          return r.success && r.data ? r.data : []
+        },
+        enabled: !!projectId && !!req.id && !!LINKAGE_V1,
+      },
+    ]),
   })
-  const effectiveLinks = LINKAGE_V1 ? fetchedLinks : []
-
-  // Debug: log when links loaded but no requirement matches (helps diagnose ID mismatch)
-  useEffect(() => {
-    if (effectiveLinks.length > 0 && requirements.length > 0) {
-      const reqLinks = effectiveLinks.filter((l) => l.sourceType === 'requirement' || l.targetType === 'requirement')
-      const sampleReqIds = [...new Set(reqLinks.flatMap((l) => (l.sourceType === 'requirement' ? [l.sourceId] : []).concat(l.targetType === 'requirement' ? [l.targetId] : [])))].slice(0, 5)
-      const sampleReqIdsFromReqs = requirements.slice(0, 5).map((r) => ({ id: r.id, reqId: r.requirementId }))
-      console.debug('[PBS Tree] Links:', effectiveLinks.length, 'requirement IDs in links:', sampleReqIds, 'req ids from data:', sampleReqIdsFromReqs)
-    }
-  }, [effectiveLinks, requirements])
+  // Build map: reqId -> links[] (outgoing + incoming, deduped, excluding allocated_to->pbs_component)
+  const linksByReqId = useMemo(() => {
+    const exclude = (l: LinkLike) =>
+      l.linkType === 'allocated_to' && (l.targetType === 'pbs_component' || l.sourceType === 'pbs_component')
+    const map = new Map<string, LinkLike[]>()
+    const reqIds = requirements.map((r) => r.id)
+    reqIds.forEach((reqId, i) => {
+      const outIdx = i * 2
+      const inIdx = i * 2 + 1
+      const outgoing = ((linkQueries[outIdx]?.data as LinkLike[] | undefined) ?? []).filter((l) => !exclude(l))
+      const incoming = ((linkQueries[inIdx]?.data as LinkLike[] | undefined) ?? []).filter((l) => !exclude(l))
+      const seen = new Set<string>()
+      const combined = [...outgoing]
+      incoming.forEach((l) => {
+        const key = l.id ?? `${l.sourceType}-${l.sourceId}-${l.targetType}-${l.targetId}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          combined.push(l)
+        }
+      })
+      map.set(reqId, combined)
+    })
+    return map
+  }, [requirements, linkQueries])
   const [searchQuery, setSearchQuery] = useState('')
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [pbsSynced, setPbsSynced] = useState(false)
@@ -467,16 +477,16 @@ export default function RequirementsPBSTree({
     }, [assignComponentMutation])
 
   const flatItems = useMemo(
-    () => buildFlatTree(componentTree, requirements, expandedNodes, expandedReqs, searchQuery, effectiveLinks),
-    [componentTree, requirements, expandedNodes, expandedReqs, searchQuery, effectiveLinks]
+    () => buildFlatTree(componentTree, requirements, expandedNodes, expandedReqs, searchQuery, (req) => linksByReqId.get(req.id) ?? []),
+    [componentTree, requirements, expandedNodes, expandedReqs, searchQuery, linksByReqId]
   )
 
   // Auto-expand requirements that have linked elements so they're visible by default
   useEffect(() => {
-    if (!LINKAGE_V1 || effectiveLinks.length === 0) return
+    if (!LINKAGE_V1) return
     const toExpand = new Set<string>()
     for (const req of requirements) {
-      if (getLinksForRequirement(effectiveLinks, req).length > 0) toExpand.add(req.id)
+      if ((linksByReqId.get(req.id) ?? []).length > 0) toExpand.add(req.id)
     }
     if (toExpand.size > 0) {
       setExpandedReqs((prev) => {
@@ -485,7 +495,7 @@ export default function RequirementsPBSTree({
         return next
       })
     }
-  }, [requirements, effectiveLinks])
+  }, [requirements, linksByReqId])
 
     // Count requirements per component
     const reqCounts = useMemo(() => {
@@ -541,7 +551,7 @@ export default function RequirementsPBSTree({
 
                     if (item.type === 'requirement') {
                       const req = item.requirement!
-                      const reqLinks = getLinksForRequirement(effectiveLinks, req)
+                      const reqLinks = linksByReqId.get(req.id) ?? []
                       const hasLinkedElements = reqLinks.length > 0
                       const isReqExpanded = expandedReqs.has(req.id)
                       return (
