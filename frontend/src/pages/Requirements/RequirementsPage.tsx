@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { ArrowUp, ArrowDown } from 'lucide-react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
-import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, AlertTriangle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft, BarChart3 } from 'lucide-react'
+import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, AlertTriangle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft, BarChart3, LayoutList } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 import CreateRequirementModal from '../../components/requirements/CreateRequirementModal'
@@ -16,6 +16,7 @@ import ImportWizard from '../../components/requirements/ImportWizard'
 import RequirementDiagramsModal from '../../components/requirements/RequirementDiagramsModal'
 import RequirementQualityPanel from '../../components/requirements/RequirementQualityPanel'
 import RequirementsPBSTree, { type LinkedElementClickPayload } from '../../components/requirements/RequirementsPBSTree'
+import RequirementDocumentCard from '../../components/requirements/RequirementDocumentCard'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import CreateIssueModal from '../../components/issues/CreateIssueModal'
 import ReviewStatusBadge from '../../components/requirements/ReviewStatusBadge'
@@ -33,6 +34,7 @@ import { buildDeepLink } from '../../linkage/buildDeepLink'
 import ChangeStatusPopover, { getStatusColorClasses } from '../../components/requirements/ChangeStatusPopover'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import type { Requirement, UpdateRequirementDto } from 'shared/types/engineering.types'
+import type { Link } from 'shared/types/linkage.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
 import { useAuthStore } from '../../store/authStore'
@@ -161,6 +163,22 @@ export default function RequirementsPage() {
 
   // Grouping by type
   const [groupByType, setGroupByType] = useState<boolean>(false)
+
+  // List view style: table or document
+  const loadListViewStyle = (): 'table' | 'document' => {
+    try {
+      const stored = localStorage.getItem('requirements-list-view')
+      if (stored === 'document' || stored === 'table') return stored
+    } catch (e) { /* ignore */ }
+    return 'table'
+  }
+  const [listViewStyle, setListViewStyle] = useState<'table' | 'document'>(() => loadListViewStyle())
+  const persistListViewStyle = useCallback((style: 'table' | 'document') => {
+    setListViewStyle(style)
+    try {
+      localStorage.setItem('requirements-list-view', style)
+    } catch (e) { /* ignore */ }
+  }, [])
 
   const [isPBSPanelOpen, setIsPBSPanelOpen] = useState<boolean>(true)
   const [pbsPanelWidth, setPbsPanelWidth] = useState<number>(280)
@@ -598,6 +616,31 @@ export default function RequirementsPage() {
     return rootReqs
   }
 
+  /** Flatten requirement tree for document view (each req as its own card) */
+  const flattenReqs = useCallback((reqs: Requirement[]): Requirement[] => {
+    const result: Requirement[] = []
+    const walk = (list: Requirement[]) => {
+      for (const r of list) {
+        result.push(r)
+        if (r.children && r.children.length > 0) {
+          walk(r.children)
+        }
+      }
+    }
+    walk(reqs)
+    return result
+  }, [])
+
+  /** Get links for a requirement (incoming + outgoing, exclude allocated_to->pbs_component) */
+  const getLinksForRequirement = useCallback((reqId: string): Link[] => {
+    if (!LINKAGE_V1 || !links.length) return []
+    const exclude = (l: Link) =>
+      l.linkType === 'allocated_to' && (l.targetType === 'pbs_component' || l.sourceType === 'pbs_component')
+    return (links as Link[]).filter(
+      (l) => !exclude(l) && (l.sourceId === reqId || l.targetId === reqId)
+    )
+  }, [links])
+
   // Get linked elements for a requirement
   const getLinkedElements = (requirementId: string): ExpandedRow => {
     // Find functions linked to this requirement
@@ -798,6 +841,19 @@ export default function RequirementsPage() {
     return { groups: sortedGroups, orderedKeys: orderedTypeKeys }
   }, [hierarchyRequirements, groupByType])
 
+  // Requirements to show in document view: flatten hierarchy or grouped
+  const documentViewRequirements = useMemo(() => {
+    if (groupByType) {
+      const { groups, orderedKeys } = groupedRequirements
+      const flat: Requirement[] = []
+      for (const key of orderedKeys) {
+        const groupReqs = groups[key]
+        if (groupReqs?.length) flat.push(...flattenReqs(groupReqs))
+      }
+      return flat
+    }
+    return flattenReqs(hierarchyRequirements)
+  }, [groupByType, groupedRequirements, hierarchyRequirements, flattenReqs])
 
   // Helper function to format requirement type name
   const formatRequirementTypeName = (type: string): string => {
@@ -1841,6 +1897,20 @@ export default function RequirementsPage() {
                 <Grid3X3 size={16} />
                 <span className="text-sm">Group by Type</span>
               </button>
+              {/* Document View Toggle */}
+              <button
+                onClick={() => persistListViewStyle(listViewStyle === 'document' ? 'table' : 'document')}
+                className={clsx(
+                  "px-3 py-2 rounded-lg border transition-colors flex items-center gap-2 whitespace-nowrap",
+                  listViewStyle === 'document'
+                    ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-600"
+                    : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600"
+                )}
+                title="View requirements as document-style cards"
+              >
+                <LayoutList size={16} />
+                <span className="text-sm">Document View</span>
+              </button>
             </div>
           </div>
 
@@ -2022,8 +2092,66 @@ export default function RequirementsPage() {
             )}
           </div>
 
-          {/* Requirements Table */}
+          {/* Requirements Table / Document View */}
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden flex-1 min-h-0">
+            {listViewStyle === 'document' ? (
+              <div className="overflow-y-auto h-full p-4 space-y-6">
+                {isLoading ? (
+                  <div className="py-8 text-center text-gray-500 dark:text-gray-400">
+                    Loading requirements...
+                  </div>
+                ) : groupByType ? (
+                  (() => {
+                    const { groups, orderedKeys } = groupedRequirements
+                    const hasAny = orderedKeys.some((k) => groups[k]?.length)
+                    if (!hasAny) {
+                      return (
+                        <div className="py-8 text-center text-gray-500 dark:text-gray-400">
+                          {totalRequirements === 0
+                            ? 'No requirements found. Click "Create Requirement" to get started.'
+                            : 'No requirements match your search or filter criteria.'}
+                        </div>
+                      )
+                    }
+                    return orderedKeys.map((type) => {
+                      const typeReqs = groups[type]
+                      if (!typeReqs?.length) return null
+                      const flatReqs = flattenReqs(typeReqs)
+                      return (
+                        <div key={type} className="space-y-4">
+                          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide border-b border-gray-200 dark:border-gray-600 pb-2">
+                            {formatRequirementTypeName(type)} Requirements ({flatReqs.length})
+                          </h3>
+                          {flatReqs.map((req) => (
+                            <RequirementDocumentCard
+                              key={req.id}
+                              requirement={req}
+                              links={getLinksForRequirement(req.id)}
+                              onRequirementClick={setDetailRequirement}
+                            />
+                          ))}
+                        </div>
+                      )
+                    })
+                  })()
+                ) : documentViewRequirements.length === 0 ? (
+                  <div className="py-8 text-center text-gray-500 dark:text-gray-400">
+                    {totalRequirements === 0
+                      ? 'No requirements found. Click "Create Requirement" to get started.'
+                      : 'No requirements match your search or filter criteria.'}
+                  </div>
+                ) : (
+                  documentViewRequirements.map((req) => (
+                    <RequirementDocumentCard
+                      key={req.id}
+                      requirement={req}
+                      links={getLinksForRequirement(req.id)}
+                      onRequirementClick={setDetailRequirement}
+                    />
+                  ))
+                )}
+              </div>
+            ) : (
             <div className="overflow-x-auto h-full">
               <table className="w-full border-collapse">
                 <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(0,0,0,0.1)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
@@ -2296,6 +2424,7 @@ export default function RequirementsPage() {
                 </tbody>
               </table>
             </div>
+            )}
           </div>
 
           {/* Pagination Controls */}

@@ -28,6 +28,7 @@ import { issueAdapter } from '../../linkage/adapters/issueAdapter'
 import { requirementAdapter } from '../../linkage/adapters/requirementAdapter'
 import { functionAdapter } from '../../linkage/adapters/functionAdapter'
 import { authService } from '../../services/auth.service'
+import { useAuthStore } from '../../store/authStore'
 import type { CreateRequirementDto, Requirement, RequirementType } from 'shared/types/engineering.types'
 import type { ComponentTreeNode } from 'shared/types/project.types'
 
@@ -235,6 +236,7 @@ export default function CreateRequirementModal({
   const [customAttributeValue, setCustomAttributeValue] = useState('')
 
   const queryClient = useQueryClient()
+  const { user } = useAuthStore()
   const { statuses } = useStatusDefinitionsStore()
   const { lifecycles } = useLifecycleStore()
   const [availableLifecycles, setAvailableLifecycles] = useState<LifecycleSummary[]>([])
@@ -440,6 +442,13 @@ export default function CreateRequirementModal({
       setFormData((prev) => ({ ...prev, parentId: undefined }))
     }
   }, [parentRequirement])
+
+  // Auto-fill owner with current user when modal opens
+  useEffect(() => {
+    if (isOpen && user?.name) {
+      setFormData((prev) => ({ ...prev, owner: user.name }))
+    }
+  }, [isOpen, user?.name])
 
   // Update status when lifecycle or status definitions change
   useEffect(() => {
