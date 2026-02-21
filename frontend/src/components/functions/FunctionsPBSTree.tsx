@@ -165,6 +165,7 @@ export default function FunctionsPBSTree({
         const pbsData = await loadPBSAsync(projectId)
         if (pbsData.nodes.length > 0) {
           await componentService.syncPBSToComponents(projectId, pbsData.nodes)
+          queryClient.invalidateQueries({ queryKey: ['component-tree', projectId] })
         }
       } catch (err) {
         console.warn('Failed to sync PBS data:', err)
@@ -173,47 +174,13 @@ export default function FunctionsPBSTree({
       }
     }
     syncPBS()
-  }, [projectId, pbsSynced])
+  }, [projectId, pbsSynced, queryClient])
 
   const { data: componentTree = [] } = useQuery({
-    queryKey: ['pbs-local', projectId],
+    queryKey: ['component-tree', projectId],
     queryFn: async () => {
-      const pbsData = await loadPBSAsync(projectId)
-      const nodes = pbsData.nodes
-      const nodeMap = new Map<string, any>()
-      const rootNodes: any[] = []
-
-      nodes.forEach(node => {
-        nodeMap.set(node.id, {
-          id: node.id,
-          projectId: projectId!,
-          parentId: node.parentId,
-          name: node.name,
-          description: node.description,
-          sortOrder: node.orderIndex,
-          createdAt: node.createdAt,
-          updatedAt: node.updatedAt,
-          children: [],
-        })
-      })
-
-      nodes.forEach(node => {
-        const component = nodeMap.get(node.id)
-        if (node.parentId && nodeMap.has(node.parentId)) {
-          nodeMap.get(node.parentId).children.push(component)
-        } else {
-          rootNodes.push(component)
-        }
-      })
-
-      const sortNodes = (n: any[]) => {
-        n.sort((a, b) => a.sortOrder - b.sortOrder)
-        n.forEach(child => {
-          if (child.children.length > 0) sortNodes(child.children)
-        })
-      }
-      sortNodes(rootNodes)
-      return rootNodes
+      const response = await componentService.getComponentTree(projectId!)
+      return response.success && response.data ? response.data : []
     },
     enabled: !!projectId,
   })
