@@ -222,7 +222,6 @@ export default function CreateRequirementModal({
     certification: false,
   })
   // Premium Traceability
-  const [sourceDocumentInput, setSourceDocumentInput] = useState('')
   const [linkRationale, setLinkRationale] = useState('')
   const [traceLinks, setTraceLinks] = useState<{ targetId: string; targetType: string; linkType: string; rationale: string; targetDisplayId?: string }[]>([])
   const [quickLinksRequirements, setQuickLinksRequirements] = useState<string[]>([])
@@ -569,23 +568,6 @@ export default function CreateRequirementModal({
     setFormData((prev) => ({
       ...prev,
       tags: prev.tags?.filter((t) => t !== tag) || [],
-    }))
-  }
-
-  const handleAddSourceDocument = () => {
-    if (sourceDocumentInput.trim() && !formData.relatedDocuments?.includes(sourceDocumentInput.trim())) {
-      setFormData((prev) => ({
-        ...prev,
-        relatedDocuments: [...(prev.relatedDocuments || []), sourceDocumentInput.trim()],
-      }))
-      setSourceDocumentInput('')
-    }
-  }
-
-  const handleRemoveSourceDocument = (doc: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      relatedDocuments: prev.relatedDocuments?.filter((d) => d !== doc) || [],
     }))
   }
 
@@ -1634,7 +1616,7 @@ export default function CreateRequirementModal({
                   </div>
                   <div className="grid grid-cols-4 gap-2 text-xs">
                     {[
-                      { label: 'Source / Parent', filled: !!formData.parentId || traceLinks.some(l => l.linkType === 'derives_from') || (formData.relatedDocuments?.length ?? 0) > 0, icon: GitBranch },
+                      { label: 'Source / Parent', filled: !!formData.parentId || traceLinks.some(l => l.linkType === 'derives_from') || quickLinksDocuments.length > 0, icon: GitBranch },
                       { label: 'Verification', filled: quickLinksVerification.length > 0, icon: ClipboardCheck },
                       { label: 'Allocation', filled: quickLinksPbs.length > 0 || quickLinksFunctions.length > 0 || !!formData.componentId, icon: Target },
                       { label: 'Compliance', filled: quickLinksCompliance.length > 0 || quickLinksCertification.length > 0, icon: Shield },
@@ -1712,54 +1694,15 @@ export default function CreateRequirementModal({
                     <GitBranch size={16} className="text-blue-500" />
                     <span className="text-sm font-semibold text-gray-900 dark:text-white">Origin & Upward Traceability</span>
                     <span className="text-[10px] text-gray-400 font-normal ml-auto uppercase">INCOSE 4.2.3</span>
-                    {((formData.parentId ? 1 : 0) + (formData.relatedDocuments?.length || 0) + quickLinksDocuments.length) > 0 && (
-                      <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 rounded-full">
-                        {(formData.parentId ? 1 : 0) + (formData.relatedDocuments?.length || 0) + quickLinksDocuments.length}
+                    {((formData.parentId ? 1 : 0) + quickLinksDocuments.length) > 0 && (
+                        <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 rounded-full">
+                        {(formData.parentId ? 1 : 0) + quickLinksDocuments.length}
                       </span>
                     )}
                   </button>
                   {traceSection.origin && (
                     <div className="p-4 space-y-4 border-t border-gray-200 dark:border-gray-700">
-                      {/* Reference Documents */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                          Reference Documents
-                        </label>
-                        <div className="flex gap-2 mb-2">
-                          <input
-                            type="text"
-                            value={sourceDocumentInput}
-                            onChange={(e) => setSourceDocumentInput(e.target.value)}
-                            className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                            placeholder="e.g. SOW Section 3.1, Architecture Doc v2"
-                            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSourceDocument())}
-                          />
-                          <button
-                            type="button"
-                            onClick={handleAddSourceDocument}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-                          >
-                            <Plus size={16} />
-                          </button>
-                        </div>
-                        {formData.relatedDocuments && formData.relatedDocuments.length > 0 && (
-                          <div className="flex flex-col gap-2">
-                            {formData.relatedDocuments.map((doc, idx) => (
-                              <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700">
-                                <span className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                                  <FileText size={14} className="text-gray-400" />
-                                  {doc}
-                                </span>
-                                <button type="button" onClick={() => handleRemoveSourceDocument(doc)} className="text-gray-400 hover:text-red-500">
-                                  <X size={14} />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Linked Documents (from Document module) */}
+                      {/* Linked Documents (documented_in) */}
                       {LINKAGE_V1 && (
                         <QuickLinkSelector
                           label="Linked Documents (documented_in)"
@@ -2106,7 +2049,7 @@ export default function CreateRequirementModal({
                 </div>
 
                 {/* ═══════ Section 4: Verification & Validation (DO-178C Table A-7) ═══════ */}
-                <div className="border border-gray-200 dark:border-gray-700 rounded-lg">
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                   <button
                     type="button"
                     onClick={() => setTraceSection(prev => ({ ...prev, verification: !prev.verification }))}
