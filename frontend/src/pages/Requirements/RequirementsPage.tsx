@@ -304,14 +304,14 @@ export default function RequirementsPage() {
   })
 
   useEffect(() => {
-    if (!focusRequirementId || requirements.length === 0) return
-    const req = requirements.find(
-      (item) => item.id === focusRequirementId || item.requirementId === focusRequirementId
-    )
+    if (!focusRequirementId) return
+    const req =
+      requirements.find((r) => r.id === focusRequirementId || r.requirementId === focusRequirementId) ??
+      allRequirements.find((r) => r.id === focusRequirementId || r.requirementId === focusRequirementId)
     if (req) {
       setDetailRequirement(req)
     }
-  }, [focusRequirementId, requirements])
+  }, [focusRequirementId, requirements, allRequirements])
 
   // Fetch functions for linking
   const { data: functions = [] } = useQuery({
@@ -1583,6 +1583,7 @@ export default function RequirementsPage() {
                 onComponentSelect={setSelectedComponentId}
                 links={LINKAGE_V1 ? links : []}
                 onLinkedElementClick={handleLinkedElementClick}
+                onRequirementClick={setDetailRequirement}
               />
             </div>
             {/* Resize handle */}

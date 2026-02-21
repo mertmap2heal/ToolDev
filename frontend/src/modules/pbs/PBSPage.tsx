@@ -901,6 +901,7 @@ export default function PBSPage() {
                   }}
                   links={LINKAGE_V1 ? links : []}
                   onLinkedElementClick={handleLinkedElementClick}
+                  onRequirementClick={(req) => navigate(`/projects/${projectId}/requirements?requirementId=${req.id}`)}
                 />
               ) : (
                 <FunctionsPBSTree

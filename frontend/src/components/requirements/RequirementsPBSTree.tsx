@@ -40,6 +40,7 @@ interface RequirementsPBSTreeProps {
   onComponentSelect: (componentId: string | null) => void
   links?: LinkLike[]
   onLinkedElementClick?: (payload: LinkedElementClickPayload) => void
+  onRequirementClick?: (req: Requirement) => void
 }
 
 interface FlatTreeItem {
@@ -259,6 +260,7 @@ export default function RequirementsPBSTree({
   onComponentSelect,
   links = [],
   onLinkedElementClick,
+  onRequirementClick,
 }: RequirementsPBSTreeProps) {
   const queryClient = useQueryClient()
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['unassigned']))
@@ -557,10 +559,18 @@ export default function RequirementsPBSTree({
                       return (
                         <div
                           key={item.id}
-                          className="group flex items-center gap-2 px-3 py-1.5 mx-2 text-sm rounded-lg cursor-grab hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border border-transparent hover:border-gray-100 dark:hover:border-gray-700"
+                          role={onRequirementClick ? 'button' : undefined}
+                          tabIndex={onRequirementClick ? 0 : undefined}
+                          onClick={() => onRequirementClick?.(req)}
+                          onKeyDown={(e) => { if (onRequirementClick && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onRequirementClick(req) } }}
+                          className={clsx(
+                            'group flex items-center gap-2 px-3 py-1.5 mx-2 text-sm rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border border-transparent hover:border-gray-100 dark:hover:border-gray-700',
+                            onRequirementClick ? 'cursor-pointer' : 'cursor-grab'
+                          )}
                           style={{ paddingLeft: `${item.depth * 16 + 12}px` }}
                           draggable
                           onDragStart={(e) => handleDragStart(e, req.id)}
+                          title={onRequirementClick ? 'Click to preview' : undefined}
                         >
                           <button
                             type="button"
