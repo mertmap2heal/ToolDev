@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { X, ChevronDown, Link2, Download, Search, Check, Plus, FileCode } from 'lucide-react'
+import { X, ChevronDown, Link2, Download, Search, Check, Plus, FileCode, Play } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
 import { requirementService } from '../../services/requirement.service'
@@ -8,6 +8,7 @@ import ReportExporter from './ReportExporter'
 import ExportWithTemplateModal from './ExportWithTemplateModal'
 import CustomSectionEditor from './CustomSectionEditor'
 import VerificationLifecycle from './VerificationLifecycle'
+import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
 import clsx from 'clsx'
 
 interface TestCaseDetailDrawerProps {
@@ -715,6 +716,11 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
             <LinkedTestResultsSection testCaseId={currentCase?.id} projectId={projectId} />
           )}
 
+          {/* Execution history (runs that executed this test case) */}
+          {!isEditing && currentCase?.id && (
+            <ExecutionHistorySection testCaseId={currentCase.id} projectId={projectId} />
+          )}
+
           {/* Custom Sections */}
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -1042,6 +1048,57 @@ function VerifiesElementsSection({ testCaseId, projectId }: { testCaseId?: strin
       <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
         Link this test case to requirements or functions it verifies
       </p>
+    </div>
+  )
+}
+
+function ExecutionHistorySection({ testCaseId, projectId }: { testCaseId: string; projectId: string }) {
+  const drawer = useVerificationDrawer()
+  const { data: runResults = [] } = useQuery({
+    queryKey: ['run-results', projectId, testCaseId],
+    queryFn: async () => {
+      const res = (await verificationService.getRunResultsForTestCase(projectId, testCaseId)) as { success?: boolean; data?: any[] }
+      return res.success && res.data ? res.data : []
+    },
+    enabled: !!testCaseId && !!projectId,
+  })
+  const getStatusColor = (s: string) => {
+    if (s === 'PASS' || s === 'PASSED_WITH_ERRORS') return 'text-green-600 dark:text-green-400'
+    if (s === 'FAIL') return 'text-red-600 dark:text-red-400'
+    if (s === 'BLOCKED') return 'text-yellow-600 dark:text-yellow-400'
+    return 'text-gray-500 dark:text-gray-400'
+  }
+  if (runResults.length === 0) return null
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Execution history</label>
+      <div className="space-y-2">
+        {runResults.map((rr: any) => (
+          <button
+            key={rr.id}
+            onClick={() => rr.testRun && drawer.openRun?.(rr.testRun)}
+            className="flex items-center justify-between w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 text-left"
+          >
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">{rr.testRun?.runName || 'Run'}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {rr.testRun?.testPlan?.key || 'N/A'} — {rr.testRun?.testPlan?.name || ''}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-medium ${getStatusColor(rr.resultStatus || 'NOT_RUN')}`}>
+                {rr.resultStatus || 'NOT_RUN'}
+              </span>
+              {rr.testRun?.createdAt && (
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {new Date(rr.testRun.createdAt).toLocaleDateString()}
+                </span>
+              )}
+              <Play size={14} className="text-gray-500" />
+            </div>
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

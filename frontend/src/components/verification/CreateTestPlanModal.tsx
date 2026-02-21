@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
-import CustomDropdown from './CustomDropdown'
 import clsx from 'clsx'
 
 interface CreateTestPlanModalProps {
@@ -21,9 +20,9 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
     scope: '',
     entryCriteria: '',
     exitCriteria: '',
-    phase: '',
-    ownerUserId: '',
   })
+  const [selectedTestingEnvironments, setSelectedTestingEnvironments] = useState<Set<string>>(new Set())
+  const [selectedTestingTools, setSelectedTestingTools] = useState<Set<string>>(new Set())
 
   // Selection State
   const [selectedTestCaseIds, setSelectedTestCaseIds] = useState<Set<string>>(new Set())
@@ -60,6 +59,21 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
     enabled: isOpen,
   })
 
+  const { data: environmentOptions = [] } = useQuery({
+    queryKey: ['custom-options', projectId, 'ENVIRONMENT_TYPE'],
+    queryFn: () => verificationService.getCustomOptions(projectId, 'ENVIRONMENT_TYPE'),
+    enabled: isOpen && activeTab === 'general',
+  })
+
+  const { data: testingToolOptions = [] } = useQuery({
+    queryKey: ['custom-options', projectId, 'TESTING_TOOL'],
+    queryFn: () => verificationService.getCustomOptions(projectId, 'TESTING_TOOL'),
+    enabled: isOpen && activeTab === 'general',
+  })
+
+  const envOptions: { id: string; value: string }[] = environmentOptions?.success && environmentOptions?.data ? (environmentOptions.data as { id: string; value: string }[]) : []
+  const toolOptions: { id: string; value: string }[] = testingToolOptions?.success && testingToolOptions?.data ? (testingToolOptions.data as { id: string; value: string }[]) : []
+
   // Combine requirements and functions for "Verifies" tab
   const verifyTargets = [
     ...requirements.map((r: any) => ({ ...r, type: 'requirement', label: r.title, identifier: r.requirementId })),
@@ -75,8 +89,13 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
 
   const createPlanMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      // 1. Create Plan
-      const res = await verificationService.createTestPlan(projectId, data)
+      // 1. Create Plan (owner derived from creator on backend; no phase/ownerUserId sent)
+      const payload = {
+        ...data,
+        testingEnvironmentIds: Array.from(selectedTestingEnvironments),
+        testingToolIds: Array.from(selectedTestingTools),
+      }
+      const res = await verificationService.createTestPlan(projectId, payload)
       if (!res.success) throw new Error(res.error)
       const planId = res.data.id
 
@@ -95,6 +114,7 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['test-plans', projectId] })
       queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
       onClose()
       // Reset form
       setFormData({
@@ -103,9 +123,9 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
         scope: '',
         entryCriteria: '',
         exitCriteria: '',
-        phase: '',
-        ownerUserId: '',
       })
+      setSelectedTestingEnvironments(new Set())
+      setSelectedTestingTools(new Set())
       setSelectedTestCaseIds(new Set())
       setSelectedLinks([])
       setActiveTab('general')
@@ -116,6 +136,20 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     createPlanMutation.mutate(formData)
+  }
+
+  const toggleTestingEnvironment = (value: string) => {
+    const next = new Set(selectedTestingEnvironments)
+    if (next.has(value)) next.delete(value)
+    else next.add(value)
+    setSelectedTestingEnvironments(next)
+  }
+
+  const toggleTestingTool = (value: string) => {
+    const next = new Set(selectedTestingTools)
+    if (next.has(value)) next.delete(value)
+    else next.add(value)
+    setSelectedTestingTools(next)
   }
 
   const toggleTestCase = (id: string) => {
@@ -192,30 +226,67 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Phase
-                    </label>
-                    <CustomDropdown
-                      value={formData.phase}
-                      onChange={(value) => setFormData({ ...formData, phase: value })}
-                      optionType="PHASE"
-                      projectId={projectId}
-                      placeholder="Select phase"
-                    />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Testing Environment
+                  </label>
+                  <div className="grid grid-cols-1 gap-2 max-h-[140px] overflow-y-auto p-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                    {envOptions.length === 0 ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 py-2">No environments configured.</p>
+                    ) : (
+                      envOptions.map((opt) => (
+                        <label
+                          key={opt.id}
+                          className={clsx(
+                            "flex items-center gap-2 p-2 rounded cursor-pointer",
+                            selectedTestingEnvironments.has(opt.value) ? "bg-blue-50 dark:bg-blue-900/20" : "hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                          )}
+                        >
+                          <div className={clsx(selectedTestingEnvironments.has(opt.value) ? "text-blue-600 dark:text-blue-400" : "text-gray-400")}>
+                            {selectedTestingEnvironments.has(opt.value) ? <CheckSquare size={18} /> : <Square size={18} />}
+                          </div>
+                          <span className="text-sm text-gray-900 dark:text-white">{opt.value}</span>
+                          <input
+                            type="checkbox"
+                            checked={selectedTestingEnvironments.has(opt.value)}
+                            onChange={() => toggleTestingEnvironment(opt.value)}
+                            className="sr-only"
+                          />
+                        </label>
+                      ))
+                    )}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Owner User ID
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.ownerUserId}
-                      onChange={(e) => setFormData({ ...formData, ownerUserId: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      placeholder="Optional"
-                    />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Testing Tools
+                  </label>
+                  <div className="grid grid-cols-1 gap-2 max-h-[140px] overflow-y-auto p-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                    {toolOptions.length === 0 ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 py-2">No testing tools configured.</p>
+                    ) : (
+                      toolOptions.map((opt) => (
+                        <label
+                          key={opt.id}
+                          className={clsx(
+                            "flex items-center gap-2 p-2 rounded cursor-pointer",
+                            selectedTestingTools.has(opt.value) ? "bg-blue-50 dark:bg-blue-900/20" : "hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                          )}
+                        >
+                          <div className={clsx(selectedTestingTools.has(opt.value) ? "text-blue-600 dark:text-blue-400" : "text-gray-400")}>
+                            {selectedTestingTools.has(opt.value) ? <CheckSquare size={18} /> : <Square size={18} />}
+                          </div>
+                          <span className="text-sm text-gray-900 dark:text-white">{opt.value}</span>
+                          <input
+                            type="checkbox"
+                            checked={selectedTestingTools.has(opt.value)}
+                            onChange={() => toggleTestingTool(opt.value)}
+                            className="sr-only"
+                          />
+                        </label>
+                      ))
+                    )}
                   </div>
                 </div>
 

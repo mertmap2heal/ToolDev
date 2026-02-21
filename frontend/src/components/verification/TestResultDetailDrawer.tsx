@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { X, Download, Trash2, Edit2, Link2, Unlink } from 'lucide-react'
+import { X, Download, Trash2, Edit2, Link2, Unlink, Play } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
 import clsx from 'clsx'
+import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
 
 interface TestResultDetailDrawerProps {
   testResult: any
@@ -42,6 +43,7 @@ export default function TestResultDetailDrawer({
     notes: '',
   })
   const queryClient = useQueryClient()
+  const drawer = useVerificationDrawer()
 
   // Fetch full test result details
   const { data: resultDetails } = useQuery<{ links?: Array<{ id: string; linkedEntityType: string; linkedEntityId: string }> } | null>({
@@ -438,6 +440,23 @@ export default function TestResultDetailDrawer({
                     </p>
                   )}
                 </div>
+
+                {(currentResult.sourceTestRunId || currentResult.sourceTestRun) && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Source</h4>
+                    <button
+                      onClick={() =>
+                        drawer.openRun?.(
+                          currentResult.sourceTestRun || { id: currentResult.sourceTestRunId }
+                        )
+                      }
+                      className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      <Play size={14} />
+                      Test Run: {currentResult.sourceTestRun?.runName || currentResult.sourceTestRunId?.slice(0, 8) || 'View'}
+                    </button>
+                  </div>
+                )}
 
                 {currentResult.executedAt && (
                   <div>

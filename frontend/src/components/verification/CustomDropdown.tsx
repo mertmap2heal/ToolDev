@@ -3,7 +3,7 @@ import { Trash2, Plus, ChevronDown, X } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
 
-export type CustomOptionType = 'ENVIRONMENT_TYPE' | 'COMPONENT_TYPE' | 'INTERFACE_TYPE' | 'PHASE'
+export type CustomOptionType = 'ENVIRONMENT_TYPE' | 'COMPONENT_TYPE' | 'INTERFACE_TYPE' | 'PHASE' | 'TESTING_TOOL'
 
 interface CustomOption {
   id: string

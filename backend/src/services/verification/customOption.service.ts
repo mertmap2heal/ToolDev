@@ -1,4 +1,4 @@
-export type CustomOptionType = 'ENVIRONMENT_TYPE' | 'COMPONENT_TYPE' | 'INTERFACE_TYPE' | 'PHASE'
+export type CustomOptionType = 'ENVIRONMENT_TYPE' | 'COMPONENT_TYPE' | 'INTERFACE_TYPE' | 'PHASE' | 'TESTING_TOOL'
 
 export interface CustomOption {
   id: string
@@ -33,6 +33,8 @@ export function getSystemDefaults(optionType: CustomOptionType): string[] {
       return ['Port', 'Bus', 'Connector', 'Network', 'Other']
     case 'PHASE':
       return ['Srr', 'Pdr', 'Cdr', 'Trr', 'Qualification', 'Certification', 'Other']
+    case 'TESTING_TOOL':
+      return []
     default:
       return []
   }

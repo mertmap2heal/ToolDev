@@ -75,6 +75,7 @@ export const ingestAutomatedResult = async (req: AuthRequest, res: Response): Pr
                         testRunId: testRun.id,
                         testCaseId: testCase.id,
                         testCaseVersionSnapshot: { version: testCase.version, title: testCase.title },
+                        parentTestCaseVersionAtExecution: testCase.version,
                         resultStatus: result.status,
                         actualResults: result.actualResults || {},
                         executedAt: result.executedAt ? new Date(result.executedAt) : new Date(),
@@ -101,17 +102,72 @@ export const ingestAutomatedResult = async (req: AuthRequest, res: Response): Pr
     }
 }
 
+export const getTestRun = async (req: AuthRequest, res: Response): Promise<Response | void> => {
+    try {
+        const { projectId, runId } = req.params
+        const run = await prisma.verTestRun.findFirst({
+            where: { id: runId, projectId, deletedAt: null },
+            include: {
+                environment: true,
+                testPlan: {
+                    select: {
+                        id: true,
+                        key: true,
+                        name: true,
+                        entryCriteria: true,
+                        exitCriteria: true,
+                        scope: true,
+                        phase: true,
+                        testingEnvironmentIds: true,
+                        testingToolIds: true,
+                    },
+                },
+                results: {
+                    include: {
+                        testCase: {
+                            include: {
+                                testCaseSetups: { include: { setup: true } },
+                            },
+                        },
+                        actualResultBlocks: true,
+                    },
+                    orderBy: { createdAt: 'asc' },
+                },
+            },
+        })
+        if (!run) return res.status(404).json({ success: false, error: 'Test run not found' })
+        res.json({ success: true, data: run })
+    } catch (error: any) {
+        console.error('Get Test Run error:', error)
+        res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+    }
+}
+
 export const getTestRuns = async (req: AuthRequest, res: Response): Promise<Response | void> => {
     try {
         const { projectId } = req.params
+        const includeDeleted = (req.query.includeDeleted as string) === 'true'
+        const testPlanId = req.query.testPlanId as string | undefined
+        const where: { projectId: string; deletedAt?: null; testPlanId?: string } = { projectId }
+        if (!includeDeleted) where.deletedAt = null
+        if (testPlanId) where.testPlanId = testPlanId
+
         const testRuns = await prisma.verTestRun.findMany({
-            where: { projectId },
+            where,
             include: {
                 environment: true,
                 testPlan: { select: { key: true, name: true } },
-                results: { select: { id: true, resultStatus: true, testCaseId: true, isSuspect: true } }
+                results: {
+                    select: {
+                        id: true,
+                        resultStatus: true,
+                        testCaseId: true,
+                        isSuspect: true,
+                        isOutOfSync: true,
+                    },
+                },
             },
-            orderBy: { createdAt: 'desc' }
+            orderBy: { createdAt: 'desc' },
         })
         res.json({ success: true, data: testRuns })
     } catch (error: any) {
@@ -119,22 +175,57 @@ export const getTestRuns = async (req: AuthRequest, res: Response): Promise<Resp
         res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
     }
 }
+/**
+ * Soft-delete only. Per 21 CFR Part 11, hard delete of test runs is forbidden.
+ * Sets deletedAt; record remains for audit. Use ?includeDeleted=true when listing to see archived runs.
+ */
+/** Get run results (VerTestRunResult) for a specific test case - for execution history in TestCase drawer */
+export const getRunResultsForTestCase = async (req: AuthRequest, res: Response): Promise<Response | void> => {
+    try {
+        const { projectId, id: testCaseId } = req.params
+        const results = await prisma.verTestRunResult.findMany({
+            where: {
+                testCaseId,
+                testRun: { projectId, deletedAt: null },
+            },
+            include: {
+                testRun: {
+                    select: {
+                        id: true,
+                        runName: true,
+                        status: true,
+                        executedAt: true,
+                        actualDurationSeconds: true,
+                        createdAt: true,
+                        testPlan: { select: { id: true, key: true, name: true } },
+                    },
+                },
+            },
+            orderBy: { createdAt: 'desc' },
+        })
+        res.json({ success: true, data: results })
+    } catch (error: any) {
+        console.error('Get run results for test case error:', error)
+        res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+    }
+}
+
 export const deleteTestRun = async (req: AuthRequest, res: Response): Promise<Response | void> => {
     try {
         const { projectId, id } = req.params
 
         const testRun = await prisma.verTestRun.findUnique({
-            where: { id: id }
+            where: { id },
         })
 
         if (!testRun || testRun.projectId !== projectId) return res.status(404).json({ success: false, error: 'Test run not found' })
 
-        // Cascades should handle testRunResults and testLogs
-        await prisma.verTestRun.delete({
-            where: { id: id }
+        await prisma.verTestRun.update({
+            where: { id },
+            data: { deletedAt: new Date() },
         })
 
-        res.json({ success: true, message: 'Test run deleted successfully' })
+        res.json({ success: true, message: 'Test run archived (soft-deleted). Record preserved for audit.' })
     } catch (error: any) {
         console.error('Delete Test Run error:', error)
         res.status(500).json({ success: false, error: error?.message || 'Internal server error' })

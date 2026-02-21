@@ -18,7 +18,9 @@ import * as testResultController from '../controllers/verification/testResult.co
 import * as customSectionController from '../controllers/verification/customSection.controller'
 import * as templateController from '../controllers/verification/template.controller'
 import * as runIngestionController from '../controllers/verificationV2/runIngestion.controller'
+import * as testRunController from '../controllers/verification/testRun.controller'
 import { reportService } from '../services/verification/report.service'
+import { traceabilityMatrixService } from '../services/verification/TraceabilityMatrixService'
 import { exportTemplateService } from '../services/verification/exportTemplate.service'
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
@@ -61,6 +63,7 @@ router.delete('/custom-options/:projectId/:id', customOptionController.removeCus
 // D) Test Cases
 router.get('/test-cases/:projectId', testCaseController.getTestCases)
 router.post('/test-cases/:projectId', testCaseController.createTestCase)
+router.get('/test-cases/:projectId/:id/run-results', runIngestionController.getRunResultsForTestCase)
 router.get('/test-cases/:projectId/:id', testCaseController.getTestCase)
 router.patch('/test-cases/:projectId/:id', testCaseController.updateTestCase)
 router.delete('/test-cases/:projectId/:id', testCaseController.deleteTestCase)
@@ -109,6 +112,29 @@ router.post('/evidence/:projectId/:id/unlink', evidenceController.unlinkEvidence
 // H) Coverage
 router.get('/coverage/:projectId/moc-summary', coverageController.getMocSummary)
 router.get('/coverage/:projectId/plan/:planId', coverageController.getPlanCoverage)
+
+// H.1) Traceability Matrix (Req -> TC -> TestRun)
+router.get('/traceability-matrix/:projectId', async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+    const considerPassedWithErrors = req.query.considerPassedWithErrors !== 'false'
+    const data = await traceabilityMatrixService.getTraceabilityMatrix(projectId, { considerPassedWithErrors })
+    res.json({ success: true, data })
+  } catch (error: any) {
+    console.error('Traceability matrix error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+})
+router.get('/traceability-matrix/:projectId/gaps', async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+    const gaps = await traceabilityMatrixService.getCoverageGaps(projectId)
+    res.json({ success: true, data: gaps })
+  } catch (error: any) {
+    console.error('Coverage gaps error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+})
 
 // I) Reviews
 router.get('/reviews/:projectId', reviewController.getReviews)
@@ -161,9 +187,20 @@ router.post('/test-results/:projectId/:id/link', testResultController.linkTestRe
 router.post('/test-results/:projectId/:id/unlink', testResultController.unlinkTestResult)
 router.get('/test-results/:projectId/:id/download', testResultController.downloadTestResult)
 
-// N.1) Test Runs (Automated Ingestion)
+// N.1) Test Runs (Automated Ingestion + Manual)
 router.post('/runs/ingest/:projectId', runIngestionController.ingestAutomatedResult)
 router.get('/test-runs/:projectId', runIngestionController.getTestRuns)
+router.get('/test-runs/:projectId/:runId', runIngestionController.getTestRun)
+router.post('/test-runs/:projectId', testRunController.createTestRun)
+router.patch('/test-runs/:projectId/:runId', testRunController.updateTestRun)
+router.post('/test-runs/:projectId/:runId/start', testRunController.startTimer)
+router.post('/test-runs/:projectId/:runId/pause', testRunController.pauseTimer)
+router.post('/test-runs/:projectId/:runId/resume', testRunController.resumeTimer)
+router.post('/test-runs/:projectId/:runId/stop', testRunController.stopTimer)
+router.post('/test-runs/:projectId/:runId/complete-and-export', testRunController.completeAndExport)
+router.patch('/test-runs/:projectId/:runId/results/:resultId', testRunController.updateRunResult)
+router.post('/test-runs/:projectId/:runId/results/:resultId/sync', testRunController.syncRunResult)
+router.post('/test-runs/:projectId/:runId/results/:resultId/evidence', testRunController.uploadEvidence)
 router.delete('/test-runs/:projectId/:id', runIngestionController.deleteTestRun)
 
 // Reports

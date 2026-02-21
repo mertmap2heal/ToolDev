@@ -6,6 +6,7 @@ import {
   Settings,
   FileCode,
   Play,
+  Table2,
 } from 'lucide-react'
 
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
@@ -14,6 +15,7 @@ import TestPlanDetailDrawer from '../../components/verification/TestPlanDetailDr
 import TestCaseDetailDrawer from '../../components/verification/TestCaseDetailDrawer'
 import TestSetupDetailDrawer from '../../components/verification/TestSetupDetailDrawer'
 import TestResultDetailDrawer from '../../components/verification/TestResultDetailDrawer'
+import TestRunDetailDrawer from '../../components/verification/TestRunDetailDrawer'
 import clsx from 'clsx'
 
 const MAIN_TABS = [
@@ -23,6 +25,7 @@ const MAIN_TABS = [
   { id: 'runs', label: 'Test Runs', icon: Play },
   { id: 'setups', label: 'Test Setups', icon: Settings },
   { id: 'results', label: 'Test Results', icon: CheckCircle },
+  { id: 'traceability', label: 'Traceability Matrix', icon: Table2 },
 ]
 
 function VerificationLayoutInner() {
@@ -31,6 +34,8 @@ function VerificationLayoutInner() {
   const location = useLocation()
   const isTemplates = location.pathname.includes('/verification/templates')
   const tabParam = new URLSearchParams(location.search).get('tab') || 'overview'
+  const validTabs = ['overview', 'plans', 'cases', 'runs', 'setups', 'results', 'traceability']
+  const activeTabParam = validTabs.includes(tabParam) ? tabParam : 'overview'
   const drawer = useVerificationDrawer()
 
   const handleMainTab = (tabId: string) => {
@@ -53,7 +58,7 @@ function VerificationLayoutInner() {
           <div className="flex border-b border-gray-200 dark:border-gray-700">
             {MAIN_TABS.map((tab) => {
               const Icon = tab.icon
-              const active = !isTemplates && tabParam === tab.id
+              const active = !isTemplates && activeTabParam === tab.id
               return (
                 <button
                   key={tab.id}
@@ -115,6 +120,12 @@ function VerificationLayoutInner() {
             testResult={drawer.selectedResult}
             isOpen={drawer.isResultDrawerOpen}
             onClose={drawer.closeResult}
+            projectId={projectId}
+          />
+          <TestRunDetailDrawer
+            run={drawer.selectedRun}
+            isOpen={drawer.isRunDrawerOpen}
+            onClose={drawer.closeRun}
             projectId={projectId}
           />
         </>

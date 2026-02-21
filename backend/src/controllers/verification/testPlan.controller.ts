@@ -85,7 +85,7 @@ export const getTestPlan = async (req: AuthRequest, res: Response) => {
 export const createTestPlan = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
-    const { key, name, description, scope, entryCriteria, exitCriteria, phase, ownerUserId } = req.body
+    const { key, name, description, scope, entryCriteria, exitCriteria, testingEnvironmentIds, testingToolIds } = req.body
     if (!name) return res.status(400).json({ success: false, error: 'Name is required' })
     const planKey = key || await verificationService.generateTestPlanKey(projectId)
     const existing = await prisma.verTestPlan.findFirst({ where: { projectId, key: planKey } })
@@ -99,8 +99,9 @@ export const createTestPlan = async (req: AuthRequest, res: Response) => {
         scope,
         entryCriteria,
         exitCriteria,
-        phase,
-        ownerUserId: ownerUserId || req.userId,
+        ownerUserId: req.userId,
+        testingEnvironmentIds: Array.isArray(testingEnvironmentIds) ? testingEnvironmentIds : null,
+        testingToolIds: Array.isArray(testingToolIds) ? testingToolIds : null,
         status: TestPlanStatus.DRAFT,
       },
     })
@@ -124,13 +125,16 @@ export const updateTestPlan = async (req: AuthRequest, res: Response) => {
     const { projectId, id } = req.params
     const existing = await prisma.verTestPlan.findFirst({ where: { id, projectId } })
     if (!existing) return res.status(404).json({ success: false, error: 'Test plan not found' })
-    const { name, description, scope, entryCriteria, exitCriteria, phase, ownerUserId, status } = req.body
+    const { name, description, scope, entryCriteria, exitCriteria, phase, ownerUserId, testingEnvironmentIds, testingToolIds, status } = req.body
     if (status && status !== existing.status) {
       statusTransitionService.validateTransition('TEST_PLAN', existing.status, status)
     }
+    const updateData: Record<string, unknown> = { name, description, scope, entryCriteria, exitCriteria, phase, ownerUserId, status }
+    if (testingEnvironmentIds !== undefined) updateData.testingEnvironmentIds = Array.isArray(testingEnvironmentIds) ? testingEnvironmentIds : null
+    if (testingToolIds !== undefined) updateData.testingToolIds = Array.isArray(testingToolIds) ? testingToolIds : null
     const updated = await prisma.verTestPlan.update({
       where: { id },
-      data: { name, description, scope, entryCriteria, exitCriteria, phase, ownerUserId, status },
+      data: updateData,
     })
     if (status && status !== existing.status) {
       await auditService.logStatusChange({

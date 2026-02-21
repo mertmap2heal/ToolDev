@@ -38,6 +38,7 @@ export const getTestResult = async (req: AuthRequest, res: Response) => {
       where: { id, projectId },
       include: {
         setup: true,
+        sourceTestRun: true,
         links: {
           include: {
             testResult: true,

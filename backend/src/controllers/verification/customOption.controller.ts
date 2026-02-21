@@ -17,10 +17,10 @@ export const getCustomOptions = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId, optionType } = req.params
 
-    if (!['ENVIRONMENT_TYPE', 'COMPONENT_TYPE', 'INTERFACE_TYPE', 'PHASE'].includes(optionType)) {
+    if (!['ENVIRONMENT_TYPE', 'COMPONENT_TYPE', 'INTERFACE_TYPE', 'PHASE', 'TESTING_TOOL'].includes(optionType)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid optionType. Must be ENVIRONMENT_TYPE, COMPONENT_TYPE, INTERFACE_TYPE, or PHASE',
+        error: 'Invalid optionType. Must be ENVIRONMENT_TYPE, COMPONENT_TYPE, INTERFACE_TYPE, PHASE, or TESTING_TOOL',
       })
     }
 
@@ -100,10 +100,10 @@ export const addCustomOption = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    if (!['ENVIRONMENT_TYPE', 'COMPONENT_TYPE', 'INTERFACE_TYPE', 'PHASE'].includes(optionType)) {
+    if (!['ENVIRONMENT_TYPE', 'COMPONENT_TYPE', 'INTERFACE_TYPE', 'PHASE', 'TESTING_TOOL'].includes(optionType)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid optionType. Must be ENVIRONMENT_TYPE, COMPONENT_TYPE, INTERFACE_TYPE, or PHASE',
+        error: 'Invalid optionType. Must be ENVIRONMENT_TYPE, COMPONENT_TYPE, INTERFACE_TYPE, PHASE, or TESTING_TOOL',
       })
     }
 

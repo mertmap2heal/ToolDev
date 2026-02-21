@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
-import { X, ChevronDown, Plus, Trash2, GripVertical, Search, Download, FileCode } from 'lucide-react'
+import { X, ChevronDown, Plus, Trash2, GripVertical, Search, Download, FileCode, CheckSquare, Square, Play } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
-import CustomDropdown from './CustomDropdown'
 import ReportExporter from './ReportExporter'
 import ExportWithTemplateModal from './ExportWithTemplateModal'
 import VerificationLifecycle from './VerificationLifecycle'
+import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
 import clsx from 'clsx'
 
 interface TestPlanDetailDrawerProps {
@@ -26,8 +26,8 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
     scope: plan?.scope || '',
     entryCriteria: plan?.entryCriteria || '',
     exitCriteria: plan?.exitCriteria || '',
-    phase: plan?.phase || '',
-    ownerUserId: plan?.ownerUserId || '',
+    testingEnvironmentIds: (plan?.testingEnvironmentIds as string[] | null) || [],
+    testingToolIds: (plan?.testingToolIds as string[] | null) || [],
   })
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
@@ -45,6 +45,21 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
     },
     enabled: isOpen && !!plan?.id,
   })
+
+  const { data: environmentOptions = [] } = useQuery({
+    queryKey: ['custom-options', projectId, 'ENVIRONMENT_TYPE'],
+    queryFn: () => verificationService.getCustomOptions(projectId, 'ENVIRONMENT_TYPE'),
+    enabled: isOpen && isEditing,
+  })
+
+  const { data: testingToolOptions = [] } = useQuery({
+    queryKey: ['custom-options', projectId, 'TESTING_TOOL'],
+    queryFn: () => verificationService.getCustomOptions(projectId, 'TESTING_TOOL'),
+    enabled: isOpen && isEditing,
+  })
+
+  const envOptions: { id: string; value: string }[] = environmentOptions?.success && environmentOptions?.data ? (environmentOptions.data as { id: string; value: string }[]) : []
+  const toolOptions: { id: string; value: string }[] = testingToolOptions?.success && testingToolOptions?.data ? (testingToolOptions.data as { id: string; value: string }[]) : []
 
   // Fetch all test cases for adding to plan
   const { data: allTestCases = [] } = useQuery({
@@ -65,6 +80,18 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
     },
     enabled: showExportModal && !!plan?.id,
   })
+
+  // Fetch test runs for this plan
+  const { data: planTestRuns = [] } = useQuery({
+    queryKey: ['test-runs', projectId, plan?.id],
+    queryFn: async () => {
+      const response = await verificationService.getTestRuns(projectId, { testPlanId: plan?.id })
+      return (response.success && response.data ? response.data : []) as any[]
+    },
+    enabled: isOpen && !!plan?.id,
+  })
+
+  const drawer = useVerificationDrawer()
 
   const updatePlanMutation = useMutation({
     mutationFn: (data: any) => verificationService.updateTestPlan(projectId, plan.id, data),
@@ -146,8 +173,8 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
         scope: currentPlan.scope || '',
         entryCriteria: currentPlan.entryCriteria || '',
         exitCriteria: currentPlan.exitCriteria || '',
-        phase: currentPlan.phase || '',
-        ownerUserId: currentPlan.ownerUserId || '',
+        testingEnvironmentIds: Array.isArray(currentPlan.testingEnvironmentIds) ? currentPlan.testingEnvironmentIds : [],
+        testingToolIds: Array.isArray(currentPlan.testingToolIds) ? currentPlan.testingToolIds : [],
       })
     }
   }, [currentPlan])
@@ -373,6 +400,33 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
                 />
               </div>
 
+              {/* Test Runs */}
+              {planTestRuns.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Test Runs</label>
+                  <div className="space-y-2">
+                    {planTestRuns.map((run: any) => (
+                      <button
+                        key={run.id}
+                        onClick={() => drawer.openRun?.(run)}
+                        className="flex items-center justify-between w-full p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 text-left"
+                      >
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">{run.runName || 'Run'}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500 dark:text-gray-400">{run.status || '—'}</span>
+                          {run.createdAt && (
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {new Date(run.createdAt).toLocaleDateString()}
+                            </span>
+                          )}
+                          <Play size={14} className="text-gray-500" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Description */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -441,39 +495,103 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
                 )}
               </div>
 
-              {/* Phase */}
+              {/* Owner (read-only, derived from creator) */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Phase
+                  Owner
+                </label>
+                <p className="text-gray-900 dark:text-white">{currentPlan?.ownerUserId || '—'}</p>
+              </div>
+
+              {/* Testing Environment */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Testing Environment
                 </label>
                 {isEditing ? (
-                  <CustomDropdown
-                    value={editData.phase}
-                    onChange={(value) => setEditData({ ...editData, phase: value })}
-                    optionType="PHASE"
-                    projectId={projectId}
-                    placeholder="Select phase"
-                  />
+                  <div className="grid grid-cols-1 gap-2 max-h-[120px] overflow-y-auto p-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                    {envOptions.length === 0 ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 py-2">No environments configured.</p>
+                    ) : (
+                      envOptions.map((opt) => (
+                        <label
+                          key={opt.id}
+                          className={clsx(
+                            "flex items-center gap-2 p-2 rounded cursor-pointer",
+                            editData.testingEnvironmentIds.includes(opt.value) ? "bg-blue-50 dark:bg-blue-900/20" : "hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                          )}
+                        >
+                          <div className={clsx(editData.testingEnvironmentIds.includes(opt.value) ? "text-blue-600 dark:text-blue-400" : "text-gray-400")}>
+                            {editData.testingEnvironmentIds.includes(opt.value) ? <CheckSquare size={18} /> : <Square size={18} />}
+                          </div>
+                          <span className="text-sm text-gray-900 dark:text-white">{opt.value}</span>
+                          <input
+                            type="checkbox"
+                            checked={editData.testingEnvironmentIds.includes(opt.value)}
+                            onChange={() => {
+                              const next = editData.testingEnvironmentIds.includes(opt.value)
+                                ? editData.testingEnvironmentIds.filter((v) => v !== opt.value)
+                                : [...editData.testingEnvironmentIds, opt.value]
+                              setEditData({ ...editData, testingEnvironmentIds: next })
+                            }}
+                            className="sr-only"
+                          />
+                        </label>
+                      ))
+                    )}
+                  </div>
                 ) : (
-                  <p className="text-gray-900 dark:text-white">{currentPlan?.phase || 'No phase specified'}</p>
+                  <p className="text-gray-900 dark:text-white">
+                    {(Array.isArray(currentPlan?.testingEnvironmentIds) && currentPlan.testingEnvironmentIds.length > 0)
+                      ? currentPlan.testingEnvironmentIds.join(', ')
+                      : 'None'}
+                  </p>
                 )}
               </div>
 
-              {/* Owner User ID */}
+              {/* Testing Tools */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Owner User ID
+                  Testing Tools
                 </label>
                 {isEditing ? (
-                  <input
-                    type="text"
-                    value={editData.ownerUserId}
-                    onChange={(e) => setEditData({ ...editData, ownerUserId: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    placeholder="Enter owner user ID (optional)"
-                  />
+                  <div className="grid grid-cols-1 gap-2 max-h-[120px] overflow-y-auto p-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                    {toolOptions.length === 0 ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 py-2">No testing tools configured.</p>
+                    ) : (
+                      toolOptions.map((opt) => (
+                        <label
+                          key={opt.id}
+                          className={clsx(
+                            "flex items-center gap-2 p-2 rounded cursor-pointer",
+                            editData.testingToolIds.includes(opt.value) ? "bg-blue-50 dark:bg-blue-900/20" : "hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                          )}
+                        >
+                          <div className={clsx(editData.testingToolIds.includes(opt.value) ? "text-blue-600 dark:text-blue-400" : "text-gray-400")}>
+                            {editData.testingToolIds.includes(opt.value) ? <CheckSquare size={18} /> : <Square size={18} />}
+                          </div>
+                          <span className="text-sm text-gray-900 dark:text-white">{opt.value}</span>
+                          <input
+                            type="checkbox"
+                            checked={editData.testingToolIds.includes(opt.value)}
+                            onChange={() => {
+                              const next = editData.testingToolIds.includes(opt.value)
+                                ? editData.testingToolIds.filter((v) => v !== opt.value)
+                                : [...editData.testingToolIds, opt.value]
+                              setEditData({ ...editData, testingToolIds: next })
+                            }}
+                            className="sr-only"
+                          />
+                        </label>
+                      ))
+                    )}
+                  </div>
                 ) : (
-                  <p className="text-gray-900 dark:text-white">{currentPlan?.ownerUserId || '—'}</p>
+                  <p className="text-gray-900 dark:text-white">
+                    {(Array.isArray(currentPlan?.testingToolIds) && currentPlan.testingToolIds.length > 0)
+                      ? currentPlan.testingToolIds.join(', ')
+                      : 'None'}
+                  </p>
                 )}
               </div>
 

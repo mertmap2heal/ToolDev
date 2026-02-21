@@ -2140,6 +2140,8 @@ model VerTestPlan {
   exitCriteria  String?  @db.Text
   phase         String? // SRR, PDR, CDR, TRR, QUALIFICATION, CERTIFICATION, OTHER
   ownerUserId   String?
+  testingEnvironmentIds Json? // Array of ENVIRONMENT_TYPE option values
+  testingToolIds        Json? // Array of TESTING_TOOL option values
   status        String   @default("DRAFT") // DRAFT, REVIEWED, APPROVED, ACTIVE, CLOSED
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -2173,56 +2175,114 @@ model VerTestPlanCase {
 
 // Test Run Execution Instance
 model VerTestRun {
-  id               String    @id @default(uuid())
-  projectId        String
-  testPlanId       String?
-  runName          String
-  runNumber        Int?
-  executedByUserId String?
-  executionContext Json? // JSON: build version, config, tool versions
-  startedAt        DateTime?
-  endedAt          DateTime?
-  status           String    @default("PLANNED") // PLANNED, IN_PROGRESS, COMPLETED, ABORTED
-  environmentId    String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                    String    @id @default(uuid())
+  projectId             String
+  testPlanId            String?
+  runName               String
+  runNumber             Int?
+  executedByUserId      String?
+  executionContext      Json? // JSON: build version, config, tool versions
+  startedAt             DateTime?
+  endedAt               DateTime?
+  status                String    @default("PLANNED") // PLANNED, IN_PROGRESS, COMPLETED, ABORTED
+  environmentId         String?
+  actualDurationSeconds Int?
+  pausedAt              DateTime?
+  deletedAt             DateTime? // Soft-delete only; hard delete forbidden for audit compliance
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   testPlan    VerTestPlan?       @relation(fields: [testPlanId], references: [id], onDelete: SetNull)
   environment VerTestEnvironment? @relation(fields: [environmentId], references: [id], onDelete: SetNull)
   results     VerTestRunResult[]
   testLog     VerTestLog?
+  timerSegments VerTestRunExecutionTimer[]
+  exportedTestResults VerTestResult[] // Test results exported from this run
 
   @@index([projectId])
   @@index([environmentId])
   @@index([testPlanId])
   @@index([status])
+  @@index([deletedAt])
 }
 
 // Test Run Result (per test case execution)
 model VerTestRunResult {
-  id                      String    @id @default(uuid())
-  testRunId               String
-  testCaseId              String
-  testCaseVersionSnapshot Json // Immutable snapshot of test case at execution
-  setupVersionSnapshot    Json? // Immutable snapshot of setup used
-  resultStatus            String    @default("NOT_RUN") // NOT_RUN, PASS, FAIL, BLOCKED, SKIPPED
-  actualResults           Json? // JSON or text
-  notes                   String?   @db.Text
-  executedAt              DateTime?
-  isSuspect               Boolean   @default(false)
-  invalidatedAt           DateTime?
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @updatedAt
+  id                            String    @id @default(uuid())
+  testRunId                     String
+  testCaseId                    String
+  testCaseVersionSnapshot       Json // Immutable snapshot of test case at execution
+  parentTestCaseVersionAtExecution String? // Version string at execution for sync comparison
+  setupVersionSnapshot          Json? // Immutable snapshot of setup used
+  resultStatus                  String    @default("NOT_RUN") // NOT_RUN, PASS, FAIL, BLOCKED, SKIPPED, PASSED_WITH_ERRORS
+  actualResults                 Json? // JSON or text (legacy)
+  notes                         String?   @db.Text
+  executedAt                    DateTime?
+  isSuspect                     Boolean   @default(false)
+  isOutOfSync                   Boolean   @default(false)
+  invalidatedAt                 DateTime?
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
 
   testRun         VerTestRun         @relation(fields: [testRunId], references: [id], onDelete: Cascade)
   testCase        VerTestCase        @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
   nonconformities VerNonconformity[]
+  actualResultBlocks VerTestRunResultActualResult[]
+  statusHistory   VerTestRunResultStatusHistory[]
 
   @@unique([testRunId, testCaseId])
   @@index([testRunId])
   @@index([testCaseId])
   @@index([resultStatus])
+  @@index([isOutOfSync])
+}
+
+// Rich actual results (append-only)
+model VerTestRunResultActualResult {
+  id              String   @id @default(uuid())
+  testRunResultId String
+  contentType     String // TEXT_RICH | IMAGE
+  textContent     String?  @db.Text
+  imageStorageKey String?
+  imageFileName   String?
+  orderIndex      Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  testRunResult VerTestRunResult @relation(fields: [testRunResultId], references: [id], onDelete: Cascade)
+
+  @@index([testRunResultId])
+}
+
+// Execution timer segments (immutable)
+model VerTestRunExecutionTimer {
+  id                String    @id @default(uuid())
+  testRunId         String
+  startedAt         DateTime  @default(now())
+  pausedAt          DateTime?
+  resumedAt         DateTime?
+  loggedSeconds     Int       @default(0)
+  performedByUserId String?
+
+  testRun VerTestRun @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+
+  @@index([testRunId])
+}
+
+// Status change audit stream (21 CFR Part 11)
+model VerTestRunResultStatusHistory {
+  id               String    @id @default(uuid())
+  testRunResultId  String
+  oldStatus        String
+  newStatus        String
+  performedByUserId String?
+  performedAt      DateTime  @default(now())
+  reason           String?   @db.Text
+
+  testRunResult VerTestRunResult @relation(fields: [testRunResultId], references: [id], onDelete: Cascade)
+
+  @@index([testRunResultId])
+  @@index([performedAt])
 }
 
 // Evidence Repository
@@ -2280,17 +2340,20 @@ model VerTestResult {
   testEnvironment  String?   @db.Text
   linkedSetupId    String?
   notes            String?   @db.Text
+  sourceTestRunId  String?   // FK to VerTestRun when result was exported from a run
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
   project    Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   setup      VerTestSetup?      @relation(fields: [linkedSetupId], references: [id], onDelete: SetNull)
+  sourceTestRun VerTestRun?     @relation(fields: [sourceTestRunId], references: [id], onDelete: SetNull)
   links      VerTestResultLink[]
 
   @@index([projectId])
   @@index([resultStatus])
   @@index([executedAt])
   @@index([linkedSetupId])
+  @@index([sourceTestRunId])
 }
 
 // Test Result Linking (to Test Cases and Test Plans)

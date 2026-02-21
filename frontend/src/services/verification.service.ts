@@ -130,8 +130,42 @@ export const verificationService = {
   removeCustomOption: (projectId: string, id: string) => apiClient.delete(`/verification/custom-options/${projectId}/${id}`),
   createTestPlan: (projectId: string, data: unknown) => apiClient.post(`/verification/test-plans/${projectId}`, data),
   createTestResult: (projectId: string, data: unknown) => apiClient.post(`/verification/test-results/${projectId}`, data),
-  getTestRuns: (projectId: string) => apiClient.get(`/verification/test-runs/${projectId}`),
+  getTestRun: (projectId: string, runId: string) => apiClient.get(`/verification/test-runs/${projectId}/${runId}`),
+  getTestRuns: (projectId: string, opts?: { includeDeleted?: boolean; testPlanId?: string }) =>
+    apiClient.get(`/verification/test-runs/${projectId}`, {
+      params: {
+        ...(opts?.includeDeleted ? { includeDeleted: 'true' } : {}),
+        ...(opts?.testPlanId ? { testPlanId: opts.testPlanId } : {}),
+      },
+    }),
+  getRunResultsForTestCase: (projectId: string, testCaseId: string) =>
+    apiClient.get(`/verification/test-cases/${projectId}/${testCaseId}/run-results`),
   deleteTestRun: (projectId: string, id: string) => apiClient.delete(`/verification/test-runs/${projectId}/${id}`),
   triggerTestRun: (projectId: string, data: unknown) => apiClient.post(`/verification/runs/ingest/${projectId}`, data),
+  createTestRun: (projectId: string, data: { testPlanId?: string; environmentId?: string; runName?: string }) =>
+    apiClient.post(`/verification/test-runs/${projectId}`, data),
+  updateTestRun: (projectId: string, runId: string, data: { status?: string; actualDurationSeconds?: number }) =>
+    apiClient.patch(`/verification/test-runs/${projectId}/${runId}`, data),
+  startTimer: (projectId: string, runId: string) => apiClient.post(`/verification/test-runs/${projectId}/${runId}/start`),
+  pauseTimer: (projectId: string, runId: string) => apiClient.post(`/verification/test-runs/${projectId}/${runId}/pause`),
+  resumeTimer: (projectId: string, runId: string) => apiClient.post(`/verification/test-runs/${projectId}/${runId}/resume`),
+  stopTimer: (projectId: string, runId: string) => apiClient.post(`/verification/test-runs/${projectId}/${runId}/stop`),
+  completeAndExport: (projectId: string, runId: string) =>
+    apiClient.post(`/verification/test-runs/${projectId}/${runId}/complete-and-export`),
+  updateRunResult: (projectId: string, runId: string, resultId: string, data: {
+    resultStatus?: string
+    actualResultsBlocks?: unknown[]
+    reason?: string
+    stepOutcomes?: { stepIndex: number; status: string; note?: string }[]
+    failConditions?: string
+  }) =>
+    apiClient.patch(`/verification/test-runs/${projectId}/${runId}/results/${resultId}`, data),
+  syncRunResult: (projectId: string, runId: string, resultId: string) =>
+    apiClient.post(`/verification/test-runs/${projectId}/${runId}/results/${resultId}/sync`),
+  uploadRunResultEvidence: (projectId: string, runId: string, resultId: string, data: FormData | { fileData: string; fileName: string; mimeType?: string }) =>
+    apiClient.post(`/verification/test-runs/${projectId}/${runId}/results/${resultId}/evidence`, data),
+  getTraceabilityMatrix: (projectId: string, considerPassedWithErrors?: boolean) =>
+    apiClient.get(`/verification/traceability-matrix/${projectId}`, considerPassedWithErrors === false ? { params: { considerPassedWithErrors: 'false' } } : undefined),
+  getCoverageGaps: (projectId: string) => apiClient.get(`/verification/traceability-matrix/${projectId}/gaps`),
   exportWithTemplate: (projectId: string, data: unknown) => apiClient.post(`/verification/export-with-template/${projectId}`, data),
 }

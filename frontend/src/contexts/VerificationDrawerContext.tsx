@@ -9,6 +9,8 @@ type VerificationDrawerState = {
   isSetupDrawerOpen: boolean
   selectedResult: any
   isResultDrawerOpen: boolean
+  selectedRun: any
+  isRunDrawerOpen: boolean
   openPlan: (plan: any) => void
   closePlan: () => void
   openCase: (testCase: any) => void
@@ -17,6 +19,8 @@ type VerificationDrawerState = {
   closeSetup: () => void
   openResult: (result: any) => void
   closeResult: () => void
+  openRun: (run: any) => void
+  closeRun: () => void
 }
 
 const defaultValue: VerificationDrawerState = {
@@ -28,6 +32,8 @@ const defaultValue: VerificationDrawerState = {
   isSetupDrawerOpen: false,
   selectedResult: null,
   isResultDrawerOpen: false,
+  selectedRun: null,
+  isRunDrawerOpen: false,
   openPlan: () => {},
   closePlan: () => {},
   openCase: () => {},
@@ -36,6 +42,8 @@ const defaultValue: VerificationDrawerState = {
   closeSetup: () => {},
   openResult: () => {},
   closeResult: () => {},
+  openRun: () => {},
+  closeRun: () => {},
 }
 
 const VerificationDrawerContext = createContext<VerificationDrawerState>(defaultValue)
@@ -49,6 +57,8 @@ export function VerificationDrawerProvider({ children }: { children: ReactNode }
   const [isSetupDrawerOpen, setIsSetupDrawerOpen] = useState(false)
   const [selectedResult, setSelectedResult] = useState<any>(null)
   const [isResultDrawerOpen, setIsResultDrawerOpen] = useState(false)
+  const [selectedRun, setSelectedRun] = useState<any>(null)
+  const [isRunDrawerOpen, setIsRunDrawerOpen] = useState(false)
 
   const openPlan = useCallback((plan: any) => {
     setSelectedPlan(plan)
@@ -86,6 +96,15 @@ export function VerificationDrawerProvider({ children }: { children: ReactNode }
     setSelectedResult(null)
   }, [])
 
+  const openRun = useCallback((run: any) => {
+    setSelectedRun(run)
+    setIsRunDrawerOpen(true)
+  }, [])
+  const closeRun = useCallback(() => {
+    setIsRunDrawerOpen(false)
+    setSelectedRun(null)
+  }, [])
+
   const value: VerificationDrawerState = {
     selectedPlan,
     isPlanDrawerOpen,
@@ -95,6 +114,8 @@ export function VerificationDrawerProvider({ children }: { children: ReactNode }
     isSetupDrawerOpen,
     selectedResult,
     isResultDrawerOpen,
+    selectedRun,
+    isRunDrawerOpen,
     openPlan,
     closePlan,
     openCase,
@@ -103,6 +124,8 @@ export function VerificationDrawerProvider({ children }: { children: ReactNode }
     closeSetup,
     openResult,
     closeResult,
+    openRun,
+    closeRun,
   }
 
   return (

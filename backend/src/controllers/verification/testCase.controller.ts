@@ -5,6 +5,7 @@ import { auditService } from '../../services/verification/audit.service'
 import { statusTransitionService } from '../../services/verification/statusTransition.service'
 import { verificationService } from '../../services/verification/verification.service'
 import { traceabilityService } from '../../services/traceability.service'
+import { outOfSyncService } from '../../services/verification/outOfSync.service'
 import { linkageAuditService } from '../../services/linkageAudit.service'
 import { AuditAction, TestCaseStatus } from '../../types/verification.types'
 
@@ -129,26 +130,32 @@ export const updateTestCase = async (req: AuthRequest, res: Response) => {
     const { projectId, id } = req.params
     const existing = await prisma.verTestCase.findFirst({ where: { id, projectId } })
     if (!existing) return res.status(404).json({ success: false, error: 'Test case not found' })
-    const { title, objective, preconditions, steps, expectedResults, passFailCriteria, linkedMocCode, linkedMethodId, ownerUserId, status } = req.body
+    const { title, objective, preconditions, steps, expectedResults, passFailCriteria, linkedMocCode, linkedMethodId, ownerUserId, status, version } = req.body
     if (status && status !== existing.status) {
       statusTransitionService.validateTransition('TEST_CASE', existing.status, status)
     }
+    const updateData: Record<string, unknown> = {
+      title,
+      objective,
+      preconditions,
+      steps,
+      expectedResults,
+      passFailCriteria,
+      linkedMocCode: linkedMocCode != null ? parseInt(linkedMocCode, 10) : undefined,
+      linkedMethodId,
+      ownerUserId,
+      status,
+    }
+    if (version != null) updateData.version = String(version)
     const updated = await prisma.verTestCase.update({
       where: { id },
-      data: {
-        title,
-        objective,
-        preconditions,
-        steps,
-        expectedResults,
-        passFailCriteria,
-        linkedMocCode: linkedMocCode ? parseInt(linkedMocCode, 10) : null,
-        linkedMethodId,
-        ownerUserId,
-        status,
-      },
+      data: updateData,
       include: { moc: true, method: true },
     })
+    const newVersion = (updated as { version?: string }).version ?? existing.version
+    if (newVersion !== existing.version || steps !== undefined || expectedResults !== undefined) {
+      await outOfSyncService.markRunResultsOutOfSync(id, newVersion)
+    }
     if (status && status !== existing.status) {
       await auditService.logStatusChange({
         projectId,

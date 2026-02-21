@@ -14,6 +14,8 @@
     "check-db": "tsx src/scripts/check-and-fix-projects.ts",
     "seed:users": "tsx src/scripts/seed-users.ts",
     "seed:mocs": "tsx prisma/seed-mocs.ts",
+    "seed:test-case": "tsx src/scripts/seed-test-case.ts",
+    "seed:test-plan": "tsx src/scripts/seed-test-plan.ts",
     "db:push": "prisma db push --accept-data-loss",
     "db:gen": "prisma generate",
     "test": "vitest run"

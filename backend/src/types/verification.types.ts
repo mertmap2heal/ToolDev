@@ -57,6 +57,7 @@ export enum ResultStatus {
   FAIL = 'FAIL',
   BLOCKED = 'BLOCKED',
   SKIPPED = 'SKIPPED',
+  PASSED_WITH_ERRORS = 'PASSED_WITH_ERRORS',
 }
 
 export enum EvidenceType {
@@ -152,6 +153,12 @@ export enum AuditAction {
   APPROVE = 'APPROVE',
   DEPRECATE = 'DEPRECATE',
   CLOSE = 'CLOSE',
+  TIMER_START = 'TIMER_START',
+  TIMER_PAUSE = 'TIMER_PAUSE',
+  TIMER_RESUME = 'TIMER_RESUME',
+  TIMER_STOP = 'TIMER_STOP',
+  SYNC = 'SYNC',
+  EXPORT = 'EXPORT',
 }
 
 export enum LinkedEntityType {

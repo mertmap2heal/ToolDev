@@ -25,6 +25,8 @@ import CreateTestResultModal from '../../components/verification/CreateTestResul
 import ListExporter from '../../components/verification/ListExporter'
 import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
 import TestRunList from '../../components/verification/TestRunList'
+import TestRunExecutionView from '../../components/verification/TestRunExecutionView'
+import TraceabilityMatrixView from './TraceabilityMatrixView'
 import ExportWithTemplateModal from '../../components/verification/ExportWithTemplateModal'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 
@@ -146,11 +148,16 @@ export default function VerificationPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab') || 'overview'
+  const resolvedTab = tabParam === 'test-cases' ? 'cases' : tabParam
+  const runIdParam = searchParams.get('runId')
+  const modeParam = searchParams.get('mode')
+  const isExecutionMode = resolvedTab === 'runs' && !!runIdParam && modeParam === 'execute'
   const focusType = searchParams.get('focusType')
   const focusId = searchParams.get('focusId')
-  const activeTab = (['overview', 'plans', 'cases', 'runs', 'setups', 'results'].includes(tabParam)
-    ? tabParam
-    : 'overview') as 'overview' | 'plans' | 'cases' | 'runs' | 'setups' | 'results'
+  const caseId = searchParams.get('caseId')
+  const activeTab = (['overview', 'plans', 'cases', 'runs', 'setups', 'results', 'traceability'].includes(resolvedTab)
+    ? resolvedTab
+    : 'overview') as 'overview' | 'plans' | 'cases' | 'runs' | 'setups' | 'results' | 'traceability'
   const useTemplateId = searchParams.get('useTemplateId')
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -344,43 +351,45 @@ export default function VerificationPage() {
     }
   }, [focusType, focusId, activeTab, setSearchParams])
 
-  // Focus handling: open drawer when focusType/focusId match loaded data
+  // Focus handling: open drawer when focusType/focusId or caseId match loaded data
   useEffect(() => {
-    if (!focusType || !focusId || !projectId) return
-    if (focusType === 'test_plan' || focusType === 'test-plan') {
+    const effectiveFocusType = focusType || (caseId ? 'test-case' : null)
+    const effectiveFocusId = focusId || caseId
+    if (!effectiveFocusType || !effectiveFocusId || !projectId) return
+    if (effectiveFocusType === 'test_plan' || effectiveFocusType === 'test-plan') {
       if (testPlans.length > 0) {
-        const plan = testPlans.find((p: any) => p.id === focusId)
+        const plan = testPlans.find((p: any) => p.id === effectiveFocusId)
         if (plan) {
-          setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'plans'); n.delete('focusType'); n.delete('focusId'); return n }, { replace: true })
+          setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'plans'); n.delete('focusType'); n.delete('focusId'); n.delete('caseId'); return n }, { replace: true })
           drawer.openPlan(plan)
         }
       }
-    } else if (focusType === 'test_case' || focusType === 'test-case') {
+    } else if (effectiveFocusType === 'test_case' || effectiveFocusType === 'test-case') {
       if (testCases.length > 0) {
-        const tc = testCases.find((c: any) => c.id === focusId)
+        const tc = testCases.find((c: any) => c.id === effectiveFocusId)
         if (tc) {
-          setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'cases'); n.delete('focusType'); n.delete('focusId'); return n }, { replace: true })
+          setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'cases'); n.delete('focusType'); n.delete('focusId'); n.delete('caseId'); return n }, { replace: true })
           drawer.openCase(tc)
         }
       }
-    } else if (focusType === 'test_setup' || focusType === 'test-setup') {
+    } else if (effectiveFocusType === 'test_setup' || effectiveFocusType === 'test-setup') {
       if (testSetups.length > 0) {
-        const setup = testSetups.find((s: any) => s.id === focusId)
+        const setup = testSetups.find((s: any) => s.id === effectiveFocusId)
         if (setup) {
-          setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'setups'); n.delete('focusType'); n.delete('focusId'); return n }, { replace: true })
+          setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'setups'); n.delete('focusType'); n.delete('focusId'); n.delete('caseId'); return n }, { replace: true })
           drawer.openSetup(setup)
         }
       }
-    } else if (focusType === 'test_result' || focusType === 'test-result') {
+    } else if (effectiveFocusType === 'test_result' || effectiveFocusType === 'test-result') {
       if (testResults.length > 0) {
-        const result = testResults.find((r: any) => r.id === focusId)
+        const result = testResults.find((r: any) => r.id === effectiveFocusId)
         if (result) {
-          setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'results'); n.delete('focusType'); n.delete('focusId'); return n }, { replace: true })
+          setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'results'); n.delete('focusType'); n.delete('focusId'); n.delete('caseId'); return n }, { replace: true })
           drawer.openResult(result)
         }
       }
     }
-  }, [focusType, focusId, projectId, testPlans, testCases, testSetups, testResults, drawer, setSearchParams])
+  }, [focusType, focusId, caseId, projectId, testPlans, testCases, testSetups, testResults, drawer, setSearchParams])
 
   // Delete mutations
   const deleteTestPlanMutation = useMutation({
@@ -1061,7 +1070,15 @@ export default function VerificationPage() {
         </div>
       )}
 
-      {activeTab === 'runs' && (
+      {activeTab === 'runs' && isExecutionMode && runIdParam && (
+        <TestRunExecutionView
+          run={{ id: runIdParam }}
+          projectId={projectId!}
+          onClose={() => setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('runId'); n.delete('mode'); return n })}
+          onCompleteAndExport={() => setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('runId'); n.delete('mode'); return n })}
+        />
+      )}
+      {activeTab === 'runs' && !isExecutionMode && (
         <TestRunList />
       )}
 
@@ -1455,6 +1472,8 @@ export default function VerificationPage() {
           )}
         </div>
       )}
+
+      {activeTab === 'traceability' && <TraceabilityMatrixView />}
 
       {/* Modals */}
       {projectId && (
