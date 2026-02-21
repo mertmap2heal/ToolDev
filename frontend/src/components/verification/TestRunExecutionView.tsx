@@ -139,6 +139,7 @@ export default function TestRunExecutionView({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['test-run', projectId, run.id] })
       queryClient.invalidateQueries({ queryKey: ['test-runs', projectId] })
+      completeAndExportMutation.mutate()
     },
   })
 

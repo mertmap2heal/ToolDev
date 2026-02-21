@@ -325,7 +325,7 @@ export default function VerificationPage() {
     enabled: !!projectId && (activeTab === 'setups' || focusType === 'test_setup' || focusType === 'test-setup'),
   })
 
-  // Fetch test results
+  // Fetch test results (enabled whenever on verification page so data is ready when switching to results tab)
   const { data: testResults = [], isLoading: loadingResults } = useQuery({
     queryKey: ['test-results', projectId],
     queryFn: async () => {
@@ -333,7 +333,7 @@ export default function VerificationPage() {
       const response = await verificationService.getTestResults(projectId)
       return response.success && response.data ? response.data : []
     },
-    enabled: !!projectId && (activeTab === 'results' || focusType === 'test_result' || focusType === 'test-result'),
+    enabled: !!projectId,
   })
 
   // Navigate to tab when focus type requires it

@@ -326,6 +326,7 @@ export const testExecutionService = {
 
   /**
    * Complete run and export to Test Results: stop timer, set COMPLETED, create VerTestResult with sourceTestRunId.
+   * Saves all relevant data: per-scenario results, snapshots, actual results, evidence, environment.
    */
   async completeAndExport(
     projectId: string,
@@ -336,7 +337,14 @@ export const testExecutionService = {
       where: { id: runId, projectId, deletedAt: null },
       include: {
         testPlan: true,
-        results: true,
+        environment: true,
+        results: {
+          include: {
+            testCase: { select: { id: true, key: true, title: true, version: true } },
+            actualResultBlocks: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
       },
     })
     if (!run) throw new Error('Test run not found')
@@ -384,18 +392,65 @@ export const testExecutionService = {
     const planKey = run.testPlan?.key ?? 'Manual'
     const runName = run.runName || 'Run'
     const title = `Run: ${runName} - ${planKey}`
-    const summaryJson = JSON.stringify({
+    const executedAtDate = run.endedAt ?? new Date()
+
+    const scenarioResults = run.results.map((r) => ({
+      testCaseId: r.testCaseId,
+      testCaseKey: r.testCase?.key,
+      testCaseTitle: r.testCase?.title,
+      testCaseVersion: r.testCase?.version,
+      resultStatus: r.resultStatus,
+      testCaseVersionSnapshot: r.testCaseVersionSnapshot,
+      actualResults: r.actualResults,
+      actualResultBlocks: r.actualResultBlocks.map((b) => ({
+        contentType: b.contentType,
+        textContent: b.textContent,
+        imageStorageKey: b.imageStorageKey,
+        imageFileName: b.imageFileName,
+      })),
+      executedAt: r.executedAt?.toISOString() ?? null,
+      isSuspect: r.isSuspect,
+      isOutOfSync: r.isOutOfSync,
+    }))
+
+    const exportPayload = {
       runId,
       runName,
       planKey,
       planId: run.testPlanId,
+      planName: run.testPlan?.name ?? null,
       statusCounts,
       aggregatedStatus,
-      executedAt: (run.endedAt ?? new Date()).toISOString(),
+      executedAt: executedAtDate.toISOString(),
       durationSeconds: totalSeconds,
-    })
+      environment: run.environment
+        ? {
+            name: run.environment.name,
+            hardwareVersion: run.environment.hardwareVersion,
+            softwareBuild: run.environment.softwareBuild,
+          }
+        : null,
+      scenarioResults,
+    }
+    const summaryJson = JSON.stringify(exportPayload, null, 2)
+
+    const descriptionLines: string[] = [
+      `Run: ${runName}`,
+      `Plan: ${planKey} - ${run.testPlan?.name ?? 'Manual'}`,
+      `Executed: ${executedAtDate.toISOString()}`,
+      `Duration: ${totalSeconds}s`,
+      `Summary: ${Object.entries(statusCounts)
+        .map(([s, c]) => `${c} ${s}`)
+        .join(', ')}`,
+    ]
+    const description = descriptionLines.join('\n')
+
+    const testEnvironment =
+      run.environment?.name && run.environment?.hardwareVersion
+        ? `${run.environment.name} / ${run.environment.hardwareVersion}`
+        : run.environment?.name ?? null
     const uniqueName = `run-export-${runId}-${Date.now()}.json`
-    const uploadsDir = path.join(__dirname, '../../../uploads/verification/test-results')
+    const uploadsDir = path.join(process.cwd(), 'uploads', 'verification', 'test-results')
     if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
     const filePath = path.join(uploadsDir, uniqueName)
     fs.writeFileSync(filePath, summaryJson, 'utf8')
@@ -405,14 +460,16 @@ export const testExecutionService = {
       data: {
         projectId,
         title,
+        description,
         storageRef,
         fileName: uniqueName,
         fileSize: Buffer.byteLength(summaryJson, 'utf8'),
         mimeType: 'application/json',
         checksum: null,
         resultStatus: aggregatedStatus,
-        executedAt: run.endedAt ?? new Date(),
+        executedAt: executedAtDate,
         executedByUserId: userId ?? run.executedByUserId ?? null,
+        testEnvironment,
         sourceTestRunId: runId,
       },
     })
