@@ -234,6 +234,22 @@ async function updateRequirementIdReferences(
   }
 }
 
+/** Collect component ID and all descendant IDs for inclusive filtering */
+async function collectComponentIdAndDescendants(projectId: string, componentId: string): Promise<string[]> {
+  const components = await prisma.component.findMany({
+    where: { projectId },
+    select: { id: true, parentId: true },
+  })
+  const ids = new Set<string>()
+  function addRecursive(id: string) {
+    ids.add(id)
+    components.filter((c) => c.parentId === id).forEach((c) => addRecursive(c.id))
+  }
+  const root = components.find((c) => c.id === componentId)
+  if (root) addRecursive(root.id)
+  return Array.from(ids)
+}
+
 export const getRequirements = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
@@ -253,8 +269,20 @@ export const getRequirements = async (req: AuthRequest, res: Response) => {
     const category = req.query.category as string | undefined
     const source = req.query.source as string | undefined
     const componentId = req.query.componentId as string | undefined
+    const componentIdIncludeDescendants = (req.query.componentIdIncludeDescendants as string) !== 'false' // default true
     const verificationStatus = req.query.verificationStatus as string | undefined
     const reviewStatus = req.query.reviewStatus as string | undefined
+
+    // Resolve componentId filter: when include-descendants, show requirements for selected component + all children
+    let componentIdsFilter: string[] | string | undefined
+    if (componentId) {
+      if (componentIdIncludeDescendants) {
+        const allIds = await collectComponentIdAndDescendants(projectId, componentId)
+        componentIdsFilter = allIds
+      } else {
+        componentIdsFilter = componentId
+      }
+    }
 
     // Build where clause — paginate only root-level requirements
     const where: any = {
@@ -286,7 +314,11 @@ export const getRequirements = async (req: AuthRequest, res: Response) => {
     } else if (source) {
       where.source = source
     }
-    if (componentId) where.componentId = componentId
+    if (componentIdsFilter) {
+      where.componentId = Array.isArray(componentIdsFilter)
+        ? { in: componentIdsFilter }
+        : componentIdsFilter
+    }
     if (verificationStatus) where.verificationStatus = verificationStatus
     if (reviewStatus) where.reviewStatus = reviewStatus
 
