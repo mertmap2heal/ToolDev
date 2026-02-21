@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { X, Edit2, Trash2, MessageSquare, Paperclip, Tag, ChevronRight, ChevronDown, Link2, FileText, Settings, AlertCircle, Zap, History, ExternalLink, Check, Bell, BellRing, GitPullRequest, Shield, Target, ClipboardCheck, Layers, BookOpen, LayoutGrid, List } from 'lucide-react'
+import { X, Edit2, Trash2, MessageSquare, Paperclip, Tag, ChevronRight, ChevronDown, Link2, FileText, Settings, AlertCircle, Zap, History, ExternalLink, Check, Bell, BellRing, GitPullRequest, Shield, Target, ClipboardCheck, Layers, BookOpen, LayoutGrid, List, Unlink } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { requirementService, type RequirementSubscriptionSnapshot } from '../../services/requirement.service'
@@ -10,6 +10,7 @@ import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import { RequirementLifecycleVisual } from '../lifecycle/RequirementLifecycleVisual'
 import { changeRequestService } from '../../services/changeRequest.service'
 import { linkService } from '../../services/link.service'
+import { traceabilityService } from '../../services/traceability.service'
 import { componentService } from '../../services/component.service'
 import { LINKAGE_V1, LIFECYCLE_V1 } from '../../config/featureFlags'
 import { lifecycleService } from '../../services/lifecycle.service'
@@ -199,6 +200,12 @@ export default function RequirementDetailDrawer({
   const [isImpactAnalysisOpen, setIsImpactAnalysisOpen] = useState(false)
   const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [breakLinkModal, setBreakLinkModal] = useState<{
+    linkId: string
+    targetType: string
+    targetId: string
+    targetDisplayId?: string
+  } | null>(null)
 
   // Resizable drawer width
   const [drawerWidth, setDrawerWidth] = useState<number>(512) // 32rem = 512px
@@ -455,6 +462,79 @@ export default function RequirementDetailDrawer({
       queryClient.invalidateQueries({ queryKey: ['requirement', projectId, requirement?.id] })
     },
   })
+
+  const DELETABLE_TARGET_TYPES = ['requirement', 'function', 'issue', 'change_request', 'pbs_component', 'test_plan', 'test_case']
+
+  const deleteLinkedItem = async (targetType: string, targetId: string) => {
+    switch (targetType) {
+      case 'requirement':
+        return requirementService.deleteRequirement(projectId, targetId)
+      case 'function':
+        return functionService.deleteFunction(projectId, targetId)
+      case 'issue':
+        return issueService.deleteIssue(projectId, targetId)
+      case 'change_request':
+        return changeRequestService.deleteChangeRequest(projectId, targetId)
+      case 'pbs_component':
+        return componentService.deleteComponent(projectId, targetId)
+      case 'test_plan':
+        return verificationService.deleteTestPlan(projectId, targetId)
+      case 'test_case':
+        return verificationService.deleteTestCase(projectId, targetId)
+      default:
+        throw new Error(`Cannot delete linked item of type: ${targetType}`)
+    }
+  }
+
+  const breakLinkOrDeleteMutation = useMutation({
+    mutationFn: async ({ linkId, deleteLinkedItem: shouldDelete, targetType, targetId }: {
+      linkId: string
+      deleteLinkedItem: boolean
+      targetType: string
+      targetId: string
+    }) => {
+      if (shouldDelete && DELETABLE_TARGET_TYPES.includes(targetType)) {
+        const delRes = await deleteLinkedItem(targetType, targetId)
+        if (!delRes.success) throw new Error(delRes.error)
+      }
+      const linkRes = LINKAGE_V1
+        ? await linkService.deleteLink(projectId, linkId)
+        : await traceabilityService.deleteTraceLink(projectId, linkId)
+      if (!linkRes.success) throw new Error(linkRes.error)
+    },
+    onSuccess: (_data, { deleteLinkedItem: didDelete }) => {
+      setBreakLinkModal(null)
+      queryClient.invalidateQueries({ queryKey: ['requirement-links', projectId, requirement?.id] })
+      queryClient.invalidateQueries({ queryKey: ['incoming-links', projectId, requirement?.id] })
+      queryClient.invalidateQueries({ queryKey: ['traceability', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['requirement', projectId, requirement?.id] })
+      queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['functions', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['change-requests', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['components', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['test-plans', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
+      showToast(didDelete ? 'Link removed and linked item deleted' : 'Link removed')
+    },
+    onError: (error: any) => {
+      showToast(error?.error || error?.message || 'Failed to complete action')
+    },
+  })
+
+  const handleBreakLink = (linkId: string, targetType: string, targetId: string, targetDisplayId?: string) => {
+    setBreakLinkModal({ linkId, targetType, targetId, targetDisplayId })
+  }
+
+  const handleBreakLinkConfirm = (deleteLinkedItem: boolean) => {
+    if (!breakLinkModal) return
+    breakLinkOrDeleteMutation.mutate({
+      linkId: breakLinkModal.linkId,
+      deleteLinkedItem,
+      targetType: breakLinkModal.targetType,
+      targetId: breakLinkModal.targetId,
+    })
+  }
 
   const displayRequirement = fullRequirement || requirement
 
@@ -1599,14 +1679,25 @@ export default function RequirementDetailDrawer({
                                               </p>
                                             )}
                                           </div>
-                                          <button
-                                            type="button"
-                                            onClick={() => navigate(deepLink)}
-                                            className="mt-1 p-2 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/40 rounded-lg transition-all"
-                                            title="Open linked item"
-                                          >
-                                            <ExternalLink size={16} />
-                                          </button>
+                                          <div className="mt-1 flex items-center gap-1">
+                                            <button
+                                              type="button"
+                                              onClick={() => navigate(deepLink)}
+                                              className="p-2 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/40 rounded-lg transition-all"
+                                              title="Open linked item"
+                                            >
+                                              <ExternalLink size={16} />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleBreakLink(link.id, link.targetType, link.targetId, displayId)}
+                                              disabled={breakLinkOrDeleteMutation.isPending}
+                                              className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all disabled:opacity-50"
+                                              title="Break link"
+                                            >
+                                              <Unlink size={16} />
+                                            </button>
+                                          </div>
                                         </div>
                                       )
                                     })}
@@ -1647,14 +1738,25 @@ export default function RequirementDetailDrawer({
                                           {item.plan.name}
                                         </div>
                                       </div>
-                                      <button
-                                        type="button"
-                                        onClick={() => navigate(`/verification?tab=test-plans&planId=${item.plan.id}`)}
-                                        className="mt-1 p-2 text-gray-400 dark:text-gray-500 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/40 rounded-lg transition-all"
-                                        title="Open Test Plan"
-                                      >
-                                        <ExternalLink size={16} />
-                                      </button>
+                                      <div className="mt-1 flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => navigate(`/verification?tab=test-plans&planId=${item.plan.id}`)}
+                                          className="p-2 text-gray-400 dark:text-gray-500 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/40 rounded-lg transition-all"
+                                          title="Open Test Plan"
+                                        >
+                                          <ExternalLink size={16} />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleBreakLink(item.id, 'test_plan', item.plan.id, item.plan.key)}
+                                          disabled={breakLinkOrDeleteMutation.isPending}
+                                          className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all disabled:opacity-50"
+                                          title="Break link"
+                                        >
+                                          <Unlink size={16} />
+                                        </button>
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
@@ -1686,14 +1788,25 @@ export default function RequirementDetailDrawer({
                                           {item.testCase.title}
                                         </div>
                                       </div>
-                                      <button
-                                        type="button"
-                                        onClick={() => navigate(`/verification?tab=test-cases&caseId=${item.testCase.id}`)}
-                                        className="mt-1 p-2 text-gray-400 dark:text-gray-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 rounded-lg transition-all"
-                                        title="Open Test Case"
-                                      >
-                                        <ExternalLink size={16} />
-                                      </button>
+                                      <div className="mt-1 flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => navigate(`/verification?tab=test-cases&caseId=${item.testCase.id}`)}
+                                          className="p-2 text-gray-400 dark:text-gray-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 rounded-lg transition-all"
+                                          title="Open Test Case"
+                                        >
+                                          <ExternalLink size={16} />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleBreakLink(item.id, 'test_case', item.testCase.id, item.testCase.key)}
+                                          disabled={breakLinkOrDeleteMutation.isPending}
+                                          className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all disabled:opacity-50"
+                                          title="Break link"
+                                        >
+                                          <Unlink size={16} />
+                                        </button>
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
@@ -1900,6 +2013,63 @@ export default function RequirementDetailDrawer({
             />
           )}
 
+          {/* Break Link Modal */}
+          {breakLinkModal && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4">
+                <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">Break link</h2>
+                  <button
+                    onClick={() => !breakLinkOrDeleteMutation.isPending && setBreakLinkModal(null)}
+                    disabled={breakLinkOrDeleteMutation.isPending}
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    <X size={20} className="text-gray-600 dark:text-gray-400" />
+                  </button>
+                </div>
+                <div className="p-6 space-y-4">
+                  <p className="text-gray-700 dark:text-gray-300">
+                    Should the linked element{breakLinkModal.targetDisplayId ? ` (${breakLinkModal.targetDisplayId})` : ''} be deleted?
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setBreakLinkModal(null)}
+                      disabled={breakLinkOrDeleteMutation.isPending}
+                      className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBreakLinkConfirm(false)}
+                      disabled={breakLinkOrDeleteMutation.isPending}
+                      className="px-4 py-2 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      No, only break link
+                    </button>
+                    {DELETABLE_TARGET_TYPES.includes(breakLinkModal.targetType) ? (
+                      <button
+                        type="button"
+                        onClick={() => handleBreakLinkConfirm(true)}
+                        disabled={breakLinkOrDeleteMutation.isPending}
+                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {breakLinkOrDeleteMutation.isPending ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>Yes, delete linked item and break link</>
+                        )}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

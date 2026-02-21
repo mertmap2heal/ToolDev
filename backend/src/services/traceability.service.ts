@@ -547,46 +547,111 @@ export const traceabilityService = {
   },
 
   /**
-   * Deletes a trace link
+   * Deletes a trace link. Handles links from TraceLink, IssueLink, and RequirementChangeRequestLink
+   * since getTraceLinks merges all three into a unified view.
    */
   async deleteTraceLink(
     projectId: string,
     linkId: string,
     performedByUserId?: string
   ): Promise<void> {
-    const link = await prisma.traceLink.findUnique({
-      where: { id: linkId },
-    })
-    await prisma.traceLink.delete({
-      where: { id: linkId },
-    })
-    if (link) {
+    const traceLink = await prisma.traceLink.findUnique({ where: { id: linkId } })
+    if (traceLink) {
+      await prisma.traceLink.delete({ where: { id: linkId } })
       await linkageAuditService.log({
         projectId,
         entityType: 'LINK',
         entityId: linkId,
         action: 'LINK_REMOVED',
         oldValue: {
-          sourceType: link.sourceType,
-          sourceId: link.sourceId,
-          targetType: link.targetType,
-          targetId: link.targetId,
-          linkType: link.linkType,
+          sourceType: traceLink.sourceType,
+          sourceId: traceLink.sourceId,
+          targetType: traceLink.targetType,
+          targetId: traceLink.targetId,
+          linkType: traceLink.linkType,
         },
         performedByUserId,
       })
-
       await notifyRequirementLinkChange({
         projectId,
-        sourceType: link.sourceType,
-        sourceId: link.sourceId,
-        targetType: link.targetType,
-        targetId: link.targetId,
-        linkType: link.linkType,
+        sourceType: traceLink.sourceType,
+        sourceId: traceLink.sourceId,
+        targetType: traceLink.targetType,
+        targetId: traceLink.targetId,
+        linkType: traceLink.linkType,
         action: 'removed',
         actorUserId: performedByUserId,
       })
+      return
     }
+
+    const issueLink = await prisma.issueLink.findUnique({
+      where: { id: linkId },
+      include: { issue: true },
+    })
+    if (issueLink && issueLink.issue?.projectId === projectId) {
+      await prisma.issueLink.delete({ where: { id: linkId } })
+      await linkageAuditService.log({
+        projectId,
+        entityType: 'LINK',
+        entityId: linkId,
+        action: 'LINK_REMOVED',
+        oldValue: {
+          sourceType: 'issue',
+          sourceId: issueLink.issueId,
+          targetType: issueLink.linkedType,
+          targetId: issueLink.linkedId,
+          linkType: issueLink.linkType,
+        },
+        performedByUserId,
+      })
+      await notifyRequirementLinkChange({
+        projectId,
+        sourceType: 'issue',
+        sourceId: issueLink.issueId,
+        targetType: issueLink.linkedType,
+        targetId: issueLink.linkedId,
+        linkType: issueLink.linkType,
+        action: 'removed',
+        actorUserId: performedByUserId,
+      })
+      return
+    }
+
+    const crLink = await prisma.requirementChangeRequestLink.findUnique({
+      where: { id: linkId },
+      include: { requirement: true, changeRequest: true },
+    })
+    if (crLink && crLink.requirement?.projectId === projectId) {
+      await prisma.requirementChangeRequestLink.delete({ where: { id: linkId } })
+      await linkageAuditService.log({
+        projectId,
+        entityType: 'LINK',
+        entityId: linkId,
+        action: 'LINK_REMOVED',
+        oldValue: {
+          sourceType: 'requirement',
+          sourceId: crLink.requirementId,
+          targetType: 'change_request',
+          targetId: crLink.changeRequestId,
+          linkType: crLink.relationshipType,
+        },
+        performedByUserId,
+      })
+      await notifyRequirementLinkChange({
+        projectId,
+        sourceType: 'requirement',
+        sourceId: crLink.requirementId,
+        targetType: 'change_request',
+        targetId: crLink.changeRequestId,
+        linkType: crLink.relationshipType,
+        action: 'removed',
+        actorUserId: performedByUserId,
+      })
+      return
+    }
+
+    throw new Error('Link not found')
   },
 }
 
