@@ -399,26 +399,22 @@ export default function RequirementsPBSTree({
         enabled: !!projectId,
     })
 
-    // Auto-expand root nodes on first load
+    // Auto-expand all nodes when component tree loads or project changes (so requirements are visible)
     useEffect(() => {
         if (componentTree.length > 0) {
             setExpandedNodes(prev => {
                 const next = new Set(prev)
-                // Recursive expand function
                 const expandAll = (nodes: any[]) => {
                     for (const node of nodes) {
                         next.add(node.id)
-                        if (node.children && node.children.length > 0) {
-                            expandAll(node.children)
-                        }
+                        if (node.children && node.children.length > 0) expandAll(node.children)
                     }
                 }
-                // Expand everything by default since local trees are usually small/navigable
                 expandAll(componentTree)
                 return next
             })
         }
-    }, [componentTree.length]) // Only run when tree size changes (loaded)
+    }, [componentTree.length, projectId])
 
     // Mutation for drag-and-drop component reassignment
     const assignComponentMutation = useMutation({

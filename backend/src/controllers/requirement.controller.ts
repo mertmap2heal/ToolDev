@@ -314,7 +314,7 @@ export const getRequirements = async (req: AuthRequest, res: Response) => {
     } else if (source) {
       where.source = source
     }
-    if (componentIdsFilter) {
+    if (componentIdsFilter && (Array.isArray(componentIdsFilter) ? componentIdsFilter.length > 0 : true)) {
       where.componentId = Array.isArray(componentIdsFilter)
         ? { in: componentIdsFilter }
         : componentIdsFilter
