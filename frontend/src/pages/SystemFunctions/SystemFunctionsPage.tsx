@@ -6,16 +6,20 @@ import {
   FolderTree,
   Shield,
   Layers,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 
 import FunctionTreePanel from '../../components/functions/FunctionTreePanel'
 import FunctionDetailPanel from '../../components/functions/FunctionDetailPanel'
+import { RelationshipGraphView } from '../../components/relationshipGraph'
 import CreateFunctionModal from '../../components/functions/CreateFunctionModal'
 import DeleteFunctionModal from '../../components/functions/DeleteFunctionModal'
 import RaiseIssueModal from '../../components/functions/RaiseIssueModal'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import clsx from 'clsx'
 import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
 import { changeRequestService } from '../../services/changeRequest.service'
@@ -37,6 +41,32 @@ export default function SystemFunctionsPage() {
   const [deleteModal, setDeleteModal] = useState<{ func: SystemFunction } | null>(null)
   const [raiseIssueTarget, setRaiseIssueTarget] = useState<string | null>(null)
   const [changeRequestModal, setChangeRequestModal] = useState<{ isOpen: boolean; sourceId: string; sourceName: string } | null>(null)
+  const [leftPanelViewMode, setLeftPanelViewModeState] = useState<'tree' | 'graph'>(() => {
+    try {
+      const s = sessionStorage.getItem(`functions::view-mode::${projectId ?? 'default'}`)
+      return s === 'graph' ? 'graph' : 'tree'
+    } catch {
+      return 'tree'
+    }
+  })
+  const setLeftPanelViewMode = useCallback((value: 'tree' | 'graph' | ((prev: 'tree' | 'graph') => 'tree' | 'graph')) => {
+    setLeftPanelViewModeState((prev) => {
+      const next = typeof value === 'function' ? value(prev) : value
+      try {
+        sessionStorage.setItem(`functions::view-mode::${projectId ?? 'default'}`, next)
+      } catch { /* ignore */ }
+      return next
+    })
+  }, [projectId])
+
+  useEffect(() => {
+    try {
+      const s = sessionStorage.getItem(`functions::view-mode::${projectId ?? 'default'}`)
+      setLeftPanelViewModeState(s === 'graph' ? 'graph' : 'tree')
+    } catch { /* ignore */ }
+  }, [projectId])
+
+  const [isTreePanelOpen, setIsTreePanelOpen] = useState(true)
 
   // Resizable panel
   const PANEL_MIN = 260
@@ -91,7 +121,19 @@ export default function SystemFunctionsPage() {
       throw new Error(response.error || 'Failed to load functions')
     },
     enabled: !!projectId,
+    placeholderData: (prev) => prev, // Keep previous data during refetch
+    refetchOnWindowFocus: false,
+    staleTime: 30_000, // Avoid background refetches that can cause graph to flicker
   })
+
+  // Snapshot functions when switching to graph mode (like PBS uses stable state)
+  const graphSnapshotRef = useRef<SystemFunction[]>([])
+  if (leftPanelViewMode === 'graph' && functions.length > 0) {
+    graphSnapshotRef.current = functions
+  }
+  const functionsForGraph = leftPanelViewMode === 'graph'
+    ? (graphSnapshotRef.current.length > 0 ? graphSnapshotRef.current : functions)
+    : functions
 
   const { data: issues = [] } = useQuery({
     queryKey: ['issues', projectId],
@@ -221,6 +263,22 @@ export default function SystemFunctionsPage() {
               ))}
             </div>
 
+            <button
+              type="button"
+              onClick={() => setIsTreePanelOpen((o) => !o)}
+              className={clsx(
+                'inline-flex gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors',
+                isTreePanelOpen
+                  ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+                  : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+              )}
+              title={isTreePanelOpen ? 'Hide tree' : 'Show tree'}
+            >
+              {isTreePanelOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+              <FolderTree size={16} />
+              Tree
+            </button>
+
             <SafetyLinkPanel variant="impact" count={2} />
 
             <button
@@ -236,26 +294,56 @@ export default function SystemFunctionsPage() {
 
       {/* Main content: tree + detail */}
       <div ref={resizeContainerRef} className="flex-1 flex overflow-hidden">
-        {/* Left: Tree panel */}
-        <div style={{ width: leftPanelWidth }} className="flex-shrink-0 overflow-hidden">
-          <FunctionTreePanel
-            functions={functions}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            onAddRoot={handleAddRoot}
-            onAddChild={handleAddChild}
-          />
-        </div>
+        {/* Left: Tree panel (collapsible) - always tree, never graph */}
+        {isTreePanelOpen ? (
+          <>
+            <div style={{ width: leftPanelWidth }} className="flex-shrink-0 overflow-hidden">
+              <FunctionTreePanel
+                functions={functions}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                onAddRoot={handleAddRoot}
+                onAddChild={handleAddChild}
+                onGraphClick={() => setLeftPanelViewMode('graph')}
+              />
+            </div>
+            <div
+              role="separator"
+              aria-label="Resize tree panel"
+              onMouseDown={handleResizeStart}
+              className="w-1 flex-shrink-0 cursor-col-resize bg-gray-100 dark:bg-gray-700 hover:bg-blue-300 dark:hover:bg-blue-600 transition-colors"
+            />
+          </>
+        ) : (
+          <div
+            className="shrink-0 w-8 flex flex-col items-center py-2 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
+            style={{ minWidth: 32 }}
+          >
+            <button
+              type="button"
+              onClick={() => setIsTreePanelOpen(true)}
+              className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
+              title="Expand tree"
+              aria-label="Expand tree"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        )}
 
-        {/* Resize handle */}
-        <div
-          className="w-1 flex-shrink-0 cursor-col-resize bg-gray-100 dark:bg-gray-700 hover:bg-blue-300 dark:hover:bg-blue-600 transition-colors"
-          onMouseDown={handleResizeStart}
-        />
-
-        {/* Right: Detail panel or empty state — aligned with PBS */}
+        {/* Center: Graph (when graph mode) OR FunctionDetailPanel/empty (when tree mode) */}
         <div className="flex-1 min-w-0 flex flex-col rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
-          {isLoading ? (
+          {leftPanelViewMode === 'graph' ? (
+            <RelationshipGraphView
+              projectId={projectId}
+              mode="functions"
+              functions={functionsForGraph}
+              selectedId={selectedId}
+              onNodeSelect={(nodeId) => setSelectedId(nodeId)}
+              onBackToTree={() => setLeftPanelViewMode('tree')}
+              showBackButton
+            />
+          ) : isLoading ? (
             <div className="h-full flex items-center justify-center">
               <div className="flex flex-col items-center gap-3">
                 <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />

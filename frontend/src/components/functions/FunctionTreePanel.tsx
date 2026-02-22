@@ -12,6 +12,7 @@ import {
   Cpu,
   Box,
   X,
+  Network,
 } from 'lucide-react'
 import type { SystemFunction } from 'shared/types/engineering.types'
 
@@ -27,6 +28,7 @@ interface FunctionTreePanelProps {
   onSelect: (id: string | null) => void
   onAddRoot: () => void
   onAddChild: (parentId: string) => void
+  onGraphClick?: () => void
 }
 
 // ── Helpers ──
@@ -131,6 +133,7 @@ export default function FunctionTreePanel({
   onSelect,
   onAddRoot,
   onAddChild,
+  onGraphClick,
 }: FunctionTreePanelProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
@@ -279,6 +282,16 @@ export default function FunctionTreePanel({
             Function Hierarchy
           </h3>
           <div className="flex items-center gap-1">
+            {onGraphClick && (
+              <button
+                onClick={onGraphClick}
+                className="p-1.5 rounded hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 transition-colors"
+                title="View relationship graph"
+                aria-label="View as graph"
+              >
+                <Network size={14} />
+              </button>
+            )}
             <button
               onClick={toggleAll}
               className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition-colors"

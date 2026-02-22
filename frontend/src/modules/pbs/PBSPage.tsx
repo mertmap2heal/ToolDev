@@ -11,6 +11,8 @@ import {
   Upload,
   FolderTree,
   ChevronDown,
+  ChevronRight,
+  ChevronLeft,
   Loader2,
   Check,
   AlertCircle,
@@ -45,6 +47,7 @@ import { LINKAGE_V1 } from '../../config/featureFlags'
 import { buildDeepLink } from '../../linkage/buildDeepLink'
 import type { LinkedElementClickPayload } from '../../components/requirements/RequirementsPBSTree'
 import LinkedElementPreviewPopover from '../../components/requirements/LinkedElementPreviewPopover'
+import { RelationshipGraphView } from '../../components/relationshipGraph'
 
 const SAVE_DEBOUNCE_MS = 600
 
@@ -76,6 +79,8 @@ export default function PBSPage() {
   const [rightPanelTab, setRightPanelTab] = useState<'requirements' | 'functions'>('requirements')
   const [selectedComponentIdForReqs, setSelectedComponentIdForReqs] = useState<string | null>(null)
   const [linkedElementPreview, setLinkedElementPreview] = useState<LinkedElementClickPayload | null>(null)
+  const [leftPanelViewMode, setLeftPanelViewMode] = useState<'tree' | 'graph'>('tree')
+  const [isTreePanelOpen, setIsTreePanelOpen] = useState(true)
   const REQS_PANEL_WIDTH_KEY = `pbs::reqs-panel-width::${projectId ?? 'default'}`
   const REQS_PANEL_MIN = 260
   const REQS_PANEL_MAX = 500
@@ -702,6 +707,21 @@ export default function PBSPage() {
 
           <button
             type="button"
+            onClick={() => setIsTreePanelOpen((o) => !o)}
+            className={clsx(
+              'inline-flex gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors',
+              isTreePanelOpen
+                ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+                : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+            )}
+            title={isTreePanelOpen ? 'Hide tree' : 'Show tree'}
+          >
+            {isTreePanelOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+            <FolderTree size={16} />
+            Tree
+          </button>
+          <button
+            type="button"
             onClick={() => setIsRequirementsPanelOpen((o) => !o)}
             className={clsx(
               'inline-flex gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors',
@@ -750,36 +770,68 @@ export default function PBSPage() {
         ref={resizeContainerRef}
         className="flex-1 flex overflow-hidden min-h-0"
       >
-        <div
-          className="shrink-0 flex flex-col gap-2"
-          style={{ width: leftPanelWidth }}
-        >
-          <PBSTree
-            nodes={nodes}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            onAddRoot={handlers.addRoot}
-            onAddChild={handlers.addChild}
-            onAddSibling={handlers.addSibling}
-            onRename={handlers.rename}
-            onInlineRename={handleInlineRename}
-            onDuplicate={handlers.duplicateNode}
-            onDelete={handlers.deleteNode}
-            onMove={handlers.moveNode}
-          />
-          <PBSStats nodes={nodes} />
-        </div>
-        <div
-          role="separator"
-          aria-label="Resize tree panel"
-          onMouseDown={handleResizeStart}
-          className="w-1 flex-shrink-0 cursor-col-resize bg-gray-100 dark:bg-gray-700 hover:bg-blue-300 dark:hover:bg-blue-600 transition-colors"
-        />
+        {/* Left: Tree panel (collapsible) - always tree, never graph */}
+        {isTreePanelOpen ? (
+          <>
+            <div
+              className="shrink-0 flex flex-col gap-2"
+              style={{ width: leftPanelWidth }}
+            >
+              <PBSTree
+                nodes={nodes}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                onAddRoot={handlers.addRoot}
+                onAddChild={handlers.addChild}
+                onAddSibling={handlers.addSibling}
+                onRename={handlers.rename}
+                onInlineRename={handleInlineRename}
+                onDuplicate={handlers.duplicateNode}
+                onDelete={handlers.deleteNode}
+                onMove={handlers.moveNode}
+                onGraphClick={() => setLeftPanelViewMode('graph')}
+              />
+              <PBSStats nodes={nodes} />
+            </div>
+            <div
+              role="separator"
+              aria-label="Resize tree panel"
+              onMouseDown={handleResizeStart}
+              className="w-1 flex-shrink-0 cursor-col-resize bg-gray-100 dark:bg-gray-700 hover:bg-blue-300 dark:hover:bg-blue-600 transition-colors"
+            />
+          </>
+        ) : (
+          <div
+            className="shrink-0 w-8 flex flex-col items-center py-2 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900"
+            style={{ minWidth: 32 }}
+          >
+            <button
+              type="button"
+              onClick={() => setIsTreePanelOpen(true)}
+              className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
+              title="Expand tree"
+              aria-label="Expand tree"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        )}
+        {/* Center: Graph (when graph mode) OR PBSNodeEditor/empty (when tree mode) */}
         <div
           ref={reqsResizeContainerRef}
           className="flex-1 min-w-0 flex flex-col rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden"
         >
-          {nodes.length === 0 ? (
+          {leftPanelViewMode === 'graph' ? (
+            <RelationshipGraphView
+              projectId={projectId}
+              mode="pbs"
+              pbsNodes={nodes}
+              selectedId={selectedId}
+              onNodeSelect={(nodeId) => setSelectedId(nodeId)}
+              onBackToTree={() => setLeftPanelViewMode('tree')}
+              showBackButton
+            />
+          ) : nodes.length === 0 ? (
             // Empty state (e.g. user deleted all nodes) — restore project root — aligned with Functions
             <div className="flex-1 flex items-center justify-center bg-gray-50/50 dark:bg-gray-900/30 overflow-y-auto">
               <div className="text-center max-w-md px-6">

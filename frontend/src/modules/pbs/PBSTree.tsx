@@ -15,6 +15,7 @@ import {
   Package,
   Cpu,
   FileText,
+  Network,
   type LucideIcon,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -63,6 +64,7 @@ interface PBSTreeProps {
   onDuplicate: (nodeId: string) => void
   onDelete: (nodeId: string) => void
   onMove: (nodeId: string, targetParentId: string | null, targetOrderIndex: number) => void
+  onGraphClick?: () => void
 }
 
 const TYPE_BADGE_CLASS: Record<string, string> = {
@@ -328,6 +330,7 @@ export default function PBSTree({
   onDuplicate,
   onDelete,
   onMove,
+  onGraphClick,
 }: PBSTreeProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterType, setFilterType] = useState<string | null>(null)
@@ -806,26 +809,39 @@ export default function PBSTree({
             <FolderTree size={16} />
             Product Structure
           </h3>
-          {hasExpandableNodes && (
-            <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1">
+            {onGraphClick && (
               <button
                 type="button"
-                onClick={expandAll}
-                aria-label="Expand all"
-                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                onClick={onGraphClick}
+                aria-label="View as graph"
+                title="View relationship graph"
+                className="p-1 rounded hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
-                <ChevronsUpDown size={16} />
+                <Network size={16} />
               </button>
-              <button
-                type="button"
-                onClick={collapseAll}
-                aria-label="Collapse all"
-                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              >
-                <ChevronsDownUp size={16} />
-              </button>
-            </div>
-          )}
+            )}
+            {hasExpandableNodes && (
+              <>
+                <button
+                  type="button"
+                  onClick={expandAll}
+                  aria-label="Expand all"
+                  className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                >
+                  <ChevronsUpDown size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={collapseAll}
+                  aria-label="Collapse all"
+                  className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                >
+                  <ChevronsDownUp size={16} />
+                </button>
+              </>
+            )}
+          </div>
         </div>
         <div className="flex gap-2">
           <div className="relative flex-1">
