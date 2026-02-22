@@ -23,6 +23,7 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
   })
   const [selectedTestingEnvironments, setSelectedTestingEnvironments] = useState<Set<string>>(new Set())
   const [selectedTestingTools, setSelectedTestingTools] = useState<Set<string>>(new Set())
+  const [selectedSetupIds, setSelectedSetupIds] = useState<Set<string>>(new Set())
 
   // Selection State
   const [selectedTestCaseIds, setSelectedTestCaseIds] = useState<Set<string>>(new Set())
@@ -71,6 +72,15 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
     enabled: isOpen && activeTab === 'general',
   })
 
+  const { data: setups = [] } = useQuery({
+    queryKey: ['setups', projectId],
+    queryFn: async () => {
+      const res = await verificationService.getSetups(projectId) as { success?: boolean; data?: unknown }
+      return res.success ? (res.data as { id: string; name: string }[]) : []
+    },
+    enabled: isOpen,
+  })
+
   const envOptions: { id: string; value: string }[] = environmentOptions?.success && environmentOptions?.data ? (environmentOptions.data as { id: string; value: string }[]) : []
   const toolOptions: { id: string; value: string }[] = testingToolOptions?.success && testingToolOptions?.data ? (testingToolOptions.data as { id: string; value: string }[]) : []
 
@@ -95,16 +105,23 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
         testingEnvironmentIds: Array.from(selectedTestingEnvironments),
         testingToolIds: Array.from(selectedTestingTools),
       }
-      const res = await verificationService.createTestPlan(projectId, payload)
+      const res = await verificationService.createTestPlan(projectId, payload) as { success?: boolean; error?: string; data?: { id: string } }
       if (!res.success) throw new Error(res.error)
-      const planId = res.data.id
+      const planId = (res.data as { id: string }).id
 
       // 2. Add Test Cases
       for (const tcId of selectedTestCaseIds) {
         await verificationService.addCaseToPlan(projectId, planId, tcId)
       }
 
-      // 3. Link Verification Elements
+      // 3. Link setups to each test case
+      for (const tcId of selectedTestCaseIds) {
+        for (const setupId of selectedSetupIds) {
+          await verificationService.linkSetup(projectId, tcId, setupId)
+        }
+      }
+
+      // 4. Link Verification Elements
       for (const link of selectedLinks) {
         await verificationService.linkTestPlanVerificationElement(projectId, planId, link.type, link.id)
       }
@@ -126,6 +143,7 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
       })
       setSelectedTestingEnvironments(new Set())
       setSelectedTestingTools(new Set())
+      setSelectedSetupIds(new Set())
       setSelectedTestCaseIds(new Set())
       setSelectedLinks([])
       setActiveTab('general')
@@ -150,6 +168,13 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
     if (next.has(value)) next.delete(value)
     else next.add(value)
     setSelectedTestingTools(next)
+  }
+
+  const toggleSetup = (setupId: string) => {
+    const next = new Set(selectedSetupIds)
+    if (next.has(setupId)) next.delete(setupId)
+    else next.add(setupId)
+    setSelectedSetupIds(next)
   }
 
   const toggleTestCase = (id: string) => {
@@ -282,6 +307,38 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
                             type="checkbox"
                             checked={selectedTestingTools.has(opt.value)}
                             onChange={() => toggleTestingTool(opt.value)}
+                            className="sr-only"
+                          />
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Test Setups
+                  </label>
+                  <div className="grid grid-cols-1 gap-2 max-h-[140px] overflow-y-auto p-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                    {(setups as { id: string; name: string }[]).length === 0 ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 py-2">No test setups available.</p>
+                    ) : (
+                      (setups as { id: string; name: string }[]).map((setup) => (
+                        <label
+                          key={setup.id}
+                          className={clsx(
+                            "flex items-center gap-2 p-2 rounded cursor-pointer",
+                            selectedSetupIds.has(setup.id) ? "bg-blue-50 dark:bg-blue-900/20" : "hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                          )}
+                        >
+                          <div className={clsx(selectedSetupIds.has(setup.id) ? "text-blue-600 dark:text-blue-400" : "text-gray-400")}>
+                            {selectedSetupIds.has(setup.id) ? <CheckSquare size={18} /> : <Square size={18} />}
+                          </div>
+                          <span className="text-sm text-gray-900 dark:text-white">{setup.name}</span>
+                          <input
+                            type="checkbox"
+                            checked={selectedSetupIds.has(setup.id)}
+                            onChange={() => toggleSetup(setup.id)}
                             className="sr-only"
                           />
                         </label>

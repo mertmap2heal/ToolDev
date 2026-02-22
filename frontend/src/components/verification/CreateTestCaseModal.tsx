@@ -41,7 +41,6 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
   const [steps, setSteps] = useState<Step[]>([{ id: '1', text: '' }])
   const [criteria, setCriteria] = useState<Criterion[]>([])
   const [attachments, setAttachments] = useState<File[]>([])
-  const [selectedSetups, setSelectedSetups] = useState<string[]>([])
   const [customSections, setCustomSections] = useState<Array<{ id: string; title: string; content: string; orderIndex: number }>>([])
   const [selectedLinks, setSelectedLinks] = useState<{ type: 'requirement' | 'function'; id: string }[]>([])
   const [linkSearchTerm, setLinkSearchTerm] = useState('')
@@ -65,15 +64,6 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
     queryKey: ['methods', projectId],
     queryFn: async () => {
       const res = await verificationService.getMethods(projectId)
-      return res.success ? res.data : []
-    },
-    enabled: isOpen,
-  })
-
-  const { data: setups = [] } = useQuery({
-    queryKey: ['setups', projectId],
-    queryFn: async () => {
-      const res = await verificationService.getSetups(projectId)
       return res.success ? res.data : []
     },
     enabled: isOpen,
@@ -117,17 +107,12 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
 
       const testCaseId = (response.data as { id: string }).id
 
-      // 2. Link setups
-      for (const setupId of selectedSetups) {
-        await verificationService.linkSetup(projectId, testCaseId, setupId)
-      }
-
-      // 3. Link Verification Elements (Requirements/Functions)
+      // 2. Link Verification Elements (Requirements/Functions)
       for (const link of selectedLinks) {
         await verificationService.linkTestCaseVerificationElement(projectId, testCaseId, link.type, link.id)
       }
 
-      // 4. Attachments
+      // 3. Attachments
       for (const file of attachments) {
         const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader()
@@ -152,7 +137,7 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
         }
       }
 
-      // 5. Custom Sections
+      // 4. Custom Sections
       for (let i = 0; i < customSections.length; i++) {
         await verificationService.createCustomSection(projectId, testCaseId, {
           title: customSections[i].title,
@@ -188,7 +173,6 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
     setSteps([{ id: '1', text: '' }])
     setCriteria([])
     setAttachments([])
-    setSelectedSetups([])
     setCustomSections([])
     setSelectedLinks([])
     setErrors({})
@@ -285,7 +269,7 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
             { id: 'general', label: 'General', icon: Layers },
             { id: 'steps', label: 'Steps & Criteria', icon: clsx },
             { id: 'verifies', label: 'Verifies', count: selectedLinks.length },
-            { id: 'attachments', label: 'Setups & Attachments', count: attachments.length + selectedSetups.length },
+            { id: 'attachments', label: 'Attachments', count: attachments.length },
             { id: 'custom', label: 'Custom Sections', count: customSections.length },
           ].map((tab: any) => (
             <button
@@ -573,27 +557,6 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
             {/* Attachments Tab */}
             {activeTab === 'attachments' && (
               <div className="space-y-6">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Test Setups</h3>
-                  <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-2">
-                    {setups.map((setup: any) => (
-                      <div key={setup.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
-                        <input
-                          type="checkbox"
-                          checked={selectedSetups.includes(setup.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) setSelectedSetups([...selectedSetups, setup.id])
-                            else setSelectedSetups(selectedSetups.filter((id) => id !== setup.id))
-                          }}
-                          className="w-4 h-4 text-blue-600 rounded"
-                        />
-                        <div className="text-sm text-gray-900 dark:text-white">{setup.name}</div>
-                      </div>
-                    ))}
-                    {setups.length === 0 && <p className="text-sm text-gray-500 p-2">No setups available.</p>}
-                  </div>
-                </div>
-
                 <div>
                   <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Attachments</h3>
                   <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer" onClick={() => fileInputRef.current?.click()}>
