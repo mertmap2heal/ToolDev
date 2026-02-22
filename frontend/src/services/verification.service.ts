@@ -167,5 +167,23 @@ export const verificationService = {
   getTraceabilityMatrix: (projectId: string, considerPassedWithErrors?: boolean) =>
     apiClient.get(`/verification/traceability-matrix/${projectId}`, considerPassedWithErrors === false ? { params: { considerPassedWithErrors: 'false' } } : undefined),
   getCoverageGaps: (projectId: string) => apiClient.get(`/verification/traceability-matrix/${projectId}/gaps`),
+  createNonconformityFromFailedResult: (projectId: string, runResultId: string) =>
+    apiClient.post(`/verification/nonconformities/${projectId}/from-failed-run-result/${runResultId}`),
+  getReviews: (projectId: string) => apiClient.get(`/verification/reviews/${projectId}`),
+  createReview: (projectId: string, data: { reviewType: string; title: string; description?: string; datePlanned: string }) =>
+    apiClient.post(`/verification/reviews/${projectId}`, data),
+  getReview: (projectId: string, id: string) => apiClient.get(`/verification/reviews/${projectId}/${id}`),
+  updateReview: (projectId: string, id: string, data: unknown) => apiClient.patch(`/verification/reviews/${projectId}/${id}`, data),
+  closeReview: (projectId: string, id: string) => apiClient.post(`/verification/reviews/${projectId}/${id}/close`),
+  addReviewItem: (projectId: string, reviewId: string, data: unknown) =>
+    apiClient.post(`/verification/reviews/${projectId}/${reviewId}/items`, data),
+  updateReviewItem: (projectId: string, reviewId: string, itemId: string, data: unknown) =>
+    apiClient.patch(`/verification/reviews/${projectId}/${reviewId}/items/${itemId}`, data),
+  getBaselines: (projectId: string) => apiClient.get(`/verification/baselines/${projectId}`),
+  createBaseline: (projectId: string, data: { name: string; description?: string; baselineType: string }) =>
+    apiClient.post(`/verification/baselines/${projectId}`, data),
+  getBaseline: (projectId: string, id: string) => apiClient.get(`/verification/baselines/${projectId}/${id}`),
+  compareBaselines: (projectId: string, id: string, otherId: string) =>
+    apiClient.post(`/verification/baselines/${projectId}/${id}/compare/${otherId}`),
   exportWithTemplate: (projectId: string, data: unknown) => apiClient.post(`/verification/export-with-template/${projectId}`, data),
 }

@@ -155,9 +155,9 @@ export default function VerificationPage() {
   const focusType = searchParams.get('focusType')
   const focusId = searchParams.get('focusId')
   const caseId = searchParams.get('caseId')
-  const activeTab = (['overview', 'plans', 'cases', 'runs', 'setups', 'results', 'traceability'].includes(resolvedTab)
+  const activeTab = (['overview', 'plans', 'cases', 'runs', 'setups', 'results', 'reviews', 'traceability'].includes(resolvedTab)
     ? resolvedTab
-    : 'overview') as 'overview' | 'plans' | 'cases' | 'runs' | 'setups' | 'results' | 'traceability'
+    : 'overview') as 'overview' | 'plans' | 'cases' | 'runs' | 'setups' | 'results' | 'reviews' | 'traceability'
   const useTemplateId = searchParams.get('useTemplateId')
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -333,6 +333,17 @@ export default function VerificationPage() {
       return response.success && response.data ? response.data : []
     },
     enabled: !!projectId && (activeTab === 'setups' || activeTab === 'cases' || focusType === 'test_setup' || focusType === 'test-setup'),
+  })
+
+  // Fetch reviews (when on reviews tab)
+  const { data: reviews = [], isLoading: loadingReviews } = useQuery({
+    queryKey: ['verification-reviews', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const response = await verificationService.getReviews(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId && activeTab === 'reviews',
   })
 
   // Fetch test results (enabled whenever on verification page so data is ready when switching to results tab)
@@ -636,6 +647,33 @@ export default function VerificationPage() {
                   <div className="text-xs text-gray-500 mt-1">Overall verification</div>
                 </div>
               </div>
+
+              {/* MoC Coverage Dashboard */}
+              {overview.coverage?.byMoc && Object.keys(overview.coverage.byMoc).length > 0 && (
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-4">MoC Coverage by Code</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {Object.entries(overview.coverage.byMoc).map(([mocCode, data]: [string, any]) => (
+                      <div
+                        key={mocCode}
+                        className="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-gray-50 dark:bg-gray-700/50"
+                      >
+                        <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">MoC {mocCode}</div>
+                        <div className="text-lg font-bold text-gray-900 dark:text-white mt-1">{data.percentage || 0}%</div>
+                        <div className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                          {data.verified || 0} / {data.total || 0} verified
+                        </div>
+                        <div className="mt-2 h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-blue-600 dark:bg-blue-500 rounded-full transition-all"
+                            style={{ width: `${Math.min(100, data.percentage || 0)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Nonconformities */}
               {overview.nonconformities && (overview.nonconformities?.total ?? 0) > 0 && (
@@ -1615,6 +1653,59 @@ export default function VerificationPage() {
           ) : (
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center">
               <p className="text-gray-600 dark:text-gray-400">No test results found</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'reviews' && (
+        <div className="space-y-4">
+          {loadingReviews ? (
+            <div className="flex items-center justify-center p-12">
+              <RefreshCw className="animate-spin text-gray-400" size={24} />
+            </div>
+          ) : (reviews as any[]).length > 0 ? (
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              <table className="w-full text-left">
+                <thead className="bg-gray-50 dark:bg-gray-900">
+                  <tr>
+                    <th className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Title</th>
+                    <th className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Type</th>
+                    <th className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Status</th>
+                    <th className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Planned</th>
+                    <th className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Items</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {(reviews as any[]).map((review: any) => (
+                    <tr key={review.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{review.title}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{review.reviewType || '—'}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={clsx(
+                            'inline-flex px-2 py-1 rounded text-xs font-medium',
+                            review.status === 'CLOSED' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                            review.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400' :
+                            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                          )}
+                        >
+                          {review.status || 'PLANNED'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                        {review.datePlanned ? new Date(review.datePlanned).toLocaleDateString() : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{review.items?.length ?? 0}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-12 text-center">
+              <p className="text-gray-600 dark:text-gray-400">No reviews yet.</p>
+              <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">Reviews track formal verification reviews (e.g. TRR, QSR).</p>
             </div>
           )}
         </div>

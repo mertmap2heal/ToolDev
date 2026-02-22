@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import {
   X,
   Play,
@@ -14,6 +14,9 @@ import {
   Wrench,
   Server,
   Package,
+  AlertTriangle,
+  Paperclip,
+  Download,
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
@@ -62,6 +65,7 @@ export default function TestRunExecutionView({
   onCompleteAndExport,
 }: TestRunExecutionViewProps) {
   const queryClient = useQueryClient()
+  const evidenceInputRef = useRef<HTMLInputElement>(null)
   const [readinessCheckbox, setReadinessCheckbox] = useState(false)
   const [readinessConfirmed, setReadinessConfirmed] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -166,6 +170,94 @@ export default function TestRunExecutionView({
     onError: (err: any) => alert(err?.message || 'Failed to complete and export'),
   })
 
+  const uploadEvidenceMutation = useMutation({
+    mutationFn: async ({ resultId, file }: { resultId: string; file: File }) => {
+      const reader = new FileReader()
+      const base64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve((reader.result as string)?.split(',')[1] ?? '')
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      return verificationService.uploadRunResultEvidence(projectId, run.id, resultId, {
+        fileData: base64,
+        fileName: file.name,
+        mimeType: file.type || undefined,
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['test-run', projectId, run.id] })
+    },
+    onError: (err: any) => alert(err?.message || 'Failed to upload evidence'),
+  })
+
+  const handleAttachEvidence = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !currentResult) return
+    uploadEvidenceMutation.mutate({ resultId: currentResult.id, file })
+    e.target.value = ''
+  }
+
+  const createNcMutation = useMutation({
+    mutationFn: (runResultId: string) =>
+      verificationService.createNonconformityFromFailedResult(projectId, runResultId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['test-run', projectId, run.id] })
+    },
+  })
+
+  const DRAFT_KEY = `verification-run-draft-${run.id}`
+
+  const getStoredDrafts = useCallback((): Record<string, { payload: any; timestamp: number }> => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY)
+      return raw ? JSON.parse(raw) : {}
+    } catch {
+      return {}
+    }
+  }, [run.id])
+
+  const [pendingDrafts, setPendingDrafts] = useState(getStoredDrafts)
+
+  const storeDraft = useCallback(
+    (resultId: string, payload: any) => {
+      const drafts = { ...getStoredDrafts(), [resultId]: { payload, timestamp: Date.now() } }
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts))
+      setPendingDrafts(drafts)
+    },
+    [getStoredDrafts]
+  )
+
+  const clearDraft = useCallback((resultId: string) => {
+    const drafts = getStoredDrafts()
+    delete drafts[resultId]
+    if (Object.keys(drafts).length) {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts))
+    } else {
+      localStorage.removeItem(DRAFT_KEY)
+    }
+    setPendingDrafts({ ...drafts })
+  }, [getStoredDrafts])
+
+  const retrySync = useCallback(
+    async (resultId: string) => {
+      const draft = pendingDrafts[resultId]
+      if (!draft?.payload) return
+      try {
+        await verificationService.updateRunResult(projectId, run.id, resultId, {
+          resultStatus: draft.payload.resultStatus,
+          stepOutcomes: draft.payload.stepOutcomes,
+          failConditions: draft.payload.failConditions,
+          actualResultsBlocks: draft.payload.actualResultsBlocks,
+        })
+        clearDraft(resultId)
+        queryClient.invalidateQueries({ queryKey: ['test-run', projectId, run.id] })
+      } catch (err: any) {
+        alert(err?.message || 'Sync failed')
+      }
+    },
+    [pendingDrafts, projectId, run.id, clearDraft, queryClient]
+  )
+
   const updateResultMutation = useMutation({
     mutationFn: (payload: {
       resultId: string
@@ -180,9 +272,14 @@ export default function TestRunExecutionView({
         failConditions: payload.failConditions,
         actualResultsBlocks: payload.actualResultsBlocks,
       }),
-    onSuccess: () => {
+    onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['test-run', projectId, run.id] })
       queryClient.invalidateQueries({ queryKey: ['test-runs', projectId] })
+      clearDraft(vars.resultId)
+    },
+    onError: (err: any, vars) => {
+      storeDraft(vars.resultId, vars)
+      alert(err?.message || 'Update failed. Changes saved locally. Retry sync when online.')
     },
   })
 
@@ -343,6 +440,30 @@ export default function TestRunExecutionView({
               </button>
             )}
           </div>
+          {plan?.id && (
+            <button
+              onClick={async () => {
+                try {
+                  const res = (await verificationService.getTestPlanReport(projectId, plan.id)) as { success?: boolean; data?: any }
+                  if (res.success && res.data) {
+                    const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `Run-${r.runName || r.id}-Report-${new Date().toISOString().slice(0, 10)}.json`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  }
+                } catch (err: any) {
+                  alert(err?.message || 'Failed to download report')
+                }
+              }}
+              className="flex items-center gap-2 px-3 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+            >
+              <Download size={14} />
+              Download Report
+            </button>
+          )}
           {isCompleted && onCompleteAndExport && (
             <div className="flex items-center gap-4">
               {plan?.exitCriteria && (
@@ -497,6 +618,24 @@ export default function TestRunExecutionView({
         </div>
       ) : (
         <>
+          {Object.keys(pendingDrafts).length > 0 && (
+            <div className="flex-shrink-0 px-6 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 flex items-center justify-between gap-4">
+              <span className="text-sm text-amber-800 dark:text-amber-200">
+                {Object.keys(pendingDrafts).length} unsaved change(s). Connection may be offline.
+              </span>
+              <div className="flex gap-2">
+                {Object.keys(pendingDrafts).map((rid) => (
+                  <button
+                    key={rid}
+                    onClick={() => retrySync(rid)}
+                    className="px-3 py-1.5 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-lg"
+                  >
+                    Retry sync
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {/* Progress bar */}
           <div className="flex-shrink-0 px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50">
             <div className="flex items-center justify-between text-sm">
@@ -700,6 +839,16 @@ export default function TestRunExecutionView({
                         </option>
                       ))}
                     </select>
+                    {(currentResult.resultStatus === 'FAIL' || currentResult.resultStatus === 'PASSED_WITH_ERRORS') && (
+                      <button
+                        onClick={() => createNcMutation.mutate(currentResult.id)}
+                        disabled={createNcMutation.isPending}
+                        className="mt-3 flex items-center gap-2 px-3 py-2 text-sm bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg"
+                      >
+                        <AlertTriangle size={16} />
+                        {createNcMutation.isPending ? 'Creating…' : 'Create Nonconformity'}
+                      </button>
+                    )}
                   </div>
 
                   {/* Rich notes */}
@@ -732,9 +881,27 @@ export default function TestRunExecutionView({
                     </button>
                     {currentResult.actualResultBlocks?.length > 0 && (
                       <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                        {currentResult.actualResultBlocks.length} note(s) saved
+                        {currentResult.actualResultBlocks.length} note(s)/evidence saved
                       </p>
                     )}
+                    <div className="mt-2 flex items-center gap-2">
+                      <input
+                        ref={evidenceInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/jpg,image/gif,image/webp,.png,.jpg,.jpeg,.gif,.webp"
+                        onChange={handleAttachEvidence}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => evidenceInputRef.current?.click()}
+                        disabled={uploadEvidenceMutation.isPending}
+                        className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 dark:text-gray-300"
+                      >
+                        <Paperclip size={16} />
+                        {uploadEvidenceMutation.isPending ? 'Uploading…' : 'Attach evidence (screenshot/image)'}
+                      </button>
+                    </div>
                   </div>
                 </>
               )}

@@ -9,6 +9,7 @@ import {
   FileCode,
   Play,
   Table2,
+  ClipboardList,
 } from 'lucide-react'
 
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
@@ -29,6 +30,7 @@ const MAIN_TABS = [
   { id: 'runs', label: 'Test Runs', icon: Play },
   { id: 'setups', label: 'Test Setups', icon: Settings },
   { id: 'results', label: 'Test Results', icon: CheckCircle },
+  { id: 'reviews', label: 'Reviews', icon: ClipboardList },
   { id: 'traceability', label: 'Traceability Matrix', icon: Table2 },
 ]
 
@@ -39,6 +41,7 @@ const TAB_LABELS: Record<string, string> = {
   runs: 'Test Runs',
   setups: 'Test Setups',
   results: 'Test Results',
+  reviews: 'Reviews',
   traceability: 'Traceability Matrix',
 }
 
@@ -49,7 +52,7 @@ function VerificationLayoutInner() {
   const breadcrumb = useBreadcrumb()
   const isTemplates = location.pathname.includes('/verification/templates')
   const tabParam = new URLSearchParams(location.search).get('tab') || 'overview'
-  const validTabs = ['overview', 'plans', 'cases', 'runs', 'setups', 'results', 'traceability']
+  const validTabs = ['overview', 'plans', 'cases', 'runs', 'setups', 'results', 'reviews', 'traceability']
   const activeTabParam = validTabs.includes(tabParam) ? tabParam : 'overview'
   const drawer = useVerificationDrawer()
 

@@ -148,6 +148,39 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
     },
   })
 
+  const duplicateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await verificationService.createTestCase(projectId, {
+        title: `Copy of ${currentCase?.title || 'Test Case'}`,
+        objective: currentCase?.objective,
+        preconditions: currentCase?.preconditions,
+        steps: currentCase?.steps,
+        expectedResults: currentCase?.expectedResults,
+        passFailCriteria: currentCase?.passFailCriteria,
+        linkedMocCode: currentCase?.linkedMocCode,
+        linkedMethodId: currentCase?.linkedMethodId,
+        ownerUserId: currentCase?.ownerUserId,
+      })
+      if (!res.success || !res.data) throw new Error((res as any).error || 'Duplicate failed')
+      const newCase = res.data
+      const setupIds = currentCase?.testCaseSetups?.map((l: any) => l.setupId) ?? []
+      for (const setupId of setupIds) {
+        try {
+          await verificationService.linkSetup(projectId, newCase.id, setupId)
+        } catch (e) {
+          console.error('Failed to link setup:', e)
+        }
+      }
+      return newCase
+    },
+    onSuccess: (newCase) => {
+      queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
+      drawer.openCase(newCase)
+    },
+    onError: (err: any) => alert(err?.message || 'Failed to duplicate'),
+  })
+
   const linkSetupMutation = useMutation({
     mutationFn: (setupId: string) => verificationService.linkSetup(projectId, testCase.id, setupId),
   })
@@ -357,6 +390,13 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
                     Approve
                   </button>
                 )}
+                <button
+                  onClick={() => duplicateMutation.mutate()}
+                  disabled={duplicateMutation.isPending}
+                  className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                >
+                  {duplicateMutation.isPending ? 'Duplicating…' : 'Duplicate'}
+                </button>
                 <button
                   onClick={() => setIsEditing(true)}
                   className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { X, Play, Pause, Square, RotateCcw, CheckCircle, AlertTriangle, PlayCircle, ExternalLink } from 'lucide-react'
+import { X, Play, Pause, Square, RotateCcw, CheckCircle, AlertTriangle, PlayCircle, ExternalLink, Download } from 'lucide-react'
 import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
@@ -193,6 +193,30 @@ export default function TestRunDetailDrawer({ run, isOpen, onClose, projectId, o
                     >
                       <PlayCircle size={14} />
                       Execute
+                    </button>
+                  )}
+                  {r?.testPlanId && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = (await verificationService.getTestPlanReport(projectId, r.testPlanId)) as { success?: boolean; data?: any }
+                          if (res.success && res.data) {
+                            const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' })
+                            const url = URL.createObjectURL(blob)
+                            const a = document.createElement('a')
+                            a.href = url
+                            a.download = `Run-${r.runName || r.id}-Report-${new Date().toISOString().slice(0, 10)}.json`
+                            a.click()
+                            URL.revokeObjectURL(url)
+                          }
+                        } catch (err: any) {
+                          alert(err?.message || 'Failed to download report')
+                        }
+                      }}
+                      className="flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
+                      <Download size={14} />
+                      Download Plan Report
                     </button>
                   )}
                 </div>

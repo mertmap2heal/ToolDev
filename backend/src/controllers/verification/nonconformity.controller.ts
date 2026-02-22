@@ -123,6 +123,55 @@ export const createReverifyTask = async (req: AuthRequest, res: Response) => {
   }
 }
 
+export const createNonconformityFromFailedResult = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, runResultId } = req.params
+    const runResult = await prisma.verTestRunResult.findFirst({
+      where: {
+        id: runResultId,
+        testRun: { testPlan: { projectId: projectId as string } },
+      },
+      include: {
+        testCaseVersionSnapshot: true,
+        testCase: true,
+      },
+    })
+    if (!runResult) {
+      return res.status(404).json({ success: false, error: 'Run result not found' })
+    }
+    const snapshot = (runResult.testCaseVersionSnapshot ?? {}) as Record<string, unknown>
+    const title = (snapshot.title as string) || runResult.testCase?.title || 'Failed test'
+    const actualResults = (runResult.actualResults ?? {}) as Record<string, unknown>
+    const failConditions = (actualResults.failConditions as string) || ''
+    const description = failConditions.trim()
+      ? `Source: ${runResult.testCase?.key || runResult.testCaseId?.slice(0, 8)}\n\nFail conditions:\n${failConditions}`
+      : `Source: ${runResult.testCase?.key || runResult.testCaseId?.slice(0, 8)}`
+    const nc = await prisma.verNonconformity.create({
+      data: {
+        projectId,
+        title,
+        description,
+        severity: 'MEDIUM',
+        sourceTestRunResultId: runResultId,
+        status: NonconformityStatus.OPEN,
+        createdByUserId: req.userId,
+      },
+    })
+    await auditService.logEvent({
+      projectId,
+      entityType: 'NONCONFORMITY',
+      entityId: nc.id,
+      action: AuditAction.CREATE,
+      newValue: nc,
+      performedByUserId: req.userId,
+    })
+    res.status(201).json({ success: true, data: nc })
+  } catch (error: any) {
+    console.error('Create NC from failed result error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+}
+
 export const markReverified = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId, id } = req.params

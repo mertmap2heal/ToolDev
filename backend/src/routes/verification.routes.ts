@@ -148,6 +148,7 @@ router.post('/reviews/:projectId/:id/close', reviewController.closeReview)
 // J) Nonconformities
 router.get('/nonconformities/:projectId', nonconformityController.getNonconformities)
 router.post('/nonconformities/:projectId', nonconformityController.createNonconformity)
+router.post('/nonconformities/:projectId/from-failed-run-result/:runResultId', nonconformityController.createNonconformityFromFailedResult)
 router.get('/nonconformities/:projectId/:id', nonconformityController.getNonconformity)
 router.patch('/nonconformities/:projectId/:id', nonconformityController.updateNonconformity)
 router.post('/nonconformities/:projectId/:id/create-reverify-task', nonconformityController.createReverifyTask)
