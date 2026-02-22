@@ -6,7 +6,7 @@ import type { ApiResponse } from 'shared/types/api.types'
 
 const EXCLUDED_TARGET_TYPES = ['parameter']
 
-function traceLinkToLink(tl: TraceLink): Link {
+function traceLinkToLink(tl: TraceLink & { targetLabel?: string; sourceLabel?: string }): Link {
   return {
     id: tl.id,
     projectId: tl.projectId,
@@ -22,9 +22,11 @@ function traceLinkToLink(tl: TraceLink): Link {
     targetTitle: tl.targetTitle,
     targetDescription: tl.targetDescription,
     targetDisplayId: tl.targetDisplayId,
+    targetLabel: tl.targetLabel,
     sourceTitle: tl.sourceTitle,
     sourceDescription: tl.sourceDescription,
-    sourceDisplayId: tl.sourceDisplayId
+    sourceDisplayId: tl.sourceDisplayId,
+    sourceLabel: tl.sourceLabel,
   }
 }
 

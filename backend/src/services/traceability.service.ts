@@ -253,21 +253,26 @@ export const traceabilityService = {
       uniqueCrLinks.set(key, l)
     })
 
-    // 4. For standard links (Req <-> Req, Req <-> Function), fetch Entity details to populate titles
-    // Collect IDs of requirements and functions involved in links
+    const allLinks = [...links, ...issueLinksDirect, ...issueLinksInverse, ...Array.from(uniqueCrLinks.values())]
+
+    // 4. For standard links, fetch Entity details to populate titles (from ALL links, not just TraceLink)
     const reqIdsToFetch = new Set<string>()
     const funcIdsToFetch = new Set<string>()
-    links.forEach(l => {
-      if (l.sourceType === 'requirement') reqIdsToFetch.add(l.sourceId)
-      if (l.targetType === 'requirement') reqIdsToFetch.add(l.targetId)
+    const testCaseIdsToFetch = new Set<string>()
+    allLinks.forEach((l: any) => {
+      if (l.sourceType === 'requirement' || l.sourceType === 'hazard' || l.sourceType === 'risk') reqIdsToFetch.add(l.sourceId)
+      if (l.targetType === 'requirement' || l.targetType === 'hazard' || l.targetType === 'risk') reqIdsToFetch.add(l.targetId)
       if (l.sourceType === 'function') funcIdsToFetch.add(l.sourceId)
       if (l.targetType === 'function') funcIdsToFetch.add(l.targetId)
+      if (l.sourceType === 'test_case') testCaseIdsToFetch.add(l.sourceId)
+      if (l.targetType === 'test_case') testCaseIdsToFetch.add(l.targetId)
     })
 
     let reqDetails: { id: string; title: string; requirementId: string | null }[] = []
     let funcDetails: { id: string; name: string; functionId: string | null }[] = []
+    let testCaseDetails: { id: string; key: string; title: string }[] = []
     try {
-      const [reqs, funcs] = await Promise.all([
+      const [reqs, funcs, testCases] = await Promise.all([
         reqIdsToFetch.size > 0
           ? prisma.requirement.findMany({
               where: { id: { in: Array.from(reqIdsToFetch) }, deletedAt: null },
@@ -280,29 +285,40 @@ export const traceabilityService = {
               select: { id: true, name: true, functionId: true }
             })
           : Promise.resolve([]),
+        testCaseIdsToFetch.size > 0
+          ? prisma.verTestCase.findMany({
+              where: { id: { in: Array.from(testCaseIdsToFetch) } },
+              select: { id: true, key: true, title: true }
+            })
+          : Promise.resolve([]),
       ])
       reqDetails = reqs
       funcDetails = funcs
+      testCaseDetails = testCases
     } catch (err) {
       console.error('getTraceLinks: Entity details fetch failed:', err)
     }
 
     const reqMap = new Map(reqDetails.map(r => [r.id, r]))
     const funcMap = new Map(funcDetails.map(f => [f.id, f]))
-
-    const allLinks = [...links, ...issueLinksDirect, ...issueLinksInverse, ...Array.from(uniqueCrLinks.values())]
+    const testCaseMap = new Map(testCaseDetails.map(t => [t.id, t]))
 
     const safeDate = (d: any) => (d ? new Date(d).getTime() : 0)
+    const isReqType = (t: string) => t === 'requirement' || t === 'hazard' || t === 'risk'
     return allLinks.sort((a: any, b: any) => safeDate(b.createdAt) - safeDate(a.createdAt)).map((link) => {
-      const isReqSource = link.sourceType === 'requirement'
-      const isReqTarget = link.targetType === 'requirement'
+      const isReqSource = isReqType(link.sourceType)
+      const isReqTarget = isReqType(link.targetType)
       const isFuncSource = link.sourceType === 'function'
       const isFuncTarget = link.targetType === 'function'
+      const isTestCaseSource = link.sourceType === 'test_case'
+      const isTestCaseTarget = link.targetType === 'test_case'
 
       const sReq = isReqSource ? reqMap.get(link.sourceId) : null
       const tReq = isReqTarget ? reqMap.get(link.targetId) : null
       const sFunc = isFuncSource ? funcMap.get(link.sourceId) : null
       const tFunc = isFuncTarget ? funcMap.get(link.targetId) : null
+      const sTc = isTestCaseSource ? testCaseMap.get(link.sourceId) : null
+      const tTc = isTestCaseTarget ? testCaseMap.get(link.targetId) : null
 
       return {
         id: link.id,
@@ -322,17 +338,33 @@ export const traceabilityService = {
         targetTitle:
           link.targetTitle ||
           (tReq ? tReq.title : undefined) ||
-          (tFunc ? tFunc.name : undefined),
+          (tFunc ? tFunc.name : undefined) ||
+          (tTc ? tTc.title : undefined),
         targetDisplayId:
           link.targetDisplayId ||
           (tReq ? (tReq.requirementId || tReq.id.substring(0, 8)) : undefined) ||
-          (tFunc ? (tFunc.functionId || tFunc.id.substring(0, 8)) : undefined),
+          (tFunc ? (tFunc.functionId || tFunc.id.substring(0, 8)) : undefined) ||
+          (tTc ? tTc.key : undefined),
+        targetLabel:
+          link.targetLabel ||
+          (tReq ? `${tReq.requirementId || tReq.id.substring(0, 8)} - ${tReq.title}` : undefined) ||
+          (tFunc ? `${tFunc.functionId || tFunc.id.substring(0, 8)} - ${tFunc.name}` : undefined) ||
+          (tTc ? `${tTc.key} - ${tTc.title}` : undefined),
         sourceTitle:
+          link.sourceTitle ||
           (sReq ? sReq.title : undefined) ||
-          (sFunc ? sFunc.name : undefined),
+          (sFunc ? sFunc.name : undefined) ||
+          (sTc ? sTc.title : undefined),
         sourceDisplayId:
+          link.sourceDisplayId ||
           (sReq ? (sReq.requirementId || sReq.id.substring(0, 8)) : undefined) ||
-          (sFunc ? (sFunc.functionId || sFunc.id.substring(0, 8)) : undefined),
+          (sFunc ? (sFunc.functionId || sFunc.id.substring(0, 8)) : undefined) ||
+          (sTc ? sTc.key : undefined),
+        sourceLabel:
+          link.sourceLabel ||
+          (sReq ? `${sReq.requirementId || sReq.id.substring(0, 8)} - ${sReq.title}` : undefined) ||
+          (sFunc ? `${sFunc.functionId || sFunc.id.substring(0, 8)} - ${sFunc.name}` : undefined) ||
+          (sTc ? `${sTc.key} - ${sTc.title}` : undefined),
       }
     })
   },

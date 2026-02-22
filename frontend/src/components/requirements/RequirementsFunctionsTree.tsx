@@ -21,6 +21,7 @@ interface LinkLike {
   targetDisplayId?: string
   sourceTitle?: string
   sourceDisplayId?: string
+  sourceLabel?: string
   linkType?: string
   _displayTargetType?: string
 }
@@ -198,7 +199,7 @@ function buildFlatTree(
               const isOutgoing = link.sourceType === 'requirement' && link.sourceId === req.id
               const label = isOutgoing
                 ? (link.targetLabel ?? link.targetTitle ?? link.targetDisplayId ?? `${link.targetType}:${link.targetId.slice(0, 8)}`)
-                : (link.sourceTitle ?? link.sourceDisplayId ?? `${link.sourceType}:${link.sourceId.slice(0, 8)}`)
+                : (link.sourceLabel ?? link.sourceTitle ?? link.sourceDisplayId ?? `${link.sourceType}:${link.sourceId.slice(0, 8)}`)
               const targetType = isOutgoing ? link.targetType : link.sourceType
               const linkKey = link.id ?? `${link.sourceType}-${link.sourceId}-${link.targetType}-${link.targetId}`
               items.push({
@@ -267,7 +268,7 @@ function buildFlatTree(
               const isOutgoing = link.sourceType === 'requirement' && link.sourceId === req.id
               const label = isOutgoing
                 ? (link.targetLabel ?? link.targetTitle ?? link.targetDisplayId ?? `${link.targetType}:${link.targetId.slice(0, 8)}`)
-                : (link.sourceTitle ?? link.sourceDisplayId ?? `${link.sourceType}:${link.sourceId.slice(0, 8)}`)
+                : (link.sourceLabel ?? link.sourceTitle ?? link.sourceDisplayId ?? `${link.sourceType}:${link.sourceId.slice(0, 8)}`)
               const targetType = isOutgoing ? link.targetType : link.sourceType
               const linkKey = link.id ?? `${link.sourceType}-${link.sourceId}-${link.targetType}-${link.targetId}`
               items.push({
@@ -372,6 +373,29 @@ export default function RequirementsFunctionsTree({
   const linksByReqId = useMemo(() => {
     const keyOf = (l: LinkLike) => l.id ?? `${l.sourceType}-${l.sourceId}-${l.targetType}-${l.targetId}`
     const funcMap = new Map(functions.map((f) => [f.id, f]))
+    const reqMapForEnrich = new Map(requirements.map((r) => [r.id, r]))
+    const reqByReqIdMap = new Map<string, Requirement>()
+    requirements.forEach((r) => { if (r.requirementId) reqByReqIdMap.set(String(r.requirementId), r) })
+    const isReqType = (t: string) => ['requirement', 'hazard', 'risk'].includes((t || '').toLowerCase())
+    const findReq = (id: string) => reqMapForEnrich.get(id) ?? reqByReqIdMap.get(id) ?? requirements.find((r) => r.id === id || String(r.requirementId) === id)
+    const enrichLink = (l: LinkLike): LinkLike => {
+      let enriched = { ...l }
+      if (isReqType(l.targetType) && !l.targetLabel && !l.targetTitle) {
+        const r = findReq(l.targetId)
+        if (r) {
+          const displayId = r.requirementId || r.id.slice(0, 8)
+          enriched = { ...enriched, targetLabel: `${displayId} - ${r.title}`, targetTitle: r.title, targetDisplayId: displayId }
+        }
+      }
+      if (isReqType(l.sourceType) && !l.sourceLabel && !l.sourceTitle) {
+        const r = findReq(l.sourceId)
+        if (r) {
+          const displayId = r.requirementId || r.id.slice(0, 8)
+          enriched = { ...enriched, sourceLabel: `${displayId} - ${r.title}`, sourceTitle: r.title, sourceDisplayId: displayId }
+        }
+      }
+      return enriched
+    }
     const map = new Map<string, LinkLike[]>()
     requirements.forEach((req, i) => {
       const outIdx = i * 2
@@ -384,7 +408,7 @@ export default function RequirementsFunctionsTree({
         const k = keyOf(l)
         if (seen.has(k)) continue
         seen.add(k)
-        combined.push(l)
+        combined.push(enrichLink(l))
       }
       // Merge allocation links (requirement -> function) so function appears when chevron expanded
       for (const link of allocationLinks) {

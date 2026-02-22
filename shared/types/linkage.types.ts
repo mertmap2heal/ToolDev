@@ -85,9 +85,11 @@ export interface Link {
   targetTitle?: string
   targetDescription?: string
   targetDisplayId?: string
+  targetLabel?: string
   sourceTitle?: string
   sourceDescription?: string
   sourceDisplayId?: string
+  sourceLabel?: string
 }
 
 export interface EntitySummary {

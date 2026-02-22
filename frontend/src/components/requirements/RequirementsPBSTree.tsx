@@ -22,6 +22,7 @@ interface LinkLike {
   targetDisplayId?: string
   sourceTitle?: string
   sourceDisplayId?: string
+  sourceLabel?: string
   linkType?: string
   _displayTargetType?: string
 }
@@ -179,7 +180,7 @@ function buildFlatTree(
                     const isOutgoing = link.sourceType === 'requirement' && link.sourceId === req.id
                     const label = isOutgoing
                       ? (link.targetLabel ?? link.targetTitle ?? link.targetDisplayId ?? `${link.targetType}:${link.targetId.slice(0, 8)}`)
-                      : (link.sourceTitle ?? link.sourceDisplayId ?? `${link.sourceType}:${link.sourceId.slice(0, 8)}`)
+                      : (link.sourceLabel ?? link.sourceTitle ?? link.sourceDisplayId ?? `${link.sourceType}:${link.sourceId.slice(0, 8)}`)
                     const targetType = isOutgoing ? link.targetType : link.sourceType
                     items.push({
                       id: `link-${req.id}-${link.id ?? `${link.sourceType}-${link.sourceId}-${link.targetType}-${link.targetId}`}`,
@@ -246,7 +247,7 @@ function buildFlatTree(
                     const isOutgoing = link.sourceType === 'requirement' && link.sourceId === req.id
                     const label = isOutgoing
                       ? (link.targetLabel ?? link.targetTitle ?? link.targetDisplayId ?? `${link.targetType}:${link.targetId.slice(0, 8)}`)
-                      : (link.sourceTitle ?? link.sourceDisplayId ?? `${link.sourceType}:${link.sourceId.slice(0, 8)}`)
+                      : (link.sourceLabel ?? link.sourceTitle ?? link.sourceDisplayId ?? `${link.sourceType}:${link.sourceId.slice(0, 8)}`)
                     const targetType = isOutgoing ? link.targetType : link.sourceType
                     items.push({
                       id: `link-${req.id}-${link.id ?? `${link.sourceType}-${link.sourceId}-${link.targetType}-${link.targetId}`}`,
@@ -378,8 +379,70 @@ export default function RequirementsPBSTree({
   // Build map: reqId -> links[] (outgoing + incoming, deduped). Include allocated_to for visibility when chevron expanded.
   // Merge synthetic component links so PBS component shows as linked element even when traceability API fails.
   const componentMap = useMemo(() => buildComponentMap(componentTree), [componentTree])
+  const reqMapForEnrich = useMemo(() => new Map(requirements.map(r => [r.id, r])), [requirements])
+  const reqByReqIdMap = useMemo(() => {
+    const m = new Map<string, Requirement>()
+    requirements.forEach(r => { if (r.requirementId) m.set(String(r.requirementId), r) })
+    return m
+  }, [requirements])
+  const hasReq = useCallback((id: string) => !!(reqMapForEnrich.get(id) ?? reqByReqIdMap.get(id) ?? requirements.find(r => r.id === id || String(r.requirementId) === id)), [reqMapForEnrich, reqByReqIdMap, requirements])
+  const isReqType = (t: string) => ['requirement', 'hazard', 'risk'].includes((t || '').toLowerCase())
+  const missingReqIds = useMemo(() => {
+    const ids = new Set<string>()
+    requirements.forEach((_, i) => {
+      const outgoing = (linkQueries[i * 2]?.data as LinkLike[] | undefined) ?? []
+      const incoming = (linkQueries[i * 2 + 1]?.data as LinkLike[] | undefined) ?? []
+      for (const l of [...outgoing, ...incoming]) {
+        if (isReqType(l.targetType) && !l.targetLabel && !l.targetTitle && !hasReq(l.targetId)) ids.add(l.targetId)
+        if (isReqType(l.sourceType) && !l.sourceLabel && !l.sourceTitle && !hasReq(l.sourceId)) ids.add(l.sourceId)
+      }
+    })
+    return Array.from(ids)
+  }, [requirements, linkQueries, hasReq])
+  const missingReqQueries = useQueries({
+    queries: missingReqIds.map(id => ({
+      queryKey: ['requirement', projectId, id],
+      queryFn: () => requirementService.getRequirement(projectId!, id),
+      enabled: !!projectId && !!id,
+    })),
+  })
+  const fetchedRequirements = useMemo(() => {
+    const list: Requirement[] = []
+    missingReqQueries.forEach((q, i) => {
+      const data = q.data
+      if (data?.success && data?.data) list.push(data.data)
+    })
+    return list
+  }, [missingReqQueries])
+  const allRequirementsForEnrich = useMemo(() => [...requirements, ...fetchedRequirements], [requirements, fetchedRequirements])
+  const mergedReqMap = useMemo(() => new Map(allRequirementsForEnrich.map(r => [r.id, r])), [allRequirementsForEnrich])
+  const mergedReqByReqId = useMemo(() => {
+    const m = new Map<string, Requirement>()
+    allRequirementsForEnrich.forEach(r => { if (r.requirementId) m.set(String(r.requirementId), r) })
+    return m
+  }, [allRequirementsForEnrich])
+  const findRequirement = useCallback((id: string) => mergedReqMap.get(id) ?? mergedReqByReqId.get(id) ?? allRequirementsForEnrich.find(r => r.id === id || String(r.requirementId) === id), [mergedReqMap, mergedReqByReqId, allRequirementsForEnrich])
   const linksByReqId = useMemo(() => {
     const keyOf = (l: LinkLike) => l.id ?? `${l.sourceType}-${l.sourceId}-${l.targetType}-${l.targetId}`
+    const isReqType = (t: string) => ['requirement', 'hazard', 'risk'].includes((t || '').toLowerCase())
+    const enrichLink = (l: LinkLike): LinkLike => {
+      let enriched = { ...l }
+      if (isReqType(l.targetType) && !l.targetLabel && !l.targetTitle) {
+        const req = findRequirement(l.targetId)
+        if (req) {
+          const displayId = req.requirementId || req.id.slice(0, 8)
+          enriched = { ...enriched, targetLabel: `${displayId} - ${req.title}`, targetTitle: req.title, targetDisplayId: displayId }
+        }
+      }
+      if (isReqType(l.sourceType) && !l.sourceLabel && !l.sourceTitle) {
+        const req = findRequirement(l.sourceId)
+        if (req) {
+          const displayId = req.requirementId || req.id.slice(0, 8)
+          enriched = { ...enriched, sourceLabel: `${displayId} - ${req.title}`, sourceTitle: req.title, sourceDisplayId: displayId }
+        }
+      }
+      return enriched
+    }
     const map = new Map<string, LinkLike[]>()
     requirements.forEach((req, i) => {
       const outIdx = i * 2
@@ -392,7 +455,7 @@ export default function RequirementsPBSTree({
         const k = keyOf(l)
         if (seen.has(k)) continue
         seen.add(k)
-        combined.push(l)
+        combined.push(enrichLink(l))
       }
       // Merge synthetic component link (requirement -> pbs_component) so component appears when chevron expanded
       if (req.componentId) {
@@ -417,7 +480,7 @@ export default function RequirementsPBSTree({
       map.set(req.id, combined)
     })
     return map
-  }, [requirements, linkQueries, componentMap])
+  }, [requirements, linkQueries, componentMap, findRequirement])
   const [searchQuery, setSearchQuery] = useState('')
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [pbsSynced, setPbsSynced] = useState(false)
