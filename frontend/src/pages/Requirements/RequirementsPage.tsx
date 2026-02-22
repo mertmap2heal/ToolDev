@@ -25,6 +25,8 @@ import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import LockWarningModal from '../../components/requirements/LockWarningModal'
 import { requirementService, type RequirementFilters } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
+import { componentService } from '../../services/component.service'
+import { loadPBSAsync } from '../../modules/pbs/storage'
 import { issueService } from '../../services/issue.service'
 import { changeRequestService } from '../../services/changeRequest.service'
 import { traceabilityService } from '../../services/traceability.service'
@@ -82,6 +84,7 @@ export default function RequirementsPage() {
   const [isSuspectReviewOpen, setIsSuspectReviewOpen] = useState(false)
   const [isBaselineManagerOpen, setIsBaselineManagerOpen] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
+  const [exportScope, setExportScope] = useState<{ type: 'component' | 'function'; id: string; label: string } | null>(null)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [isDiagramOpen, setIsDiagramOpen] = useState(false)
   const [isQualityPanelOpen, setIsQualityPanelOpen] = useState(false)
@@ -413,6 +416,53 @@ export default function RequirementsPage() {
         l.linkType === 'allocated_to'
     ) as Link[]
   }, [LINKAGE_V1, links, traceLinks])
+
+  // Component tree for Export scope selection (shares cache with PBS tree)
+  const { data: componentTreeForExport = [] } = useQuery({
+    queryKey: ['pbs-nodes', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const pbsData = await loadPBSAsync(projectId)
+      const nodes = pbsData.nodes
+      if (nodes.length > 0) {
+        const nodeMap = new Map<string, any>()
+        const rootNodes: any[] = []
+        nodes.forEach((node: any) => {
+          nodeMap.set(node.id, {
+            id: node.id,
+            projectId: projectId,
+            parentId: node.parentId,
+            name: node.name,
+            pbsCode: node.pbsCode,
+            description: node.description,
+            sortOrder: node.orderIndex ?? 0,
+            createdAt: node.createdAt,
+            updatedAt: node.updatedAt,
+            children: [],
+          })
+        })
+        nodes.forEach((node: any) => {
+          const component = nodeMap.get(node.id)
+          if (node.parentId && nodeMap.has(node.parentId)) {
+            nodeMap.get(node.parentId).children.push(component)
+          } else {
+            rootNodes.push(component)
+          }
+        })
+        const sortNodes = (n: any[]) => {
+          n.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+          n.forEach((child: any) => {
+            if (child.children?.length) sortNodes(child.children)
+          })
+        }
+        sortNodes(rootNodes)
+        return rootNodes
+      }
+      const response = await componentService.getComponentTree(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId && isExportOpen,
+  })
 
   // Linked safety items count (requirements linked to hazard, safety_requirement, safety_analysis, safety_evidence)
   const SAFETY_ENTITY_TYPES = ['hazard', 'safety_requirement', 'safety_analysis', 'safety_evidence']
@@ -1853,6 +1903,14 @@ export default function RequirementsPage() {
                       setIsCreateIssueModalOpen(true)
                     }}
                     onOpenTraceabilityMatrix={() => setIsTraceMatrixOpen(true)}
+                    onExportForComponent={(componentId, componentName) => {
+                      setExportScope({
+                        type: 'component',
+                        id: componentId,
+                        label: componentName ? `Component: ${componentName}` : `Component: ${componentId.slice(0, 8)}`,
+                      })
+                      setIsExportOpen(true)
+                    }}
                   />
                 ) : (
                   <RequirementsFunctionsTree
@@ -1893,6 +1951,14 @@ export default function RequirementsPage() {
                       setIsCreateIssueModalOpen(true)
                     }}
                     onOpenTraceabilityMatrix={() => setIsTraceMatrixOpen(true)}
+                    onExportForFunction={(functionId, functionName) => {
+                      setExportScope({
+                        type: 'function',
+                        id: functionId,
+                        label: functionName ? `Function: ${functionName}` : `Function: ${functionId.slice(0, 8)}`,
+                      })
+                      setIsExportOpen(true)
+                    }}
                     onDropRequirements={async (requirementIds, functionId) => {
                       const locked = allRequirements.filter(
                         (r) => requirementIds.includes(r.id) && r.isLocked
@@ -2871,14 +2937,43 @@ export default function RequirementsPage() {
             message={lockWarning.message}
           />
 
-          {isExportOpen && projectId && (
-            <ExportBuilder
-              requirements={allRequirements}
-              projectName={projectId}
-              projectId={projectId}
-              onClose={() => setIsExportOpen(false)}
-            />
-          )}
+          {isExportOpen && projectId && (() => {
+            const isFromContextMenu = !!exportScope
+            const exportRequirements = exportScope
+              ? exportScope.type === 'component'
+                ? allRequirements.filter((r) => r.componentId === exportScope.id)
+                : allRequirements.filter((r) =>
+                    allocationLinks.some(
+                      (l) =>
+                        l.sourceType === 'requirement' &&
+                        l.targetType === 'function' &&
+                        l.targetId === exportScope.id &&
+                        l.linkType === 'allocated_to' &&
+                        l.sourceId === r.id
+                    )
+                  )
+              : allRequirements
+            const scopeFilenameSuffix = exportScope
+              ? `${exportScope.type}_${(exportScope.label.replace(/^[^:]+:\s*/, '').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '')).slice(0, 40)}`
+              : undefined
+            return (
+              <ExportBuilder
+                requirements={exportRequirements}
+                projectName={projectId}
+                projectId={projectId}
+                onClose={() => {
+                  setIsExportOpen(false)
+                  setExportScope(null)
+                }}
+                scopeLabel={exportScope?.label}
+                scopeFilenameSuffix={scopeFilenameSuffix}
+                enableScopeSelection={!isFromContextMenu}
+                componentTree={!isFromContextMenu ? componentTreeForExport : undefined}
+                functions={!isFromContextMenu ? functions : undefined}
+                allocationLinks={!isFromContextMenu ? allocationLinks : undefined}
+              />
+            )
+          })()}
 
           {isImportOpen && projectId && (
             <ImportWizard

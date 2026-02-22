@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, ChevronDown, Package, FileText, Search, FolderOpen, Inbox, Settings, AlertCircle, GitPullRequest, Layers, ClipboardList, Link2, Plus, Edit2, Trash2, Copy, ExternalLink, BarChart3, Unlink } from 'lucide-react'
+import { ChevronRight, ChevronDown, Package, FileText, Search, FolderOpen, Inbox, Settings, AlertCircle, GitPullRequest, Layers, ClipboardList, Link2, Plus, Edit2, Trash2, Copy, ExternalLink, BarChart3, Unlink, Download } from 'lucide-react'
 import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query'
 import { componentService } from '../../services/component.service'
 import { requirementService } from '../../services/requirement.service'
@@ -51,6 +51,7 @@ interface RequirementsPBSTreeProps {
   onCreateChangeRequest?: (req: Requirement) => void
   onCreateIssue?: (req: Requirement) => void
   onOpenTraceabilityMatrix?: (focusReqId?: string) => void
+  onExportForComponent?: (componentId: string, componentName?: string) => void
 }
 
 interface FlatTreeItem {
@@ -286,6 +287,7 @@ export default function RequirementsPBSTree({
   onCreateChangeRequest,
   onCreateIssue,
   onOpenTraceabilityMatrix,
+  onExportForComponent,
 }: RequirementsPBSTreeProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -809,6 +811,11 @@ export default function RequirementsPBSTree({
                       <button onClick={() => { navigator.clipboard.writeText(t.componentId); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
                         <Copy size={14} /> Copy component ID
                       </button>
+                      {onExportForComponent && (
+                        <button onClick={() => { onExportForComponent(t.componentId, t.componentName); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
+                          <Download size={14} /> Export requirements for component
+                        </button>
+                      )}
                     </>
                   )}
                   {t.type === 'requirement' && (

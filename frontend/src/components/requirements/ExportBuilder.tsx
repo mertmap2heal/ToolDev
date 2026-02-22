@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { X, Download, FileSpreadsheet, FileText, File, CheckSquare, Square, Code } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
-import { apiClient } from '../../services/api'
-import type { Requirement } from 'shared/types/engineering.types'
+import type { Requirement, SystemFunction } from 'shared/types/engineering.types'
+import type { Link } from 'shared/types/linkage.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
 
@@ -23,11 +23,27 @@ async function loadAutoTable() {
   return autoTableModule.default || autoTableModule
 }
 
+interface ComponentTreeNode {
+  id: string
+  name: string
+  pbsCode?: string
+  children?: ComponentTreeNode[]
+}
+
 interface ExportBuilderProps {
   requirements: Requirement[]
   projectName?: string
   projectId: string
   onClose: () => void
+  /** Scope label for enterprise export (e.g. "Component: ABC-001" or "Function: Main Control") */
+  scopeLabel?: string
+  /** Optional filename suffix for scoped exports (e.g. "Component_ABC001") */
+  scopeFilenameSuffix?: string
+  /** Allow user to choose scope (All / Component / Function) inside the modal */
+  enableScopeSelection?: boolean
+  componentTree?: ComponentTreeNode[]
+  functions?: SystemFunction[]
+  allocationLinks?: Link[]
 }
 
 type ExportFormat = 'csv' | 'excel' | 'pdf' | 'reqif'
@@ -58,11 +74,143 @@ const defaultColumns: ExportColumn[] = [
  * ExportBuilder component provides functionality to export requirements
  * to various formats (CSV, Excel, PDF) with customizable column selection.
  */
-export default function ExportBuilder({ requirements, projectName, projectId, onClose }: ExportBuilderProps) {
+function flattenComponentTree(nodes: ComponentTreeNode[], parentPath: string[] = []): { id: string; name: string; displayLabel: string }[] {
+  const result: { id: string; name: string; displayLabel: string }[] = []
+  for (const node of nodes) {
+    const path = [...parentPath, node.name]
+    const displayLabel = path.join(' > ')
+    result.push({ id: node.id, name: node.name, displayLabel })
+    if (node.children?.length) {
+      result.push(...flattenComponentTree(node.children, path))
+    }
+  }
+  return result
+}
+
+function flattenFunctionTree(fns: SystemFunction[]): { id: string; name: string; displayLabel: string }[] {
+  type Node = { fn: SystemFunction; children: Node[] }
+  const map = new Map<string, Node>()
+  for (const fn of fns) {
+    map.set(fn.id, { fn, children: [] })
+  }
+  const roots: Node[] = []
+  for (const fn of fns) {
+    const entry = map.get(fn.id)!
+    if (fn.parentId && map.has(fn.parentId)) {
+      map.get(fn.parentId)!.children.push(entry)
+    } else {
+      roots.push(entry)
+    }
+  }
+  const sortNodes = (nodes: Node[]) => {
+    nodes.sort((a, b) => (a.fn.sortOrder ?? 0) - (b.fn.sortOrder ?? 0))
+    nodes.forEach((n) => sortNodes(n.children))
+  }
+  sortNodes(roots)
+  const result: { id: string; name: string; displayLabel: string }[] = []
+  const walk = (list: Node[], path: string[] = []) => {
+    for (const { fn, children } of list) {
+      const label = fn.name || fn.functionId || fn.id
+      const p = [...path, label]
+      result.push({ id: fn.id, name: label, displayLabel: p.join(' > ') })
+      if (children?.length) walk(children, p)
+    }
+  }
+  walk(roots)
+  return result
+}
+
+export default function ExportBuilder({
+  requirements,
+  projectName,
+  projectId,
+  onClose,
+  scopeLabel: propsScopeLabel,
+  scopeFilenameSuffix: propsScopeFilenameSuffix,
+  enableScopeSelection,
+  componentTree = [],
+  functions = [],
+  allocationLinks = [],
+}: ExportBuilderProps) {
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('csv')
   const [columns, setColumns] = useState<ExportColumn[]>(defaultColumns)
   const [includeHeader, setIncludeHeader] = useState(true)
   const [isExporting, setIsExporting] = useState(false)
+  const [scopeType, setScopeType] = useState<'all' | 'component' | 'function'>('all')
+  const [selectedComponentId, setSelectedComponentId] = useState<string>('')
+  const [selectedFunctionId, setSelectedFunctionId] = useState<string>('')
+  const [componentSearch, setComponentSearch] = useState('')
+  const [functionSearch, setFunctionSearch] = useState('')
+
+  const flatComponents = useMemo(() => flattenComponentTree(componentTree), [componentTree])
+  const flatFunctions = useMemo(() => flattenFunctionTree(functions), [functions])
+  const filteredComponents = useMemo(
+    () =>
+      componentSearch
+        ? flatComponents.filter(
+            (c) =>
+              c.displayLabel.toLowerCase().includes(componentSearch.toLowerCase()) ||
+              c.name.toLowerCase().includes(componentSearch.toLowerCase())
+          )
+        : flatComponents,
+    [flatComponents, componentSearch]
+  )
+  const filteredFunctions = useMemo(
+    () =>
+      functionSearch
+        ? flatFunctions.filter(
+            (f) =>
+              f.displayLabel.toLowerCase().includes(functionSearch.toLowerCase()) ||
+              f.name.toLowerCase().includes(functionSearch.toLowerCase())
+          )
+        : flatFunctions,
+    [flatFunctions, functionSearch]
+  )
+
+  const effectiveRequirements = useMemo(() => {
+    if (!enableScopeSelection) return requirements
+    if (scopeType === 'all') return requirements
+    if (scopeType === 'component' && selectedComponentId) {
+      return requirements.filter((r) => r.componentId === selectedComponentId)
+    }
+    if (scopeType === 'function' && selectedFunctionId) {
+      return requirements.filter((r) =>
+        allocationLinks.some(
+          (l) =>
+            l.sourceType === 'requirement' &&
+            l.targetType === 'function' &&
+            l.targetId === selectedFunctionId &&
+            l.linkType === 'allocated_to' &&
+            l.sourceId === r.id
+        )
+      )
+    }
+    return requirements
+  }, [enableScopeSelection, requirements, scopeType, selectedComponentId, selectedFunctionId, allocationLinks])
+
+  const effectiveScopeLabel = useMemo(() => {
+    if (propsScopeLabel) return propsScopeLabel
+    if (!enableScopeSelection || scopeType === 'all') return undefined
+    if (scopeType === 'component' && selectedComponentId) {
+      const c = flatComponents.find((x) => x.id === selectedComponentId)
+      return c ? `Component: ${c.displayLabel}` : undefined
+    }
+    if (scopeType === 'function' && selectedFunctionId) {
+      const f = flatFunctions.find((x) => x.id === selectedFunctionId)
+      return f ? `Function: ${f.displayLabel}` : undefined
+    }
+    return undefined
+  }, [enableScopeSelection, propsScopeLabel, scopeType, selectedComponentId, selectedFunctionId, flatComponents, flatFunctions])
+
+  const effectiveScopeFilenameSuffix = useMemo(() => {
+    if (propsScopeFilenameSuffix) return propsScopeFilenameSuffix
+    if (!effectiveScopeLabel) return undefined
+    return `${scopeType}_${effectiveScopeLabel
+      .replace(/^[^:]+:\s*/, '')
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9_-]/g, '')
+      .slice(0, 40)}`
+  }, [propsScopeFilenameSuffix, effectiveScopeLabel, scopeType])
 
   // Toggle column selection
   const toggleColumn = (key: string) => {
@@ -109,7 +257,7 @@ export default function ExportBuilder({ requirements, projectName, projectId, on
   const exportCsv = () => {
     const selectedCols = columns.filter((c) => c.selected)
     const headers = selectedCols.map((c) => c.label)
-    const rows = requirements.map((req) =>
+    const rows = effectiveRequirements.map((req) =>
       selectedCols.map((col) => {
         let value = getValue(req, col.key)
         // Strip HTML from description
@@ -132,14 +280,15 @@ export default function ExportBuilder({ requirements, projectName, projectId, on
       .filter(Boolean)
       .join('\n')
 
-    downloadFile(csvContent, 'requirements_export.csv', 'text/csv')
+    const baseName = effectiveScopeFilenameSuffix ? `requirements_export_${effectiveScopeFilenameSuffix}` : 'requirements_export'
+    downloadFile(csvContent, `${baseName}.csv`, 'text/csv')
   }
 
   // Export to Excel
   const exportExcel = () => {
     const selectedCols = columns.filter((c) => c.selected)
     const headers = selectedCols.map((c) => c.label)
-    const data = requirements.map((req) =>
+    const data = effectiveRequirements.map((req) =>
       selectedCols.reduce((acc, col) => {
         let value = getValue(req, col.key)
         if (col.key === 'description' || col.key === 'acceptanceCriteria') {
@@ -167,13 +316,14 @@ export default function ExportBuilder({ requirements, projectName, projectId, on
     })
     worksheet['!cols'] = colWidths
 
-    XLSX.writeFile(workbook, 'requirements_export.xlsx')
+    const baseName = effectiveScopeFilenameSuffix ? `requirements_export_${effectiveScopeFilenameSuffix}` : 'requirements_export'
+    XLSX.writeFile(workbook, `${baseName}.xlsx`)
   }
 
   // Export to ReqIF
   const exportReqIF = async () => {
     try {
-      const requirementIds = requirements.map((r) => r.id).join(',')
+      const requirementIds = effectiveRequirements.map((r) => r.id).join(',')
       const url = `/reqif/${projectId}/export${requirementIds ? `?requirementIds=${requirementIds}` : ''}`
 
       // Use fetch directly for blob response
@@ -193,7 +343,8 @@ export default function ExportBuilder({ requirements, projectName, projectId, on
       const downloadUrl = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = downloadUrl
-      a.download = `requirements_${projectId}_${Date.now()}.reqif`
+      const suffix = effectiveScopeFilenameSuffix ? `_${effectiveScopeFilenameSuffix}` : ''
+      a.download = `requirements_${projectId}${suffix}_${Date.now()}.reqif`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -208,7 +359,7 @@ export default function ExportBuilder({ requirements, projectName, projectId, on
   const exportPdf = async () => {
     const selectedCols = columns.filter((c) => c.selected)
     const headers = selectedCols.map((c) => c.label)
-    const data = requirements.map((req) =>
+    const data = effectiveRequirements.map((req) =>
       selectedCols.map((col) => {
         let value = getValue(req, col.key)
         if (col.key === 'description' || col.key === 'acceptanceCriteria') {
@@ -231,7 +382,7 @@ export default function ExportBuilder({ requirements, projectName, projectId, on
     doc.text(projectName ? `${projectName} - Requirements Export` : 'Requirements Export', 14, 15)
     doc.setFontSize(10)
     doc.text(`Generated: ${format(new Date(), 'PPpp')}`, 14, 22)
-    doc.text(`Total Requirements: ${requirements.length}`, 14, 28)
+    doc.text(`Total Requirements: ${effectiveRequirements.length}`, 14, 28)
 
     // Load and use autoTable
     const autoTable = await loadAutoTable()
@@ -259,7 +410,8 @@ export default function ExportBuilder({ requirements, projectName, projectId, on
       }, {} as Record<number, { cellWidth: string }>),
     })
 
-    doc.save('requirements_export.pdf')
+    const baseName = effectiveScopeFilenameSuffix ? `requirements_export_${effectiveScopeFilenameSuffix}` : 'requirements_export'
+    doc.save(`${baseName}.pdf`)
   }
 
   // Download file helper
@@ -273,11 +425,23 @@ export default function ExportBuilder({ requirements, projectName, projectId, on
     URL.revokeObjectURL(url)
   }
 
+  const canExport =
+    effectiveRequirements.length > 0 &&
+    (!enableScopeSelection ||
+      (scopeType === 'all') ||
+      (scopeType === 'component' && !!selectedComponentId) ||
+      (scopeType === 'function' && !!selectedFunctionId))
+
   // Handle export
   const handleExport = async () => {
     const selectedCols = columns.filter((c) => c.selected)
     if (selectedCols.length === 0) {
       alert('Please select at least one column to export')
+      return
+    }
+    if (!canExport) {
+      if (scopeType === 'component') alert('Please select a component to export')
+      else if (scopeType === 'function') alert('Please select a function to export')
       return
     }
 
@@ -317,10 +481,10 @@ export default function ExportBuilder({ requirements, projectName, projectId, on
             <Download className="text-blue-500" size={24} />
             <div>
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                Export Requirements
+                Export Requirements{effectiveScopeLabel ? ` — ${effectiveScopeLabel}` : ''}
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                {requirements.length} requirement{requirements.length !== 1 ? 's' : ''} to export
+                {effectiveRequirements.length} requirement{effectiveRequirements.length !== 1 ? 's' : ''} to export
               </p>
             </div>
           </div>
@@ -334,6 +498,111 @@ export default function ExportBuilder({ requirements, projectName, projectId, on
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Scope Selection */}
+          {enableScopeSelection && (componentTree.length > 0 || flatFunctions.length > 0) && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Scope
+              </label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="scope"
+                    checked={scopeType === 'all'}
+                    onChange={() => {
+                      setScopeType('all')
+                      setSelectedComponentId('')
+                      setSelectedFunctionId('')
+                    }}
+                    className="w-4 h-4 text-blue-600 border-gray-300"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">All requirements</span>
+                </label>
+                {componentTree.length > 0 && (
+                  <div>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="scope"
+                        checked={scopeType === 'component'}
+                        onChange={() => {
+                          setScopeType('component')
+                          setSelectedFunctionId('')
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">By component</span>
+                    </label>
+                    {scopeType === 'component' && (
+                      <div className="mt-2 ml-6">
+                        <input
+                          type="text"
+                          placeholder="Search components..."
+                          value={componentSearch}
+                          onChange={(e) => setComponentSearch(e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white mb-2"
+                        />
+                        <select
+                          value={selectedComponentId}
+                          onChange={(e) => setSelectedComponentId(e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white max-h-40 overflow-y-auto"
+                        >
+                          <option value="">— Select component —</option>
+                          {filteredComponents.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.displayLabel}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {flatFunctions.length > 0 && (
+                  <div>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="scope"
+                        checked={scopeType === 'function'}
+                        onChange={() => {
+                          setScopeType('function')
+                          setSelectedComponentId('')
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">By function</span>
+                    </label>
+                    {scopeType === 'function' && (
+                      <div className="mt-2 ml-6">
+                        <input
+                          type="text"
+                          placeholder="Search functions..."
+                          value={functionSearch}
+                          onChange={(e) => setFunctionSearch(e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white mb-2"
+                        />
+                        <select
+                          value={selectedFunctionId}
+                          onChange={(e) => setSelectedFunctionId(e.target.value)}
+                          className="w-full px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white max-h-40 overflow-y-auto"
+                        >
+                          <option value="">— Select function —</option>
+                          {filteredFunctions.map((f) => (
+                            <option key={f.id} value={f.id}>
+                              {f.displayLabel}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Format Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -461,7 +730,7 @@ export default function ExportBuilder({ requirements, projectName, projectId, on
           </button>
           <button
             onClick={handleExport}
-            disabled={isExporting || selectedCount === 0}
+            disabled={isExporting || selectedCount === 0 || !canExport}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg flex items-center gap-2"
           >
             <Download size={16} />

@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, ChevronDown, Settings, FileText, Search, FolderOpen, Inbox, AlertCircle, GitPullRequest, Layers, ClipboardList, Link2, Plus, Edit2, Copy, ExternalLink, BarChart3, Unlink } from 'lucide-react'
+import { ChevronRight, ChevronDown, Settings, FileText, Search, FolderOpen, Inbox, AlertCircle, GitPullRequest, Layers, ClipboardList, Link2, Plus, Edit2, Copy, ExternalLink, BarChart3, Unlink, Download } from 'lucide-react'
 import { useQuery, useQueries } from '@tanstack/react-query'
 import { functionService } from '../../services/function.service'
 import { linkService } from '../../services/link.service'
@@ -71,6 +71,7 @@ interface RequirementsFunctionsTreeProps {
   onCreateChangeRequest?: (req: Requirement) => void
   onCreateIssue?: (req: Requirement) => void
   onOpenTraceabilityMatrix?: (focusReqId?: string) => void
+  onExportForFunction?: (functionId: string, functionName?: string) => void
 }
 
 function buildFunctionTree(functions: SystemFunction[]): TreeNode[] {
@@ -321,6 +322,7 @@ export default function RequirementsFunctionsTree({
   onCreateChangeRequest,
   onCreateIssue,
   onOpenTraceabilityMatrix,
+  onExportForFunction,
 }: RequirementsFunctionsTreeProps) {
   const navigate = useNavigate()
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['unassigned']))
@@ -866,6 +868,11 @@ export default function RequirementsFunctionsTree({
                 <button onClick={() => { navigator.clipboard.writeText(t.functionId); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
                   <Copy size={14} /> Copy function ID
                 </button>
+                {onExportForFunction && (
+                  <button onClick={() => { onExportForFunction(t.functionId, t.functionName); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
+                    <Download size={14} /> Export requirements for function
+                  </button>
+                )}
               </>
             )}
             {t.type === 'requirement' && (
