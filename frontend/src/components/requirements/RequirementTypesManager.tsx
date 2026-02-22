@@ -1,68 +1,66 @@
 import { useState } from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { verificationService } from '../../services/verification.service'
+import { requirementService } from '../../services/requirement.service'
 
-interface CustomOption {
+const DEFAULT_REQUIREMENT_TYPES = [
+  'Functional',
+  'Non-functional',
+  'Performance',
+  'Safety',
+  'Interface',
+  'Environmental',
+  'Reliability',
+  'Maintainability',
+  'Security',
+  'Usability',
+]
+
+interface CustomRequirementType {
   id: string
-  projectId: string
-  optionType: string
-  value: string
-  isSystem: boolean
+  typeName: string
+  createdAt: string
 }
 
-interface CustomOptionsManagerProps {
+interface RequirementTypesManagerProps {
   projectId: string
-  optionType:
-    | 'ENVIRONMENT_TYPE'
-    | 'TESTING_TOOL'
-    | 'REQUIREMENT_LEVEL'
-    | 'RISK'
-    | 'COMPLEXITY'
-    | 'VERIFICATION_METHOD'
-    | 'SOURCE'
-  label: string
-  description?: string
 }
 
-export default function CustomOptionsManager({
-  projectId,
-  optionType,
-  label,
-  description,
-}: CustomOptionsManagerProps) {
+export default function RequirementTypesManager({ projectId }: RequirementTypesManagerProps) {
   const [newValue, setNewValue] = useState('')
   const [showAdd, setShowAdd] = useState(false)
   const queryClient = useQueryClient()
 
-  const { data: optionsRes, isLoading } = useQuery({
-    queryKey: ['custom-options', projectId, optionType],
-    queryFn: () => verificationService.getCustomOptions(projectId, optionType),
+  const { data: customTypesRes, isLoading } = useQuery({
+    queryKey: ['customRequirementTypes', projectId],
+    queryFn: () => requirementService.getCustomRequirementTypes(projectId),
     enabled: !!projectId,
   })
 
-  const options: CustomOption[] =
-    optionsRes?.success && optionsRes.data ? (optionsRes.data as CustomOption[]) : []
+  const customTypes: CustomRequirementType[] =
+    customTypesRes?.success && customTypesRes.data
+      ? (customTypesRes.data as CustomRequirementType[])
+      : []
 
   const addMutation = useMutation({
-    mutationFn: (val: string) => verificationService.addCustomOption(projectId, optionType, val),
+    mutationFn: (typeName: string) => requirementService.addCustomRequirementType(projectId, typeName),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['custom-options', projectId, optionType] })
+      queryClient.invalidateQueries({ queryKey: ['customRequirementTypes', projectId] })
       setNewValue('')
       setShowAdd(false)
     },
     onError: (err: any) => {
-      alert(err?.message || 'Failed to add option')
+      alert(err?.message || 'Failed to add requirement type')
     },
   })
 
   const removeMutation = useMutation({
-    mutationFn: (id: string) => verificationService.removeCustomOption(projectId, id),
+    mutationFn: (typeId: string) => requirementService.deleteCustomRequirementType(projectId, typeId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['custom-options', projectId, optionType] })
+      queryClient.invalidateQueries({ queryKey: ['customRequirementTypes', projectId] })
     },
     onError: (err: any) => {
-      alert(err?.message || 'Failed to remove option')
+      alert(err?.message || 'Failed to remove requirement type')
     },
   })
 
@@ -72,9 +70,25 @@ export default function CustomOptionsManager({
     addMutation.mutate(v)
   }
 
-  const handleRemove = (opt: CustomOption) => {
+  type DisplayItem =
+    | { id: string; typeName: string; isSystem: true }
+    | { id: string; typeName: string; createdAt: string; isSystem: false }
+  const customTypeNames = new Set(customTypes.map((t) => t.typeName.toLowerCase()))
+  const systemItems: DisplayItem[] = DEFAULT_REQUIREMENT_TYPES.filter(
+    (t) => !customTypeNames.has(t.toLowerCase())
+  ).map((value) => ({ id: `system-${value}`, typeName: value, isSystem: true }))
+  const customItems: DisplayItem[] = customTypes.map((t) => ({
+    ...t,
+    isSystem: false as const,
+  }))
+  const allTypes = [...systemItems, ...customItems].sort((a, b) =>
+    a.typeName.localeCompare(b.typeName)
+  )
+
+  const handleRemove = (opt: DisplayItem) => {
     if (opt.isSystem) return
-    if (window.confirm(`Remove "${opt.value}"? This will remove it from all dropdowns.`)) {
+    const typeName = opt.typeName
+    if (window.confirm(`Remove "${typeName}"? This will remove it from all dropdowns.`)) {
       removeMutation.mutate(opt.id)
     }
   }
@@ -83,10 +97,12 @@ export default function CustomOptionsManager({
     <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{label}</h3>
-          {description && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{description}</p>
-          )}
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+            Requirement Types
+          </h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            Used when creating or editing requirements (e.g., Functional, Safety, Regulatory)
+          </p>
         </div>
         {!showAdd && (
           <button
@@ -110,7 +126,7 @@ export default function CustomOptionsManager({
                 if (e.key === 'Enter') handleAdd()
                 if (e.key === 'Escape') setShowAdd(false)
               }}
-              placeholder={`New ${label.toLowerCase()}`}
+              placeholder="New requirement type"
               className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               autoFocus
             />
@@ -124,7 +140,10 @@ export default function CustomOptionsManager({
             </button>
             <button
               type="button"
-              onClick={() => { setShowAdd(false); setNewValue('') }}
+              onClick={() => {
+                setShowAdd(false)
+                setNewValue('')
+              }}
               className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded-lg"
             >
               <X size={18} />
@@ -133,17 +152,17 @@ export default function CustomOptionsManager({
         )}
         {isLoading ? (
           <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>
-        ) : options.length === 0 ? (
+        ) : allTypes.length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-gray-400">No options yet.</p>
         ) : (
           <ul className="space-y-1">
-            {options.map((opt) => (
+            {allTypes.map((opt) => (
               <li
                 key={opt.id}
                 className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50"
               >
                 <span className="text-sm text-gray-900 dark:text-white">
-                  {opt.value}
+                  {opt.typeName}
                   {opt.isSystem && (
                     <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">(system)</span>
                   )}

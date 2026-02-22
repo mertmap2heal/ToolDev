@@ -1,4 +1,14 @@
-export type CustomOptionType = 'ENVIRONMENT_TYPE' | 'COMPONENT_TYPE' | 'INTERFACE_TYPE' | 'PHASE' | 'TESTING_TOOL'
+export type CustomOptionType =
+  | 'ENVIRONMENT_TYPE'
+  | 'COMPONENT_TYPE'
+  | 'INTERFACE_TYPE'
+  | 'PHASE'
+  | 'TESTING_TOOL'
+  | 'REQUIREMENT_LEVEL'
+  | 'RISK'
+  | 'COMPLEXITY'
+  | 'VERIFICATION_METHOD'
+  | 'SOURCE'
 
 export interface CustomOption {
   id: string
@@ -35,6 +45,16 @@ export function getSystemDefaults(optionType: CustomOptionType): string[] {
       return ['Srr', 'Pdr', 'Cdr', 'Trr', 'Qualification', 'Certification', 'Other']
     case 'TESTING_TOOL':
       return []
+    case 'REQUIREMENT_LEVEL':
+      return ['System', 'Subsystem', 'Component', 'Interface']
+    case 'RISK':
+      return ['Low', 'Medium', 'High', 'Critical']
+    case 'COMPLEXITY':
+      return ['Simple', 'Moderate', 'Complex']
+    case 'VERIFICATION_METHOD':
+      return ['Test', 'Analysis', 'Inspection', 'Demonstration', 'Review']
+    case 'SOURCE':
+      return ['Customer', 'Regulatory', 'Internal', 'Derived', 'Standard']
     default:
       return []
   }

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { ArrowUp, ArrowDown } from 'lucide-react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, AlertTriangle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft, BarChart3, LayoutList } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 import CreateRequirementModal from '../../components/requirements/CreateRequirementModal'
@@ -37,7 +38,7 @@ import { buildDeepLink } from '../../linkage/buildDeepLink'
 import ChangeStatusPopover, { getStatusColorClasses } from '../../components/requirements/ChangeStatusPopover'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import type { Requirement, UpdateRequirementDto } from 'shared/types/engineering.types'
-import type { Link } from 'shared/types/linkage.types'
+import type { Link as LinkType } from 'shared/types/linkage.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
 import { useAuthStore } from '../../store/authStore'
@@ -414,7 +415,7 @@ export default function RequirementsPage() {
         l.sourceType === 'requirement' &&
         l.targetType === 'function' &&
         l.linkType === 'allocated_to'
-    ) as Link[]
+    ) as LinkType[]
   }, [LINKAGE_V1, links, traceLinks])
 
   // Component tree for Export scope selection (shares cache with PBS tree)
@@ -819,9 +820,9 @@ export default function RequirementsPage() {
   }, [])
 
   /** Get links for a requirement (incoming + outgoing). Includes allocated_to for bidirectional visibility. */
-  const getLinksForRequirement = useCallback((reqId: string): Link[] => {
+  const getLinksForRequirement = useCallback((reqId: string): LinkType[] => {
     if (!LINKAGE_V1 || !links.length) return []
-    return (links as Link[]).filter((l) => l.sourceId === reqId || l.targetId === reqId)
+    return (links as LinkType[]).filter((l) => l.sourceId === reqId || l.targetId === reqId)
   }, [links])
 
   // Get linked elements for a requirement
@@ -2156,6 +2157,14 @@ export default function RequirementsPage() {
                 <BarChart3 size={16} />
                 <span className="text-sm">Quality</span>
               </button>
+              <Link
+                to={`/projects/${projectId}/requirements/settings`}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+                title="Requirements Settings"
+              >
+                <Settings size={16} />
+                <span className="text-sm">Settings</span>
+              </Link>
               </div>
               <div className="relative" ref={columnSelectorRef}>
                 <button

@@ -60,9 +60,6 @@ const defaultRequirementTypes = [
   'Usability',
 ]
 
-const verificationMethods = ['Test', 'Analysis', 'Inspection', 'Demonstration', 'Review']
-const sources = ['Customer', 'Regulatory', 'Internal', 'Derived', 'Standard']
-
 interface QuickLinkAdapter {
   search: (query: string, projectId: string) => Promise<{ id: string; label: string }[]>
 }
@@ -191,13 +188,7 @@ export default function CreateRequirementModal({
   })
   const [tagInput, setTagInput] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const [customRequirementType, setCustomRequirementType] = useState('')
-  const [showAddRequirementType, setShowAddRequirementType] = useState(false)
-  const predefinedTypes = ['functional', 'performance', 'interface', 'design_constraint', 'safety', 'security', 'usability', 'other']
-  const [availableRequirementTypes, setAvailableRequirementTypes] = useState<string[]>(predefinedTypes)
-  const [customSource, setCustomSource] = useState('')
-  const [showAddSource, setShowAddSource] = useState(false)
-  const [sourceTypes, setSourceTypes] = useState<string[]>(sources)
+  const [availableRequirementTypes, setAvailableRequirementTypes] = useState<string[]>(defaultRequirementTypes)
   const [autoGenerateId, setAutoGenerateId] = useState(true)
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
   // Quick Links (LINKAGE_V1)
@@ -417,9 +408,48 @@ export default function CreateRequirementModal({
   useEffect(() => {
     if (Array.isArray(customTypesData) && customTypesData.length > 0) {
       const customTypeNames = customTypesData.map((t: { typeName: string }) => t.typeName)
-      setAvailableRequirementTypes([...predefinedTypes, ...customTypeNames])
+      const merged = [...defaultRequirementTypes]
+      customTypeNames.forEach((name: string) => {
+        if (!merged.some((t) => t.toLowerCase() === name.toLowerCase())) merged.push(name)
+      })
+      setAvailableRequirementTypes(merged)
+    } else {
+      setAvailableRequirementTypes(defaultRequirementTypes)
     }
   }, [customTypesData])
+
+  // Fetch custom options for requirement dropdowns (level, risk, complexity, verification method, source)
+  const { data: levelOptions = [] } = useQuery({
+    queryKey: ['custom-options', projectId, 'REQUIREMENT_LEVEL'],
+    queryFn: () => verificationService.getCustomOptions(projectId, 'REQUIREMENT_LEVEL'),
+    enabled: isOpen && !!projectId,
+  })
+  const { data: riskOptions = [] } = useQuery({
+    queryKey: ['custom-options', projectId, 'RISK'],
+    queryFn: () => verificationService.getCustomOptions(projectId, 'RISK'),
+    enabled: isOpen && !!projectId,
+  })
+  const { data: complexityOptions = [] } = useQuery({
+    queryKey: ['custom-options', projectId, 'COMPLEXITY'],
+    queryFn: () => verificationService.getCustomOptions(projectId, 'COMPLEXITY'),
+    enabled: isOpen && !!projectId,
+  })
+  const { data: verificationMethodOptions = [] } = useQuery({
+    queryKey: ['custom-options', projectId, 'VERIFICATION_METHOD'],
+    queryFn: () => verificationService.getCustomOptions(projectId, 'VERIFICATION_METHOD'),
+    enabled: isOpen && !!projectId,
+  })
+  const { data: sourceOptions = [] } = useQuery({
+    queryKey: ['custom-options', projectId, 'SOURCE'],
+    queryFn: () => verificationService.getCustomOptions(projectId, 'SOURCE'),
+    enabled: isOpen && !!projectId,
+  })
+
+  const levelValues = (levelOptions?.success && levelOptions?.data ? levelOptions.data : []) as { value: string }[]
+  const riskValues = (riskOptions?.success && riskOptions?.data ? riskOptions.data : []) as { value: string }[]
+  const complexityValues = (complexityOptions?.success && complexityOptions?.data ? complexityOptions.data : []) as { value: string }[]
+  const verificationMethodValues = (verificationMethodOptions?.success && verificationMethodOptions?.data ? verificationMethodOptions.data : []) as { value: string }[]
+  const sourceValues = (sourceOptions?.success && sourceOptions?.data ? sourceOptions.data : []) as { value: string }[]
 
   // Fetch Admin Panel users for Owner dropdown
   const { data: adminUsersRes } = useQuery({
@@ -628,70 +658,6 @@ export default function CreateRequirementModal({
     setTraceLinks(prev => prev.filter(l => !(l.targetId === targetId && l.linkType === linkType)))
   }
 
-
-  const addCustomTypeMutation = useMutation({
-    mutationFn: (typeName: string) => requirementService.addCustomRequirementType(projectId, typeName),
-    onSuccess: (response) => {
-      if (response.success && response.data) {
-        const newType = response.data.typeName
-        setAvailableRequirementTypes((prev) => {
-          if (!prev.includes(newType)) {
-            return [...prev, newType]
-          }
-          return prev
-        })
-        setFormData((prev) => ({ ...prev, requirementType: newType as RequirementType }))
-        setCustomRequirementType('')
-        setShowAddRequirementType(false)
-        queryClient.invalidateQueries({ queryKey: ['customRequirementTypes', projectId] })
-      }
-    },
-    onError: (error: any) => {
-      console.error('Add custom requirement type error:', error)
-      alert(error?.error || 'Failed to add custom requirement type')
-    },
-  })
-
-  const deleteCustomTypeMutation = useMutation({
-    mutationFn: (typeId: string) => requirementService.deleteCustomRequirementType(projectId, typeId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customRequirementTypes', projectId] })
-      queryClient.refetchQueries({ queryKey: ['customRequirementTypes', projectId] })
-    },
-    onError: (error: any) => {
-      console.error('Delete custom requirement type error:', error)
-      alert(error?.error || 'Failed to delete custom requirement type')
-    },
-  })
-
-  const handleAddRequirementType = () => {
-    if (customRequirementType.trim()) {
-      addCustomTypeMutation.mutate(customRequirementType.trim())
-    }
-  }
-
-  const handleDeleteRequirementType = async (typeName: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!confirm(`Are you sure you want to delete the requirement type "${typeName}"?`)) {
-      return
-    }
-
-    if (!customTypesData || customTypesData.length === 0) return
-
-    const customType = customTypesData.find(t => t.typeName === typeName)
-    if (customType) {
-      deleteCustomTypeMutation.mutate(customType.id)
-    }
-  }
-
-  const handleAddSource = () => {
-    if (customSource.trim() && !sourceTypes.includes(customSource.trim())) {
-      setSourceTypes([...sourceTypes, customSource.trim()])
-      setFormData((prev) => ({ ...prev, source: customSource.trim() }))
-      setCustomSource('')
-      setShowAddSource(false)
-    }
-  }
 
   const handleAddCustomAttribute = () => {
     if (!customAttributeKey.trim() || !customAttributeValue.trim()) return
@@ -1305,49 +1271,26 @@ export default function CreateRequirementModal({
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
                       Source/Origin
                     </label>
-                    <div className="flex gap-2">
-                      <select
-                        value={formData.source || ''}
-                        onChange={(e) => handleChange('source', e.target.value || undefined)}
-                        className={clsx(
-                          'flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
-                          'border-gray-300 dark:border-gray-600'
-                        )}
-                      >
-                        <option value="">Select source</option>
-                        {sourceTypes.map((source) => (
-                          <option key={source} value={source}>
-                            {source}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => setShowAddSource(!showAddSource)}
-                        className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2"
-                      >
-                        <Plus size={16} />
-                        <span>Add Source</span>
-                      </button>
-                    </div>
-                    {showAddSource && (
-                      <div className="mt-2 flex gap-2">
-                        <input
-                          type="text"
-                          value={customSource}
-                          onChange={(e) => setCustomSource(e.target.value)}
-                          placeholder="Enter new source type name"
-                          className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleAddSource}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-                        >
-                          Add
-                        </button>
-                      </div>
-                    )}
+                    <select
+                      value={formData.source || ''}
+                      onChange={(e) => handleChange('source', e.target.value || undefined)}
+                      className={clsx(
+                        'w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                        'border-gray-300 dark:border-gray-600'
+                      )}
+                    >
+                      <option value="">Select source</option>
+                      {(() => {
+                        const vals = sourceValues.map((o) => o.value)
+                        const current = formData.source
+                        if (current && !vals.some((v) => v.toLowerCase() === (current || '').toLowerCase())) {
+                          vals.unshift(current)
+                        }
+                        return vals.map((v) => (
+                          <option key={v} value={v}>{v}</option>
+                        ))
+                      })()}
+                    </select>
                   </div>
                 </div>
 
@@ -1417,10 +1360,8 @@ export default function CreateRequirementModal({
                       )}
                     >
                       <option value="">Select verification method</option>
-                      {verificationMethods.map((method) => (
-                        <option key={method} value={method}>
-                          {method}
-                        </option>
+                      {verificationMethodValues.map((o) => (
+                        <option key={o.value} value={o.value}>{o.value}</option>
                       ))}
                     </select>
                     {errors.verificationMethod && (
@@ -1440,78 +1381,19 @@ export default function CreateRequirementModal({
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
                       Requirement Type
                     </label>
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <select
-                          value={formData.requirementType || ''}
-                          onChange={(e) => handleChange('requirementType', e.target.value || undefined)}
-                          className={clsx(
-                            'flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
-                            'border-gray-300 dark:border-gray-600'
-                          )}
-                        >
-                          <option value="">Select requirement type</option>
-                          {availableRequirementTypes.map((type) => (
-                            <option key={type} value={type}>
-                              {type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => setShowAddRequirementType(!showAddRequirementType)}
-                          className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg flex items-center gap-2"
-                        >
-                          <Plus size={16} />
-                          <span>Add Type</span>
-                        </button>
-                      </div>
-                      {showAddRequirementType && (
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={customRequirementType}
-                            onChange={(e) => setCustomRequirementType(e.target.value)}
-                            placeholder="Enter new requirement type"
-                            className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                handleAddRequirementType()
-                              }
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={handleAddRequirementType}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-                          >
-                            Add
-                          </button>
-                        </div>
+                    <select
+                      value={formData.requirementType || ''}
+                      onChange={(e) => handleChange('requirementType', e.target.value || undefined)}
+                      className={clsx(
+                        'w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
+                        'border-gray-300 dark:border-gray-600'
                       )}
-                      {/* Custom types with delete buttons */}
-                      {customTypesData && customTypesData.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {customTypesData.map((customType) => (
-                            <div
-                              key={customType.id}
-                              className="flex items-center gap-1 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-sm"
-                            >
-                              <span>{customType.typeName.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</span>
-                              <button
-                                type="button"
-                                onClick={(e) => handleDeleteRequirementType(customType.typeName, e)}
-                                className="ml-1 p-0.5 hover:bg-blue-200 dark:hover:bg-blue-800 rounded"
-                                title="Delete requirement type"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    >
+                      <option value="">Select requirement type</option>
+                      {availableRequirementTypes.map((type) => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Requirement Level */}
@@ -1528,10 +1410,9 @@ export default function CreateRequirementModal({
                       )}
                     >
                       <option value="">Select requirement level</option>
-                      <option value="system">System</option>
-                      <option value="subsystem">Subsystem</option>
-                      <option value="component">Component</option>
-                      <option value="interface">Interface</option>
+                      {levelValues.map((o) => (
+                        <option key={o.value} value={o.value}>{o.value}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -1550,10 +1431,9 @@ export default function CreateRequirementModal({
                         )}
                       >
                         <option value="">Select risk level</option>
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                        <option value="critical">Critical</option>
+                        {riskValues.map((o) => (
+                          <option key={o.value} value={o.value}>{o.value}</option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -1569,9 +1449,9 @@ export default function CreateRequirementModal({
                         )}
                       >
                         <option value="">Select complexity</option>
-                        <option value="simple">Simple</option>
-                        <option value="moderate">Moderate</option>
-                        <option value="complex">Complex</option>
+                        {complexityValues.map((o) => (
+                          <option key={o.value} value={o.value}>{o.value}</option>
+                        ))}
                       </select>
                     </div>
                   </div>

@@ -17,10 +17,11 @@ export const getCustomOptions = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId, optionType } = req.params
 
-    if (!['ENVIRONMENT_TYPE', 'COMPONENT_TYPE', 'INTERFACE_TYPE', 'PHASE', 'TESTING_TOOL'].includes(optionType)) {
+    const validOptionTypes = ['ENVIRONMENT_TYPE', 'COMPONENT_TYPE', 'INTERFACE_TYPE', 'PHASE', 'TESTING_TOOL', 'REQUIREMENT_LEVEL', 'RISK', 'COMPLEXITY', 'VERIFICATION_METHOD', 'SOURCE']
+    if (!validOptionTypes.includes(optionType)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid optionType. Must be ENVIRONMENT_TYPE, COMPONENT_TYPE, INTERFACE_TYPE, PHASE, or TESTING_TOOL',
+        error: 'Invalid optionType. Must be one of: ENVIRONMENT_TYPE, COMPONENT_TYPE, INTERFACE_TYPE, PHASE, TESTING_TOOL, REQUIREMENT_LEVEL, RISK, COMPLEXITY, VERIFICATION_METHOD, SOURCE',
       })
     }
 
@@ -100,10 +101,11 @@ export const addCustomOption = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    if (!['ENVIRONMENT_TYPE', 'COMPONENT_TYPE', 'INTERFACE_TYPE', 'PHASE', 'TESTING_TOOL'].includes(optionType)) {
+    const validOptionTypes = ['ENVIRONMENT_TYPE', 'COMPONENT_TYPE', 'INTERFACE_TYPE', 'PHASE', 'TESTING_TOOL', 'REQUIREMENT_LEVEL', 'RISK', 'COMPLEXITY', 'VERIFICATION_METHOD', 'SOURCE']
+    if (!validOptionTypes.includes(optionType)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid optionType. Must be ENVIRONMENT_TYPE, COMPONENT_TYPE, INTERFACE_TYPE, PHASE, or TESTING_TOOL',
+        error: 'Invalid optionType. Must be one of: ENVIRONMENT_TYPE, COMPONENT_TYPE, INTERFACE_TYPE, PHASE, TESTING_TOOL, REQUIREMENT_LEVEL, RISK, COMPLEXITY, VERIFICATION_METHOD, SOURCE',
       })
     }
 
