@@ -30,7 +30,8 @@ router.get('/:projectId', async (req, res) => {
     console.error('Get trace links error:', error?.message, error?.stack)
     res.status(500).json({
       success: false,
-      error: error?.message || 'Internal server error',
+      error: process.env.NODE_ENV === 'production' ? 'Internal server error' : (error?.message || 'Internal server error'),
+      ...(process.env.NODE_ENV !== 'production' && error?.stack && { stack: error.stack }),
     })
   }
 })

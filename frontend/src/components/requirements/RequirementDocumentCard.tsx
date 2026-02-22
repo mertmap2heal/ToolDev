@@ -9,6 +9,8 @@ interface RequirementDocumentCardProps {
   links: Link[]
   projectName?: string
   onRequirementClick?: (req: Requirement) => void
+  draggable?: boolean
+  onDragStart?: (e: React.DragEvent) => void
 }
 
 function formatLinkType(linkType: string): string {
@@ -38,6 +40,8 @@ export default function RequirementDocumentCard({
   links,
   projectName,
   onRequirementClick,
+  draggable: isDraggable,
+  onDragStart,
 }: RequirementDocumentCardProps) {
   const createdFormatted = requirement.createdAt
     ? format(new Date(requirement.createdAt), 'MM/dd/yyyy hh:mm:ss a O')
@@ -82,7 +86,14 @@ export default function RequirementDocumentCard({
   })
 
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden">
+    <div
+      className={clsx(
+        'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden',
+        isDraggable && 'cursor-grab'
+      )}
+      draggable={isDraggable}
+      onDragStart={onDragStart}
+    >
       {/* Header */}
       <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/50">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">

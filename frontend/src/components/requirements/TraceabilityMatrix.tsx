@@ -15,6 +15,7 @@ import {
   hazardAdapter,
   riskAdapter,
   documentAdapter,
+  functionAdapter,
 } from '../../linkage/adapters'
 import type { Requirement } from 'shared/types/engineering.types'
 import type { LinkType } from 'shared/types/traceability.types'
@@ -30,6 +31,7 @@ type CellStatus = 'linked' | 'suspect' | 'none'
 type MatrixType = 'requirements-functions' | 'requirements-requirements'
 type LinkageTargetType =
   | 'pbs_component'
+  | 'function'
   | 'interface'
   | 'issue'
   | 'change_request'
@@ -40,6 +42,7 @@ type LinkageTargetType =
 
 const LINKAGE_TARGET_OPTIONS: { value: LinkageTargetType; label: string; adapter: { search: (q: string, pid: string) => Promise<EntitySummary[]> } }[] = [
   { value: 'pbs_component', label: 'PBS Components', adapter: pbsAdapter },
+  { value: 'function', label: 'Functions', adapter: functionAdapter },
   { value: 'interface', label: 'Interfaces', adapter: interfaceAdapter },
   { value: 'test_case', label: 'Test Cases', adapter: verificationAdapter },
   { value: 'hazard', label: 'Hazards', adapter: hazardAdapter },
@@ -51,6 +54,7 @@ const LINKAGE_TARGET_OPTIONS: { value: LinkageTargetType; label: string; adapter
 
 const LINK_TYPE_MAP: Record<LinkageTargetType, string> = {
   pbs_component: 'allocated_to',
+  function: 'allocated_to',
   interface: 'related_interface',
   issue: 'tracked_by',
   change_request: 'changes_via',

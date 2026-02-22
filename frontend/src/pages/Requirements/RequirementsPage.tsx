@@ -16,6 +16,7 @@ import ImportWizard from '../../components/requirements/ImportWizard'
 import RequirementDiagramsModal from '../../components/requirements/RequirementDiagramsModal'
 import RequirementQualityPanel from '../../components/requirements/RequirementQualityPanel'
 import RequirementsPBSTree, { type LinkedElementClickPayload } from '../../components/requirements/RequirementsPBSTree'
+import RequirementsFunctionsTree from '../../components/requirements/RequirementsFunctionsTree'
 import RequirementDocumentCard from '../../components/requirements/RequirementDocumentCard'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import CreateIssueModal from '../../components/issues/CreateIssueModal'
@@ -122,6 +123,8 @@ export default function RequirementsPage() {
 
   // PBS Tree panel state (declared early — referenced by serverFilters and filter reset)
   const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null)
+  const [leftPanelTab, setLeftPanelTab] = useState<'pbs' | 'functions'>('pbs')
+  const [selectedFunctionId, setSelectedFunctionId] = useState<string | null>(null)
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -398,6 +401,17 @@ export default function RequirementsPage() {
     enabled: !!projectId && LINKAGE_V1,
   })
 
+  // Requirement→function allocation links (allocated_to) for Functions tree
+  const allocationLinks = useMemo(() => {
+    const source = LINKAGE_V1 ? links : (traceLinks as any[])
+    return (source || []).filter(
+      (l: any) =>
+        l.sourceType === 'requirement' &&
+        l.targetType === 'function' &&
+        l.linkType === 'allocated_to'
+    ) as Link[]
+  }, [LINKAGE_V1, links, traceLinks])
+
   // Linked safety items count (requirements linked to hazard, safety_requirement, safety_analysis, safety_evidence)
   const SAFETY_ENTITY_TYPES = ['hazard', 'safety_requirement', 'safety_analysis', 'safety_evidence']
   const linkedSafetyCount = useMemo(() => {
@@ -486,6 +500,70 @@ export default function RequirementsPage() {
     onError: (error: any) => {
       console.error('Bulk create change requests error:', error)
       alert(error?.error || 'Failed to create change requests')
+    },
+  })
+
+  // Allocate requirements to function (or unallocate when functionId is null)
+  const allocateRequirementsToFunctionMutation = useMutation({
+    mutationFn: async ({
+      requirementIds,
+      functionId,
+    }: {
+      requirementIds: string[]
+      functionId: string | null
+    }) => {
+      if (!projectId) throw new Error('Project ID required')
+      if (functionId) {
+        for (const reqId of requirementIds) {
+          const r = await traceabilityService.getTraceLinks(projectId, {
+            sourceId: reqId,
+            targetId: functionId,
+            sourceType: 'requirement',
+            targetType: 'function',
+          })
+          const existing = r.success && r.data ? r.data : []
+          const alreadyLinked = existing.some(
+            (l: any) =>
+              l.sourceType === 'requirement' &&
+              l.targetType === 'function' &&
+              l.linkType === 'allocated_to'
+          )
+          if (!alreadyLinked) {
+            await traceabilityService.createTraceLink(projectId, {
+              sourceType: 'requirement',
+              sourceId: reqId,
+              targetType: 'function',
+              targetId: functionId,
+              linkType: 'allocated_to',
+              rationale: 'Allocated from Requirements page Functions menu',
+            })
+          }
+        }
+      } else {
+        const toDelete = allocationLinks.filter(
+          (l) =>
+            l.sourceType === 'requirement' &&
+            l.targetType === 'function' &&
+            l.linkType === 'allocated_to' &&
+            requirementIds.includes(l.sourceId)
+        )
+        for (const link of toDelete) {
+          if (link.id) {
+            await traceabilityService.deleteTraceLink(projectId, link.id)
+          }
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['links', projectId] })
+    },
+    onError: (error: any) => {
+      console.error('Allocate requirements to function error:', error)
+      alert(
+        error?.message || error?.error || 'Failed to allocate requirements to function. Please try again.'
+      )
     },
   })
 
@@ -978,8 +1056,11 @@ export default function RequirementsPage() {
           key={req.id}
           className={clsx(
             'hover:bg-gray-50 dark:hover:bg-gray-700/50 group',
-            level > 0 && 'bg-gray-50/50 dark:bg-gray-900/30'
+            level > 0 && 'bg-gray-50/50 dark:bg-gray-900/30',
+            leftPanelTab === 'functions' && 'cursor-grab'
           )}
+          draggable={leftPanelTab === 'functions'}
+          onDragStart={(e) => handleRequirementDragStart(e, req)}
         >
           <td className="px-4 py-3">
             <div className="flex items-center gap-2">
@@ -1607,6 +1688,21 @@ export default function RequirementsPage() {
     document.addEventListener('mouseup', handleMouseUp)
   }, [pbsPanelWidth])
 
+  const handleRequirementDragStart = useCallback(
+    (e: React.DragEvent, req: Requirement) => {
+      if (leftPanelTab !== 'functions') return
+      const ids =
+        selectedRequirements.has(req.id) && selectedRequirements.size > 1
+          ? Array.from(selectedRequirements)
+          : [req.id]
+      e.dataTransfer.setData('application/requirement-ids', JSON.stringify(ids))
+      e.dataTransfer.setData('application/requirement-id', ids[0])
+      e.dataTransfer.setData('text/plain', ids.join(','))
+      e.dataTransfer.effectAllowed = 'move'
+    },
+    [leftPanelTab, selectedRequirements]
+  )
+
   const handleLinkedElementClick = useCallback((payload: LinkedElementClickPayload) => {
     if (!projectId) return
     const { targetType, targetId } = payload
@@ -1628,19 +1724,86 @@ export default function RequirementsPage() {
 
       </div>
       <div className="flex flex-1 min-h-0">
-        {/* PBS Tree Panel */}
+        {/* PBS / Functions Tree Panel */}
         {isPBSPanelOpen && projectId && (
           <>
-            <div style={{ width: pbsPanelWidth, minWidth: 200 }} className="flex-shrink-0 h-full">
-              <RequirementsPBSTree
-                projectId={projectId}
-                requirements={allRequirements}
-                selectedComponentId={selectedComponentId}
-                onComponentSelect={setSelectedComponentId}
-                links={LINKAGE_V1 ? links : []}
-                onLinkedElementClick={handleLinkedElementClick}
-                onRequirementClick={setDetailRequirement}
-              />
+            <div style={{ width: pbsPanelWidth, minWidth: 200 }} className="flex-shrink-0 h-full flex flex-col">
+              <div className="flex border-b border-gray-200 dark:border-gray-700 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setLeftPanelTab('pbs')}
+                  className={clsx(
+                    'flex-1 px-4 py-2 text-sm font-medium transition-colors',
+                    leftPanelTab === 'pbs'
+                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-500'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  )}
+                >
+                  PBS Components
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLeftPanelTab('functions')}
+                  className={clsx(
+                    'flex-1 px-4 py-2 text-sm font-medium transition-colors',
+                    leftPanelTab === 'functions'
+                      ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-500'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  )}
+                >
+                  Functions
+                </button>
+              </div>
+              <div className="flex-1 min-h-0 overflow-hidden">
+                {leftPanelTab === 'pbs' ? (
+                  <RequirementsPBSTree
+                    projectId={projectId}
+                    requirements={allRequirements}
+                    selectedComponentId={selectedComponentId}
+                    onComponentSelect={setSelectedComponentId}
+                    links={LINKAGE_V1 ? links : []}
+                    onLinkedElementClick={handleLinkedElementClick}
+                    onRequirementClick={setDetailRequirement}
+                  />
+                ) : (
+                  <RequirementsFunctionsTree
+                    projectId={projectId}
+                    requirements={allRequirements}
+                    selectedFunctionId={selectedFunctionId}
+                    onFunctionSelect={setSelectedFunctionId}
+                    allocationLinks={allocationLinks}
+                    onRequirementClick={setDetailRequirement}
+                    onLinkedElementClick={handleLinkedElementClick}
+                    onDropRequirements={async (requirementIds, functionId) => {
+                      const locked = allRequirements.filter(
+                        (r) => requirementIds.includes(r.id) && r.isLocked
+                      )
+                      const toAllocate = requirementIds.filter(
+                        (id) => !locked.some((r) => r.id === id)
+                      )
+                      if (locked.length > 0) {
+                        alert(
+                          `Some requirements are locked and could not be allocated (${locked.length}).`
+                        )
+                      }
+                      if (toAllocate.length > 0) {
+                        try {
+                          await allocateRequirementsToFunctionMutation.mutateAsync({
+                            requirementIds: toAllocate,
+                            functionId,
+                          })
+                        } catch (err: any) {
+                          console.error('Allocation failed:', err)
+                          alert(
+                            err?.message || err?.error || 'Failed to allocate requirements. Please try again.'
+                          )
+                        }
+                      }
+                    }}
+                    isDropTarget={!isBaselineView}
+                  />
+                )}
+              </div>
             </div>
             {/* Resize handle */}
             <div
@@ -1674,10 +1837,19 @@ export default function RequirementsPage() {
                 {isPBSPanelOpen ? <PanelLeftClose size={16} className="text-gray-500" /> : <PanelLeft size={16} className="text-gray-500" />}
               </button>
               <h2 className="text-lg font-bold text-gray-900 dark:text-white">Requirements</h2>
-              {selectedComponentId && (
+              {leftPanelTab === 'pbs' && selectedComponentId && (
                 <button
                   onClick={() => setSelectedComponentId(null)}
                   className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                >
+                  <X size={12} />
+                  Clear filter
+                </button>
+              )}
+              {leftPanelTab === 'functions' && selectedFunctionId && (
+                <button
+                  onClick={() => setSelectedFunctionId(null)}
+                  className="flex items-center gap-1 px-2 py-1 text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
                 >
                   <X size={12} />
                   Clear filter
@@ -2128,6 +2300,8 @@ export default function RequirementsPage() {
                               requirement={req}
                               links={getLinksForRequirement(req.id)}
                               onRequirementClick={setDetailRequirement}
+                              draggable={leftPanelTab === 'functions'}
+                              onDragStart={(e) => handleRequirementDragStart(e, req)}
                             />
                           ))}
                         </div>
@@ -2143,6 +2317,8 @@ export default function RequirementsPage() {
                 ) : (
                   documentViewRequirements.map((req) => (
                     <RequirementDocumentCard
+                      draggable={leftPanelTab === 'functions'}
+                      onDragStart={(e) => handleRequirementDragStart(e, req)}
                       key={req.id}
                       requirement={req}
                       links={getLinksForRequirement(req.id)}

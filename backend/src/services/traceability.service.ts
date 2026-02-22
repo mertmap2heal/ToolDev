@@ -62,22 +62,29 @@ export const traceabilityService = {
       ? { AND: [baseWhere, { targetType: { notIn: ['function', 'parameter'] } }] }
       : baseWhere
 
-    const links = await prisma.traceLink.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-    })
+    let links: any[] = []
+    try {
+      links = await prisma.traceLink.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+      })
+    } catch (err) {
+      console.error('getTraceLinks: TraceLink fetch failed:', err)
+      throw err
+    }
 
     // Fetch IssueLinks to include in the trace (mapped to TraceLink items)
 
     // 1. Where Issue is the SOURCE (Issue -> X)
     let issueLinksDirect: any[] = []
-    if (!filters?.sourceType || filters.sourceType === 'issue') {
-      const whereDirect: any = { issue: { projectId } }
-      if (filters?.sourceId) whereDirect.issueId = filters.sourceId
-      if (filters?.targetType) whereDirect.linkedType = filters.targetType
-      if (filters?.targetId) whereDirect.linkedId = filters.targetId
+    try {
+      if (!filters?.sourceType || filters.sourceType === 'issue') {
+        const whereDirect: any = { issue: { projectId } }
+        if (filters?.sourceId) whereDirect.issueId = filters.sourceId
+        if (filters?.targetType) whereDirect.linkedType = filters.targetType
+        if (filters?.targetId) whereDirect.linkedId = filters.targetId
 
-      const results = await prisma.issueLink.findMany({ where: whereDirect, include: { issue: true } })
+        const results = await prisma.issueLink.findMany({ where: whereDirect, include: { issue: true } })
       issueLinksDirect = results
         .filter((l) => l.issue != null)
         .map((l) => ({
@@ -96,18 +103,22 @@ export const traceabilityService = {
         confidence: undefined,
         lastChecked: undefined
       }))
+      }
+    } catch (err) {
+      console.error('getTraceLinks: IssueLink direct fetch failed:', err)
     }
 
     // 2. Where Issue is the TARGET (X -> Issue) - Stored as Issue -> X
     let issueLinksInverse: any[] = []
-    if (!filters?.targetType || filters.targetType === 'issue') {
-      const whereInverse: any = { issue: { projectId } }
-      if (filters?.sourceType) whereInverse.linkedType = filters.sourceType
-      if (filters?.sourceId) whereInverse.linkedId = filters.sourceId
-      if (filters?.targetId) whereInverse.issueId = filters.targetId
+    try {
+      if (!filters?.targetType || filters.targetType === 'issue') {
+        const whereInverse: any = { issue: { projectId } }
+        if (filters?.sourceType) whereInverse.linkedType = filters.sourceType
+        if (filters?.sourceId) whereInverse.linkedId = filters.sourceId
+        if (filters?.targetId) whereInverse.issueId = filters.targetId
 
-      const results = await prisma.issueLink.findMany({ where: whereInverse, include: { issue: true } })
-      issueLinksInverse = results
+        const results = await prisma.issueLink.findMany({ where: whereInverse, include: { issue: true } })
+        issueLinksInverse = results
         .filter((l) => l.issue != null)
         .map((l) => ({
         id: l.id,
@@ -128,11 +139,15 @@ export const traceabilityService = {
         targetDescription: l.issue!.description,
         targetDisplayId: l.issue!.issueKey || l.issue!.id.substring(0, 8)
       }))
+      }
+    } catch (err) {
+      console.error('getTraceLinks: IssueLink inverse fetch failed:', err)
     }
 
 
     // 3. Where Change Request is linked (Requirement <-> CR)
     let crLinks: any[] = []
+    try {
     const crInclude = { changeRequest: true, requirement: true }
 
     // Check if we need to fetch CR links based on filters
@@ -215,6 +230,9 @@ export const traceabilityService = {
         })))
       }
     }
+    } catch (err) {
+      console.error('getTraceLinks: RequirementChangeRequestLink fetch failed:', err)
+    }
 
     // Dedup CR links if we fetched both directions for a broad query (rare but possible)
     // We can use a Map by ID to dedup if needed, but for now simple concatenation. 
@@ -246,21 +264,28 @@ export const traceabilityService = {
       if (l.targetType === 'function') funcIdsToFetch.add(l.targetId)
     })
 
-    // Fetch titles (use Promise.resolve([]) for empty to avoid Promise.all issues)
-    const [reqDetails, funcDetails] = await Promise.all([
-      reqIdsToFetch.size > 0
-        ? prisma.requirement.findMany({
-            where: { id: { in: Array.from(reqIdsToFetch) }, deletedAt: null },
-            select: { id: true, title: true, requirementId: true }
-          })
-        : Promise.resolve([]),
-      funcIdsToFetch.size > 0
-        ? prisma.systemFunction.findMany({
-            where: { id: { in: Array.from(funcIdsToFetch) } },
-            select: { id: true, name: true, functionId: true }
-          })
-        : Promise.resolve([]),
-    ])
+    let reqDetails: { id: string; title: string; requirementId: string | null }[] = []
+    let funcDetails: { id: string; name: string; functionId: string | null }[] = []
+    try {
+      const [reqs, funcs] = await Promise.all([
+        reqIdsToFetch.size > 0
+          ? prisma.requirement.findMany({
+              where: { id: { in: Array.from(reqIdsToFetch) }, deletedAt: null },
+              select: { id: true, title: true, requirementId: true }
+            })
+          : Promise.resolve([]),
+        funcIdsToFetch.size > 0
+          ? prisma.systemFunction.findMany({
+              where: { id: { in: Array.from(funcIdsToFetch) } },
+              select: { id: true, name: true, functionId: true }
+            })
+          : Promise.resolve([]),
+      ])
+      reqDetails = reqs
+      funcDetails = funcs
+    } catch (err) {
+      console.error('getTraceLinks: Entity details fetch failed:', err)
+    }
 
     const reqMap = new Map(reqDetails.map(r => [r.id, r]))
     const funcMap = new Map(funcDetails.map(f => [f.id, f]))
