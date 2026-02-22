@@ -44,6 +44,11 @@ function formatLinkType(linkType: string): string {
   return linkType?.replace(/_/g, ' ') ?? ''
 }
 
+/** Strip HTML tags from content so plain text is shown (e.g. "<p>test</p>" → "test") */
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
+}
+
 export default function LinkedElementPreviewPopover({
   payload,
   projectId,
@@ -188,9 +193,9 @@ export default function LinkedElementPreviewPopover({
             {fullDescription && !isLoading && (
               <p
                 className="text-xs text-gray-600 dark:text-gray-300 line-clamp-4 mt-1"
-                title={fullDescription}
+                title={stripHtml(fullDescription)}
               >
-                {fullDescription}
+                {stripHtml(fullDescription)}
               </p>
             )}
             {detailRows.length > 0 && !isLoading && (
