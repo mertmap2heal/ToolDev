@@ -1,21 +1,17 @@
 import { useState, useRef } from 'react'
-import { X, Plus, Trash2, ChevronUp, ChevronDown, Upload, File, Layers, Link as LinkIcon, CheckSquare, Square, Search } from 'lucide-react'
+import { X, Plus, Trash2, Upload, File, Layers, Link as LinkIcon, CheckSquare, Square, Search } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import CustomSectionEditor from './CustomSectionEditor'
+import StructuredStepEditor, { parseStepsToPairs, pairsToStepsAndExpected, type StepPair } from './StructuredStepEditor'
 import clsx from 'clsx'
 
 interface CreateTestCaseModalProps {
   isOpen: boolean
   onClose: () => void
   projectId: string
-}
-
-interface Step {
-  id: string
-  text: string
 }
 
 interface Criterion {
@@ -32,13 +28,12 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
     title: '',
     objective: '',
     preconditions: '',
-    expectedResults: '',
     linkedMocCode: '',
     linkedMethodId: '',
     ownerUserId: '',
   })
 
-  const [steps, setSteps] = useState<Step[]>([{ id: '1', text: '' }])
+  const [stepPairs, setStepPairs] = useState<StepPair[]>(() => parseStepsToPairs([], []))
   const [criteria, setCriteria] = useState<Criterion[]>([])
   const [attachments, setAttachments] = useState<File[]>([])
   const [customSections, setCustomSections] = useState<Array<{ id: string; title: string; content: string; orderIndex: number }>>([])
@@ -146,6 +141,16 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
         })
       }
 
+      // 5. Step Design Notes (per-step notes during authoring)
+      const designNotes = stepPairs.map((p) => p.designNote ?? '')
+      if (designNotes.some((n) => n.trim())) {
+        await verificationService.createCustomSection(projectId, testCaseId, {
+          title: '_StepDesignNotes',
+          content: JSON.stringify(designNotes),
+          orderIndex: -1,
+        })
+      }
+
       return response.data
     },
     onSuccess: () => {
@@ -165,12 +170,11 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
       title: '',
       objective: '',
       preconditions: '',
-      expectedResults: '',
       linkedMocCode: '',
       linkedMethodId: '',
       ownerUserId: '',
     })
-    setSteps([{ id: '1', text: '' }])
+    setStepPairs(parseStepsToPairs([], []))
     setCriteria([])
     setAttachments([])
     setCustomSections([])
@@ -192,15 +196,17 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
       title: formData.title.trim(),
       objective: formData.objective?.trim() || undefined,
       preconditions: formData.preconditions?.trim() || undefined,
-      expectedResults: formData.expectedResults?.trim() || undefined,
       ownerUserId: formData.ownerUserId?.trim() || undefined,
     }
 
     if (formData.key.trim()) submitData.key = formData.key.trim()
 
-    // Steps
-    const stepTexts = steps.filter((s) => s.text.trim()).map((s) => s.text.trim())
-    if (stepTexts.length > 0) submitData.steps = stepTexts
+    // Steps and expected results from structured editor
+    const { steps: stepsArr, expectedResults } = pairsToStepsAndExpected(stepPairs)
+    if (stepsArr.some((s) => s) || expectedResults.some((e) => e)) {
+      submitData.steps = stepsArr
+      submitData.expectedResults = expectedResults
+    }
 
     // Criteria
     const checkedCriteria = criteria.filter((c) => c.checked && c.text.trim()).map((c) => c.text.trim())
@@ -232,11 +238,6 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
       setSelectedLinks([...selectedLinks, { type, id }])
     }
   }
-
-  // Helpers for Steps
-  const addStep = () => setSteps([...steps, { id: Date.now().toString(), text: '' }])
-  const removeStep = (id: string) => steps.length > 1 && setSteps(steps.filter((s) => s.id !== id))
-  const updateStep = (id: string, text: string) => setSteps(steps.map((s) => (s.id === id ? { ...s, text } : s)))
 
   // Helpers for Criteria
   const addCriterion = () => setCriteria([...criteria, { id: Date.now().toString(), text: '', checked: false }])
@@ -395,54 +396,11 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
             {/* Steps Tab */}
             {activeTab === 'steps' && (
               <div className="space-y-6">
-                {/* Steps */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Test Steps</label>
-                    <button
-                      type="button"
-                      onClick={addStep}
-                      className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-                    >
-                      <Plus size={14} /> Add Step
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    {steps.map((step, idx) => (
-                      <div key={step.id} className="flex items-start gap-2">
-                        <span className="mt-2 text-sm text-gray-500 font-medium min-w-[24px]">{idx + 1}.</span>
-                        <input
-                          type="text"
-                          value={step.text}
-                          onChange={(e) => updateStep(step.id, e.target.value)}
-                          className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          placeholder={`Step ${idx + 1}`}
-                        />
-                        {steps.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeStep(step.id)}
-                            className="mt-2 p-1 text-red-600 hover:bg-red-50 rounded"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Expected Results */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expected Results</label>
-                  <textarea
-                    rows={3}
-                    value={formData.expectedResults}
-                    onChange={(e) => handleChange('expectedResults', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-                    placeholder="Enter expected results"
-                  />
-                </div>
+                <StructuredStepEditor
+                  pairs={stepPairs}
+                  onChange={setStepPairs}
+                  readOnly={false}
+                />
 
                 {/* Criteria */}
                 <div>

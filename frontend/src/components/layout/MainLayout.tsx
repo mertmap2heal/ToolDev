@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
+import { BreadcrumbProvider } from '../../contexts/BreadcrumbContext'
 import AIGuideChat from '../ai-guide/AIGuideChat'
 import ForceChangePasswordModal from '../auth/ForceChangePasswordModal'
 import { useAIGuideStore } from '../../store/aiGuideStore'
@@ -49,12 +50,14 @@ export default function MainLayout() {
         <ForceChangePasswordModal onSuccess={handleForceChangePasswordSuccess} />
       )}
       <Sidebar />
-      <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${isOpen ? '' : ''}`}>
-        <Header />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4" style={{ backgroundColor: 'var(--theme-bg)' }}>
-          <Outlet />
-        </main>
-      </div>
+      <BreadcrumbProvider>
+        <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${isOpen ? '' : ''}`}>
+          <Header />
+          <main className="flex-1 overflow-y-auto overflow-x-hidden p-4" style={{ backgroundColor: 'var(--theme-bg)' }}>
+            <Outlet />
+          </main>
+        </div>
+      </BreadcrumbProvider>
       {/* AI Guide Chat - Right Side Panel */}
       <AIGuideChat />
     </div>

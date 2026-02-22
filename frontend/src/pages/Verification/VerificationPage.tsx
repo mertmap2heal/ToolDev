@@ -192,6 +192,16 @@ export default function VerificationPage() {
     name: string
   } | null>(null)
 
+  // Bulk selection for test cases
+  const [selectedCaseIds, setSelectedCaseIds] = useState<Set<string>>(new Set())
+
+  // Bulk link/unlink setups modal
+  const [bulkSetupModal, setBulkSetupModal] = useState<{
+    isOpen: boolean
+    mode: 'link' | 'unlink'
+    selectedSetupIds: Set<string>
+  }>({ isOpen: false, mode: 'link', selectedSetupIds: new Set() })
+
   // Change request modal state
   const [changeRequestModal, setChangeRequestModal] = useState<{
     isOpen: boolean
@@ -314,7 +324,7 @@ export default function VerificationPage() {
     enabled: !!projectId && (activeTab === 'cases' || focusType === 'test_case' || focusType === 'test-case'),
   })
 
-  // Fetch test setups
+  // Fetch test setups (also when on cases tab for bulk link/unlink)
   const { data: testSetups = [], isLoading: loadingSetups } = useQuery({
     queryKey: ['test-setups', projectId],
     queryFn: async () => {
@@ -322,7 +332,7 @@ export default function VerificationPage() {
       const response = await verificationService.getSetups(projectId)
       return response.success && response.data ? response.data : []
     },
-    enabled: !!projectId && (activeTab === 'setups' || focusType === 'test_setup' || focusType === 'test-setup'),
+    enabled: !!projectId && (activeTab === 'setups' || activeTab === 'cases' || focusType === 'test_setup' || focusType === 'test-setup'),
   })
 
   // Fetch test results (enabled whenever on verification page so data is ready when switching to results tab)
@@ -407,6 +417,68 @@ export default function VerificationPage() {
       queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
       queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
       setDeleteConfirmation(null)
+    },
+  })
+
+  const bulkReviewMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      for (const id of ids) {
+        await verificationService.reviewTestCase(projectId!, id)
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
+      setSelectedCaseIds(new Set())
+    },
+  })
+
+  const bulkApproveMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      for (const id of ids) {
+        await verificationService.approveTestCase(projectId!, id)
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
+      setSelectedCaseIds(new Set())
+    },
+  })
+
+  const bulkLinkSetupsMutation = useMutation({
+    mutationFn: async ({ caseIds, setupIds }: { caseIds: string[]; setupIds: string[] }) => {
+      for (const caseId of caseIds) {
+        for (const setupId of setupIds) {
+          await verificationService.linkSetup(projectId!, caseId, setupId)
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
+      setBulkSetupModal({ isOpen: false, mode: 'link', selectedSetupIds: new Set() })
+      setSelectedCaseIds(new Set())
+    },
+  })
+
+  const bulkUnlinkSetupsMutation = useMutation({
+    mutationFn: async ({ caseIds, setupIds }: { caseIds: string[]; setupIds: string[] }) => {
+      for (const caseId of caseIds) {
+        for (const setupId of setupIds) {
+          try {
+            await verificationService.unlinkSetup(projectId!, caseId, setupId)
+          } catch {
+            // Ignore if setup wasn't linked
+          }
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
+      setBulkSetupModal({ isOpen: false, mode: 'unlink', selectedSetupIds: new Set() })
+      setSelectedCaseIds(new Set())
     },
   })
 
@@ -822,6 +894,51 @@ export default function VerificationPage() {
 
       {activeTab === 'cases' && (
         <div className="space-y-4">
+          {selectedCaseIds.size > 0 && (
+            <div className="flex items-center justify-between gap-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                {selectedCaseIds.size} case{selectedCaseIds.size !== 1 ? 's' : ''} selected
+              </span>
+              <div className="flex items-center gap-2">
+                {filteredCases.some((c: any) => selectedCaseIds.has(c.id) && c.status === 'DRAFT') && (
+                  <button
+                    onClick={() => bulkReviewMutation.mutate(Array.from(selectedCaseIds))}
+                    disabled={bulkReviewMutation.isPending}
+                    className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg"
+                  >
+                    Submit for review
+                  </button>
+                )}
+                {filteredCases.some((c: any) => selectedCaseIds.has(c.id) && c.status === 'REVIEWED') && (
+                  <button
+                    onClick={() => bulkApproveMutation.mutate(Array.from(selectedCaseIds))}
+                    disabled={bulkApproveMutation.isPending}
+                    className="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg"
+                  >
+                    Approve
+                  </button>
+                )}
+                <button
+                  onClick={() => setBulkSetupModal({ isOpen: true, mode: 'link', selectedSetupIds: new Set() })}
+                  className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg"
+                >
+                  Link setups
+                </button>
+                <button
+                  onClick={() => setBulkSetupModal({ isOpen: true, mode: 'unlink', selectedSetupIds: new Set() })}
+                  className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg"
+                >
+                  Unlink setups
+                </button>
+                <button
+                  onClick={() => setSelectedCaseIds(new Set())}
+                  className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
           <div className="flex justify-end gap-2">
             <div className="relative" ref={columnSelectorOpen.type === 'cases' ? columnSelectorRef : null}>
               <button
@@ -890,6 +1007,20 @@ export default function VerificationPage() {
               <table className="w-full">
                 <thead className="bg-gray-50 dark:bg-gray-900">
                   <tr>
+                    <th className="px-4 py-3 text-left w-10">
+                      <input
+                        type="checkbox"
+                        checked={filteredCases.length > 0 && filteredCases.every((c: any) => selectedCaseIds.has(c.id))}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedCaseIds(new Set(filteredCases.map((c: any) => c.id)))
+                          } else {
+                            setSelectedCaseIds(new Set())
+                          }
+                        }}
+                        className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                      />
+                    </th>
                     {caseColumns.has('key') && (
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Key</th>
                     )}
@@ -930,6 +1061,22 @@ export default function VerificationPage() {
                       onClick={() => drawer.openCase(case_)}
                       className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer group"
                     >
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedCaseIds.has(case_.id)}
+                          onChange={(e) => {
+                            e.stopPropagation()
+                            setSelectedCaseIds((prev) => {
+                              const next = new Set(prev)
+                              if (next.has(case_.id)) next.delete(case_.id)
+                              else next.add(case_.id)
+                              return next
+                            })
+                          }}
+                          className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                        />
+                      </td>
                       {caseColumns.has('key') && (
                         <td className="px-4 py-3">
                           <span className="font-mono text-sm text-gray-600 dark:text-gray-400">{case_.key}</span>
@@ -1519,6 +1666,74 @@ export default function VerificationPage() {
             projectId={projectId}
           />
         </>
+      )}
+
+      {/* Bulk Link/Unlink Setups Modal */}
+      {bulkSetupModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-lg w-full mx-4 max-h-[80vh] flex flex-col">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              {bulkSetupModal.mode === 'link' ? 'Bulk Link Setups' : 'Bulk Unlink Setups'}
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Select setups to {bulkSetupModal.mode} to {selectedCaseIds.size} case{selectedCaseIds.size !== 1 ? 's' : ''}.
+            </p>
+            <div className="flex-1 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-2 mb-4">
+              {loadingSetups ? (
+                <p className="text-sm text-gray-500">Loading setups...</p>
+              ) : testSetups.length === 0 ? (
+                <p className="text-sm text-gray-500">No setups available.</p>
+              ) : (
+                testSetups.map((setup: any) => (
+                  <label key={setup.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded px-2 py-1">
+                    <input
+                      type="checkbox"
+                      checked={bulkSetupModal.selectedSetupIds.has(setup.id)}
+                      onChange={(e) => {
+                        setBulkSetupModal((prev) => {
+                          const next = new Set(prev.selectedSetupIds)
+                          if (e.target.checked) next.add(setup.id)
+                          else next.delete(setup.id)
+                          return { ...prev, selectedSetupIds: next }
+                        })
+                      }}
+                      className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-900 dark:text-white">{setup.name || setup.key || setup.id}</span>
+                  </label>
+                ))
+              )}
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setBulkSetupModal({ isOpen: false, mode: 'link', selectedSetupIds: new Set() })}
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (bulkSetupModal.selectedSetupIds.size === 0) return
+                  const ids = Array.from(bulkSetupModal.selectedSetupIds)
+                  const caseIds = Array.from(selectedCaseIds)
+                  if (bulkSetupModal.mode === 'link') {
+                    bulkLinkSetupsMutation.mutate({ caseIds, setupIds: ids })
+                  } else {
+                    bulkUnlinkSetupsMutation.mutate({ caseIds, setupIds: ids })
+                  }
+                }}
+                disabled={
+                  bulkSetupModal.selectedSetupIds.size === 0 ||
+                  bulkLinkSetupsMutation.isPending ||
+                  bulkUnlinkSetupsMutation.isPending
+                }
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {bulkSetupModal.mode === 'link' ? 'Link' : 'Unlink'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Delete Confirmation Modal */}

@@ -8,6 +8,7 @@ import ReportExporter from './ReportExporter'
 import ExportWithTemplateModal from './ExportWithTemplateModal'
 import CustomSectionEditor from './CustomSectionEditor'
 import VerificationLifecycle from './VerificationLifecycle'
+import StructuredStepEditor, { parseStepsToPairs, pairsToStepsAndExpected, type StepPair } from './StructuredStepEditor'
 import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
 import clsx from 'clsx'
 
@@ -31,6 +32,7 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
     linkedMethodId: '',
     ownerUserId: '',
   })
+  const [stepPairs, setStepPairs] = useState<StepPair[]>([])
   const [selectedSetups, setSelectedSetups] = useState<string[]>([])
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
@@ -177,32 +179,36 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
 
   const currentCase = caseDetails || testCase
 
+  const stepDesignNotesSection = customSections?.find((s: any) => s.title === '_StepDesignNotes')
+
   useEffect(() => {
     if (currentCase) {
-      const stepsText = Array.isArray(currentCase.steps)
-        ? JSON.stringify(currentCase.steps, null, 2)
-        : currentCase.steps || ''
-      const expectedText = Array.isArray(currentCase.expectedResults)
-        ? JSON.stringify(currentCase.expectedResults, null, 2)
-        : currentCase.expectedResults || ''
-
       setEditData({
         title: currentCase.title || '',
         objective: currentCase.objective || '',
         preconditions: currentCase.preconditions || '',
-        steps: stepsText,
-        expectedResults: expectedText,
+        steps: '',
+        expectedResults: '',
         passFailCriteria: currentCase.passFailCriteria || '',
         linkedMocCode: currentCase.linkedMocCode?.toString() || '',
         linkedMethodId: currentCase.linkedMethodId || '',
         ownerUserId: currentCase.ownerUserId || '',
       })
+      let designNotes: string[] = []
+      if (stepDesignNotesSection?.content) {
+        try {
+          const parsed = JSON.parse(stepDesignNotesSection.content)
+          designNotes = Array.isArray(parsed) ? parsed : []
+        } catch {
+          designNotes = []
+        }
+      }
+      setStepPairs(parseStepsToPairs(currentCase.steps, currentCase.expectedResults, designNotes))
 
-      // Initialize selectedSetups from currentCase.testCaseSetups
       const currentSetupIds = currentCase.testCaseSetups?.map((link: any) => link.setupId) || []
       setSelectedSetups(currentSetupIds)
     }
-  }, [currentCase])
+  }, [currentCase, stepDesignNotesSection?.content])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -226,23 +232,11 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
       ownerUserId: editData.ownerUserId?.trim() || undefined,
     }
 
-    // Parse steps and expectedResults
-    if (editData.steps.trim()) {
-      try {
-        const parsed = JSON.parse(editData.steps)
-        submitData.steps = Array.isArray(parsed) ? parsed : [editData.steps.trim()]
-      } catch {
-        submitData.steps = [editData.steps.trim()]
-      }
-    }
-
-    if (editData.expectedResults.trim()) {
-      try {
-        const parsed = JSON.parse(editData.expectedResults)
-        submitData.expectedResults = Array.isArray(parsed) ? parsed : [editData.expectedResults.trim()]
-      } catch {
-        submitData.expectedResults = [editData.expectedResults.trim()]
-      }
+    // Steps and expected results from structured editor
+    const { steps, expectedResults } = pairsToStepsAndExpected(stepPairs)
+    if (steps.some((s) => s) || expectedResults.some((e) => e)) {
+      submitData.steps = steps.length > 0 ? steps : undefined
+      submitData.expectedResults = expectedResults.length > 0 ? expectedResults : undefined
     }
 
     if (editData.linkedMocCode) {
@@ -284,8 +278,26 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
         }
       }
 
+      // Create or update Step Design Notes custom section
+      const designNotes = stepPairs.map((p) => p.designNote ?? '')
+      const notesContent = JSON.stringify(designNotes)
+      const stepNotesSection = customSections?.find((s: any) => s.title === '_StepDesignNotes')
+      if (stepNotesSection) {
+        await updateCustomSectionMutation.mutateAsync({
+          sectionId: stepNotesSection.id,
+          data: { content: notesContent },
+        })
+      } else if (designNotes.some((n) => n.trim())) {
+        await createCustomSectionMutation.mutateAsync({
+          title: '_StepDesignNotes',
+          content: notesContent,
+          orderIndex: -1,
+        })
+      }
+
       // Invalidate queries to refresh data (updateCaseMutation already invalidates, but we do it again after setup changes)
       queryClient.invalidateQueries({ queryKey: ['test-case', projectId, testCase.id] })
+      queryClient.invalidateQueries({ queryKey: ['custom-sections', projectId, testCase.id] })
       queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
       queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
       setIsEditing(false)
@@ -372,25 +384,25 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
                 <button
                   onClick={() => {
                     setIsEditing(false)
-                    // Reset edit data
-                    const stepsText = Array.isArray(currentCase?.steps)
-                      ? JSON.stringify(currentCase.steps, null, 2)
-                      : currentCase?.steps || ''
-                    const expectedText = Array.isArray(currentCase?.expectedResults)
-                      ? JSON.stringify(currentCase.expectedResults, null, 2)
-                      : currentCase?.expectedResults || ''
                     setEditData({
                       title: currentCase?.title || '',
                       objective: currentCase?.objective || '',
                       preconditions: currentCase?.preconditions || '',
-                      steps: stepsText,
-                      expectedResults: expectedText,
+                      steps: '',
+                      expectedResults: '',
                       passFailCriteria: currentCase?.passFailCriteria || '',
                       linkedMocCode: currentCase?.linkedMocCode?.toString() || '',
                       linkedMethodId: currentCase?.linkedMethodId || '',
                       ownerUserId: currentCase?.ownerUserId || '',
                     })
-                    // Reset selectedSetups from currentCase.testCaseSetups
+                    let cancelNotes: string[] = []
+                    if (stepDesignNotesSection?.content) {
+                      try {
+                        const p = JSON.parse(stepDesignNotesSection.content)
+                        cancelNotes = Array.isArray(p) ? p : []
+                      } catch { /* ignore */ }
+                    }
+                    setStepPairs(parseStepsToPairs(currentCase?.steps, currentCase?.expectedResults, cancelNotes))
                     const currentSetupIds = currentCase?.testCaseSetups?.map((link: any) => link.setupId) || []
                     setSelectedSetups(currentSetupIds)
                   }}
@@ -503,61 +515,12 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
             )}
           </div>
 
-          {/* Steps */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Steps
-            </label>
-            {isEditing ? (
-              <textarea
-                value={editData.steps}
-                onChange={(e) => setEditData({ ...editData, steps: e.target.value })}
-                rows={6}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none font-mono text-sm"
-                placeholder="Enter steps as JSON array or one per line"
-              />
-            ) : (
-              <div className="text-gray-900 dark:text-white">
-                {Array.isArray(currentCase?.steps) ? (
-                  <ol className="list-decimal list-inside space-y-1">
-                    {currentCase.steps.map((step: any, idx: number) => (
-                      <li key={idx}>{step}</li>
-                    ))}
-                  </ol>
-                ) : (
-                  <p>{currentCase?.steps || 'No steps defined'}</p>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Expected Results */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Expected Results
-            </label>
-            {isEditing ? (
-              <textarea
-                value={editData.expectedResults}
-                onChange={(e) => setEditData({ ...editData, expectedResults: e.target.value })}
-                rows={6}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none font-mono text-sm"
-                placeholder="Enter expected results as JSON array or one per line"
-              />
-            ) : (
-              <div className="text-gray-900 dark:text-white">
-                {Array.isArray(currentCase?.expectedResults) ? (
-                  <ol className="list-decimal list-inside space-y-1">
-                    {currentCase.expectedResults.map((result: any, idx: number) => (
-                      <li key={idx}>{result}</li>
-                    ))}
-                  </ol>
-                ) : (
-                  <p>{currentCase?.expectedResults || 'No expected results'}</p>
-                )}
-              </div>
-            )}
-          </div>
+          {/* Steps & Expected Results */}
+          <StructuredStepEditor
+            pairs={stepPairs}
+            onChange={setStepPairs}
+            readOnly={!isEditing}
+          />
 
           {/* Pass/Fail Criteria */}
           <div>
@@ -747,9 +710,9 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
               )}
             </div>
 
-            {customSections.length > 0 ? (
+            {customSections.filter((s: any) => s.title !== '_StepDesignNotes').length > 0 ? (
               <div className="space-y-4">
-                {customSections.map((section: any) => (
+                {customSections.filter((s: any) => s.title !== '_StepDesignNotes').map((section: any) => (
                   <CustomSectionEditor
                     key={section.id}
                     section={section}

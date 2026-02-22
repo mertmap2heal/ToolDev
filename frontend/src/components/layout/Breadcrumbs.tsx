@@ -2,19 +2,18 @@ import { Link, useParams, useLocation } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { projectService } from '../../services/project.service'
-
-interface BreadcrumbItem {
-  label: string
-  path?: string
-}
+import { useBreadcrumb } from '../../contexts/BreadcrumbContext'
+import type { BreadcrumbItem } from '../../contexts/BreadcrumbContext'
 
 interface BreadcrumbsProps {
-  items?: BreadcrumbItem[]
+  items?: BreadcrumbItem[] | null
 }
 
-export default function Breadcrumbs({ items }: BreadcrumbsProps) {
+export default function Breadcrumbs({ items: itemsProp }: BreadcrumbsProps) {
   const { projectId } = useParams<{ projectId: string }>()
   const location = useLocation()
+  const breadcrumbCtx = useBreadcrumb()
+  const itemsFromContext = breadcrumbCtx?.items ?? null
   
   // Fetch project name if we're on a project page
   const { data: projectData } = useQuery({
@@ -29,7 +28,8 @@ export default function Breadcrumbs({ items }: BreadcrumbsProps) {
 
   // Auto-generate breadcrumbs based on route
   const generateBreadcrumbs = (): BreadcrumbItem[] => {
-    if (items) return items // Use provided items if available
+    if (itemsProp) return itemsProp // Use provided items prop if available
+    if (itemsFromContext) return itemsFromContext // Use context (e.g. verification drawer open)
     
     const pathSegments = location.pathname.split('/').filter(Boolean)
     const breadcrumbs: BreadcrumbItem[] = [

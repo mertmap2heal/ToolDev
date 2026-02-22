@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import {
   X,
   Play,
@@ -66,6 +66,7 @@ export default function TestRunExecutionView({
   const [readinessConfirmed, setReadinessConfirmed] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [notesDraft, setNotesDraft] = useState<Record<string, string>>({})
+  const [stepNotesDraft, setStepNotesDraft] = useState<Record<string, Record<number, string>>>({})
   const [failConditionsDraft, setFailConditionsDraft] = useState<Record<string, string>>({})
 
   const { data: runDetails, isLoading } = useQuery({
@@ -95,6 +96,16 @@ export default function TestRunExecutionView({
 
   const r = runDetails || run
   const results = r?.results ?? []
+  const currentResult = results[currentIndex] ?? null
+  const { data: verificationLinks = [] } = useQuery({
+    queryKey: ['test-case-verification-links', projectId, currentResult?.testCaseId],
+    queryFn: async () => {
+      if (!currentResult?.testCaseId) return []
+      const res = (await verificationService.getTestCaseVerificationLinks(projectId, currentResult.testCaseId)) as { success?: boolean; data?: any[] }
+      return res.success && res.data ? res.data : []
+    },
+    enabled: !!projectId && !!currentResult?.testCaseId && readinessConfirmed,
+  })
   const plan = r?.testPlan
   const envIds = (plan?.testingEnvironmentIds ?? []) as string[]
   const toolIds = (plan?.testingToolIds ?? []) as string[]
@@ -104,13 +115,13 @@ export default function TestRunExecutionView({
   const toolLabels = toolIds
     .map((id) => toolOptions.find((o) => o.id === id)?.value ?? id)
     .filter(Boolean)
-  const currentResult = results[currentIndex] ?? null
   const snapshot = (currentResult?.testCaseVersionSnapshot ?? {}) as Record<string, unknown>
   const steps = ensureArray(snapshot.steps) as string[]
   const expectedResults = ensureArray(snapshot.expectedResults) as string[]
   const actualResultsJson = (currentResult?.actualResults ?? {}) as Record<string, unknown>
   const stepOutcomes = (actualResultsJson.stepOutcomes ?? []) as { stepIndex: number; status: string; note?: string }[]
   const getStepStatus = (idx: number) => stepOutcomes.find((s) => s.stepIndex === idx)?.status
+  const getStepNote = (idx: number) => stepOutcomes.find((s) => s.stepIndex === idx)?.note ?? ''
   const failConditions = (actualResultsJson.failConditions as string) ?? ''
 
   const startTimerMutation = useMutation({
@@ -180,7 +191,8 @@ export default function TestRunExecutionView({
       const existing = (currentResult?.actualResults as Record<string, unknown>) ?? {}
       const so = (existing.stepOutcomes as { stepIndex: number; status: string; note?: string }[]) ?? []
       const filtered = so.filter((s) => s.stepIndex !== stepIndex)
-      const next = [...filtered, { stepIndex, status, note: note || '' }].sort(
+      const prevNote = so.find((s) => s.stepIndex === stepIndex)?.note ?? ''
+      const next = [...filtered, { stepIndex, status, note: note ?? prevNote }].sort(
         (a, b) => a.stepIndex - b.stepIndex
       )
       updateResultMutation.mutate({
@@ -189,6 +201,22 @@ export default function TestRunExecutionView({
       })
     },
     [currentResult, updateResultMutation]
+  )
+
+  const setStepNote = useCallback(
+    (resultId: string, stepIndex: number, note: string) => {
+      const status = getStepStatus(stepIndex) || ''
+      setStepOutcome(resultId, stepIndex, status, note)
+      setStepNotesDraft((prev) => {
+        const next = { ...prev }
+        if (!next[resultId]) next[resultId] = {}
+        const stepDraft = { ...next[resultId] }
+        delete stepDraft[stepIndex]
+        next[resultId] = Object.keys(stepDraft).length ? stepDraft : {}
+        return next
+      })
+    },
+    [getStepStatus, setStepOutcome]
   )
 
   const saveFailConditions = useCallback(
@@ -215,6 +243,31 @@ export default function TestRunExecutionView({
   )
 
   const canStart = r?.status === 'PLANNED' || r?.status === 'COMPLETED'
+
+  // Keyboard shortcuts: Left/Right for prev/next scenario, Ctrl+Enter to save note
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === 'Enter') {
+        if (currentResult && (notesDraft[currentResult.id] ?? '').trim()) {
+          e.preventDefault()
+          saveNotes(currentResult.id, notesDraft[currentResult.id] ?? '')
+        }
+        return
+      }
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        setCurrentIndex((i) => Math.max(0, i - 1))
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        setCurrentIndex((i) => Math.min((results?.length ?? 1) - 1, i + 1))
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [currentResult, notesDraft, results?.length, saveNotes])
   const canPause = r?.status === 'IN_PROGRESS' && !r?.pausedAt
   const canResume = r?.status === 'IN_PROGRESS' && !!r?.pausedAt
   const canStop = r?.status === 'IN_PROGRESS'
@@ -476,6 +529,31 @@ export default function TestRunExecutionView({
                   <span className="text-sm font-normal text-gray-500">({currentResult.testCase.key})</span>
                 )}
               </h3>
+              {verificationLinks.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">Verifies</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {verificationLinks.map((link: any) => {
+                      const el = link.targetElement
+                      const identifier = el?.requirementId ?? el?.functionId ?? link.targetId?.slice(0, 8)
+                      const label = link.targetType === 'requirement' ? 'REQ' : 'FUNC'
+                      return (
+                        <span
+                          key={link.id}
+                          className={clsx(
+                            'inline-flex items-center px-2 py-1 rounded text-xs font-medium',
+                            link.targetType === 'requirement'
+                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+                              : 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                          )}
+                        >
+                          {label}: {identifier}
+                        </span>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
               {(snapshot.preconditions as string) && (
                 <div className="mb-4">
                   <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-1">
@@ -532,27 +610,47 @@ export default function TestRunExecutionView({
                       <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-2">
                         Per-step outcome
                       </h3>
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         {steps.map((_, idx) => (
-                          <div key={idx} className="flex items-center gap-2">
-                            <span className="text-sm text-gray-600 dark:text-gray-400 w-6">{idx + 1}.</span>
-                            <div className="flex gap-1">
-                              {STEP_STATUSES.map(({ value, label, Icon, color }) => (
-                                <button
-                                  key={value}
-                                  onClick={() => setStepOutcome(currentResult.id, idx, value)}
-                                  disabled={updateResultMutation.isPending}
-                                  className={clsx(
-                                    'flex items-center gap-1 px-2 py-1 rounded text-xs border transition-colors',
-                                    getStepStatus(idx) === value
-                                      ? color + ' border-current'
-                                      : 'border-gray-300 dark:border-gray-600 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                  )}
-                                >
-                                  <Icon size={12} />
-                                  {label}
-                                </button>
-                              ))}
+                          <div key={idx} className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-gray-600 dark:text-gray-400 w-6">{idx + 1}.</span>
+                              <div className="flex gap-1">
+                                {STEP_STATUSES.map(({ value, label, Icon, color }) => (
+                                  <button
+                                    key={value}
+                                    onClick={() => setStepOutcome(currentResult.id, idx, value)}
+                                    disabled={updateResultMutation.isPending}
+                                    className={clsx(
+                                      'flex items-center gap-1 px-2 py-1 rounded text-xs border transition-colors',
+                                      getStepStatus(idx) === value
+                                        ? color + ' border-current'
+                                        : 'border-gray-300 dark:border-gray-600 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                    )}
+                                  >
+                                    <Icon size={12} />
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="pl-8">
+                              <input
+                                type="text"
+                                value={stepNotesDraft[currentResult.id]?.[idx] ?? getStepNote(idx)}
+                                onChange={(e) =>
+                                  setStepNotesDraft((prev) => ({
+                                    ...prev,
+                                    [currentResult.id]: { ...(prev[currentResult.id] ?? {}), [idx]: e.target.value },
+                                  }))
+                                }
+                                onBlur={(e) => {
+                                  const v = e.target.value.trim()
+                                  if (v !== getStepNote(idx)) setStepNote(currentResult.id, idx, v)
+                                }}
+                                placeholder="Note for this step (optional)"
+                                className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
                             </div>
                           </div>
                         ))}

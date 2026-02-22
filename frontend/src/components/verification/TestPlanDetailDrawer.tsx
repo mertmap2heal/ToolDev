@@ -61,6 +61,39 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
   const envOptions: { id: string; value: string }[] = environmentOptions?.success && environmentOptions?.data ? (environmentOptions.data as { id: string; value: string }[]) : []
   const toolOptions: { id: string; value: string }[] = testingToolOptions?.success && testingToolOptions?.data ? (testingToolOptions.data as { id: string; value: string }[]) : []
 
+  // Fetch setups for default-setup selection
+  const { data: allSetups = [] } = useQuery({
+    queryKey: ['setups', projectId],
+    queryFn: async () => {
+      const res = await verificationService.getSetups(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    enabled: isOpen && activeTab === 'cases' && !!projectId,
+  })
+
+  const [defaultSetupIds, setDefaultSetupIds] = useState<Set<string>>(() => {
+    try {
+      const key = `verification-plan-default-setups-${plan?.id}`
+      const stored = localStorage.getItem(key)
+      if (stored) {
+        const arr = JSON.parse(stored) as string[]
+        return new Set(Array.isArray(arr) ? arr : [])
+      }
+    } catch { /* ignore */ }
+    return new Set()
+  })
+
+  useEffect(() => {
+    if (plan?.id) {
+      try {
+        localStorage.setItem(
+          `verification-plan-default-setups-${plan.id}`,
+          JSON.stringify(Array.from(defaultSetupIds))
+        )
+      } catch { /* ignore */ }
+    }
+  }, [plan?.id, defaultSetupIds])
+
   // Fetch all test cases for adding to plan
   const { data: allTestCases = [] } = useQuery({
     queryKey: ['test-cases', projectId],
@@ -120,9 +153,19 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
   })
 
   const addCaseMutation = useMutation({
-    mutationFn: (testCaseId: string) => verificationService.addCaseToPlan(projectId, plan.id, testCaseId),
+    mutationFn: async (testCaseId: string) => {
+      await verificationService.addCaseToPlan(projectId, plan.id, testCaseId)
+      for (const setupId of defaultSetupIds) {
+        try {
+          await verificationService.linkSetup(projectId, testCaseId, setupId)
+        } catch (e) {
+          console.warn('Failed to link default setup:', e)
+        }
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['test-plan', projectId, plan.id] })
+      queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
     },
   })
 
@@ -604,6 +647,44 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
 
           {activeTab === 'cases' && (
             <div className="space-y-4">
+              {/* Default setups for new cases */}
+              {allSetups.length > 0 && (
+                <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Default setups for new cases
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                    When adding a case, these setups are auto-linked to it.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {allSetups.map((s: any) => (
+                      <label
+                        key={s.id}
+                        className={clsx(
+                          'flex items-center gap-2 px-2 py-1.5 rounded text-sm cursor-pointer',
+                          defaultSetupIds.has(s.id) ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={defaultSetupIds.has(s.id)}
+                          onChange={() => {
+                            setDefaultSetupIds((prev) => {
+                              const next = new Set(prev)
+                              if (next.has(s.id)) next.delete(s.id)
+                              else next.add(s.id)
+                              return next
+                            })
+                          }}
+                          className="sr-only"
+                        />
+                        {defaultSetupIds.has(s.id) ? <CheckSquare size={16} /> : <Square size={16} />}
+                        {s.name}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                   Test Cases ({planCases.length})
