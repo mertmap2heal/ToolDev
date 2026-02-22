@@ -44,6 +44,7 @@ import FunctionsPBSTree from '../../components/functions/FunctionsPBSTree'
 import { LINKAGE_V1 } from '../../config/featureFlags'
 import { buildDeepLink } from '../../linkage/buildDeepLink'
 import type { LinkedElementClickPayload } from '../../components/requirements/RequirementsPBSTree'
+import LinkedElementPreviewPopover from '../../components/requirements/LinkedElementPreviewPopover'
 
 const SAVE_DEBOUNCE_MS = 600
 
@@ -74,6 +75,7 @@ export default function PBSPage() {
   const [isRequirementsPanelOpen, setIsRequirementsPanelOpen] = useState(true)
   const [rightPanelTab, setRightPanelTab] = useState<'requirements' | 'functions'>('requirements')
   const [selectedComponentIdForReqs, setSelectedComponentIdForReqs] = useState<string | null>(null)
+  const [linkedElementPreview, setLinkedElementPreview] = useState<LinkedElementClickPayload | null>(null)
   const REQS_PANEL_WIDTH_KEY = `pbs::reqs-panel-width::${projectId ?? 'default'}`
   const REQS_PANEL_MIN = 260
   const REQS_PANEL_MAX = 500
@@ -513,18 +515,20 @@ export default function PBSPage() {
     URL.revokeObjectURL(url)
   }, [nodes, projectKey])
 
-  const handleLinkedElementClick = useCallback(
-    (payload: LinkedElementClickPayload) => {
-      if (!projectId) return
-      const { targetType, targetId } = payload
-      if (targetType === 'requirement') {
-        navigate(`/projects/${projectId}/requirements?requirementId=${targetId}`)
-      } else {
-        navigate(buildDeepLink(projectId, { type: targetType, id: targetId }))
-      }
-    },
-    [projectId, navigate]
-  )
+  const handleLinkedElementClick = useCallback((payload: LinkedElementClickPayload) => {
+    setLinkedElementPreview(payload)
+  }, [])
+
+  const handleViewLinkedElementDetails = useCallback(() => {
+    if (!projectId || !linkedElementPreview) return
+    const { targetType, targetId } = linkedElementPreview
+    if (targetType === 'requirement') {
+      navigate(`/projects/${projectId}/requirements?requirementId=${targetId}`)
+    } else {
+      navigate(buildDeepLink(projectId, { type: targetType, id: targetId }))
+    }
+    setLinkedElementPreview(null)
+  }, [projectId, linkedElementPreview, navigate])
 
   const exportJSON = useCallback(() => {
     const json = JSON.stringify({ nodes, changeLog }, null, 2)
@@ -894,6 +898,8 @@ export default function PBSPage() {
                   Functions
                 </button>
               </div>
+              <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                <div className="flex-1 min-h-0 overflow-hidden">
               {rightPanelTab === 'requirements' ? (
                 <RequirementsPBSTree
                   projectId={projectId}
@@ -918,6 +924,16 @@ export default function PBSPage() {
                   }}
                 />
               )}
+                </div>
+                {linkedElementPreview && (
+                  <LinkedElementPreviewPopover
+                    payload={linkedElementPreview}
+                    projectId={projectId ?? undefined}
+                    onViewDetails={handleViewLinkedElementDetails}
+                    onClose={() => setLinkedElementPreview(null)}
+                  />
+                )}
+              </div>
             </div>
           </>
         )}

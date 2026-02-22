@@ -17,6 +17,7 @@ import ImportWizard from '../../components/requirements/ImportWizard'
 import RequirementDiagramsModal from '../../components/requirements/RequirementDiagramsModal'
 import RequirementQualityPanel from '../../components/requirements/RequirementQualityPanel'
 import RequirementsPBSTree, { type LinkedElementClickPayload } from '../../components/requirements/RequirementsPBSTree'
+import LinkedElementPreviewPopover from '../../components/requirements/LinkedElementPreviewPopover'
 import RequirementsFunctionsTree from '../../components/requirements/RequirementsFunctionsTree'
 import RequirementDocumentCard from '../../components/requirements/RequirementDocumentCard'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
@@ -96,6 +97,7 @@ export default function RequirementsPage() {
   const [suspectLinksForCR, setSuspectLinksForCR] = useState<{ sourceType: string; sourceId: string; targetType: string; targetId: string }[] | null>(null)
   const [changeStatusAnchor, setChangeStatusAnchor] = useState<{ requirement: Requirement; el: HTMLElement } | null>(null)
   const [lockWarning, setLockWarning] = useState<{ isOpen: boolean; message: string }>({ isOpen: false, message: '' })
+  const [linkedElementPreview, setLinkedElementPreview] = useState<LinkedElementClickPayload | null>(null)
 
   // Inline editing state
   const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null)
@@ -1810,8 +1812,12 @@ export default function RequirementsPage() {
   )
 
   const handleLinkedElementClick = useCallback((payload: LinkedElementClickPayload) => {
-    if (!projectId) return
-    const { targetType, targetId } = payload
+    setLinkedElementPreview(payload)
+  }, [])
+
+  const handleViewLinkedElementDetails = useCallback(() => {
+    if (!projectId || !linkedElementPreview) return
+    const { targetType, targetId } = linkedElementPreview
     if (targetType === 'requirement') {
       const req = allRequirements.find((r) => r.id === targetId || r.requirementId === targetId)
       if (req) {
@@ -1822,7 +1828,8 @@ export default function RequirementsPage() {
     } else {
       navigate(buildDeepLink(projectId, { type: targetType, id: targetId }))
     }
-  }, [projectId, allRequirements, navigate])
+    setLinkedElementPreview(null)
+  }, [projectId, linkedElementPreview, allRequirements, navigate])
 
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col">
@@ -1860,7 +1867,8 @@ export default function RequirementsPage() {
                   Functions
                 </button>
               </div>
-              <div className="flex-1 min-h-0 overflow-hidden">
+              <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                <div className="flex-1 min-h-0 overflow-hidden">
                 {leftPanelTab === 'pbs' ? (
                   <RequirementsPBSTree
                     projectId={projectId}
@@ -1983,6 +1991,15 @@ export default function RequirementsPage() {
                       }
                     }}
                     isDropTarget={!isBaselineView}
+                  />
+                )}
+                </div>
+                {linkedElementPreview && (
+                  <LinkedElementPreviewPopover
+                    payload={linkedElementPreview}
+                    projectId={projectId ?? undefined}
+                    onViewDetails={handleViewLinkedElementDetails}
+                    onClose={() => setLinkedElementPreview(null)}
                   />
                 )}
               </div>
