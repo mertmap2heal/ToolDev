@@ -52,7 +52,7 @@ export default function DeleteRequirementModal({
       linkedFunctions.forEach(f => initialLinkedItems.add(`function:${f.id}`))
       // Generic items
       linkedItems.forEach(item => {
-        if (['issue', 'change_request', 'requirement', 'hazard', 'risk', 'test_case', 'pbs_component'].includes(item.targetType)) {
+        if (['issue', 'change_request', 'requirement', 'hazard', 'risk', 'test_case', 'pbs_component', 'function'].includes(item.targetType)) {
           initialLinkedItems.add(`${item.targetType}:${item.targetId}`)
         }
       })
@@ -282,8 +282,8 @@ export default function DeleteRequirementModal({
                         const typeLabel = item.targetType.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
                         const displayId = item.displayId || item.targetId.substring(0, 8)
 
-                        // Only allow checking for issue, change_request, requirement, hazard, risk, test_case, pbs_component
-                        const canDelete = ['issue', 'change_request', 'requirement', 'hazard', 'risk', 'test_case', 'pbs_component'].includes(item.targetType)
+                        // Allow checkbox for all deletable types: issue, change_request, requirement, hazard, risk, test_case, pbs_component, function
+                        const canDelete = ['issue', 'change_request', 'requirement', 'hazard', 'risk', 'test_case', 'pbs_component', 'function'].includes(item.targetType)
                         const key = `${item.targetType}:${item.targetId}`;
 
                         // Determine URL
