@@ -337,6 +337,15 @@ export default function RequirementsFunctionsTree({
     return () => document.removeEventListener('click', handleClick)
   }, [])
 
+  const { data: functions = [] } = useQuery({
+    queryKey: ['functions', projectId],
+    queryFn: async () => {
+      const response = await functionService.getFunctions(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId,
+  })
+
   const linkQueries = useQueries({
     queries: requirements.flatMap((req) => [
       {
@@ -358,16 +367,17 @@ export default function RequirementsFunctionsTree({
     ]),
   })
 
+  // Include allocated_to for visibility when chevron expanded (bidirectional link display).
+  // Merge allocationLinks so the function shows as linked element even when traceability API fails.
   const linksByReqId = useMemo(() => {
-    const exclude = (l: LinkLike) =>
-      l.linkType === 'allocated_to' && (l.targetType === 'function' || l.sourceType === 'function')
     const keyOf = (l: LinkLike) => l.id ?? `${l.sourceType}-${l.sourceId}-${l.targetType}-${l.targetId}`
+    const funcMap = new Map(functions.map((f) => [f.id, f]))
     const map = new Map<string, LinkLike[]>()
     requirements.forEach((req, i) => {
       const outIdx = i * 2
       const inIdx = i * 2 + 1
-      const outgoing = ((linkQueries[outIdx]?.data as LinkLike[]) ?? []).filter((l) => !exclude(l))
-      const incoming = ((linkQueries[inIdx]?.data as LinkLike[]) ?? []).filter((l) => !exclude(l))
+      const outgoing = (linkQueries[outIdx]?.data as LinkLike[] | undefined) ?? []
+      const incoming = (linkQueries[inIdx]?.data as LinkLike[] | undefined) ?? []
       const seen = new Set<string>()
       const combined: LinkLike[] = []
       for (const l of [...outgoing, ...incoming]) {
@@ -376,19 +386,32 @@ export default function RequirementsFunctionsTree({
         seen.add(k)
         combined.push(l)
       }
+      // Merge allocation links (requirement -> function) so function appears when chevron expanded
+      for (const link of allocationLinks) {
+        if (
+          link.sourceType === 'requirement' &&
+          link.sourceId === req.id &&
+          link.targetType === 'function' &&
+          link.linkType === 'allocated_to'
+        ) {
+          const k = keyOf(link as LinkLike)
+          if (seen.has(k)) continue
+          seen.add(k)
+          const fn = funcMap.get(link.targetId)
+          const targetLabel = fn?.name ?? fn?.functionId ?? link.targetId.slice(0, 8)
+          combined.push({
+            ...link,
+            targetLabel,
+            targetTitle: targetLabel,
+            targetDisplayId: fn?.functionId ?? link.targetId.slice(0, 8),
+            _displayTargetType: 'function',
+          } as LinkLike)
+        }
+      }
       map.set(req.id, combined)
     })
     return map
-  }, [requirements, linkQueries])
-
-  const { data: functions = [] } = useQuery({
-    queryKey: ['functions', projectId],
-    queryFn: async () => {
-      const response = await functionService.getFunctions(projectId)
-      return response.success && response.data ? response.data : []
-    },
-    enabled: !!projectId,
-  })
+  }, [requirements, linkQueries, allocationLinks, functions])
 
   const functionTree = useMemo(() => buildFunctionTree(functions), [functions])
 

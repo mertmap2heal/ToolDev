@@ -818,14 +818,10 @@ export default function RequirementsPage() {
     return result
   }, [])
 
-  /** Get links for a requirement (incoming + outgoing, exclude allocated_to->pbs_component) */
+  /** Get links for a requirement (incoming + outgoing). Includes allocated_to for bidirectional visibility. */
   const getLinksForRequirement = useCallback((reqId: string): Link[] => {
     if (!LINKAGE_V1 || !links.length) return []
-    const exclude = (l: Link) =>
-      l.linkType === 'allocated_to' && (l.targetType === 'pbs_component' || l.sourceType === 'pbs_component')
-    return (links as Link[]).filter(
-      (l) => !exclude(l) && (l.sourceId === reqId || l.targetId === reqId)
-    )
+    return (links as Link[]).filter((l) => l.sourceId === reqId || l.targetId === reqId)
   }, [links])
 
   // Get linked elements for a requirement

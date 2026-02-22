@@ -79,6 +79,17 @@ function collectNodeIds(nodes: ComponentTreeNode[]): Set<string> {
     return ids
 }
 
+/** Build map of componentId -> { name, pbsCode } from tree */
+function buildComponentMap(nodes: ComponentTreeNode[]): Map<string, { name: string; pbsCode?: string }> {
+    const map = new Map<string, { name: string; pbsCode?: string }>()
+    function walk(n: ComponentTreeNode) {
+        map.set(n.id, { name: n.name, pbsCode: (n as { pbsCode?: string }).pbsCode })
+        if (n.children) n.children.forEach(walk)
+    }
+    nodes.forEach(walk)
+    return map
+}
+
 /**
  * Flatten the component tree + requirements + linked elements into a list for rendering.
  * Requirements whose componentId points to a missing/orphaned PBS node are shown as Unassigned.
@@ -294,8 +305,55 @@ export default function RequirementsPBSTree({
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['unassigned']))
   const [expandedReqs, setExpandedReqs] = useState<Set<string>>(new Set())
 
+  // Use PBS menu (local storage) as source so PBS Components panel matches PBS page exactly
+  const { data: componentTree = [] } = useQuery({
+    queryKey: ['pbs-nodes', projectId],
+    queryFn: async () => {
+      const pbsData = await loadPBSAsync(projectId)
+      const nodes = pbsData.nodes
+
+      if (nodes.length > 0) {
+        const nodeMap = new Map<string, any>()
+        const rootNodes: any[] = []
+        nodes.forEach((node: any) => {
+          nodeMap.set(node.id, {
+            id: node.id,
+            projectId: projectId!,
+            parentId: node.parentId,
+            name: node.name,
+            pbsCode: node.pbsCode,
+            description: node.description,
+            sortOrder: node.orderIndex ?? 0,
+            createdAt: node.createdAt,
+            updatedAt: node.updatedAt,
+            children: [],
+          })
+        })
+        nodes.forEach((node: any) => {
+          const component = nodeMap.get(node.id)
+          if (node.parentId && nodeMap.has(node.parentId)) {
+            nodeMap.get(node.parentId).children.push(component)
+          } else {
+            rootNodes.push(component)
+          }
+        })
+        const sortNodes = (n: any[]) => {
+          n.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+          n.forEach((child: any) => {
+            if (child.children?.length) sortNodes(child.children)
+          })
+        }
+        sortNodes(rootNodes)
+        return rootNodes
+      }
+
+      const response = await componentService.getComponentTree(projectId!)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId,
+  })
+
   // Fetch links per requirement using SAME API as Requirement Detail Drawer (sourceId + targetId)
-  // This ensures we get the exact same links the drawer shows
   const linkQueries = useQueries({
     queries: requirements.flatMap((req) => [
       {
@@ -316,18 +374,18 @@ export default function RequirementsPBSTree({
       },
     ]),
   })
-  // Build map: reqId -> links[] (outgoing + incoming, deduped, excluding allocated_to->pbs_component)
+
+  // Build map: reqId -> links[] (outgoing + incoming, deduped). Include allocated_to for visibility when chevron expanded.
+  // Merge synthetic component links so PBS component shows as linked element even when traceability API fails.
+  const componentMap = useMemo(() => buildComponentMap(componentTree), [componentTree])
   const linksByReqId = useMemo(() => {
-    const exclude = (l: LinkLike) =>
-      l.linkType === 'allocated_to' && (l.targetType === 'pbs_component' || l.sourceType === 'pbs_component')
     const keyOf = (l: LinkLike) => l.id ?? `${l.sourceType}-${l.sourceId}-${l.targetType}-${l.targetId}`
     const map = new Map<string, LinkLike[]>()
-    const reqIds = requirements.map((r) => r.id)
-    reqIds.forEach((reqId, i) => {
+    requirements.forEach((req, i) => {
       const outIdx = i * 2
       const inIdx = i * 2 + 1
-      const outgoing = ((linkQueries[outIdx]?.data as LinkLike[] | undefined) ?? []).filter((l) => !exclude(l))
-      const incoming = ((linkQueries[inIdx]?.data as LinkLike[] | undefined) ?? []).filter((l) => !exclude(l))
+      const outgoing = (linkQueries[outIdx]?.data as LinkLike[] | undefined) ?? []
+      const incoming = (linkQueries[inIdx]?.data as LinkLike[] | undefined) ?? []
       const seen = new Set<string>()
       const combined: LinkLike[] = []
       for (const l of [...outgoing, ...incoming]) {
@@ -336,10 +394,30 @@ export default function RequirementsPBSTree({
         seen.add(k)
         combined.push(l)
       }
-      map.set(reqId, combined)
+      // Merge synthetic component link (requirement -> pbs_component) so component appears when chevron expanded
+      if (req.componentId) {
+        const k = `requirement-${req.id}-pbs_component-${req.componentId}`
+        if (!seen.has(k)) {
+          seen.add(k)
+          const comp = componentMap.get(req.componentId)
+          const targetLabel = comp ? (comp.pbsCode ? `${comp.pbsCode} - ${comp.name}` : comp.name) : req.componentId.slice(0, 8)
+          combined.push({
+            sourceType: 'requirement',
+            sourceId: req.id,
+            targetType: 'pbs_component',
+            targetId: req.componentId,
+            linkType: 'allocated_to',
+            targetLabel,
+            targetTitle: targetLabel,
+            targetDisplayId: comp?.pbsCode ?? req.componentId.slice(0, 8),
+            _displayTargetType: 'pbs_component',
+          } as LinkLike)
+        }
+      }
+      map.set(req.id, combined)
     })
     return map
-  }, [requirements, linkQueries])
+  }, [requirements, linkQueries, componentMap])
   const [searchQuery, setSearchQuery] = useState('')
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [pbsSynced, setPbsSynced] = useState(false)
@@ -379,55 +457,6 @@ export default function RequirementsPBSTree({
 
         syncPBS()
     }, [projectId, pbsSynced])
-
-    // Use PBS menu (local storage) as source so PBS Components panel matches PBS page exactly
-    const { data: componentTree = [] } = useQuery({
-        queryKey: ['pbs-nodes', projectId],
-        queryFn: async () => {
-            const pbsData = await loadPBSAsync(projectId)
-            const nodes = pbsData.nodes
-
-            if (nodes.length > 0) {
-                const nodeMap = new Map<string, any>()
-                const rootNodes: any[] = []
-                nodes.forEach(node => {
-                    nodeMap.set(node.id, {
-                        id: node.id,
-                        projectId: projectId!,
-                        parentId: node.parentId,
-                        name: node.name,
-                        pbsCode: node.pbsCode,
-                        description: node.description,
-                        sortOrder: node.orderIndex ?? 0,
-                        createdAt: node.createdAt,
-                        updatedAt: node.updatedAt,
-                        children: []
-                    })
-                })
-                nodes.forEach(node => {
-                    const component = nodeMap.get(node.id)
-                    if (node.parentId && nodeMap.has(node.parentId)) {
-                        nodeMap.get(node.parentId).children.push(component)
-                    } else {
-                        rootNodes.push(component)
-                    }
-                })
-                const sortNodes = (n: any[]) => {
-                    n.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-                    n.forEach(child => {
-                        if (child.children?.length) sortNodes(child.children)
-                    })
-                }
-                sortNodes(rootNodes)
-                return rootNodes
-            }
-
-            // PBS empty: fall back to backend so requirements with componentIds still display
-            const response = await componentService.getComponentTree(projectId!)
-            return response.success && response.data ? response.data : []
-        },
-        enabled: !!projectId,
-    })
 
     // Auto-expand all nodes when component tree loads or project changes (so requirements are visible)
     useEffect(() => {
