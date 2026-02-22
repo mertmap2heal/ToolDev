@@ -9,6 +9,8 @@ export type CustomOptionType =
   | 'COMPLEXITY'
   | 'VERIFICATION_METHOD'
   | 'SOURCE'
+  | 'BASELINE_TYPE'
+  | 'BASELINE_REVIEW_TYPE'
 
 export interface CustomOption {
   id: string
@@ -55,6 +57,10 @@ export function getSystemDefaults(optionType: CustomOptionType): string[] {
       return ['Test', 'Analysis', 'Inspection', 'Demonstration', 'Review']
     case 'SOURCE':
       return ['Customer', 'Regulatory', 'Internal', 'Derived', 'Standard']
+    case 'BASELINE_TYPE':
+      return ['functional', 'allocated', 'product', 'milestone', 'custom']
+    case 'BASELINE_REVIEW_TYPE':
+      return ['SRR', 'PDR', 'CDR']
     default:
       return []
   }

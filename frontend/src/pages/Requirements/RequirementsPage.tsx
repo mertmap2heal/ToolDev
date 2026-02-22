@@ -301,8 +301,8 @@ export default function RequirementsPage() {
   const queryClient = useQueryClient()
   const { statuses: statusDefinitions } = useStatusDefinitionsStore()
 
-  // Paginated requirements query
-  const { data: paginatedData, isLoading } = useQuery({
+  // Paginated requirements query (disabled when viewing baseline)
+  const { data: paginatedData, isLoading: isLoadingLive } = useQuery({
     queryKey: ['requirements', projectId, serverFilters],
     queryFn: async () => {
       if (!projectId) throw new Error('Project ID required')
@@ -312,25 +312,112 @@ export default function RequirementsPage() {
       }
       throw new Error(response.error || 'Failed to load requirements')
     },
-    enabled: !!projectId,
+    enabled: !!projectId && !baselineId,
     placeholderData: (prev) => prev, // Keep previous data while loading new page
   })
 
-  const requirements = paginatedData?.items ?? []
-  const totalRequirements = paginatedData?.total ?? 0
-  const totalPages = paginatedData?.totalPages ?? 1
-
-  // All requirements (non-paginated) for features that need the full list
-  const { data: allRequirements = [] } = useQuery({
+  // All requirements (non-paginated) - disabled when viewing baseline
+  const { data: allRequirementsLive = [] } = useQuery({
     queryKey: ['requirements-all', projectId],
     queryFn: async () => {
       if (!projectId) return []
       const response = await requirementService.getAllRequirements(projectId)
       return response.success && response.data ? response.data : []
     },
-    enabled: !!projectId,
+    enabled: !!projectId && !baselineId,
     staleTime: 30_000, // Cache for 30s to avoid excessive refetches
   })
+
+  // Baseline (when baselineId in URL) - must be before baselineRequirements
+  const { data: baseline } = useQuery({
+    queryKey: ['baseline', projectId, baselineId],
+    queryFn: async () => {
+      if (!projectId || !baselineId) return null
+      const response = await baselineService.getBaseline(projectId, baselineId)
+      return response.success && response.data ? response.data : null
+    },
+    enabled: !!projectId && !!baselineId,
+  })
+
+  // Baseline requirements (from snapshot when baselineId in URL)
+  const baselineRequirements = useMemo(() => {
+    if (!baseline?.items?.length) return []
+    return baseline.items
+      .map((item) => {
+        try {
+          return JSON.parse(item.snapshot) as Requirement
+        } catch {
+          return null
+        }
+      })
+      .filter((r): r is Requirement => r != null)
+  }, [baseline?.items])
+
+  // Requirements from baseline snapshot: filter and sort client-side
+  const baselineFilteredAndSorted = useMemo(() => {
+    let list = [...baselineRequirements]
+    // Search filter
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase()
+      list = list.filter(
+        (r) =>
+          (r.title || '').toLowerCase().includes(q) ||
+          (r.requirementId || '').toLowerCase().includes(q) ||
+          (r.description || '').toLowerCase().includes(q) ||
+          (r.category || '').toLowerCase().includes(q)
+      )
+    }
+    // Other filters
+    if (statusFilter !== 'all') list = list.filter((r) => (r.status || '') === statusFilter)
+    if (priorityFilter !== 'all') list = list.filter((r) => (r.priority || '') === priorityFilter)
+    if (ownerFilter !== 'all') list = list.filter((r) => (r.owner || '') === ownerFilter)
+    if (sourceFilter !== 'all') list = list.filter((r) => (r.source || '') === sourceFilter)
+    if (requirementTypeFilter !== 'all') list = list.filter((r) => (r.requirementType || '') === requirementTypeFilter)
+    if (categoryFilter !== 'all') list = list.filter((r) => (r.category || '') === categoryFilter)
+    if (verificationStatusFilter !== 'all') list = list.filter((r) => (r.verificationStatus || '') === verificationStatusFilter)
+    if (reviewStatusFilter !== 'all') list = list.filter((r) => (r.reviewStatus || '') === reviewStatusFilter)
+    if (selectedComponentId) {
+      list = list.filter((r) => (r as any).componentId === selectedComponentId)
+    }
+    // Sort
+    const key = sortBy || 'createdAt'
+    const dir = sortOrder === 'asc' ? 1 : -1
+    list.sort((a, b) => {
+      const va = (a as any)[key] ?? ''
+      const vb = (b as any)[key] ?? ''
+      if (typeof va === 'string' && typeof vb === 'string') {
+        return dir * va.localeCompare(vb)
+      }
+      if (va < vb) return -dir
+      if (va > vb) return dir
+      return 0
+    })
+    return list
+  }, [
+    baselineRequirements,
+    debouncedSearch,
+    statusFilter,
+    priorityFilter,
+    ownerFilter,
+    sourceFilter,
+    requirementTypeFilter,
+    categoryFilter,
+    verificationStatusFilter,
+    reviewStatusFilter,
+    selectedComponentId,
+    sortBy,
+    sortOrder,
+  ])
+
+  // Final requirements and totals: baseline snapshot vs live
+  const isBaselineView = !!baselineId
+  const requirements = isBaselineView
+    ? baselineFilteredAndSorted.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+    : (paginatedData?.items ?? [])
+  const totalRequirements = isBaselineView ? baselineFilteredAndSorted.length : (paginatedData?.total ?? 0)
+  const totalPages = isBaselineView ? Math.max(1, Math.ceil(baselineFilteredAndSorted.length / pageSize)) : (paginatedData?.totalPages ?? 1)
+  const allRequirements = isBaselineView ? baselineFilteredAndSorted : allRequirementsLive
+  const isLoading = isBaselineView ? (!!baselineId && baseline === undefined) : isLoadingLive
 
   useEffect(() => {
     if (!focusRequirementId) return
@@ -386,18 +473,6 @@ export default function RequirementsPage() {
     enabled: !!projectId,
   })
 
-  const { data: baseline } = useQuery({
-    queryKey: ['baseline', projectId, baselineId],
-    queryFn: async () => {
-      if (!projectId || !baselineId) return null
-      const response = await baselineService.getBaseline(projectId, baselineId)
-      return response.success && response.data ? response.data : null
-    },
-    enabled: !!projectId && !!baselineId,
-  })
-
-  const isBaselineView = !!baselineId
-
   // Fetch links for LINKAGE_V1 (used for linked items count and expanded row)
   const { data: links = [] } = useQuery({
     queryKey: ['links', projectId],
@@ -406,19 +481,27 @@ export default function RequirementsPage() {
       const response = await linkService.getLinks(projectId)
       return response.success && response.data ? response.data : []
     },
-    enabled: !!projectId && LINKAGE_V1,
+    enabled: !!projectId && LINKAGE_V1 && !baselineId,
   })
+
+  // Effective links: baseline linksSnapshot when viewing baseline, else live links
+  const effectiveLinks = useMemo(() => {
+    if (baselineId && baseline?.linksSnapshot) {
+      const snap = baseline.linksSnapshot as { links?: any[] }
+      return snap?.links ?? []
+    }
+    return LINKAGE_V1 ? links : (traceLinks as any[])
+  }, [baselineId, baseline?.linksSnapshot, LINKAGE_V1, links, traceLinks])
 
   // Requirement→function allocation links (allocated_to) for Functions tree
   const allocationLinks = useMemo(() => {
-    const source = LINKAGE_V1 ? links : (traceLinks as any[])
-    return (source || []).filter(
+    return (effectiveLinks || []).filter(
       (l: any) =>
         l.sourceType === 'requirement' &&
         l.targetType === 'function' &&
         l.linkType === 'allocated_to'
     ) as LinkType[]
-  }, [LINKAGE_V1, links, traceLinks])
+  }, [effectiveLinks])
 
   // Component tree for Export scope selection (shares cache with PBS tree)
   const { data: componentTreeForExport = [] } = useQuery({
@@ -470,14 +553,14 @@ export default function RequirementsPage() {
   // Linked safety items count (requirements linked to hazard, safety_requirement, safety_analysis, safety_evidence)
   const SAFETY_ENTITY_TYPES = ['hazard', 'safety_requirement', 'safety_analysis', 'safety_evidence']
   const linkedSafetyCount = useMemo(() => {
-    if (!LINKAGE_V1 || !links.length) return 0
-    const safetyLinks = links.filter(
+    if (!LINKAGE_V1 || !effectiveLinks.length) return 0
+    const safetyLinks = effectiveLinks.filter(
       (l) =>
         (l.sourceType === 'requirement' && SAFETY_ENTITY_TYPES.includes(l.targetType as string)) ||
         (l.targetType === 'requirement' && SAFETY_ENTITY_TYPES.includes(l.sourceType as string))
     )
     return safetyLinks.length
-  }, [links])
+  }, [LINKAGE_V1, effectiveLinks])
 
   const deleteRequirementMutation = useMutation({
     mutationFn: ({ requirementId, reason, childrenToDelete, linkedItemsToDelete }: { requirementId: string; reason?: string; childrenToDelete?: string[], linkedItemsToDelete?: { type: string, id: string }[] }) => {
@@ -823,9 +906,9 @@ export default function RequirementsPage() {
 
   /** Get links for a requirement (incoming + outgoing). Includes allocated_to for bidirectional visibility. */
   const getLinksForRequirement = useCallback((reqId: string): LinkType[] => {
-    if (!LINKAGE_V1 || !links.length) return []
-    return (links as LinkType[]).filter((l) => l.sourceId === reqId || l.targetId === reqId)
-  }, [links])
+    if (!LINKAGE_V1 || !effectiveLinks.length) return []
+    return (effectiveLinks as LinkType[]).filter((l) => l.sourceId === reqId || l.targetId === reqId)
+  }, [LINKAGE_V1, effectiveLinks])
 
   // Get linked elements for a requirement
   const getLinkedElements = (requirementId: string): ExpandedRow => {
@@ -871,7 +954,7 @@ export default function RequirementsPage() {
 
     // Get linked items (LINKAGE_V1)
     const linkedItems = LINKAGE_V1
-      ? (links as any[])
+      ? (effectiveLinks as any[])
         .filter((l: any) => l.sourceType === 'requirement' && l.sourceId === requirementId)
         .map((l: any) => {
           const item: any = {
@@ -1175,8 +1258,10 @@ export default function RequirementsPage() {
               <input
                 type="checkbox"
                 checked={selectedRequirements.has(req.id)}
+                disabled={isBaselineView}
                 onChange={(e) => {
                   e.stopPropagation()
+                  if (isBaselineView) return
                   setSelectedRequirements((prev) => {
                     const newSet = new Set(prev)
                     if (newSet.has(req.id)) {
@@ -1187,7 +1272,7 @@ export default function RequirementsPage() {
                     return newSet
                   })
                 }}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
               />
             </div>
           </td>
@@ -1875,7 +1960,7 @@ export default function RequirementsPage() {
                     requirements={allRequirements}
                     selectedComponentId={selectedComponentId}
                     onComponentSelect={setSelectedComponentId}
-                    links={LINKAGE_V1 ? links : []}
+                    links={LINKAGE_V1 ? effectiveLinks : []}
                     onLinkedElementClick={handleLinkedElementClick}
                     onRequirementClick={setDetailRequirement}
                     onAddRequirementToComponent={(componentId) => {
@@ -2018,11 +2103,19 @@ export default function RequirementsPage() {
         <div className="flex-1 overflow-y-auto space-y-6 pr-6">
 
           {isBaselineView && (
-            <div className="px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center gap-2">
-              <Archive size={20} className="text-amber-600 dark:text-amber-400" />
-              <span className="font-medium text-amber-800 dark:text-amber-200">
-                Viewing baseline{baseline ? `: ${baseline.name}` : ''}. Editing is disabled.
-              </span>
+            <div className="px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <Archive size={20} className="text-amber-600 dark:text-amber-400" />
+                <span className="font-medium text-amber-800 dark:text-amber-200">
+                  Viewing baseline{baseline ? `: ${baseline.name}` : ''}. Editing is disabled.
+                </span>
+              </div>
+              <button
+                onClick={() => navigate(`/projects/${projectId}/requirements`)}
+                className="px-3 py-1.5 text-sm font-medium text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40 rounded-lg transition-colors"
+              >
+                Exit baseline view
+              </button>
             </div>
           )}
 
@@ -2056,7 +2149,7 @@ export default function RequirementsPage() {
               )}
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {selectedRequirements.size > 0 && (
+              {selectedRequirements.size > 0 && !isBaselineView && (
                 <>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-gray-600 dark:text-gray-400">
@@ -2131,8 +2224,9 @@ export default function RequirementsPage() {
               {/* Data group */}
               <div className="flex items-center gap-2">
               <button
-                onClick={() => setIsImportOpen(true)}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+                onClick={() => !isBaselineView && setIsImportOpen(true)}
+                disabled={isBaselineView}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Import Requirements"
               >
                 <Download size={16} />
@@ -2543,14 +2637,16 @@ export default function RequirementsPage() {
                       <input
                         type="checkbox"
                         checked={selectedRequirements.size > 0 && selectedRequirements.size === filteredRequirements.length}
+                        disabled={isBaselineView}
                         onChange={(e) => {
+                          if (isBaselineView) return
                           if (e.target.checked) {
                             setSelectedRequirements(new Set(filteredRequirements.map((r) => r.id)))
                           } else {
                             setSelectedRequirements(new Set())
                           }
                         }}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
                       />
                     </th>
                     {requirementColumns.has('requirementId') && (
@@ -2913,7 +3009,7 @@ export default function RequirementsPage() {
               children={requirementData.get(deleteConfirmation.id)?.children || []}
               linkedFunctionsCount={LINKAGE_V1 ? undefined : functions.filter((f) => f.sourceReqId === deleteConfirmation.id).length}
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              linkedItemsCount={LINKAGE_V1 ? links.filter((l: any) => l.sourceType === 'requirement' && l.sourceId === deleteConfirmation.id).length : undefined}
+              linkedItemsCount={LINKAGE_V1 ? effectiveLinks.filter((l: any) => l.sourceType === 'requirement' && l.sourceId === deleteConfirmation.id).length : undefined}
               linkedIssues={requirementData.get(deleteConfirmation.id)?.linkedIssues || []}
               linkedChangeRequests={requirementData.get(deleteConfirmation.id)?.linkedChangeRequests || []}
               linkedFunctions={requirementData.get(deleteConfirmation.id)?.linkedFunctions || []}
@@ -2950,6 +3046,10 @@ export default function RequirementsPage() {
             <BaselineManager
               projectId={projectId}
               onClose={() => setIsBaselineManagerOpen(false)}
+              onViewInRequirementsPage={(id) => {
+                setIsBaselineManagerOpen(false)
+                navigate(`/projects/${projectId}/requirements?baselineId=${id}`)
+              }}
             />
           )}
 

@@ -36,6 +36,29 @@ export default function RequirementsSettingsPage() {
 
       <RequirementTypesManager projectId={projectId} />
 
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          Baseline Options
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 -mt-2">
+          Customize baseline types and review types used when creating baselines (aerospace: Functional/Allocated/Product, SRR/PDR/CDR).
+        </p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <CustomOptionsManager
+            projectId={projectId}
+            optionType="BASELINE_TYPE"
+            label="Baseline Type"
+            description="e.g. Functional (SRR), Allocated (PDR), Product (CDR), Milestone, Custom"
+          />
+          <CustomOptionsManager
+            projectId={projectId}
+            optionType="BASELINE_REVIEW_TYPE"
+            label="Baseline Review / Milestone"
+            description="e.g. SRR, PDR, CDR for design reviews"
+          />
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         <CustomOptionsManager
           projectId={projectId}

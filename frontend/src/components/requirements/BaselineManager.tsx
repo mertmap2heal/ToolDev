@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X, Archive, Trash2, Plus, ArrowLeftRight, Calendar, User, FileText, Search, CheckSquare, Square, ChevronRight, ChevronLeft, Eye, Download, Link2, AlertTriangle } from 'lucide-react'
 import { baselineService } from '../../services/baseline.service'
 import { requirementService } from '../../services/requirement.service'
+import { verificationService } from '../../services/verification.service'
 import BaselineViewModal from './BaselineViewModal'
 import BaselineExportModal from './BaselineExportModal'
 import BaselineComparisonModal from './BaselineComparisonModal'
@@ -14,6 +15,8 @@ import clsx from 'clsx'
 interface BaselineManagerProps {
   projectId: string
   onClose: () => void
+  /** Called when user clicks "View in Requirements Page" to navigate to requirements with baselineId in URL */
+  onViewInRequirementsPage?: (baselineId: string) => void
 }
 
 /**
@@ -23,11 +26,16 @@ interface BaselineManagerProps {
  */
 type CreateBaselineStep = 'details' | 'select-requirements'
 
-export default function BaselineManager({ projectId, onClose }: BaselineManagerProps) {
+export default function BaselineManager({ projectId, onClose, onViewInRequirementsPage }: BaselineManagerProps) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [createStep, setCreateStep] = useState<CreateBaselineStep>('details')
   const [newBaselineName, setNewBaselineName] = useState('')
   const [newBaselineDescription, setNewBaselineDescription] = useState('')
+  const [newBaselineType, setNewBaselineType] = useState('')
+  const [newReviewType, setNewReviewType] = useState('')
+  const [newSupersedesBaselineId, setNewSupersedesBaselineId] = useState('')
+  const [newConfigurationAuthority, setNewConfigurationAuthority] = useState<'government' | 'contractor' | ''>('')
+  const [newFdAL, setNewFdAL] = useState('')
   const [selectedRequirementIds, setSelectedRequirementIds] = useState<Set<string>>(new Set())
   const [requirementSearchQuery, setRequirementSearchQuery] = useState('')
   const [selectedBaselines, setSelectedBaselines] = useState<string[]>([])
@@ -57,6 +65,42 @@ export default function BaselineManager({ projectId, onClose }: BaselineManagerP
     enabled: !!projectId && isCreateModalOpen,
   })
 
+  // Fetch custom baseline types and review types from settings
+  const { data: baselineTypesRes } = useQuery({
+    queryKey: ['custom-options', projectId, 'BASELINE_TYPE'],
+    queryFn: () => verificationService.getCustomOptions(projectId, 'BASELINE_TYPE'),
+    enabled: !!projectId,
+  })
+  const { data: reviewTypesRes } = useQuery({
+    queryKey: ['custom-options', projectId, 'BASELINE_REVIEW_TYPE'],
+    queryFn: () => verificationService.getCustomOptions(projectId, 'BASELINE_REVIEW_TYPE'),
+    enabled: !!projectId,
+  })
+  // Fallback defaults when custom options API fails or returns empty (e.g. 500 errors)
+  const DEFAULT_BASELINE_TYPES = [
+    { value: 'functional', label: 'Functional (SRR)' },
+    { value: 'allocated', label: 'Allocated (PDR)' },
+    { value: 'product', label: 'Product (CDR)' },
+    { value: 'milestone', label: 'Milestone' },
+    { value: 'custom', label: 'Custom' },
+  ]
+  const DEFAULT_REVIEW_TYPES = [
+    { value: 'SRR', label: 'SRR - System Requirements Review' },
+    { value: 'PDR', label: 'PDR - Preliminary Design Review' },
+    { value: 'CDR', label: 'CDR - Critical Design Review' },
+  ]
+  const baselineTypeOptions =
+    baselineTypesRes?.success && Array.isArray(baselineTypesRes.data) && baselineTypesRes.data.length > 0
+      ? (baselineTypesRes.data as { value: string }[]).map((o) => ({
+          value: o.value,
+          label: o.value.charAt(0).toUpperCase() + o.value.slice(1),
+        }))
+      : DEFAULT_BASELINE_TYPES
+  const reviewTypeOptions =
+    reviewTypesRes?.success && Array.isArray(reviewTypesRes.data) && reviewTypesRes.data.length > 0
+      ? (reviewTypesRes.data as { value: string }[]).map((o) => ({ value: o.value, label: o.value }))
+      : DEFAULT_REVIEW_TYPES
+
   // Filter requirements based on search
   const filteredRequirements = useMemo(() => {
     if (!requirementSearchQuery.trim()) return requirements
@@ -77,6 +121,11 @@ export default function BaselineManager({ projectId, onClose }: BaselineManagerP
       name: newBaselineName,
       description: newBaselineDescription || undefined,
       requirementIds: selectedRequirementIds.size > 0 ? Array.from(selectedRequirementIds) : undefined,
+      baselineType: newBaselineType || undefined,
+      reviewType: newReviewType || undefined,
+      supersedesBaselineId: newSupersedesBaselineId || undefined,
+      configurationAuthority: newConfigurationAuthority || undefined,
+      fdAL: newFdAL || undefined,
     }),
     onSuccess: (response) => {
       if (response.success) {
@@ -85,6 +134,11 @@ export default function BaselineManager({ projectId, onClose }: BaselineManagerP
         setCreateStep('details')
         setNewBaselineName('')
         setNewBaselineDescription('')
+        setNewBaselineType('')
+        setNewReviewType('')
+        setNewSupersedesBaselineId('')
+        setNewConfigurationAuthority('')
+        setNewFdAL('')
         setSelectedRequirementIds(new Set())
         setRequirementSearchQuery('')
       } else {
@@ -184,6 +238,11 @@ export default function BaselineManager({ projectId, onClose }: BaselineManagerP
     setCreateStep('details')
     setNewBaselineName('')
     setNewBaselineDescription('')
+    setNewBaselineType('')
+    setNewReviewType('')
+    setNewSupersedesBaselineId('')
+    setNewConfigurationAuthority('')
+    setNewFdAL('')
     setSelectedRequirementIds(new Set())
     setRequirementSearchQuery('')
   }
@@ -285,13 +344,23 @@ export default function BaselineManager({ projectId, onClose }: BaselineManagerP
 
                   {/* Baseline Info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h3 className="font-medium text-gray-900 dark:text-white truncate">
                         {baseline.name}
                       </h3>
                       <span className={clsx('px-2 py-0.5 text-xs font-medium rounded-full', getStatusColor(baseline.status))}>
                         {baseline.status}
                       </span>
+                      {baseline.baselineType && (
+                        <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                          {baseline.baselineType}
+                        </span>
+                      )}
+                      {baseline.reviewType && (
+                        <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                          {baseline.reviewType}
+                        </span>
+                      )}
                     </div>
                     {baseline.description && (
                       <p className="text-sm text-gray-600 dark:text-gray-400 truncate mb-1">
@@ -445,6 +514,77 @@ export default function BaselineManager({ projectId, onClose }: BaselineManagerP
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
                       />
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Baseline Type (optional)
+                      </label>
+                      <select
+                        value={newBaselineType}
+                        onChange={(e) => setNewBaselineType(e.target.value || '')}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="">— Select type —</option>
+                        {baselineTypeOptions.map((t) => (
+                          <option key={t.value} value={t.value}>{t.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Review / Milestone (optional)
+                      </label>
+                      <select
+                        value={newReviewType}
+                        onChange={(e) => setNewReviewType(e.target.value || '')}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="">— Select review —</option>
+                        {reviewTypeOptions.map((t) => (
+                          <option key={t.value} value={t.value}>{t.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Supersedes Baseline (optional)
+                      </label>
+                      <select
+                        value={newSupersedesBaselineId}
+                        onChange={(e) => setNewSupersedesBaselineId(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="">— None —</option>
+                        {baselines.filter((b) => b.status === 'locked' || b.status === 'archived').map((b) => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Configuration Authority (optional)
+                      </label>
+                      <select
+                        value={newConfigurationAuthority}
+                        onChange={(e) => setNewConfigurationAuthority((e.target.value || '') as 'government' | 'contractor' | '')}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="">— None —</option>
+                        <option value="government">Government</option>
+                        <option value="contractor">Contractor</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        FDAL / DAL (optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={newFdAL}
+                        onChange={(e) => setNewFdAL(e.target.value)}
+                        placeholder="e.g. A, B, C, D, E"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
                     <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 text-sm text-blue-700 dark:text-blue-300">
                       {requirements.length > 0
                         ? `You will be able to select which of ${requirements.length} requirements to include in the next step.`
@@ -593,6 +733,7 @@ export default function BaselineManager({ projectId, onClose }: BaselineManagerP
           projectId={projectId}
           baselineId={viewingBaselineId}
           onClose={() => setViewingBaselineId(null)}
+          onViewInRequirementsPage={onViewInRequirementsPage}
         />
       )}
 

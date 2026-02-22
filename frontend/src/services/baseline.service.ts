@@ -16,7 +16,15 @@ export const baselineService = {
   },
 
   async createBaseline(projectId: string, data: CreateBaselineDto): Promise<ApiResponse<Baseline>> {
-    return apiClient.post<Baseline>(`/baselines/${projectId}`, data)
+    return apiClient.post<Baseline>(`/baselines/${projectId}`, {
+      ...data,
+      baselineType: data.baselineType || undefined,
+      reviewType: data.reviewType || undefined,
+      milestoneId: data.milestoneId || undefined,
+      supersedesBaselineId: data.supersedesBaselineId || undefined,
+      configurationAuthority: data.configurationAuthority || undefined,
+      fdAL: data.fdAL || undefined,
+    })
   },
 
   async lockBaseline(projectId: string, baselineId: string): Promise<ApiResponse<Baseline>> {

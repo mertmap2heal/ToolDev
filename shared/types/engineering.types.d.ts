@@ -128,18 +128,35 @@ export interface RequirementVersion {
     snapshot?: string;
     createdAt: string;
 }
+/** Aerospace baseline types (DAU/NASA) */
+export type BaselineType = 'functional' | 'allocated' | 'product' | 'milestone' | 'custom';
+/** Review types for milestone linkage */
+export type ReviewType = 'SRR' | 'PDR' | 'CDR';
+
 export interface Baseline {
     id: string;
     projectId: string;
     name: string;
     description?: string;
-    status: 'active' | 'locked' | 'archived';
+    status: 'active' | 'locked' | 'archived' | 'draft' | 'submitted' | 'approved' | 'frozen' | 'superseded';
+    baselineType?: BaselineType;
+    reviewType?: ReviewType;
+    milestoneId?: string;
+    approvedBy?: string;
+    approvedByName?: string;
+    approvedAt?: string;
+    approvalNotes?: string;
+    supersedesBaselineId?: string;
+    configurationAuthority?: 'government' | 'contractor';
+    fdAL?: string; // Functional Design Assurance Level (A-E)
     createdBy?: string;
     createdByName?: string;
     lockedAt?: string;
     itemCount?: number;
     /** Snapshot items (from GET baseline with expand) */
     items?: BaselineItem[];
+    /** Raw links snapshot (from GET baseline, used when viewing baseline in requirements page) */
+    linksSnapshot?: { links?: unknown[] };
     /** Number of requirement-related links in baseline snapshot (LINKAGE_V1) */
     linksCount?: number;
     /** Number of suspect links in baseline snapshot (LINKAGE_V1) */
@@ -158,6 +175,12 @@ export interface CreateBaselineDto {
     name: string;
     description?: string;
     requirementIds?: string[];
+    baselineType?: BaselineType | string;
+    reviewType?: ReviewType | string;
+    milestoneId?: string;
+    supersedesBaselineId?: string;
+    configurationAuthority?: 'government' | 'contractor';
+    fdAL?: string;
 }
 export interface RequirementComparisonItem {
     id: string;

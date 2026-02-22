@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { X, FileText, Calendar, User, Archive, Lock, Link2, AlertTriangle } from 'lucide-react'
+import { X, FileText, Calendar, User, Archive, Lock, Link2, AlertTriangle, ExternalLink } from 'lucide-react'
 import { baselineService } from '../../services/baseline.service'
 import { LINKAGE_V1 } from '../../config/featureFlags'
 import type { Baseline } from 'shared/types/engineering.types'
@@ -10,13 +10,15 @@ interface BaselineViewModalProps {
   projectId: string
   baselineId: string
   onClose: () => void
+  /** When provided, enables "View in Requirements Page" to navigate to requirements with baseline in URL */
+  onViewInRequirementsPage?: (baselineId: string) => void
 }
 
 /**
  * BaselineViewModal displays detailed information about a baseline
  * including all requirements that were included in the snapshot.
  */
-export default function BaselineViewModal({ projectId, baselineId, onClose }: BaselineViewModalProps) {
+export default function BaselineViewModal({ projectId, baselineId, onClose, onViewInRequirementsPage }: BaselineViewModalProps) {
   const { data: baseline, isLoading } = useQuery({
     queryKey: ['baseline', projectId, baselineId],
     queryFn: async () => {
@@ -87,13 +89,23 @@ export default function BaselineViewModal({ projectId, baselineId, onClose }: Ba
             <div className="space-y-6">
               {/* Baseline Info */}
               <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                     {baseline.name}
                   </h3>
                   <span className={clsx('px-2 py-0.5 text-xs font-medium rounded-full', getStatusColor(baseline.status))}>
                     {baseline.status}
                   </span>
+                  {baseline.baselineType && (
+                    <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                      {baseline.baselineType}
+                    </span>
+                  )}
+                  {baseline.reviewType && (
+                    <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                      {baseline.reviewType}
+                    </span>
+                  )}
                 </div>
                 {baseline.description && (
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
@@ -133,6 +145,21 @@ export default function BaselineViewModal({ projectId, baselineId, onClose }: Ba
                     <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                       <Lock size={16} />
                       <span>Locked: {format(new Date(baseline.lockedAt), 'PPp')}</span>
+                    </div>
+                  )}
+                  {baseline.supersedesBaselineId && (
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                      <span>Supersedes: {baseline.supersedesBaselineId.substring(0, 8)}...</span>
+                    </div>
+                  )}
+                  {baseline.configurationAuthority && (
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                      <span>Authority: {baseline.configurationAuthority}</span>
+                    </div>
+                  )}
+                  {baseline.fdAL && (
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                      <span>FDAL: {baseline.fdAL}</span>
                     </div>
                   )}
                 </div>
@@ -201,7 +228,21 @@ export default function BaselineViewModal({ projectId, baselineId, onClose }: Ba
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end p-4 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex justify-between items-center p-4 border-t border-gray-200 dark:border-gray-700">
+          <div>
+            {onViewInRequirementsPage && (
+              <button
+                onClick={() => {
+                  onViewInRequirementsPage(baselineId)
+                  onClose()
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
+              >
+                <ExternalLink size={16} />
+                View in Requirements Page
+              </button>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg"

@@ -21,6 +21,8 @@ interface CustomOptionsManagerProps {
     | 'COMPLEXITY'
     | 'VERIFICATION_METHOD'
     | 'SOURCE'
+    | 'BASELINE_TYPE'
+    | 'BASELINE_REVIEW_TYPE'
   label: string
   description?: string
 }

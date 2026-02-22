@@ -4,6 +4,22 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
+async function logBaselineAudit(
+  projectId: string,
+  userId: string | undefined,
+  action: string,
+  details: string
+): Promise<void> {
+  if (!userId) return
+  try {
+    await prisma.auditLog.create({
+      data: { projectId, userId, action, details },
+    })
+  } catch (e) {
+    console.warn('Baseline audit log failed:', e)
+  }
+}
+
 /**
  * Get all baselines for a project
  */
@@ -32,6 +48,16 @@ export const getBaselines = async (req: AuthRequest, res: Response) => {
         name: baseline.name,
         description: baseline.description,
         status: baseline.status,
+        baselineType: baseline.baselineType ?? undefined,
+        reviewType: baseline.reviewType ?? undefined,
+        milestoneId: baseline.milestoneId ?? undefined,
+        approvedBy: baseline.approvedBy ?? undefined,
+        approvedByName: baseline.approvedByName ?? undefined,
+        approvedAt: baseline.approvedAt?.toISOString(),
+        approvalNotes: baseline.approvalNotes ?? undefined,
+        supersedesBaselineId: baseline.supersedesBaselineId ?? undefined,
+        configurationAuthority: baseline.configurationAuthority ?? undefined,
+        fdAL: baseline.fdAL ?? undefined,
         createdBy: baseline.createdBy,
         createdByName: baseline.createdByName,
         lockedAt: baseline.lockedAt?.toISOString(),
@@ -109,6 +135,16 @@ export const getBaseline = async (req: AuthRequest, res: Response) => {
         name: baseline.name,
         description: baseline.description,
         status: baseline.status,
+        baselineType: baseline.baselineType ?? undefined,
+        reviewType: baseline.reviewType ?? undefined,
+        milestoneId: baseline.milestoneId ?? undefined,
+        approvedBy: baseline.approvedBy ?? undefined,
+        approvedByName: baseline.approvedByName ?? undefined,
+        approvedAt: baseline.approvedAt?.toISOString(),
+        approvalNotes: baseline.approvalNotes ?? undefined,
+        supersedesBaselineId: baseline.supersedesBaselineId ?? undefined,
+        configurationAuthority: baseline.configurationAuthority ?? undefined,
+        fdAL: baseline.fdAL ?? undefined,
         createdBy: baseline.createdBy,
         createdByName: baseline.createdByName,
         lockedAt: baseline.lockedAt?.toISOString(),
@@ -139,7 +175,7 @@ export const getBaseline = async (req: AuthRequest, res: Response) => {
 export const createBaseline = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
-    const { name, description, requirementIds } = req.body
+    const { name, description, requirementIds, baselineType, reviewType, milestoneId, supersedesBaselineId, configurationAuthority, fdAL } = req.body
 
     if (!projectId) {
       return res.status(400).json({
@@ -185,6 +221,12 @@ export const createBaseline = async (req: AuthRequest, res: Response) => {
           name,
           description: description || null,
           status: 'active',
+          baselineType: baselineType || null,
+          reviewType: reviewType || null,
+          milestoneId: milestoneId || null,
+          supersedesBaselineId: supersedesBaselineId || null,
+          configurationAuthority: configurationAuthority || null,
+          fdAL: fdAL || null,
           createdBy: req.user?.id,
           createdByName: req.user?.name,
         },
@@ -263,6 +305,13 @@ export const createBaseline = async (req: AuthRequest, res: Response) => {
       return newBaseline
     })
 
+    await logBaselineAudit(
+      projectId,
+      req.user?.id,
+      'BASELINE_CREATED',
+      `Baseline "${name}" created (id: ${baseline.id}, ${requirements.length} requirements)`
+    )
+
     res.status(201).json({
       success: true,
       data: {
@@ -331,6 +380,13 @@ export const lockBaseline = async (req: AuthRequest, res: Response) => {
       },
     })
 
+    await logBaselineAudit(
+      projectId,
+      req.user?.id,
+      'BASELINE_LOCKED',
+      `Baseline "${baseline.name}" locked (id: ${baselineId})`
+    )
+
     res.json({
       success: true,
       data: {
@@ -374,6 +430,13 @@ export const deleteBaseline = async (req: AuthRequest, res: Response) => {
         error: 'Cannot delete a locked baseline',
       })
     }
+
+    await logBaselineAudit(
+      projectId,
+      req.user?.id,
+      'BASELINE_DELETED',
+      `Baseline "${baseline.name}" deleted (id: ${baselineId})`
+    )
 
     await prisma.baseline.delete({
       where: { id: baselineId },

@@ -17,11 +17,11 @@ export const getCustomOptions = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId, optionType } = req.params
 
-    const validOptionTypes = ['ENVIRONMENT_TYPE', 'COMPONENT_TYPE', 'INTERFACE_TYPE', 'PHASE', 'TESTING_TOOL', 'REQUIREMENT_LEVEL', 'RISK', 'COMPLEXITY', 'VERIFICATION_METHOD', 'SOURCE']
+    const validOptionTypes = ['ENVIRONMENT_TYPE', 'COMPONENT_TYPE', 'INTERFACE_TYPE', 'PHASE', 'TESTING_TOOL', 'REQUIREMENT_LEVEL', 'RISK', 'COMPLEXITY', 'VERIFICATION_METHOD', 'SOURCE', 'BASELINE_TYPE', 'BASELINE_REVIEW_TYPE']
     if (!validOptionTypes.includes(optionType)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid optionType. Must be one of: ENVIRONMENT_TYPE, COMPONENT_TYPE, INTERFACE_TYPE, PHASE, TESTING_TOOL, REQUIREMENT_LEVEL, RISK, COMPLEXITY, VERIFICATION_METHOD, SOURCE',
+        error: 'Invalid optionType',
       })
     }
 
@@ -101,16 +101,18 @@ export const addCustomOption = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    const validOptionTypes = ['ENVIRONMENT_TYPE', 'COMPONENT_TYPE', 'INTERFACE_TYPE', 'PHASE', 'TESTING_TOOL', 'REQUIREMENT_LEVEL', 'RISK', 'COMPLEXITY', 'VERIFICATION_METHOD', 'SOURCE']
+    const validOptionTypes = ['ENVIRONMENT_TYPE', 'COMPONENT_TYPE', 'INTERFACE_TYPE', 'PHASE', 'TESTING_TOOL', 'REQUIREMENT_LEVEL', 'RISK', 'COMPLEXITY', 'VERIFICATION_METHOD', 'SOURCE', 'BASELINE_TYPE', 'BASELINE_REVIEW_TYPE']
     if (!validOptionTypes.includes(optionType)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid optionType. Must be one of: ENVIRONMENT_TYPE, COMPONENT_TYPE, INTERFACE_TYPE, PHASE, TESTING_TOOL, REQUIREMENT_LEVEL, RISK, COMPLEXITY, VERIFICATION_METHOD, SOURCE',
+        error: 'Invalid optionType',
       })
     }
 
-    // Capitalize first letter only
-    const normalizedValue = capitalizeFirstLetter(value.trim())
+    // For baseline types use lowercase; for review types preserve (SRR, PDR, CDR); others capitalize
+    const normalizedValue = (optionType === 'BASELINE_TYPE' || optionType === 'BASELINE_REVIEW_TYPE')
+      ? value.trim()
+      : capitalizeFirstLetter(value.trim())
 
     if (!normalizedValue || normalizedValue.length === 0) {
       return res.status(400).json({

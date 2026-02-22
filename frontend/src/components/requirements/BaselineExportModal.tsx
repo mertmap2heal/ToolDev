@@ -29,7 +29,7 @@ interface BaselineExportModalProps {
   onClose: () => void
 }
 
-type ExportFormat = 'csv' | 'excel' | 'pdf'
+type ExportFormat = 'csv' | 'excel' | 'pdf' | 'json'
 
 interface ExportColumn {
   key: string
@@ -143,6 +143,51 @@ export default function BaselineExportModal({ projectId, baselineId, onClose }: 
     XLSX.writeFile(wb, `${baseline?.name || 'baseline'}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
   }
 
+  const exportToJSON = async () => {
+    const payload = {
+      _exportMetadata: {
+        format: 'baseline-export-v1',
+        exportedAt: new Date().toISOString(),
+        baselineId: baseline?.id,
+        baselineName: baseline?.name,
+        baselineType: baseline?.baselineType,
+        reviewType: baseline?.reviewType,
+        status: baseline?.status,
+        createdAt: baseline?.createdAt,
+        requirementCount: requirements.length,
+        linkCount: (baseline?.linksSnapshot as { links?: unknown[] })?.links?.length ?? 0,
+      },
+      baseline: {
+        id: baseline?.id,
+        name: baseline?.name,
+        description: baseline?.description,
+        status: baseline?.status,
+        baselineType: baseline?.baselineType,
+        reviewType: baseline?.reviewType,
+        createdAt: baseline?.createdAt,
+        itemCount: requirements.length,
+      },
+      requirements,
+      links: (baseline?.linksSnapshot as { links?: unknown[] })?.links ?? [],
+    }
+    const jsonStr = JSON.stringify(payload, null, 2)
+    let checksum = ''
+    if (typeof crypto !== 'undefined' && crypto.subtle) {
+      const encoder = new TextEncoder()
+      const data = encoder.encode(jsonStr)
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+      const hashArray = Array.from(new Uint8Array(hashBuffer))
+      checksum = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+    }
+    const withChecksum = { ...payload, _exportMetadata: { ...payload._exportMetadata, sha256: checksum } }
+    const blob = new Blob([JSON.stringify(withChecksum, null, 2)], { type: 'application/json' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `${baseline?.name || 'baseline'}_${format(new Date(), 'yyyy-MM-dd')}.json`
+    link.click()
+    URL.revokeObjectURL(link.href)
+  }
+
   const exportToPDF = async () => {
     try {
       const autoTable = await loadAutoTable()
@@ -204,6 +249,9 @@ export default function BaselineExportModal({ projectId, baselineId, onClose }: 
         case 'pdf':
           await exportToPDF()
           break
+        case 'json':
+          await exportToJSON()
+          break
       }
       setTimeout(() => {
         setIsExporting(false)
@@ -253,8 +301,8 @@ export default function BaselineExportModal({ projectId, baselineId, onClose }: 
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Export Format
                 </label>
-                <div className="grid grid-cols-3 gap-3">
-                  {(['csv', 'excel', 'pdf'] as ExportFormat[]).map((format) => (
+                <div className="grid grid-cols-4 gap-3">
+                  {(['csv', 'excel', 'pdf', 'json'] as ExportFormat[]).map((format) => (
                     <button
                       key={format}
                       onClick={() => setExportFormat(format)}
@@ -268,6 +316,7 @@ export default function BaselineExportModal({ projectId, baselineId, onClose }: 
                       {format === 'csv' && <FileText size={24} className="text-gray-600 dark:text-gray-400" />}
                       {format === 'excel' && <FileSpreadsheet size={24} className="text-gray-600 dark:text-gray-400" />}
                       {format === 'pdf' && <File size={24} className="text-gray-600 dark:text-gray-400" />}
+                      {format === 'json' && <File size={24} className="text-gray-600 dark:text-gray-400" />}
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
                         {format}
                       </span>

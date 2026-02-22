@@ -714,17 +714,27 @@ model RequirementVersion {
 }
 
 model Baseline {
-  id             String    @id @default(uuid())
-  projectId      String
-  name           String
-  description    String?
-  status         String    @default("active") // 'active' | 'locked' | 'archived'
-  createdBy      String?
-  createdByName  String?
-  lockedAt       DateTime?
-  linksSnapshot  Json?     // Snapshot of links where source or target is a requirement
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id              String    @id @default(uuid())
+  projectId       String
+  name            String
+  description     String?
+  status          String    @default("active") // draft | submitted | approved | frozen | superseded | active | locked | archived
+  baselineType    String?   // functional | allocated | product | milestone | custom (aerospace)
+  reviewType      String?   // SRR | PDR | CDR (milestone linkage)
+  milestoneId     String?
+  approvedBy           String?
+  approvedByName       String?
+  approvedAt           DateTime?
+  approvalNotes        String?
+  supersedesBaselineId String?   // Links to prior baseline when superseded
+  configurationAuthority String? // government | contractor (defense)
+  fdAL                 String?   // Functional Design Assurance Level (A–E, aerospace)
+  createdBy            String?
+  createdByName   String?
+  lockedAt        DateTime?
+  linksSnapshot   Json?     // Snapshot of links where source or target is a requirement
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   items   BaselineItem[]
   project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
