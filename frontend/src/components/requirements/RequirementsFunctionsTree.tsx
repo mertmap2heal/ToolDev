@@ -173,7 +173,7 @@ function buildFlatTree(
         const reqLinks = getLinksForReq(req)
         const hasLinkedElements = reqLinks.length > 0
         items.push({
-          id: `req-${req.id}`,
+          id: `req-${req.id}-${fn.id}`,
           type: 'requirement',
           name: req.title,
           depth: depth + 1,
@@ -190,8 +190,9 @@ function buildFlatTree(
                 ? (link.targetLabel ?? link.targetTitle ?? link.targetDisplayId ?? `${link.targetType}:${link.targetId.slice(0, 8)}`)
                 : (link.sourceTitle ?? link.sourceDisplayId ?? `${link.sourceType}:${link.sourceId.slice(0, 8)}`)
               const targetType = isOutgoing ? link.targetType : link.sourceType
+              const linkKey = link.id ?? `${link.sourceType}-${link.sourceId}-${link.targetType}-${link.targetId}`
               items.push({
-                id: `link-${req.id}-${link.id ?? `${link.sourceType}-${link.sourceId}-${link.targetType}-${link.targetId}`}`,
+                id: `link-${req.id}-${linkKey}-${fn.id}`,
                 type: 'linked_element',
                 name: label,
                 depth: depth + 2,
@@ -202,7 +203,7 @@ function buildFlatTree(
             }
           } else {
             items.push({
-              id: `no-links-${req.id}`,
+              id: `no-links-${req.id}-${fn.id}`,
               type: 'no_linked_elements',
               name: 'No linked elements',
               depth: depth + 2,
@@ -241,7 +242,7 @@ function buildFlatTree(
         const reqLinks = getLinksForReq(req)
         const hasLinkedElements = reqLinks.length > 0
         items.push({
-          id: `req-${req.id}`,
+          id: `req-${req.id}-unassigned`,
           type: 'requirement',
           name: req.title,
           depth: 1,
@@ -258,8 +259,9 @@ function buildFlatTree(
                 ? (link.targetLabel ?? link.targetTitle ?? link.targetDisplayId ?? `${link.targetType}:${link.targetId.slice(0, 8)}`)
                 : (link.sourceTitle ?? link.sourceDisplayId ?? `${link.sourceType}:${link.sourceId.slice(0, 8)}`)
               const targetType = isOutgoing ? link.targetType : link.sourceType
+              const linkKey = link.id ?? `${link.sourceType}-${link.sourceId}-${link.targetType}-${link.targetId}`
               items.push({
-                id: `link-${req.id}-${link.id ?? `${link.sourceType}-${link.sourceId}-${link.targetType}-${link.targetId}`}`,
+                id: `link-${req.id}-${linkKey}-unassigned`,
                 type: 'linked_element',
                 name: label,
                 depth: 2,
@@ -270,7 +272,7 @@ function buildFlatTree(
             }
           } else {
             items.push({
-              id: `no-links-${req.id}`,
+              id: `no-links-${req.id}-unassigned`,
               type: 'no_linked_elements',
               name: 'No linked elements',
               depth: 2,
