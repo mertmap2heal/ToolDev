@@ -460,25 +460,36 @@ export default function RelationshipGraphView({
             </button>
           </div>
         )}
-        <div className="flex-1 min-h-0">
-          <ReactFlow
-          nodes={nodes.map((n) => ({
-            ...n,
-            className: clsx(selectedId === n.id && 'ring-2 ring-blue-500 ring-offset-2'),
-          }))}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onNodeClick={onNodeClick}
-          fitView
-          className={clsx(
-            theme === 'high-contrast'
-              ? 'bg-gray-100 dark:bg-gray-800'
-              : 'bg-gray-50 dark:bg-gray-900'
-          )}
+        <div
+          className="flex-1 min-h-0 w-full"
+          style={{ minHeight: 200 }}
+          onWheel={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
         >
+          <ReactFlow
+            nodes={nodes.map((n) => ({
+              ...n,
+              className: clsx(selectedId === n.id && 'ring-2 ring-blue-500 ring-offset-2'),
+            }))}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onNodeClick={onNodeClick}
+            onPaneClick={() => {}}
+            fitView
+            minZoom={0.1}
+            maxZoom={2}
+            nodesDraggable={false}
+            panOnScroll={false}
+            onError={(id, msg) => console.warn('React Flow:', id, msg)}
+            className={clsx(
+              theme === 'high-contrast'
+                ? 'bg-gray-100 dark:bg-gray-800'
+                : 'bg-gray-50 dark:bg-gray-900'
+            )}
+          >
           <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-        </ReactFlow>
+          </ReactFlow>
         </div>
       </div>
     </ReactFlowProvider>
