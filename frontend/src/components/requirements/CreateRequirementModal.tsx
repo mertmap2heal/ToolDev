@@ -43,6 +43,8 @@ interface CreateRequirementModalProps {
   onClose: () => void
   projectId: string
   parentRequirement?: Requirement | null
+  initialComponentId?: string
+  initialFunctionAllocations?: string[]
 }
 
 const defaultRequirementTypes = [
@@ -164,6 +166,8 @@ export default function CreateRequirementModal({
   onClose,
   projectId,
   parentRequirement,
+  initialComponentId,
+  initialFunctionAllocations,
 }: CreateRequirementModalProps) {
   const [activeTab, setActiveTab] = useState<'general' | 'analysis' | 'traceability' | 'properties'>('general')
   const [formData, setFormData] = useState<CreateRequirementDto>({
@@ -443,6 +447,26 @@ export default function CreateRequirementModal({
     }
   }, [parentRequirement])
 
+  useEffect(() => {
+    if (isOpen && initialComponentId) {
+      setFormData((prev) => ({ ...prev, componentId: initialComponentId }))
+    }
+  }, [isOpen, initialComponentId])
+
+  useEffect(() => {
+    if (isOpen && initialFunctionAllocations && initialFunctionAllocations.length > 0) {
+      setQuickLinksFunctions(initialFunctionAllocations)
+      functionAdapter.search('', projectId).then((results) => {
+        const labels: Record<string, string> = {}
+        initialFunctionAllocations.forEach((id) => {
+          const match = results.find((r: { id: string; label: string }) => r.id === id)
+          if (match) labels[id] = match.label
+        })
+        setQuickLinksLabels((prev) => ({ ...prev, ...labels }))
+      })
+    }
+  }, [isOpen, initialFunctionAllocations, projectId])
+
   // Auto-fill owner with current user when modal opens
   useEffect(() => {
     if (isOpen && user?.name) {
@@ -539,6 +563,7 @@ export default function CreateRequirementModal({
     setTagInput('')
     setSelectedTemplate('')
     setQuickLinksPbs([])
+    setQuickLinksFunctions([])
     setQuickLinksInterfaces([])
     setQuickLinksHazards([])
     setQuickLinksRisks([])
@@ -786,6 +811,20 @@ export default function CreateRequirementModal({
             })
           )
         )
+        if (initialFunctionAllocations && initialFunctionAllocations.length > 0) {
+          initialFunctionAllocations.forEach((targetId) =>
+            linkPromises.push(
+              linkService.createLink(projectId, {
+                sourceType: 'requirement',
+                sourceId: createdReq.id,
+                targetType: 'function',
+                targetId,
+                linkType: 'allocated_to',
+                rationale: 'Allocated from Requirements page Functions menu',
+              })
+            )
+          )
+        }
         quickLinksInterfaces.forEach((targetId) =>
           linkPromises.push(
             linkService.createLink(projectId, {

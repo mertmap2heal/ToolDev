@@ -74,6 +74,8 @@ export default function RequirementsPage() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [requirementData, setRequirementData] = useState<Map<string, ExpandedRow>>(new Map())
   const [parentRequirement, setParentRequirement] = useState<Requirement | null>(null)
+  const [initialComponentId, setInitialComponentId] = useState<string | undefined>(undefined)
+  const [initialFunctionAllocations, setInitialFunctionAllocations] = useState<string[] | undefined>(undefined)
   const [selectedRequirements, setSelectedRequirements] = useState<Set<string>>(new Set())
   const [detailRequirement, setDetailRequirement] = useState<Requirement | null>(null)
   const [isTraceMatrixOpen, setIsTraceMatrixOpen] = useState(false)
@@ -564,6 +566,63 @@ export default function RequirementsPage() {
       alert(
         error?.message || error?.error || 'Failed to allocate requirements to function. Please try again.'
       )
+    },
+  })
+
+  const removeFromComponentMutation = useMutation({
+    mutationFn: (reqId: string) => {
+      if (!projectId) throw new Error('Project ID required')
+      return requirementService.updateRequirementComponent(projectId, reqId, null)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['links', projectId] })
+    },
+    onError: (error: any) => {
+      console.error('Remove from component error:', error)
+      alert(error?.message || error?.error || 'Failed to remove requirement from component.')
+    },
+  })
+
+  const removeAllocationMutation = useMutation({
+    mutationFn: async ({ reqId, functionId }: { reqId: string; functionId: string | null }) => {
+      if (!projectId) throw new Error('Project ID required')
+      const link = allocationLinks.find(
+        (l) =>
+          l.sourceType === 'requirement' &&
+          l.sourceId === reqId &&
+          l.targetType === 'function' &&
+          l.targetId === (functionId || '') &&
+          l.linkType === 'allocated_to'
+      )
+      if (!link?.id) throw new Error('Allocation link not found')
+      return LINKAGE_V1 ? linkService.deleteLink(projectId, link.id) : traceabilityService.deleteTraceLink(projectId, link.id)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['links', projectId] })
+    },
+    onError: (error: any) => {
+      console.error('Remove allocation error:', error)
+      alert(error?.message || error?.error || 'Failed to remove allocation.')
+    },
+  })
+
+  const removeLinkMutation = useMutation({
+    mutationFn: (linkId: string) => {
+      if (!projectId) throw new Error('Project ID required')
+      return LINKAGE_V1 ? linkService.deleteLink(projectId, linkId) : traceabilityService.deleteTraceLink(projectId, linkId)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['links', projectId] })
+    },
+    onError: (error: any) => {
+      console.error('Remove link error:', error)
+      alert(error?.message || error?.error || 'Failed to remove link.')
     },
   })
 
@@ -1764,6 +1823,36 @@ export default function RequirementsPage() {
                     links={LINKAGE_V1 ? links : []}
                     onLinkedElementClick={handleLinkedElementClick}
                     onRequirementClick={setDetailRequirement}
+                    onAddRequirementToComponent={(componentId) => {
+                      setInitialComponentId(componentId)
+                      setInitialFunctionAllocations(undefined)
+                      setParentRequirement(null)
+                      setIsCreateModalOpen(true)
+                    }}
+                    onAddRequirementUnassigned={() => {
+                      setInitialComponentId(undefined)
+                      setInitialFunctionAllocations(undefined)
+                      setParentRequirement(null)
+                      setIsCreateModalOpen(true)
+                    }}
+                    onEditRequirement={(req) => setEditingRequirement(req)}
+                    onRemoveFromComponent={(reqId) => {
+                      if (isBaselineView) return
+                      removeFromComponentMutation.mutate(reqId)
+                    }}
+                    onRemoveLink={(linkId) => {
+                      if (isBaselineView) return
+                      removeLinkMutation.mutate(linkId)
+                    }}
+                    onCreateChangeRequest={(req) => {
+                      setSelectedRequirementForChangeRequest(req)
+                      setIsChangeRequestModalOpen(true)
+                    }}
+                    onCreateIssue={(req) => {
+                      setSelectedRequirementForIssue(req)
+                      setIsCreateIssueModalOpen(true)
+                    }}
+                    onOpenTraceabilityMatrix={() => setIsTraceMatrixOpen(true)}
                   />
                 ) : (
                   <RequirementsFunctionsTree
@@ -1774,6 +1863,36 @@ export default function RequirementsPage() {
                     allocationLinks={allocationLinks}
                     onRequirementClick={setDetailRequirement}
                     onLinkedElementClick={handleLinkedElementClick}
+                    onAddRequirementToFunction={(functionId) => {
+                      setInitialComponentId(undefined)
+                      setInitialFunctionAllocations([functionId])
+                      setParentRequirement(null)
+                      setIsCreateModalOpen(true)
+                    }}
+                    onAddRequirementUnassigned={() => {
+                      setInitialComponentId(undefined)
+                      setInitialFunctionAllocations(undefined)
+                      setParentRequirement(null)
+                      setIsCreateModalOpen(true)
+                    }}
+                    onEditRequirement={(req) => setEditingRequirement(req)}
+                    onRemoveAllocation={(reqId, functionId) => {
+                      if (isBaselineView || !functionId) return
+                      removeAllocationMutation.mutate({ reqId, functionId })
+                    }}
+                    onRemoveLink={(linkId) => {
+                      if (isBaselineView) return
+                      removeLinkMutation.mutate(linkId)
+                    }}
+                    onCreateChangeRequest={(req) => {
+                      setSelectedRequirementForChangeRequest(req)
+                      setIsChangeRequestModalOpen(true)
+                    }}
+                    onCreateIssue={(req) => {
+                      setSelectedRequirementForIssue(req)
+                      setIsCreateIssueModalOpen(true)
+                    }}
+                    onOpenTraceabilityMatrix={() => setIsTraceMatrixOpen(true)}
                     onDropRequirements={async (requirementIds, functionId) => {
                       const locked = allRequirements.filter(
                         (r) => requirementIds.includes(r.id) && r.isLocked
@@ -2671,9 +2790,13 @@ export default function RequirementsPage() {
               onClose={() => {
                 setIsCreateModalOpen(false)
                 setParentRequirement(null)
+                setInitialComponentId(undefined)
+                setInitialFunctionAllocations(undefined)
               }}
               projectId={projectId}
               parentRequirement={parentRequirement}
+              initialComponentId={initialComponentId}
+              initialFunctionAllocations={initialFunctionAllocations}
             />
           )}
 

@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
-import { ChevronRight, ChevronDown, Package, FileText, Search, FolderOpen, Inbox, Settings, AlertCircle, GitPullRequest, Layers, ClipboardList, Link2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { ChevronRight, ChevronDown, Package, FileText, Search, FolderOpen, Inbox, Settings, AlertCircle, GitPullRequest, Layers, ClipboardList, Link2, Plus, Edit2, Trash2, Copy, ExternalLink, BarChart3, Unlink } from 'lucide-react'
 import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query'
 import { componentService } from '../../services/component.service'
 import { requirementService } from '../../services/requirement.service'
@@ -22,6 +23,7 @@ interface LinkLike {
   sourceTitle?: string
   sourceDisplayId?: string
   linkType?: string
+  _displayTargetType?: string
 }
 
 export interface LinkedElementClickPayload {
@@ -41,6 +43,14 @@ interface RequirementsPBSTreeProps {
   links?: LinkLike[]
   onLinkedElementClick?: (payload: LinkedElementClickPayload) => void
   onRequirementClick?: (req: Requirement) => void
+  onAddRequirementToComponent?: (componentId: string) => void
+  onAddRequirementUnassigned?: () => void
+  onEditRequirement?: (req: Requirement) => void
+  onRemoveFromComponent?: (reqId: string) => void
+  onRemoveLink?: (linkId: string) => void
+  onCreateChangeRequest?: (req: Requirement) => void
+  onCreateIssue?: (req: Requirement) => void
+  onOpenTraceabilityMatrix?: (focusReqId?: string) => void
 }
 
 interface FlatTreeItem {
@@ -255,6 +265,11 @@ function buildFlatTree(
     return items
 }
 
+type ContextMenuTarget = { type: 'component'; componentId: string; componentName?: string }
+  | { type: 'requirement'; req: Requirement }
+  | { type: 'linked_element'; link: LinkLike; payload: LinkedElementClickPayload }
+  | { type: 'unassigned' }
+
 export default function RequirementsPBSTree({
   projectId,
   requirements,
@@ -263,7 +278,16 @@ export default function RequirementsPBSTree({
   links = [],
   onLinkedElementClick,
   onRequirementClick,
+  onAddRequirementToComponent,
+  onAddRequirementUnassigned,
+  onEditRequirement,
+  onRemoveFromComponent,
+  onRemoveLink,
+  onCreateChangeRequest,
+  onCreateIssue,
+  onOpenTraceabilityMatrix,
 }: RequirementsPBSTreeProps) {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['unassigned']))
   const [expandedReqs, setExpandedReqs] = useState<Set<string>>(new Set())
@@ -317,6 +341,13 @@ export default function RequirementsPBSTree({
   const [searchQuery, setSearchQuery] = useState('')
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [pbsSynced, setPbsSynced] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{ target: ContextMenuTarget; x: number; y: number } | null>(null)
+
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null)
+    document.addEventListener('click', handleClick)
+    return () => document.removeEventListener('click', handleClick)
+  }, [])
 
   const toggleReq = useCallback((reqId: string) => {
     setExpandedReqs((prev) => {
@@ -550,11 +581,17 @@ export default function RequirementsPBSTree({
                       const reqLinks = linksByReqId.get(req.id) ?? []
                       const hasLinkedElements = reqLinks.length > 0
                       const isReqExpanded = expandedReqs.has(req.id)
+                      const isLocked = !!req.isLocked
                       return (
                         <div
                           key={item.id}
                           className="group flex items-center mx-2 text-sm rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border border-transparent hover:border-gray-100 dark:hover:border-gray-700"
                           style={{ paddingLeft: `${item.depth * 16 + 12}px` }}
+                          onContextMenu={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setContextMenu({ target: { type: 'requirement', req }, x: e.clientX, y: e.clientY })
+                          }}
                         >
                           <button
                             type="button"
@@ -616,6 +653,14 @@ export default function RequirementsPBSTree({
                       const isOutgoing = link.sourceType === 'requirement' && link.sourceId
                       const entityType = isOutgoing ? link.targetType : link.sourceType
                       const entityId = isOutgoing ? link.targetId : link.sourceId
+                      const payload: LinkedElementClickPayload = {
+                        targetType: entityType,
+                        targetId: entityId,
+                        sourceType: link.sourceType,
+                        sourceId: link.sourceId,
+                        isOutgoing: !!isOutgoing,
+                        link,
+                      }
                       const Icon = displayType === 'function' ? Settings
                         : displayType === 'issue' ? AlertCircle
                         : displayType === 'change_request' ? GitPullRequest
@@ -623,16 +668,7 @@ export default function RequirementsPBSTree({
                         : displayType === 'use_case' ? Layers
                         : displayType === 'test_plan' || displayType === 'test_case' ? ClipboardList
                         : Link2
-                      const handleClick = () => {
-                        onLinkedElementClick?.({
-                          targetType: entityType,
-                          targetId: entityId,
-                          sourceType: link.sourceType,
-                          sourceId: link.sourceId,
-                          isOutgoing: !!isOutgoing,
-                          link,
-                        })
-                      }
+                      const handleClick = () => onLinkedElementClick?.(payload)
                       return (
                         <div
                           key={item.id}
@@ -640,6 +676,11 @@ export default function RequirementsPBSTree({
                           tabIndex={0}
                           onClick={handleClick}
                           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick() } }}
+                          onContextMenu={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setContextMenu({ target: { type: 'linked_element', link, payload }, x: e.clientX, y: e.clientY })
+                          }}
                           className={clsx(
                             'flex items-center gap-2 px-3 py-1 mx-2 text-xs rounded-md border-l-2 ml-4 transition-colors',
                             onLinkedElementClick
@@ -661,6 +702,11 @@ export default function RequirementsPBSTree({
                         return (
                             <div
                                 key={item.id}
+                                onContextMenu={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  setContextMenu({ target: { type: 'unassigned' }, x: e.clientX, y: e.clientY })
+                                }}
                                 className={`flex items-center gap-2 px-3 py-2 mx-2 mt-2 text-sm rounded-lg cursor-pointer select-none border transition-all
                   ${isUnassignedDragOver
                                         ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
@@ -700,6 +746,11 @@ export default function RequirementsPBSTree({
                                 toggleNode(item.componentId!)
                                 handleComponentClick(item.componentId!)
                             }}
+                            onContextMenu={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setContextMenu({ target: { type: 'component', componentId: item.componentId!, componentName: item.name }, x: e.clientX, y: e.clientY })
+                            }}
                             onDragOver={(e) => handleDragOver(e, item.componentId!)}
                             onDragLeave={handleDragLeave}
                             onDrop={(e) => handleDrop(e, item.componentId!)}
@@ -735,6 +786,87 @@ export default function RequirementsPBSTree({
             <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/50 text-xs text-center text-gray-400 dark:text-gray-500">
                 Drag requirements to assign components
             </div>
+
+            {/* Context menu */}
+            {contextMenu && (() => {
+              const t = contextMenu.target
+              return (
+                <div
+                  className="fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 z-50 min-w-[180px]"
+                  style={{ left: contextMenu.x, top: contextMenu.y }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t.type === 'component' && (
+                    <>
+                      {onAddRequirementToComponent && (
+                        <button onClick={() => { onAddRequirementToComponent(t.componentId); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
+                          <Plus size={14} /> Add new requirement to component
+                        </button>
+                      )}
+                      <button onClick={() => { projectId && navigate(`/projects/${projectId}/product-breakdown-structure`); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
+                        <ExternalLink size={14} /> Open in PBS page
+                      </button>
+                      <button onClick={() => { navigator.clipboard.writeText(t.componentId); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
+                        <Copy size={14} /> Copy component ID
+                      </button>
+                    </>
+                  )}
+                  {t.type === 'requirement' && (
+                    <>
+                      {onEditRequirement && !t.req.isLocked && (
+                        <button onClick={() => { onEditRequirement(t.req); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
+                          <Edit2 size={14} /> Edit requirement
+                        </button>
+                      )}
+                      {onRemoveFromComponent && t.req.componentId && !t.req.isLocked && (
+                        <button onClick={() => { onRemoveFromComponent(t.req.id); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
+                          <Unlink size={14} /> Remove from component
+                        </button>
+                      )}
+                      <button onClick={() => { navigator.clipboard.writeText(t.req.requirementId || t.req.id); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
+                        <Copy size={14} /> Copy requirement ID
+                      </button>
+                      {onCreateChangeRequest && (
+                        <button onClick={() => { onCreateChangeRequest(t.req); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
+                          <GitPullRequest size={14} /> Create change request
+                        </button>
+                      )}
+                      {onCreateIssue && (
+                        <button onClick={() => { onCreateIssue(t.req); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
+                          <AlertCircle size={14} /> Create issue
+                        </button>
+                      )}
+                      {onOpenTraceabilityMatrix && (
+                        <button onClick={() => { onOpenTraceabilityMatrix(t.req.id); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
+                          <BarChart3 size={14} /> View in traceability matrix
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {t.type === 'linked_element' && (
+                    <>
+                      <button onClick={() => { onLinkedElementClick?.(t.payload); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
+                        <ExternalLink size={14} /> View target
+                      </button>
+                      {onRemoveLink && t.link.id && (
+                        <button onClick={() => { onRemoveLink(t.link.id!); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 text-left">
+                          <Unlink size={14} /> Remove link
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {t.type === 'unassigned' && (
+                    <>
+                      {onAddRequirementUnassigned && (
+                        <button onClick={() => { onAddRequirementUnassigned(); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
+                          <Plus size={14} /> Add new requirement
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )
+            })()}
         </div>
     )
 }
