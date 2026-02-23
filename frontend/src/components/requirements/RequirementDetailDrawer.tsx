@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { X, Edit2, Trash2, MessageSquare, Paperclip, Tag, ChevronRight, ChevronDown, Link2, FileText, Settings, AlertCircle, Zap, History, ExternalLink, Check, Bell, BellRing, GitPullRequest, Shield, Target, ClipboardCheck, Layers, BookOpen, LayoutGrid, List, Unlink } from 'lucide-react'
+import { X, Edit2, Trash2, MessageSquare, Paperclip, Tag, ChevronRight, ChevronDown, Link2, FileText, Settings, AlertCircle, Zap, History, ExternalLink, Check, Bell, BellRing, GitPullRequest, Shield, Target, ClipboardCheck, Layers, BookOpen, LayoutGrid, List, Unlink, Sliders } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { requirementService, type RequirementSubscriptionSnapshot } from '../../services/requirement.service'
@@ -29,7 +29,7 @@ import { LockButton } from './LockButton'
 import { useAuthStore } from '../../store/authStore'
 import RichTextEditor from '../common/RichTextEditor'
 import { useParameterDisplayStore } from '../../store/parameterDisplayStore'
-import { resolveParameterPlaceholders } from '../../utils/parameterPlaceholder'
+import { resolveParameterPlaceholders, editorSpansToPlaceholders } from '../../utils/parameterPlaceholder'
 import { parameterService } from '../../services/parameter.service'
 
 interface RequirementDetailDrawerProps {
@@ -556,18 +556,22 @@ export default function RequirementDetailDrawer({
     parameters.forEach((p) => m.set(p.id.toLowerCase(), { id: p.id, name: p.name, defaultValue: p.defaultValue, unit: p.unit, tolerance: p.tolerance, minValue: p.minValue, maxValue: p.maxValue }))
     return m
   }, [parameters])
-  const resolvedTitle = useMemo(
-    () => (displayRequirement && (displayRequirement.title || '').includes('{{param:')
-      ? resolveParameterPlaceholders(displayRequirement.title || '', parameterMap, parameterDisplayMode)
-      : displayRequirement?.title ?? ''),
-    [displayRequirement, parameterMap, parameterDisplayMode]
-  )
-  const resolvedDescription = useMemo(
-    () => (displayRequirement && (displayRequirement.description || '').includes('{{param:')
-      ? resolveParameterPlaceholders(displayRequirement.description || '', parameterMap, parameterDisplayMode)
-      : displayRequirement?.description ?? ''),
-    [displayRequirement, parameterMap, parameterDisplayMode]
-  )
+  const resolvedTitle = useMemo(() => {
+    if (!displayRequirement) return ''
+    const title = displayRequirement.title || ''
+    const hasParam = title.includes('{{param:') || title.includes('data-param-id')
+    return hasParam
+      ? resolveParameterPlaceholders(editorSpansToPlaceholders(title), parameterMap, parameterDisplayMode)
+      : title
+  }, [displayRequirement, parameterMap, parameterDisplayMode])
+  const resolvedDescription = useMemo(() => {
+    if (!displayRequirement) return ''
+    const desc = displayRequirement.description || ''
+    const hasParam = desc.includes('{{param:') || desc.includes('data-param-id')
+    return hasParam
+      ? resolveParameterPlaceholders(editorSpansToPlaceholders(desc), parameterMap, parameterDisplayMode)
+      : desc
+  }, [displayRequirement, parameterMap, parameterDisplayMode])
 
   const showToast = (message: string) => setToastMessage(message)
 
@@ -654,18 +658,20 @@ export default function RequirementDetailDrawer({
                 link.targetType === 'pbs_component' ? flatComponents.find((c) => c.id === link.targetId) :
                   link.targetType === 'test_plan' ? testPlans.find((p: any) => p.id === link.targetId) :
                     link.targetType === 'test_case' ? testCases.find((tc: any) => tc.id === link.targetId) :
-                      null;
+                      link.targetType === 'parameter' ? parameters.find((p: any) => p.id === link.targetId) :
+                        null;
 
-      const displayId = targetItem ? (
+      const displayId = (link as any).targetDisplayId ?? (targetItem ? (
         targetItem.requirementId ||
         targetItem.functionId ||
         targetItem.issueKey ||
         targetItem.crId ||
+        targetItem.key ||
         targetItem.name ||
         link.targetId.slice(0, 8)
-      ) : link.targetId.slice(0, 8);
+      ) : link.targetId.slice(0, 8));
 
-      const title = targetItem ? (targetItem.title || targetItem.name) : `${link.targetType?.replace(/_/g, ' ')} (${link.targetId.slice(0, 8)})`;
+      const title = (link as any).targetTitle ?? (targetItem ? (targetItem.title || targetItem.name) : `${link.targetType?.replace(/_/g, ' ')} (${link.targetId.slice(0, 8)})`);
 
       return {
         ...link,
@@ -674,7 +680,7 @@ export default function RequirementDetailDrawer({
         targetTitle: title
       }
     })
-  }, [allLinks, requirements, functions, issues, changeRequests, flatComponents, testPlans, testCases])
+  }, [allLinks, requirements, functions, issues, changeRequests, flatComponents, testPlans, testCases, parameters])
 
   const isLocked = displayRequirement?.isLocked
   const isLockedByCurrentUser = displayRequirement?.lockedByUserId === currentUserId
@@ -1642,9 +1648,10 @@ export default function RequirementDetailDrawer({
                                                 link.targetType === 'pbs_component' ? flatComponents.find((c) => c.id === link.targetId) :
                                                   link.targetType === 'test_plan' ? testPlans.find((p: any) => p.id === link.targetId) :
                                                     link.targetType === 'test_case' ? testCases.find((tc: any) => tc.id === link.targetId) :
-                                                      null;
+                                                      link.targetType === 'parameter' ? parameters.find((p: any) => p.id === link.targetId) :
+                                                        null;
 
-                                      const displayId = targetItem ? (
+                                      const displayId = (link as any).targetDisplayId ?? (targetItem ? (
                                         targetItem.requirementId ||
                                         targetItem.functionId ||
                                         targetItem.issueKey ||
@@ -1652,9 +1659,9 @@ export default function RequirementDetailDrawer({
                                         targetItem.key ||
                                         targetItem.name ||
                                         link.targetId.slice(0, 8)
-                                      ) : link.targetId.slice(0, 8);
+                                      ) : link.targetId.slice(0, 8));
 
-                                      const title = targetItem ? (targetItem.title || targetItem.name) : `${link.targetType?.replace(/_/g, ' ')} (${link.targetId.slice(0, 8)})`;
+                                      const title = (link as any).targetTitle ?? (targetItem ? (targetItem.title || targetItem.name) : `${link.targetType?.replace(/_/g, ' ')} (${link.targetId.slice(0, 8)})`);
 
                                       const getIcon = () => {
                                         switch (link.targetType) {
@@ -1672,6 +1679,7 @@ export default function RequirementDetailDrawer({
                                           case 'task': return <Layers size={16} className="text-indigo-500" />
                                           case 'cert_objective': return <Shield size={16} className="text-indigo-500" />
                                           case 'compliance_rule': return <Check size={16} className="text-emerald-500" />
+                                          case 'parameter': return <Sliders size={16} className="text-violet-500" />
                                           default: return <Link2 size={16} className="text-gray-500" />
                                         }
                                       }

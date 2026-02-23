@@ -45,7 +45,7 @@ export function resolveParameterPlaceholders(
 }
 
 /**
- * Extracts parameter ids from text ({{param:id}}).
+ * Extracts parameter ids from text ({{param:id}} or HTML span data-param-id).
  */
 export function extractParameterIds(text: string): string[] {
   if (!text) return []
@@ -53,6 +53,10 @@ export function extractParameterIds(text: string): string[] {
   let m: RegExpExecArray | null
   const re = new RegExp(PLACEHOLDER_REGEX.source, 'gi')
   while ((m = re.exec(text)) !== null) {
+    if (m[1]) ids.add(m[1].toLowerCase())
+  }
+  const spanRe = new RegExp(/data-param-id=["']([a-f0-9-]{36})["']/gi.source, 'gi')
+  while ((m = spanRe.exec(text)) !== null) {
     if (m[1]) ids.add(m[1].toLowerCase())
   }
   return Array.from(ids)

@@ -4,6 +4,7 @@ import { useParameterDisplayStore } from '../../store/parameterDisplayStore'
 import {
   resolveParameterPlaceholders,
   extractParameterIds,
+  editorSpansToPlaceholders,
   type ParameterResolveEntry,
 } from '../../utils/parameterPlaceholder'
 
@@ -31,7 +32,10 @@ export default function RequirementParameterText({
   const mode = useParameterDisplayStore((s) => s.mode)
 
   const rawForCheck = stripHtml ? stripHtmlSimple(text || '') : (text || '')
-  const hasPlaceholderLike = rawForCheck.includes('{{param:') || rawForCheck.includes('param:')
+  const hasPlaceholderLike =
+    rawForCheck.includes('{{param:') ||
+    rawForCheck.includes('param:') ||
+    rawForCheck.includes('data-param-id')
 
   const { data: parameters = [] } = useQuery({
     queryKey: ['parameters', projectId],
@@ -44,7 +48,8 @@ export default function RequirementParameterText({
   })
 
   const raw = stripHtml ? stripHtmlSimple(text) : text
-  const ids = extractParameterIds(raw)
+  const normalized = editorSpansToPlaceholders(raw)
+  const ids = extractParameterIds(normalized)
 
   const map = new Map<string, ParameterResolveEntry>()
   parameters.forEach((p) => {
@@ -59,6 +64,6 @@ export default function RequirementParameterText({
     })
   })
 
-  const resolved = resolveParameterPlaceholders(raw, map, mode)
+  const resolved = resolveParameterPlaceholders(normalized, map, mode)
   return <span className={className}>{resolved}</span>
 }

@@ -1690,7 +1690,7 @@ export default function RequirementsPage() {
                           ) : (
                             <>
                               <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
-                                {item.targetType} ({item.targetId.slice(0, 8)})
+                                {item.title ?? item.label ?? `${item.targetType} (${item.targetId.slice(0, 8)})`}
                               </span>{' '}
                               - {item.linkType}
                             </>
