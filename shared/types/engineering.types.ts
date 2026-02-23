@@ -506,6 +506,7 @@ export type ParameterOwnerType = 'component' | 'function' | 'system' | 'team'
 export interface Parameter {
   id: string
   projectId: string
+  parameterId?: string | null
   name: string
   description?: string
   dataType?: string
@@ -533,6 +534,7 @@ export interface Parameter {
 }
 
 export interface CreateParameterDto {
+  parameterId?: string | null
   name: string
   description?: string
   dataType?: string
@@ -549,6 +551,7 @@ export interface CreateParameterDto {
 }
 
 export interface UpdateParameterDto {
+  parameterId?: string | null
   name?: string
   description?: string
   dataType?: string

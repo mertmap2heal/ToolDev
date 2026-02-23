@@ -577,6 +577,7 @@ model IssueLink {
 model Parameter {
   id               String   @id @default(uuid())
   projectId        String
+  parameterId      String?  // unique display ID per project (e.g. PARAM-001)
   name             String
   description      String?
   dataType         String?
@@ -603,6 +604,7 @@ model Parameter {
   versions        ParameterVersion[]
 
   @@unique([projectId, name])
+  @@unique([projectId, parameterId])
   @@index([projectId, status])
   @@index([projectId, folderId])
   @@index([sourceParameterId])

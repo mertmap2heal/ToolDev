@@ -4,6 +4,25 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
+async function generateParameterId(projectId: string): Promise<string> {
+  const prefix = 'PARAM'
+  const all = await prisma.parameter.findMany({
+    where: { projectId },
+    select: { parameterId: true },
+  })
+  let maxNumber = 0
+  for (const p of all) {
+    if (p.parameterId && /^PARAM-\d+$/.test(p.parameterId)) {
+      const m = p.parameterId.match(/-(\d+)$/)
+      if (m) {
+        const n = parseInt(m[1], 10)
+        if (n > maxNumber) maxNumber = n
+      }
+    }
+  }
+  return `${prefix}-${(maxNumber + 1).toString().padStart(3, '0')}`
+}
+
 function buildParameterWhere(projectId: string, query: Record<string, string | undefined>) {
   const where: Record<string, unknown> = { projectId }
   if (query.search) {
@@ -102,6 +121,7 @@ export const updateParameter = async (req: AuthRequest, res: Response) => {
       sourceParameterId,
       formula,
       sourceFunctionId,
+      parameterId: parameterIdFromBody,
     } = body
 
     const parameter = await prisma.parameter.findUnique({ where: { id } })
@@ -110,6 +130,23 @@ export const updateParameter = async (req: AuthRequest, res: Response) => {
     }
 
     const updateData: Record<string, unknown> = {}
+    if (parameterIdFromBody !== undefined) {
+      const pid = (parameterIdFromBody as string)?.trim() || null
+      if (pid && pid !== parameter.parameterId) {
+        const existing = await prisma.parameter.findFirst({
+          where: { projectId: parameter.projectId, parameterId: pid },
+        })
+        if (existing) {
+          return res.status(400).json({
+            success: false,
+            error: `Another parameter in this project already has ID "${pid}"`,
+          })
+        }
+        updateData.parameterId = pid
+      } else if (pid === '' || pid === null) {
+        updateData.parameterId = null
+      }
+    }
     if (description !== undefined) updateData.description = description
     if (dataType !== undefined) updateData.dataType = dataType
     if (defaultValue !== undefined) updateData.defaultValue = defaultValue
@@ -192,15 +229,32 @@ export const createParameter = async (req: AuthRequest, res: Response) => {
       sourceParameterId,
       formula,
       sourceFunctionId,
+      parameterId: providedParameterId,
     } = body
 
     if (!name || typeof name !== 'string' || !name.trim()) {
       return res.status(400).json({ success: false, error: 'Parameter name is required' })
     }
 
+    let parameterId: string | null = (providedParameterId as string)?.trim() || null
+    if (!parameterId) {
+      parameterId = await generateParameterId(projectId)
+    } else {
+      const existing = await prisma.parameter.findFirst({
+        where: { projectId, parameterId },
+      })
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          error: `A parameter with ID "${parameterId}" already exists in this project`,
+        })
+      }
+    }
+
     const parameter = await prisma.parameter.create({
       data: {
         projectId,
+        parameterId,
         name: (name as string).trim(),
         description: (description as string)?.trim() ?? null,
         dataType: (dataType as string)?.trim() ?? null,

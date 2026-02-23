@@ -274,7 +274,7 @@ export const traceabilityService = {
     let reqDetails: { id: string; title: string; requirementId: string | null }[] = []
     let funcDetails: { id: string; name: string; functionId: string | null }[] = []
     let testCaseDetails: { id: string; key: string; title: string }[] = []
-    let paramDetails: { id: string; name: string }[] = []
+    let paramDetails: { id: string; name: string; parameterId: string | null }[] = []
     try {
       const [reqs, funcs, testCases, params] = await Promise.all([
         reqIdsToFetch.size > 0
@@ -298,7 +298,7 @@ export const traceabilityService = {
         paramIdsToFetch.size > 0
           ? prisma.parameter.findMany({
               where: { id: { in: Array.from(paramIdsToFetch) } },
-              select: { id: true, name: true }
+              select: { id: true, name: true, parameterId: true }
             })
           : Promise.resolve([]),
       ])
@@ -356,19 +356,19 @@ export const traceabilityService = {
           (tReq ? tReq.title : undefined) ||
           (tFunc ? tFunc.name : undefined) ||
           (tTc ? tTc.title : undefined) ||
-          (tParam ? tParam.name : undefined),
+          (tParam ? `${tParam.parameterId || tParam.id.substring(0, 8)} - ${tParam.name}` : undefined),
         targetDisplayId:
           link.targetDisplayId ||
           (tReq ? (tReq.requirementId || tReq.id.substring(0, 8)) : undefined) ||
           (tFunc ? (tFunc.functionId || tFunc.id.substring(0, 8)) : undefined) ||
           (tTc ? tTc.key : undefined) ||
-          (tParam ? tParam.name : undefined),
+          (tParam ? (tParam.parameterId || tParam.id.substring(0, 8)) : undefined),
         targetLabel:
           link.targetLabel ||
           (tReq ? `${tReq.requirementId || tReq.id.substring(0, 8)} - ${tReq.title}` : undefined) ||
           (tFunc ? `${tFunc.functionId || tFunc.id.substring(0, 8)} - ${tFunc.name}` : undefined) ||
           (tTc ? `${tTc.key} - ${tTc.title}` : undefined) ||
-          (tParam ? `Parameter: ${tParam.name}` : undefined),
+          (tParam ? `${tParam.parameterId || tParam.id.substring(0, 8)} - ${tParam.name}` : undefined),
         sourceTitle:
           link.sourceTitle ||
           (sReq ? sReq.title : undefined) ||
@@ -380,13 +380,13 @@ export const traceabilityService = {
           (sReq ? (sReq.requirementId || sReq.id.substring(0, 8)) : undefined) ||
           (sFunc ? (sFunc.functionId || sFunc.id.substring(0, 8)) : undefined) ||
           (sTc ? sTc.key : undefined) ||
-          (sParam ? sParam.name : undefined),
+          (sParam ? (sParam.parameterId || sParam.id.substring(0, 8)) : undefined),
         sourceLabel:
           link.sourceLabel ||
           (sReq ? `${sReq.requirementId || sReq.id.substring(0, 8)} - ${sReq.title}` : undefined) ||
           (sFunc ? `${sFunc.functionId || sFunc.id.substring(0, 8)} - ${sFunc.name}` : undefined) ||
           (sTc ? `${sTc.key} - ${sTc.title}` : undefined) ||
-          (sParam ? `Parameter: ${sParam.name}` : undefined),
+          (sParam ? `${sParam.parameterId || sParam.id.substring(0, 8)} - ${sParam.name}` : undefined),
       }
     })
   },

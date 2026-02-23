@@ -667,11 +667,17 @@ export default function RequirementDetailDrawer({
         targetItem.issueKey ||
         targetItem.crId ||
         targetItem.key ||
+        (link.targetType === 'parameter' ? (targetItem.parameterId || link.targetId.slice(0, 8)) : null) ||
+        (link.sourceType === 'parameter' ? (targetItem.parameterId || link.sourceId.slice(0, 8)) : null) ||
+        targetItem.parameterId ||
         targetItem.name ||
         link.targetId.slice(0, 8)
       ) : link.targetId.slice(0, 8));
 
-      const title = (link as any).targetTitle ?? (targetItem ? (targetItem.title || targetItem.name) : `${link.targetType?.replace(/_/g, ' ')} (${link.targetId.slice(0, 8)})`);
+      const paramIdForTitle = (link.targetType === 'parameter' || link.sourceType === 'parameter') && targetItem?.name
+        ? (targetItem.parameterId || (link.targetType === 'parameter' ? link.targetId : link.sourceId)?.slice(0, 8))
+        : null
+      const title = (link as any).targetTitle ?? (targetItem ? (targetItem.title || (paramIdForTitle ? `${paramIdForTitle} - ${targetItem.name}` : targetItem.name)) : `${link.targetType?.replace(/_/g, ' ')} (${link.targetId.slice(0, 8)})`);
 
       return {
         ...link,
@@ -1657,11 +1663,17 @@ export default function RequirementDetailDrawer({
                                         targetItem.issueKey ||
                                         targetItem.crId ||
                                         targetItem.key ||
+                                        (link.targetType === 'parameter' ? (targetItem.parameterId || link.targetId.slice(0, 8)) : null) ||
+                                        (link.sourceType === 'parameter' ? (targetItem.parameterId || link.sourceId.slice(0, 8)) : null) ||
+                                        targetItem.parameterId ||
                                         targetItem.name ||
                                         link.targetId.slice(0, 8)
                                       ) : link.targetId.slice(0, 8));
 
-                                      const title = (link as any).targetTitle ?? (targetItem ? (targetItem.title || targetItem.name) : `${link.targetType?.replace(/_/g, ' ')} (${link.targetId.slice(0, 8)})`);
+                                      const paramIdForTitle = (link.targetType === 'parameter' || link.sourceType === 'parameter') && targetItem?.name
+                                        ? (targetItem.parameterId || (link.targetType === 'parameter' ? link.targetId : link.sourceId)?.slice(0, 8))
+                                        : null
+                                      const title = (link as any).targetTitle ?? (targetItem ? (targetItem.title || (paramIdForTitle ? `${paramIdForTitle} - ${targetItem.name}` : targetItem.name)) : `${link.targetType?.replace(/_/g, ' ')} (${link.targetId.slice(0, 8)})`);
 
                                       const getIcon = () => {
                                         switch (link.targetType) {
