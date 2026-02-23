@@ -7,10 +7,75 @@ import { linkageAuditService } from '../services/linkageAudit.service'
 import { requirementValidationService } from '../services/requirementValidation.service'
 import { requirementSubscriptionService } from '../services/requirementSubscription.service'
 import { buildRequirementChangeSummary, notifyRequirementSubscribers } from '../services/requirementNotification.service'
+import { extractParameterIds } from '../utils/parameterPlaceholder'
 import fs from 'fs'
 import path from 'path'
 
 const prisma = new PrismaClient()
+
+/** INCOSE-aligned: sync TraceLinks requirement -> parameter (constrained_by) from {{param:id}} in title/description. */
+async function syncRequirementParameterLinks(
+  projectId: string,
+  requirementId: string,
+  title: string,
+  description: string,
+  userId: string | undefined
+): Promise<void> {
+  const text = [title ?? '', description ?? ''].filter(Boolean).join(' ')
+  const paramIdsLower = extractParameterIds(text)
+  if (paramIdsLower.length === 0) {
+    const existing = await prisma.traceLink.findMany({
+      where: {
+        projectId,
+        sourceType: 'requirement',
+        sourceId: requirementId,
+        targetType: 'parameter',
+        linkType: 'constrained_by',
+      },
+    })
+    for (const link of existing) {
+      await traceabilityService.deleteTraceLink(projectId, link.id, userId)
+    }
+    return
+  }
+  const parameters = await prisma.parameter.findMany({
+    where: { projectId },
+    select: { id: true },
+  })
+  const paramIdToRealId = new Map(parameters.map((p) => [p.id.toLowerCase(), p.id]))
+  const existingLinks = await prisma.traceLink.findMany({
+    where: {
+      projectId,
+      sourceType: 'requirement',
+      sourceId: requirementId,
+      targetType: 'parameter',
+      linkType: 'constrained_by',
+    },
+  })
+  const existingTargetIds = new Set(existingLinks.map((l) => l.targetId.toLowerCase()))
+  for (const link of existingLinks) {
+    if (!paramIdsLower.includes(link.targetId.toLowerCase())) {
+      await traceabilityService.deleteTraceLink(projectId, link.id, userId)
+      existingTargetIds.delete(link.targetId.toLowerCase())
+    }
+  }
+  for (const paramIdLower of paramIdsLower) {
+    const realId = paramIdToRealId.get(paramIdLower)
+    if (!realId || existingTargetIds.has(paramIdLower)) continue
+    await traceabilityService.createTraceLink(
+      projectId,
+      'requirement',
+      requirementId,
+      'parameter',
+      realId,
+      'constrained_by',
+      undefined,
+      'Referenced in requirement text (INCOSE traceability)',
+      userId
+    )
+    existingTargetIds.add(paramIdLower)
+  }
+}
 
 const MEANINGFUL_FIELDS = [
   'title',
@@ -904,6 +969,8 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    await syncRequirementParameterLinks(projectId, requirement.id, title, description, req.userId)
+
     await linkageAuditService.log({
       projectId,
       entityType: 'REQUIREMENT',
@@ -1305,6 +1372,14 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
     if (finalRequirementId !== undefined && finalRequirementId !== requirement.requirementId) {
       changedFields.push('requirementId')
     }
+
+    await syncRequirementParameterLinks(
+      projectId,
+      requirement.id,
+      updatedRequirement.title ?? '',
+      updatedRequirement.description ?? '',
+      req.userId
+    )
 
     if (changedFields.length > 0) {
       await traceabilityService.markLinksSuspectByMeaningfulChange(

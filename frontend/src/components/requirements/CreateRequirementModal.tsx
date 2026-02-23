@@ -547,6 +547,10 @@ export default function CreateRequirementModal({
     onSuccess: (response) => {
       if (response.success) {
         queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+        queryClient.invalidateQueries({ queryKey: ['links', projectId] })
+        queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+        queryClient.invalidateQueries({ queryKey: ['requirement-links-out', projectId] })
+        queryClient.invalidateQueries({ queryKey: ['requirement-links-in', projectId] })
         onClose()
         resetForm()
       } else {

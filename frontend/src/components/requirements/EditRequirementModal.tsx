@@ -481,6 +481,10 @@ export default function EditRequirementModal({
       if (response.success) {
         queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
         queryClient.invalidateQueries({ queryKey: ['requirement', projectId, requirement?.id] })
+        queryClient.invalidateQueries({ queryKey: ['links', projectId] })
+        queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+        queryClient.invalidateQueries({ queryKey: ['requirement-links-out', projectId] })
+        queryClient.invalidateQueries({ queryKey: ['requirement-links-in', projectId] })
         onClose()
       } else {
         console.error('Update failed:', response.error)
