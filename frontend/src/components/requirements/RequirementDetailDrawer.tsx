@@ -28,6 +28,9 @@ import clsx from 'clsx'
 import { LockButton } from './LockButton'
 import { useAuthStore } from '../../store/authStore'
 import RichTextEditor from '../common/RichTextEditor'
+import { useParameterDisplayStore } from '../../store/parameterDisplayStore'
+import { resolveParameterPlaceholders } from '../../utils/parameterPlaceholder'
+import { parameterService } from '../../services/parameter.service'
 
 interface RequirementDetailDrawerProps {
   isOpen: boolean
@@ -538,6 +541,34 @@ export default function RequirementDetailDrawer({
 
   const displayRequirement = fullRequirement || requirement
 
+  const parameterDisplayMode = useParameterDisplayStore((s) => s.mode)
+  const { data: parameters = [] } = useQuery({
+    queryKey: ['parameters', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const res = await parameterService.getParameters(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    enabled: isOpen && !!projectId && !!displayRequirement && ((displayRequirement.title || '').includes('{{param:') || (displayRequirement.description || '').includes('{{param:')),
+  })
+  const parameterMap = useMemo(() => {
+    const m = new Map<string, { id: string; name: string; defaultValue?: string | null; unit?: string | null; tolerance?: string | null; minValue?: string | null; maxValue?: string | null }>()
+    parameters.forEach((p) => m.set(p.id.toLowerCase(), { id: p.id, name: p.name, defaultValue: p.defaultValue, unit: p.unit, tolerance: p.tolerance, minValue: p.minValue, maxValue: p.maxValue }))
+    return m
+  }, [parameters])
+  const resolvedTitle = useMemo(
+    () => (displayRequirement && (displayRequirement.title || '').includes('{{param:')
+      ? resolveParameterPlaceholders(displayRequirement.title || '', parameterMap, parameterDisplayMode)
+      : displayRequirement?.title ?? ''),
+    [displayRequirement, parameterMap, parameterDisplayMode]
+  )
+  const resolvedDescription = useMemo(
+    () => (displayRequirement && (displayRequirement.description || '').includes('{{param:')
+      ? resolveParameterPlaceholders(displayRequirement.description || '', parameterMap, parameterDisplayMode)
+      : displayRequirement?.description ?? ''),
+    [displayRequirement, parameterMap, parameterDisplayMode]
+  )
+
   const showToast = (message: string) => setToastMessage(message)
 
   const { data: subscriptionSnapshot, isLoading: subscriptionLoading } = useQuery<RequirementSubscriptionSnapshot>({
@@ -786,7 +817,7 @@ export default function RequirementDetailDrawer({
                 <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400 inline-flex">
                   <FileText className="w-5 h-5" />
                 </div>
-                {displayRequirement.title}
+                {resolvedTitle}
               </h2>
             </div>
             <div className="flex items-center gap-2">
@@ -904,7 +935,7 @@ export default function RequirementDetailDrawer({
                   </div>
                   <div>
                     <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Title</h3>
-                    <p className="text-sm text-gray-900 dark:text-white">{displayRequirement.title}</p>
+                    <p className="text-sm text-gray-900 dark:text-white">{resolvedTitle}</p>
                   </div>
                 </div>
 
@@ -912,7 +943,7 @@ export default function RequirementDetailDrawer({
                 <div>
                   <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Description</h3>
                   <RichTextEditor
-                    content={displayRequirement.description || ''}
+                    content={resolvedDescription}
                     onChange={() => { }}
                     editable={false}
                     className="max-w-none"

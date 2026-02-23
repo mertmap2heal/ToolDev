@@ -382,7 +382,7 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
                       className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     >
                       <option value="">Select Method</option>
-                      {methods.map((method: any) => (
+                      {(Array.isArray(methods) ? methods : []).map((method: any) => (
                         <option key={method.id} value={method.id}>
                           {method.name} ({method.methodType})
                         </option>

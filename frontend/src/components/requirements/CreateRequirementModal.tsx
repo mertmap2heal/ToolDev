@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import RichTextEditor from '../common/RichTextEditor'
-import { X, Plus, Trash2, ChevronDown, ChevronRight, Layers, FileText, Link as LinkIcon, Tag, Activity, FileCheck, Shield, Target, GitBranch, CheckCircle2, AlertTriangle, ClipboardCheck, BarChart3, Info, ArrowRight } from 'lucide-react'
+import { X, Plus, Trash2, ChevronDown, ChevronRight, Layers, FileText, Link as LinkIcon, Tag, Activity, FileCheck, Shield, Target, GitBranch, CheckCircle2, AlertTriangle, ClipboardCheck, BarChart3, Info, ArrowRight, Sliders } from 'lucide-react'
 import clsx from 'clsx'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { requirementService } from '../../services/requirement.service'
@@ -30,7 +30,16 @@ import { functionAdapter } from '../../linkage/adapters/functionAdapter'
 import { authService } from '../../services/auth.service'
 import { useAuthStore } from '../../store/authStore'
 import type { CreateRequirementDto, Requirement, RequirementType } from 'shared/types/engineering.types'
+import type { ApiResponse } from 'shared/types/api.types'
 import type { ComponentTreeNode } from 'shared/types/project.types'
+import type { Editor } from '@tiptap/core'
+import ParameterPickerModal from '../parameters/ParameterPickerModal'
+import {
+  toPlaceholder,
+  placeholdersToEditorSpans,
+  editorSpansToPlaceholders,
+} from '../../utils/parameterPlaceholder'
+import { parameterService } from '../../services/parameter.service'
 
 interface Moc {
   code?: string | number
@@ -187,8 +196,14 @@ export default function CreateRequirementModal({
     linkedMocCode: '',
   })
   const [tagInput, setTagInput] = useState('')
+  const [descriptionEditorRef, setDescriptionEditorRef] = useState<Editor | null>(null)
+  const [parameterPickerOpen, setParameterPickerOpen] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [availableRequirementTypes, setAvailableRequirementTypes] = useState<string[]>(defaultRequirementTypes)
+  const [customRequirementType, setCustomRequirementType] = useState('')
+  const [showAddRequirementType, setShowAddRequirementType] = useState(false)
+  const [customSource, setCustomSource] = useState('')
+  const [showAddSource, setShowAddSource] = useState(false)
   const [autoGenerateId, setAutoGenerateId] = useState(true)
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
   // Quick Links (LINKAGE_V1)
@@ -419,29 +434,29 @@ export default function CreateRequirementModal({
   }, [customTypesData])
 
   // Fetch custom options for requirement dropdowns (level, risk, complexity, verification method, source)
-  const { data: levelOptions = [] } = useQuery({
+  const { data: levelOptions } = useQuery<ApiResponse<{ value: string }[]>>({
     queryKey: ['custom-options', projectId, 'REQUIREMENT_LEVEL'],
-    queryFn: () => verificationService.getCustomOptions(projectId, 'REQUIREMENT_LEVEL'),
+    queryFn: async () => (await verificationService.getCustomOptions(projectId, 'REQUIREMENT_LEVEL')) as ApiResponse<{ value: string }[]>,
     enabled: isOpen && !!projectId,
   })
-  const { data: riskOptions = [] } = useQuery({
+  const { data: riskOptions } = useQuery<ApiResponse<{ value: string }[]>>({
     queryKey: ['custom-options', projectId, 'RISK'],
-    queryFn: () => verificationService.getCustomOptions(projectId, 'RISK'),
+    queryFn: async () => (await verificationService.getCustomOptions(projectId, 'RISK')) as ApiResponse<{ value: string }[]>,
     enabled: isOpen && !!projectId,
   })
-  const { data: complexityOptions = [] } = useQuery({
+  const { data: complexityOptions } = useQuery<ApiResponse<{ value: string }[]>>({
     queryKey: ['custom-options', projectId, 'COMPLEXITY'],
-    queryFn: () => verificationService.getCustomOptions(projectId, 'COMPLEXITY'),
+    queryFn: async () => (await verificationService.getCustomOptions(projectId, 'COMPLEXITY')) as ApiResponse<{ value: string }[]>,
     enabled: isOpen && !!projectId,
   })
-  const { data: verificationMethodOptions = [] } = useQuery({
+  const { data: verificationMethodOptions } = useQuery<ApiResponse<{ value: string }[]>>({
     queryKey: ['custom-options', projectId, 'VERIFICATION_METHOD'],
-    queryFn: () => verificationService.getCustomOptions(projectId, 'VERIFICATION_METHOD'),
+    queryFn: async () => (await verificationService.getCustomOptions(projectId, 'VERIFICATION_METHOD')) as ApiResponse<{ value: string }[]>,
     enabled: isOpen && !!projectId,
   })
-  const { data: sourceOptions = [] } = useQuery({
+  const { data: sourceOptions } = useQuery<ApiResponse<{ value: string }[]>>({
     queryKey: ['custom-options', projectId, 'SOURCE'],
-    queryFn: () => verificationService.getCustomOptions(projectId, 'SOURCE'),
+    queryFn: async () => (await verificationService.getCustomOptions(projectId, 'SOURCE')) as ApiResponse<{ value: string }[]>,
     enabled: isOpen && !!projectId,
   })
 
@@ -921,6 +936,26 @@ export default function CreateRequirementModal({
     }
   }
 
+  const descriptionHasPlaceholders = (formData.description || '').includes('{{param:')
+  const { data: parametersForDescription = [] } = useQuery({
+    queryKey: ['parameters', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const res = await parameterService.getParameters(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    enabled: !!projectId && !!descriptionHasPlaceholders,
+  })
+  const paramMapForEditor = useMemo(() => {
+    const m = new Map<string, { id: string; name: string }>()
+    parametersForDescription.forEach((p) => m.set(p.id.toLowerCase(), { id: p.id, name: p.name }))
+    return m
+  }, [parametersForDescription])
+  const descriptionContentForEditor =
+    descriptionHasPlaceholders && paramMapForEditor.size > 0
+      ? placeholdersToEditorSpans(formData.description || '', paramMapForEditor)
+      : (formData.description || '')
+
   const handleChange = (field: keyof CreateRequirementDto, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
     if (errors[field]) {
@@ -1079,14 +1114,27 @@ export default function CreateRequirementModal({
 
                 {/* Description */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                    Description <span className="text-red-500">*</span>
-                  </label>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 text-left">
+                      Description <span className="text-red-500">*</span>
+                    </label>
+                    {projectId && (
+                      <button
+                        type="button"
+                        onClick={() => setParameterPickerOpen(true)}
+                        className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800"
+                      >
+                        <Sliders size={14} />
+                        Insert parameter
+                      </button>
+                    )}
+                  </div>
                   <div className={`rounded-lg border ${errors.description ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}>
                     <RichTextEditor
-                      content={formData.description || ''}
-                      onChange={(content) => handleChange('description', content)}
-                      placeholder="Enter requirement description..."
+                      content={descriptionContentForEditor}
+                      onChange={(content) => handleChange('description', editorSpansToPlaceholders(content))}
+                      onEditorReady={(editor) => setDescriptionEditorRef(editor)}
+                      placeholder="Enter requirement description... Use Insert parameter to add parameters from the library."
                       minHeight="150px"
                     />
                   </div>
@@ -1094,6 +1142,18 @@ export default function CreateRequirementModal({
                     <p className="mt-1 text-sm text-red-500">{errors.description}</p>
                   )}
                 </div>
+                {projectId && (
+                  <ParameterPickerModal
+                    isOpen={parameterPickerOpen}
+                    onClose={() => setParameterPickerOpen(false)}
+                    projectId={projectId}
+                    onSelect={(param) => {
+                      const spanHtml = `<span data-param-id="${param.id}" class="param-ref">${param.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>`
+                      descriptionEditorRef?.chain().focus().insertContent(spanHtml).run()
+                      setParameterPickerOpen(false)
+                    }}
+                  />
+                )}
 
 
 

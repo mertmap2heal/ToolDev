@@ -193,15 +193,16 @@ export default function RelationshipGraphView({
         })
       })
     } else if (mode === 'functions') {
-      const byParent = new Map<string | null, SystemFunction[]>()
-      functions.forEach((f) => {
-        const key = f.parentId ?? null
+      const normalized = functions.map((f) => ({ id: f.id, parentId: f.parentId ?? null }))
+      const byParent = new Map<string | null, { id: string; parentId: string | null }[]>()
+      normalized.forEach((f) => {
+        const key = f.parentId
         if (!byParent.has(key)) byParent.set(key, [])
         byParent.get(key)!.push(f)
       })
-      byParent.forEach((list) => list.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)))
+      byParent.forEach((list) => list.sort((a, b) => (functions.find((f) => f.id === a.id)?.sortOrder ?? 0) - (functions.find((f) => f.id === b.id)?.sortOrder ?? 0)))
 
-      const posMap = layoutTree(functions, byParent)
+      const posMap = layoutTree(normalized, byParent)
 
       functions.forEach((f) => {
         const pos = posMap.get(f.id) ?? { x: 0, y: nodes.length * SIBLING_GAP }
@@ -297,15 +298,16 @@ export default function RelationshipGraphView({
         compByParent.get(key)!.push(c)
       })
 
-      const funcByParent = new Map<string | null, SystemFunction[]>()
-      functions.forEach((f) => {
-        const key = f.parentId ?? null
+      const normalizedFuncs = functions.map((f) => ({ id: f.id, parentId: f.parentId ?? null }))
+      const funcByParent = new Map<string | null, { id: string; parentId: string | null }[]>()
+      normalizedFuncs.forEach((f) => {
+        const key = f.parentId
         if (!funcByParent.has(key)) funcByParent.set(key, [])
         funcByParent.get(key)!.push(f)
       })
 
       const compPosMap = layoutTree(flatComponents, compByParent)
-      const funcPosMap = layoutTree(functions, funcByParent)
+      const funcPosMap = layoutTree(normalizedFuncs, funcByParent)
 
       flatComponents.forEach((c) => {
         const pos = compPosMap.get(c.id) ?? { x: 0, y: nodes.length * SIBLING_GAP }

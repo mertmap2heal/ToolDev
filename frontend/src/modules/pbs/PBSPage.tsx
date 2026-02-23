@@ -45,6 +45,7 @@ import RequirementsPBSTree from '../../components/requirements/RequirementsPBSTr
 import FunctionsPBSTree from '../../components/functions/FunctionsPBSTree'
 import { LINKAGE_V1 } from '../../config/featureFlags'
 import { buildDeepLink } from '../../linkage/buildDeepLink'
+import type { EntityType } from 'shared/types/linkage.types'
 import type { LinkedElementClickPayload } from '../../components/requirements/RequirementsPBSTree'
 import LinkedElementPreviewPopover from '../../components/requirements/LinkedElementPreviewPopover'
 import { RelationshipGraphView } from '../../components/relationshipGraph'
@@ -530,7 +531,7 @@ export default function PBSPage() {
     if (targetType === 'requirement') {
       navigate(`/projects/${projectId}/requirements?requirementId=${targetId}`)
     } else {
-      navigate(buildDeepLink(projectId, { type: targetType, id: targetId }))
+      navigate(buildDeepLink(projectId, { type: targetType as EntityType, id: targetId }))
     }
     setLinkedElementPreview(null)
   }, [projectId, linkedElementPreview, navigate])

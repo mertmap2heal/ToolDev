@@ -99,7 +99,7 @@ export default function ExportWithTemplateModal({
               {isLoading ? (
                 <option disabled>Loading…</option>
               ) : (
-                templates
+                (Array.isArray(templates) ? templates : [])
                   .filter((t: any) => (t.status || 'DRAFT') !== 'ARCHIVED')
                   .map((t: any) => (
                     <option key={t.id} value={t.id}>

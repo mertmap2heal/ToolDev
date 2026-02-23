@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { X, Search, CheckSquare, Square } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { ApiResponse } from 'shared/types/api.types'
 import { verificationService } from '../../services/verification.service'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
@@ -60,15 +61,15 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
     enabled: isOpen,
   })
 
-  const { data: environmentOptions = [] } = useQuery({
+  const { data: environmentOptions } = useQuery<ApiResponse<{ id: string; value: string }[]>>({
     queryKey: ['custom-options', projectId, 'ENVIRONMENT_TYPE'],
-    queryFn: () => verificationService.getCustomOptions(projectId, 'ENVIRONMENT_TYPE'),
+    queryFn: async () => (await verificationService.getCustomOptions(projectId, 'ENVIRONMENT_TYPE')) as ApiResponse<{ id: string; value: string }[]>,
     enabled: isOpen && activeTab === 'general',
   })
 
-  const { data: testingToolOptions = [] } = useQuery({
+  const { data: testingToolOptions } = useQuery<ApiResponse<{ id: string; value: string }[]>>({
     queryKey: ['custom-options', projectId, 'TESTING_TOOL'],
-    queryFn: () => verificationService.getCustomOptions(projectId, 'TESTING_TOOL'),
+    queryFn: async () => (await verificationService.getCustomOptions(projectId, 'TESTING_TOOL')) as ApiResponse<{ id: string; value: string }[]>,
     enabled: isOpen && activeTab === 'general',
   })
 

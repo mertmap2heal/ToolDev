@@ -20,6 +20,7 @@ interface TestCaseDetailDrawerProps {
 }
 
 export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projectId }: TestCaseDetailDrawerProps) {
+  const drawer = useVerificationDrawer()
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState({
     title: '',
@@ -166,7 +167,7 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
       const setupIds = currentCase?.testCaseSetups?.map((l: any) => l.setupId) ?? []
       for (const setupId of setupIds) {
         try {
-          await verificationService.linkSetup(projectId, newCase.id, setupId)
+          await verificationService.linkSetup(projectId, (newCase as { id: string }).id, setupId)
         } catch (e) {
           console.error('Failed to link setup:', e)
         }
@@ -212,7 +213,7 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
 
   const currentCase = caseDetails || testCase
 
-  const stepDesignNotesSection = customSections?.find((s: any) => s.title === '_StepDesignNotes')
+  const stepDesignNotesSection = (Array.isArray(customSections) ? customSections : []).find((s: any) => s.title === '_StepDesignNotes')
 
   useEffect(() => {
     if (currentCase) {
@@ -314,7 +315,7 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
       // Create or update Step Design Notes custom section
       const designNotes = stepPairs.map((p) => p.designNote ?? '')
       const notesContent = JSON.stringify(designNotes)
-      const stepNotesSection = customSections?.find((s: any) => s.title === '_StepDesignNotes')
+      const stepNotesSection = (Array.isArray(customSections) ? customSections : []).find((s: any) => s.title === '_StepDesignNotes')
       if (stepNotesSection) {
         await updateCustomSectionMutation.mutateAsync({
           sectionId: stepNotesSection.id,
@@ -616,7 +617,7 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
                 <option value="">No Method</option>
-                {methods.map((method: any) => (
+                {(Array.isArray(methods) ? methods : []).map((method: any) => (
                   <option key={method.id} value={method.id}>
                     {method.name} ({method.methodType})
                   </option>
@@ -654,10 +655,10 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
             </label>
             {isEditing ? (
               <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-lg p-3">
-                {setups.length === 0 ? (
+                {(Array.isArray(setups) ? setups : []).length === 0 ? (
                   <p className="text-sm text-gray-500 dark:text-gray-400">No test setups available</p>
                 ) : (
-                  setups.map((setup: any) => (
+                  (Array.isArray(setups) ? setups : []).map((setup: any) => (
                     <div key={setup.id} className="flex items-center gap-2 p-2 border border-gray-200 dark:border-gray-600 rounded-lg">
                       <input
                         type="checkbox"
@@ -737,7 +738,7 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
                       createCustomSectionMutation.mutate({
                         title: 'New Section',
                         content: '',
-                        orderIndex: customSections.length,
+                        orderIndex: (Array.isArray(customSections) ? customSections : []).length,
                       })
                     }
                   }}
@@ -750,9 +751,9 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
               )}
             </div>
 
-            {customSections.filter((s: any) => s.title !== '_StepDesignNotes').length > 0 ? (
+            {(Array.isArray(customSections) ? customSections : []).filter((s: any) => s.title !== '_StepDesignNotes').length > 0 ? (
               <div className="space-y-4">
-                {customSections.filter((s: any) => s.title !== '_StepDesignNotes').map((section: any) => (
+                {(Array.isArray(customSections) ? customSections : []).filter((s: any) => s.title !== '_StepDesignNotes').map((section: any) => (
                   <CustomSectionEditor
                     key={section.id}
                     section={section}
@@ -868,7 +869,7 @@ function VerifiesElementsSection({ testCaseId, projectId }: { testCaseId?: strin
   ]
 
   // Get already linked element IDs
-  const linkedElementIds = new Set(verificationLinks.map((link: any) => link.targetId))
+  const linkedElementIds = new Set((Array.isArray(verificationLinks) ? verificationLinks : []).map((link: any) => link.targetId))
 
   // Filter elements based on search and exclude already linked
   const filteredElements = allElements.filter((element) => {
@@ -915,7 +916,7 @@ function VerifiesElementsSection({ testCaseId, projectId }: { testCaseId?: strin
   }, [showDropdown])
 
   // Get linked elements with their details
-  const linkedElements = verificationLinks.map((link: any) => {
+  const linkedElements = (Array.isArray(verificationLinks) ? verificationLinks : []).map((link: any) => {
     const element = link.targetElement
     if (!element) return null
     return {
@@ -1118,13 +1119,13 @@ function LinkedTestResultsSection({ testCaseId, projectId }: { testCaseId?: stri
     },
   })
 
-  const linkedResults = allTestResults.filter((result: any) =>
+  const linkedResults = (Array.isArray(allTestResults) ? allTestResults : []).filter((result: any) =>
     result.links?.some((link: any) => link.linkedEntityType === 'TEST_CASE' && link.linkedEntityId === testCaseId)
   )
 
   const linkMutation = useMutation({
     mutationFn: (data: any) => {
-      const result = allTestResults.find((r: any) => r.id === data.testResultId)
+      const result = (Array.isArray(allTestResults) ? allTestResults : []).find((r: any) => r.id === data.testResultId)
       if (!result) throw new Error('Test result not found')
       return verificationService.linkTestResult(projectId, data.testResultId, {
         linkedEntityType: 'TEST_CASE',
@@ -1161,7 +1162,7 @@ function LinkedTestResultsSection({ testCaseId, projectId }: { testCaseId?: stri
     }
   }
 
-  const availableResults = allTestResults.filter(
+  const availableResults = (Array.isArray(allTestResults) ? allTestResults : []).filter(
     (result: any) =>
       !result.links?.some((link: any) => link.linkedEntityType === 'TEST_CASE' && link.linkedEntityId === testCaseId)
   )

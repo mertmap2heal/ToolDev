@@ -582,14 +582,43 @@ model Parameter {
   dataType         String?
   defaultValue     String?
   unit             String?
+  tolerance        String?
+  minValue         String?
+  maxValue         String?
+  version          String   @default("1.0")
+  status           String   @default("draft") // draft | approved | obsolete
+  ownerType        String?  // component | function | system | team
+  tags             Json?    // array of strings
+  folderId         String?
+  sourceParameterId String?  // for derived parameters
+  formula          String?  // optional formula/rule (display or future evaluation)
   sourceFunctionId String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  sourceFunction SystemFunction? @relation(fields: [sourceFunctionId], references: [id], onDelete: SetNull)
+  project          Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceFunction   SystemFunction? @relation(fields: [sourceFunctionId], references: [id], onDelete: SetNull)
+  sourceParameter  Parameter?      @relation("DerivedParameter", fields: [sourceParameterId], references: [id], onDelete: SetNull)
+  derivedParameters Parameter[]    @relation("DerivedParameter")
+  versions        ParameterVersion[]
 
   @@unique([projectId, name])
+  @@index([projectId, status])
+  @@index([projectId, folderId])
+  @@index([sourceParameterId])
+}
+
+model ParameterVersion {
+  id          String   @id @default(uuid())
+  parameterId String
+  version     Int      // incrementing version number
+  snapshot    Json     // { defaultValue, unit, tolerance, status, minValue, maxValue, ... }
+  createdAt   DateTime @default(now())
+  createdById String?
+
+  parameter Parameter @relation(fields: [parameterId], references: [id], onDelete: Cascade)
+
+  @@index([parameterId])
 }
 
 model ChangeRequest {

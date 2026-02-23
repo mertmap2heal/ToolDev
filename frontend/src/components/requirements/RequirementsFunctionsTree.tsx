@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, ChevronDown, Settings, FileText, Search, FolderOpen, Inbox, AlertCircle, GitPullRequest, Layers, ClipboardList, Link2, Plus, Edit2, Copy, ExternalLink, BarChart3, Unlink, Download } from 'lucide-react'
+import { ChevronRight, ChevronDown, Settings, FileText, Search, FolderOpen, Inbox, AlertCircle, GitPullRequest, Layers, ClipboardList, Link2, Plus, Edit2, Copy, ExternalLink, BarChart3, Unlink, Download, Sliders } from 'lucide-react'
 import { useQuery, useQueries } from '@tanstack/react-query'
 import { functionService } from '../../services/function.service'
 import { linkService } from '../../services/link.service'
@@ -723,7 +723,9 @@ export default function RequirementsFunctionsTree({
               const Icon =
                 displayType === 'function'
                   ? Settings
-                  : displayType === 'issue'
+                  : displayType === 'parameter'
+                    ? Sliders
+                    : displayType === 'issue'
                     ? AlertCircle
                     : displayType === 'change_request'
                       ? GitPullRequest

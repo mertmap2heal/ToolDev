@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { X, Download, FileSpreadsheet, FileText, File, CheckSquare, Square, Code } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
@@ -6,6 +7,9 @@ import type { Requirement, SystemFunction } from 'shared/types/engineering.types
 import type { Link } from 'shared/types/linkage.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
+import { parameterService } from '../../services/parameter.service'
+import { resolveParameterPlaceholders } from '../../utils/parameterPlaceholder'
+import type { ResolveMode } from '../../utils/parameterPlaceholder'
 
 // Dynamic import for jspdf-autotable to prevent build issues
 // This will be loaded only when PDF export is needed
@@ -136,11 +140,27 @@ export default function ExportBuilder({
   const [columns, setColumns] = useState<ExportColumn[]>(defaultColumns)
   const [includeHeader, setIncludeHeader] = useState(true)
   const [isExporting, setIsExporting] = useState(false)
+  const [parameterExportMode, setParameterExportMode] = useState<ResolveMode>('name')
   const [scopeType, setScopeType] = useState<'all' | 'component' | 'function'>('all')
   const [selectedComponentId, setSelectedComponentId] = useState<string>('')
   const [selectedFunctionId, setSelectedFunctionId] = useState<string>('')
   const [componentSearch, setComponentSearch] = useState('')
   const [functionSearch, setFunctionSearch] = useState('')
+
+  const { data: parameters = [] } = useQuery({
+    queryKey: ['parameters', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const res = await parameterService.getParameters(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    enabled: !!projectId,
+  })
+  const parameterMap = useMemo(() => {
+    const m = new Map<string, { id: string; name: string; defaultValue?: string | null; unit?: string | null; tolerance?: string | null }>()
+    parameters.forEach((p) => m.set(p.id.toLowerCase(), { id: p.id, name: p.name, defaultValue: p.defaultValue, unit: p.unit, tolerance: p.tolerance }))
+    return m
+  }, [parameters])
 
   const flatComponents = useMemo(() => flattenComponentTree(componentTree), [componentTree])
   const flatFunctions = useMemo(() => flattenFunctionTree(functions), [functions])
@@ -241,10 +261,14 @@ export default function ExportBuilder({
     if (key === 'tags') {
       return (req.tags || []).join(', ')
     }
-    const value = req[key as keyof Requirement]
+    let value = req[key as keyof Requirement]
     if (value === null || value === undefined) return ''
     if (typeof value === 'object') return JSON.stringify(value)
-    return String(value)
+    let str = String(value)
+    if ((key === 'title' || key === 'description' || key === 'acceptanceCriteria') && str.includes('{{param:') && parameterMap.size > 0) {
+      str = resolveParameterPlaceholders(str, parameterMap, parameterExportMode)
+    }
+    return str
   }
 
   // Strip HTML tags from description
@@ -324,7 +348,10 @@ export default function ExportBuilder({
   const exportReqIF = async () => {
     try {
       const requirementIds = effectiveRequirements.map((r) => r.id).join(',')
-      const url = `/reqif/${projectId}/export${requirementIds ? `?requirementIds=${requirementIds}` : ''}`
+      const params = new URLSearchParams()
+      if (requirementIds) params.set('requirementIds', requirementIds)
+      params.set('parameterMode', parameterExportMode)
+      const url = `/reqif/${projectId}/export?${params.toString()}`
 
       // Use fetch directly for blob response
       const token = localStorage.getItem('token')
@@ -658,6 +685,21 @@ export default function ExportBuilder({
                 <span className="text-sm font-medium text-gray-900 dark:text-white">ReqIF</span>
               </button>
             </div>
+          </div>
+
+          {/* Parameter display in exported text */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Parameter display
+            </label>
+            <select
+              value={parameterExportMode}
+              onChange={(e) => setParameterExportMode(e.target.value as ResolveMode)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              <option value="name">Names (e.g. MAX_CRUISE_SPEED)</option>
+              <option value="resolved">Resolved values (e.g. 250 ±5 km/h)</option>
+            </select>
           </div>
 
           {/* Column Selection */}

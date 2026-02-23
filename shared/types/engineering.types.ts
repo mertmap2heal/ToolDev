@@ -152,6 +152,13 @@ export interface Baseline {
   linksCount?: number
   /** Number of suspect links in baseline snapshot (LINKAGE_V1) */
   suspectLinksCount?: number
+  baselineType?: string
+  reviewType?: string
+  /** Snapshot of links at baseline creation (LINKAGE_V1) */
+  linksSnapshot?: unknown
+  supersedesBaselineId?: string | null
+  configurationAuthority?: string | null
+  fdAL?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -168,6 +175,12 @@ export interface CreateBaselineDto {
   name: string
   description?: string
   requirementIds?: string[] // If not provided, all requirements will be included
+  baselineType?: string
+  reviewType?: string
+  milestoneId?: string
+  supersedesBaselineId?: string | null
+  configurationAuthority?: string | null
+  fdAL?: string | null
 }
 
 export interface RequirementComparisonItem {
@@ -487,6 +500,9 @@ export interface UpdateIssueCommentDto {
   content: string
 }
 
+export type ParameterStatus = 'draft' | 'approved' | 'obsolete'
+export type ParameterOwnerType = 'component' | 'function' | 'system' | 'team'
+
 export interface Parameter {
   id: string
   projectId: string
@@ -495,12 +511,23 @@ export interface Parameter {
   dataType?: string
   defaultValue?: string
   unit?: string
+  tolerance?: string
+  minValue?: string
+  maxValue?: string
+  version?: string
+  status?: ParameterStatus
+  ownerType?: ParameterOwnerType
+  tags?: string[]
+  folderId?: string
+  sourceParameterId?: string
+  formula?: string
   sourceFunctionId?: string
   sourceFunction?: {
     id: string
     functionId?: string
     name: string
   }
+  sourceParameter?: Parameter | null
   createdAt: string
   updatedAt: string
 }
@@ -511,14 +538,42 @@ export interface CreateParameterDto {
   dataType?: string
   defaultValue?: string
   unit?: string
+  tolerance?: string
+  minValue?: string
+  maxValue?: string
+  status?: ParameterStatus
+  ownerType?: ParameterOwnerType
+  tags?: string[]
+  formula?: string
   sourceFunctionId?: string
 }
 
 export interface UpdateParameterDto {
+  name?: string
   description?: string
   dataType?: string
   defaultValue?: string
   unit?: string
+  tolerance?: string
+  minValue?: string
+  maxValue?: string
+  status?: ParameterStatus
+  ownerType?: ParameterOwnerType
+  tags?: string[]
+  formula?: string
+  sourceParameterId?: string | null
+}
+
+/** Resolved parameter value for placeholder substitution (e.g. in requirements). */
+export interface ParameterResolvedValue {
+  id: string
+  name: string
+  value: string
+  unit?: string | null
+  tolerance?: string | null
+  minValue?: string | null
+  maxValue?: string | null
+  resolvedDisplay?: string
 }
 
 export interface ChangeRequestAttachment {

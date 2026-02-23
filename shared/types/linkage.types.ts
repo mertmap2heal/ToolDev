@@ -6,6 +6,7 @@
 export type EntityType =
   | 'requirement'
   | 'function'
+  | 'parameter'
   | 'pbs_component'
   | 'interface'
   | 'issue'
@@ -38,6 +39,8 @@ export type EntityType =
   | 'user_group'
   | 'lifecycle'
   | 'lifecycle_status'
+  | 'verification'
+  | 'architecture'
 
 export interface EntityRef {
   type: EntityType
@@ -61,12 +64,31 @@ export type LinkType =
   | 'archived_as'
   // Legacy compatibility
   | 'satisfies'
+  | 'satisfied_by'
   | 'implements'
   | 'verifies'
   | 'derives'
   | 'refines'
   | 'trace'
   | 'allocate'
+  | 'copy'
+  | 'copied_from'
+  | 'derived_to'
+  | 'refined_by'
+  | 'traced_from'
+  | 'traced_to'
+  | 'parent_of'
+  | 'child_of'
+  | 'depends_on'
+  | 'required_by'
+  | 'constrains'
+  | 'constrained_by'
+  | 'conflicts_with'
+  | 'supports'
+  | 'supported_by'
+  | 'supersedes'
+  | 'superseded_by'
+  | 'related_to'
 
 export type LinkStatus = 'active' | 'suspect' | 'removed'
 

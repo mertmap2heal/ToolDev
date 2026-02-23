@@ -17,6 +17,7 @@ import {
   Square,
   FileCode,
 } from 'lucide-react'
+import clsx from 'clsx'
 import { verificationService } from '../../services/verification.service'
 import CreateTestPlanModal from '../../components/verification/CreateTestPlanModal'
 import CreateTestCaseModal from '../../components/verification/CreateTestCaseModal'
@@ -394,16 +395,18 @@ export default function VerificationPage() {
         }
       }
     } else if (effectiveFocusType === 'test_setup' || effectiveFocusType === 'test-setup') {
-      if (testSetups.length > 0) {
-        const setup = testSetups.find((s: any) => s.id === effectiveFocusId)
+      const setupsArr = Array.isArray(testSetups) ? testSetups : []
+      if (setupsArr.length > 0) {
+        const setup = setupsArr.find((s: any) => s.id === effectiveFocusId)
         if (setup) {
           setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'setups'); n.delete('focusType'); n.delete('focusId'); n.delete('caseId'); return n }, { replace: true })
           drawer.openSetup(setup)
         }
       }
     } else if (effectiveFocusType === 'test_result' || effectiveFocusType === 'test-result') {
-      if (testResults.length > 0) {
-        const result = testResults.find((r: any) => r.id === effectiveFocusId)
+      const resultsArr = Array.isArray(testResults) ? testResults : []
+      if (resultsArr.length > 0) {
+        const result = resultsArr.find((r: any) => r.id === effectiveFocusId)
         if (result) {
           setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'results'); n.delete('focusType'); n.delete('focusId'); n.delete('caseId'); return n }, { replace: true })
           drawer.openResult(result)
@@ -561,16 +564,16 @@ export default function VerificationPage() {
     plan.key?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const filteredCases = testCases.filter((case_: any) =>
+  const filteredCases = (Array.isArray(testCases) ? testCases : []).filter((case_: any) =>
     case_.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     case_.key?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const filteredSetups = testSetups.filter((setup: any) =>
+  const filteredSetups = (Array.isArray(testSetups) ? testSetups : []).filter((setup: any) =>
     setup.name?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const filteredResults = testResults.filter((result: any) =>
+  const filteredResults = (Array.isArray(testResults) ? testResults : []).filter((result: any) =>
     result.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     result.fileName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     result.description?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -649,11 +652,11 @@ export default function VerificationPage() {
               </div>
 
               {/* MoC Coverage Dashboard */}
-              {overview.coverage?.byMoc && Object.keys(overview.coverage.byMoc).length > 0 && (
+              {(overview.coverage as { byMoc?: Record<string, unknown> } | undefined)?.byMoc && Object.keys((overview.coverage as { byMoc?: Record<string, unknown> }).byMoc ?? {}).length > 0 && (
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                   <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-4">MoC Coverage by Code</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {Object.entries(overview.coverage.byMoc).map(([mocCode, data]: [string, any]) => (
+                    {Object.entries((overview.coverage as { byMoc?: Record<string, unknown> }).byMoc ?? {}).map(([mocCode, data]: [string, any]) => (
                       <div
                         key={mocCode}
                         className="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-gray-50 dark:bg-gray-700/50"
@@ -1772,10 +1775,10 @@ export default function VerificationPage() {
             <div className="flex-1 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-2 mb-4">
               {loadingSetups ? (
                 <p className="text-sm text-gray-500">Loading setups...</p>
-              ) : testSetups.length === 0 ? (
+              ) : (Array.isArray(testSetups) ? testSetups : []).length === 0 ? (
                 <p className="text-sm text-gray-500">No setups available.</p>
               ) : (
-                testSetups.map((setup: any) => (
+                (Array.isArray(testSetups) ? testSetups : []).map((setup: any) => (
                   <label key={setup.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded px-2 py-1">
                     <input
                       type="checkbox"

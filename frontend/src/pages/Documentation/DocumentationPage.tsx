@@ -152,7 +152,7 @@ export default function DocumentationPage() {
     }
     const res = await documentationService.createDocument(projectId, doc)
     if (res.success && res.data) {
-      setDocuments((prev) => [res.data, ...prev])
+      setDocuments((prev) => (res.data ? [res.data, ...prev] : prev))
       return true
     }
     showToast(res.error || 'Failed to create document')
@@ -177,7 +177,7 @@ export default function DocumentationPage() {
     if (!projectId) return;
     const res = await documentationService.updateDocument(projectId, doc.id, doc);
     if (res.success && res.data) {
-      setDocuments((prev) => prev.map((d) => (d.id === doc.id ? res.data : d)));
+      setDocuments((prev) => prev.map((d) => (d.id === doc.id && res.data ? res.data : d)));
     }
   }
 

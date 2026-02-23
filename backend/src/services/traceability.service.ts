@@ -59,7 +59,7 @@ export const traceabilityService = {
     if (filters?.sourceId) baseWhere.sourceId = filters.sourceId
     if (filters?.targetId) baseWhere.targetId = filters.targetId
     const where = filters?.excludeFunctions
-      ? { AND: [baseWhere, { targetType: { notIn: ['function', 'parameter'] } }] }
+      ? { AND: [baseWhere, { targetType: { notIn: ['function'] } }] }
       : baseWhere
 
     let links: any[] = []
@@ -259,6 +259,7 @@ export const traceabilityService = {
     const reqIdsToFetch = new Set<string>()
     const funcIdsToFetch = new Set<string>()
     const testCaseIdsToFetch = new Set<string>()
+    const paramIdsToFetch = new Set<string>()
     allLinks.forEach((l: any) => {
       if (l.sourceType === 'requirement' || l.sourceType === 'hazard' || l.sourceType === 'risk') reqIdsToFetch.add(l.sourceId)
       if (l.targetType === 'requirement' || l.targetType === 'hazard' || l.targetType === 'risk') reqIdsToFetch.add(l.targetId)
@@ -266,13 +267,16 @@ export const traceabilityService = {
       if (l.targetType === 'function') funcIdsToFetch.add(l.targetId)
       if (l.sourceType === 'test_case') testCaseIdsToFetch.add(l.sourceId)
       if (l.targetType === 'test_case') testCaseIdsToFetch.add(l.targetId)
+      if (l.sourceType === 'parameter') paramIdsToFetch.add(l.sourceId)
+      if (l.targetType === 'parameter') paramIdsToFetch.add(l.targetId)
     })
 
     let reqDetails: { id: string; title: string; requirementId: string | null }[] = []
     let funcDetails: { id: string; name: string; functionId: string | null }[] = []
     let testCaseDetails: { id: string; key: string; title: string }[] = []
+    let paramDetails: { id: string; name: string }[] = []
     try {
-      const [reqs, funcs, testCases] = await Promise.all([
+      const [reqs, funcs, testCases, params] = await Promise.all([
         reqIdsToFetch.size > 0
           ? prisma.requirement.findMany({
               where: { id: { in: Array.from(reqIdsToFetch) }, deletedAt: null },
@@ -291,10 +295,17 @@ export const traceabilityService = {
               select: { id: true, key: true, title: true }
             })
           : Promise.resolve([]),
+        paramIdsToFetch.size > 0
+          ? prisma.parameter.findMany({
+              where: { id: { in: Array.from(paramIdsToFetch) } },
+              select: { id: true, name: true }
+            })
+          : Promise.resolve([]),
       ])
       reqDetails = reqs
       funcDetails = funcs
       testCaseDetails = testCases
+      paramDetails = params
     } catch (err) {
       console.error('getTraceLinks: Entity details fetch failed:', err)
     }
@@ -302,6 +313,7 @@ export const traceabilityService = {
     const reqMap = new Map(reqDetails.map(r => [r.id, r]))
     const funcMap = new Map(funcDetails.map(f => [f.id, f]))
     const testCaseMap = new Map(testCaseDetails.map(t => [t.id, t]))
+    const paramMap = new Map(paramDetails.map(p => [p.id, p]))
 
     const safeDate = (d: any) => (d ? new Date(d).getTime() : 0)
     const isReqType = (t: string) => t === 'requirement' || t === 'hazard' || t === 'risk'
@@ -312,6 +324,8 @@ export const traceabilityService = {
       const isFuncTarget = link.targetType === 'function'
       const isTestCaseSource = link.sourceType === 'test_case'
       const isTestCaseTarget = link.targetType === 'test_case'
+      const isParamSource = link.sourceType === 'parameter'
+      const isParamTarget = link.targetType === 'parameter'
 
       const sReq = isReqSource ? reqMap.get(link.sourceId) : null
       const tReq = isReqTarget ? reqMap.get(link.targetId) : null
@@ -319,6 +333,8 @@ export const traceabilityService = {
       const tFunc = isFuncTarget ? funcMap.get(link.targetId) : null
       const sTc = isTestCaseSource ? testCaseMap.get(link.sourceId) : null
       const tTc = isTestCaseTarget ? testCaseMap.get(link.targetId) : null
+      const sParam = isParamSource ? paramMap.get(link.sourceId) : null
+      const tParam = isParamTarget ? paramMap.get(link.targetId) : null
 
       return {
         id: link.id,
@@ -339,32 +355,38 @@ export const traceabilityService = {
           link.targetTitle ||
           (tReq ? tReq.title : undefined) ||
           (tFunc ? tFunc.name : undefined) ||
-          (tTc ? tTc.title : undefined),
+          (tTc ? tTc.title : undefined) ||
+          (tParam ? tParam.name : undefined),
         targetDisplayId:
           link.targetDisplayId ||
           (tReq ? (tReq.requirementId || tReq.id.substring(0, 8)) : undefined) ||
           (tFunc ? (tFunc.functionId || tFunc.id.substring(0, 8)) : undefined) ||
-          (tTc ? tTc.key : undefined),
+          (tTc ? tTc.key : undefined) ||
+          (tParam ? tParam.name : undefined),
         targetLabel:
           link.targetLabel ||
           (tReq ? `${tReq.requirementId || tReq.id.substring(0, 8)} - ${tReq.title}` : undefined) ||
           (tFunc ? `${tFunc.functionId || tFunc.id.substring(0, 8)} - ${tFunc.name}` : undefined) ||
-          (tTc ? `${tTc.key} - ${tTc.title}` : undefined),
+          (tTc ? `${tTc.key} - ${tTc.title}` : undefined) ||
+          (tParam ? `Parameter: ${tParam.name}` : undefined),
         sourceTitle:
           link.sourceTitle ||
           (sReq ? sReq.title : undefined) ||
           (sFunc ? sFunc.name : undefined) ||
-          (sTc ? sTc.title : undefined),
+          (sTc ? sTc.title : undefined) ||
+          (sParam ? sParam.name : undefined),
         sourceDisplayId:
           link.sourceDisplayId ||
           (sReq ? (sReq.requirementId || sReq.id.substring(0, 8)) : undefined) ||
           (sFunc ? (sFunc.functionId || sFunc.id.substring(0, 8)) : undefined) ||
-          (sTc ? sTc.key : undefined),
+          (sTc ? sTc.key : undefined) ||
+          (sParam ? sParam.name : undefined),
         sourceLabel:
           link.sourceLabel ||
           (sReq ? `${sReq.requirementId || sReq.id.substring(0, 8)} - ${sReq.title}` : undefined) ||
           (sFunc ? `${sFunc.functionId || sFunc.id.substring(0, 8)} - ${sFunc.name}` : undefined) ||
-          (sTc ? `${sTc.key} - ${sTc.title}` : undefined),
+          (sTc ? `${sTc.key} - ${sTc.title}` : undefined) ||
+          (sParam ? `Parameter: ${sParam.name}` : undefined),
       }
     })
   },
@@ -375,7 +397,7 @@ export const traceabilityService = {
   ): Promise<TraceLink[]> {
     const where: any = { projectId, isSuspect: true }
     if (options?.excludeFunctions) {
-      where.targetType = { notIn: ['function', 'parameter'] }
+      where.targetType = { notIn: ['function'] }
     }
     const links = await prisma.traceLink.findMany({
       where,
@@ -401,13 +423,14 @@ export const traceabilityService = {
   },
 
   async getTraceabilityGraph(projectId: string): Promise<TraceabilityGraph> {
-    const [links, requirements, functions, architectures, verifications] =
+    const [links, requirements, functions, architectures, verifications, parameters] =
       await Promise.all([
         prisma.traceLink.findMany({ where: { projectId } }),
         prisma.requirement.findMany({ where: { projectId } }),
         prisma.systemFunction.findMany({ where: { projectId } }),
         prisma.architecture.findMany({ where: { projectId } }),
         prisma.verificationPlan.findMany({ where: { projectId } }),
+        prisma.parameter.findMany({ where: { projectId } }),
       ])
 
     const nodes = [
@@ -434,6 +457,12 @@ export const traceabilityService = {
         type: 'verification' as const,
         label: v.name,
         data: v,
+      })),
+      ...parameters.map((p) => ({
+        id: p.id,
+        type: 'parameter' as const,
+        label: p.name,
+        data: p,
       })),
     ]
 

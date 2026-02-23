@@ -80,6 +80,7 @@ export default function ParameterTextRenderer({ text, projectId }: ParameterText
           isOpen={!!selectedParameter}
           onClose={() => setClickedParameter(null)}
           parameter={selectedParameter}
+          projectId={projectId}
         />
       )}
     </>

@@ -26,6 +26,7 @@ export default function ParametersPage() {
   const [dataTypeFilter, setDataTypeFilter] = useState<string>('all')
   const [unitFilter, setUnitFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
   const queryClient = useQueryClient()
 
   const { data: parameters = [], isLoading } = useQuery({
@@ -97,6 +98,11 @@ export default function ParametersPage() {
       if (sourceFilter === 'has-source' && !param.sourceFunction) {
         return false
       }
+    }
+
+    // Status filter
+    if (statusFilter !== 'all' && (param.status ?? 'draft') !== statusFilter) {
+      return false
     }
 
     return true
@@ -232,6 +238,23 @@ export default function ParametersPage() {
                   <option value="unassigned">Unassigned</option>
                 </select>
               </div>
+
+              {/* Status Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                  Status
+                </label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="draft">Draft</option>
+                  <option value="approved">Approved</option>
+                  <option value="obsolete">Obsolete</option>
+                </select>
+              </div>
             </div>
           </div>
         )}
@@ -271,6 +294,9 @@ export default function ParametersPage() {
                   Source
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Created
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-16">
@@ -281,13 +307,13 @@ export default function ParametersPage() {
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                     Loading parameters...
                   </td>
                 </tr>
               ) : filteredParameters.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                     {parameters.length === 0
                       ? 'No parameters found. Use @parameterName@ in function descriptions to automatically create parameters.'
                       : 'No parameters match your search or filter criteria.'}
@@ -319,6 +345,7 @@ export default function ParametersPage() {
                     <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
                       {param.sourceFunction ? (
                         <button
+                          type="button"
                           onClick={() => setViewingSource(param)}
                           className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer"
                         >
@@ -327,6 +354,16 @@ export default function ParametersPage() {
                       ) : (
                         <span className="text-gray-400 dark:text-gray-500">—</span>
                       )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                      <span className={clsx(
+                        'px-2 py-0.5 rounded text-xs font-medium',
+                        (param.status ?? 'draft') === 'approved' && 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200',
+                        (param.status ?? 'draft') === 'obsolete' && 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400',
+                        (param.status ?? 'draft') === 'draft' && 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200'
+                      )}>
+                        {param.status ?? 'draft'}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                       {format(new Date(param.createdAt), 'MMM dd, yyyy')}

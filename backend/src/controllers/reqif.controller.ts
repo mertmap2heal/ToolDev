@@ -8,13 +8,14 @@ import { reqifService } from '../services/reqif.service'
 export const exportToReqIF = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
-    const { requirementIds } = req.query
+    const { requirementIds, parameterMode } = req.query
 
     const ids = requirementIds
       ? (typeof requirementIds === 'string' ? requirementIds.split(',') : requirementIds)
       : undefined
+    const paramMode = (parameterMode === 'resolved' ? 'resolved' : 'name') as 'name' | 'resolved'
 
-    const reqifXml = await reqifService.exportToReqIF(projectId, ids as string[] | undefined)
+    const reqifXml = await reqifService.exportToReqIF(projectId, ids as string[] | undefined, paramMode)
 
     res.setHeader('Content-Type', 'application/xml')
     res.setHeader('Content-Disposition', `attachment; filename="requirements_${projectId}_${Date.now()}.reqif"`)

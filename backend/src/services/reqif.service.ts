@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import { buildRequirementChangeSummary, notifyRequirementSubscribers } from './requirementNotification.service'
 import { XMLBuilder, XMLParser } from 'fast-xml-parser'
+import { resolveParameterPlaceholders } from '../utils/parameterPlaceholder'
 
 const prisma = new PrismaClient()
 
@@ -62,9 +63,10 @@ interface ReqIFDocument {
  */
 export const reqifService = {
   /**
-   * Export requirements to ReqIF format
+   * Export requirements to ReqIF format.
+   * @param parameterMode - 'name' | 'resolved': replace {{param:id}} with parameter name or resolved value in title/description
    */
-  async exportToReqIF(projectId: string, requirementIds?: string[]): Promise<string> {
+  async exportToReqIF(projectId: string, requirementIds?: string[], parameterMode: 'name' | 'resolved' = 'name'): Promise<string> {
     const project = await prisma.project.findUnique({
       where: { id: projectId },
       include: {
@@ -79,7 +81,19 @@ export const reqifService = {
       throw new Error('Project not found')
     }
 
-    const requirements = project.requirements
+    let requirements = project.requirements
+    if (parameterMode && requirements.some((r) => (r.title || '').includes('{{param:') || (r.description || '').includes('{{param:'))) {
+      const parameters = await prisma.parameter.findMany({
+        where: { projectId },
+        select: { id: true, name: true, defaultValue: true, unit: true, tolerance: true, minValue: true, maxValue: true },
+      })
+      const parameterMap = new Map(parameters.map((p) => [p.id.toLowerCase(), { id: p.id, name: p.name, defaultValue: p.defaultValue, unit: p.unit, tolerance: p.tolerance, minValue: p.minValue, maxValue: p.maxValue }]))
+      requirements = requirements.map((r) => ({
+        ...r,
+        title: resolveParameterPlaceholders(r.title || '', parameterMap, parameterMode),
+        description: resolveParameterPlaceholders(r.description || '', parameterMap, parameterMode),
+      }))
+    }
     const now = new Date().toISOString()
     const identifier = `reqif-${projectId}-${Date.now()}`
 

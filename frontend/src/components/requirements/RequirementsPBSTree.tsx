@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, ChevronDown, Package, FileText, Search, FolderOpen, Inbox, Settings, AlertCircle, GitPullRequest, Layers, ClipboardList, Link2, Plus, Edit2, Trash2, Copy, ExternalLink, BarChart3, Unlink, Download } from 'lucide-react'
+import { ChevronRight, ChevronDown, Package, FileText, Search, FolderOpen, Inbox, Settings, AlertCircle, GitPullRequest, Layers, ClipboardList, Link2, Plus, Edit2, Trash2, Copy, ExternalLink, BarChart3, Unlink, Download, Sliders } from 'lucide-react'
 import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query'
 import { componentService } from '../../services/component.service'
 import { requirementService } from '../../services/requirement.service'
@@ -756,6 +756,7 @@ export default function RequirementsPBSTree({
                         link,
                       }
                       const Icon = displayType === 'function' ? Settings
+                        : displayType === 'parameter' ? Sliders
                         : displayType === 'issue' ? AlertCircle
                         : displayType === 'change_request' ? GitPullRequest
                         : displayType === 'requirement' ? FileText

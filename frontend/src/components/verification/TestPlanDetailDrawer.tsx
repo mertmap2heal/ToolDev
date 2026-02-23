@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { X, ChevronDown, Plus, Trash2, GripVertical, Search, Download, FileCode, CheckSquare, Square, Play } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { ApiResponse } from 'shared/types/api.types'
 import { verificationService } from '../../services/verification.service'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
@@ -20,7 +21,17 @@ interface TestPlanDetailDrawerProps {
 export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId }: TestPlanDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'cases' | 'activity'>('overview')
   const [isEditing, setIsEditing] = useState(false)
-  const [editData, setEditData] = useState({
+  const [editData, setEditData] = useState<{
+    name: string
+    description: string
+    scope: string
+    entryCriteria: string
+    exitCriteria: string
+    testingEnvironmentIds: string[]
+    testingToolIds: string[]
+    phase?: string
+    ownerUserId?: string
+  }>({
     name: plan?.name || '',
     description: plan?.description || '',
     scope: plan?.scope || '',
@@ -46,15 +57,15 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
     enabled: isOpen && !!plan?.id,
   })
 
-  const { data: environmentOptions = [] } = useQuery({
+  const { data: environmentOptions } = useQuery<ApiResponse<{ id: string; value: string }[]>>({
     queryKey: ['custom-options', projectId, 'ENVIRONMENT_TYPE'],
-    queryFn: () => verificationService.getCustomOptions(projectId, 'ENVIRONMENT_TYPE'),
+    queryFn: async () => (await verificationService.getCustomOptions(projectId, 'ENVIRONMENT_TYPE')) as ApiResponse<{ id: string; value: string }[]>,
     enabled: isOpen && isEditing,
   })
 
-  const { data: testingToolOptions = [] } = useQuery({
+  const { data: testingToolOptions } = useQuery<ApiResponse<{ id: string; value: string }[]>>({
     queryKey: ['custom-options', projectId, 'TESTING_TOOL'],
-    queryFn: () => verificationService.getCustomOptions(projectId, 'TESTING_TOOL'),
+    queryFn: async () => (await verificationService.getCustomOptions(projectId, 'TESTING_TOOL')) as ApiResponse<{ id: string; value: string }[]>,
     enabled: isOpen && isEditing,
   })
 
@@ -340,6 +351,8 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
                       scope: currentPlan?.scope || '',
                       entryCriteria: currentPlan?.entryCriteria || '',
                       exitCriteria: currentPlan?.exitCriteria || '',
+                      testingEnvironmentIds: (currentPlan?.testingEnvironmentIds as string[] | null) || [],
+                      testingToolIds: (currentPlan?.testingToolIds as string[] | null) || [],
                       phase: currentPlan?.phase || '',
                       ownerUserId: currentPlan?.ownerUserId || '',
                     })
@@ -648,7 +661,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
           {activeTab === 'cases' && (
             <div className="space-y-4">
               {/* Default setups for new cases */}
-              {allSetups.length > 0 && (
+              {(Array.isArray(allSetups) ? allSetups : []).length > 0 && (
                 <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Default setups for new cases
@@ -657,7 +670,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
                     When adding a case, these setups are auto-linked to it.
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {allSetups.map((s: any) => (
+                    {(Array.isArray(allSetups) ? allSetups : []).map((s: any) => (
                       <label
                         key={s.id}
                         className={clsx(
@@ -831,7 +844,7 @@ function VerifiesElementsSection({ testPlanId, projectId }: { testPlanId?: strin
   ]
 
   // Get already linked element IDs
-  const linkedElementIds = new Set(verificationLinks.map((link: any) => link.targetId))
+  const linkedElementIds = new Set((Array.isArray(verificationLinks) ? verificationLinks : []).map((link: any) => link.targetId))
 
   // Filter elements based on search and exclude already linked
   const filteredElements = allElements.filter((element) => {
@@ -878,7 +891,7 @@ function VerifiesElementsSection({ testPlanId, projectId }: { testPlanId?: strin
   }, [showDropdown])
 
   // Get linked elements with their details
-  const linkedElements = verificationLinks.map((link: any) => {
+  const linkedElements = (Array.isArray(verificationLinks) ? verificationLinks : []).map((link: any) => {
     const element = link.targetElement
     if (!element) return null
     return {
@@ -1030,13 +1043,13 @@ function LinkedTestResultsSection({ testPlanId, projectId }: { testPlanId?: stri
     },
   })
 
-  const linkedResults = allTestResults.filter((result: any) =>
+  const linkedResults = (Array.isArray(allTestResults) ? allTestResults : []).filter((result: any) =>
     result.links?.some((link: any) => link.linkedEntityType === 'TEST_PLAN' && link.linkedEntityId === testPlanId)
   )
 
   const linkMutation = useMutation({
     mutationFn: (data: any) => {
-      const result = allTestResults.find((r: any) => r.id === data.testResultId)
+      const result = (Array.isArray(allTestResults) ? allTestResults : []).find((r: any) => r.id === data.testResultId)
       if (!result) throw new Error('Test result not found')
       return verificationService.linkTestResult(projectId, data.testResultId, {
         linkedEntityType: 'TEST_PLAN',
@@ -1073,7 +1086,7 @@ function LinkedTestResultsSection({ testPlanId, projectId }: { testPlanId?: stri
     }
   }
 
-  const availableResults = allTestResults.filter(
+  const availableResults = (Array.isArray(allTestResults) ? allTestResults : []).filter(
     (result: any) =>
       !result.links?.some((link: any) => link.linkedEntityType === 'TEST_PLAN' && link.linkedEntityId === testPlanId)
   )

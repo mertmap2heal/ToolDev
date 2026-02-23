@@ -4,7 +4,7 @@ import type { Link, CreateLinkDto, LinkFilters } from 'shared/types/linkage.type
 import type { TraceLink, ArtifactType, LinkType as TraceLinkType } from 'shared/types/traceability.types'
 import type { ApiResponse } from 'shared/types/api.types'
 
-const EXCLUDED_TARGET_TYPES = ['parameter']
+const EXCLUDED_TARGET_TYPES: string[] = []
 
 function traceLinkToLink(tl: TraceLink & { targetLabel?: string; sourceLabel?: string }): Link {
   return {

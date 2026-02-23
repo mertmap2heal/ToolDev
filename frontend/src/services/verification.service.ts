@@ -69,7 +69,13 @@ export async function getVerificationEvidence(
 export const verificationService = {
   getMocs,
   getVerificationEvidence,
-  getTemplates: (projectId: string) => apiClient.get(`/templates/${projectId}`),
+  getTemplates: (projectId: string, options?: { type?: string; includeArchived?: boolean }) => {
+    const params = new URLSearchParams()
+    if (options?.type) params.set('type', options.type)
+    if (options?.includeArchived !== undefined) params.set('includeArchived', String(options.includeArchived))
+    const q = params.toString()
+    return apiClient.get(`/templates/${projectId}${q ? `?${q}` : ''}`)
+  },
   createTemplate: (projectId: string, data: unknown) => apiClient.post(`/templates/${projectId}`, data),
   duplicateTemplate: (projectId: string, id: string) => apiClient.post(`/templates/${projectId}/${id}/duplicate`),
   publishTemplate: (projectId: string, id: string) => apiClient.post(`/templates/${projectId}/${id}/publish`),

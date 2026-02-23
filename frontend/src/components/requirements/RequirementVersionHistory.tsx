@@ -239,9 +239,10 @@ export default function RequirementVersionHistory({
                   'Type,Date,User,Action,Title,Reason,Details',
                   ...timeline.map(item => {
                     if (item.type === 'version') {
-                      return `Version,${item.date.toISOString()},${item.data.changedByName || ''},Edit,${item.data.title},${item.data.changeReason || ''},Version ${item.data.version}`;
+                      const v = item.data as RequirementVersion;
+                      return `Version,${item.date.toISOString()},${v.changedByName || ''},Edit,${v.title},${v.changeReason || ''},Version ${v.version}`;
                     } else {
-                      const e = item.data;
+                      const e = item.data as AuditEvent;
                       return `Audit,${item.date.toISOString()},${e.performedByUser?.name || 'System'},${e.action},${e.newValue?.title || ''},${e.newValue?.reason || ''},${JSON.stringify(e.newValue)}`;
                     }
                   })

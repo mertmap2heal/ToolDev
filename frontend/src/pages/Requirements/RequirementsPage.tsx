@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { ArrowUp, ArrowDown } from 'lucide-react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
-import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, AlertTriangle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft, BarChart3, LayoutList } from 'lucide-react'
+import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, AlertTriangle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft, BarChart3, LayoutList, Sliders } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
@@ -38,8 +38,10 @@ import { LINKAGE_V1, LIFECYCLE_V1 } from '../../config/featureFlags'
 import { buildDeepLink } from '../../linkage/buildDeepLink'
 import ChangeStatusPopover, { getStatusColorClasses } from '../../components/requirements/ChangeStatusPopover'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
+import { useParameterDisplayStore } from '../../store/parameterDisplayStore'
+import RequirementParameterText from '../../components/requirements/RequirementParameterText'
 import type { Requirement, UpdateRequirementDto } from 'shared/types/engineering.types'
-import type { Link as LinkType } from 'shared/types/linkage.types'
+import type { Link as LinkType, EntityType } from 'shared/types/linkage.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
 import { useAuthStore } from '../../store/authStore'
@@ -71,6 +73,8 @@ export default function RequirementsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const { user } = useAuthStore()
   const currentUserId = user?.id
+  const parameterDisplayMode = useParameterDisplayStore((s) => s.mode)
+  const setParameterDisplayMode = useParameterDisplayStore((s) => s.setMode)
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingRequirement, setEditingRequirement] = useState<Requirement | null>(null)
@@ -1331,7 +1335,11 @@ export default function RequirementsPage() {
                     }}
                     title="Double-click to edit"
                   >
-                    {req.title}
+                    {projectId && (req.title || '').includes('{{param:') ? (
+                      <RequirementParameterText projectId={projectId} text={req.title} />
+                    ) : (
+                      req.title
+                    )}
                   </span>
                   {req.requirementType && (
                     <span className={clsx('px-2 py-0.5 text-xs font-medium rounded-full', getRequirementTypeColor(req.requirementType))}>
@@ -1346,9 +1354,13 @@ export default function RequirementsPage() {
           {requirementColumns.has('description') && (
             <td className="px-4 py-3">
               <div className="text-sm text-gray-600 dark:text-gray-400 max-w-md">
-                <p className="line-clamp-2" title={req.description}>
+                <p className="line-clamp-2" title={req.description ? req.description.replace(/<[^>]*>/g, '').substring(0, 200) : ''}>
                   {req.description ? (
-                    <span dangerouslySetInnerHTML={{ __html: req.description.replace(/<[^>]*>/g, '').substring(0, 150) + (req.description.length > 150 ? '...' : '') }} />
+                    projectId && (req.description || '').includes('{{param:') ? (
+                      <RequirementParameterText projectId={projectId} text={req.description} stripHtml />
+                    ) : (
+                      <span dangerouslySetInnerHTML={{ __html: req.description.replace(/<[^>]*>/g, '').substring(0, 150) + (req.description.length > 150 ? '...' : '') }} />
+                    )
                   ) : (
                     <span className="text-gray-400">—</span>
                   )}
@@ -1911,7 +1923,7 @@ export default function RequirementsPage() {
         navigate(`/projects/${projectId}/requirements?requirementId=${targetId}`)
       }
     } else {
-      navigate(buildDeepLink(projectId, { type: targetType, id: targetId }))
+      navigate(buildDeepLink(projectId, { type: targetType as EntityType, id: targetId }))
     }
     setLinkedElementPreview(null)
   }, [projectId, linkedElementPreview, allRequirements, navigate])
@@ -2268,6 +2280,20 @@ export default function RequirementsPage() {
                 <BarChart3 size={16} />
                 <span className="text-sm">Quality</span>
               </button>
+              {/* Parameter display: Name vs Resolved value */}
+              {projectId && (
+                <div className="flex items-center gap-2" title="Show parameters as name or resolved value">
+                  <Sliders size={16} className="text-gray-500 dark:text-gray-400 shrink-0" />
+                  <select
+                    value={parameterDisplayMode}
+                    onChange={(e) => setParameterDisplayMode(e.target.value as 'name' | 'resolved')}
+                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm cursor-pointer"
+                  >
+                    <option value="name">Params: Name</option>
+                    <option value="resolved">Params: Value</option>
+                  </select>
+                </div>
+              )}
               <Link
                 to={`/projects/${projectId}/requirements/settings`}
                 className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"

@@ -201,13 +201,13 @@ export default function DashboardPage() {
           <input
             type="date"
             value={dateRange?.from || ''}
-            onChange={e => setDateRange(r => ({ ...r, from: e.target.value }))}
+            onChange={e => setDateRange(r => ({ from: e.target.value, to: r?.to ?? '' }))}
             className="px-2 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           />
           <input
             type="date"
             value={dateRange?.to || ''}
-            onChange={e => setDateRange(r => ({ ...r, to: e.target.value }))}
+            onChange={e => setDateRange(r => ({ from: r?.from ?? '', to: e.target.value }))}
             className="px-2 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           />
           <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded" onClick={() => setShowRunningOnly(v => !v)}>

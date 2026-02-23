@@ -1,11 +1,12 @@
 import { useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { X, ExternalLink, FileText, Settings, AlertCircle, GitPullRequest, Layers, ClipboardList, Link2, Loader2 } from 'lucide-react'
+import { X, ExternalLink, FileText, Settings, AlertCircle, GitPullRequest, Layers, ClipboardList, Link2, Loader2, Sliders } from 'lucide-react'
 import type { LinkedElementClickPayload } from './RequirementsPBSTree'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
 import { changeRequestService } from '../../services/changeRequest.service'
+import { parameterService } from '../../services/parameter.service'
 
 interface LinkedElementPreviewPopoverProps {
   payload: LinkedElementClickPayload
@@ -18,6 +19,8 @@ function getTypeIcon(type: string) {
   switch (type) {
     case 'function':
       return Settings
+    case 'parameter':
+      return Sliders
     case 'issue':
       return AlertCircle
     case 'change_request':
@@ -72,7 +75,7 @@ export default function LinkedElementPreviewPopover({
     ? (link as { targetDescription?: string }).targetDescription
     : (link as { sourceDescription?: string }).sourceDescription
 
-  const fetchableTypes = ['requirement', 'function', 'issue', 'change_request', 'hazard', 'risk']
+  const fetchableTypes = ['requirement', 'function', 'parameter', 'issue', 'change_request', 'hazard', 'risk']
   const canFetch = !!projectId && fetchableTypes.includes(entityType)
 
   const { data: entity, isLoading } = useQuery({
@@ -85,6 +88,10 @@ export default function LinkedElementPreviewPopover({
       }
       if (entityType === 'function') {
         const r = await functionService.getFunction(projectId, entityId)
+        return r.success ? r.data : null
+      }
+      if (entityType === 'parameter') {
+        const r = await parameterService.getParameter(projectId, entityId)
         return r.success ? r.data : null
       }
       if (entityType === 'issue') {
@@ -107,7 +114,7 @@ export default function LinkedElementPreviewPopover({
   // Type-specific detail rows
   const detailRows: { label: string; value: string | undefined }[] = []
   if (entity) {
-    const e = entity as Record<string, unknown>
+    const e = entity as unknown as Record<string, unknown>
     if (entityType === 'requirement' || entityType === 'hazard' || entityType === 'risk') {
       if (e.priority) detailRows.push({ label: 'Priority', value: String(e.priority) })
       if (e.owner) detailRows.push({ label: 'Owner', value: String(e.owner) })
@@ -119,7 +126,7 @@ export default function LinkedElementPreviewPopover({
     } else if (entityType === 'function') {
       if (e.owner) detailRows.push({ label: 'Owner', value: String(e.owner) })
       if (e.criticality) detailRows.push({ label: 'Criticality', value: String(e.criticality) })
-      if (e.parent?.name) detailRows.push({ label: 'Parent', value: (e.parent as { name?: string }).name })
+      if ((e.parent as { name?: string } | undefined)?.name) detailRows.push({ label: 'Parent', value: (e.parent as { name?: string }).name })
     } else if (entityType === 'issue') {
       if (e.priority) detailRows.push({ label: 'Priority', value: String(e.priority) })
       if (e.issueType) detailRows.push({ label: 'Type', value: String(e.issueType) })
@@ -134,6 +141,11 @@ export default function LinkedElementPreviewPopover({
       if (e.owner) detailRows.push({ label: 'Owner', value: String(e.owner) })
       if (e.risk) detailRows.push({ label: 'Risk', value: String(e.risk) })
       if (e.effort) detailRows.push({ label: 'Effort', value: String(e.effort) })
+    } else if (entityType === 'parameter') {
+      if (e.defaultValue != null) detailRows.push({ label: 'Value', value: String(e.defaultValue) })
+      if (e.unit) detailRows.push({ label: 'Unit', value: String(e.unit) })
+      if (e.dataType) detailRows.push({ label: 'Data type', value: String(e.dataType) })
+      if (e.status) detailRows.push({ label: 'Status', value: String(e.status) })
     }
     if (e.createdAt) detailRows.push({ label: 'Created', value: new Date(String(e.createdAt)).toLocaleDateString() })
     if (e.updatedAt) detailRows.push({ label: 'Updated', value: new Date(String(e.updatedAt)).toLocaleDateString() })
