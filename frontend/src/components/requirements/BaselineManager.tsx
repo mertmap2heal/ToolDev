@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X, Archive, Trash2, Plus, ArrowLeftRight, Calendar, User, FileText, Search, CheckSquare, Square, ChevronRight, ChevronLeft, Eye, Download, Link2, AlertTriangle } from 'lucide-react'
 import { baselineService } from '../../services/baseline.service'
@@ -42,6 +43,7 @@ export default function BaselineManager({ projectId, onClose, onViewInRequiremen
   const [viewingBaselineId, setViewingBaselineId] = useState<string | null>(null)
   const [exportingBaselineId, setExportingBaselineId] = useState<string | null>(null)
   const [comparingBaselines, setComparingBaselines] = useState<{ baselineAId: string; baselineBId: string } | null>(null)
+  const [showViewInArchiveLink, setShowViewInArchiveLink] = useState(false)
 
   const queryClient = useQueryClient()
 
@@ -130,6 +132,7 @@ export default function BaselineManager({ projectId, onClose, onViewInRequiremen
     onSuccess: (response) => {
       if (response.success) {
         queryClient.invalidateQueries({ queryKey: ['baselines', projectId] })
+        setShowViewInArchiveLink(true)
         setIsCreateModalOpen(false)
         setCreateStep('details')
         setNewBaselineName('')
@@ -302,6 +305,18 @@ export default function BaselineManager({ projectId, onClose, onViewInRequiremen
             </button>
           </div>
         </div>
+
+        {showViewInArchiveLink && (
+          <div className="px-4 py-2 bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800 flex items-center justify-between gap-2">
+            <span className="text-sm text-green-800 dark:text-green-300">Baseline created.</span>
+            <Link
+              to={`/projects/${projectId}/archive#baselines`}
+              className="text-sm font-medium text-green-700 dark:text-green-400 hover:underline"
+            >
+              View in Archive
+            </Link>
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4">
