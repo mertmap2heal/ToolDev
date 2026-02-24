@@ -60,7 +60,7 @@ interface ExpandedRow {
  */
 interface InlineEditState {
   requirementId: string
-  field: 'title' | 'priority' | 'status' | 'owner'
+  field: 'title' | 'description' | 'priority' | 'status' | 'owner'
   value: string
 }
 
@@ -106,6 +106,7 @@ export default function RequirementsPage() {
   // Inline editing state
   const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null)
   const inlineInputRef = useRef<HTMLInputElement>(null)
+  const inlineTextareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -816,21 +817,27 @@ export default function RequirementsPage() {
     },
   })
 
-  // Focus input when inline editing starts
+  // Focus input/textarea when inline editing starts
   useEffect(() => {
-    if (inlineEdit && inlineInputRef.current) {
+    if (!inlineEdit) return
+    if (inlineEdit.field === 'description' && inlineTextareaRef.current) {
+      inlineTextareaRef.current.focus()
+      inlineTextareaRef.current.select()
+    } else if (inlineInputRef.current) {
       inlineInputRef.current.focus()
       inlineInputRef.current.select()
     }
   }, [inlineEdit])
 
-  // Handle starting inline edit
+  // Handle starting inline edit (strip HTML for description so user sees plain text)
   const startInlineEdit = (req: Requirement, field: InlineEditState['field']) => {
     if (isBaselineView) return
+    const raw = (req[field] as string) || ''
+    const value = field === 'description' ? raw.replace(/<[^>]*>/g, '') : raw
     setInlineEdit({
       requirementId: req.id,
       field,
-      value: (req[field] as string) || '',
+      value,
     })
   }
 
@@ -853,7 +860,7 @@ export default function RequirementsPage() {
     setInlineEdit(null)
   }
 
-  // Handle inline edit key events
+  // Handle inline edit key events (single-line input: Enter saves)
   const handleInlineKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -862,6 +869,17 @@ export default function RequirementsPage() {
       e.preventDefault()
       cancelInlineEdit()
     } else if (e.key === 'Tab') {
+      e.preventDefault()
+      saveInlineEdit()
+    }
+  }
+
+  // Handle description textarea key events (Enter = newline; Ctrl/Cmd+Enter = save)
+  const handleDescriptionKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      cancelInlineEdit()
+    } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault()
       saveInlineEdit()
     }
@@ -1350,22 +1368,43 @@ export default function RequirementsPage() {
               )}
             </td>
           )}
-          {/* Description */}
+          {/* Description - inline editable */}
           {requirementColumns.has('description') && (
             <td className="px-4 py-3">
-              <div className="text-sm text-gray-600 dark:text-gray-400 max-w-md">
-                <p className="line-clamp-2" title={req.description ? req.description.replace(/<[^>]*>/g, '').substring(0, 200) : ''}>
-                  {req.description ? (
-                    projectId && (req.description || '').includes('{{param:') ? (
-                      <RequirementParameterText projectId={projectId} text={req.description} stripHtml />
+              {inlineEdit?.requirementId === req.id && inlineEdit.field === 'description' ? (
+                <div className="flex items-center gap-1">
+                  <textarea
+                    ref={inlineTextareaRef}
+                    value={inlineEdit.value}
+                    onChange={(e) => setInlineEdit({ ...inlineEdit, value: e.target.value })}
+                    onKeyDown={handleDescriptionKeyDown}
+                    onBlur={saveInlineEdit}
+                    rows={3}
+                    className="flex-1 min-w-[200px] px-2 py-1 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                  />
+                </div>
+              ) : (
+                <div className="text-sm text-gray-600 dark:text-gray-400 max-w-md">
+                  <p
+                    className="line-clamp-2 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                    title="Double-click to edit"
+                    onDoubleClick={(e) => {
+                      e.stopPropagation()
+                      startInlineEdit(req, 'description')
+                    }}
+                  >
+                    {req.description ? (
+                      projectId && (req.description || '').includes('{{param:') ? (
+                        <RequirementParameterText projectId={projectId} text={req.description} stripHtml />
+                      ) : (
+                        <span dangerouslySetInnerHTML={{ __html: req.description.replace(/<[^>]*>/g, '').substring(0, 150) + (req.description.length > 150 ? '...' : '') }} />
+                      )
                     ) : (
-                      <span dangerouslySetInnerHTML={{ __html: req.description.replace(/<[^>]*>/g, '').substring(0, 150) + (req.description.length > 150 ? '...' : '') }} />
-                    )
-                  ) : (
-                    <span className="text-gray-400">—</span>
-                  )}
-                </p>
-              </div>
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </p>
+                </div>
+              )}
             </td>
           )}
           {/* Priority - inline editable */}
