@@ -31,6 +31,8 @@ import RichTextEditor from '../common/RichTextEditor'
 import { useParameterDisplayStore } from '../../store/parameterDisplayStore'
 import { resolveParameterPlaceholders, editorSpansToPlaceholders } from '../../utils/parameterPlaceholder'
 import { parameterService } from '../../services/parameter.service'
+import { definitionEntryService } from '../../services/definitionEntry.service'
+import { injectGlossaryTerms } from '../../utils/glossaryTerms'
 
 interface RequirementDetailDrawerProps {
   isOpen: boolean
@@ -573,6 +575,19 @@ export default function RequirementDetailDrawer({
       : desc
   }, [displayRequirement, parameterMap, parameterDisplayMode])
 
+  const { data: definitionEntries = [] } = useQuery({
+    queryKey: ['definitions', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const res = await definitionEntryService.getDefinitionEntries(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    enabled: isOpen && !!projectId,
+  })
+  const descriptionWithGlossary = useMemo(() => {
+    return injectGlossaryTerms(resolvedDescription, definitionEntries as { id: string; term: string; definition: string; notes?: string | null }[])
+  }, [resolvedDescription, definitionEntries])
+
   const showToast = (message: string) => setToastMessage(message)
 
   const { data: subscriptionSnapshot, isLoading: subscriptionLoading } = useQuery<RequirementSubscriptionSnapshot>({
@@ -955,10 +970,10 @@ export default function RequirementDetailDrawer({
                 <div>
                   <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Description</h3>
                   <RichTextEditor
-                    content={resolvedDescription}
+                    content={descriptionWithGlossary}
                     onChange={() => { }}
                     editable={false}
-                    className="max-w-none"
+                    className="max-w-none glossary-terms-description"
                   />
                 </div>
 

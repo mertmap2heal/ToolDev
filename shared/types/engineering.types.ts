@@ -786,3 +786,35 @@ export interface UpdateReviewerDto {
   status: ReviewerStatus
   reviewComments?: string
 }
+
+/** Project-scoped glossary or abbreviation entry (DefinitionEntry) */
+export type DefinitionEntryType = 'glossary' | 'abbreviation'
+
+export interface DefinitionEntry {
+  id: string
+  projectId: string
+  type: DefinitionEntryType
+  term: string
+  definition: string
+  notes?: string | null
+  source?: string | null
+  createdById?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateDefinitionEntryDto {
+  type: DefinitionEntryType
+  term: string
+  definition: string
+  notes?: string | null
+  source?: string | null
+}
+
+export interface UpdateDefinitionEntryDto {
+  type?: DefinitionEntryType
+  term?: string
+  definition?: string
+  notes?: string | null
+  source?: string | null
+}

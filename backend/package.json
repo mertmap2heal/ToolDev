@@ -19,6 +19,7 @@
     "backfill:parameter-ids": "tsx src/scripts/backfill-parameter-ids.ts",
     "db:push": "prisma db push --accept-data-loss",
     "db:gen": "prisma generate",
+    "setup-db": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup-database.ps1",
     "test": "vitest run"
   },
   "dependencies": {

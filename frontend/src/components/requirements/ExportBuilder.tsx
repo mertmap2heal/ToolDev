@@ -8,8 +8,10 @@ import type { Link } from 'shared/types/linkage.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
 import { parameterService } from '../../services/parameter.service'
+import { definitionEntryService } from '../../services/definitionEntry.service'
 import { resolveParameterPlaceholders } from '../../utils/parameterPlaceholder'
 import type { ResolveMode } from '../../utils/parameterPlaceholder'
+import type { DefinitionEntry } from 'shared/types/engineering.types'
 
 // Dynamic import for jspdf-autotable to prevent build issues
 // This will be loaded only when PDF export is needed
@@ -146,6 +148,10 @@ export default function ExportBuilder({
   const [selectedFunctionId, setSelectedFunctionId] = useState<string>('')
   const [componentSearch, setComponentSearch] = useState('')
   const [functionSearch, setFunctionSearch] = useState('')
+  const [includeGlossary, setIncludeGlossary] = useState(true)
+  const [includeAbbreviations, setIncludeAbbreviations] = useState(true)
+  const [glossaryShowDefinitions, setGlossaryShowDefinitions] = useState(true)
+  const [glossarySortAlphabetically, setGlossarySortAlphabetically] = useState(true)
 
   const { data: parameters = [] } = useQuery({
     queryKey: ['parameters', projectId],
@@ -161,6 +167,16 @@ export default function ExportBuilder({
     parameters.forEach((p) => m.set(p.id.toLowerCase(), { id: p.id, name: p.name, defaultValue: p.defaultValue, unit: p.unit, tolerance: p.tolerance }))
     return m
   }, [parameters])
+
+  const { data: definitionEntries = [] } = useQuery({
+    queryKey: ['definitions', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const res = await definitionEntryService.getDefinitionEntries(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    enabled: !!projectId,
+  })
 
   const flatComponents = useMemo(() => flattenComponentTree(componentTree), [componentTree])
   const flatFunctions = useMemo(() => flattenFunctionTree(functions), [functions])
@@ -277,6 +293,32 @@ export default function ExportBuilder({
     return doc.body.textContent || ''
   }
 
+  const combinedDescriptionText = useMemo(() => {
+    return effectiveRequirements
+      .map((r) => {
+        let desc = r.description || ''
+        if (desc.includes('{{param:') && parameterMap.size > 0) {
+          desc = resolveParameterPlaceholders(desc, parameterMap, parameterExportMode)
+        }
+        return stripHtml(desc)
+      })
+      .join('\n')
+  }, [effectiveRequirements, parameterMap, parameterExportMode])
+
+  const usedGlossaryEntries = useMemo(() => {
+    if (!includeGlossary || definitionEntries.length === 0) return []
+    const glossary = (definitionEntries as DefinitionEntry[]).filter((e) => e.type === 'glossary')
+    const used = glossary.filter((d) => combinedDescriptionText.includes(d.term))
+    return glossarySortAlphabetically ? [...used].sort((a, b) => a.term.localeCompare(b.term)) : used
+  }, [definitionEntries, includeGlossary, glossarySortAlphabetically, combinedDescriptionText])
+
+  const usedAbbreviationEntries = useMemo(() => {
+    if (!includeAbbreviations || definitionEntries.length === 0) return []
+    const abbreviations = (definitionEntries as DefinitionEntry[]).filter((e) => e.type === 'abbreviation')
+    const used = abbreviations.filter((d) => combinedDescriptionText.includes(d.term))
+    return glossarySortAlphabetically ? [...used].sort((a, b) => a.term.localeCompare(b.term)) : used
+  }, [definitionEntries, includeAbbreviations, glossarySortAlphabetically, combinedDescriptionText])
+
   // Export to CSV
   const exportCsv = () => {
     const selectedCols = columns.filter((c) => c.selected)
@@ -339,6 +381,25 @@ export default function ExportBuilder({
       return { wch: Math.min(maxLen + 2, maxWidth) }
     })
     worksheet['!cols'] = colWidths
+
+    if (includeGlossary && usedGlossaryEntries.length > 0) {
+      const glossaryData = usedGlossaryEntries.map((e) =>
+        glossaryShowDefinitions
+          ? { Term: e.term, Definition: (e.definition || '').replace(/<[^>]*>/g, '').trim() }
+          : { Term: e.term }
+      )
+      const wsGlossary = XLSX.utils.json_to_sheet(glossaryData)
+      XLSX.utils.book_append_sheet(workbook, wsGlossary, 'Glossary')
+    }
+    if (includeAbbreviations && usedAbbreviationEntries.length > 0) {
+      const abbrData = usedAbbreviationEntries.map((e) =>
+        glossaryShowDefinitions
+          ? { Term: e.term, Definition: (e.definition || '').replace(/<[^>]*>/g, '').trim() }
+          : { Term: e.term }
+      )
+      const wsAbbr = XLSX.utils.json_to_sheet(abbrData)
+      XLSX.utils.book_append_sheet(workbook, wsAbbr, 'Abbreviations')
+    }
 
     const baseName = effectiveScopeFilenameSuffix ? `requirements_export_${effectiveScopeFilenameSuffix}` : 'requirements_export'
     XLSX.writeFile(workbook, `${baseName}.xlsx`)
@@ -413,7 +474,7 @@ export default function ExportBuilder({
 
     // Load and use autoTable
     const autoTable = await loadAutoTable()
-    autoTable(doc, {
+    const tableResult = autoTable(doc, {
       head: includeHeader ? [headers] : undefined,
       body: data,
       startY: 35,
@@ -436,6 +497,53 @@ export default function ExportBuilder({
         return acc
       }, {} as Record<number, { cellWidth: string }>),
     })
+
+    let lastY = (tableResult as { finalY?: number }).finalY ?? 35
+
+    const stripHtmlForPdf = (html: string) => (html || '').replace(/<[^>]*>/g, '').trim().slice(0, 200)
+
+    if (includeGlossary && usedGlossaryEntries.length > 0) {
+      doc.addPage()
+      doc.setFontSize(14)
+      doc.text('Glossary', 14, 15)
+      doc.setFontSize(10)
+      const glossaryBody = usedGlossaryEntries.map((e) =>
+        glossaryShowDefinitions
+          ? [e.term, stripHtmlForPdf(e.definition)]
+          : [e.term]
+      )
+      const glossaryHead = glossaryShowDefinitions ? [['Term', 'Definition']] : [['Term']]
+      autoTable(doc, {
+        head: glossaryHead,
+        body: glossaryBody,
+        startY: 22,
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
+        columnStyles: glossaryShowDefinitions ? { 1: { cellWidth: 'wrap' } } : {},
+      })
+      lastY = (doc as any).lastAutoTable?.finalY ?? lastY
+    }
+
+    if (includeAbbreviations && usedAbbreviationEntries.length > 0) {
+      doc.addPage()
+      doc.setFontSize(14)
+      doc.text('Abbreviations', 14, 15)
+      doc.setFontSize(10)
+      const abbrBody = usedAbbreviationEntries.map((e) =>
+        glossaryShowDefinitions
+          ? [e.term, stripHtmlForPdf(e.definition)]
+          : [e.term]
+      )
+      const abbrHead = glossaryShowDefinitions ? [['Term', 'Definition']] : [['Term']]
+      autoTable(doc, {
+        head: abbrHead,
+        body: abbrBody,
+        startY: 22,
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
+        columnStyles: glossaryShowDefinitions ? { 1: { cellWidth: 'wrap' } } : {},
+      })
+    }
 
     const baseName = effectiveScopeFilenameSuffix ? `requirements_export_${effectiveScopeFilenameSuffix}` : 'requirements_export'
     doc.save(`${baseName}.pdf`)
@@ -743,6 +851,49 @@ export default function ExportBuilder({
                   <span className="text-sm text-gray-700 dark:text-gray-300">{col.label}</span>
                 </label>
               ))}
+            </div>
+          </div>
+
+          {/* Glossary & Abbreviations options */}
+          <div className="space-y-2">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Glossary & Abbreviations</span>
+            <div className="space-y-1.5 pl-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeGlossary}
+                  onChange={(e) => setIncludeGlossary(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Include Glossary (used terms only)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeAbbreviations}
+                  onChange={(e) => setIncludeAbbreviations(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Include Abbreviations (used terms only)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={glossaryShowDefinitions}
+                  onChange={(e) => setGlossaryShowDefinitions(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Show definitions in export</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={glossarySortAlphabetically}
+                  onChange={(e) => setGlossarySortAlphabetically(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Sort alphabetically</span>
+              </label>
             </div>
           </div>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import RichTextEditor from '../common/RichTextEditor'
 import { X, Plus, Trash2, ChevronDown, ChevronRight, Layers, FileText, Link as LinkIcon, Tag, Activity, FileCheck, Shield, Target, GitBranch, CheckCircle2, AlertTriangle, ClipboardCheck, BarChart3, Info, ArrowRight, Sliders } from 'lucide-react'
 import clsx from 'clsx'
@@ -34,6 +34,9 @@ import type { ApiResponse } from 'shared/types/api.types'
 import type { ComponentTreeNode } from 'shared/types/project.types'
 import type { Editor } from '@tiptap/core'
 import ParameterPickerModal from '../parameters/ParameterPickerModal'
+import CreateDefinitionModal, { toCapitalCase } from '../definitions/CreateDefinitionModal'
+import GlossaryQuickAddPrompt from '../definitions/GlossaryQuickAddPrompt'
+import { definitionEntryService } from '../../services/definitionEntry.service'
 import {
   toPlaceholder,
   placeholdersToEditorSpans,
@@ -198,6 +201,11 @@ export default function CreateRequirementModal({
   const [tagInput, setTagInput] = useState('')
   const [descriptionEditorRef, setDescriptionEditorRef] = useState<Editor | null>(null)
   const [parameterPickerOpen, setParameterPickerOpen] = useState(false)
+  const [definitionModalOpen, setDefinitionModalOpen] = useState(false)
+  const [definitionInitialTerm, setDefinitionInitialTerm] = useState('')
+  const [definitionInitialType, setDefinitionInitialType] = useState<'glossary' | 'abbreviation'>('glossary')
+  const [glossaryPromptTerm, setGlossaryPromptTerm] = useState<string | null>(null)
+  const [glossaryDismissedTerms, setGlossaryDismissedTerms] = useState<Set<string>>(new Set())
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [availableRequirementTypes, setAvailableRequirementTypes] = useState<string[]>(defaultRequirementTypes)
   const [customRequirementType, setCustomRequirementType] = useState('')
@@ -483,6 +491,43 @@ export default function CreateRequirementModal({
     },
     enabled: isOpen,
   })
+
+  const { data: definitionEntries = [] } = useQuery({
+    queryKey: ['definitions', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const res = await definitionEntryService.getDefinitionEntries(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    enabled: isOpen && !!projectId,
+  })
+
+  const glossaryDetectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (!projectId || !isOpen) return
+    const html = formData.description || ''
+    const plain = html.replace(/<[^>]*>/g, ' ').replace(/\{\{param:[^}]*\}\}/g, ' ').replace(/\s+/g, ' ').trim()
+    if (plain.length < 2) {
+      setGlossaryPromptTerm(null)
+      return
+    }
+    if (glossaryDetectTimeoutRef.current) clearTimeout(glossaryDetectTimeoutRef.current)
+    glossaryDetectTimeoutRef.current = setTimeout(() => {
+      glossaryDetectTimeoutRef.current = null
+      const existingTerms = new Set((definitionEntries as { term: string }[]).map((d) => d.term))
+      const capPhrase = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b/g
+      const acronym = /\b([A-Z]{2,})\b/g
+      const candidates: string[] = []
+      let m: RegExpExecArray | null
+      while ((m = capPhrase.exec(plain)) !== null) candidates.push(m[1].trim())
+      while ((m = acronym.exec(plain)) !== null) candidates.push(m[1])
+      const lastNew = [...candidates].reverse().find((t) => !existingTerms.has(t) && !glossaryDismissedTerms.has(t))
+      setGlossaryPromptTerm(lastNew ?? null)
+    }, 700)
+    return () => {
+      if (glossaryDetectTimeoutRef.current) clearTimeout(glossaryDetectTimeoutRef.current)
+    }
+  }, [formData.description, projectId, isOpen, definitionEntries, glossaryDismissedTerms])
 
   useEffect(() => {
     if (parentRequirement) {
@@ -1123,14 +1168,31 @@ export default function CreateRequirementModal({
                       Description <span className="text-red-500">*</span>
                     </label>
                     {projectId && (
-                      <button
-                        type="button"
-                        onClick={() => setParameterPickerOpen(true)}
-                        className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800"
-                      >
-                        <Sliders size={14} />
-                        Insert parameter
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setParameterPickerOpen(true)}
+                          className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800"
+                        >
+                          <Sliders size={14} />
+                          Insert parameter
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const sel = descriptionEditorRef?.state.selection
+                            const text = sel
+                              ? descriptionEditorRef.state.doc.textBetween(sel.from, sel.to)
+                              : ''
+                            setDefinitionInitialTerm(text ? toCapitalCase(text) : '')
+                            setDefinitionModalOpen(true)
+                          }}
+                          className="flex items-center gap-1 px-2 py-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800"
+                        >
+                          <FileText size={14} />
+                          Add to Glossary / Abbreviations
+                        </button>
+                      </div>
                     )}
                   </div>
                   <div className={`rounded-lg border ${errors.description ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}>
@@ -1145,18 +1207,51 @@ export default function CreateRequirementModal({
                   {errors.description && (
                     <p className="mt-1 text-sm text-red-500">{errors.description}</p>
                   )}
+                  {projectId && glossaryPromptTerm && (
+                    <GlossaryQuickAddPrompt
+                      term={glossaryPromptTerm}
+                      onAddGlossary={() => {
+                        setDefinitionInitialTerm(toCapitalCase(glossaryPromptTerm!))
+                        setDefinitionInitialType('glossary')
+                        setDefinitionModalOpen(true)
+                        setGlossaryPromptTerm(null)
+                        setGlossaryDismissedTerms((prev) => new Set(prev).add(glossaryPromptTerm!))
+                      }}
+                      onAddAbbreviation={() => {
+                        setDefinitionInitialTerm(glossaryPromptTerm!)
+                        setDefinitionInitialType('abbreviation')
+                        setDefinitionModalOpen(true)
+                        setGlossaryPromptTerm(null)
+                        setGlossaryDismissedTerms((prev) => new Set(prev).add(glossaryPromptTerm!))
+                      }}
+                      onIgnore={() => {
+                        setGlossaryPromptTerm(null)
+                        setGlossaryDismissedTerms((prev) => new Set(prev).add(glossaryPromptTerm!))
+                      }}
+                    />
+                  )}
                 </div>
                 {projectId && (
-                  <ParameterPickerModal
-                    isOpen={parameterPickerOpen}
-                    onClose={() => setParameterPickerOpen(false)}
-                    projectId={projectId}
-                    onSelect={(param) => {
-                      const spanHtml = `<span data-param-id="${param.id}" class="param-ref">${param.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>`
-                      descriptionEditorRef?.chain().focus().insertContent(spanHtml).run()
-                      setParameterPickerOpen(false)
-                    }}
-                  />
+                  <>
+                    <ParameterPickerModal
+                      isOpen={parameterPickerOpen}
+                      onClose={() => setParameterPickerOpen(false)}
+                      projectId={projectId}
+                      onSelect={(param) => {
+                        const spanHtml = `<span data-param-id="${param.id}" class="param-ref">${param.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>`
+                        descriptionEditorRef?.chain().focus().insertContent(spanHtml).run()
+                        setParameterPickerOpen(false)
+                      }}
+                    />
+                    <CreateDefinitionModal
+                      isOpen={definitionModalOpen}
+                      onClose={() => setDefinitionModalOpen(false)}
+                      projectId={projectId}
+                      initialTerm={definitionInitialTerm}
+                      initialType={definitionInitialType}
+                      overlayClassName="z-[60]"
+                    />
+                  </>
                 )}
 
 

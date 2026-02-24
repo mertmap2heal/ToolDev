@@ -7,13 +7,14 @@ import clsx from 'clsx'
 
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import ConfirmDialog from '../../components/common/ConfirmDialog'
+import GlossaryAbbreviationsSection from '../../components/archive/GlossaryAbbreviationsSection'
 import { requirementService } from '../../services/requirement.service'
 import type { Requirement } from 'shared/types/engineering.types'
 
 export default function ArchivePage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeTab, setActiveTab] = useState<'requirements' | 'issues'>('requirements')
+  const [activeTab, setActiveTab] = useState<'requirements' | 'issues' | 'glossary'>('requirements')
   const [confirmRestore, setConfirmRestore] = useState<Requirement | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Requirement | null>(null)
   const queryClient = useQueryClient()
@@ -148,9 +149,21 @@ export default function ArchivePage() {
               >
                 Issues (Coming Soon)
               </button>
+              <button
+                onClick={() => setActiveTab('glossary')}
+                className={clsx(
+                  "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+                  activeTab === 'glossary'
+                    ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                    : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                )}
+              >
+                Glossary & Abbreviations
+              </button>
             </div>
 
-            {/* Toolbar */}
+            {/* Toolbar - only for requirements/issues */}
+            {activeTab !== 'glossary' && (
             <div className="flex items-center gap-4">
               <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
@@ -163,11 +176,18 @@ export default function ArchivePage() {
                 />
               </div>
             </div>
+            )}
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-x-auto">
-            {activeTab === 'requirements' ? (
+          <div className="flex-1 overflow-x-auto flex flex-col">
+            {activeTab === 'glossary' ? (
+              projectId ? (
+                <GlossaryAbbreviationsSection projectId={projectId} />
+              ) : (
+                <div className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">No project selected.</div>
+              )
+            ) : activeTab === 'requirements' ? (
               <table className="w-full">
                 <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
                   <tr>
