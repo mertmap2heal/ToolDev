@@ -207,6 +207,16 @@ export const createBaseline = async (req: AuthRequest, res: Response) => {
 
     const snapshotReqIds = requirements.map((r) => r.id)
 
+    // Resolve creator name for "Created by" display (Archive and BaselineManager)
+    let createdByName: string | null = null
+    if (req.userId) {
+      const creator = await prisma.user.findUnique({
+        where: { id: req.userId },
+        select: { name: true, email: true },
+      })
+      createdByName = creator?.name?.trim() || creator?.email || null
+    }
+
     // Create baseline and items in a transaction
     const baseline = await prisma.$transaction(async (tx) => {
       // Verify that baseline model exists on transaction client
@@ -227,8 +237,8 @@ export const createBaseline = async (req: AuthRequest, res: Response) => {
           supersedesBaselineId: supersedesBaselineId || null,
           configurationAuthority: configurationAuthority || null,
           fdAL: fdAL || null,
-          createdBy: req.user?.id,
-          createdByName: req.user?.name,
+          createdBy: req.userId ?? null,
+          createdByName,
         },
       })
 

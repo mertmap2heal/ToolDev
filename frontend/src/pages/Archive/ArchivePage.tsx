@@ -133,7 +133,8 @@ export default function ArchivePage() {
           b.name?.toLowerCase().includes(q) ||
           b.baselineType?.toLowerCase().includes(q) ||
           b.reviewType?.toLowerCase().includes(q) ||
-          (b.status && String(b.status).toLowerCase().includes(q))
+          (b.status && String(b.status).toLowerCase().includes(q)) ||
+          (b.createdByName && b.createdByName.toLowerCase().includes(q))
       )
     }
     list = [...list].sort((a, b) => {
@@ -418,7 +419,7 @@ export default function ArchivePage() {
                           type="text"
                           value={baselineSearchQuery}
                           onChange={(e) => setBaselineSearchQuery(e.target.value)}
-                          placeholder="Search by name, type, or status..."
+                          placeholder="Search by name, type, status, or created by..."
                           className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         />
                       </div>
@@ -516,7 +517,9 @@ export default function ArchivePage() {
                               <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">
                                 {b.createdAt ? format(new Date(b.createdAt), 'MMM d, yyyy') : '—'}
                               </td>
-                              <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{b.createdByName || '—'}</td>
+                              <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
+                                {b.createdByName || (b.createdBy ? `User (${String(b.createdBy).slice(0, 8)}…)` : '—')}
+                              </td>
                               <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
                                 <span className="inline-flex items-center gap-1">
                                   <FileText size={12} />
