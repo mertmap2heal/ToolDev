@@ -93,3 +93,13 @@ body {
 .param-ref:hover {
   @apply bg-blue-200 dark:bg-blue-900/60;
 }
+
+/* Glossary/abbreviation terms in requirement description: highlight + underline, tooltip on hover */
+.glossary-term {
+  @apply border-b-2 border-dotted border-blue-500 dark:border-blue-400 cursor-help;
+  @apply bg-blue-50/80 dark:bg-blue-900/20;
+  @apply px-0.5 rounded-sm;
+}
+.glossary-term:hover {
+  @apply bg-blue-100 dark:bg-blue-900/40;
+}

@@ -27,7 +27,6 @@ import { format } from 'date-fns'
 import clsx from 'clsx'
 import { LockButton } from './LockButton'
 import { useAuthStore } from '../../store/authStore'
-import RichTextEditor from '../common/RichTextEditor'
 import { useParameterDisplayStore } from '../../store/parameterDisplayStore'
 import { resolveParameterPlaceholders, editorSpansToPlaceholders } from '../../utils/parameterPlaceholder'
 import { parameterService } from '../../services/parameter.service'
@@ -585,7 +584,7 @@ export default function RequirementDetailDrawer({
     enabled: isOpen && !!projectId,
   })
   const descriptionWithGlossary = useMemo(() => {
-    return injectGlossaryTerms(resolvedDescription, definitionEntries as { id: string; term: string; definition: string; notes?: string | null }[])
+    return injectGlossaryTerms(resolvedDescription, definitionEntries as { id: string; term: string; definition: string; notes?: string | null; type?: 'glossary' | 'abbreviation' }[])
   }, [resolvedDescription, definitionEntries])
 
   const showToast = (message: string) => setToastMessage(message)
@@ -966,14 +965,12 @@ export default function RequirementDetailDrawer({
                   </div>
                 </div>
 
-                {/* Description */}
+                {/* Description — render as HTML so glossary-term spans (highlight + tooltip) are preserved */}
                 <div>
                   <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Description</h3>
-                  <RichTextEditor
-                    content={descriptionWithGlossary}
-                    onChange={() => { }}
-                    editable={false}
-                    className="max-w-none glossary-terms-description"
+                  <div
+                    className="prose prose-sm dark:prose-invert max-w-none text-gray-900 dark:text-gray-100 [&_p]:mb-2 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-5 [&_ol]:pl-5"
+                    dangerouslySetInnerHTML={{ __html: descriptionWithGlossary }}
                   />
                 </div>
 
