@@ -21,9 +21,19 @@ import IssueCommentComposer from '../../components/issues/IssueCommentComposer'
 import IssueSidebar from '../../components/issues/IssueSidebar'
 import IssueLinkedItems from '../../components/issues/IssueLinkedItems'
 import IssueDescriptionEditor from '../../components/issues/IssueDescriptionEditor'
-import type { Issue } from 'shared/types/engineering.types'
+import DeleteConfirmationModal from '../../components/projects/DeleteConfirmationModal'
+import type { Issue, IssueType } from 'shared/types/engineering.types'
 import { formatDistanceToNow } from 'date-fns'
 import clsx from 'clsx'
+
+const ISSUE_TYPE_LABELS: Record<string, string> = {
+  specification_error: 'Specification Error',
+  design_error: 'Design Error',
+  coding_error: 'Coding Error',
+  documentation_error: 'Documentation Error',
+  interface_error: 'Interface Error',
+  other: 'Other',
+}
 
 export default function IssueDetailPage() {
   const { projectId, issueId } = useParams<{ projectId: string; issueId: string }>()
@@ -36,6 +46,7 @@ export default function IssueDetailPage() {
   const [isEditingDescription, setIsEditingDescription] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [copyLinkSuccess, setCopyLinkSuccess] = useState(false)
+  const [deleteConfirmation, setDeleteConfirmation] = useState(false)
 
   // Fetch issue detail
   const { data: issueData, isLoading } = useQuery({
@@ -113,6 +124,33 @@ export default function IssueDetailPage() {
     },
   })
 
+  // Delete issue mutation
+  const deleteIssueMutation = useMutation({
+    mutationFn: async () => {
+      if (!projectId || !issueId) throw new Error('Missing params')
+      return issueService.deleteIssue(projectId, issueId)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
+      setDeleteConfirmation(false)
+      setShowMoreMenu(false)
+      const listParams = new URLSearchParams()
+      if (searchParams.get('q')) listParams.set('q', searchParams.get('q')!)
+      if (searchParams.get('status')) listParams.set('status', searchParams.get('status')!)
+      if (searchParams.get('priority')) listParams.set('priority', searchParams.get('priority')!)
+      if (searchParams.get('owner')) listParams.set('owner', searchParams.get('owner')!)
+      if (searchParams.get('assignee')) listParams.set('assignee', searchParams.get('assignee')!)
+      if (searchParams.get('type')) listParams.set('type', searchParams.get('type')!)
+      const queryString = listParams.toString()
+      navigate(`/projects/${projectId}/issues${queryString ? `?${queryString}` : ''}`)
+    },
+    onError: (error: any) => {
+      console.error('Delete issue error:', error)
+      alert(error?.error || 'Failed to delete issue')
+      setDeleteConfirmation(false)
+    },
+  })
+
   const handleTitleSave = () => {
     if (titleValue.trim() && titleValue !== issue?.title) {
       updateTitleMutation.mutate(titleValue.trim())
@@ -136,13 +174,13 @@ export default function IssueDetailPage() {
   }
 
   const handleBackToList = () => {
-    // Preserve list state from query params
     const listParams = new URLSearchParams()
     if (searchParams.get('q')) listParams.set('q', searchParams.get('q')!)
     if (searchParams.get('status')) listParams.set('status', searchParams.get('status')!)
     if (searchParams.get('priority')) listParams.set('priority', searchParams.get('priority')!)
     if (searchParams.get('owner')) listParams.set('owner', searchParams.get('owner')!)
-
+    if (searchParams.get('assignee')) listParams.set('assignee', searchParams.get('assignee')!)
+    if (searchParams.get('type')) listParams.set('type', searchParams.get('type')!)
     const queryString = listParams.toString()
     navigate(`/projects/${projectId}/issues${queryString ? `?${queryString}` : ''}`)
   }
@@ -155,14 +193,15 @@ export default function IssueDetailPage() {
     )
   }
 
+  // Aligned with list page status colors
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'open':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+        return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
       case 'in-progress':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
       case 'resolved':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400'
+        return 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
       case 'closed':
         return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
       default:
@@ -261,7 +300,8 @@ export default function IssueDetailPage() {
                       </button>
                       <button
                         onClick={() => {
-                          /* TODO: Implement delete */
+                          setShowMoreMenu(false)
+                          setDeleteConfirmation(true)
                         }}
                         className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                       >
@@ -319,10 +359,15 @@ export default function IssueDetailPage() {
           </div>
 
           {/* Meta */}
-          <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
             <span className={clsx('px-2 py-1 rounded-full text-xs font-medium', getStatusColor(issue.status))}>
               {issue.status}
             </span>
+            {issue.issueType && (
+              <span className="px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" title="Problem Report (DO-178C)">
+                {ISSUE_TYPE_LABELS[issue.issueType] ?? issue.issueType}
+              </span>
+            )}
             <span className="font-mono font-semibold text-blue-600 dark:text-blue-400">
               {issue.issueKey || `#${issue.id.slice(0, 8)}`}
             </span>
@@ -355,7 +400,7 @@ export default function IssueDetailPage() {
               <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-3">
                 Activity
               </h3>
-              <IssueActivityFeed projectId={projectId!} issueId={issueId!} />
+              <IssueActivityFeed projectId={projectId!} issueId={issueId!} currentUserId={currentUser?.id} />
             </div>
 
             {/* Comment composer */}
@@ -368,6 +413,17 @@ export default function IssueDetailPage() {
           </div>
         </div>
       </div>
+
+      {deleteConfirmation && (
+        <DeleteConfirmationModal
+          isOpen={true}
+          itemName={issue.title}
+          itemType="issue"
+          onConfirm={() => deleteIssueMutation.mutate()}
+          onCancel={() => setDeleteConfirmation(false)}
+          isDeleting={deleteIssueMutation.isPending}
+        />
+      )}
     </div>
   )
 }

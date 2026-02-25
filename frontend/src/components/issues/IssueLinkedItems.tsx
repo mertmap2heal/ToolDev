@@ -4,8 +4,17 @@ import { Link as LinkIcon, Plus, X, ExternalLink, FileText, AlertCircle, GitPull
 import { useNavigate } from 'react-router-dom'
 import { issueService } from '../../services/issue.service'
 import { requirementService } from '../../services/requirement.service'
+import { functionService } from '../../services/function.service'
 import type { Issue, IssueLink } from 'shared/types/engineering.types'
-import clsx from 'clsx'
+
+const LINK_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'relates_to', label: 'Relates to' },
+  { value: 'blocks', label: 'Blocks' },
+  { value: 'blocked_by', label: 'Blocked by' },
+  { value: 'duplicates', label: 'Duplicates' },
+  { value: 'parent_of', label: 'Parent of' },
+  { value: 'child_of', label: 'Child of' },
+]
 
 interface IssueLinkedItemsProps {
   issue: Issue
@@ -16,7 +25,8 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [isAdding, setIsAdding] = useState(false)
-  const [linkType, setLinkType] = useState<'requirement' | 'issue' | 'function'>('requirement')
+  const [linkedType, setLinkedType] = useState<'requirement' | 'issue' | 'function'>('requirement')
+  const [relationshipType, setRelationshipType] = useState('relates_to')
   const [selectedItemId, setSelectedItemId] = useState('')
 
   // Fetch requirements for linking
@@ -26,10 +36,38 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
       const response = await requirementService.getAllRequirements(projectId)
       return response.success && Array.isArray(response.data) ? response.data : []
     },
-    enabled: linkType === 'requirement',
+    enabled: isAdding && linkedType === 'requirement',
   })
 
   const requirements = requirementsData || []
+
+  const hasIssueLinks = issue.links?.some((l) => l.linkedType === 'issue')
+  const hasFunctionLinks = issue.links?.some((l) => l.linkedType === 'function')
+
+  // Fetch issues for linking and for displaying link titles
+  const { data: issuesData } = useQuery({
+    queryKey: ['issues', projectId],
+    queryFn: async () => {
+      const response = await issueService.getIssues(projectId)
+      return response.success && Array.isArray(response.data) ? response.data : []
+    },
+    enabled: (isAdding && linkedType === 'issue') || !!hasIssueLinks,
+  })
+
+  const issues = (issuesData || []).filter((i) => i.id !== issue.id)
+  const allIssues = issuesData || []
+
+  // Fetch functions for linking and for displaying link titles
+  const { data: functionsData } = useQuery({
+    queryKey: ['functions', projectId],
+    queryFn: async () => {
+      const response = await functionService.getFunctions(projectId)
+      return response.success && Array.isArray(response.data) ? response.data : []
+    },
+    enabled: (isAdding && linkedType === 'function') || !!hasFunctionLinks,
+  })
+
+  const functions = functionsData || []
 
   // Create link mutation
   const createLinkMutation = useMutation({
@@ -44,7 +82,6 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
     },
   })
 
-  // Delete link mutation
   const deleteLinkMutation = useMutation({
     mutationFn: async (linkId: string) => {
       return issueService.deleteLink(projectId, linkId)
@@ -57,14 +94,16 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
 
   const handleAddLink = () => {
     if (selectedItemId) {
-      const selectedRequirement = requirements.find((r: any) => r.id === selectedItemId)
       createLinkMutation.mutate({
-        linkedType: linkType,
+        linkedType,
         linkedId: selectedItemId,
-        linkType: 'related',
+        linkType: relationshipType,
       })
     }
   }
+
+  const getRelationshipLabel = (linkTypeValue: string) =>
+    LINK_TYPE_OPTIONS.find((o) => o.value === linkTypeValue)?.label || linkTypeValue.replace(/_/g, ' ')
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -78,6 +117,14 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
 
   const getDisplayId = (link: IssueLink) => {
     if (link.linkedType === 'requirement') return link.linkedRequirementKey || `#${link.linkedId.slice(0, 8)}`
+    if (link.linkedType === 'issue') {
+      const i = allIssues.find((x: Issue) => x.id === link.linkedId)
+      return i?.issueKey || `#${link.linkedId.slice(0, 8)}`
+    }
+    if (link.linkedType === 'function') {
+      const f = functions.find((x: any) => x.id === link.linkedId)
+      return f?.functionId || `#${link.linkedId.slice(0, 8)}`
+    }
     return `#${link.linkedId.slice(0, 8)}`
   }
 
@@ -85,6 +132,14 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
     if (link.linkedType === 'requirement') {
       const req = requirements.find((r: any) => r.id === link.linkedId)
       return req?.title || link.linkedRequirementKey || 'Linked Requirement'
+    }
+    if (link.linkedType === 'issue') {
+      const linkedIssue = allIssues.find((i: Issue) => i.id === link.linkedId)
+      return linkedIssue ? `${linkedIssue.issueKey || link.linkedId.slice(0, 8)}: ${linkedIssue.title}` : (link as any).linkedTitle || 'Linked Issue'
+    }
+    if (link.linkedType === 'function') {
+      const func = functions.find((f: any) => f.id === link.linkedId)
+      return func ? `${func.functionId || func.id.slice(0, 8)}: ${func.name}` : (link as any).linkedTitle || 'Linked Function'
     }
     return (link as any).linkedTitle || `Linked ${link.linkedType}`
   }
@@ -119,8 +174,11 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
               Link Type
             </label>
             <select
-              value={linkType}
-              onChange={(e) => setLinkType(e.target.value as 'requirement' | 'issue' | 'function')}
+              value={linkedType}
+              onChange={(e) => {
+                setLinkedType(e.target.value as 'requirement' | 'issue' | 'function')
+                setSelectedItemId('')
+              }}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="requirement">Requirement</option>
@@ -129,7 +187,24 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
             </select>
           </div>
 
-          {linkType === 'requirement' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Relationship
+            </label>
+            <select
+              value={relationshipType}
+              onChange={(e) => setRelationshipType(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {LINK_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {linkedType === 'requirement' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Select Requirement
@@ -143,6 +218,46 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
                 {requirements.map((req: any) => (
                   <option key={req.id} value={req.id}>
                     {req.requirementKey || `#${req.id.slice(0, 8)}`} - {req.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {linkedType === 'issue' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Select Issue
+              </label>
+              <select
+                value={selectedItemId}
+                onChange={(e) => setSelectedItemId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Choose an issue...</option>
+                {issues.map((i: Issue) => (
+                  <option key={i.id} value={i.id}>
+                    {i.issueKey || `#${i.id.slice(0, 8)}`} - {i.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {linkedType === 'function' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Select Function
+              </label>
+              <select
+                value={selectedItemId}
+                onChange={(e) => setSelectedItemId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Choose a function...</option>
+                {functions.map((f: any) => (
+                  <option key={f.id} value={f.id}>
+                    {f.functionId || `#${f.id.slice(0, 8)}`} - {f.name}
                   </option>
                 ))}
               </select>
@@ -182,9 +297,12 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
                 {getIcon(link.linkedType)}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
                     {getDisplayId(link)}
+                  </span>
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                    {getRelationshipLabel(link.linkType)}
                   </span>
                 </div>
                 <div className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">

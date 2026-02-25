@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState, useRef, useEffect } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Send, Loader2 } from 'lucide-react'
 import { issueService } from '../../services/issue.service'
+import { authService } from '../../services/auth.service'
 import clsx from 'clsx'
 
 interface IssueCommentComposerProps {
@@ -18,8 +19,29 @@ export default function IssueCommentComposer({
   onCancel,
 }: IssueCommentComposerProps) {
   const queryClient = useQueryClient()
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [content, setContent] = useState('')
   const [isPreview, setIsPreview] = useState(false)
+  const [showMentionDropdown, setShowMentionDropdown] = useState(false)
+  const [mentionQuery, setMentionQuery] = useState('')
+  const [mentionAnchor, setMentionAnchor] = useState(0)
+
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: async () => {
+      const response = await authService.getUsers()
+      return response.success && Array.isArray(response.data) ? response.data : []
+    },
+    enabled: showMentionDropdown,
+  })
+
+  const filteredMentionUsers = mentionQuery
+    ? users.filter(
+        (u: { name?: string; email?: string }) =>
+          (u.name || '').toLowerCase().includes(mentionQuery.toLowerCase()) ||
+          (u.email || '').toLowerCase().includes(mentionQuery.toLowerCase())
+      )
+    : users
 
   const createCommentMutation = useMutation({
     mutationFn: async (commentContent: string) => {
@@ -44,7 +66,6 @@ export default function IssueCommentComposer({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Cmd/Ctrl + Enter to submit
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault()
       if (content.trim()) {
@@ -52,6 +73,44 @@ export default function IssueCommentComposer({
       }
     }
   }
+
+  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const v = e.target.value
+    const pos = e.target.selectionStart ?? v.length
+    setContent(v)
+    const beforeCursor = v.slice(0, pos)
+    const lastAt = beforeCursor.lastIndexOf('@')
+    if (lastAt >= 0) {
+      const segment = beforeCursor.slice(lastAt + 1)
+      if (!segment.includes(' ') && !segment.includes('\n')) {
+        setMentionAnchor(lastAt)
+        setMentionQuery(segment)
+        setShowMentionDropdown(true)
+        return
+      }
+    }
+    setShowMentionDropdown(false)
+  }
+
+  const insertMention = (name: string) => {
+    const cursor = textareaRef.current?.selectionStart ?? content.length
+    const newContent = content.slice(0, mentionAnchor) + '@' + name + ' ' + content.slice(cursor)
+    setContent(newContent)
+    setShowMentionDropdown(false)
+    setMentionQuery('')
+    setTimeout(() => {
+      textareaRef.current?.focus()
+      const newPos = mentionAnchor + name.length + 2
+      textareaRef.current?.setSelectionRange(newPos, newPos)
+    }, 0)
+  }
+
+  useEffect(() => {
+    if (!showMentionDropdown) return
+    const h = () => setShowMentionDropdown(false)
+    document.addEventListener('click', h)
+    return () => document.removeEventListener('click', h)
+  }, [showMentionDropdown])
 
   return (
     <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
@@ -102,14 +161,38 @@ export default function IssueCommentComposer({
               )}
             </div>
           ) : (
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              onKeyDown={handleKeyDown}
-              rows={4}
-              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              placeholder="Write a comment... (Cmd/Ctrl + Enter to submit)"
-            />
+            <div className="relative">
+              <textarea
+                ref={textareaRef}
+                value={content}
+                onChange={handleContentChange}
+                onKeyDown={handleKeyDown}
+                rows={4}
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                placeholder="Write a comment... Use @ to mention someone. Cmd/Ctrl + Enter to submit"
+              />
+              {showMentionDropdown && (
+                <div
+                  className="absolute z-20 mt-1 w-56 max-h-40 overflow-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {filteredMentionUsers.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">No users found</div>
+                  ) : (
+                    filteredMentionUsers.slice(0, 8).map((u: { id: string; name?: string; email?: string }) => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => insertMention(u.name || u.email || u.id)}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        {u.name || u.email || u.id}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
 

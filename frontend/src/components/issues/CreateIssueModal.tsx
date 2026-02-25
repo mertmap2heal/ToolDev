@@ -5,6 +5,7 @@ import { issueService } from '../../services/issue.service'
 import { functionService } from '../../services/function.service'
 import { parameterService } from '../../services/parameter.service'
 import { requirementService } from '../../services/requirement.service'
+import { authService } from '../../services/auth.service'
 import { useAuthStore } from '../../store/authStore'
 import type { CreateIssueDto, IssueType, SystemFunction, Parameter } from 'shared/types/engineering.types'
 
@@ -44,6 +45,7 @@ export default function CreateIssueModal({
     description: initialSourceDescription || '',
     priority: 'medium',
     owner: '',
+    assigneeId: undefined,
     relatedFunctionIds: initialSourceType === 'function' && initialSourceId ? [initialSourceId] : [],
     relatedParameterIds: initialSourceType === 'parameter' && initialSourceId ? [initialSourceId] : [],
   })
@@ -82,6 +84,16 @@ export default function CreateIssueModal({
     queryFn: async () => {
       const response = await requirementService.getAllRequirements(projectId)
       return response.success && response.data ? response.data : []
+    },
+    enabled: isOpen,
+  })
+
+  // Fetch users for assignee picker
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: async () => {
+      const response = await authService.getUsers()
+      return response.success && Array.isArray(response.data) ? response.data : []
     },
     enabled: isOpen,
   })
@@ -178,6 +190,7 @@ export default function CreateIssueModal({
           description: '',
           priority: 'medium',
           owner: '',
+          assigneeId: undefined,
           relatedFunctionIds: [],
           relatedParameterIds: [],
         })
@@ -225,6 +238,7 @@ export default function CreateIssueModal({
       description: formData.description.trim(),
       priority: formData.priority,
       owner: formData.owner?.trim() || '',
+      assigneeId: formData.assigneeId || undefined,
       relatedFunctionIds: formData.relatedFunctionIds || [],
       relatedParameterIds: formData.relatedParameterIds || [],
       sourceRequirementId: initialSourceType === 'requirement' && initialSourceId ? initialSourceId : undefined,
@@ -235,7 +249,7 @@ export default function CreateIssueModal({
   }
 
   const handleChange = (field: keyof CreateIssueDto, value: string | string[] | undefined) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
+    setFormData((prev) => ({ ...prev, [field]: value as any }))
     if (errors[field]) {
       setErrors((prev) => {
         const newErrors = { ...prev }
@@ -327,6 +341,7 @@ export default function CreateIssueModal({
         description: initialSourceDescription || '',
         priority: 'medium',
         owner: user?.name || '',
+        assigneeId: undefined,
         relatedFunctionIds: initialSourceType === 'function' && initialSourceId ? [initialSourceId] : [],
         relatedParameterIds: initialSourceType === 'parameter' && initialSourceId ? [initialSourceId] : [],
       })
@@ -646,6 +661,28 @@ export default function CreateIssueModal({
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               Automatically pre-filled with your account name
+            </p>
+          </div>
+
+          {/* Assignee */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+              Assignee
+            </label>
+            <select
+              value={formData.assigneeId || ''}
+              onChange={(e) => handleChange('assigneeId', e.target.value || undefined)}
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              <option value="">Unassigned</option>
+              {users.map((u: { id: string; name: string; email?: string }) => (
+                <option key={u.id} value={u.id}>
+                  {u.name || u.email || u.id}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Optional: assign to a team member
             </p>
           </div>
 

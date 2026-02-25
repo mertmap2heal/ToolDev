@@ -13,8 +13,17 @@ import {
 } from 'lucide-react'
 import { issueService } from '../../services/issue.service'
 import { authService } from '../../services/auth.service'
-import type { Issue, IssueLabel } from 'shared/types/engineering.types'
+import type { Issue, IssueLabel, IssueType } from 'shared/types/engineering.types'
 import clsx from 'clsx'
+
+const ISSUE_TYPE_OPTIONS: { value: IssueType; label: string }[] = [
+  { value: 'specification_error', label: 'Specification Error' },
+  { value: 'design_error', label: 'Design Error' },
+  { value: 'coding_error', label: 'Coding Error' },
+  { value: 'documentation_error', label: 'Documentation Error' },
+  { value: 'interface_error', label: 'Interface Error' },
+  { value: 'other', label: 'Other' },
+]
 
 interface IssueSidebarProps {
   issue: Issue
@@ -57,7 +66,7 @@ export default function IssueSidebar({ issue, projectId, currentUser }: IssueSid
 
   // Update issue mutation
   const updateIssueMutation = useMutation({
-    mutationFn: async (data: Partial<Issue>) => {
+    mutationFn: async (data: Parameters<typeof issueService.updateIssue>[2]) => {
       return issueService.updateIssue(projectId, issue.id, data)
     },
     onSuccess: () => {
@@ -163,6 +172,30 @@ export default function IssueSidebar({ issue, projectId, currentUser }: IssueSid
             No one assigned
           </p>
         )}
+      </div>
+
+      {/* Problem Report Type (DO-178C) */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+        <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+          Problem Report Type
+        </h4>
+        <select
+          value={issue.issueType || ''}
+          onChange={(e) => {
+            const v = e.target.value
+            updateIssueMutation.mutate({ issueType: (v ? v as IssueType : undefined) })
+          }}
+          disabled={updateIssueMutation.isPending}
+          className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">Not set</option>
+          {ISSUE_TYPE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">DO-178C classification</p>
       </div>
 
       {/* Labels */}

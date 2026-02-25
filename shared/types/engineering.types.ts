@@ -485,6 +485,7 @@ export interface UpdateIssueDto {
   description?: string
   priority?: Issue['priority']
   status?: Issue['status']
+  issueType?: IssueType
   assigneeId?: string | null
   labelIds?: string[]
   startDate?: string | null

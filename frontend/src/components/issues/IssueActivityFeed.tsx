@@ -1,19 +1,24 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { MessageSquare, History, Loader2, Edit2, Trash2 } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { MessageSquare, History, Loader2, Edit2, Trash2, Check, X } from 'lucide-react'
 import { issueService } from '../../services/issue.service'
-import type { IssueActivity } from 'shared/types/engineering.types'
+import type { IssueActivity, IssueComment } from 'shared/types/engineering.types'
 import { formatDistanceToNow } from 'date-fns'
 import clsx from 'clsx'
 
 interface IssueActivityFeedProps {
   projectId: string
   issueId: string
+  currentUserId?: string | null
 }
 
-export default function IssueActivityFeed({ projectId, issueId }: IssueActivityFeedProps) {
+export default function IssueActivityFeed({ projectId, issueId, currentUserId }: IssueActivityFeedProps) {
+  const queryClient = useQueryClient()
   const [filter, setFilter] = useState<'all' | 'comments' | 'history'>('all')
   const [sort, setSort] = useState<'oldest' | 'newest'>('oldest')
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
+  const [editingContent, setEditingContent] = useState('')
+  const [deleteConfirmCommentId, setDeleteConfirmCommentId] = useState<string | null>(null)
 
   const { data: activitiesData, isLoading } = useQuery({
     queryKey: ['issue-activity', projectId, issueId, filter, sort],
@@ -25,10 +30,45 @@ export default function IssueActivityFeed({ projectId, issueId }: IssueActivityF
 
   const activities = activitiesData || []
 
+  const updateCommentMutation = useMutation({
+    mutationFn: async ({ commentId, content }: { commentId: string; content: string }) => {
+      return issueService.updateComment(projectId, commentId, { content })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['issue-activity', projectId, issueId] })
+      queryClient.invalidateQueries({ queryKey: ['issue', projectId, issueId] })
+      setEditingCommentId(null)
+      setEditingContent('')
+    },
+    onError: (error: any) => {
+      console.error('Update comment error:', error)
+      alert(error?.error || 'Failed to update comment')
+    },
+  })
+
+  const deleteCommentMutation = useMutation({
+    mutationFn: async (commentId: string) => {
+      return issueService.deleteComment(projectId, commentId)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['issue-activity', projectId, issueId] })
+      queryClient.invalidateQueries({ queryKey: ['issue', projectId, issueId] })
+      setDeleteConfirmCommentId(null)
+    },
+    onError: (error: any) => {
+      console.error('Delete comment error:', error)
+      alert(error?.error || 'Failed to delete comment')
+    },
+  })
+
+  const isCommentAuthor = (comment: IssueComment) => currentUserId && comment.authorId === currentUserId
+
   const renderActivity = (activity: IssueActivity) => {
     if ('content' in activity) {
-      // Comment
-      const comment = activity as unknown as import('shared/types/engineering.types').IssueComment
+      const comment = activity as unknown as IssueComment
+      const canEdit = isCommentAuthor(comment)
+      const isEditing = editingCommentId === comment.id
+
       return (
         <div key={comment.id} className="flex gap-2">
           <div className="flex-shrink-0">
@@ -47,18 +87,93 @@ export default function IssueActivityFeed({ projectId, issueId }: IssueActivityF
                     commented {formatDistanceToNow(new Date(comment.createdAt))} ago
                   </span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <button className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
-                    <Edit2 size={14} className="text-gray-600 dark:text-gray-400" />
+                {canEdit && !isEditing && !deleteConfirmCommentId && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingCommentId(comment.id)
+                        setEditingContent(comment.content)
+                      }}
+                      className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                      title="Edit comment"
+                    >
+                      <Edit2 size={14} className="text-gray-600 dark:text-gray-400" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirmCommentId(comment.id)}
+                      className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors"
+                      title="Delete comment"
+                    >
+                      <Trash2 size={14} className="text-red-600 dark:text-red-400" />
+                    </button>
+                  </div>
+                )}
+              </div>
+              {isEditing ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={editingContent}
+                    onChange={(e) => setEditingContent(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[80px]"
+                    rows={3}
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (editingContent.trim() && editingContent !== comment.content) {
+                          updateCommentMutation.mutate({ commentId: comment.id, content: editingContent.trim() })
+                        } else {
+                          setEditingCommentId(null)
+                          setEditingContent('')
+                        }
+                      }}
+                      disabled={updateCommentMutation.isPending || !editingContent.trim()}
+                      className="px-2 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+                    >
+                      <Check size={14} />
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingCommentId(null)
+                        setEditingContent('')
+                      }}
+                      className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-1"
+                    >
+                      <X size={14} />
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : deleteConfirmCommentId === comment.id ? (
+                <div className="flex items-center gap-2 py-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Delete this comment?</span>
+                  <button
+                    type="button"
+                    onClick={() => deleteCommentMutation.mutate(comment.id)}
+                    disabled={deleteCommentMutation.isPending}
+                    className="px-2 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {deleteCommentMutation.isPending ? 'Deleting...' : 'Delete'}
                   </button>
-                  <button className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
-                    <Trash2 size={14} className="text-gray-600 dark:text-gray-400" />
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirmCommentId(null)}
+                    className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
+                    Cancel
                   </button>
                 </div>
-              </div>
-              <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                {comment.content}
-              </p>
+              ) : (
+                <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                  {comment.content}
+                </p>
+              )}
             </div>
           </div>
         </div>
