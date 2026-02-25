@@ -2675,6 +2675,16 @@ export default function RequirementsPage() {
                               onRequirementClick={setDetailRequirement}
                               draggable={leftPanelTab === 'functions'}
                               onDragStart={(e) => handleRequirementDragStart(e, req)}
+                              inlineEdit={inlineEdit?.field === 'title' || inlineEdit?.field === 'description' ? inlineEdit : null}
+                              onStartInlineEdit={startInlineEdit}
+                              onSaveInlineEdit={saveInlineEdit}
+                              onCancelInlineEdit={cancelInlineEdit}
+                              onInlineEditChange={(value) => setInlineEdit((prev) => (prev ? { ...prev, value } : null))}
+                              inlineInputRef={inlineInputRef}
+                              inlineTextareaRef={inlineTextareaRef}
+                              onInlineKeyDown={handleInlineKeyDown}
+                              onDescriptionKeyDown={handleDescriptionKeyDown}
+                              isBaselineView={isBaselineView}
                             />
                           ))}
                         </div>
@@ -2696,6 +2706,16 @@ export default function RequirementsPage() {
                       requirement={req}
                       links={getLinksForRequirement(req.id)}
                       onRequirementClick={setDetailRequirement}
+                      inlineEdit={inlineEdit?.field === 'title' || inlineEdit?.field === 'description' ? inlineEdit : null}
+                      onStartInlineEdit={startInlineEdit}
+                      onSaveInlineEdit={saveInlineEdit}
+                      onCancelInlineEdit={cancelInlineEdit}
+                      onInlineEditChange={(value) => setInlineEdit((prev) => (prev ? { ...prev, value } : null))}
+                      inlineInputRef={inlineInputRef}
+                      inlineTextareaRef={inlineTextareaRef}
+                      onInlineKeyDown={handleInlineKeyDown}
+                      onDescriptionKeyDown={handleDescriptionKeyDown}
+                      isBaselineView={isBaselineView}
                     />
                   ))
                 )}
