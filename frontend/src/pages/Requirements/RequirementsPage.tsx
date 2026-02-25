@@ -10,6 +10,7 @@ import EditRequirementModal from '../../components/requirements/EditRequirementM
 import DeleteRequirementModal from '../../components/requirements/DeleteRequirementModal'
 import RequirementDetailDrawer from '../../components/requirements/RequirementDetailDrawer'
 import TraceabilityMatrix from '../../components/requirements/TraceabilityMatrix'
+import FunctionVerificationCoverageMatrix from '../../components/requirements/FunctionVerificationCoverageMatrix'
 import SuspectLinksReview from '../../components/requirements/SuspectLinksReview'
 import BaselineManager from '../../components/requirements/BaselineManager'
 import ExportBuilder from '../../components/requirements/ExportBuilder'
@@ -87,6 +88,7 @@ export default function RequirementsPage() {
   const [selectedRequirements, setSelectedRequirements] = useState<Set<string>>(new Set())
   const [detailRequirement, setDetailRequirement] = useState<Requirement | null>(null)
   const [isTraceMatrixOpen, setIsTraceMatrixOpen] = useState(false)
+  const [isFunctionVerificationMatrixOpen, setIsFunctionVerificationMatrixOpen] = useState(false)
   const [isSuspectReviewOpen, setIsSuspectReviewOpen] = useState(false)
   const [isBaselineManagerOpen, setIsBaselineManagerOpen] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
@@ -2270,6 +2272,14 @@ export default function RequirementsPage() {
                 <span className="text-sm">Matrix</span>
               </button>
               <button
+                onClick={() => setIsFunctionVerificationMatrixOpen(true)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+                title="Function Verification Coverage Matrix"
+              >
+                <BarChart3 size={16} />
+                <span className="text-sm">Function Verification</span>
+              </button>
+              <button
                 onClick={() => setIsSuspectReviewOpen(true)}
                 className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
                 title="Review Suspect Links"
@@ -3117,6 +3127,13 @@ export default function RequirementsPage() {
             <TraceabilityMatrix
               projectId={projectId}
               onClose={() => setIsTraceMatrixOpen(false)}
+            />
+          )}
+
+          {isFunctionVerificationMatrixOpen && projectId && (
+            <FunctionVerificationCoverageMatrix
+              projectId={projectId}
+              onClose={() => setIsFunctionVerificationMatrixOpen(false)}
             />
           )}
 

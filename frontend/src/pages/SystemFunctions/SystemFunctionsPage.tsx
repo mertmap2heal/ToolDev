@@ -8,9 +8,11 @@ import {
   Layers,
   ChevronLeft,
   ChevronRight,
+  BarChart3,
 } from 'lucide-react'
 
 import FunctionTreePanel from '../../components/functions/FunctionTreePanel'
+import FunctionVerificationCoverageMatrix from '../../components/requirements/FunctionVerificationCoverageMatrix'
 import FunctionDetailPanel from '../../components/functions/FunctionDetailPanel'
 import { RelationshipGraphView } from '../../components/relationshipGraph'
 import CreateFunctionModal from '../../components/functions/CreateFunctionModal'
@@ -67,6 +69,7 @@ export default function SystemFunctionsPage() {
   }, [projectId])
 
   const [isTreePanelOpen, setIsTreePanelOpen] = useState(true)
+  const [isFunctionVerificationMatrixOpen, setIsFunctionVerificationMatrixOpen] = useState(false)
 
   // Resizable panel
   const PANEL_MIN = 260
@@ -282,6 +285,16 @@ export default function SystemFunctionsPage() {
             <SafetyLinkPanel variant="impact" count={2} />
 
             <button
+              type="button"
+              onClick={() => setIsFunctionVerificationMatrixOpen(true)}
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors text-sm font-medium"
+              title="Function Verification Coverage Matrix"
+            >
+              <BarChart3 size={16} />
+              <span>Verification Coverage</span>
+            </button>
+
+            <button
               onClick={handleAddRoot}
               className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors text-sm font-medium"
             >
@@ -451,6 +464,13 @@ export default function SystemFunctionsPage() {
           sourceType="function"
           sourceId={changeRequestModal.sourceId}
           sourceName={changeRequestModal.sourceName}
+        />
+      )}
+
+      {isFunctionVerificationMatrixOpen && projectId && (
+        <FunctionVerificationCoverageMatrix
+          projectId={projectId}
+          onClose={() => setIsFunctionVerificationMatrixOpen(false)}
         />
       )}
     </div>
