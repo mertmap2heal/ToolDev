@@ -133,6 +133,8 @@ export interface RequirementVersion {
   changedByName?: string
   changeReason?: string
   snapshot?: string
+  baselineId?: string
+  baselineName?: string
   createdAt: string
 }
 

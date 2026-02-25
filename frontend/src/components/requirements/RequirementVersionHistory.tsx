@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { X, History, ChevronDown, ChevronRight, ArrowLeftRight, Clock, User, FileText, Tag, Trash2, RotateCcw, Plus, AlertCircle, GitPullRequest, ExternalLink, Check, FileStack, Unlink } from 'lucide-react'
+import { X, History, ChevronDown, ChevronRight, ArrowLeftRight, Clock, User, FileText, Tag, Trash2, RotateCcw, Plus, AlertCircle, GitPullRequest, ExternalLink, Check, FileStack, Unlink, Archive } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { versionService, VersionComparison, AuditEvent } from '../../services/version.service'
 import type { Requirement, RequirementVersion } from 'shared/types/engineering.types'
 import { format } from 'date-fns'
@@ -22,6 +23,7 @@ export default function RequirementVersionHistory({
   requirement,
   onClose,
 }: RequirementVersionHistoryProps) {
+  const navigate = useNavigate()
   const [selectedVersions, setSelectedVersions] = useState<number[]>([])
   const [expandedVersion, setExpandedVersion] = useState<number | null>(null)
   const [isComparing, setIsComparing] = useState(false)
@@ -218,9 +220,10 @@ export default function RequirementVersionHistory({
             <span className="text-sm text-gray-600 dark:text-gray-400">
               {versions.length + auditEvents.length} event{versions.length + auditEvents.length !== 1 ? 's' : ''} recorded
             </span>
-            <select value={filter} onChange={e => setFilter(e.target.value)} className="ml-4 px-2 py-1 rounded border border-gray-300 text-sm">
+            <select value={filter} onChange={e => setFilter(e.target.value)} className="ml-4 px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">
               <option value="all">All</option>
               <option value="version">Versions</option>
+              <option value="baselined">Baselined</option>
               <option value="audit">Audit Events</option>
               <option value="linked">Linked Artifacts</option>
               <option value="edit">Edits</option>
@@ -335,9 +338,17 @@ export default function RequirementVersionHistory({
                       {version.version}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                        {version.title}
-                      </p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {version.title}
+                        </p>
+                        {version.baselineId && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                            <Archive size={12} />
+                            Baselined
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
                         {format(new Date(version.createdAt), 'PPp')}
                       </p>
@@ -396,6 +407,7 @@ export default function RequirementVersionHistory({
                   if (filter !== 'all') {
                     timeline = timeline.filter(item => {
                       if (filter === 'version') return item.type === 'version';
+                      if (filter === 'baselined') return item.type === 'version' && !!(item.data as RequirementVersion).baselineId;
                       if (filter === 'audit') return item.type === 'audit';
                       if (filter === 'linked') return item.type === 'audit' && ['ISSUE_LINKED','CHANGE_REQUEST_LINKED','TEST_CASE_LINKED','TEST_PLAN_LINKED'].includes(item.data.action);
                       if (filter === 'edit') return item.type === 'version';
@@ -409,13 +421,22 @@ export default function RequirementVersionHistory({
                       const version = item.data as RequirementVersion;
                       return (
                         <div key={`version-${version.id}`} className="relative pl-10">
-                          <div className="absolute left-2 w-4 h-4 bg-gray-300 dark:bg-gray-600 rounded-full border-2 border-white dark:border-gray-800" />
+                          <div className={clsx(
+                            'absolute left-2 w-4 h-4 rounded-full border-2 border-white dark:border-gray-800',
+                            version.baselineId ? 'bg-amber-500' : 'bg-gray-300 dark:bg-gray-600'
+                          )} />
                           <div className="bg-white dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                             <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                                   Version {version.version}
                                 </span>
+                                {version.baselineId && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                                    <Archive size={12} />
+                                    Baselined
+                                  </span>
+                                )}
                                 {version.changedByName && (
                                   <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                                     <User size={12} />
@@ -447,6 +468,24 @@ export default function RequirementVersionHistory({
                             )}
                             {expandedVersion === version.version && (
                               <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600 space-y-2">
+                                {version.baselineId && (
+                                  <div className="mb-3 p-2 rounded bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                                    <p className="text-xs font-medium text-amber-800 dark:text-amber-300 mb-1">Baseline</p>
+                                    <p className="text-sm text-gray-900 dark:text-white">{version.baselineName ?? '—'}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">{version.baselineId}</p>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        onClose()
+                                        navigate(`/projects/${projectId}/requirements?openBaselines=1&baselineId=${version.baselineId}`)
+                                      }}
+                                      className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                                    >
+                                      <ExternalLink size={14} />
+                                      View baseline
+                                    </button>
+                                  </div>
+                                )}
                                 <div className="grid grid-cols-2 gap-2 text-sm">
                                   <div>
                                     <span className="text-gray-500 dark:text-gray-400">Status:</span>{' '}

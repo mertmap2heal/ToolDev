@@ -757,6 +757,8 @@ model RequirementVersion {
   changedByName      String?
   changeReason       String?
   snapshot           String? // JSON string of full requirement data
+  baselineId         String?  // baseline that created this version (when included in a baseline)
+  baselineName       String?  // denormalized for display
   createdAt          DateTime @default(now())
 
   @@index([requirementId])

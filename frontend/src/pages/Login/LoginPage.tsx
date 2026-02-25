@@ -38,9 +38,10 @@ export default function LoginPage() {
   }, [navigate, token])
 
   const getUserFriendlyError = (responseError?: string, statusCode?: number): string => {
-    if (statusCode === 401) return 'Invalid username or password.'
-    if (responseError?.toLowerCase().includes('connect') || responseError?.toLowerCase().includes('network')) {
-      return 'Unable to connect. Please check your connection.'
+    if (statusCode === 401) return 'Invalid email/username or password.'
+    const err = (responseError ?? '').toLowerCase()
+    if (err.includes('connect') || err.includes('network') || err.includes('backend')) {
+      return 'Backend not reachable. Start it in a terminal: cd backend && npm run dev — then try again.'
     }
     return responseError || 'Something went wrong. Please try again.'
   }
@@ -49,9 +50,9 @@ export default function LoginPage() {
     const trimmedUsername = username.trim()
     const errors: { username?: string; password?: string } = {}
     if (!trimmedUsername) {
-      errors.username = 'Username is required.'
+      errors.username = 'Email or username is required.'
     } else if (trimmedUsername.length < MIN_USERNAME_LENGTH) {
-      errors.username = `Username must be at least ${MIN_USERNAME_LENGTH} character.`
+      errors.username = `Must be at least ${MIN_USERNAME_LENGTH} character.`
     }
     if (!password) {
       errors.password = 'Password is required.'
@@ -165,7 +166,7 @@ export default function LoginPage() {
                 htmlFor="username"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
               >
-                Username
+                Email or username
               </label>
               <input
                 ref={usernameInputRef}
@@ -186,7 +187,7 @@ export default function LoginPage() {
                     ? 'border-red-500 dark:border-red-500'
                     : 'border-gray-300 dark:border-gray-600'
                 }`}
-                placeholder="Enter your username"
+                placeholder="Enter your email or username"
               />
               {usernameError && (
                 <p id="username-error" className="mt-1 text-sm text-red-600 dark:text-red-400">

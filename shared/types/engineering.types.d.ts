@@ -126,6 +126,8 @@ export interface RequirementVersion {
     changedByName?: string;
     changeReason?: string;
     snapshot?: string;
+    baselineId?: string;
+    baselineName?: string;
     createdAt: string;
 }
 export interface Baseline {
@@ -146,6 +148,7 @@ export interface Baseline {
     suspectLinksCount?: number;
     baselineType?: string;
     reviewType?: string;
+    /** Snapshot of links at baseline creation (LINKAGE_V1) */
     linksSnapshot?: unknown;
     supersedesBaselineId?: string | null;
     configurationAuthority?: string | null;
@@ -732,5 +735,33 @@ export interface CreateReviewDto {
 export interface UpdateReviewerDto {
     status: ReviewerStatus;
     reviewComments?: string;
+}
+/** Project-scoped glossary or abbreviation entry (DefinitionEntry) */
+export type DefinitionEntryType = 'glossary' | 'abbreviation';
+export interface DefinitionEntry {
+    id: string;
+    projectId: string;
+    type: DefinitionEntryType;
+    term: string;
+    definition: string;
+    notes?: string | null;
+    source?: string | null;
+    createdById?: string | null;
+    createdAt: string;
+    updatedAt: string;
+}
+export interface CreateDefinitionEntryDto {
+    type: DefinitionEntryType;
+    term: string;
+    definition: string;
+    notes?: string | null;
+    source?: string | null;
+}
+export interface UpdateDefinitionEntryDto {
+    type?: DefinitionEntryType;
+    term?: string;
+    definition?: string;
+    notes?: string | null;
+    source?: string | null;
 }
 //# sourceMappingURL=engineering.types.d.ts.map

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X, Archive, Trash2, Plus, ArrowLeftRight, Calendar, User, FileText, Search, CheckSquare, Square, ChevronRight, ChevronLeft, Eye, Download, Link2, AlertTriangle } from 'lucide-react'
@@ -16,6 +16,8 @@ import clsx from 'clsx'
 interface BaselineManagerProps {
   projectId: string
   onClose: () => void
+  /** When set (e.g. from URL openBaselines=1&baselineId=), open the view modal for this baseline on mount */
+  initialBaselineId?: string
   /** Called when user clicks "View in Requirements Page" to navigate to requirements with baselineId in URL */
   onViewInRequirementsPage?: (baselineId: string) => void
 }
@@ -27,7 +29,7 @@ interface BaselineManagerProps {
  */
 type CreateBaselineStep = 'details' | 'select-requirements'
 
-export default function BaselineManager({ projectId, onClose, onViewInRequirementsPage }: BaselineManagerProps) {
+export default function BaselineManager({ projectId, onClose, onViewInRequirementsPage, initialBaselineId }: BaselineManagerProps) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [createStep, setCreateStep] = useState<CreateBaselineStep>('details')
   const [newBaselineName, setNewBaselineName] = useState('')
@@ -46,6 +48,13 @@ export default function BaselineManager({ projectId, onClose, onViewInRequiremen
   const [showViewInArchiveLink, setShowViewInArchiveLink] = useState(false)
 
   const queryClient = useQueryClient()
+
+  // When opened with initialBaselineId (e.g. from Version History "View baseline"), open that baseline's view modal
+  useEffect(() => {
+    if (initialBaselineId) {
+      setViewingBaselineId(initialBaselineId)
+    }
+  }, [initialBaselineId])
 
   // Fetch baselines
   const { data: baselines = [], isLoading } = useQuery({

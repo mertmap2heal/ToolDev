@@ -209,6 +209,7 @@ export const createBaseline = async (req: AuthRequest, res: Response) => {
 
     // Resolve creator name for "Created by" display (Archive and BaselineManager)
     let createdByName: string | null = null
+    const createdByUserId = req.userId ?? null
     if (req.userId) {
       const creator = await prisma.user.findUnique({
         where: { id: req.userId },
@@ -310,6 +311,43 @@ export const createBaseline = async (req: AuthRequest, res: Response) => {
         await tx.baselineItem.createMany({
           data: snapshotData,
         })
+
+        // Record each included requirement in its version history as a baselined snapshot
+        for (const requirement of requirements) {
+          const latestVersion = await tx.requirementVersion.findFirst({
+            where: { requirementId: requirement.id, projectId },
+            orderBy: { version: 'desc' },
+            select: { version: true },
+          })
+          const newVersionNumber = (latestVersion?.version ?? 0) + 1
+          const tagsArray = Array.isArray(requirement.tags)
+            ? requirement.tags.map((t: unknown) => (typeof t === 'string' ? t : String(t)))
+            : []
+          await tx.requirementVersion.create({
+            data: {
+              requirementId: requirement.id,
+              projectId,
+              version: newVersionNumber,
+              title: String(requirement.title ?? ''),
+              description: String(requirement.description ?? ''),
+              priority: String(requirement.priority ?? ''),
+              status: String(requirement.status ?? ''),
+              stage: requirement.stage != null ? String(requirement.stage) : null,
+              owner: requirement.owner != null ? String(requirement.owner) : null,
+              category: requirement.category != null ? String(requirement.category) : null,
+              source: requirement.source != null ? String(requirement.source) : null,
+              verificationMethod: requirement.verificationMethod != null ? String(requirement.verificationMethod) : null,
+              acceptanceCriteria: requirement.acceptanceCriteria != null ? String(requirement.acceptanceCriteria) : null,
+              tags: tagsArray,
+              changedBy: createdByUserId,
+              changedByName: createdByName,
+              changeReason: `Baselined: ${newBaseline.name}`,
+              snapshot: JSON.stringify(requirement),
+              baselineId: newBaseline.id,
+              baselineName: newBaseline.name,
+            },
+          })
+        }
       }
 
       return newBaseline

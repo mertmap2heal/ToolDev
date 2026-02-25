@@ -134,6 +134,13 @@ export default function RequirementsPage() {
     return () => clearTimeout(timer)
   }, [searchQuery])
 
+  // Open Baseline Manager when navigating with openBaselines=1&baselineId= (e.g. from Version History "View baseline")
+  useEffect(() => {
+    if (searchParams.get('openBaselines') === '1' && searchParams.get('baselineId')) {
+      setIsBaselineManagerOpen(true)
+    }
+  }, [searchParams])
+
   // PBS Tree panel state (declared early — referenced by serverFilters and filter reset)
   const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null)
   const [leftPanelTab, setLeftPanelTab] = useState<'pbs' | 'functions'>('pbs')
@@ -3110,6 +3117,7 @@ export default function RequirementsPage() {
           {isBaselineManagerOpen && projectId && (
             <BaselineManager
               projectId={projectId}
+              initialBaselineId={searchParams.get('openBaselines') === '1' ? (searchParams.get('baselineId') ?? undefined) : undefined}
               onClose={() => setIsBaselineManagerOpen(false)}
               onViewInRequirementsPage={(id) => {
                 setIsBaselineManagerOpen(false)
