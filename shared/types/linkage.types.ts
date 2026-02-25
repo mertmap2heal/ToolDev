@@ -127,6 +127,7 @@ export interface CreateLinkDto {
   targetType: string
   targetId: string
   linkType: string
+  direction?: string
   rationale?: string
 }
 

@@ -951,18 +951,27 @@ export default function RequirementDetailDrawer({
           <div className="overflow-y-auto flex-1 px-4 py-4">
             {activeTab === 'overview' && (
               <div className="space-y-6">
-                {/* ID and Title */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">ID</h3>
-                    <p className="text-sm text-gray-900 dark:text-white font-mono">
-                      {displayRequirement.requirementId || displayRequirement.id.substring(0, 8)}
-                    </p>
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Title</h3>
-                    <p className="text-sm text-gray-900 dark:text-white">{resolvedTitle}</p>
-                  </div>
+                {/* Requirement Details — Project ID, Global ID, Name (matches document view / external tools) */}
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50/50 dark:bg-gray-800/50">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Requirement Details</h3>
+                  <dl className="grid grid-cols-1 gap-3">
+                    <div>
+                      <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">Project ID</dt>
+                      <dd className="mt-0.5 text-sm text-gray-900 dark:text-white font-mono">
+                        {displayRequirement.requirementId || displayRequirement.id.substring(0, 8)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">Global ID</dt>
+                      <dd className="mt-0.5 text-sm text-gray-900 dark:text-white font-mono">
+                        {'GID-' + displayRequirement.id.replace(/-/g, '').substring(0, 5)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">Name</dt>
+                      <dd className="mt-0.5 text-sm text-gray-900 dark:text-white">{resolvedTitle}</dd>
+                    </div>
+                  </dl>
                 </div>
 
                 {/* Description — render as HTML so glossary-term spans (highlight + tooltip) are preserved */}
@@ -1966,20 +1975,20 @@ export default function RequirementDetailDrawer({
                     <MessageSquare size={16} className="text-blue-500" />
                     New Comment
                   </h3>
-                  <RichTextEditor
-                    content={newComment}
-                    onChange={setNewComment}
+                  <textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
                     placeholder="Write a comment..."
-                    className="min-h-[120px] bg-white dark:bg-gray-800"
+                    className="min-h-[120px] w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-y"
                   />
                   <div className="flex justify-end mt-3">
                     <button
                       onClick={() => {
-                        if (newComment.trim() && newComment !== '<p><br></p>') {
+                        if (newComment.trim()) {
                           createCommentMutation.mutate(newComment.trim())
                         }
                       }}
-                      disabled={!newComment.trim() || newComment === '<p><br></p>' || createCommentMutation.isPending}
+                      disabled={!newComment.trim() || createCommentMutation.isPending}
                       className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors flex items-center gap-2"
                     >
                       {createCommentMutation.isPending ? 'Posting...' : 'Post Comment'}
@@ -2029,14 +2038,10 @@ export default function RequirementDetailDrawer({
                                 </button>
                               </div>
 
-                              <div className="prose prose-sm dark:prose-invert max-w-none">
-                                <RichTextEditor
-                                  content={comment.content}
-                                  onChange={() => { }}
-                                  editable={false}
-                                  className="border-none p-0 min-h-0 bg-transparent"
-                                />
-                              </div>
+                              <div
+                                className="prose prose-sm dark:prose-invert max-w-none border-none p-0 min-h-0 bg-transparent"
+                                dangerouslySetInnerHTML={{ __html: comment.content }}
+                              />
                             </div>
                           </div>
                         </div>

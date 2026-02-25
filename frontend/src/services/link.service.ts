@@ -79,6 +79,7 @@ export const linkService = {
       targetType: dto.targetType as ArtifactType,
       targetId: dto.targetId,
       linkType: dto.linkType as TraceLinkType,
+      direction: dto.direction,
       rationale: dto.rationale,
     })
     if (!response.success || !response.data) return response as unknown as ApiResponse<Link>

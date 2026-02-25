@@ -52,7 +52,7 @@ interface ExpandedRow {
   linkedFunctions: Array<{ id: string; functionId?: string; name: string }>
   linkedIssues: Array<{ id: string; title: string }>
   linkedChangeRequests: Array<{ id: string; title: string }>
-  linkedItems?: Array<{ id: string; targetType: string; targetId: string; label?: string; linkType?: string; issue?: { id: string; title: string; issueKey?: string; createdByUser?: { id: string; name: string; email: string } } }>
+  linkedItems?: Array<{ id: string; targetType: string; targetId: string; label?: string; title?: string; description?: string; displayId?: string; linkType?: string; issue?: { id: string; title: string; issueKey?: string; createdByUser?: { id: string; name: string; email: string } } }>
 }
 
 /**

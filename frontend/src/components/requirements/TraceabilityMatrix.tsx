@@ -322,6 +322,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
           targetType: linkageTargetType,
           targetId: data.targetId,
           linkType,
+          direction: data.direction,
           rationale: data.rationale,
         })
       }
@@ -366,6 +367,8 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
       if (LINKAGE_V1) queryClient.invalidateQueries({ queryKey: ['links', projectId] })
       setSelectedReq(null)
       setSelectedFunc(null)
+      setSelectedTargetReq(null)
+      setSelectedTargetId(null)
     },
     onError: (error: any) => {
       console.error('Delete link error:', error)
@@ -754,7 +757,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                 <p className="text-sm font-medium text-gray-900 dark:text-white">
                   {LINKAGE_V1 ? (
                     <>
-                      {linkageTargets.find((t) => t.id === selectedTargetId)?.label || selectedTargetId?.substring(0, 8)}
+                      {filteredTargets.find((t) => t.id === selectedTargetId)?.label || selectedTargetId?.substring(0, 8)}
                     </>
                   ) : matrixType === 'requirements-functions' ? (
                     <>
