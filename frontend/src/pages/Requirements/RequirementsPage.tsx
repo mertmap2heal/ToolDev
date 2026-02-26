@@ -575,20 +575,37 @@ export default function RequirementsPage() {
   const verificationSetupsList = useMemo(() => Array.isArray(verificationSetups) ? verificationSetups : [], [verificationSetups])
   const requirementTestCaseLinks = useMemo((): RequirementTestCaseLinkLike[] => {
     const links = Array.isArray(effectiveLinks) ? effectiveLinks : []
-    return links
-      .filter(
-        (l: any) =>
-          l.sourceType === 'requirement' &&
-          (l.targetType === 'test_case' || l.targetType === 'testCase') &&
-          (l.linkType === 'verifies' || l.linkType === 'verified_by')
-      )
-      .map((l: any) => ({
-        id: l.id,
-        sourceId: l.sourceId,
-        targetId: l.targetId,
-        sourceTitle: l.sourceTitle ?? l.sourceLabel ?? l.sourceDisplayId,
-        sourceDisplayId: l.sourceDisplayId,
-      }))
+    const norm = (s: string) => (s ?? '').toLowerCase().replace(/-/g, '_')
+    const result: RequirementTestCaseLinkLike[] = []
+    const seen = new Set<string>()
+    for (const l of links) {
+      const st = norm((l as any).sourceType)
+      const tt = norm((l as any).targetType)
+      const isForward = st === 'requirement' && (tt === 'test_case' || tt === 'testcase')
+      const isReverse = (st === 'test_case' || st === 'testcase') && tt === 'requirement'
+      if (!isForward && !isReverse) continue
+      const lid = (l as any).id ?? `${(l as any).sourceId}-${(l as any).targetId}`
+      if (seen.has(lid)) continue
+      seen.add(lid)
+      if (isForward) {
+        result.push({
+          id: (l as any).id,
+          sourceId: (l as any).sourceId,
+          targetId: (l as any).targetId,
+          sourceTitle: (l as any).sourceTitle ?? (l as any).sourceLabel ?? (l as any).sourceDisplayId,
+          sourceDisplayId: (l as any).sourceDisplayId,
+        })
+      } else {
+        result.push({
+          id: (l as any).id,
+          sourceId: (l as any).targetId,
+          targetId: (l as any).sourceId,
+          sourceTitle: (l as any).targetTitle ?? (l as any).targetLabel ?? (l as any).targetDisplayId,
+          sourceDisplayId: (l as any).targetDisplayId,
+        })
+      }
+    }
+    return result
   }, [effectiveLinks])
   const requirementsForVerificationTree = useMemo(
     () =>

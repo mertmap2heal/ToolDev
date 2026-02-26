@@ -152,11 +152,24 @@ function buildTree(
   const reqLinksByCaseIdStable = requirementTestCaseLinks?.length
     ? (() => {
         const m = new Map<string, RequirementTestCaseLinkLike[]>()
+        const targetIdToCaseId = (targetId: string): string | null => {
+          const c = caseMap.get(targetId)
+          if (c && (c as { id?: string }).id) return (c as { id: string }).id
+          const byKey = caseKeyToId.get(targetId)
+          if (byKey) return byKey
+          const byKeyLower = caseKeyToId.get(targetId.toLowerCase())
+          if (byKeyLower) return byKeyLower
+          const str = String(targetId)
+          for (const tc of testCases) {
+            const id = (tc as { id: string }).id
+            const key = (tc as { key?: string }).key
+            if (id === targetId || id === str || key === targetId || key === str) return id
+          }
+          return null
+        }
         for (const link of requirementTestCaseLinks) {
-          const caseObj = caseMap.get(link.targetId)
-          const treeCaseId =
-            (caseObj as { id?: string })?.id ?? caseKeyToId.get(link.targetId) ?? link.targetId
-          if (!knownCaseIds.has(treeCaseId)) continue
+          const treeCaseId = targetIdToCaseId(link.targetId)
+          if (treeCaseId == null || !knownCaseIds.has(treeCaseId)) continue
           const list = m.get(treeCaseId) ?? []
           list.push(link)
           m.set(treeCaseId, list)
@@ -314,6 +327,56 @@ function buildTree(
     })
     .filter(Boolean) as VerTreeNode[]
 
+  const allPlanCaseIds = new Set<string>()
+  for (const plan of plans) {
+    const rawCases = plan.planCases ?? []
+    const planCaseIds = rawCases.map((pc: any) =>
+      pc?.testCase?.id ?? pc?.testCaseId ?? (typeof pc === 'object' && pc !== null && 'id' in pc ? pc.id : (pc as string))
+    )
+    for (const cid of planCaseIds) {
+      const c = caseMap.get(cid)
+      const caseId = (c as { id?: string })?.id ?? caseKeyToId.get(cid) ?? caseKeyToId.get(String(cid).toLowerCase()) ?? cid
+      if (knownCaseIds.has(caseId)) allPlanCaseIds.add(caseId)
+    }
+  }
+  const caseIdsWithLinksNotInPlan = requirementTestCaseLinks?.length
+    ? [...reqLinksByCaseIdStable.keys()].filter((cid) => !allPlanCaseIds.has(cid))
+    : []
+  const otherTestCasesNode: VerTreeNode | null =
+    caseIdsWithLinksNotInPlan.length > 0
+      ? {
+          type: 'test-plan',
+          id: '_other_cases_with_links',
+          planId: undefined,
+          label: `Other test cases (${caseIdsWithLinksNotInPlan.length})`,
+          children: caseIdsWithLinksNotInPlan
+            .map((caseId) => {
+              const c = caseMap.get(caseId)
+              if (!c) return null
+              const label = (c as { title?: string; name?: string }).title ?? (c as { name?: string }).name ?? (c as { id: string }).id
+              const key = (c as { key?: string }).key
+              const reqLinks = reqLinksByCaseIdStable.get(caseId) ?? []
+              const requirementChildren: VerTreeNode[] = reqLinks.map((link) => ({
+                type: 'requirement' as const,
+                id: `req-${link.sourceId}-${caseId}`,
+                label: link.sourceTitle ?? link.sourceDisplayId ?? link.sourceId.slice(0, 8),
+                requirementId: link.sourceId,
+                caseId,
+              }))
+              return {
+                type: 'test-case' as const,
+                id: caseId,
+                planId: undefined,
+                label,
+                key,
+                status: (c as { status?: string }).status,
+                children: requirementChildren.length > 0 ? requirementChildren : undefined,
+              }
+            })
+            .filter(Boolean) as VerTreeNode[],
+        }
+      : null
+
   const unassignedNode: VerTreeNode | null =
     requirements != null
       ? {
@@ -333,7 +396,10 @@ function buildTree(
         }
       : null
 
-  return unassignedNode ? [...planNodes, unassignedNode] : planNodes
+  const roots: VerTreeNode[] = [...planNodes]
+  if (otherTestCasesNode && (otherTestCasesNode.children?.length ?? 0) > 0) roots.push(otherTestCasesNode)
+  if (unassignedNode) roots.push(unassignedNode)
+  return roots
 }
 
 const STATUS_DOT: Record<string, string> = {
