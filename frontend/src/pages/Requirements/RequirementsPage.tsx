@@ -20,6 +20,7 @@ import RequirementQualityPanel from '../../components/requirements/RequirementQu
 import RequirementsPBSTree, { type LinkedElementClickPayload } from '../../components/requirements/RequirementsPBSTree'
 import LinkedElementPreviewPopover from '../../components/requirements/LinkedElementPreviewPopover'
 import RequirementsFunctionsTree from '../../components/requirements/RequirementsFunctionsTree'
+import VerificationTreePanel, { type VerNodeType, type RequirementTestCaseLinkLike } from '../../components/verification/VerificationTreePanel'
 import RequirementDocumentCard from '../../components/requirements/RequirementDocumentCard'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import CreateIssueModal from '../../components/issues/CreateIssueModal'
@@ -34,6 +35,7 @@ import { issueService } from '../../services/issue.service'
 import { changeRequestService } from '../../services/changeRequest.service'
 import { traceabilityService } from '../../services/traceability.service'
 import { linkService } from '../../services/link.service'
+import { verificationService } from '../../services/verification.service'
 import { baselineService } from '../../services/baseline.service'
 import { LINKAGE_V1, LIFECYCLE_V1 } from '../../config/featureFlags'
 import { buildDeepLink } from '../../linkage/buildDeepLink'
@@ -145,8 +147,9 @@ export default function RequirementsPage() {
 
   // PBS Tree panel state (declared early — referenced by serverFilters and filter reset)
   const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null)
-  const [leftPanelTab, setLeftPanelTab] = useState<'pbs' | 'functions'>('pbs')
+  const [leftPanelTab, setLeftPanelTab] = useState<'pbs' | 'functions' | 'verification'>('pbs')
   const [selectedFunctionId, setSelectedFunctionId] = useState<string | null>(null)
+  const [selectedVerificationNode, setSelectedVerificationNode] = useState<{ type: VerNodeType; id: string } | null>(null)
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -516,6 +519,152 @@ export default function RequirementsPage() {
         l.linkType === 'allocated_to'
     ) as LinkType[]
   }, [effectiveLinks])
+
+  // Verification tree data (when Verification tab is active)
+  const verificationTabActive = leftPanelTab === 'verification'
+  const { data: verificationPlans = [] } = useQuery({
+    queryKey: ['test-plans', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const res = await verificationService.getTestPlans(projectId) as { success?: boolean; data?: any[] }
+      return res.success && res.data ? res.data : []
+    },
+    enabled: !!projectId && verificationTabActive,
+  })
+  const { data: verificationCases = [] } = useQuery({
+    queryKey: ['test-cases', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const res = await verificationService.getTestCases(projectId) as { success?: boolean; data?: any[] }
+      return res.success && res.data ? res.data : []
+    },
+    enabled: !!projectId && verificationTabActive,
+  })
+  const { data: verificationSetups = [] } = useQuery({
+    queryKey: ['test-setups', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const res = await verificationService.getSetups(projectId) as { success?: boolean; data?: any[] }
+      return res.success && res.data ? res.data : []
+    },
+    enabled: !!projectId && verificationTabActive,
+  })
+  const { data: verificationRuns = [] } = useQuery({
+    queryKey: ['test-runs', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const res = await verificationService.getTestRuns(projectId) as { success?: boolean; data?: any[] }
+      return res.success && res.data ? res.data : []
+    },
+    enabled: !!projectId && verificationTabActive,
+  })
+  const verificationRunsByPlanId = useMemo(() => {
+    const map: Record<string, any[]> = {}
+    const runs = Array.isArray(verificationRuns) ? verificationRuns : []
+    runs.forEach((r: any) => {
+      const planId = r.testPlanId ?? r.testPlan?.id ?? ''
+      if (planId) {
+        if (!map[planId]) map[planId] = []
+        map[planId].push(r)
+      }
+    })
+    return map
+  }, [verificationRuns])
+  const verificationPlansList = useMemo(() => Array.isArray(verificationPlans) ? verificationPlans : [], [verificationPlans])
+  const verificationCasesList = useMemo(() => Array.isArray(verificationCases) ? verificationCases : [], [verificationCases])
+  const verificationSetupsList = useMemo(() => Array.isArray(verificationSetups) ? verificationSetups : [], [verificationSetups])
+  const requirementTestCaseLinks = useMemo((): RequirementTestCaseLinkLike[] => {
+    const links = Array.isArray(effectiveLinks) ? effectiveLinks : []
+    return links
+      .filter(
+        (l: any) =>
+          l.sourceType === 'requirement' &&
+          (l.targetType === 'test_case' || l.targetType === 'testCase') &&
+          (l.linkType === 'verifies' || l.linkType === 'verified_by')
+      )
+      .map((l: any) => ({
+        id: l.id,
+        sourceId: l.sourceId,
+        targetId: l.targetId,
+        sourceTitle: l.sourceTitle ?? l.sourceLabel ?? l.sourceDisplayId,
+        sourceDisplayId: l.sourceDisplayId,
+      }))
+  }, [effectiveLinks])
+  const requirementsForVerificationTree = useMemo(
+    () =>
+      (allRequirements || []).map((r: { id: string; title?: string; requirementId?: string }) => ({
+        id: r.id,
+        title: r.title,
+        requirementId: r.requirementId,
+      })),
+    [allRequirements]
+  )
+
+  const invalidateVerificationQueries = useCallback(() => {
+    if (!projectId) return
+    queryClient.invalidateQueries({ queryKey: ['test-plans', projectId] })
+    queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
+    queryClient.invalidateQueries({ queryKey: ['test-setups', projectId] })
+    queryClient.invalidateQueries({ queryKey: ['test-runs', projectId] })
+  }, [projectId, queryClient])
+
+  const removeRequirementFromTestCaseMutation = useMutation({
+    mutationFn: async ({ reqId, caseId }: { reqId: string; caseId: string }) => {
+      if (!projectId) throw new Error('Project ID required')
+      const link = requirementTestCaseLinks.find((l) => l.sourceId === reqId && l.targetId === caseId)
+      if (!link?.id) throw new Error('Link not found')
+      return traceabilityService.deleteTraceLink(projectId, link.id)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['links', projectId] })
+      invalidateVerificationQueries()
+    },
+    onError: (err: any) => {
+      console.error('Unlink requirement from test case:', err)
+      alert(err?.message || err?.error || 'Failed to unlink requirement from test case.')
+    },
+  })
+  const removeCaseFromPlanVerificationMutation = useMutation({
+    mutationFn: ({ planId, caseId }: { planId: string; caseId: string }) =>
+      verificationService.removeCaseFromPlan(projectId!, planId, caseId),
+    onSuccess: invalidateVerificationQueries,
+  })
+  const addCaseToPlanVerification = useCallback(
+    (planId: string, caseId: string) => {
+      verificationService.addCaseToPlan(projectId!, planId, caseId).then(() => invalidateVerificationQueries())
+    },
+    [projectId, invalidateVerificationQueries]
+  )
+  const addSetupToPlanVerification = useCallback(
+    (planId: string, setupId: string) => {
+      verificationService.linkSetupToPlan(projectId!, planId, setupId).then(() => invalidateVerificationQueries()).catch(() => {})
+    },
+    [projectId, invalidateVerificationQueries]
+  )
+  const removeSetupFromPlanVerification = useCallback(
+    (planId: string, setupId: string) => {
+      verificationService.unlinkSetupFromPlan(projectId!, planId, setupId).then(() => invalidateVerificationQueries()).catch(() => {})
+    },
+    [projectId, invalidateVerificationQueries]
+  )
+  const deleteVerificationPlanMutation = useMutation({
+    mutationFn: (id: string) => verificationService.deleteTestPlan(projectId!, id),
+    onSuccess: invalidateVerificationQueries,
+  })
+  const deleteVerificationCaseMutation = useMutation({
+    mutationFn: (id: string) => verificationService.deleteTestCase(projectId!, id),
+    onSuccess: invalidateVerificationQueries,
+  })
+  const deleteVerificationSetupMutation = useMutation({
+    mutationFn: (id: string) => verificationService.deleteSetup(projectId!, id),
+    onSuccess: invalidateVerificationQueries,
+  })
+  const deleteVerificationRunMutation = useMutation({
+    mutationFn: (id: string) => verificationService.deleteTestRun(projectId!, id),
+    onSuccess: invalidateVerificationQueries,
+  })
 
   // Component tree for Export scope selection (shares cache with PBS tree)
   const { data: componentTreeForExport = [] } = useQuery({
@@ -1991,19 +2140,19 @@ export default function RequirementsPage() {
                   type="button"
                   onClick={() => setLeftPanelTab('pbs')}
                   className={clsx(
-                    'flex-1 px-4 py-2 text-sm font-medium transition-colors',
+                    'flex-1 px-3 py-2 text-sm font-medium transition-colors',
                     leftPanelTab === 'pbs'
                       ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-500'
                       : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
                   )}
                 >
-                  PBS Components
+                  PBS
                 </button>
                 <button
                   type="button"
                   onClick={() => setLeftPanelTab('functions')}
                   className={clsx(
-                    'flex-1 px-4 py-2 text-sm font-medium transition-colors',
+                    'flex-1 px-3 py-2 text-sm font-medium transition-colors',
                     leftPanelTab === 'functions'
                       ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-500'
                       : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
@@ -2011,10 +2160,22 @@ export default function RequirementsPage() {
                 >
                   Functions
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setLeftPanelTab('verification')}
+                  className={clsx(
+                    'flex-1 px-3 py-2 text-sm font-medium transition-colors',
+                    leftPanelTab === 'verification'
+                      ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border-b-2 border-teal-500'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  )}
+                >
+                  Verification
+                </button>
               </div>
               <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
                 <div className="flex-1 min-h-0 overflow-hidden">
-                {leftPanelTab === 'pbs' ? (
+                {leftPanelTab === 'pbs' && (
                   <RequirementsPBSTree
                     projectId={projectId}
                     requirements={allRequirements}
@@ -2062,7 +2223,8 @@ export default function RequirementsPage() {
                       setIsExportOpen(true)
                     }}
                   />
-                ) : (
+                )}
+                {leftPanelTab === 'functions' && (
                   <RequirementsFunctionsTree
                     projectId={projectId}
                     requirements={allRequirements}
@@ -2138,6 +2300,52 @@ export default function RequirementsPage() {
                     isDropTarget={!isBaselineView}
                   />
                 )}
+                {leftPanelTab === 'verification' && projectId && (
+                  <VerificationTreePanel
+                    projectId={projectId}
+                    plans={verificationPlansList}
+                    testCases={verificationCasesList}
+                    testSetups={verificationSetupsList}
+                    runsByPlanId={verificationRunsByPlanId}
+                    selectedNode={selectedVerificationNode}
+                    onSelect={(node) => {
+                      setSelectedVerificationNode(node)
+                      if (node) {
+                        const tabMap: Record<VerNodeType, string> = {
+                          'test-plan': 'plans',
+                          'test-case': 'cases',
+                          'test-setup': 'setups',
+                          'test-run': 'runs',
+                          'requirement': 'cases',
+                          'unassigned-group': 'cases',
+                          'plan-requirements-group': 'plans',
+                        }
+                        const tab = tabMap[node.type]
+                        navigate(`/projects/${projectId}/verification?tab=${tab}&focusType=${node.type}&focusId=${node.id}`)
+                      }
+                    }}
+                    onCreatePlan={() => navigate(`/projects/${projectId}/verification?tab=plans&openCreate=plan`)}
+                    onCreateCase={(planId) => navigate(`/projects/${projectId}/verification?tab=cases&openCreateCase=${planId}`)}
+                    onCreateSetup={(planId) => navigate(`/projects/${projectId}/verification?tab=setups&openCreateSetup=${planId}`)}
+                    onCreateRun={(planId) => navigate(`/projects/${projectId}/verification?tab=runs&openCreateRun=${planId}`)}
+                    onDeletePlan={(id) => { if (confirm('Delete this test plan?')) deleteVerificationPlanMutation.mutate(id) }}
+                    onDeleteCase={(id) => { if (confirm('Delete this test case?')) deleteVerificationCaseMutation.mutate(id) }}
+                    onDeleteSetup={(id) => { if (confirm('Delete this test setup?')) deleteVerificationSetupMutation.mutate(id) }}
+                    onDeleteRun={(id) => { if (confirm('Delete this test run?')) deleteVerificationRunMutation.mutate(id) }}
+                    onRemoveCaseFromPlan={(planId, caseId) => removeCaseFromPlanVerificationMutation.mutate({ planId, caseId })}
+                    onAddCaseToPlan={addCaseToPlanVerification}
+                    onAddSetupToPlan={addSetupToPlanVerification}
+                    onRemoveSetupFromPlan={removeSetupFromPlanVerification}
+                    requirementTestCaseLinks={requirementTestCaseLinks}
+                    requirements={requirementsForVerificationTree}
+                    onAddRequirementToTestCase={(caseId) => navigate(`/projects/${projectId}/requirements?tree=verification&linkToCase=${caseId}`)}
+                    onRemoveRequirementFromTestCase={(reqId, caseId) => removeRequirementFromTestCaseMutation.mutate({ reqId, caseId })}
+                    onRequirementClick={(reqId) => {
+                      const req = allRequirements?.find((r) => r.id === reqId)
+                      if (req) setDetailRequirement(req)
+                    }}
+                  />
+                )}
                 </div>
                 {linkedElementPreview && (
                   <LinkedElementPreviewPopover
@@ -2205,6 +2413,15 @@ export default function RequirementsPage() {
                 >
                   <X size={12} />
                   Clear filter
+                </button>
+              )}
+              {leftPanelTab === 'verification' && selectedVerificationNode && (
+                <button
+                  onClick={() => setSelectedVerificationNode(null)}
+                  className="flex items-center gap-1 px-2 py-1 text-xs bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-full hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors"
+                >
+                  <X size={12} />
+                  Clear selection
                 </button>
               )}
             </div>
