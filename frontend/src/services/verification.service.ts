@@ -98,6 +98,10 @@ export const verificationService = {
   closeTestPlan: (projectId: string, id: string) => apiClient.post(`/verification/test-plans/${projectId}/${id}/close`),
   addCaseToPlan: (projectId: string, planId: string, testCaseId: string) => apiClient.post(`/verification/test-plans/${projectId}/${planId}/add-case`, { testCaseId }),
   removeCaseFromPlan: (projectId: string, planId: string, testCaseId: string) => apiClient.post(`/verification/test-plans/${projectId}/${planId}/remove-case`, { testCaseId }),
+  linkSetupToPlan: (projectId: string, planId: string, setupId: string) =>
+    apiClient.post(`/verification/test-plans/${projectId}/${planId}/link-setup`, { setupId }),
+  unlinkSetupFromPlan: (projectId: string, planId: string, setupId: string) =>
+    apiClient.delete(`/verification/test-plans/${projectId}/${planId}/link-setup/${setupId}`),
   getTestPlanReport: (projectId: string, planId: string) => apiClient.get(`/verification/reports/test-plan/${projectId}/${planId}`),
   getTestPlanVerificationLinks: (projectId: string, planId: string) => apiClient.get(`/verification/test-plans/${projectId}/${planId}/verification-links`),
   linkTestPlanVerificationElement: (projectId: string, planId: string, targetType: string, targetId: string) => apiClient.post(`/verification/test-plans/${projectId}/${planId}/verification-links`, { targetType, targetId }),

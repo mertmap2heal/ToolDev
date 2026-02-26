@@ -160,6 +160,10 @@ export default function VerificationPage() {
     ? resolvedTab
     : 'overview') as 'overview' | 'plans' | 'cases' | 'runs' | 'setups' | 'results' | 'reviews' | 'traceability'
   const useTemplateId = searchParams.get('useTemplateId')
+  const openCreate = searchParams.get('openCreate')
+  const openCreateCase = searchParams.get('openCreateCase')
+  const openCreateSetup = searchParams.get('openCreateSetup')
+  const openCreateRun = searchParams.get('openCreateRun')
   const [searchQuery, setSearchQuery] = useState('')
 
   // Modal states
@@ -181,6 +185,24 @@ export default function VerificationPage() {
       navigate(`/projects/${projectId}/verification?tab=cases`, { replace: true })
     }
   }, [useTemplateId, activeTab, projectId, navigate])
+
+  // Open create modal when navigating from tree panel (openCreate, openCreateCase, etc.)
+  useEffect(() => {
+    if (!projectId) return
+    if (openCreate === 'plan') {
+      setIsCreatePlanOpen(true)
+      setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('openCreate'); return n }, { replace: true })
+    } else if (openCreateCase) {
+      setIsCreateCaseOpen(true)
+      setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'cases'); n.delete('openCreateCase'); return n }, { replace: true })
+    } else if (openCreateSetup) {
+      setIsCreateSetupOpen(true)
+      setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'setups'); n.delete('openCreateSetup'); return n }, { replace: true })
+    } else if (openCreateRun) {
+      setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'runs'); n.delete('openCreateRun'); return n }, { replace: true })
+      // Create-run is handled by TestRunList's "Start New Run" modal; user can pick plan there
+    }
+  }, [openCreate, openCreateCase, openCreateSetup, openCreateRun, projectId, setSearchParams])
 
   // Export modal states
   const [showTestCasesExport, setShowTestCasesExport] = useState(false)
@@ -358,6 +380,17 @@ export default function VerificationPage() {
     enabled: !!projectId,
   })
 
+  // Fetch single run when focus is test-run (for opening run drawer from tree)
+  const { data: focusedRun } = useQuery({
+    queryKey: ['test-run', projectId, focusId],
+    queryFn: async () => {
+      if (!projectId || !focusId) return null
+      const res = await verificationService.getTestRun(projectId, focusId) as { success?: boolean; data?: any }
+      return res.success && res.data ? res.data : null
+    },
+    enabled: !!projectId && !!focusId && (focusType === 'test-run' || focusType === 'test_run'),
+  })
+
   // Navigate to tab when focus type requires it
   useEffect(() => {
     if (!focusType || !focusId) return
@@ -366,6 +399,7 @@ export default function VerificationPage() {
       'test_case': 'cases', 'test-case': 'cases',
       'test_setup': 'setups', 'test-setup': 'setups',
       'test_result': 'results', 'test-result': 'results',
+      'test_run': 'runs', 'test-run': 'runs',
     }
     const targetTab = tabMap[focusType]
     if (targetTab && activeTab !== targetTab) {
@@ -412,8 +446,13 @@ export default function VerificationPage() {
           drawer.openResult(result)
         }
       }
+    } else if (effectiveFocusType === 'test_run' || effectiveFocusType === 'test-run') {
+      if (focusedRun) {
+        setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'runs'); n.delete('focusType'); n.delete('focusId'); n.delete('caseId'); return n }, { replace: true })
+        drawer.openRun(focusedRun)
+      }
     }
-  }, [focusType, focusId, caseId, projectId, testPlans, testCases, testSetups, testResults, drawer, setSearchParams])
+  }, [focusType, focusId, caseId, projectId, testPlans, testCases, testSetups, testResults, focusedRun, drawer, setSearchParams])
 
   // Delete mutations
   const deleteTestPlanMutation = useMutation({

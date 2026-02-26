@@ -4,14 +4,21 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App.tsx'
 import './index.css'
 
-// Suppress known non-actionable errors (React Flow internal, Chrome extensions)
+// Suppress known non-actionable errors from browser extensions and third-party code:
+// - MessageNotSentError / cookieManager.injectClientScript: extension messaging when content script isn't loaded
+// - RegisterClientLocalizationsError / translations: extension or IDE localization code
+// These are not from this app and can be ignored.
 window.addEventListener('unhandledrejection', (event) => {
-  const name = event.reason?.name
-  const message = String(event.reason?.message ?? '')
+  const reason = event.reason
+  const name = reason?.name
+  const message = String(reason?.message ?? '')
+  const messageName = typeof (reason as any)?.messageName === 'string' ? (reason as any).messageName : ''
   if (
     name === 'RegisterClientLocalizationsError' ||
     name === 'MessageNotSentError' ||
-    message.includes('Receiving end does not exist')
+    message.includes('Receiving end does not exist') ||
+    message.includes("reading 'translations'") ||
+    messageName === 'cookieManager.injectClientScript'
   ) {
     event.preventDefault()
     event.stopPropagation()
