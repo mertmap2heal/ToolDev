@@ -662,18 +662,26 @@ export default function RequirementDetailDrawer({
   const subscriberOverflow = Math.max(0, subscriberCount - subscriberPreview.length)
   const subscriptionDisabled = subscriptionLoading || subscriptionMutation.isPending
 
+  const resolveTargetItem = useCallback((targetType: string, targetId: string): any => {
+    const nt = (targetType ?? '').toLowerCase().replace(/-/g, '_')
+    switch (nt) {
+      case 'requirement': return requirements.find((r: any) => r.id === targetId)
+      case 'function': return functions.find((f: any) => f.id === targetId)
+      case 'issue': return issues.find((i: any) => i.id === targetId)
+      case 'change_request': return changeRequests.find((cr: any) => cr.id === targetId)
+      case 'pbs_component': return flatComponents.find((c) => c.id === targetId)
+      case 'test_plan': return testPlans.find((p: any) => p.id === targetId) ?? testPlans.find((p: any) => p.key === targetId)
+      case 'test_case':
+      case 'testcase':
+        return testCases.find((tc: any) => tc.id === targetId) ?? testCases.find((tc: any) => tc.key === targetId)
+      case 'parameter': return parameters.find((p: any) => p.id === targetId)
+      default: return null
+    }
+  }, [requirements, functions, issues, changeRequests, flatComponents, testPlans, testCases, parameters])
+
   const enrichedLinks = useMemo(() => {
     return allLinks.map((link) => {
-      const targetItem: any =
-        link.targetType === 'requirement' ? requirements.find((r: any) => r.id === link.targetId) :
-          link.targetType === 'function' ? functions.find((f: any) => f.id === link.targetId) :
-            link.targetType === 'issue' ? issues.find((i: any) => i.id === link.targetId) :
-              link.targetType === 'change_request' ? changeRequests.find((cr: any) => cr.id === link.targetId) :
-                link.targetType === 'pbs_component' ? flatComponents.find((c) => c.id === link.targetId) :
-                  link.targetType === 'test_plan' ? testPlans.find((p: any) => p.id === link.targetId) :
-                    link.targetType === 'test_case' ? testCases.find((tc: any) => tc.id === link.targetId) :
-                      link.targetType === 'parameter' ? parameters.find((p: any) => p.id === link.targetId) :
-                        null;
+      const targetItem: any = resolveTargetItem(link.targetType, link.targetId)
 
       const displayId = (link as any).targetDisplayId ?? (targetItem ? (
         targetItem.requirementId ||
@@ -700,7 +708,7 @@ export default function RequirementDetailDrawer({
         targetTitle: title
       }
     })
-  }, [allLinks, requirements, functions, issues, changeRequests, flatComponents, testPlans, testCases, parameters])
+  }, [allLinks, resolveTargetItem])
 
   const isLocked = displayRequirement?.isLocked
   const isLockedByCurrentUser = displayRequirement?.lockedByUserId === currentUserId
@@ -738,17 +746,23 @@ export default function RequirementDetailDrawer({
 
   // Filter verification links
   const linkedTestPlans = incomingLinks
-    .filter(l => l.sourceType === 'test_plan')
+    .filter(l => {
+      const st = (l.sourceType ?? '').toLowerCase().replace(/-/g, '_')
+      return st === 'test_plan' || st === 'testplan'
+    })
     .map(l => {
-      const plan: any = testPlans.find((p: any) => p.id === l.sourceId)
+      const plan: any = testPlans.find((p: any) => p.id === l.sourceId) ?? testPlans.find((p: any) => p.key === l.sourceId)
       return { ...l, plan }
     })
     .filter(l => l.plan)
 
   const linkedTestCases = incomingLinks
-    .filter(l => l.sourceType === 'test_case')
+    .filter(l => {
+      const st = (l.sourceType ?? '').toLowerCase().replace(/-/g, '_')
+      return st === 'test_case' || st === 'testcase'
+    })
     .map(l => {
-      const testCase: any = testCases.find((tc: any) => tc.id === l.sourceId)
+      const testCase: any = testCases.find((tc: any) => tc.id === l.sourceId) ?? testCases.find((tc: any) => tc.key === l.sourceId)
       return { ...l, testCase }
     })
     .filter(l => l.testCase)
@@ -1667,16 +1681,7 @@ export default function RequirementDetailDrawer({
                                   </div>
                                   <div className="space-y-2">
                                     {linkList.map((link) => {
-                                      const targetItem: any =
-                                        link.targetType === 'requirement' ? requirements.find((r: any) => r.id === link.targetId) :
-                                          link.targetType === 'function' ? functions.find((f: any) => f.id === link.targetId) :
-                                            link.targetType === 'issue' ? issues.find((i: any) => i.id === link.targetId) :
-                                              link.targetType === 'change_request' ? changeRequests.find((cr: any) => cr.id === link.targetId) :
-                                                link.targetType === 'pbs_component' ? flatComponents.find((c) => c.id === link.targetId) :
-                                                  link.targetType === 'test_plan' ? testPlans.find((p: any) => p.id === link.targetId) :
-                                                    link.targetType === 'test_case' ? testCases.find((tc: any) => tc.id === link.targetId) :
-                                                      link.targetType === 'parameter' ? parameters.find((p: any) => p.id === link.targetId) :
-                                                        null;
+                                      const targetItem: any = resolveTargetItem(link.targetType, link.targetId)
 
                                       const displayId = (link as any).targetDisplayId ?? (targetItem ? (
                                         targetItem.requirementId ||

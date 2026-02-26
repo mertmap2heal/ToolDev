@@ -256,6 +256,9 @@ export const traceabilityService = {
     const allLinks = [...links, ...issueLinksDirect, ...issueLinksInverse, ...Array.from(uniqueCrLinks.values())]
 
     // 4. For standard links, fetch Entity details to populate titles (from ALL links, not just TraceLink)
+    const normType = (t: string) => (t ?? '').toLowerCase().replace(/-/g, '_')
+    const isTestCaseType = (t: string) => { const n = normType(t); return n === 'test_case' || n === 'testcase' }
+    const isTestPlanType = (t: string) => { const n = normType(t); return n === 'test_plan' || n === 'testplan' }
     const reqIdsToFetch = new Set<string>()
     const funcIdsToFetch = new Set<string>()
     const testCaseIdsToFetch = new Set<string>()
@@ -265,8 +268,8 @@ export const traceabilityService = {
       if (l.targetType === 'requirement' || l.targetType === 'hazard' || l.targetType === 'risk') reqIdsToFetch.add(l.targetId)
       if (l.sourceType === 'function') funcIdsToFetch.add(l.sourceId)
       if (l.targetType === 'function') funcIdsToFetch.add(l.targetId)
-      if (l.sourceType === 'test_case') testCaseIdsToFetch.add(l.sourceId)
-      if (l.targetType === 'test_case') testCaseIdsToFetch.add(l.targetId)
+      if (isTestCaseType(l.sourceType)) testCaseIdsToFetch.add(l.sourceId)
+      if (isTestCaseType(l.targetType)) testCaseIdsToFetch.add(l.targetId)
       if (l.sourceType === 'parameter') paramIdsToFetch.add(l.sourceId)
       if (l.targetType === 'parameter') paramIdsToFetch.add(l.targetId)
     })
@@ -322,8 +325,8 @@ export const traceabilityService = {
       const isReqTarget = isReqType(link.targetType)
       const isFuncSource = link.sourceType === 'function'
       const isFuncTarget = link.targetType === 'function'
-      const isTestCaseSource = link.sourceType === 'test_case'
-      const isTestCaseTarget = link.targetType === 'test_case'
+      const isTestCaseSource = isTestCaseType(link.sourceType)
+      const isTestCaseTarget = isTestCaseType(link.targetType)
       const isParamSource = link.sourceType === 'parameter'
       const isParamTarget = link.targetType === 'parameter'
 
@@ -335,6 +338,9 @@ export const traceabilityService = {
       const tTc = isTestCaseTarget ? testCaseMap.get(link.targetId) : null
       const sParam = isParamSource ? paramMap.get(link.sourceId) : null
       const tParam = isParamTarget ? paramMap.get(link.targetId) : null
+
+      const shortId = (id: string) => id.substring(0, 8)
+      const deletedLabel = (type: string, id: string) => `Deleted ${type} (${shortId(id)})`
 
       return {
         id: link.id,
@@ -356,37 +362,61 @@ export const traceabilityService = {
           (tReq ? tReq.title : undefined) ||
           (tFunc ? tFunc.name : undefined) ||
           (tTc ? tTc.title : undefined) ||
-          (tParam ? `${tParam.parameterId || tParam.id.substring(0, 8)} - ${tParam.name}` : undefined),
+          (tParam ? `${tParam.parameterId || shortId(tParam.id)} - ${tParam.name}` : undefined) ||
+          (isTestCaseTarget && !tTc ? deletedLabel('test case', link.targetId) : undefined) ||
+          (isReqTarget && !tReq ? deletedLabel('requirement', link.targetId) : undefined) ||
+          (isFuncTarget && !tFunc ? deletedLabel('function', link.targetId) : undefined) ||
+          (isParamTarget && !tParam ? deletedLabel('parameter', link.targetId) : undefined),
         targetDisplayId:
           link.targetDisplayId ||
-          (tReq ? (tReq.requirementId || tReq.id.substring(0, 8)) : undefined) ||
-          (tFunc ? (tFunc.functionId || tFunc.id.substring(0, 8)) : undefined) ||
+          (tReq ? (tReq.requirementId || shortId(tReq.id)) : undefined) ||
+          (tFunc ? (tFunc.functionId || shortId(tFunc.id)) : undefined) ||
           (tTc ? tTc.key : undefined) ||
-          (tParam ? (tParam.parameterId || tParam.id.substring(0, 8)) : undefined),
+          (tParam ? (tParam.parameterId || shortId(tParam.id)) : undefined) ||
+          (isTestCaseTarget && !tTc ? shortId(link.targetId) : undefined) ||
+          (isReqTarget && !tReq ? shortId(link.targetId) : undefined) ||
+          (isFuncTarget && !tFunc ? shortId(link.targetId) : undefined) ||
+          (isParamTarget && !tParam ? shortId(link.targetId) : undefined),
         targetLabel:
           link.targetLabel ||
-          (tReq ? `${tReq.requirementId || tReq.id.substring(0, 8)} - ${tReq.title}` : undefined) ||
-          (tFunc ? `${tFunc.functionId || tFunc.id.substring(0, 8)} - ${tFunc.name}` : undefined) ||
+          (tReq ? `${tReq.requirementId || shortId(tReq.id)} - ${tReq.title}` : undefined) ||
+          (tFunc ? `${tFunc.functionId || shortId(tFunc.id)} - ${tFunc.name}` : undefined) ||
           (tTc ? `${tTc.key} - ${tTc.title}` : undefined) ||
-          (tParam ? `${tParam.parameterId || tParam.id.substring(0, 8)} - ${tParam.name}` : undefined),
+          (tParam ? `${tParam.parameterId || shortId(tParam.id)} - ${tParam.name}` : undefined) ||
+          (isTestCaseTarget && !tTc ? deletedLabel('test case', link.targetId) : undefined) ||
+          (isReqTarget && !tReq ? deletedLabel('requirement', link.targetId) : undefined) ||
+          (isFuncTarget && !tFunc ? deletedLabel('function', link.targetId) : undefined) ||
+          (isParamTarget && !tParam ? deletedLabel('parameter', link.targetId) : undefined),
         sourceTitle:
           link.sourceTitle ||
           (sReq ? sReq.title : undefined) ||
           (sFunc ? sFunc.name : undefined) ||
           (sTc ? sTc.title : undefined) ||
-          (sParam ? sParam.name : undefined),
+          (sParam ? sParam.name : undefined) ||
+          (isTestCaseSource && !sTc ? deletedLabel('test case', link.sourceId) : undefined) ||
+          (isReqSource && !sReq ? deletedLabel('requirement', link.sourceId) : undefined) ||
+          (isFuncSource && !sFunc ? deletedLabel('function', link.sourceId) : undefined) ||
+          (isParamSource && !sParam ? deletedLabel('parameter', link.sourceId) : undefined),
         sourceDisplayId:
           link.sourceDisplayId ||
-          (sReq ? (sReq.requirementId || sReq.id.substring(0, 8)) : undefined) ||
-          (sFunc ? (sFunc.functionId || sFunc.id.substring(0, 8)) : undefined) ||
+          (sReq ? (sReq.requirementId || shortId(sReq.id)) : undefined) ||
+          (sFunc ? (sFunc.functionId || shortId(sFunc.id)) : undefined) ||
           (sTc ? sTc.key : undefined) ||
-          (sParam ? (sParam.parameterId || sParam.id.substring(0, 8)) : undefined),
+          (sParam ? (sParam.parameterId || shortId(sParam.id)) : undefined) ||
+          (isTestCaseSource && !sTc ? shortId(link.sourceId) : undefined) ||
+          (isReqSource && !sReq ? shortId(link.sourceId) : undefined) ||
+          (isFuncSource && !sFunc ? shortId(link.sourceId) : undefined) ||
+          (isParamSource && !sParam ? shortId(link.sourceId) : undefined),
         sourceLabel:
           link.sourceLabel ||
-          (sReq ? `${sReq.requirementId || sReq.id.substring(0, 8)} - ${sReq.title}` : undefined) ||
-          (sFunc ? `${sFunc.functionId || sFunc.id.substring(0, 8)} - ${sFunc.name}` : undefined) ||
+          (sReq ? `${sReq.requirementId || shortId(sReq.id)} - ${sReq.title}` : undefined) ||
+          (sFunc ? `${sFunc.functionId || shortId(sFunc.id)} - ${sFunc.name}` : undefined) ||
           (sTc ? `${sTc.key} - ${sTc.title}` : undefined) ||
-          (sParam ? `${sParam.parameterId || sParam.id.substring(0, 8)} - ${sParam.name}` : undefined),
+          (sParam ? `${sParam.parameterId || shortId(sParam.id)} - ${sParam.name}` : undefined) ||
+          (isTestCaseSource && !sTc ? deletedLabel('test case', link.sourceId) : undefined) ||
+          (isReqSource && !sReq ? deletedLabel('requirement', link.sourceId) : undefined) ||
+          (isFuncSource && !sFunc ? deletedLabel('function', link.sourceId) : undefined) ||
+          (isParamSource && !sParam ? deletedLabel('parameter', link.sourceId) : undefined),
       }
     })
   },
