@@ -15,6 +15,12 @@ import {
   Trash2,
   Unlink,
   Inbox,
+  Edit2,
+  GitPullRequest,
+  AlertCircle,
+  BarChart3,
+  Copy,
+  Link2,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -41,6 +47,32 @@ export interface RequirementTestCaseLinkLike {
   targetId: string
   sourceTitle?: string
   sourceDisplayId?: string
+}
+
+/** Link-like shape for linked elements under a requirement (e.g. issues, change requests) */
+export interface VerLinkLike {
+  id?: string
+  sourceType: string
+  sourceId: string
+  targetType: string
+  targetId: string
+  targetLabel?: string
+  targetTitle?: string
+  targetDisplayId?: string
+  sourceTitle?: string
+  sourceDisplayId?: string
+  sourceLabel?: string
+  linkType?: string
+  _displayTargetType?: string
+}
+
+export interface VerLinkedElementClickPayload {
+  targetType: string
+  targetId: string
+  sourceType: string
+  sourceId: string
+  isOutgoing: boolean
+  link: VerLinkLike
 }
 
 export interface VerificationTreePanelProps {
@@ -79,6 +111,14 @@ export interface VerificationTreePanelProps {
   onDropRequirementsOnTestCase?: (requirementIds: string[], caseId: string) => void
   /** Optional: list of all requirements to show "Unassigned requirements" section (requirements not linked to any test case) */
   requirements?: Array<{ id: string; title?: string; requirementId?: string }>
+  /** Optional: requirement-level actions (parity with PBS/Functions tree) */
+  onEditRequirement?: (reqId: string) => void
+  onCreateChangeRequest?: (reqId: string) => void
+  onCreateIssue?: (reqId: string) => void
+  onOpenTraceabilityMatrix?: (focusReqId?: string) => void
+  /** Optional: show linked elements under requirement nodes (issues, CRs, etc.) */
+  getLinksForRequirement?: (reqId: string) => VerLinkLike[]
+  onLinkedElementClick?: (payload: VerLinkedElementClickPayload) => void
 }
 
 const TAB_MAP: Record<VerNodeType, string> = {
@@ -339,9 +379,16 @@ export default function VerificationTreePanel({
   onRequirementClick,
   onDropRequirementsOnTestCase,
   requirements,
+  onEditRequirement,
+  onCreateChangeRequest,
+  onCreateIssue,
+  onOpenTraceabilityMatrix,
+  getLinksForRequirement,
+  onLinkedElementClick,
 }: VerificationTreePanelProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const [expandedRequirementIds, setExpandedRequirementIds] = useState<Set<string>>(new Set())
   const [allExpanded, setAllExpanded] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ node: VerTreeNode; x: number; y: number } | null>(null)
   const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set())
@@ -429,6 +476,16 @@ export default function VerificationTreePanel({
     else setExpandedIds(new Set(allExpandableIds))
     setAllExpanded(!allExpanded)
   }, [allExpanded, allExpandableIds])
+
+  const toggleRequirementExpand = useCallback((reqId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setExpandedRequirementIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(reqId)) next.delete(reqId)
+      else next.add(reqId)
+      return next
+    })
+  }, [])
 
   const isExpandableNode = useCallback((node: VerTreeNode) => {
     if (node.type === 'unassigned-group') return true
@@ -580,6 +637,10 @@ export default function VerificationTreePanel({
     const isPlanRequirementsGroup = node.type === 'plan-requirements-group'
     const hasChildren = (isPlan || isCase || isUnassignedGroup || isPlanRequirementsGroup) && (node.children?.length ?? 0) > 0
     const isExpanded = (isPlan || isCase || isUnassignedGroup || isPlanRequirementsGroup) && effectiveExpanded.has(node.id)
+    const reqLinks = isRequirement && node.requirementId && getLinksForRequirement ? getLinksForRequirement(node.requirementId) : []
+    const hasReqLinks = reqLinks.length > 0
+    const showReqExpand = isRequirement && hasReqLinks && !!onLinkedElementClick
+    const isReqExpanded = isRequirement && node.requirementId ? expandedRequirementIds.has(node.requirementId) : false
     const isSelected = !isRequirement && !isUnassignedGroup && !isPlanRequirementsGroup && selectedNode?.type === node.type && selectedNode?.id === node.id
     const isMultiSelected = multiSelectedIds.has(node.id)
     const isDropTargetPlan = isPlan && dragOverPlanId === node.id
@@ -644,7 +705,19 @@ export default function VerificationTreePanel({
           data-node-id={node.id}
           data-droppable={isPlan ? 'plan' : canDropRequirement ? 'test-case' : undefined}
         >
-          {showExpand ? (
+          {showReqExpand ? (
+            <button
+              type="button"
+              onClick={(e) => toggleRequirementExpand(node.requirementId!, e)}
+              className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded"
+            >
+              {isReqExpanded ? (
+                <ChevronDown size={14} className="text-gray-500 dark:text-gray-400" />
+              ) : (
+                <ChevronRight size={14} className="text-gray-500 dark:text-gray-400" />
+              )}
+            </button>
+          ) : showExpand ? (
             <button
               onClick={(e) => toggleExpand(node.id, e)}
               className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded"
@@ -692,6 +765,55 @@ export default function VerificationTreePanel({
             style={{ paddingLeft: `${depth * 20 + 28}px` }}
           >
             No unassigned requirements. All requirements are linked to test cases.
+          </div>
+        )}
+        {isRequirement && node.requirementId && isReqExpanded && reqLinks.length > 0 && onLinkedElementClick && (
+          <div className="relative">
+            <div
+              className="absolute top-0 bottom-0 border-l border-gray-200 dark:border-gray-700"
+              style={{ left: `${depth * 20 + 18}px` }}
+            />
+            {reqLinks.map((link) => {
+              const isOutgoing = link.sourceType === 'requirement' && link.sourceId === node.requirementId
+              const displayType = (link as VerLinkLike)._displayTargetType ?? (isOutgoing ? link.targetType : link.sourceType)
+              const label = isOutgoing
+                ? (link.targetLabel ?? link.targetTitle ?? link.targetDisplayId ?? `${link.targetType}:${link.targetId.slice(0, 8)}`)
+                : (link.sourceLabel ?? link.sourceTitle ?? link.sourceDisplayId ?? `${link.sourceType}:${link.sourceId.slice(0, 8)}`)
+              const payload: VerLinkedElementClickPayload = {
+                targetType: isOutgoing ? link.targetType : link.sourceType,
+                targetId: isOutgoing ? link.targetId : link.sourceId,
+                sourceType: link.sourceType,
+                sourceId: link.sourceId,
+                isOutgoing,
+                link,
+              }
+              return (
+                <div
+                  key={link.id ?? `link-${link.sourceType}-${link.sourceId}-${link.targetType}-${link.targetId}`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onLinkedElementClick(payload)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onLinkedElementClick(payload)
+                    }
+                  }}
+                  className="flex items-center gap-2 px-2 py-1 rounded-md text-xs cursor-pointer bg-gray-50/50 dark:bg-gray-800/50 border-l-2 border-gray-200 dark:border-gray-700 hover:bg-blue-50/80 dark:hover:bg-blue-900/20 hover:border-blue-200 dark:hover:border-blue-800 transition-colors"
+                  style={{ paddingLeft: `${(depth + 1) * 20 + 8}px` }}
+                  title="Click to preview"
+                >
+                  <Link2 size={12} className="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                  <span className="text-gray-500 dark:text-gray-400 font-mono text-[10px] flex-shrink-0 capitalize">
+                    {String(displayType).replace(/_/g, ' ')}
+                  </span>
+                  <span className="text-gray-600 dark:text-gray-300 truncate">{label}</span>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
@@ -937,16 +1059,81 @@ export default function VerificationTreePanel({
             </>
           )}
           {contextMenu.node.type === 'requirement' && contextMenu.node.requirementId && !contextMenu.node.caseId && (
-            <button
-              type="button"
-              onClick={() => {
-                onRequirementClick?.(contextMenu.node.requirementId!)
-                setContextMenu(null)
-              }}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
-            >
-              Open
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  onRequirementClick?.(contextMenu.node.requirementId!)
+                  setContextMenu(null)
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+              >
+                Open
+              </button>
+              {onEditRequirement && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onEditRequirement(contextMenu.node.requirementId!)
+                    setContextMenu(null)
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+                >
+                  <Edit2 size={14} />
+                  Edit requirement
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(contextMenu.node.requirementId!)
+                  setContextMenu(null)
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+              >
+                <Copy size={14} />
+                Copy requirement ID
+              </button>
+              {onCreateChangeRequest && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCreateChangeRequest(contextMenu.node.requirementId!)
+                    setContextMenu(null)
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+                >
+                  <GitPullRequest size={14} />
+                  Create change request
+                </button>
+              )}
+              {onCreateIssue && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCreateIssue(contextMenu.node.requirementId!)
+                    setContextMenu(null)
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+                >
+                  <AlertCircle size={14} />
+                  Create issue
+                </button>
+              )}
+              {onOpenTraceabilityMatrix && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenTraceabilityMatrix(contextMenu.node.requirementId!)
+                    setContextMenu(null)
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+                >
+                  <BarChart3 size={14} />
+                  View in traceability matrix
+                </button>
+              )}
+            </>
           )}
           {contextMenu.node.type === 'requirement' && contextMenu.node.requirementId && contextMenu.node.caseId && (
             <>
@@ -960,6 +1147,69 @@ export default function VerificationTreePanel({
               >
                 Open
               </button>
+              {onEditRequirement && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onEditRequirement(contextMenu.node.requirementId!)
+                    setContextMenu(null)
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+                >
+                  <Edit2 size={14} />
+                  Edit requirement
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(contextMenu.node.requirementId!)
+                  setContextMenu(null)
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+              >
+                <Copy size={14} />
+                Copy requirement ID
+              </button>
+              {onCreateChangeRequest && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCreateChangeRequest(contextMenu.node.requirementId!)
+                    setContextMenu(null)
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+                >
+                  <GitPullRequest size={14} />
+                  Create change request
+                </button>
+              )}
+              {onCreateIssue && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCreateIssue(contextMenu.node.requirementId!)
+                    setContextMenu(null)
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+                >
+                  <AlertCircle size={14} />
+                  Create issue
+                </button>
+              )}
+              {onOpenTraceabilityMatrix && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenTraceabilityMatrix(contextMenu.node.requirementId!)
+                    setContextMenu(null)
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+                >
+                  <BarChart3 size={14} />
+                  View in traceability matrix
+                </button>
+              )}
               {onRemoveRequirementFromTestCase && (
                 <button
                   type="button"

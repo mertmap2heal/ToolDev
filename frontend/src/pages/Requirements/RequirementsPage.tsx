@@ -20,7 +20,7 @@ import RequirementQualityPanel from '../../components/requirements/RequirementQu
 import RequirementsPBSTree, { type LinkedElementClickPayload } from '../../components/requirements/RequirementsPBSTree'
 import LinkedElementPreviewPopover from '../../components/requirements/LinkedElementPreviewPopover'
 import RequirementsFunctionsTree from '../../components/requirements/RequirementsFunctionsTree'
-import VerificationTreePanel, { type VerNodeType, type RequirementTestCaseLinkLike } from '../../components/verification/VerificationTreePanel'
+import VerificationTreePanel, { type VerNodeType, type RequirementTestCaseLinkLike, type VerLinkLike, type VerLinkedElementClickPayload } from '../../components/verification/VerificationTreePanel'
 import RequirementDocumentCard from '../../components/requirements/RequirementDocumentCard'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import CreateIssueModal from '../../components/issues/CreateIssueModal'
@@ -600,6 +600,33 @@ export default function RequirementsPage() {
     [allRequirements]
   )
 
+  const linksByReqIdForVerification = useMemo(() => {
+    const map = new Map<string, VerLinkLike[]>()
+    const arr = (effectiveLinks || []) as VerLinkLike[]
+    for (const l of arr) {
+      const link: VerLinkLike = {
+        ...l,
+        _displayTargetType: l.targetType ?? l.sourceType,
+      }
+      if (l.sourceId) {
+        const list = map.get(l.sourceId) ?? []
+        list.push(link)
+        map.set(l.sourceId, list)
+      }
+      if (l.targetId && l.targetId !== l.sourceId) {
+        const list = map.get(l.targetId) ?? []
+        list.push(link)
+        map.set(l.targetId, list)
+      }
+    }
+    return map
+  }, [effectiveLinks])
+
+  const getLinksForRequirementVerificationTree = useCallback(
+    (reqId: string) => linksByReqIdForVerification.get(reqId) ?? [],
+    [linksByReqIdForVerification]
+  )
+
   const invalidateVerificationQueries = useCallback(() => {
     if (!projectId) return
     queryClient.invalidateQueries({ queryKey: ['test-plans', projectId] })
@@ -665,6 +692,51 @@ export default function RequirementsPage() {
     mutationFn: (id: string) => verificationService.deleteTestRun(projectId!, id),
     onSuccess: invalidateVerificationQueries,
   })
+
+  const handleDropRequirementsOnTestCase = useCallback(
+    async (requirementIds: string[], caseId: string) => {
+      if (!projectId) return
+      const locked = (allRequirements ?? []).filter(
+        (r) => requirementIds.includes(r.id) && r.isLocked
+      )
+      const toLink = requirementIds.filter((id) => !locked.some((r) => r.id === id))
+      if (locked.length > 0) {
+        alert(
+          `Some requirements are locked and could not be linked (${locked.length}).`
+        )
+      }
+      if (toLink.length === 0) return
+      try {
+        for (const reqId of toLink) {
+          if (LINKAGE_V1) {
+            await linkService.createLink(projectId, {
+              sourceType: 'requirement',
+              sourceId: reqId,
+              targetType: 'test_case',
+              targetId: caseId,
+              linkType: 'verifies',
+            })
+          } else {
+            await traceabilityService.createTraceLink(projectId, {
+              sourceType: 'requirement',
+              sourceId: reqId,
+              targetType: 'test_case',
+              targetId: caseId,
+              linkType: 'verifies',
+            } as any)
+          }
+        }
+        queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+        queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+        queryClient.invalidateQueries({ queryKey: ['links', projectId] })
+        invalidateVerificationQueries()
+      } catch (err: any) {
+        console.error('Link requirement to test case failed:', err)
+        alert(err?.message || err?.error || 'Failed to link requirement(s) to test case. Please try again.')
+      }
+    },
+    [projectId, allRequirements, queryClient, invalidateVerificationQueries]
+  )
 
   // Component tree for Export scope selection (shares cache with PBS tree)
   const { data: componentTreeForExport = [] } = useQuery({
@@ -2092,7 +2164,7 @@ export default function RequirementsPage() {
 
   const handleRequirementDragStart = useCallback(
     (e: React.DragEvent, req: Requirement) => {
-      if (leftPanelTab !== 'functions') return
+      if (leftPanelTab !== 'functions' && leftPanelTab !== 'verification') return
       const ids =
         selectedRequirements.has(req.id) && selectedRequirements.size > 1
           ? Array.from(selectedRequirements)
@@ -2340,10 +2412,34 @@ export default function RequirementsPage() {
                     requirements={requirementsForVerificationTree}
                     onAddRequirementToTestCase={(caseId) => navigate(`/projects/${projectId}/requirements?tree=verification&linkToCase=${caseId}`)}
                     onRemoveRequirementFromTestCase={(reqId, caseId) => removeRequirementFromTestCaseMutation.mutate({ reqId, caseId })}
+                    onDropRequirementsOnTestCase={handleDropRequirementsOnTestCase}
                     onRequirementClick={(reqId) => {
                       const req = allRequirements?.find((r) => r.id === reqId)
                       if (req) setDetailRequirement(req)
                     }}
+                    onEditRequirement={(reqId) => {
+                      const req = allRequirements?.find((r) => r.id === reqId)
+                      if (req) setEditingRequirement(req)
+                    }}
+                    onCreateChangeRequest={(reqId) => {
+                      const req = allRequirements?.find((r) => r.id === reqId)
+                      if (req) {
+                        setSelectedRequirementForChangeRequest(req)
+                        setIsChangeRequestModalOpen(true)
+                      }
+                    }}
+                    onCreateIssue={(reqId) => {
+                      const req = allRequirements?.find((r) => r.id === reqId)
+                      if (req) {
+                        setSelectedRequirementForIssue(req)
+                        setIsCreateIssueModalOpen(true)
+                      }
+                    }}
+                    onOpenTraceabilityMatrix={() => setIsTraceMatrixOpen(true)}
+                    getLinksForRequirement={getLinksForRequirementVerificationTree}
+                    onLinkedElementClick={(payload: VerLinkedElementClickPayload) =>
+                      handleLinkedElementClick(payload as LinkedElementClickPayload)
+                    }
                   />
                 )}
                 </div>
@@ -2900,7 +2996,7 @@ export default function RequirementsPage() {
                               requirement={req}
                               links={getLinksForRequirement(req.id)}
                               onRequirementClick={setDetailRequirement}
-                              draggable={leftPanelTab === 'functions'}
+                              draggable={leftPanelTab === 'functions' || leftPanelTab === 'verification'}
                               onDragStart={(e) => handleRequirementDragStart(e, req)}
                               inlineEdit={inlineEdit?.field === 'title' || inlineEdit?.field === 'description' ? inlineEdit : null}
                               onStartInlineEdit={startInlineEdit}
@@ -2927,7 +3023,7 @@ export default function RequirementsPage() {
                 ) : (
                   documentViewRequirements.map((req) => (
                     <RequirementDocumentCard
-                      draggable={leftPanelTab === 'functions'}
+                      draggable={leftPanelTab === 'functions' || leftPanelTab === 'verification'}
                       onDragStart={(e) => handleRequirementDragStart(e, req)}
                       key={req.id}
                       requirement={req}
