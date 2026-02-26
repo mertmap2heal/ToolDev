@@ -168,8 +168,7 @@ function buildTree(
           return null
         }
         for (const link of requirementTestCaseLinks) {
-          const treeCaseId = targetIdToCaseId(link.targetId)
-          if (treeCaseId == null || !knownCaseIds.has(treeCaseId)) continue
+          const treeCaseId = targetIdToCaseId(link.targetId) ?? link.targetId
           const list = m.get(treeCaseId) ?? []
           list.push(link)
           m.set(treeCaseId, list)
@@ -352,9 +351,10 @@ function buildTree(
           children: caseIdsWithLinksNotInPlan
             .map((caseId) => {
               const c = caseMap.get(caseId)
-              if (!c) return null
-              const label = (c as { title?: string; name?: string }).title ?? (c as { name?: string }).name ?? (c as { id: string }).id
-              const key = (c as { key?: string }).key
+              const label = c
+                ? ((c as { title?: string; name?: string }).title ?? (c as { name?: string }).name ?? (c as { id: string }).id)
+                : caseId
+              const key = c ? (c as { key?: string }).key : undefined
               const reqLinks = reqLinksByCaseIdStable.get(caseId) ?? []
               const requirementChildren: VerTreeNode[] = reqLinks.map((link) => ({
                 type: 'requirement' as const,
@@ -369,11 +369,10 @@ function buildTree(
                 planId: undefined,
                 label,
                 key,
-                status: (c as { status?: string }).status,
+                status: c ? (c as { status?: string }).status : undefined,
                 children: requirementChildren.length > 0 ? requirementChildren : undefined,
               }
-            })
-            .filter(Boolean) as VerTreeNode[],
+            }) as VerTreeNode[],
         }
       : null
 
