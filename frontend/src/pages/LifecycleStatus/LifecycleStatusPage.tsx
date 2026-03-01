@@ -1,14 +1,39 @@
 import { useState, lazy, Suspense } from 'react'
 import { useParams } from 'react-router-dom'
-import { Search, Filter, ChevronDown, ChevronUp, Activity, Radio } from 'lucide-react'
+import { 
+  Search, 
+  Filter, 
+  ChevronDown, 
+  ChevronUp, 
+  Activity, 
+  Radio,
+  Settings
+} from 'lucide-react'
+import clsx from 'clsx'
 
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 
 const LifecycleControlTowerPage = lazy(
   () => import('./control-tower/LifecycleControlTowerPage')
 )
+const LifecycleManagementPage = lazy(
+  () => import('../LifecycleManagement/LifecycleManagementPage')
+)
 
-type TabId = 'status' | 'control-tower'
+type TabId = 'status' | 'control-tower' | 'lifecycle-settings'
+
+interface Tab {
+  id: TabId
+  label: string
+  icon: typeof Activity
+  description?: string
+}
+
+const tabs: Tab[] = [
+  { id: 'status', label: 'Lifecycle Status', icon: Activity, description: 'View lifecycle status for project items' },
+  { id: 'control-tower', label: 'Control Tower', icon: Radio, description: 'Monitor and control project lifecycle' },
+  { id: 'lifecycle-settings', label: 'Lifecycle Settings', icon: Settings, description: 'Manage lifecycle libraries, statuses, transitions, and more' },
+]
 
 export default function LifecycleStatusPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -19,33 +44,31 @@ export default function LifecycleStatusPage() {
   return (
     <div className="space-y-6">
       {/* ── Tab bar ───────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 border-b border-gray-200 dark:border-gray-700">
-        <button
-          onClick={() => setActiveTab('status')}
-          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'status'
-              ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
-              : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <Activity size={15} />
-            Lifecycle Status
-          </span>
-        </button>
-        <button
-          onClick={() => setActiveTab('control-tower')}
-          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'control-tower'
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
-              : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <Radio size={15} />
-            Control Tower
-          </span>
-        </button>
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <div className="flex items-center gap-1 border-b border-gray-200 dark:border-gray-700 px-2 py-2 min-w-max">
+            {tabs.map((tab) => {
+              const Icon = tab.icon
+              const isActive = activeTab === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  title={tab.description}
+                  className={clsx(
+                    'flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap',
+                    isActive
+                      ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
+                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-300'
+                  )}
+                >
+                  <Icon size={15} />
+                  <span>{tab.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
       </div>
 
       {/* ── Control Tower tab ────────────────────────────────────────── */}
@@ -58,6 +81,19 @@ export default function LifecycleStatusPage() {
           }
         >
           <LifecycleControlTowerPage />
+        </Suspense>
+      )}
+
+      {/* ── Lifecycle Settings tab (full lifecycle management) ──────── */}
+      {activeTab === 'lifecycle-settings' && (
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center py-20">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+            </div>
+          }
+        >
+          <LifecycleManagementPage />
         </Suspense>
       )}
 

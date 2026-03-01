@@ -143,6 +143,7 @@ function App() {
             <Route path="projects/:projectId/interface-management" element={<InterfaceManagementPage />} />
             <Route path="projects/:projectId/configuration-management" element={<ConfigurationManagementPage />} />
             <Route path="projects/:projectId/archive" element={<ArchivePage />} />
+            <Route path="projects/:projectId/audit" element={<AuditLogPage />} />
             <Route path="projects/:projectId/compliance-check" element={<ComplianceCheckPage />} />
             <Route path="projects/:projectId/safety-analysis" element={<SafetyLayoutPage />}>
             <Route index element={<Navigate to="overview" replace />} />
@@ -163,7 +164,6 @@ function App() {
               <Route path="settings" element={<SafetySettingsPage />} />
             </Route>
             <Route path="settings" element={<SettingsPage />} />
-            <Route path="lifecycle" element={<LifecycleManagementPage />} />
             <Route path="admin" element={<AdminRouteGuard />}>
               <Route index element={<AdminPage />} />
             </Route>

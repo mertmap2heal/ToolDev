@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import Sidebar from './Sidebar'
 import Header from './Header'
 import { BreadcrumbProvider } from '../../contexts/BreadcrumbContext'
 import AIGuideChat from '../ai-guide/AIGuideChat'
@@ -49,7 +48,6 @@ export default function MainLayout() {
       {user?.mustChangePassword && (
         <ForceChangePasswordModal onSuccess={handleForceChangePasswordSuccess} />
       )}
-      <Sidebar />
       <BreadcrumbProvider>
         <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${isOpen ? '' : ''}`}>
           <Header />

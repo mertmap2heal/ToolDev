@@ -59,10 +59,11 @@ export const MODULES: ModuleDefinition[] = [
     { id: 'risk-management', label: 'Risk', icon: AlertTriangle, route: 'risk-management', category: 'assurance', tooltip: 'Risk Management' },
     { id: 'compliance-check', label: 'Compliance', icon: ShieldCheck, route: 'compliance-check', category: 'assurance', tooltip: 'Compliance Check' },
     { id: 'certification', label: 'Certification', icon: Award, route: 'certification', category: 'assurance' },
+    { id: 'audit', label: 'Audit', icon: ClipboardList, route: 'audit', category: 'assurance', tooltip: 'Audit Log' },
 ]
 
 export const CATEGORIES: { id: ModuleCategory; label: string }[] = [
     { id: 'system', label: 'System Definition' },
-    { id: 'development', label: 'Dev & Control' },
+    { id: 'development', label: 'Development & Control' },
     { id: 'assurance', label: 'Assurance' },
 ]

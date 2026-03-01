@@ -1,12 +1,31 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { Bell, Search, Loader2, Menu } from 'lucide-react'
+import { 
+  Bell, 
+  Search, 
+  Loader2, 
+  Menu,
+  Sparkles,
+  Package,
+  ArrowLeft,
+  LayoutDashboard,
+  UserCheck,
+  List,
+  LayoutGrid,
+  Calendar,
+  BarChart3,
+  FileText,
+  Workflow,
+  Clock,
+  Settings2,
+} from 'lucide-react'
 import UserMenu from './UserMenu'
 import GlobalSearch from '../search/GlobalSearch'
 import Logo from '../Logo'
 import Breadcrumbs from './Breadcrumbs'
 import { useAuthStore } from '../../store/authStore'
+import { useAIGuideStore } from '../../store/aiGuideStore'
 import { notificationService } from '../../services/notification.service'
 import { projectService } from '../../services/project.service'
 import type { Notification } from 'shared/types/project.types'
@@ -48,6 +67,24 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T) => voi
 
 const DEFAULT_PINNED_IDS = ['requirements', 'issues', 'change-requests', 'verification']
 
+const mainMenuItems = [
+  { icon: Package, label: 'Inventory Management', path: '/inventory' },
+  { icon: BarChart3, label: 'Data Flow Visualization', path: '/platform-admin/data-flow' },
+]
+
+const taskMenuItems = [
+  { icon: LayoutDashboard, label: 'Dashboard', path: '/tasks' },
+  { icon: UserCheck, label: 'My Tasks', path: '/tasks/my-tasks' },
+  { icon: List, label: 'All Tasks', path: '/tasks/all' },
+  { icon: LayoutGrid, label: 'Board', path: '/tasks/board' },
+  { icon: Calendar, label: 'Calendar', path: '/tasks/calendar' },
+  { icon: BarChart3, label: 'Reports', path: '/tasks/reports' },
+  { icon: FileText, label: 'Templates', path: '/tasks/templates' },
+  { icon: Workflow, label: 'Workflows', path: '/tasks/workflows' },
+  { icon: Clock, label: 'Time Tracking', path: '/tasks/time-tracking' },
+  { icon: Settings2, label: 'Settings', path: '/tasks/settings' },
+]
+
 export default function Header() {
   const [bellOpen, setBellOpen] = useState(false)
   const bellRef = useRef<HTMLDivElement>(null)
@@ -56,9 +93,14 @@ export default function Header() {
   const { projectId } = useParams<{ projectId: string }>()
   const queryClient = useQueryClient()
   const { user } = useAuthStore()
+  const { toggleAIGuide } = useAIGuideStore()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [notificationsLoading, setNotificationsLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+
+  // Determine if we're in task mode
+  const isTaskMode = location.pathname === '/tasks' || location.pathname.startsWith('/tasks/')
+  const menuItems = isTaskMode ? taskMenuItems : mainMenuItems
 
   // Navigation State
   const [activeCategory, setActiveCategory] = useLocalStorage<ModuleCategory>('mega-menu-category', 'system')
@@ -204,6 +246,15 @@ export default function Header() {
 
           {/* Right: Icons */}
           <div className="flex items-center gap-1 flex-shrink-0">
+            {/* AI Guide Button */}
+            <button
+              onClick={toggleAIGuide}
+              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
+              title="AI Guide"
+            >
+              <Sparkles size={16} className="text-gray-600 dark:text-gray-400" />
+            </button>
+
             <div className="relative" ref={bellRef}>
               <button
                 onClick={() => setBellOpen(!bellOpen)}
@@ -278,6 +329,55 @@ export default function Header() {
             pinnedIds={pinnedSet}
             onTogglePin={handleTogglePin}
           />
+        )}
+
+        {/* Main Navigation Menu - visible when NOT in project context or in task mode */}
+        {(!isProjectContext || isTaskMode) && (
+          <div className="border-t border-gray-200 dark:border-gray-700 py-1">
+            <nav className="flex items-center gap-1 overflow-x-auto">
+              {/* Back button when in task mode */}
+              {isTaskMode && (
+                <button
+                  onClick={() => navigate('/')}
+                  title="Back to main menu"
+                  className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md transition-colors text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200"
+                >
+                  <ArrowLeft size={14} />
+                  <span>Back</span>
+                </button>
+              )}
+
+              {/* Navigation Items */}
+              {menuItems.map((item) => {
+                const Icon = item.icon
+                const isActive = isTaskMode
+                  ? item.path === '/tasks'
+                    ? location.pathname === '/tasks'
+                    : location.pathname === item.path || location.pathname.startsWith(item.path + '/')
+                  : location.pathname === item.path ||
+                    (item.path === '/inventory' && location.pathname.startsWith('/inventory')) ||
+                    (item.path === '/lifecycle' && location.pathname.startsWith('/lifecycle'))
+
+                const href = !isTaskMode && item.path === '/inventory' ? '/inventory/items' : item.path
+
+                return (
+                  <Link
+                    key={item.path}
+                    to={href}
+                    className={clsx(
+                      'flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap',
+                      isActive
+                        ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200'
+                    )}
+                  >
+                    <Icon size={14} />
+                    <span>{item.label}</span>
+                  </Link>
+                )
+              })}
+            </nav>
+          </div>
         )}
       </div>
 
