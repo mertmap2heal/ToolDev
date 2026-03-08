@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { ArrowUp, ArrowDown } from 'lucide-react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
-import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, AlertTriangle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft, BarChart3, LayoutList, Sliders } from 'lucide-react'
+import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, AlertTriangle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft, BarChart3, LayoutList, Sliders, Link2, Eye } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
@@ -106,6 +106,14 @@ export default function RequirementsPage() {
   const [changeStatusAnchor, setChangeStatusAnchor] = useState<{ requirement: Requirement; el: HTMLElement } | null>(null)
   const [lockWarning, setLockWarning] = useState<{ isOpen: boolean; message: string }>({ isOpen: false, message: '' })
   const [linkedElementPreview, setLinkedElementPreview] = useState<LinkedElementClickPayload | null>(null)
+
+  // Toolbar dropdown states
+  const [traceabilityDropdownOpen, setTraceabilityDropdownOpen] = useState(false)
+  const [dataDropdownOpen, setDataDropdownOpen] = useState(false)
+  const [viewDropdownOpen, setViewDropdownOpen] = useState(false)
+  const traceabilityDropdownRef = useRef<HTMLDivElement>(null)
+  const dataDropdownRef = useRef<HTMLDivElement>(null)
+  const viewDropdownRef = useRef<HTMLDivElement>(null)
 
   // Inline editing state
   const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null)
@@ -285,11 +293,20 @@ export default function RequirementsPage() {
   const [columnSelectorOpen, setColumnSelectorOpen] = useState<boolean>(false)
   const columnSelectorRef = useRef<HTMLDivElement>(null)
 
-  // Close column selector when clicking outside
+  // Close column selector and toolbar dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (columnSelectorRef.current && !columnSelectorRef.current.contains(event.target as Node)) {
         setColumnSelectorOpen(false)
+      }
+      if (traceabilityDropdownRef.current && !traceabilityDropdownRef.current.contains(event.target as Node)) {
+        setTraceabilityDropdownOpen(false)
+      }
+      if (dataDropdownRef.current && !dataDropdownRef.current.contains(event.target as Node)) {
+        setDataDropdownOpen(false)
+      }
+      if (viewDropdownRef.current && !viewDropdownRef.current.contains(event.target as Node)) {
+        setViewDropdownOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -2591,113 +2608,174 @@ export default function RequirementsPage() {
                   <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
                 </>
               )}
-              {/* Traceability group */}
-              <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsTraceMatrixOpen(true)}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-                title="Open Traceability Matrix"
-              >
-                <Grid3X3 size={16} />
-                <span className="text-sm">Matrix</span>
-              </button>
-              <button
-                onClick={() => setIsFunctionVerificationMatrixOpen(true)}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-                title="Function Verification Coverage Matrix"
-              >
-                <BarChart3 size={16} />
-                <span className="text-sm">Function Verification</span>
-              </button>
-              <button
-                onClick={() => setIsSuspectReviewOpen(true)}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-                title="Review Suspect Links"
-              >
-                <AlertTriangle size={16} />
-                <span className="text-sm">Suspect</span>
-              </button>
+              {/* Traceability dropdown */}
+              <div className="relative" ref={traceabilityDropdownRef}>
+                <button
+                  onClick={() => {
+                    setTraceabilityDropdownOpen(!traceabilityDropdownOpen)
+                    setDataDropdownOpen(false)
+                    setViewDropdownOpen(false)
+                  }}
+                  className={clsx(
+                    'px-2.5 py-2 border rounded-lg flex items-center gap-1.5 transition-colors text-sm',
+                    traceabilityDropdownOpen
+                      ? 'bg-gray-100 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-gray-900 dark:text-white'
+                      : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                  )}
+                  title="Traceability Tools"
+                >
+                  <Link2 size={16} />
+                  <span className="text-sm font-medium">Traceability</span>
+                  <ChevronDown size={12} className={clsx('transition-transform', traceabilityDropdownOpen && 'rotate-180')} />
+                </button>
+                {traceabilityDropdownOpen && (
+                  <div className="absolute left-0 top-full mt-1 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 py-1">
+                    <button
+                      onClick={() => { setIsTraceMatrixOpen(true); setTraceabilityDropdownOpen(false) }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <Grid3X3 size={16} className="text-gray-500 dark:text-gray-400" />
+                      Traceability Matrix
+                    </button>
+                    <button
+                      onClick={() => { setIsFunctionVerificationMatrixOpen(true); setTraceabilityDropdownOpen(false) }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <BarChart3 size={16} className="text-gray-500 dark:text-gray-400" />
+                      Function Verification
+                    </button>
+                    <button
+                      onClick={() => { setIsSuspectReviewOpen(true); setTraceabilityDropdownOpen(false) }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <AlertTriangle size={16} className="text-gray-500 dark:text-gray-400" />
+                      Suspect Links
+                    </button>
+                  </div>
+                )}
               </div>
-              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
-              {/* Data group */}
-              <div className="flex items-center gap-2">
-              <button
-                onClick={() => !isBaselineView && setIsImportOpen(true)}
-                disabled={isBaselineView}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Import Requirements"
-              >
-                <Download size={16} />
-                <span className="text-sm">Import</span>
-              </button>
-              <button
-                onClick={() => setIsExportOpen(true)}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-                title="Export Requirements"
-              >
-                <Upload size={16} />
-                <span className="text-sm">Export</span>
-              </button>
+
+              {/* Data dropdown */}
+              <div className="relative" ref={dataDropdownRef}>
+                <button
+                  onClick={() => {
+                    setDataDropdownOpen(!dataDropdownOpen)
+                    setTraceabilityDropdownOpen(false)
+                    setViewDropdownOpen(false)
+                  }}
+                  className={clsx(
+                    'px-2.5 py-2 border rounded-lg flex items-center gap-1.5 transition-colors text-sm',
+                    dataDropdownOpen
+                      ? 'bg-gray-100 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-gray-900 dark:text-white'
+                      : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                  )}
+                  title="Data Management"
+                >
+                  <Archive size={16} />
+                  <span className="text-sm font-medium">Data</span>
+                  <ChevronDown size={12} className={clsx('transition-transform', dataDropdownOpen && 'rotate-180')} />
+                </button>
+                {dataDropdownOpen && (
+                  <div className="absolute left-0 top-full mt-1 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 py-1">
+                    <button
+                      onClick={() => { if (!isBaselineView) setIsImportOpen(true); setDataDropdownOpen(false) }}
+                      disabled={isBaselineView}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Download size={16} className="text-gray-500 dark:text-gray-400" />
+                      Import
+                    </button>
+                    <button
+                      onClick={() => { setIsExportOpen(true); setDataDropdownOpen(false) }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <Upload size={16} className="text-gray-500 dark:text-gray-400" />
+                      Export
+                    </button>
+                    <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
+                    <button
+                      onClick={() => { setIsBaselineManagerOpen(true); setDataDropdownOpen(false) }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <GitBranch size={16} className="text-gray-500 dark:text-gray-400" />
+                      Baselines
+                    </button>
+                  </div>
+                )}
               </div>
-              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
-              {/* View group */}
-              <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsBaselineManagerOpen(true)}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-                title="Manage Baselines"
-              >
-                <Archive size={16} />
-                <span className="text-sm">Baselines</span>
-              </button>
-              <button
-                onClick={() => setIsDiagramOpen(true)}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-                title="View Requirement Diagram"
-              >
-                <GitBranch size={16} />
-                <span className="text-sm">Diagram</span>
-              </button>
-              <button
-                onClick={() => setIsQualityPanelOpen(true)}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-                title="Requirement Quality Analysis"
-              >
-                <BarChart3 size={16} />
-                <span className="text-sm">Quality</span>
-              </button>
-              {/* Parameter display: Name vs Resolved value */}
-              {projectId && (
-                <div className="flex items-center gap-2" title="Show parameters as name or resolved value">
-                  <Sliders size={16} className="text-gray-500 dark:text-gray-400 shrink-0" />
-                  <select
-                    value={parameterDisplayMode}
-                    onChange={(e) => setParameterDisplayMode(e.target.value as 'name' | 'resolved')}
-                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm cursor-pointer"
-                  >
-                    <option value="name">Params: Name</option>
-                    <option value="resolved">Params: Value</option>
-                  </select>
-                </div>
-              )}
-              <Link
-                to={`/projects/${projectId}/requirements/settings`}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
-                title="Requirements Settings"
-              >
-                <Settings size={16} />
-                <span className="text-sm">Settings</span>
-              </Link>
+
+              {/* View dropdown */}
+              <div className="relative" ref={viewDropdownRef}>
+                <button
+                  onClick={() => {
+                    setViewDropdownOpen(!viewDropdownOpen)
+                    setTraceabilityDropdownOpen(false)
+                    setDataDropdownOpen(false)
+                  }}
+                  className={clsx(
+                    'px-2.5 py-2 border rounded-lg flex items-center gap-1.5 transition-colors text-sm',
+                    viewDropdownOpen
+                      ? 'bg-gray-100 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-gray-900 dark:text-white'
+                      : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                  )}
+                  title="View & Settings"
+                >
+                  <Eye size={16} />
+                  <span className="text-sm font-medium">View</span>
+                  <ChevronDown size={12} className={clsx('transition-transform', viewDropdownOpen && 'rotate-180')} />
+                </button>
+                {viewDropdownOpen && (
+                  <div className="absolute left-0 top-full mt-1 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 py-1">
+                    <button
+                      onClick={() => { setIsDiagramOpen(true); setViewDropdownOpen(false) }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <GitBranch size={16} className="text-gray-500 dark:text-gray-400" />
+                      Diagram
+                    </button>
+                    <button
+                      onClick={() => { setIsQualityPanelOpen(true); setViewDropdownOpen(false) }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <BarChart3 size={16} className="text-gray-500 dark:text-gray-400" />
+                      Quality Analysis
+                    </button>
+                    <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
+                    {projectId && (
+                      <div className="flex items-center gap-3 px-4 py-2.5">
+                        <Sliders size={16} className="text-gray-500 dark:text-gray-400 shrink-0" />
+                        <select
+                          value={parameterDisplayMode}
+                          onChange={(e) => setParameterDisplayMode(e.target.value as 'name' | 'resolved')}
+                          className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm cursor-pointer"
+                        >
+                          <option value="name">Params: Name</option>
+                          <option value="resolved">Params: Value</option>
+                        </select>
+                      </div>
+                    )}
+                    <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
+                    <Link
+                      to={`/projects/${projectId}/requirements/settings`}
+                      onClick={() => setViewDropdownOpen(false)}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <Settings size={16} className="text-gray-500 dark:text-gray-400" />
+                      Settings
+                    </Link>
+                  </div>
+                )}
               </div>
+
+              {/* Columns selector */}
               <div className="relative" ref={columnSelectorRef}>
                 <button
                   onClick={() => setColumnSelectorOpen(!columnSelectorOpen)}
-                  className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-2 transition-colors"
+                  className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-1 transition-colors"
                   title="Customize Columns"
                 >
                   <Columns size={16} />
-                  <span className="text-sm">Columns</span>
-                  <ChevronDown size={14} className={clsx('ml-0.5 transition-transform', columnSelectorOpen && 'rotate-180')} />
+                  <ChevronDown size={12} className={clsx('transition-transform', columnSelectorOpen && 'rotate-180')} />
                 </button>
                 {columnSelectorOpen && (
                   <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
