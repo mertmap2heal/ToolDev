@@ -94,7 +94,7 @@ export default function RequirementsPage() {
   const [isSuspectReviewOpen, setIsSuspectReviewOpen] = useState(false)
   const [isBaselineManagerOpen, setIsBaselineManagerOpen] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
-  const [exportScope, setExportScope] = useState<{ type: 'component' | 'function'; id: string; label: string } | null>(null)
+  const [exportScope, setExportScope] = useState<{ type: 'component' | 'function' | 'test_plan' | 'test_case'; id: string; label: string } | null>(null)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [isDiagramOpen, setIsDiagramOpen] = useState(false)
   const [isQualityPanelOpen, setIsQualityPanelOpen] = useState(false)
@@ -651,10 +651,11 @@ export default function RequirementsPage() {
   }, [effectiveLinks])
   const requirementsForVerificationTree = useMemo(
     () =>
-      (allRequirements || []).map((r: { id: string; title?: string; requirementId?: string }) => ({
+      (allRequirements || []).map((r: Requirement) => ({
         id: r.id,
         title: r.title,
         requirementId: r.requirementId,
+        isLocked: r.isLocked,
       })),
     [allRequirements]
   )
@@ -2499,6 +2500,30 @@ export default function RequirementsPage() {
                     onLinkedElementClick={(payload: VerLinkedElementClickPayload) =>
                       handleLinkedElementClick(payload as LinkedElementClickPayload)
                     }
+                    onExportForPlan={(planId, planName) => {
+                      setExportScope({
+                        type: 'test_plan',
+                        id: planId,
+                        label: planName ? `Plan: ${planName}` : `Plan: ${planId.slice(0, 8)}`,
+                      })
+                      setIsExportOpen(true)
+                    }}
+                    onExportForTestCase={(caseId, caseName) => {
+                      setExportScope({
+                        type: 'test_case',
+                        id: caseId,
+                        label: caseName ? `Test case: ${caseName}` : `Test case: ${caseId.slice(0, 8)}`,
+                      })
+                      setIsExportOpen(true)
+                    }}
+                    onOpenInVerificationPage={(nodeType, id) => {
+                      const tab = nodeType === 'test-plan' ? 'plans' : 'cases'
+                      navigate(`/projects/${projectId}/verification?tab=${tab}&focusType=${nodeType}&focusId=${id}`)
+                    }}
+                    onRemoveLink={(linkId) => {
+                      if (isBaselineView) return
+                      removeLinkMutation.mutate(linkId)
+                    }}
                   />
                 )}
                 </div>
@@ -3619,16 +3644,30 @@ export default function RequirementsPage() {
             const exportRequirements = exportScope
               ? exportScope.type === 'component'
                 ? allRequirements.filter((r) => r.componentId === exportScope.id)
-                : allRequirements.filter((r) =>
-                    allocationLinks.some(
-                      (l) =>
-                        l.sourceType === 'requirement' &&
-                        l.targetType === 'function' &&
-                        l.targetId === exportScope.id &&
-                        l.linkType === 'allocated_to' &&
-                        l.sourceId === r.id
+                : exportScope.type === 'function'
+                  ? allRequirements.filter((r) =>
+                      allocationLinks.some(
+                        (l) =>
+                          l.sourceType === 'requirement' &&
+                          l.targetType === 'function' &&
+                          l.targetId === exportScope.id &&
+                          l.linkType === 'allocated_to' &&
+                          l.sourceId === r.id
+                      )
                     )
-                  )
+                  : exportScope.type === 'test_case'
+                    ? allRequirements.filter((r) =>
+                        requirementTestCaseLinks.some((l) => l.sourceId === r.id && l.targetId === exportScope.id)
+                      )
+                    : exportScope.type === 'test_plan'
+                      ? (() => {
+                          const plan = verificationPlansList.find((p: { id: string; planCases?: Array<{ testCaseId?: string }> }) => p.id === exportScope.id)
+                          const caseIds = new Set((plan?.planCases ?? []).map((pc: { testCaseId?: string }) => pc.testCaseId).filter(Boolean) as string[])
+                          return allRequirements.filter((r) =>
+                            requirementTestCaseLinks.some((l) => l.sourceId === r.id && caseIds.has(l.targetId))
+                          )
+                        })()
+                      : allRequirements
               : allRequirements
             const scopeFilenameSuffix = exportScope
               ? `${exportScope.type}_${(exportScope.label.replace(/^[^:]+:\s*/, '').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '')).slice(0, 40)}`

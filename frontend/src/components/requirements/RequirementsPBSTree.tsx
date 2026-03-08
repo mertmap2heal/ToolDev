@@ -913,6 +913,11 @@ export default function RequirementsPBSTree({
                   )}
                   {t.type === 'requirement' && (
                     <>
+                      {onRequirementClick && (
+                        <button onClick={() => { onRequirementClick(t.req); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
+                          <ExternalLink size={14} /> Open
+                        </button>
+                      )}
                       {onEditRequirement && !t.req.isLocked && (
                         <button onClick={() => { onEditRequirement(t.req); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
                           <Edit2 size={14} /> Edit requirement

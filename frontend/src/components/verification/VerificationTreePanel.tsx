@@ -21,6 +21,8 @@ import {
   BarChart3,
   Copy,
   Link2,
+  ExternalLink,
+  Download,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -110,7 +112,7 @@ export interface VerificationTreePanelProps {
   onRequirementClick?: (reqId: string) => void
   onDropRequirementsOnTestCase?: (requirementIds: string[], caseId: string) => void
   /** Optional: list of all requirements to show "Unassigned requirements" section (requirements not linked to any test case) */
-  requirements?: Array<{ id: string; title?: string; requirementId?: string }>
+  requirements?: Array<{ id: string; title?: string; requirementId?: string; isLocked?: boolean }>
   /** Optional: requirement-level actions (parity with PBS/Functions tree) */
   onEditRequirement?: (reqId: string) => void
   onCreateChangeRequest?: (reqId: string) => void
@@ -119,6 +121,14 @@ export interface VerificationTreePanelProps {
   /** Optional: show linked elements under requirement nodes (issues, CRs, etc.) */
   getLinksForRequirement?: (reqId: string) => VerLinkLike[]
   onLinkedElementClick?: (payload: VerLinkedElementClickPayload) => void
+  /** Optional: remove a link (parity with PBS/Functions tree for linked elements) */
+  onRemoveLink?: (linkId: string) => void
+  /** Optional: export requirements for a test plan (parity with PBS/Functions Export for component/function) */
+  onExportForPlan?: (planId: string, planName?: string) => void
+  /** Optional: export requirements for a test case */
+  onExportForTestCase?: (caseId: string, caseName?: string) => void
+  /** Optional: open Verification page with focus on plan or case (parity with PBS/Functions "Open in PBS/Functions page") */
+  onOpenInVerificationPage?: (nodeType: 'test-plan' | 'test-case', id: string) => void
 }
 
 const TAB_MAP: Record<VerNodeType, string> = {
@@ -450,12 +460,22 @@ export default function VerificationTreePanel({
   onOpenTraceabilityMatrix,
   getLinksForRequirement,
   onLinkedElementClick,
+  onRemoveLink,
+  onExportForPlan,
+  onExportForTestCase,
+  onOpenInVerificationPage,
 }: VerificationTreePanelProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [expandedRequirementIds, setExpandedRequirementIds] = useState<Set<string>>(new Set())
   const [allExpanded, setAllExpanded] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ node: VerTreeNode; x: number; y: number } | null>(null)
+  const [linkedElementContextMenu, setLinkedElementContextMenu] = useState<{
+    link: VerLinkLike
+    payload: VerLinkedElementClickPayload
+    x: number
+    y: number
+  } | null>(null)
   const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set())
   const [dragOverPlanId, setDragOverPlanId] = useState<string | null>(null)
   const [dragOverCaseId, setDragOverCaseId] = useState<string | null>(null)
@@ -616,7 +636,10 @@ export default function VerificationTreePanel({
   }, [])
 
   useEffect(() => {
-    const close = () => setContextMenu(null)
+    const close = () => {
+      setContextMenu(null)
+      setLinkedElementContextMenu(null)
+    }
     document.addEventListener('click', close)
     return () => document.removeEventListener('click', close)
   }, [])
@@ -861,6 +884,11 @@ export default function VerificationTreePanel({
                     e.stopPropagation()
                     onLinkedElementClick(payload)
                   }}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setLinkedElementContextMenu({ link, payload, x: e.clientX, y: e.clientY })
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault()
@@ -979,6 +1007,12 @@ export default function VerificationTreePanel({
         )}
       </div>
 
+      {(onDropRequirementsOnTestCase || onAddRequirementToTestCase) && (
+        <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/50 text-xs text-center text-gray-400 dark:text-gray-500">
+          Drag requirements onto test cases to link them
+        </div>
+      )}
+
       {contextMenu && (
         <div
           className="fixed z-50 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg min-w-[180px]"
@@ -1021,6 +1055,44 @@ export default function VerificationTreePanel({
                 Create test run
               </button>
               <div className="h-px bg-gray-200 dark:bg-gray-700 my-1" />
+              {onOpenInVerificationPage && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenInVerificationPage('test-plan', contextMenu.node.id)
+                    setContextMenu(null)
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+                >
+                  <ExternalLink size={14} />
+                  Open in Verification page
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(contextMenu.node.id)
+                  setContextMenu(null)
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+              >
+                <Copy size={14} />
+                Copy plan ID
+              </button>
+              {onExportForPlan && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onExportForPlan(contextMenu.node.id, contextMenu.node.label)
+                    setContextMenu(null)
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+                >
+                  <Download size={14} />
+                  Export requirements for plan
+                </button>
+              )}
+              <div className="h-px bg-gray-200 dark:bg-gray-700 my-1" />
               <button
                 type="button"
                 onClick={() => {
@@ -1046,6 +1118,43 @@ export default function VerificationTreePanel({
               >
                 Open
               </button>
+              {onOpenInVerificationPage && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenInVerificationPage('test-case', contextMenu.node.id)
+                    setContextMenu(null)
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+                >
+                  <ExternalLink size={14} />
+                  Open in Verification page
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(contextMenu.node.id)
+                  setContextMenu(null)
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+              >
+                <Copy size={14} />
+                Copy case ID
+              </button>
+              {onExportForTestCase && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onExportForTestCase(contextMenu.node.id, contextMenu.node.label)
+                    setContextMenu(null)
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+                >
+                  <Download size={14} />
+                  Export requirements for test case
+                </button>
+              )}
               {onAddRequirementToTestCase && (
                 <button
                   type="button"
@@ -1123,7 +1232,10 @@ export default function VerificationTreePanel({
               </button>
             </>
           )}
-          {contextMenu.node.type === 'requirement' && contextMenu.node.requirementId && !contextMenu.node.caseId && (
+          {contextMenu.node.type === 'requirement' && contextMenu.node.requirementId && !contextMenu.node.caseId && (() => {
+            const reqMeta = requirements?.find((r) => r.id === contextMenu.node.requirementId)
+            const isLocked = reqMeta?.isLocked ?? false
+            return (
             <>
               <button
                 type="button"
@@ -1135,7 +1247,7 @@ export default function VerificationTreePanel({
               >
                 Open
               </button>
-              {onEditRequirement && (
+              {onEditRequirement && !isLocked && (
                 <button
                   type="button"
                   onClick={() => {
@@ -1199,8 +1311,12 @@ export default function VerificationTreePanel({
                 </button>
               )}
             </>
-          )}
-          {contextMenu.node.type === 'requirement' && contextMenu.node.requirementId && contextMenu.node.caseId && (
+            )
+          })()}
+          {contextMenu.node.type === 'requirement' && contextMenu.node.requirementId && contextMenu.node.caseId && (() => {
+            const reqMeta = requirements?.find((r) => r.id === contextMenu.node.requirementId)
+            const isLocked = reqMeta?.isLocked ?? false
+            return (
             <>
               <button
                 type="button"
@@ -1212,7 +1328,7 @@ export default function VerificationTreePanel({
               >
                 Open
               </button>
-              {onEditRequirement && (
+              {onEditRequirement && !isLocked && (
                 <button
                   type="button"
                   onClick={() => {
@@ -1275,7 +1391,7 @@ export default function VerificationTreePanel({
                   View in traceability matrix
                 </button>
               )}
-              {onRemoveRequirementFromTestCase && (
+              {onRemoveRequirementFromTestCase && !isLocked && (
                 <button
                   type="button"
                   onClick={() => {
@@ -1289,7 +1405,8 @@ export default function VerificationTreePanel({
                 </button>
               )}
             </>
-          )}
+            )
+          })()}
           {contextMenu.node.type === 'test-run' && (
             <>
               <button
@@ -1315,6 +1432,39 @@ export default function VerificationTreePanel({
                 Delete
               </button>
             </>
+          )}
+        </div>
+      )}
+
+      {linkedElementContextMenu && (
+        <div
+          className="fixed z-50 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg min-w-[180px]"
+          style={{ left: linkedElementContextMenu.x, top: linkedElementContextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              onLinkedElementClick?.(linkedElementContextMenu.payload)
+              setLinkedElementContextMenu(null)
+            }}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+          >
+            <ExternalLink size={14} />
+            View target
+          </button>
+          {onRemoveLink && linkedElementContextMenu.link.id && (
+            <button
+              type="button"
+              onClick={() => {
+                onRemoveLink(linkedElementContextMenu.link.id!)
+                setLinkedElementContextMenu(null)
+              }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 text-left"
+            >
+              <Unlink size={14} />
+              Remove link
+            </button>
           )}
         </div>
       )}
