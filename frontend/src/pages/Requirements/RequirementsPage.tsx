@@ -130,6 +130,31 @@ export default function RequirementsPage() {
   const [verificationStatusFilter, setVerificationStatusFilter] = useState<string>('all')
   const [reviewStatusFilter, setReviewStatusFilter] = useState<string>('all')
 
+  // Active filter count
+  const activeFilterCount = useMemo(() => {
+    let count = 0
+    if (statusFilter !== 'all') count++
+    if (priorityFilter !== 'all') count++
+    if (ownerFilter !== 'all') count++
+    if (sourceFilter !== 'all') count++
+    if (requirementTypeFilter !== 'all') count++
+    if (categoryFilter !== 'all') count++
+    if (verificationStatusFilter !== 'all') count++
+    if (reviewStatusFilter !== 'all') count++
+    return count
+  }, [statusFilter, priorityFilter, ownerFilter, sourceFilter, requirementTypeFilter, categoryFilter, verificationStatusFilter, reviewStatusFilter])
+
+  const clearAllFilters = useCallback(() => {
+    setStatusFilter('all')
+    setPriorityFilter('all')
+    setOwnerFilter('all')
+    setSourceFilter('all')
+    setRequirementTypeFilter('all')
+    setCategoryFilter('all')
+    setVerificationStatusFilter('all')
+    setReviewStatusFilter('all')
+  }, [])
+
   // Pagination & sorting state
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [pageSize] = useState<number>(50)
@@ -2498,7 +2523,7 @@ export default function RequirementsPage() {
         )}
 
         {/* Main Content Area */}
-        <div className="flex-1 overflow-y-auto space-y-6 pr-6">
+        <div className="flex-1 overflow-y-auto space-y-3 pr-6">
 
           {isBaselineView && (
             <div className="px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center justify-between gap-4">
@@ -2517,7 +2542,7 @@ export default function RequirementsPage() {
             </div>
           )}
 
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between sticky top-0 z-20 bg-gray-50 dark:bg-gray-900 py-2 -mx-1 px-1">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsPBSPanelOpen(!isPBSPanelOpen)}
@@ -2608,6 +2633,32 @@ export default function RequirementsPage() {
                   <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
                 </>
               )}
+              {/* View toggles */}
+              <button
+                onClick={() => setGroupByType(!groupByType)}
+                className={clsx(
+                  'p-2 rounded-lg border transition-colors',
+                  groupByType
+                    ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-600'
+                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                )}
+                title="Group requirements by type"
+              >
+                <Grid3X3 size={16} />
+              </button>
+              <button
+                onClick={() => persistListViewStyle(listViewStyle === 'document' ? 'table' : 'document')}
+                className={clsx(
+                  'p-2 rounded-lg border transition-colors',
+                  listViewStyle === 'document'
+                    ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-600'
+                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                )}
+                title="Document View"
+              >
+                <LayoutList size={16} />
+              </button>
+              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
               {/* Traceability dropdown */}
               <div className="relative" ref={traceabilityDropdownRef}>
                 <button
@@ -2825,73 +2876,59 @@ export default function RequirementsPage() {
             </div>
           </div>
 
-          {/* Search and View Options */}
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-            <div className="flex items-center gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                <input
-                  type="text"
-                  placeholder="Search all fields (title, description, ID, requirement type, owner, tags, criteria...)"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                  >
-                    <X size={16} />
-                  </button>
-                )}
-              </div>
-              {/* Group by Type Toggle */}
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+            <input
+              type="text"
+              placeholder="Search all fields (title, description, ID, requirement type, owner, tags, criteria...)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+            {searchQuery && (
               <button
-                onClick={() => setGroupByType(!groupByType)}
-                className={clsx(
-                  "px-3 py-2 rounded-lg border transition-colors flex items-center gap-2 whitespace-nowrap",
-                  groupByType
-                    ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-600"
-                    : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600"
-                )}
-                title="Group requirements by type"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
               >
-                <Grid3X3 size={16} />
-                <span className="text-sm">Group by Type</span>
+                <X size={16} />
               </button>
-              {/* Document View Toggle */}
-              <button
-                onClick={() => persistListViewStyle(listViewStyle === 'document' ? 'table' : 'document')}
-                className={clsx(
-                  "px-3 py-2 rounded-lg border transition-colors flex items-center gap-2 whitespace-nowrap",
-                  listViewStyle === 'document'
-                    ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-600"
-                    : "bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600"
-                )}
-                title="View requirements as document-style cards"
-              >
-                <LayoutList size={16} />
-                <span className="text-sm">Document View</span>
-              </button>
-            </div>
+            )}
           </div>
 
           {/* Filters */}
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
             <button
               onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
-              className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
             >
               <div className="flex items-center gap-2">
                 <Filter size={16} className="text-gray-600 dark:text-gray-400" />
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Filters</span>
+                {activeFilterCount > 0 && (
+                  <span className="px-1.5 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                    {activeFilterCount}
+                  </span>
+                )}
               </div>
-              {isFiltersExpanded ? (
-                <ChevronUp size={16} className="text-gray-600 dark:text-gray-400" />
-              ) : (
-                <ChevronDown size={16} className="text-gray-600 dark:text-gray-400" />
-              )}
+              <div className="flex items-center gap-2">
+                {activeFilterCount > 0 && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => { e.stopPropagation(); clearAllFilters() }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); clearAllFilters() } }}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium cursor-pointer"
+                  >
+                    Clear all
+                  </span>
+                )}
+                {isFiltersExpanded ? (
+                  <ChevronUp size={16} className="text-gray-600 dark:text-gray-400" />
+                ) : (
+                  <ChevronDown size={16} className="text-gray-600 dark:text-gray-400" />
+                )}
+              </div>
             </button>
             {isFiltersExpanded && (
               <div className="p-4 border-t border-gray-200 dark:border-gray-700">
@@ -3418,8 +3455,8 @@ export default function RequirementsPage() {
 
           {/* Pagination Controls */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg mt-2">
-              <div className="text-sm text-gray-500 dark:text-gray-400">
+            <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+              <div className="text-xs text-gray-500 dark:text-gray-400">
                 Showing {((currentPage - 1) * pageSize) + 1}–{Math.min(currentPage * pageSize, totalRequirements)} of {totalRequirements} requirements
               </div>
               <div className="flex items-center gap-1">
