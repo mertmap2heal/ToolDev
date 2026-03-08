@@ -176,7 +176,9 @@ export interface BaselineItem {
 export interface CreateBaselineDto {
   name: string
   description?: string
-  requirementIds?: string[] // If not provided, all requirements will be included
+  requirementIds?: string[] // If not provided, scope (componentIds/functionIds) or all requirements
+  componentIds?: string[] // PBS components: requirements under selected components (and descendants) are included
+  functionIds?: string[] // Functions: requirements linked to selected functions (TraceLink) are included
   baselineType?: string
   reviewType?: string
   milestoneId?: string

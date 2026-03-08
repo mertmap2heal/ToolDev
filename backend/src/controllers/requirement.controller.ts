@@ -8,6 +8,7 @@ import { requirementValidationService } from '../services/requirementValidation.
 import { requirementSubscriptionService } from '../services/requirementSubscription.service'
 import { buildRequirementChangeSummary, notifyRequirementSubscribers } from '../services/requirementNotification.service'
 import { extractParameterIds } from '../utils/parameterPlaceholder'
+import { collectComponentIdAndDescendants } from '../utils/componentHelpers'
 import fs from 'fs'
 import path from 'path'
 
@@ -297,22 +298,6 @@ async function updateRequirementIdReferences(
     // Log error but don't throw - we don't want to fail the main update if reference updates fail
     console.error('Error updating requirement ID references:', error)
   }
-}
-
-/** Collect component ID and all descendant IDs for inclusive filtering */
-async function collectComponentIdAndDescendants(projectId: string, componentId: string): Promise<string[]> {
-  const components = await prisma.component.findMany({
-    where: { projectId },
-    select: { id: true, parentId: true },
-  })
-  const ids = new Set<string>()
-  function addRecursive(id: string) {
-    ids.add(id)
-    components.filter((c) => c.parentId === id).forEach((c) => addRecursive(c.id))
-  }
-  const root = components.find((c) => c.id === componentId)
-  if (root) addRecursive(root.id)
-  return Array.from(ids)
 }
 
 export const getRequirements = async (req: AuthRequest, res: Response) => {

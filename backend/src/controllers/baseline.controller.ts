@@ -1,6 +1,7 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { PrismaClient } from '@prisma/client'
+import { collectComponentIdAndDescendants } from '../utils/componentHelpers'
 
 const prisma = new PrismaClient()
 
@@ -170,12 +171,26 @@ export const getBaseline = async (req: AuthRequest, res: Response) => {
 }
 
 /**
- * Create a new baseline by snapshotting all current requirements
+ * Create a new baseline by snapshotting requirements.
+ * Body: requirementIds?, componentIds?, functionIds? (all optional). Merged to form the set of requirements to baseline.
+ * If none provided, all project requirements are included.
  */
 export const createBaseline = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
-    const { name, description, requirementIds, baselineType, reviewType, milestoneId, supersedesBaselineId, configurationAuthority, fdAL } = req.body
+    const {
+      name,
+      description,
+      requirementIds,
+      componentIds,
+      functionIds,
+      baselineType,
+      reviewType,
+      milestoneId,
+      supersedesBaselineId,
+      configurationAuthority,
+      fdAL,
+    } = req.body
 
     if (!projectId) {
       return res.status(400).json({
@@ -191,10 +206,51 @@ export const createBaseline = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    // Get requirements for the project - either selected ones or all
-    const whereClause: any = { projectId }
-    if (requirementIds && Array.isArray(requirementIds) && requirementIds.length > 0) {
-      whereClause.id = { in: requirementIds }
+    // Resolve requirement IDs from scope (components + functions) and merge with explicit requirementIds
+    const mergedReqIds = new Set<string>(
+      Array.isArray(requirementIds) && requirementIds.length > 0 ? requirementIds : []
+    )
+
+    // From PBS components: requirements whose componentId is in selected component or any descendant
+    if (Array.isArray(componentIds) && componentIds.length > 0) {
+      const allComponentIds = new Set<string>()
+      for (const cid of componentIds) {
+        const withDescendants = await collectComponentIdAndDescendants(projectId, cid)
+        withDescendants.forEach((id) => allComponentIds.add(id))
+      }
+      const reqsByComponent = await prisma.requirement.findMany({
+        where: {
+          projectId,
+          deletedAt: null,
+          componentId: { in: Array.from(allComponentIds) },
+        },
+        select: { id: true },
+      })
+      reqsByComponent.forEach((r) => mergedReqIds.add(r.id))
+    }
+
+    // From functions: requirements linked via TraceLink (either direction)
+    if (Array.isArray(functionIds) && functionIds.length > 0) {
+      const links = await prisma.traceLink.findMany({
+        where: {
+          projectId,
+          OR: [
+            { sourceType: 'requirement', targetType: 'function', targetId: { in: functionIds } },
+            { sourceType: 'function', targetType: 'requirement', sourceId: { in: functionIds } },
+          ],
+        },
+        select: { sourceType: true, sourceId: true, targetType: true, targetId: true },
+      })
+      for (const link of links) {
+        if (link.sourceType === 'requirement') mergedReqIds.add(link.sourceId)
+        if (link.targetType === 'requirement') mergedReqIds.add(link.targetId)
+      }
+    }
+
+    // Build where: if we have any merged IDs, filter by them; otherwise all project requirements
+    const whereClause: any = { projectId, deletedAt: null }
+    if (mergedReqIds.size > 0) {
+      whereClause.id = { in: Array.from(mergedReqIds) }
     }
 
     const requirements = await prisma.requirement.findMany({

@@ -1,17 +1,56 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { X, Archive, Trash2, Plus, ArrowLeftRight, Calendar, User, FileText, Search, CheckSquare, Square, ChevronRight, ChevronLeft, Eye, Download, Link2, AlertTriangle } from 'lucide-react'
+import { X, Archive, Trash2, Plus, ArrowLeftRight, Calendar, User, FileText, Search, CheckSquare, Square, ChevronRight, ChevronLeft, Eye, Download, Link2, AlertTriangle, Box, Workflow } from 'lucide-react'
 import { baselineService } from '../../services/baseline.service'
 import { requirementService } from '../../services/requirement.service'
 import { verificationService } from '../../services/verification.service'
+import { componentService } from '../../services/component.service'
+import { functionService } from '../../services/function.service'
 import BaselineViewModal from './BaselineViewModal'
 import BaselineExportModal from './BaselineExportModal'
 import BaselineComparisonModal from './BaselineComparisonModal'
 import { LINKAGE_V1 } from '../../config/featureFlags'
 import type { Baseline } from 'shared/types/engineering.types'
+import type { ComponentTreeNode } from 'shared/types/project.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
+
+function ComponentNodeRow({
+  node,
+  selectedIds,
+  onToggle,
+  depth,
+}: {
+  node: ComponentTreeNode
+  selectedIds: Set<string>
+  onToggle: (id: string) => void
+  depth: number
+}) {
+  const children = node.children ?? []
+  const isSelected = selectedIds.has(node.id)
+  return (
+    <>
+      <label
+        className={clsx(
+          'flex items-center gap-3 py-2 px-3 rounded-md cursor-pointer transition-colors',
+          isSelected
+            ? 'bg-blue-50 dark:bg-blue-900/20'
+            : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+        )}
+        style={{ marginLeft: depth * 12, marginRight: 8 }}
+      >
+        <button type="button" onClick={() => onToggle(node.id)} className="shrink-0 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+          {isSelected ? <CheckSquare size={18} className="text-blue-600 dark:text-blue-400" /> : <Square size={18} />}
+        </button>
+        <span className="text-sm font-medium text-gray-900 dark:text-white truncate">{node.name}</span>
+      </label>
+      {children.map((child) => (
+        <ComponentNodeRow key={child.id} node={child} selectedIds={selectedIds} onToggle={onToggle} depth={depth + 1} />
+      ))}
+    </>
+  )
+}
 
 interface BaselineManagerProps {
   projectId: string
@@ -27,7 +66,7 @@ interface BaselineManagerProps {
  * compare requirement baselines. Baselines freeze the state of all
  * requirements at a point in time for audits and milestone tracking.
  */
-type CreateBaselineStep = 'details' | 'select-requirements'
+type CreateBaselineStep = 'details' | 'scope' | 'select-requirements'
 
 export default function BaselineManager({ projectId, onClose, onViewInRequirementsPage, initialBaselineId }: BaselineManagerProps) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -40,6 +79,8 @@ export default function BaselineManager({ projectId, onClose, onViewInRequiremen
   const [newConfigurationAuthority, setNewConfigurationAuthority] = useState<'government' | 'contractor' | ''>('')
   const [newFdAL, setNewFdAL] = useState('')
   const [selectedRequirementIds, setSelectedRequirementIds] = useState<Set<string>>(new Set())
+  const [selectedComponentIds, setSelectedComponentIds] = useState<Set<string>>(new Set())
+  const [selectedFunctionIds, setSelectedFunctionIds] = useState<Set<string>>(new Set())
   const [requirementSearchQuery, setRequirementSearchQuery] = useState('')
   const [selectedBaselines, setSelectedBaselines] = useState<string[]>([])
   const [viewingBaselineId, setViewingBaselineId] = useState<string | null>(null)
@@ -71,6 +112,24 @@ export default function BaselineManager({ projectId, onClose, onViewInRequiremen
     queryKey: ['requirements', projectId],
     queryFn: async () => {
       const response = await requirementService.getAllRequirements(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId && isCreateModalOpen,
+  })
+
+  // Fetch component tree and functions for scope step
+  const { data: componentTree = [], isLoading: loadingComponents } = useQuery({
+    queryKey: ['component-tree', projectId],
+    queryFn: async () => {
+      const response = await componentService.getComponentTree(projectId)
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId && isCreateModalOpen,
+  })
+  const { data: functions = [], isLoading: loadingFunctions } = useQuery({
+    queryKey: ['functions', projectId],
+    queryFn: async () => {
+      const response = await functionService.getFunctions(projectId)
       return response.success && response.data ? response.data : []
     },
     enabled: !!projectId && isCreateModalOpen,
@@ -132,6 +191,8 @@ export default function BaselineManager({ projectId, onClose, onViewInRequiremen
       name: newBaselineName,
       description: newBaselineDescription || undefined,
       requirementIds: selectedRequirementIds.size > 0 ? Array.from(selectedRequirementIds) : undefined,
+      componentIds: selectedComponentIds.size > 0 ? Array.from(selectedComponentIds) : undefined,
+      functionIds: selectedFunctionIds.size > 0 ? Array.from(selectedFunctionIds) : undefined,
       baselineType: newBaselineType || undefined,
       reviewType: newReviewType || undefined,
       supersedesBaselineId: newSupersedesBaselineId || undefined,
@@ -152,6 +213,8 @@ export default function BaselineManager({ projectId, onClose, onViewInRequiremen
         setNewConfigurationAuthority('')
         setNewFdAL('')
         setSelectedRequirementIds(new Set())
+        setSelectedComponentIds(new Set())
+        setSelectedFunctionIds(new Set())
         setRequirementSearchQuery('')
       } else {
         alert(response.error || 'Failed to create baseline')
@@ -230,11 +293,33 @@ export default function BaselineManager({ projectId, onClose, onViewInRequiremen
 
   // Handle next step in create flow
   const handleNextStep = () => {
-    if (!newBaselineName.trim()) {
-      alert('Please enter a baseline name')
-      return
+    if (createStep === 'details') {
+      if (!newBaselineName.trim()) {
+        alert('Please enter a baseline name')
+        return
+      }
+      setCreateStep('scope')
+    } else if (createStep === 'scope') {
+      setCreateStep('select-requirements')
     }
-    setCreateStep('select-requirements')
+  }
+
+  const toggleComponent = (componentId: string) => {
+    setSelectedComponentIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(componentId)) next.delete(componentId)
+      else next.add(componentId)
+      return next
+    })
+  }
+
+  const toggleFunction = (functionId: string) => {
+    setSelectedFunctionIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(functionId)) next.delete(functionId)
+      else next.add(functionId)
+      return next
+    })
   }
 
   // Handle create baseline
@@ -256,6 +341,8 @@ export default function BaselineManager({ projectId, onClose, onViewInRequiremen
     setNewConfigurationAuthority('')
     setNewFdAL('')
     setSelectedRequirementIds(new Set())
+    setSelectedComponentIds(new Set())
+    setSelectedFunctionIds(new Set())
     setRequirementSearchQuery('')
   }
 
@@ -498,7 +585,7 @@ export default function BaselineManager({ projectId, onClose, onViewInRequiremen
                     Create New Baseline
                   </h3>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Step {createStep === 'details' ? 1 : 2} of 2
+                    Step {createStep === 'details' ? 1 : createStep === 'scope' ? 2 : 3} of 3
                   </p>
                 </div>
                 <button
@@ -610,96 +697,218 @@ export default function BaselineManager({ projectId, onClose, onViewInRequiremen
                       />
                     </div>
                     <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 text-sm text-blue-700 dark:text-blue-300">
-                      {requirements.length > 0
-                        ? `You will be able to select which of ${requirements.length} requirements to include in the next step.`
-                        : 'You will be able to select requirements to include in the next step.'}
+                      Next you can scope by PBS components and/or functions, then choose which requirements to include.
+                    </div>
+                  </div>
+                ) : createStep === 'scope' ? (
+                  <div className="space-y-5">
+                    <div className="rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 p-4">
+                      <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                        Optionally select PBS components and/or system functions. Requirements under selected components (and their children) or linked to selected functions will be included. You can also skip and choose requirements in the next step.
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-900/50">
+                        <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                          <Box size={18} className="text-blue-500 dark:text-blue-400" />
+                          PBS Components
+                        </h4>
+                        {selectedComponentIds.size > 0 && (
+                          <span className="px-2.5 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                            {selectedComponentIds.size} selected
+                          </span>
+                        )}
+                      </div>
+                      <div className="max-h-44 overflow-y-auto p-2">
+                        {loadingComponents ? (
+                          <div className="flex flex-col items-center justify-center py-8 text-gray-500 dark:text-gray-400">
+                            <Box size={32} className="mb-2 opacity-50" />
+                            <span className="text-sm">Loading components…</span>
+                          </div>
+                        ) : componentTree.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center py-8 text-gray-500 dark:text-gray-400">
+                            <Box size={32} className="mb-2 opacity-50" />
+                            <span className="text-sm">No components found</span>
+                          </div>
+                        ) : (
+                          <div className="space-y-0.5">
+                            {componentTree.map((node: ComponentTreeNode) => (
+                              <ComponentNodeRow
+                                key={node.id}
+                                node={node}
+                                selectedIds={selectedComponentIds}
+                                onToggle={toggleComponent}
+                                depth={0}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-900/50">
+                        <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                          <Workflow size={18} className="text-indigo-500 dark:text-indigo-400" />
+                          System Functions
+                        </h4>
+                        {selectedFunctionIds.size > 0 && (
+                          <span className="px-2.5 py-0.5 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                            {selectedFunctionIds.size} selected
+                          </span>
+                        )}
+                      </div>
+                      <p className="px-4 pt-2 pb-1 text-xs text-gray-500 dark:text-gray-400">
+                        Requirements linked to selected functions will be included.
+                      </p>
+                      <div className="max-h-44 overflow-y-auto p-2">
+                        {loadingFunctions ? (
+                          <div className="flex flex-col items-center justify-center py-8 text-gray-500 dark:text-gray-400">
+                            <Workflow size={32} className="mb-2 opacity-50" />
+                            <span className="text-sm">Loading functions…</span>
+                          </div>
+                        ) : functions.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center py-8 text-gray-500 dark:text-gray-400">
+                            <Workflow size={32} className="mb-2 opacity-50" />
+                            <span className="text-sm">No functions found</span>
+                          </div>
+                        ) : (
+                          <div className="space-y-0.5">
+                            {functions.map((fn: { id: string; name: string; functionId?: string }) => {
+                              const isSelected = selectedFunctionIds.has(fn.id)
+                              return (
+                                <label
+                                  key={fn.id}
+                                  className={clsx(
+                                    'flex items-center gap-3 py-2 px-3 rounded-md cursor-pointer transition-colors',
+                                    isSelected ? 'bg-indigo-50 dark:bg-indigo-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                                  )}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleFunction(fn.id)}
+                                    className="shrink-0 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                                  >
+                                    {isSelected ? (
+                                      <CheckSquare size={18} className="text-indigo-600 dark:text-indigo-400" />
+                                    ) : (
+                                      <Square size={18} />
+                                    )}
+                                  </button>
+                                  <span className="font-mono text-xs text-gray-500 dark:text-gray-400 shrink-0 w-20 truncate">{fn.functionId || fn.id.slice(0, 8)}</span>
+                                  <span className="text-sm font-medium text-gray-900 dark:text-white truncate">{fn.name}</span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                        Select Requirements to Include
-                      </h4>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                        {selectedRequirementIds.size > 0
-                          ? `${selectedRequirementIds.size} of ${requirements.length} requirements selected`
-                          : `No requirements selected. All ${requirements.length} requirements will be included in the baseline.`}
-                      </p>
-
-                      {/* Search */}
-                      <div className="relative mb-3">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                        <input
-                          type="text"
-                          value={requirementSearchQuery}
-                          onChange={(e) => setRequirementSearchQuery(e.target.value)}
-                          placeholder="Search requirements..."
-                          className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                        />
+                    {(selectedComponentIds.size > 0 || selectedFunctionIds.size > 0) && (
+                      <div className="rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 p-3">
+                        <p className="text-sm text-blue-800 dark:text-blue-200">
+                          Scoped by <strong>{selectedComponentIds.size}</strong> component(s) and <strong>{selectedFunctionIds.size}</strong> function(s). Select requirements below to narrow, or leave all selected to include every requirement from the scope.
+                        </p>
                       </div>
-
-                      {/* Bulk Actions */}
-                      <div className="flex items-center gap-2 mb-3">
-                        <button
-                          onClick={selectAllFiltered}
-                          className="px-2 py-1 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                        >
-                          Select All
-                        </button>
-                        <span className="text-gray-300 dark:text-gray-600">|</span>
-                        <button
-                          onClick={deselectAll}
-                          className="px-2 py-1 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                        >
-                          Deselect All
-                        </button>
+                    )}
+                    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/50 overflow-hidden">
+                      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-900/50">
+                        <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                          <FileText size={18} className="text-gray-500 dark:text-gray-400" />
+                          Select Requirements to Include
+                        </h4>
+                        <div className="flex items-center gap-2">
+                          {selectedRequirementIds.size > 0 ? (
+                            <span className="px-2.5 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                              {selectedRequirementIds.size} of {requirements.length} selected
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              All {requirements.length} will be included
+                            </span>
+                          )}
+                          <span className="text-gray-300 dark:text-gray-600">·</span>
+                          <button
+                            type="button"
+                            onClick={selectAllFiltered}
+                            className="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                          >
+                            Select all
+                          </button>
+                          <button
+                            type="button"
+                            onClick={deselectAll}
+                            className="text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                          >
+                            Deselect all
+                          </button>
+                        </div>
                       </div>
-
-                      {/* Requirements List */}
-                      <div className="border border-gray-200 dark:border-gray-700 rounded-lg max-h-96 overflow-y-auto">
+                      <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                          <input
+                            type="text"
+                            value={requirementSearchQuery}
+                            onChange={(e) => setRequirementSearchQuery(e.target.value)}
+                            placeholder="Search by title, ID, or description…"
+                            className="w-full pl-9 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400"
+                          />
+                        </div>
+                      </div>
+                      <div className="max-h-80 overflow-y-auto p-2">
                         {loadingRequirements ? (
-                          <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                            Loading requirements...
+                          <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400">
+                            <FileText size={36} className="mb-3 opacity-50" />
+                            <span className="text-sm">Loading requirements…</span>
                           </div>
                         ) : filteredRequirements.length === 0 ? (
-                          <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                            {requirementSearchQuery ? 'No requirements match your search' : 'No requirements found'}
+                          <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400">
+                            <Search size={36} className="mb-3 opacity-50" />
+                            <span className="text-sm">{requirementSearchQuery ? 'No requirements match your search' : 'No requirements found'}</span>
                           </div>
                         ) : (
-                          <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                            {filteredRequirements.map((req) => (
-                              <label
-                                key={req.id}
-                                className="flex items-start gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => toggleRequirement(req.id)}
-                                  className="mt-0.5 text-gray-600 dark:text-gray-400"
-                                >
-                                  {selectedRequirementIds.has(req.id) ? (
-                                    <CheckSquare size={18} className="text-blue-600" />
-                                  ) : (
-                                    <Square size={18} />
+                          <div className="space-y-1">
+                            {filteredRequirements.map((req) => {
+                              const isSelected = selectedRequirementIds.has(req.id)
+                              return (
+                                <label
+                                  key={req.id}
+                                  className={clsx(
+                                    'flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-colors',
+                                    isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
                                   )}
-                                </button>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
-                                      {req.requirementId || req.id.substring(0, 8)}
-                                    </span>
-                                    <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                      {req.title}
-                                    </span>
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleRequirement(req.id)}
+                                    className="mt-0.5 shrink-0 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                                  >
+                                    {isSelected ? (
+                                      <CheckSquare size={18} className="text-blue-600 dark:text-blue-400" />
+                                    ) : (
+                                      <Square size={18} />
+                                    )}
+                                  </button>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                                      <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
+                                        {req.requirementId || req.id.substring(0, 8)}
+                                      </span>
+                                      <span className="text-sm font-medium text-gray-900 dark:text-white line-clamp-1">
+                                        {req.title}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
+                                      {req.description.replace(/<[^>]*>/g, '').substring(0, 120)}
+                                      {req.description.length > 120 ? '…' : ''}
+                                    </p>
                                   </div>
-                                  <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">
-                                    {req.description.replace(/<[^>]*>/g, '').substring(0, 100)}
-                                    {req.description.length > 100 ? '...' : ''}
-                                  </p>
-                                </div>
-                              </label>
-                            ))}
+                                </label>
+                              )
+                            })}
                           </div>
                         )}
                       </div>
@@ -717,9 +926,9 @@ export default function BaselineManager({ projectId, onClose, onViewInRequiremen
                   Cancel
                 </button>
                 <div className="flex items-center gap-2">
-                  {createStep === 'select-requirements' && (
+                  {(createStep === 'scope' || createStep === 'select-requirements') && (
                     <button
-                      onClick={() => setCreateStep('details')}
+                      onClick={() => setCreateStep(createStep === 'scope' ? 'details' : 'scope')}
                       className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg flex items-center gap-2"
                     >
                       <ChevronLeft size={16} />
@@ -731,6 +940,14 @@ export default function BaselineManager({ projectId, onClose, onViewInRequiremen
                       onClick={handleNextStep}
                       disabled={!newBaselineName.trim()}
                       className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg flex items-center gap-2"
+                    >
+                      Next: Scope
+                      <ChevronRight size={16} />
+                    </button>
+                  ) : createStep === 'scope' ? (
+                    <button
+                      onClick={handleNextStep}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
                     >
                       Next: Select Requirements
                       <ChevronRight size={16} />
