@@ -26,7 +26,7 @@ export default function FullReportModal({ isOpen, onClose, projectId, reportType
   const [showExport, setShowExport] = useState(false)
   const reportQueryKey = ['verification-report-modal', projectId, reportType, entityId]
 
-  const { data: reportData, isLoading, error } = useQuery({
+  const { data: reportData, isLoading, error } = useQuery<any>({
     queryKey: reportQueryKey,
     queryFn: async () => {
       if (reportType === 'test-case') {

@@ -38,7 +38,7 @@ export default function VerificationReportPage() {
     return null
   }
 
-  const { data: reportData, isLoading, error } = useQuery({
+  const { data: reportData, isLoading, error } = useQuery<any>({
     queryKey: ['verification-report', projectId, reportType, entityId],
     queryFn: fetchReport,
     enabled: !!projectId && !!entityId && !!reportType,
