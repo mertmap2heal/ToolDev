@@ -36,6 +36,7 @@ import TestCaseDocumentCard from '../../components/verification/TestCaseDocument
 import TestSetupDocumentCard from '../../components/verification/TestSetupDocumentCard'
 import TestResultDocumentCard from '../../components/verification/TestResultDocumentCard'
 import ReviewDocumentCard from '../../components/verification/ReviewDocumentCard'
+import { VERIFICATION_VALID_TAB_IDS } from '../../config/verificationTabs'
 
 // Helper function to format test results status summary
 const formatTestResultsSummary = (statusSummary: Record<string, number> | undefined): string => {
@@ -162,9 +163,7 @@ export default function VerificationPage() {
   const focusType = searchParams.get('focusType')
   const focusId = searchParams.get('focusId')
   const caseId = searchParams.get('caseId')
-  const activeTab = (['overview', 'plans', 'cases', 'runs', 'setups', 'results', 'reviews', 'traceability'].includes(resolvedTab)
-    ? resolvedTab
-    : 'overview') as 'overview' | 'plans' | 'cases' | 'runs' | 'setups' | 'results' | 'reviews' | 'traceability'
+  const activeTab = (VERIFICATION_VALID_TAB_IDS.includes(resolvedTab) ? resolvedTab : 'overview') as 'overview' | 'plans' | 'cases' | 'runs' | 'setups' | 'results' | 'reviews' | 'traceability'
   const useTemplateId = searchParams.get('useTemplateId')
   const openCreate = searchParams.get('openCreate')
   const openCreateCase = searchParams.get('openCreateCase')

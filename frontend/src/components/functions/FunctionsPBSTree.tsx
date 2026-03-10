@@ -3,7 +3,7 @@ import { ChevronRight, ChevronDown, Package, Settings, Search, FolderOpen, Inbox
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { componentService } from '../../services/component.service'
 import { functionService } from '../../services/function.service'
-import { loadPBSAsync } from '../../modules/pbs/storage'
+import { loadPBSAsync, loadPBSComponentTreeAsync } from '../../modules/pbs/storage'
 import type { ComponentTreeNode } from 'shared/types/project.types'
 import type { SystemFunction } from 'shared/types/engineering.types'
 
@@ -177,51 +177,9 @@ export default function FunctionsPBSTree({
     syncPBS()
   }, [projectId, pbsSynced])
 
-  // Use PBS menu (local storage) as source so PBS Components panel matches PBS page exactly
   const { data: componentTree = [] } = useQuery({
     queryKey: ['pbs-nodes', projectId],
-    queryFn: async () => {
-      const pbsData = await loadPBSAsync(projectId)
-      const nodes = pbsData.nodes
-
-      if (nodes.length > 0) {
-        const nodeMap = new Map<string, any>()
-        const rootNodes: any[] = []
-      nodes.forEach(node => {
-        nodeMap.set(node.id, {
-          id: node.id,
-          projectId: projectId!,
-          parentId: node.parentId,
-          name: node.name,
-          pbsCode: node.pbsCode,
-          description: node.description,
-          sortOrder: node.orderIndex ?? 0,
-          createdAt: node.createdAt,
-          updatedAt: node.updatedAt,
-          children: []
-        })
-      })
-        nodes.forEach(node => {
-          const component = nodeMap.get(node.id)
-          if (node.parentId && nodeMap.has(node.parentId)) {
-            nodeMap.get(node.parentId).children.push(component)
-          } else {
-            rootNodes.push(component)
-          }
-        })
-        const sortNodes = (n: any[]) => {
-          n.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-          n.forEach(child => {
-            if (child.children?.length) sortNodes(child.children)
-          })
-        }
-        sortNodes(rootNodes)
-        return rootNodes
-      }
-
-      const response = await componentService.getComponentTree(projectId!)
-      return response.success && response.data ? response.data : []
-    },
+    queryFn: () => loadPBSComponentTreeAsync(projectId!),
     enabled: !!projectId,
   })
 

@@ -20,7 +20,14 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import type { PBSNode } from './types'
-import { PBS_TYPES, PBS_STATUSES } from './types'
+import {
+  PBS_TYPES,
+  PBS_STATUSES,
+  PBS_TYPE_BADGE_CLASS,
+  PBS_TYPE_ICON_CLASS,
+  PBS_TYPE_ICONS,
+  PBS_STATUS_DOT_CLASS,
+} from './types'
 import type { TreeNode } from './treeUtils'
 import { buildTree, filterTree, isDescendant } from './treeUtils'
 import { useDebounce } from './useDebounce'
@@ -67,39 +74,10 @@ interface PBSTreeProps {
   onGraphClick?: () => void
 }
 
-const TYPE_BADGE_CLASS: Record<string, string> = {
-  System: 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200',
-  Subsystem: 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-200',
-  Assembly: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200',
-  Part: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
-  Software: 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200',
-  Document: 'bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-200',
-}
-
-const TYPE_ICON_CLASS: Record<string, string> = {
-  System: 'text-blue-600 dark:text-blue-400',
-  Subsystem: 'text-indigo-600 dark:text-indigo-400',
-  Assembly: 'text-amber-600 dark:text-amber-400',
-  Part: 'text-gray-600 dark:text-gray-400',
-  Software: 'text-green-600 dark:text-green-400',
-  Document: 'text-purple-600 dark:text-purple-400',
-}
-
-const TYPE_ICONS: Record<string, LucideIcon> = {
-  System: Box,
-  Subsystem: Layers,
-  Assembly: Settings,
-  Part: Package,
-  Software: Cpu,
-  Document: FileText,
-}
-
-const STATUS_DOT_CLASS: Record<string, string> = {
-  Draft: 'bg-gray-400',
-  'In Work': 'bg-yellow-500',
-  Released: 'bg-green-500',
-  Obsolete: 'bg-red-500',
-}
+const TYPE_BADGE_CLASS = PBS_TYPE_BADGE_CLASS
+const TYPE_ICON_CLASS = PBS_TYPE_ICON_CLASS
+const TYPE_ICONS = PBS_TYPE_ICONS
+const STATUS_DOT_CLASS = PBS_STATUS_DOT_CLASS
 
 // Drop position relative to a node
 type DropPosition = 'before' | 'inside' | 'after'

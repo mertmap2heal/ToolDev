@@ -96,12 +96,20 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
   }
 
   const exportToPDF = async () => {
-    const autoTable = await loadAutoTable()
+    const mod = await loadAutoTable()
     const doc = new jsPDF()
-    // jspdf-autotable v5 does not auto-apply when dynamically imported; use as autoTable(doc, opts)
-    const autoTableFn = typeof autoTable === 'function' ? autoTable : (autoTable as any)?.default ?? (autoTable as any)?.autoTable
+    // jspdf-autotable v5: use autoTable(doc, opts) when dynamically imported; or applyPlugin(jsPDF) so doc.autoTable exists
+    const applyPlugin = (mod as any)?.applyPlugin ?? (mod as any)?.default?.applyPlugin
+    const autoTableFn =
+      typeof mod === 'function'
+        ? mod
+        : (mod as any)?.autoTable ?? (mod as any)?.default ?? (mod as any)?.default?.autoTable
+    if (typeof applyPlugin === 'function') {
+      applyPlugin(jsPDF)
+    }
     const docAutoTable = (opts: any) => {
-      if (typeof autoTableFn === 'function') autoTableFn(doc, opts)
+      if (typeof (doc as any).autoTable === 'function') (doc as any).autoTable(opts)
+      else if (typeof autoTableFn === 'function') autoTableFn(doc, opts)
       else throw new Error('PDF tables are not available')
     }
     const getLastAutoTableY = () => (doc as any).lastAutoTable?.finalY ?? 20
@@ -333,6 +341,9 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
         ['Phase', tp.phase || 'N/A'],
         ['Description', tp.description || 'N/A'],
       ]
+      if (tp.scope) details.push(['Scope', tp.scope])
+      if (tp.entryCriteria) details.push(['Entry criteria', tp.entryCriteria])
+      if (tp.exitCriteria) details.push(['Exit criteria', tp.exitCriteria])
 
       docAutoTable({
         startY: yPos,
@@ -406,6 +417,92 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
         })
 
         yPos = getLastAutoTableY() + 10
+      }
+
+      // Test Case Details (full content per case)
+      if (reportData.testCases && reportData.testCases.length > 0) {
+        doc.setFontSize(14)
+        doc.setFont('helvetica', 'bold')
+        doc.text('Test Case Details', 14, yPos)
+        yPos += 10
+
+        for (const pc of reportData.testCases) {
+          const tc = pc.testCase || {}
+          const steps = Array.isArray(tc.steps) ? tc.steps : []
+          const expectedResults = Array.isArray(tc.expectedResults) ? tc.expectedResults : []
+
+          if (yPos > 240) {
+            doc.addPage()
+            yPos = 20
+          }
+
+          doc.setFontSize(12)
+          doc.setFont('helvetica', 'bold')
+          doc.text(`${pc.orderIndex + 1}. ${tc.key || 'N/A'} — ${tc.title || 'N/A'}`, 14, yPos)
+          yPos += 7
+
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10)
+
+          if (tc.objective) {
+            if (yPos > 250) { doc.addPage(); yPos = 20 }
+            doc.setFont('helvetica', 'bold')
+            doc.text('Objective', 14, yPos)
+            yPos += 5
+            doc.setFont('helvetica', 'normal')
+            yPos = addText(tc.objective, 14, yPos, pageWidth - 28) + 4
+          }
+          if (tc.preconditions) {
+            if (yPos > 250) { doc.addPage(); yPos = 20 }
+            doc.setFont('helvetica', 'bold')
+            doc.text('Preconditions', 14, yPos)
+            yPos += 5
+            doc.setFont('helvetica', 'normal')
+            yPos = addText(tc.preconditions, 14, yPos, pageWidth - 28) + 4
+          }
+          if (steps.length > 0) {
+            if (yPos > 230) { doc.addPage(); yPos = 20 }
+            doc.setFont('helvetica', 'bold')
+            doc.text('Test procedure', 14, yPos)
+            yPos += 6
+            const stepsData = steps.map((step: string, idx: number) => [(idx + 1).toString(), step || '—'])
+            docAutoTable({
+              startY: yPos,
+              head: [['Step', 'Description']],
+              body: stepsData,
+              theme: 'plain',
+              columnStyles: { 0: { cellWidth: 15 }, 1: { cellWidth: pageWidth - 45 } },
+              margin: { left: 14 },
+            })
+            yPos = getLastAutoTableY() + 4
+          }
+          if (expectedResults.length > 0) {
+            if (yPos > 230) { doc.addPage(); yPos = 20 }
+            doc.setFont('helvetica', 'bold')
+            doc.text('Expected results', 14, yPos)
+            yPos += 6
+            const resultsData = expectedResults.map((r: string, idx: number) => [(idx + 1).toString(), r || '—'])
+            docAutoTable({
+              startY: yPos,
+              head: [['#', 'Expected result']],
+              body: resultsData,
+              theme: 'plain',
+              columnStyles: { 0: { cellWidth: 15 }, 1: { cellWidth: pageWidth - 45 } },
+              margin: { left: 14 },
+            })
+            yPos = getLastAutoTableY() + 4
+          }
+          if (tc.passFailCriteria) {
+            if (yPos > 250) { doc.addPage(); yPos = 20 }
+            doc.setFont('helvetica', 'bold')
+            doc.text('Pass/fail criteria', 14, yPos)
+            yPos += 5
+            doc.setFont('helvetica', 'normal')
+            yPos = addText(tc.passFailCriteria, 14, yPos, pageWidth - 28) + 4
+          }
+          yPos += 6
+        }
+        yPos += 4
       }
 
       // Linked Test Results
@@ -663,7 +760,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
         rows.push([])
       }
 
-      // Test Cases
+      // Test Cases summary
       if (reportData.testCases && reportData.testCases.length > 0) {
         rows.push(['Test Cases'])
         rows.push(['#', 'Key', 'Title', 'Status', 'Mandatory', 'Result'])
@@ -678,6 +775,31 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           ])
         })
         rows.push([])
+
+        // Test Case Details (full content per case)
+        rows.push(['Test Case Details'])
+        reportData.testCases.forEach((pc: any) => {
+          const tc = pc.testCase || {}
+          rows.push([`Case #${pc.orderIndex + 1}: ${tc.key || ''} — ${tc.title || ''}`])
+          rows.push(['Objective', tc.objective || ''])
+          rows.push(['Preconditions', tc.preconditions || ''])
+          if (tc.steps && Array.isArray(tc.steps) && tc.steps.length > 0) {
+            rows.push(['Test Procedure'])
+            rows.push(['Step', 'Description'])
+            tc.steps.forEach((step: string, idx: number) => {
+              rows.push([(idx + 1).toString(), step])
+            })
+          }
+          if (tc.expectedResults && Array.isArray(tc.expectedResults) && tc.expectedResults.length > 0) {
+            rows.push(['Expected Results'])
+            rows.push(['#', 'Expected Result'])
+            tc.expectedResults.forEach((r: string, idx: number) => {
+              rows.push([(idx + 1).toString(), r])
+            })
+          }
+          rows.push(['Pass/Fail Criteria', tc.passFailCriteria || ''])
+          rows.push([])
+        })
       }
 
       // Test Results
@@ -947,7 +1069,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
         children.push(createParagraph(''))
       }
 
-      // Test Cases
+      // Test Cases summary
       if (reportData.testCases && reportData.testCases.length > 0) {
         children.push(createParagraph('Test Cases', { heading: HeadingLevel.HEADING_2, size: 28 }))
         const casesRows = reportData.testCases.map((pc: any) => [
@@ -960,6 +1082,40 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
         ])
         children.push(createTable(['#', 'Key', 'Title', 'Status', 'Mandatory', 'Result'], casesRows))
         children.push(createParagraph(''))
+
+        // Test Case Details (full content per case)
+        children.push(createParagraph('Test Case Details', { heading: HeadingLevel.HEADING_2, size: 28 }))
+        reportData.testCases.forEach((pc: any) => {
+          const tc = pc.testCase || {}
+          children.push(createParagraph(`${pc.orderIndex + 1}. ${tc.key || 'N/A'} — ${tc.title || 'N/A'}`, { heading: HeadingLevel.HEADING_3, size: 26 }))
+          if (tc.objective) {
+            children.push(createParagraph('Objective', { bold: true }))
+            children.push(createParagraph(tc.objective))
+            children.push(createParagraph(''))
+          }
+          if (tc.preconditions) {
+            children.push(createParagraph('Preconditions', { bold: true }))
+            children.push(createParagraph(tc.preconditions))
+            children.push(createParagraph(''))
+          }
+          if (tc.steps && Array.isArray(tc.steps) && tc.steps.length > 0) {
+            children.push(createParagraph('Test Procedure', { bold: true }))
+            const stepsRows = tc.steps.map((step: string, idx: number) => [(idx + 1).toString(), step])
+            children.push(createTable(['Step', 'Description'], stepsRows))
+            children.push(createParagraph(''))
+          }
+          if (tc.expectedResults && Array.isArray(tc.expectedResults) && tc.expectedResults.length > 0) {
+            children.push(createParagraph('Expected Results', { bold: true }))
+            const resultsRows = tc.expectedResults.map((r: string, idx: number) => [(idx + 1).toString(), r])
+            children.push(createTable(['#', 'Expected Result'], resultsRows))
+            children.push(createParagraph(''))
+          }
+          if (tc.passFailCriteria) {
+            children.push(createParagraph('Pass/Fail Criteria', { bold: true }))
+            children.push(createParagraph(tc.passFailCriteria))
+            children.push(createParagraph(''))
+          }
+        })
       }
 
       // Test Results

@@ -44,6 +44,7 @@ import PBSToolsMenu from './PBSToolsMenu'
 import RequirementsPBSTree from '../../components/requirements/RequirementsPBSTree'
 import FunctionsPBSTree from '../../components/functions/FunctionsPBSTree'
 import { LINKAGE_V1 } from '../../config/featureFlags'
+import { PBS_RIGHT_PANEL_TABS, type PBSRightPanelTabId } from '../../config/pbsTabs'
 import { buildDeepLink } from '../../linkage/buildDeepLink'
 import type { EntityType } from 'shared/types/linkage.types'
 import type { LinkedElementClickPayload } from '../../components/requirements/RequirementsPBSTree'
@@ -77,7 +78,7 @@ export default function PBSPage() {
   const PANEL_DEFAULT = 320
   const [leftPanelWidth, setLeftPanelWidth] = useState(PANEL_DEFAULT)
   const [isRequirementsPanelOpen, setIsRequirementsPanelOpen] = useState(true)
-  const [rightPanelTab, setRightPanelTab] = useState<'requirements' | 'functions'>('requirements')
+  const [rightPanelTab, setRightPanelTab] = useState<PBSRightPanelTabId>('requirements')
   const [selectedComponentIdForReqs, setSelectedComponentIdForReqs] = useState<string | null>(null)
   const [linkedElementPreview, setLinkedElementPreview] = useState<LinkedElementClickPayload | null>(null)
   const [leftPanelViewMode, setLeftPanelViewMode] = useState<'tree' | 'graph'>('tree')
@@ -926,30 +927,23 @@ export default function PBSPage() {
               style={{ width: requirementsPanelWidth }}
             >
               <div className="flex border-b border-gray-200 dark:border-gray-700">
-                <button
-                  type="button"
-                  onClick={() => setRightPanelTab('requirements')}
-                  className={clsx(
-                    'flex-1 px-4 py-2 text-sm font-medium transition-colors',
-                    rightPanelTab === 'requirements'
-                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-500'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  )}
-                >
-                  Requirements
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRightPanelTab('functions')}
-                  className={clsx(
-                    'flex-1 px-4 py-2 text-sm font-medium transition-colors',
-                    rightPanelTab === 'functions'
-                      ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-500'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  )}
-                >
-                  Functions
-                </button>
+                {PBS_RIGHT_PANEL_TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setRightPanelTab(tab.id)}
+                    className={clsx(
+                      'flex-1 px-4 py-2 text-sm font-medium transition-colors',
+                      rightPanelTab === tab.id
+                        ? tab.id === 'requirements'
+                          ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-500'
+                          : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-500'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    )}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
               <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
                 <div className="flex-1 min-h-0 overflow-hidden">

@@ -134,8 +134,20 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
   }
 
   const exportToPDF = async () => {
-    await loadAutoTable()
+    const mod = await loadAutoTable()
     const doc = new jsPDF()
+    const applyPlugin = (mod as any)?.applyPlugin ?? (mod as any)?.default?.applyPlugin
+    const autoTableFn =
+      typeof mod === 'function' ? mod : (mod as any)?.autoTable ?? (mod as any)?.default ?? (mod as any)?.default?.autoTable
+    if (typeof applyPlugin === 'function') {
+      applyPlugin(jsPDF)
+    }
+    const docAutoTable = (opts: any) => {
+      if (typeof (doc as any).autoTable === 'function') (doc as any).autoTable(opts)
+      else if (typeof autoTableFn === 'function') autoTableFn(doc, opts)
+      else throw new Error('PDF tables are not available')
+    }
+    const getLastAutoTableY = () => (doc as any).lastAutoTable?.finalY ?? 20
     const pageWidth = doc.internal.pageSize.getWidth()
     let yPos = 20
 
@@ -178,7 +190,7 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
             ['Version', tc.version || 'N/A'],
           ]
 
-          ;(doc as any).autoTable({
+          docAutoTable({
             startY: yPos,
             head: [],
             body: details,
@@ -187,7 +199,7 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
             margin: { left: 14 },
           })
 
-          yPos = (doc as any).lastAutoTable.finalY + 10
+          yPos = getLastAutoTableY() + 10
 
           // Steps
           if (tc.steps && tc.steps.length > 0) {
@@ -197,7 +209,7 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
             yPos += 6
 
             const stepsData = tc.steps.map((step: string, idx: number) => [idx + 1, step])
-            ;(doc as any).autoTable({
+            docAutoTable({
               startY: yPos,
               head: [['#', 'Step']],
               body: stepsData,
@@ -205,7 +217,7 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
               headStyles: { fillColor: [59, 130, 246] },
               margin: { left: 14 },
             })
-            yPos = (doc as any).lastAutoTable.finalY + 10
+            yPos = getLastAutoTableY() + 10
           }
 
           // Test Results
@@ -222,7 +234,7 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
               formatDate(tr.executedAt),
             ])
 
-            ;(doc as any).autoTable({
+            docAutoTable({
               startY: yPos,
               head: [['Title', 'Status', 'Executed By', 'Date']],
               body: trData,
@@ -246,7 +258,7 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
             ['Description', tp.description || 'N/A'],
           ]
 
-          ;(doc as any).autoTable({
+          docAutoTable({
             startY: yPos,
             head: [],
             body: details,
@@ -255,7 +267,7 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
             margin: { left: 14 },
           })
 
-          yPos = (doc as any).lastAutoTable.finalY + 10
+          yPos = getLastAutoTableY() + 10
 
           // Statistics
           if (r.statistics) {
@@ -272,7 +284,7 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
               ['Coverage', `${r.statistics.coveragePercentage || 0}%`],
             ]
 
-            ;(doc as any).autoTable({
+            docAutoTable({
               startY: yPos,
               head: [],
               body: statsData,
@@ -281,7 +293,7 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
               margin: { left: 14 },
             })
 
-            yPos = (doc as any).lastAutoTable.finalY + 10
+            yPos = getLastAutoTableY() + 10
           }
 
           // Test Results
@@ -298,7 +310,7 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
               formatDate(tr.executedAt),
             ])
 
-            ;(doc as any).autoTable({
+            docAutoTable({
               startY: yPos,
               head: [['Title', 'Status', 'Executed By', 'Date']],
               body: trData,
@@ -320,7 +332,7 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
           tc.linkedTestResultsCount || 0,
         ])
 
-        ;(doc as any).autoTable({
+        docAutoTable({
           startY: yPos,
           head: [['Key', 'Title', 'Status', 'MoC', 'Results']],
           body: data,
@@ -337,7 +349,7 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
           tp.linkedTestResultsCount || 0,
         ])
 
-        ;(doc as any).autoTable({
+        docAutoTable({
           startY: yPos,
           head: [['Key', 'Name', 'Status', 'Phase', 'Results']],
           body: data,

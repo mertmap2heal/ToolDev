@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Box, FileText, Link2, Paperclip, History, Upload, Download, Trash2, AlertTriangle, ListChecks, Settings, type LucideIcon } from 'lucide-react'
+import { Upload, Download, Trash2, AlertTriangle, FileText, Settings } from 'lucide-react'
 import clsx from 'clsx'
 import { format } from 'date-fns'
 import type { PBSNode, PBSType, PBSStatus, PBSChangeLogEntry, PBSRelationType, PBSRelationship, PBSAttachment } from './types'
@@ -17,19 +17,12 @@ import { generateId, nowISO } from './utils'
 import { getNodePath } from './treeUtils'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
+import { PBS_EDITOR_TABS, type PBSEditorTabId } from '../../config/pbsTabs'
 import type { Requirement } from 'shared/types/engineering.types'
 
-type TabId = 'overview' | 'attributes' | 'relationships' | 'attachments' | 'requirements' | 'functions' | 'changelog'
+type TabId = PBSEditorTabId
 
-const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
-  { id: 'overview', label: 'Overview', icon: Box },
-  { id: 'attributes', label: 'Attributes', icon: FileText },
-  { id: 'relationships', label: 'Relationships', icon: Link2 },
-  { id: 'attachments', label: 'Attachments', icon: Paperclip },
-  { id: 'requirements', label: 'Requirements', icon: ListChecks },
-  { id: 'functions', label: 'Functions', icon: Settings },
-  { id: 'changelog', label: 'Change Log', icon: History },
-]
+const TABS = PBS_EDITOR_TABS
 
 interface PBSNodeEditorProps {
   node: PBSNode

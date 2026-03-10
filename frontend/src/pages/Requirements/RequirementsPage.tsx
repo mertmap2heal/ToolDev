@@ -29,8 +29,7 @@ import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import LockWarningModal from '../../components/requirements/LockWarningModal'
 import { requirementService, type RequirementFilters } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
-import { componentService } from '../../services/component.service'
-import { loadPBSAsync } from '../../modules/pbs/storage'
+import { loadPBSComponentTreeAsync } from '../../modules/pbs/storage'
 import { issueService } from '../../services/issue.service'
 import { changeRequestService } from '../../services/changeRequest.service'
 import { traceabilityService } from '../../services/traceability.service'
@@ -38,6 +37,8 @@ import { linkService } from '../../services/link.service'
 import { verificationService } from '../../services/verification.service'
 import { baselineService } from '../../services/baseline.service'
 import { LINKAGE_V1, LIFECYCLE_V1 } from '../../config/featureFlags'
+import { getVerificationTabForNodeType, buildVerificationUrl } from '../../config/verificationTabs'
+import { REQUIREMENTS_LEFT_PANEL_TABS, type RequirementsLeftPanelTabId } from '../../config/pbsTabs'
 import { buildDeepLink } from '../../linkage/buildDeepLink'
 import ChangeStatusPopover, { getStatusColorClasses } from '../../components/requirements/ChangeStatusPopover'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
@@ -180,7 +181,7 @@ export default function RequirementsPage() {
 
   // PBS Tree panel state (declared early — referenced by serverFilters and filter reset)
   const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null)
-  const [leftPanelTab, setLeftPanelTab] = useState<'pbs' | 'functions' | 'verification'>('pbs')
+  const [leftPanelTab, setLeftPanelTab] = useState<RequirementsLeftPanelTabId>('pbs')
   const [selectedFunctionId, setSelectedFunctionId] = useState<string | null>(null)
   const [selectedVerificationNode, setSelectedVerificationNode] = useState<{ type: VerNodeType; id: string } | null>(null)
 
@@ -798,50 +799,9 @@ export default function RequirementsPage() {
     [projectId, allRequirements, queryClient, invalidateVerificationQueries]
   )
 
-  // Component tree for Export scope selection (shares cache with PBS tree)
   const { data: componentTreeForExport = [] } = useQuery({
     queryKey: ['pbs-nodes', projectId],
-    queryFn: async () => {
-      if (!projectId) return []
-      const pbsData = await loadPBSAsync(projectId)
-      const nodes = pbsData.nodes
-      if (nodes.length > 0) {
-        const nodeMap = new Map<string, any>()
-        const rootNodes: any[] = []
-        nodes.forEach((node: any) => {
-          nodeMap.set(node.id, {
-            id: node.id,
-            projectId: projectId,
-            parentId: node.parentId,
-            name: node.name,
-            pbsCode: node.pbsCode,
-            description: node.description,
-            sortOrder: node.orderIndex ?? 0,
-            createdAt: node.createdAt,
-            updatedAt: node.updatedAt,
-            children: [],
-          })
-        })
-        nodes.forEach((node: any) => {
-          const component = nodeMap.get(node.id)
-          if (node.parentId && nodeMap.has(node.parentId)) {
-            nodeMap.get(node.parentId).children.push(component)
-          } else {
-            rootNodes.push(component)
-          }
-        })
-        const sortNodes = (n: any[]) => {
-          n.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-          n.forEach((child: any) => {
-            if (child.children?.length) sortNodes(child.children)
-          })
-        }
-        sortNodes(rootNodes)
-        return rootNodes
-      }
-      const response = await componentService.getComponentTree(projectId)
-      return response.success && response.data ? response.data : []
-    },
+    queryFn: () => loadPBSComponentTreeAsync(projectId!),
     enabled: !!projectId && isExportOpen,
   })
 
@@ -2268,42 +2228,19 @@ export default function RequirementsPage() {
           <>
             <div style={{ width: pbsPanelWidth, minWidth: 200 }} className="flex-shrink-0 h-full flex flex-col">
               <div className="flex border-b border-gray-200 dark:border-gray-700 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setLeftPanelTab('pbs')}
-                  className={clsx(
-                    'flex-1 px-3 py-2 text-sm font-medium transition-colors',
-                    leftPanelTab === 'pbs'
-                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-b-2 border-blue-500'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  )}
-                >
-                  PBS
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLeftPanelTab('functions')}
-                  className={clsx(
-                    'flex-1 px-3 py-2 text-sm font-medium transition-colors',
-                    leftPanelTab === 'functions'
-                      ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border-b-2 border-indigo-500'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  )}
-                >
-                  Functions
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLeftPanelTab('verification')}
-                  className={clsx(
-                    'flex-1 px-3 py-2 text-sm font-medium transition-colors',
-                    leftPanelTab === 'verification'
-                      ? 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border-b-2 border-teal-500'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  )}
-                >
-                  Verification
-                </button>
+                {REQUIREMENTS_LEFT_PANEL_TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setLeftPanelTab(tab.id)}
+                    className={clsx(
+                      'flex-1 px-3 py-2 text-sm font-medium transition-colors',
+                      leftPanelTab === tab.id ? tab.activeClass : tab.inactiveClass
+                    )}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
               <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
                 <div className="flex-1 min-h-0 overflow-hidden">
@@ -2442,24 +2379,15 @@ export default function RequirementsPage() {
                     selectedNode={selectedVerificationNode}
                     onSelect={(node) => {
                       setSelectedVerificationNode(node)
-                      if (node) {
-                        const tabMap: Record<VerNodeType, string> = {
-                          'test-plan': 'plans',
-                          'test-case': 'cases',
-                          'test-setup': 'setups',
-                          'test-run': 'runs',
-                          'requirement': 'cases',
-                          'unassigned-group': 'cases',
-                          'plan-requirements-group': 'plans',
-                        }
-                        const tab = tabMap[node.type]
-                        navigate(`/projects/${projectId}/verification?tab=${tab}&focusType=${node.type}&focusId=${node.id}`)
+                      if (node && projectId) {
+                        const tab = getVerificationTabForNodeType(node.type)
+                        navigate(buildVerificationUrl(projectId, { tab, focusType: node.type, focusId: node.id }))
                       }
                     }}
-                    onCreatePlan={() => navigate(`/projects/${projectId}/verification?tab=plans&openCreate=plan`)}
-                    onCreateCase={(planId) => navigate(`/projects/${projectId}/verification?tab=cases&openCreateCase=${planId}`)}
-                    onCreateSetup={(planId) => navigate(`/projects/${projectId}/verification?tab=setups&openCreateSetup=${planId}`)}
-                    onCreateRun={(planId) => navigate(`/projects/${projectId}/verification?tab=runs&openCreateRun=${planId}`)}
+                    onCreatePlan={() => projectId && navigate(buildVerificationUrl(projectId, { tab: 'plans', openCreate: 'plan' }))}
+                    onCreateCase={(planId) => projectId && navigate(buildVerificationUrl(projectId, { tab: 'cases', openCreateCase: planId }))}
+                    onCreateSetup={(planId) => projectId && navigate(buildVerificationUrl(projectId, { tab: 'setups', openCreateSetup: planId }))}
+                    onCreateRun={(planId) => projectId && navigate(buildVerificationUrl(projectId, { tab: 'runs', openCreateRun: planId }))}
                     onDeletePlan={(id) => { if (confirm('Delete this test plan?')) deleteVerificationPlanMutation.mutate(id) }}
                     onDeleteCase={(id) => { if (confirm('Delete this test case?')) deleteVerificationCaseMutation.mutate(id) }}
                     onDeleteSetup={(id) => { if (confirm('Delete this test setup?')) deleteVerificationSetupMutation.mutate(id) }}
@@ -2517,8 +2445,9 @@ export default function RequirementsPage() {
                       setIsExportOpen(true)
                     }}
                     onOpenInVerificationPage={(nodeType, id) => {
-                      const tab = nodeType === 'test-plan' ? 'plans' : 'cases'
-                      navigate(`/projects/${projectId}/verification?tab=${tab}&focusType=${nodeType}&focusId=${id}`)
+                      if (!projectId) return
+                      const tab = getVerificationTabForNodeType(nodeType)
+                      navigate(buildVerificationUrl(projectId, { tab, focusType: nodeType, focusId: id }))
                     }}
                     onRemoveLink={(linkId) => {
                       if (isBaselineView) return

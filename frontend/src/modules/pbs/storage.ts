@@ -5,6 +5,7 @@
  */
 
 import type { PBSNode, PBSChangeLogEntry } from './types'
+import { componentService } from '../../services/component.service'
 
 const KEY_PREFIX = 'pbs::'
 const STORAGE_VERSION = 2
@@ -160,6 +161,59 @@ export function estimatePBSStorageBytes(projectId: string | undefined): number {
   } catch {
     return 0
   }
+}
+
+/**
+ * Convert flat PBSNode[] into a nested ComponentTreeNode-shaped tree.
+ * Single source of truth — used by PBSPage, RequirementsPBSTree, FunctionsPBSTree, and RequirementsPage export.
+ */
+export function buildPBSComponentTree(projectId: string, nodes: PBSNode[]): any[] {
+  const nodeMap = new Map<string, any>()
+  const rootNodes: any[] = []
+  nodes.forEach((node) => {
+    nodeMap.set(node.id, {
+      id: node.id,
+      projectId,
+      parentId: node.parentId,
+      name: node.name,
+      pbsCode: node.pbsCode,
+      description: node.description,
+      sortOrder: node.orderIndex ?? 0,
+      createdAt: node.createdAt,
+      updatedAt: node.updatedAt,
+      children: [],
+    })
+  })
+  nodes.forEach((node) => {
+    const component = nodeMap.get(node.id)
+    if (node.parentId && nodeMap.has(node.parentId)) {
+      nodeMap.get(node.parentId).children.push(component)
+    } else {
+      rootNodes.push(component)
+    }
+  })
+  const sortNodes = (n: any[]) => {
+    n.sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    n.forEach((child: any) => {
+      if (child.children?.length) sortNodes(child.children)
+    })
+  }
+  sortNodes(rootNodes)
+  return rootNodes
+}
+
+/**
+ * Load PBS nodes from localStorage and build a component tree.
+ * Falls back to componentService.getComponentTree when no local PBS data exists.
+ * Shared queryFn for the ['pbs-nodes', projectId] React Query key.
+ */
+export async function loadPBSComponentTreeAsync(projectId: string): Promise<any[]> {
+  const pbsData = await loadPBSAsync(projectId)
+  if (pbsData.nodes.length > 0) {
+    return buildPBSComponentTree(projectId, pbsData.nodes)
+  }
+  const response = await componentService.getComponentTree(projectId)
+  return response.success && response.data ? response.data : []
 }
 
 /** Check if Storage API quota is available and return usage/quota in bytes; otherwise null. */

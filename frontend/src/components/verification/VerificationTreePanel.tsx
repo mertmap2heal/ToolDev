@@ -25,8 +25,9 @@ import {
   Download,
 } from 'lucide-react'
 import clsx from 'clsx'
+import { VERIFICATION_NODE_TYPE_TO_TAB } from '../../config/verificationTabs'
 
-// Node types for tree
+// Node types for tree (keep in sync with VerificationNodeType in config/verificationTabs.ts)
 export type VerNodeType = 'test-plan' | 'test-case' | 'test-setup' | 'test-run' | 'requirement' | 'unassigned-group' | 'plan-requirements-group'
 
 export interface VerTreeNode {
@@ -131,15 +132,8 @@ export interface VerificationTreePanelProps {
   onOpenInVerificationPage?: (nodeType: 'test-plan' | 'test-case', id: string) => void
 }
 
-const TAB_MAP: Record<VerNodeType, string> = {
-  'test-plan': 'plans',
-  'test-case': 'cases',
-  'test-setup': 'setups',
-  'test-run': 'runs',
-  'requirement': 'cases',
-  'unassigned-group': 'cases',
-  'plan-requirements-group': 'plans',
-}
+/** Re-export from single source of truth (config) for node-type -> tab mapping. */
+const TAB_MAP = VERIFICATION_NODE_TYPE_TO_TAB as Record<VerNodeType, string>
 
 function buildTree(
   plans: VerificationTreePanelProps['plans'],
@@ -349,7 +343,7 @@ function buildTree(
     }
   }
   const caseIdsWithLinksNotInPlan = requirementTestCaseLinks?.length
-    ? [...reqLinksByCaseIdStable.keys()].filter((cid) => !allPlanCaseIds.has(cid))
+    ? [...reqLinksByCaseIdStable.keys()].filter((cid) => !allPlanCaseIds.has(cid) && caseMap.has(cid))
     : []
   const otherTestCasesNode: VerTreeNode | null =
     caseIdsWithLinksNotInPlan.length > 0
@@ -360,11 +354,9 @@ function buildTree(
           label: `Other test cases (${caseIdsWithLinksNotInPlan.length})`,
           children: caseIdsWithLinksNotInPlan
             .map((caseId) => {
-              const c = caseMap.get(caseId)
-              const label = c
-                ? ((c as { title?: string; name?: string }).title ?? (c as { name?: string }).name ?? (c as { id: string }).id)
-                : caseId
-              const key = c ? (c as { key?: string }).key : undefined
+              const c = caseMap.get(caseId)!
+              const label = (c as { title?: string; name?: string }).title ?? (c as { name?: string }).name ?? (c as { id: string }).id
+              const key = (c as { key?: string }).key
               const reqLinks = reqLinksByCaseIdStable.get(caseId) ?? []
               const requirementChildren: VerTreeNode[] = reqLinks.map((link) => ({
                 type: 'requirement' as const,
@@ -379,7 +371,7 @@ function buildTree(
                 planId: undefined,
                 label,
                 key,
-                status: c ? (c as { status?: string }).status : undefined,
+                status: (c as { status?: string }).status,
                 children: requirementChildren.length > 0 ? requirementChildren : undefined,
               }
             }) as VerTreeNode[],

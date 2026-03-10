@@ -8,6 +8,11 @@ import type { SystemFunction } from 'shared/types/engineering.types'
 import type { Requirement } from 'shared/types/engineering.types'
 import type { Link } from 'shared/types/linkage.types'
 import { LINKAGE_V1 } from '../../config/featureFlags'
+import {
+  buildFunctionTree,
+  flattenFunctionTree,
+  type FunctionTreeNode,
+} from '../../config/functionsTabs'
 import clsx from 'clsx'
 
 interface LinkLike {
@@ -35,10 +40,7 @@ export interface LinkedElementClickPayload {
   link: LinkLike
 }
 
-interface TreeNode {
-  function: SystemFunction
-  children: TreeNode[]
-}
+type TreeNode = FunctionTreeNode
 
 interface FlatTreeItem {
   id: string
@@ -75,40 +77,6 @@ interface RequirementsFunctionsTreeProps {
   onExportForFunction?: (functionId: string, functionName?: string) => void
 }
 
-function buildFunctionTree(functions: SystemFunction[]): TreeNode[] {
-  const map = new Map<string, TreeNode>()
-  const roots: TreeNode[] = []
-  for (const fn of functions) {
-    map.set(fn.id, { function: fn, children: [] })
-  }
-  for (const fn of functions) {
-    const node = map.get(fn.id)!
-    if (fn.parentId && map.has(fn.parentId)) {
-      map.get(fn.parentId)!.children.push(node)
-    } else {
-      roots.push(node)
-    }
-  }
-  const sortChildren = (nodes: TreeNode[]) => {
-    nodes.sort((a, b) => (a.function.sortOrder ?? 0) - (b.function.sortOrder ?? 0))
-    nodes.forEach((n) => sortChildren(n.children))
-  }
-  sortChildren(roots)
-  return roots
-}
-
-function flattenTree(nodes: TreeNode[]): SystemFunction[] {
-  const result: SystemFunction[] = []
-  const walk = (list: TreeNode[]) => {
-    for (const node of list) {
-      result.push(node.function)
-      walk(node.children)
-    }
-  }
-  walk(nodes)
-  return result
-}
-
 function buildFlatTree(
   tree: TreeNode[],
   requirements: Requirement[],
@@ -138,7 +106,7 @@ function buildFlatTree(
   }
   const unassigned = requirements.filter((r) => !allocatedReqIds.has(r.id))
 
-  const validFunctionIds = new Set(flattenTree(tree).map((f) => f.id))
+  const validFunctionIds = new Set(flattenFunctionTree(tree).map((f) => f.id))
   const lowerQuery = searchQuery.toLowerCase()
 
   function functionMatches(node: TreeNode): boolean {

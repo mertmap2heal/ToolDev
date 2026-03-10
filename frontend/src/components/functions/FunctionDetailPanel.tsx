@@ -10,11 +10,8 @@ import {
   Link2,
   ChevronRight,
   GitBranch,
-  Settings,
   Shield,
   Layers,
-  Box,
-  Cpu,
   Plus,
   ExternalLink,
   ClipboardList,
@@ -27,6 +24,11 @@ import ParameterTextRenderer from './ParameterTextRenderer'
 import type { SystemFunction, FunctionCriticality } from 'shared/types/engineering.types'
 import type { Issue } from 'shared/types/engineering.types'
 import type { ChangeRequest } from 'shared/types/engineering.types'
+import {
+  FUNCTION_LEVEL_STYLES,
+  FUNCTION_STATUS_OPTIONS,
+  FUNCTION_CRITICALITY_OPTIONS,
+} from '../../config/functionsTabs'
 
 interface FunctionDetailPanelProps {
   func: SystemFunction
@@ -41,27 +43,9 @@ interface FunctionDetailPanelProps {
   onSelectFunction: (id: string) => void
 }
 
-const LEVEL_STYLES = [
-  { label: 'System Function', icon: Box, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-100 dark:bg-blue-900/40' },
-  { label: 'Sub-Function L1', icon: Layers, color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-100 dark:bg-indigo-900/40' },
-  { label: 'Sub-Function L2', icon: Settings, color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-100 dark:bg-violet-900/40' },
-  { label: 'Sub-Function L3', icon: Cpu, color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-100 dark:bg-purple-900/40' },
-  { label: 'Sub-Function L4', icon: Settings, color: 'text-fuchsia-600 dark:text-fuchsia-400', bg: 'bg-fuchsia-100 dark:bg-fuchsia-900/40' },
-]
-
-const STATUS_OPTIONS = [
-  { value: 'draft', label: 'Draft', color: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' },
-  { value: 'work-in-progress', label: 'Work in Progress', color: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300' },
-  { value: 'in-review', label: 'In Review', color: 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300' },
-  { value: 'done', label: 'Done', color: 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300' },
-]
-
-const CRITICALITY_OPTIONS: { value: FunctionCriticality; label: string; color: string }[] = [
-  { value: 'low', label: 'Low', color: 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300' },
-  { value: 'medium', label: 'Medium', color: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300' },
-  { value: 'high', label: 'High', color: 'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-300' },
-  { value: 'critical', label: 'Critical', color: 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300' },
-]
+const LEVEL_STYLES = FUNCTION_LEVEL_STYLES
+const STATUS_OPTIONS = FUNCTION_STATUS_OPTIONS
+const CRITICALITY_OPTIONS = FUNCTION_CRITICALITY_OPTIONS
 
 export default function FunctionDetailPanel({
   func,

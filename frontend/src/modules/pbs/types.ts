@@ -105,3 +105,41 @@ export const PREDEFINED_ATTRIBUTE_KEYS = [
   'Weight',
   'Dimensions',
 ]
+
+// ── Shared node-type styling constants ──
+// Used by PBSTree.tsx and available for RequirementsPBSTree / FunctionsPBSTree if needed.
+import { Box, Layers, Settings, Package, Cpu, FileText as FileTextIcon, type LucideIcon } from 'lucide-react'
+
+export const PBS_TYPE_BADGE_CLASS: Record<string, string> = {
+  System: 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200',
+  Subsystem: 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-200',
+  Assembly: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200',
+  Part: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200',
+  Software: 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200',
+  Document: 'bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-200',
+}
+
+export const PBS_TYPE_ICON_CLASS: Record<string, string> = {
+  System: 'text-blue-600 dark:text-blue-400',
+  Subsystem: 'text-indigo-600 dark:text-indigo-400',
+  Assembly: 'text-amber-600 dark:text-amber-400',
+  Part: 'text-gray-600 dark:text-gray-400',
+  Software: 'text-green-600 dark:text-green-400',
+  Document: 'text-purple-600 dark:text-purple-400',
+}
+
+export const PBS_TYPE_ICONS: Record<string, LucideIcon> = {
+  System: Box,
+  Subsystem: Layers,
+  Assembly: Settings,
+  Part: Package,
+  Software: Cpu,
+  Document: FileTextIcon,
+}
+
+export const PBS_STATUS_DOT_CLASS: Record<string, string> = {
+  Draft: 'bg-gray-400',
+  'In Work': 'bg-yellow-500',
+  Released: 'bg-green-500',
+  Obsolete: 'bg-red-500',
+}

@@ -7,20 +7,18 @@ import {
   FolderTree,
   ChevronsDownUp,
   ChevronsUpDown,
-  Settings,
-  Layers,
-  Cpu,
-  Box,
   X,
   Network,
 } from 'lucide-react'
 import type { SystemFunction } from 'shared/types/engineering.types'
-
-// ── Types ──
-interface TreeNode {
-  function: SystemFunction
-  children: TreeNode[]
-}
+import {
+  buildFunctionTree,
+  flattenFunctionTree,
+  getFunctionLevelStyle,
+  FUNCTION_STATUS_DOT,
+  FUNCTION_CRITICALITY_DOT,
+  type FunctionTreeNode,
+} from '../../config/functionsTabs'
 
 interface FunctionTreePanelProps {
   functions: SystemFunction[]
@@ -31,53 +29,11 @@ interface FunctionTreePanelProps {
   onGraphClick?: () => void
 }
 
-// ── Helpers ──
-function buildTree(functions: SystemFunction[]): TreeNode[] {
-  const map = new Map<string, TreeNode>()
-  const roots: TreeNode[] = []
-
-  // Create nodes
-  for (const fn of functions) {
-    map.set(fn.id, { function: fn, children: [] })
-  }
-
-  // Build hierarchy
-  for (const fn of functions) {
-    const node = map.get(fn.id)!
-    if (fn.parentId && map.has(fn.parentId)) {
-      map.get(fn.parentId)!.children.push(node)
-    } else {
-      roots.push(node)
-    }
-  }
-
-  // Sort children by sortOrder
-  const sortChildren = (nodes: TreeNode[]) => {
-    nodes.sort((a, b) => (a.function.sortOrder ?? 0) - (b.function.sortOrder ?? 0))
-    for (const n of nodes) sortChildren(n.children)
-  }
-  sortChildren(roots)
-
-  return roots
-}
-
-function flattenTree(nodes: TreeNode[]): SystemFunction[] {
-  const result: SystemFunction[] = []
-  const walk = (list: TreeNode[]) => {
-    for (const node of list) {
-      result.push(node.function)
-      walk(node.children)
-    }
-  }
-  walk(nodes)
-  return result
-}
-
-function filterTree(nodes: TreeNode[], query: string): TreeNode[] {
+function filterTree(nodes: FunctionTreeNode[], query: string): FunctionTreeNode[] {
   if (!query.trim()) return nodes
   const q = query.toLowerCase()
-  const filter = (list: TreeNode[]): TreeNode[] => {
-    return list.reduce<TreeNode[]>((acc, node) => {
+  const filter = (list: FunctionTreeNode[]): FunctionTreeNode[] => {
+    return list.reduce<FunctionTreeNode[]>((acc, node) => {
       const nameMatch = node.function.name.toLowerCase().includes(q)
       const idMatch = (node.function.functionId || '').toLowerCase().includes(q)
       const descMatch = (node.function.description || '').toLowerCase().includes(q)
@@ -91,7 +47,7 @@ function filterTree(nodes: TreeNode[], query: string): TreeNode[] {
   return filter(nodes)
 }
 
-function countDescendants(node: TreeNode): number {
+function countDescendants(node: FunctionTreeNode): number {
   let count = 0
   for (const child of node.children) {
     count += 1 + countDescendants(child)
@@ -99,32 +55,8 @@ function countDescendants(node: TreeNode): number {
   return count
 }
 
-// ── Level styling ──
-const LEVEL_COLORS = [
-  { text: 'text-blue-700 dark:text-blue-300', bg: 'bg-blue-50 dark:bg-blue-900/30', border: 'border-blue-200 dark:border-blue-800', icon: Box, badge: 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' },
-  { text: 'text-indigo-700 dark:text-indigo-300', bg: 'bg-indigo-50 dark:bg-indigo-900/30', border: 'border-indigo-200 dark:border-indigo-800', icon: Layers, badge: 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' },
-  { text: 'text-violet-700 dark:text-violet-300', bg: 'bg-violet-50 dark:bg-violet-900/30', border: 'border-violet-200 dark:border-violet-800', icon: Settings, badge: 'bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300' },
-  { text: 'text-purple-700 dark:text-purple-300', bg: 'bg-purple-50 dark:bg-purple-900/30', border: 'border-purple-200 dark:border-purple-800', icon: Cpu, badge: 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300' },
-  { text: 'text-fuchsia-700 dark:text-fuchsia-300', bg: 'bg-fuchsia-50 dark:bg-fuchsia-900/30', border: 'border-fuchsia-200 dark:border-fuchsia-800', icon: Settings, badge: 'bg-fuchsia-100 dark:bg-fuchsia-900/50 text-fuchsia-700 dark:text-fuchsia-300' },
-]
-
-function getLevelStyle(level: number) {
-  return LEVEL_COLORS[Math.min(level, LEVEL_COLORS.length - 1)]
-}
-
-const STATUS_DOT: Record<string, string> = {
-  'draft': 'bg-gray-400',
-  'work-in-progress': 'bg-yellow-500',
-  'in-review': 'bg-blue-500',
-  'done': 'bg-green-500',
-}
-
-const CRITICALITY_DOT: Record<string, string> = {
-  'low': 'bg-green-400',
-  'medium': 'bg-yellow-400',
-  'high': 'bg-orange-500',
-  'critical': 'bg-red-500',
-}
+const STATUS_DOT = FUNCTION_STATUS_DOT
+const CRITICALITY_DOT = FUNCTION_CRITICALITY_DOT
 
 // ── Component ──
 export default function FunctionTreePanel({
@@ -139,9 +71,9 @@ export default function FunctionTreePanel({
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [allExpanded, setAllExpanded] = useState(false)
 
-  const tree = useMemo(() => buildTree(functions), [functions])
+  const tree = useMemo(() => buildFunctionTree(functions), [functions])
   const filteredTree = useMemo(() => filterTree(tree, searchQuery), [tree, searchQuery])
-  const allIds = useMemo(() => flattenTree(tree).map(f => f.id), [tree])
+  const allIds = useMemo(() => flattenFunctionTree(tree).map(f => f.id), [tree])
 
   const stats = useMemo(() => {
     const total = functions.length
@@ -179,13 +111,13 @@ export default function FunctionTreePanel({
     : expandedIds
 
   // Render a tree node
-  const renderNode = (node: TreeNode, depth: number = 0): JSX.Element => {
+  const renderNode = (node: FunctionTreeNode, depth: number = 0): JSX.Element => {
     const fn = node.function
     const isSelected = selectedId === fn.id
     const isExpanded = effectiveExpanded.has(fn.id)
     const hasChildren = node.children.length > 0
     const level = fn.level ?? depth
-    const style = getLevelStyle(level)
+    const style = getFunctionLevelStyle(level)
     const LevelIcon = style.icon
     const descendantCount = countDescendants(node)
 

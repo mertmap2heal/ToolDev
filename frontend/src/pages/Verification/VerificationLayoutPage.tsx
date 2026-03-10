@@ -1,19 +1,7 @@
 import { useEffect, useCallback, useRef, useMemo, useState } from 'react'
 import { Outlet, useParams, useNavigate, useLocation, Link, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import {
-  BarChart3,
-  FileText,
-  CheckCircle,
-  Settings,
-  FileCode,
-  Play,
-  Table2,
-  ClipboardList,
-  ChevronLeft,
-  ChevronRight,
-  FolderTree,
-} from 'lucide-react'
+import { FileCode, Settings, ChevronLeft, ChevronRight, FolderTree } from 'lucide-react'
 
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import { VerificationDrawerProvider, useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
@@ -30,39 +18,16 @@ import { traceabilityService } from '../../services/traceability.service'
 import { requirementService } from '../../services/requirement.service'
 import { LINKAGE_V1 } from '../../config/featureFlags'
 import { linkService } from '../../services/link.service'
+import {
+  VERIFICATION_MAIN_TABS,
+  VERIFICATION_TAB_LABELS,
+  VERIFICATION_NODE_TYPE_TO_TAB,
+  VERIFICATION_VALID_TAB_IDS,
+  buildVerificationUrl,
+} from '../../config/verificationTabs'
 import clsx from 'clsx'
 
-const NODE_TYPE_TO_TAB: Record<VerNodeType, string> = {
-  'test-plan': 'plans',
-  'test-case': 'cases',
-  'test-setup': 'setups',
-  'test-run': 'runs',
-  'requirement': 'cases',
-  'unassigned-group': 'cases',
-  'plan-requirements-group': 'plans',
-}
-
-const MAIN_TABS = [
-  { id: 'overview', label: 'Overview', icon: BarChart3 },
-  { id: 'plans', label: 'Test Plans', icon: FileText },
-  { id: 'cases', label: 'Test Cases', icon: CheckCircle },
-  { id: 'runs', label: 'Test Runs', icon: Play },
-  { id: 'setups', label: 'Test Setups', icon: Settings },
-  { id: 'results', label: 'Test Results', icon: CheckCircle },
-  { id: 'reviews', label: 'Reviews', icon: ClipboardList },
-  { id: 'traceability', label: 'Traceability Matrix', icon: Table2 },
-]
-
-const TAB_LABELS: Record<string, string> = {
-  overview: 'Overview',
-  plans: 'Test Plans',
-  cases: 'Test Cases',
-  runs: 'Test Runs',
-  setups: 'Test Setups',
-  results: 'Test Results',
-  reviews: 'Reviews',
-  traceability: 'Traceability Matrix',
-}
+const NODE_TYPE_TO_TAB = VERIFICATION_NODE_TYPE_TO_TAB as Record<VerNodeType, string>
 
 function VerificationLayoutInner() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -76,8 +41,7 @@ function VerificationLayoutInner() {
   const isSettings = location.pathname.includes('/verification/settings')
   const showTreePanel = !isTemplates && !isSettings
   const tabParam = new URLSearchParams(location.search).get('tab') || 'overview'
-  const validTabs = ['overview', 'plans', 'cases', 'runs', 'setups', 'results', 'reviews', 'traceability']
-  const activeTabParam = validTabs.includes(tabParam) ? tabParam : 'overview'
+  const activeTabParam = VERIFICATION_VALID_TAB_IDS.includes(tabParam) ? tabParam : 'overview'
   const drawer = useVerificationDrawer()
 
   const focusType = searchParams.get('focusType') as VerNodeType | null
@@ -292,26 +256,30 @@ function VerificationLayoutInner() {
   )
 
   const handleCreatePlan = useCallback(() => {
-    navigate(`/projects/${projectId}/verification?tab=plans&openCreate=plan`, { replace: true })
+    if (!projectId) return
+    navigate(buildVerificationUrl(projectId, { tab: 'plans', openCreate: 'plan' }), { replace: true })
   }, [navigate, projectId])
 
   const handleCreateCase = useCallback(
     (planId: string) => {
-      navigate(`/projects/${projectId}/verification?tab=cases&openCreateCase=${planId}`, { replace: true })
+      if (!projectId) return
+      navigate(buildVerificationUrl(projectId, { tab: 'cases', openCreateCase: planId }), { replace: true })
     },
     [navigate, projectId]
   )
 
   const handleCreateSetup = useCallback(
     (planId: string) => {
-      navigate(`/projects/${projectId}/verification?tab=setups&openCreateSetup=${planId}`, { replace: true })
+      if (!projectId) return
+      navigate(buildVerificationUrl(projectId, { tab: 'setups', openCreateSetup: planId }), { replace: true })
     },
     [navigate, projectId]
   )
 
   const handleCreateRun = useCallback(
     (planId: string) => {
-      navigate(`/projects/${projectId}/verification?tab=runs&openCreateRun=${planId}`, { replace: true })
+      if (!projectId) return
+      navigate(buildVerificationUrl(projectId, { tab: 'runs', openCreateRun: planId }), { replace: true })
     },
     [navigate, projectId]
   )
@@ -425,7 +393,7 @@ function VerificationLayoutInner() {
       { label: 'Home', path: '/' },
       { label: projectName, path: `/projects/${projectId}` },
       { label: 'Verification', path: basePath },
-      { label: TAB_LABELS[entity.tab] || entity.tab, path: `${basePath}?tab=${entity.tab}` },
+      { label: VERIFICATION_TAB_LABELS[entity.tab] || entity.tab, path: `${basePath}?tab=${entity.tab}` },
       { label: entity.label },
     ])
   }, [
@@ -449,7 +417,7 @@ function VerificationLayoutInner() {
   }, [setBreadcrumbItems])
 
   const handleMainTab = (tabId: string) => {
-    navigate(`/projects/${projectId}/verification?tab=${tabId}`, { replace: true })
+    navigate(buildVerificationUrl(projectId!, { tab: tabId }), { replace: true })
   }
 
   return (
@@ -541,7 +509,7 @@ function VerificationLayoutInner() {
 
         <div className="flex-shrink-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
           <div className="flex border-b border-gray-200 dark:border-gray-700">
-            {MAIN_TABS.map((tab) => {
+            {VERIFICATION_MAIN_TABS.map((tab) => {
               const Icon = tab.icon
               const active = !isTemplates && activeTabParam === tab.id
               return (
