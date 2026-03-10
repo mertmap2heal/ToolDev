@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { X, ChevronDown, Plus, Trash2, GripVertical, Search, Download, FileCode, CheckSquare, Square, Play } from 'lucide-react'
+import { X, ChevronDown, Plus, Trash2, GripVertical, Search, Download, FileCode, FileText, CheckSquare, Square, Play } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ApiResponse } from 'shared/types/api.types'
 import { verificationService } from '../../services/verification.service'
@@ -7,6 +7,7 @@ import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import ReportExporter from './ReportExporter'
 import ExportWithTemplateModal from './ExportWithTemplateModal'
+import FullReportModal from './FullReportModal'
 import VerificationLifecycle from './VerificationLifecycle'
 import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
 import clsx from 'clsx'
@@ -43,6 +44,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
   const [showExportTemplateModal, setShowExportTemplateModal] = useState(false)
+  const [showReportModal, setShowReportModal] = useState(false)
   const statusDropdownRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
@@ -323,6 +325,13 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
                   className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
                 >
                   Edit
+                </button>
+                <button
+                  onClick={() => setShowReportModal(true)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  title="View full report"
+                >
+                  <FileText size={18} className="text-gray-600 dark:text-gray-400" />
                 </button>
                 <button
                   onClick={() => setShowExportModal(true)}
@@ -733,18 +742,23 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
                     >
                       <GripVertical className="text-gray-400" size={16} />
                       <span className="text-sm text-gray-500 dark:text-gray-400">{index + 1}.</span>
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-900 dark:text-white">
+                      <button
+                        type="button"
+                        onClick={() => planCase.testCase && drawer.openCase?.(planCase.testCase)}
+                        className="flex-1 text-left min-w-0"
+                      >
+                        <div className="font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 truncate">
                           {planCase.testCase?.key || 'Unknown'}
                         </div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                        <div className="text-sm text-gray-600 dark:text-gray-400 truncate">
                           {planCase.testCase?.title || 'Unknown test case'}
                         </div>
-                      </div>
+                      </button>
                       <button
                         onClick={() => removeCaseMutation.mutate(planCase.testCaseId)}
                         disabled={removeCaseMutation.isPending}
                         className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                        title="Remove from plan"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -783,6 +797,17 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
           entityType="TEST_PLAN"
           entityId={plan.id}
           entityName={`${currentPlan?.key || ''} - ${currentPlan?.name || ''}`}
+        />
+      )}
+
+      {/* Full report modal */}
+      {showReportModal && projectId && plan?.id && (
+        <FullReportModal
+          isOpen={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          projectId={projectId}
+          reportType="test-plan"
+          entityId={plan.id}
         />
       )}
     </div>

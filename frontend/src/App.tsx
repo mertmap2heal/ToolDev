@@ -10,6 +10,7 @@ import SystemFunctionsPage from './pages/SystemFunctions/SystemFunctionsPage'
 import ArchitecturePage from './pages/Architecture/ArchitecturePage'
 import VerificationLayoutPage from './pages/Verification/VerificationLayoutPage'
 import VerificationPage from './pages/Verification/VerificationPage'
+import VerificationReportPage from './pages/Verification/VerificationReportPage'
 import VerificationSettingsPage from './pages/Verification/VerificationSettingsPage'
 import TemplatesLandingPage from './pages/Verification/TemplatesLandingPage'
 import TemplateEditorPage from './pages/Verification/TemplateEditorPage'
@@ -129,6 +130,7 @@ function App() {
             <Route path="projects/:projectId/reports" element={<ReportsPage />} />
             <Route path="projects/:projectId/verification" element={<VerificationLayoutPage />}>
             <Route index element={<VerificationPage />} />
+            <Route path="report/:entityType/:entityId" element={<VerificationReportPage />} />
             <Route path="settings" element={<VerificationSettingsPage />} />
             <Route path="templates" element={<TemplatesLandingPage />} />
               <Route path="templates/:templateId" element={<TemplateEditorPage />} />

@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
-import { X, ChevronDown, Link2, Download, Search, Check, Plus, FileCode, Play } from 'lucide-react'
+import { X, ChevronDown, Link2, Download, Search, Check, Plus, FileCode, Play, FileText } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import ReportExporter from './ReportExporter'
 import ExportWithTemplateModal from './ExportWithTemplateModal'
+import FullReportModal from './FullReportModal'
 import CustomSectionEditor from './CustomSectionEditor'
 import VerificationLifecycle from './VerificationLifecycle'
 import StructuredStepEditor, { parseStepsToPairs, pairsToStepsAndExpected, type StepPair } from './StructuredStepEditor'
@@ -38,6 +39,7 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
   const [showExportTemplateModal, setShowExportTemplateModal] = useState(false)
+  const [showReportModal, setShowReportModal] = useState(false)
   const statusDropdownRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
@@ -100,6 +102,21 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
       return response.success && response.data ? response.data : []
     },
     enabled: isOpen && !!testCase?.id,
+  })
+
+  // Fetch run results (execution history) for this test case
+  const { data: runResultsForCase = [] } = useQuery({
+    queryKey: ['run-results-for-case', projectId, testCase?.id],
+    queryFn: async () => {
+      if (!testCase?.id || !projectId) return []
+      const response = await verificationService.getRunResultsForTestCase(projectId, testCase.id)
+      return (response.success && response.data ? response.data : []) as Array<{
+        id: string
+        resultStatus?: string
+        testRun?: { id: string; runName?: string; status?: string; createdAt?: string; testPlan?: { id: string; key?: string; name?: string } }
+      }>
+    },
+    enabled: isOpen && !!testCase?.id && !!projectId,
   })
 
   const updateCaseMutation = useMutation({
@@ -405,6 +422,13 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
                   Edit
                 </button>
                 <button
+                  onClick={() => setShowReportModal(true)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  title="View full report"
+                >
+                  <FileText size={18} className="text-gray-600 dark:text-gray-400" />
+                </button>
+                <button
                   onClick={() => setShowExportModal(true)}
                   className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                   title="Export Report"
@@ -520,6 +544,46 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
                 reviewCaseMutation.isPending || approveCaseMutation.isPending || updateCaseMutation.isPending
               }
             />
+          </div>
+
+          {/* Test runs / Execution history */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Test runs (execution history)
+            </label>
+            {runResultsForCase.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">No test runs have included this case yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {runResultsForCase.map((result: any) => {
+                  const run = result.testRun
+                  const planLabel = run?.testPlan ? `${run.testPlan.key || ''} - ${run.testPlan.name || ''}`.trim() || '—' : '—'
+                  const executedAt = run?.createdAt ? new Date(run.createdAt).toLocaleString() : '—'
+                  const statusColor =
+                    result.resultStatus === 'PASS' || result.resultStatus === 'PASSED_WITH_ERRORS'
+                      ? 'text-green-600 dark:text-green-400'
+                      : result.resultStatus === 'FAIL'
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-gray-600 dark:text-gray-400'
+                  return (
+                    <button
+                      key={result.id}
+                      type="button"
+                      onClick={() => run && drawer.openRun?.(run)}
+                      className="flex items-center justify-between w-full p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 text-left transition-colors"
+                    >
+                      <span className="font-medium text-gray-900 dark:text-white">{run?.runName || 'Run'}</span>
+                      <div className="flex items-center gap-3 text-sm">
+                        <span className="text-gray-500 dark:text-gray-400">{planLabel}</span>
+                        <span className={statusColor}>{result.resultStatus || 'NOT_RUN'}</span>
+                        <span className="text-gray-500 dark:text-gray-400">{executedAt}</span>
+                        <Play size={14} className="text-gray-400" />
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           {/* Objective */}
@@ -808,6 +872,17 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
           entityType="TEST_CASE"
           entityId={testCase.id}
           entityName={`${currentCase?.key || ''} - ${currentCase?.title || ''}`}
+        />
+      )}
+
+      {/* Full report modal */}
+      {showReportModal && projectId && testCase?.id && (
+        <FullReportModal
+          isOpen={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          projectId={projectId}
+          reportType="test-case"
+          entityId={testCase.id}
         />
       )}
     </div>

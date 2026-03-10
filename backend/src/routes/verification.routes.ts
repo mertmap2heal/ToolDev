@@ -227,6 +227,17 @@ router.get('/reports/test-plan/:projectId/:id', async (req: AuthRequest, res: Re
   }
 })
 
+router.get('/reports/test-run/:projectId/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id } = req.params
+    const report = await reportService.generateTestRunReport(projectId, id)
+    res.json({ success: true, data: report })
+  } catch (error: any) {
+    console.error('Generate test run report error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+})
+
 router.get('/reports/compliance-matrix/:projectId', async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params

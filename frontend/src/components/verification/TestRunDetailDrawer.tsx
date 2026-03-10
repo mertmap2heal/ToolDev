@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { X, Play, Pause, Square, RotateCcw, CheckCircle, AlertTriangle, PlayCircle, ExternalLink, Download } from 'lucide-react'
+import { X, Play, Pause, Square, RotateCcw, CheckCircle, AlertTriangle, PlayCircle, ExternalLink, Download, FileText } from 'lucide-react'
 import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
+import FullReportModal from './FullReportModal'
+import ReportExporter from './ReportExporter'
 import clsx from 'clsx'
 
 interface TestRunDetailDrawerProps {
@@ -53,6 +55,8 @@ export default function TestRunDetailDrawer({ run, isOpen, onClose, projectId, o
   const drawer = useVerificationDrawer()
   const { projectId: paramProjectId } = useParams<{ projectId: string }>()
   const [expandedResultId, setExpandedResultId] = useState<string | null>(null)
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [showExportModal, setShowExportModal] = useState(false)
 
   const { data: runDetails, isLoading } = useQuery({
     queryKey: ['test-run', projectId, run?.id],
@@ -62,6 +66,16 @@ export default function TestRunDetailDrawer({ run, isOpen, onClose, projectId, o
       return res.success ? res.data : null
     },
     enabled: isOpen && !!run?.id && !!projectId,
+  })
+
+  const { data: runReportData } = useQuery({
+    queryKey: ['test-run-report', projectId, run?.id],
+    queryFn: async () => {
+      if (!run?.id) return null
+      const res = await verificationService.getTestRunReport(projectId, run.id)
+      return res.success ? res.data : null
+    },
+    enabled: showExportModal && !!run?.id && !!projectId,
   })
 
   const startTimerMutation = useMutation({
@@ -132,12 +146,28 @@ export default function TestRunDetailDrawer({ run, isOpen, onClose, projectId, o
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
             {r?.runName || 'Test Run'}
           </h2>
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowReportModal(true)}
+              className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+              title="View full report"
+            >
+              <FileText size={20} />
+            </button>
+            <button
+              onClick={() => setShowExportModal(true)}
+              className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+              title="Export report"
+            >
+              <Download size={20} />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -372,6 +402,26 @@ export default function TestRunDetailDrawer({ run, isOpen, onClose, projectId, o
           )}
         </div>
       </div>
+
+      {showReportModal && projectId && run?.id && (
+        <FullReportModal
+          isOpen={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          projectId={projectId}
+          reportType="test-run"
+          entityId={run.id}
+        />
+      )}
+
+      {showExportModal && runReportData && (
+        <ReportExporter
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          reportType="test-run"
+          reportData={runReportData}
+          entityName={runDetails?.runName || run?.runName || 'Test Run'}
+        />
+      )}
     </>
   )
 }

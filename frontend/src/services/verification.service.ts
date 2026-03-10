@@ -119,6 +119,7 @@ export const verificationService = {
   getTestCase: (projectId: string, id: string) => apiClient.get(`/verification/test-cases/${projectId}/${id}`),
   getMethods: (projectId: string) => apiClient.get(`/verification/methods/${projectId}`),
   getTestCaseReport: (projectId: string, id: string) => apiClient.get(`/verification/reports/test-case/${projectId}/${id}`),
+  getTestRunReport: (projectId: string, runId: string) => apiClient.get(`/verification/reports/test-run/${projectId}/${runId}`),
   getCustomSections: (projectId: string, testCaseId: string) => apiClient.get(`/verification/test-cases/${projectId}/${testCaseId}/custom-sections`),
   updateTestCase: (projectId: string, id: string, data: unknown) => apiClient.patch(`/verification/test-cases/${projectId}/${id}`, data),
   reviewTestCase: (projectId: string, id: string) => apiClient.post(`/verification/test-cases/${projectId}/${id}/review`),

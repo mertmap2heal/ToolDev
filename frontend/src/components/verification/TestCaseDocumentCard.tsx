@@ -28,6 +28,15 @@ function getStatusColor(status: string): string {
   }
 }
 
+function toDisplayString(v: unknown): string | undefined {
+  if (v == null) return undefined
+  if (typeof v === 'string') return v
+  if (typeof v === 'number') return String(v)
+  if (typeof v === 'object' && v !== null && 'name' in v) return (v as { name?: string }).name
+  if (typeof v === 'object' && v !== null && 'code' in v) return String((v as { code?: unknown }).code)
+  return undefined
+}
+
 interface TestCaseDocumentCardProps {
   testCase: {
     id: string
@@ -36,8 +45,8 @@ interface TestCaseDocumentCardProps {
     objective?: string
     status?: string
     version?: string
-    moc?: string
-    method?: string
+    moc?: string | { code?: number; name?: string }
+    method?: string | { id?: string; name?: string }
     ownerUserId?: string
     createdAt?: string
     updatedAt?: string
@@ -55,8 +64,8 @@ export default function TestCaseDocumentCard({ testCase, onClick }: TestCaseDocu
     { label: 'Objective', value: testCase.objective || undefined },
     { label: 'Status', value: testCase.status },
     { label: 'Version', value: testCase.version || undefined },
-    { label: 'MOC', value: testCase.moc || undefined },
-    { label: 'Method', value: testCase.method || undefined },
+    { label: 'MOC', value: toDisplayString(testCase.moc) },
+    { label: 'Method', value: toDisplayString(testCase.method) },
     { label: 'Owner', value: testCase.ownerUserId || undefined },
     { label: 'Created', value: created },
     { label: 'Updated', value: updated },

@@ -48,69 +48,70 @@ async function main() {
 
   const pid = project.id
 
-  // Find TC-SEED-001 test case
-  const testCase = await prisma.verTestCase.findFirst({
-    where: { projectId: pid, key: 'TC-SEED-001' },
+  const seedCaseKeys = ['TC-SEED-001', 'TC-SEED-002', 'TC-SEED-003', 'TC-SEED-004']
+  const testCases = await prisma.verTestCase.findMany({
+    where: { projectId: pid, key: { in: seedCaseKeys } },
+    orderBy: { key: 'asc' },
   })
-  if (!testCase) {
-    console.error('Test case TC-SEED-001 not found. Run seed-test-case first.')
+  if (testCases.length === 0) {
+    console.error('No seed test cases found (TC-SEED-001 through TC-SEED-004). Run seed-test-case first.')
     process.exit(1)
   }
-  console.log(`Found test case: ${testCase.key} (${testCase.id})`)
+  console.log(`Found ${testCases.length} test case(s): ${testCases.map((tc) => tc.key).join(', ')}`)
 
-  // Check if test plan already exists
   let plan = await prisma.verTestPlan.findFirst({
     where: { projectId: pid, key: FULLY_POPULATED_TEST_PLAN.key },
     include: { planCases: true },
   })
-  if (plan) {
-    const alreadyLinked = plan.planCases.some((pc) => pc.testCaseId === testCase.id)
-    if (alreadyLinked) {
-      console.log(`Test plan ${FULLY_POPULATED_TEST_PLAN.key} already exists with TC-SEED-001.`)
-      process.exit(0)
+
+  if (!plan) {
+    plan = await prisma.verTestPlan.create({
+      data: {
+        projectId: pid,
+        key: FULLY_POPULATED_TEST_PLAN.key,
+        name: FULLY_POPULATED_TEST_PLAN.name,
+        description: FULLY_POPULATED_TEST_PLAN.description,
+        scope: FULLY_POPULATED_TEST_PLAN.scope,
+        entryCriteria: FULLY_POPULATED_TEST_PLAN.entryCriteria,
+        exitCriteria: FULLY_POPULATED_TEST_PLAN.exitCriteria,
+        phase: FULLY_POPULATED_TEST_PLAN.phase,
+        status: FULLY_POPULATED_TEST_PLAN.status,
+      },
+      include: { planCases: true },
+    })
+    console.log(`Created test plan: ${plan.key} - ${plan.name} (${plan.id})`)
+  } else {
+    console.log(`Test plan ${plan.key} already exists.`)
+  }
+
+  const linkedCaseIds = new Set(plan.planCases.map((pc) => pc.testCaseId))
+  let orderIndex = plan.planCases.length
+  const notesByKey: Record<string, string> = {
+    'TC-SEED-001': 'Primary HIL functional test for data acquisition.',
+    'TC-SEED-002': 'CAN bus error handling and recovery.',
+    'TC-SEED-003': 'Frame timing and jitter validation.',
+    'TC-SEED-004': 'Off-nominal power cycle during transfer.',
+  }
+  for (const tc of testCases) {
+    if (linkedCaseIds.has(tc.id)) {
+      console.log(`${tc.key} already in plan.`)
+      continue
     }
-    // Add test case to existing plan
     await prisma.verTestPlanCase.create({
       data: {
         testPlanId: plan.id,
-        testCaseId: testCase.id,
-        orderIndex: 0,
+        testCaseId: tc.id,
+        orderIndex,
         isMandatory: true,
+        notes: notesByKey[tc.key] ?? undefined,
       },
     })
-    console.log(`Added ${testCase.key} to existing test plan ${plan.key}`)
-    process.exit(0)
+    console.log(`Added ${tc.key} to test plan`)
+    linkedCaseIds.add(tc.id)
+    orderIndex += 1
   }
 
-  // Create fully populated test plan
-  plan = await prisma.verTestPlan.create({
-    data: {
-      projectId: pid,
-      key: FULLY_POPULATED_TEST_PLAN.key,
-      name: FULLY_POPULATED_TEST_PLAN.name,
-      description: FULLY_POPULATED_TEST_PLAN.description,
-      scope: FULLY_POPULATED_TEST_PLAN.scope,
-      entryCriteria: FULLY_POPULATED_TEST_PLAN.entryCriteria,
-      exitCriteria: FULLY_POPULATED_TEST_PLAN.exitCriteria,
-      phase: FULLY_POPULATED_TEST_PLAN.phase,
-      status: FULLY_POPULATED_TEST_PLAN.status,
-    },
-  })
-  console.log(`Created test plan: ${plan.key} - ${plan.name} (${plan.id})`)
-
-  // Add test case to plan
-  await prisma.verTestPlanCase.create({
-    data: {
-      testPlanId: plan.id,
-      testCaseId: testCase.id,
-      orderIndex: 0,
-      isMandatory: true,
-      notes: 'Primary HIL functional test for data acquisition.',
-    },
-  })
-  console.log(`Added ${testCase.key} to test plan`)
-
-  console.log('Seed complete. Fully populated test plan created with TC-SEED-001.')
+  console.log('Seed complete. Test plan has all seed test cases (TC-SEED-001 through TC-SEED-004).')
 }
 
 main()

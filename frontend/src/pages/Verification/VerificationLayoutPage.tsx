@@ -70,6 +70,7 @@ function VerificationLayoutInner() {
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const breadcrumb = useBreadcrumb()
+  const setBreadcrumbItems = breadcrumb?.setItems
   const queryClient = useQueryClient()
   const isTemplates = location.pathname.includes('/verification/templates')
   const isSettings = location.pathname.includes('/verification/settings')
@@ -398,8 +399,8 @@ function VerificationLayoutInner() {
   )
 
   useEffect(() => {
-    if (!breadcrumb?.setItems || !projectId) {
-      return () => breadcrumb?.setItems(null)
+    if (!setBreadcrumbItems || !projectId) {
+      return () => setBreadcrumbItems?.(null)
     }
     const basePath = `/projects/${projectId}/verification`
     const entity = drawer.isPlanDrawerOpen && drawer.selectedPlan
@@ -415,12 +416,12 @@ function VerificationLayoutInner() {
               : null
 
     if (!entity) {
-      breadcrumb.setItems(null)
+      setBreadcrumbItems(null)
       return
     }
 
     const projectName = projectData?.name || 'Project'
-    breadcrumb.setItems([
+    setBreadcrumbItems([
       { label: 'Home', path: '/' },
       { label: projectName, path: `/projects/${projectId}` },
       { label: 'Verification', path: basePath },
@@ -428,7 +429,7 @@ function VerificationLayoutInner() {
       { label: entity.label },
     ])
   }, [
-    breadcrumb,
+    setBreadcrumbItems,
     projectId,
     projectData?.name,
     drawer.isPlanDrawerOpen,
@@ -444,8 +445,8 @@ function VerificationLayoutInner() {
   ])
 
   useEffect(() => {
-    return () => breadcrumb?.setItems(null)
-  }, [breadcrumb])
+    return () => setBreadcrumbItems?.(null)
+  }, [setBreadcrumbItems])
 
   const handleMainTab = (tabId: string) => {
     navigate(`/projects/${projectId}/verification?tab=${tabId}`, { replace: true })

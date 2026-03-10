@@ -347,7 +347,7 @@ export default function VerificationPage() {
     enabled: !!projectId && activeTab === 'overview',
   })
 
-  // Fetch test plans (also when focus targets a plan)
+  // Fetch test plans (always when on Verification so tree and tabs have data)
   const { data: testPlans = [], isLoading: loadingPlans } = useQuery({
     queryKey: ['test-plans', projectId],
     queryFn: async () => {
@@ -355,10 +355,10 @@ export default function VerificationPage() {
       const response = await verificationService.getTestPlans(projectId)
       return response.success && response.data ? response.data : []
     },
-    enabled: !!projectId && (activeTab === 'plans' || focusType === 'test_plan' || focusType === 'test-plan'),
+    enabled: !!projectId,
   })
 
-  // Fetch test cases
+  // Fetch test cases (always when on Verification so tree and Cases tab show seeded/created cases)
   const { data: testCases = [], isLoading: loadingCases } = useQuery({
     queryKey: ['test-cases', projectId],
     queryFn: async () => {
@@ -366,7 +366,7 @@ export default function VerificationPage() {
       const response = await verificationService.getTestCases(projectId)
       return response.success && response.data ? response.data : []
     },
-    enabled: !!projectId && (activeTab === 'cases' || focusType === 'test_case' || focusType === 'test-case'),
+    enabled: !!projectId,
   })
 
   // Fetch test setups (also when on cases tab for bulk link/unlink)

@@ -34,7 +34,7 @@ async function loadDocx() {
 interface ReportExporterProps {
   isOpen: boolean
   onClose: () => void
-  reportType: 'test-case' | 'test-plan'
+  reportType: 'test-case' | 'test-plan' | 'test-run'
   reportData: any
   entityName: string
 }
@@ -112,7 +112,8 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
     // Header
     doc.setFontSize(18)
     doc.setFont('helvetica', 'bold')
-    doc.text(reportType === 'test-case' ? 'Test Case Report' : 'Test Plan Report', pageWidth / 2, yPos, { align: 'center' })
+    const reportTitle = reportType === 'test-case' ? 'Test Case Report' : reportType === 'test-plan' ? 'Test Plan Report' : 'Test Run Report'
+    doc.text(reportTitle, pageWidth / 2, yPos, { align: 'center' })
     yPos += 10
 
     doc.setFontSize(10)
@@ -308,7 +309,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           // For now, we'll just include the text content
         }
       }
-    } else {
+    } else if (reportType === 'test-plan') {
       // Test Plan Report
       const tp = reportData.testPlan
 
@@ -459,6 +460,80 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           margin: { left: 14 },
         })
       }
+    } else if (reportType === 'test-run') {
+      // Test Run Report
+      const run = reportData.testRun || {}
+      const results = reportData.results || []
+      const stats = reportData.statistics || {}
+
+      doc.setFontSize(14)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Test Run Details', 14, yPos)
+      yPos += 8
+
+      const details = [
+        ['Run name', run.runName || 'N/A'],
+        ['Status', run.status || 'N/A'],
+        ['Started', formatDate(run.startedAt)],
+        ['Ended', formatDate(run.endedAt)],
+        ['Duration', run.actualDurationSeconds != null ? `${run.actualDurationSeconds}s` : 'N/A'],
+        ['Test plan', run.testPlan ? (run.testPlan.key || run.testPlan.name || 'N/A') : 'N/A'],
+        ['Environment', run.environment ? (run.environment.name || run.environment.softwareBuild || 'N/A') : 'N/A'],
+      ]
+
+      ;(doc as any).autoTable({
+        startY: yPos,
+        head: [],
+        body: details,
+        theme: 'plain',
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 45 }, 1: { cellWidth: 135 } },
+        margin: { left: 14 },
+      })
+      yPos = (doc as any).lastAutoTable.finalY + 10
+
+      doc.setFontSize(14)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Summary', 14, yPos)
+      yPos += 8
+      const statsData = [
+        ['Total', stats.total?.toString() || '0'],
+        ['Pass', stats.pass?.toString() || '0'],
+        ['Fail', stats.fail?.toString() || '0'],
+        ['Blocked', stats.blocked?.toString() || '0'],
+        ['Skipped', stats.skipped?.toString() || '0'],
+        ['Not run', stats.notRun?.toString() || '0'],
+      ]
+      ;(doc as any).autoTable({
+        startY: yPos,
+        head: [],
+        body: statsData,
+        theme: 'grid',
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { cellWidth: 30 } },
+        margin: { left: 14 },
+      })
+      yPos = (doc as any).lastAutoTable.finalY + 10
+
+      if (results.length > 0) {
+        doc.setFontSize(14)
+        doc.setFont('helvetica', 'bold')
+        doc.text('Results', 14, yPos)
+        yPos += 8
+        const resultsData = results.map((r: any) => [
+          r.testCase?.key || 'N/A',
+          r.testCase?.title || 'N/A',
+          r.resultStatus || 'N/A',
+          formatDate(r.executedAt),
+          (r.notes || '').slice(0, 40),
+        ])
+        ;(doc as any).autoTable({
+          startY: yPos,
+          head: [['Key', 'Title', 'Status', 'Executed at', 'Notes']],
+          body: resultsData,
+          theme: 'striped',
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14 },
+        })
+      }
     }
 
     const filename = `${entityName.replace(/[^a-zA-Z0-9-_]/g, '_')}_Report.pdf`
@@ -549,7 +624,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           rows.push([])
         })
       }
-    } else {
+    } else if (reportType === 'test-plan') {
       const tp = reportData.testPlan
 
       // Header info
@@ -640,6 +715,45 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           rows.push([])
         })
       }
+    } else if (reportType === 'test-run') {
+      const run = reportData.testRun || {}
+      const results = reportData.results || []
+      const stats = reportData.statistics || {}
+
+      rows.push(['Test Run Report'])
+      rows.push(['Generated', formatDate(reportData.metadata?.generatedAt)])
+      rows.push([])
+      rows.push(['Test Run Details'])
+      rows.push(['Run name', run.runName || ''])
+      rows.push(['Status', run.status || ''])
+      rows.push(['Started', formatDate(run.startedAt)])
+      rows.push(['Ended', formatDate(run.endedAt)])
+      rows.push(['Duration', run.actualDurationSeconds != null ? `${run.actualDurationSeconds}s` : ''])
+      rows.push(['Test plan', run.testPlan ? (run.testPlan.key || run.testPlan.name || '') : ''])
+      rows.push(['Environment', run.environment ? (run.environment.name || run.environment.softwareBuild || '') : ''])
+      rows.push([])
+      rows.push(['Summary'])
+      rows.push(['Total', stats.total?.toString() || '0'])
+      rows.push(['Pass', stats.pass?.toString() || '0'])
+      rows.push(['Fail', stats.fail?.toString() || '0'])
+      rows.push(['Blocked', stats.blocked?.toString() || '0'])
+      rows.push(['Skipped', stats.skipped?.toString() || '0'])
+      rows.push(['Not run', stats.notRun?.toString() || '0'])
+      rows.push([])
+      if (results.length > 0) {
+        rows.push(['Results'])
+        rows.push(['Key', 'Title', 'Status', 'Executed at', 'Notes'])
+        results.forEach((r: any) => {
+          rows.push([
+            r.testCase?.key || '',
+            r.testCase?.title || '',
+            r.resultStatus || '',
+            formatDate(r.executedAt),
+            (r.notes || '').slice(0, 200),
+          ])
+        })
+        rows.push([])
+      }
     }
 
     // Convert to CSV string
@@ -714,12 +828,8 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
     }
 
     // Title
-    children.push(
-      createParagraph(
-        reportType === 'test-case' ? 'Test Case Report' : 'Test Plan Report',
-        { heading: HeadingLevel.HEADING_1, size: 36 }
-      )
-    )
+    const wordTitle = reportType === 'test-case' ? 'Test Case Report' : reportType === 'test-plan' ? 'Test Plan Report' : 'Test Run Report'
+    children.push(createParagraph(wordTitle, { heading: HeadingLevel.HEADING_1, size: 36 }))
     children.push(createParagraph(`Generated: ${formatDate(reportData.metadata?.generatedAt)}`, { size: 20 }))
     children.push(createParagraph(''))
 
@@ -802,7 +912,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           children.push(createParagraph(''))
         }
       }
-    } else {
+    } else if (reportType === 'test-plan') {
       const tp = reportData.testPlan
 
       // Test Plan Details
@@ -882,6 +992,37 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           }
           children.push(createParagraph(''))
         }
+      }
+    } else if (reportType === 'test-run') {
+      const run = reportData.testRun || {}
+      const results = reportData.results || []
+      const stats = reportData.statistics || {}
+
+      children.push(createParagraph('Test Run Details', { heading: HeadingLevel.HEADING_2, size: 28 }))
+      children.push(createParagraph(`Run name: ${run.runName || 'N/A'}`))
+      children.push(createParagraph(`Status: ${run.status || 'N/A'}`))
+      children.push(createParagraph(`Started: ${formatDate(run.startedAt)}`))
+      children.push(createParagraph(`Ended: ${formatDate(run.endedAt)}`))
+      children.push(createParagraph(`Duration: ${run.actualDurationSeconds != null ? `${run.actualDurationSeconds}s` : 'N/A'}`))
+      children.push(createParagraph(`Test plan: ${run.testPlan ? (run.testPlan.key || run.testPlan.name || 'N/A') : 'N/A'}`))
+      children.push(createParagraph(`Environment: ${run.environment ? (run.environment.name || run.environment.softwareBuild || 'N/A') : 'N/A'}`))
+      children.push(createParagraph(''))
+
+      children.push(createParagraph('Summary', { heading: HeadingLevel.HEADING_2, size: 28 }))
+      children.push(createParagraph(`Total: ${stats.total ?? 0}  Pass: ${stats.pass ?? 0}  Fail: ${stats.fail ?? 0}  Blocked: ${stats.blocked ?? 0}  Skipped: ${stats.skipped ?? 0}  Not run: ${stats.notRun ?? 0}`))
+      children.push(createParagraph(''))
+
+      if (results.length > 0) {
+        children.push(createParagraph('Results', { heading: HeadingLevel.HEADING_2, size: 28 }))
+        const resultsRows = results.map((r: any) => [
+          r.testCase?.key || 'N/A',
+          r.testCase?.title || 'N/A',
+          r.resultStatus || 'N/A',
+          formatDate(r.executedAt),
+          (r.notes || '').slice(0, 80),
+        ])
+        children.push(createTable(['Key', 'Title', 'Status', 'Executed at', 'Notes'], resultsRows))
+        children.push(createParagraph(''))
       }
     }
 
@@ -990,9 +1131,10 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 mb-4">
             <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Report Contents</h4>
             <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-              <li>• {reportType === 'test-case' ? 'Test case details and procedure' : 'Test plan details and scope'}</li>
+              <li>• {reportType === 'test-case' ? 'Test case details and procedure' : reportType === 'test-plan' ? 'Test plan details and scope' : 'Test run details and results'}</li>
               {reportType === 'test-case' && <li>• Steps and expected results</li>}
               {reportType === 'test-plan' && <li>• Statistics and test cases list</li>}
+              {reportType === 'test-run' && reportData.results?.length > 0 && <li>• {reportData.results.length} result(s)</li>}
               {reportData.testResults?.length > 0 && (
                 <li>• {reportData.testResults.length} linked test result(s)</li>
               )}

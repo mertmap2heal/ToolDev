@@ -352,6 +352,76 @@ export const reportService = {
   },
 
   /**
+   * Generate test run report
+   */
+  async generateTestRunReport(projectId: string, runId: string): Promise<any> {
+    const run = await prisma.verTestRun.findFirst({
+      where: { id: runId, projectId, deletedAt: null },
+      include: {
+        testPlan: { select: { id: true, key: true, name: true } },
+        environment: true,
+        results: {
+          include: { testCase: { select: { id: true, key: true, title: true } } },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    })
+
+    if (!run) {
+      throw new Error('Test run not found')
+    }
+
+    const stats = { total: 0, pass: 0, fail: 0, blocked: 0, skipped: 0, notRun: 0 }
+    for (const r of run.results) {
+      stats.total++
+      const s = (r.resultStatus || 'NOT_RUN').toUpperCase()
+      if (s === 'PASS' || s === 'PASSED_WITH_ERRORS') stats.pass++
+      else if (s === 'FAIL') stats.fail++
+      else if (s === 'BLOCKED') stats.blocked++
+      else if (s === 'SKIPPED') stats.skipped++
+      else stats.notRun++
+    }
+
+    return {
+      metadata: {
+        projectId,
+        reportType: 'TEST_RUN',
+        generatedAt: new Date().toISOString(),
+        version: '1.0',
+      },
+      testRun: {
+        id: run.id,
+        runName: run.runName,
+        runNumber: run.runNumber,
+        status: run.status,
+        startedAt: run.startedAt,
+        endedAt: run.endedAt,
+        actualDurationSeconds: run.actualDurationSeconds,
+        testPlan: run.testPlan
+          ? { id: run.testPlan.id, key: run.testPlan.key, name: run.testPlan.name }
+          : null,
+        environment: run.environment
+          ? {
+              id: run.environment.id,
+              name: run.environment.name,
+              hardwareVersion: run.environment.hardwareVersion,
+              softwareBuild: run.environment.softwareBuild,
+            }
+          : null,
+      },
+      results: run.results.map((r) => ({
+        id: r.id,
+        testCase: r.testCase ? { id: r.testCase.id, key: r.testCase.key, title: r.testCase.title } : null,
+        resultStatus: r.resultStatus,
+        executedAt: r.executedAt,
+        actualResults: r.actualResults,
+        notes: r.notes,
+      })),
+      statistics: stats,
+    }
+  },
+
+  /**
    * Generate compliance matrix
    */
   async generateComplianceMatrix(projectId: string): Promise<any> {
