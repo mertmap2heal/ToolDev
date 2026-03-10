@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { X, ExternalLink, Download } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
 import VerificationReportView, { type ReportEntityType } from './VerificationReportView'
 import ReportExporter from './ReportExporter'
@@ -22,10 +22,12 @@ export interface FullReportModalProps {
 
 export default function FullReportModal({ isOpen, onClose, projectId, reportType, entityId }: FullReportModalProps) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [showExport, setShowExport] = useState(false)
+  const reportQueryKey = ['verification-report-modal', projectId, reportType, entityId]
 
   const { data: reportData, isLoading, error } = useQuery({
-    queryKey: ['verification-report-modal', projectId, reportType, entityId],
+    queryKey: reportQueryKey,
     queryFn: async () => {
       if (reportType === 'test-case') {
         const res = await verificationService.getTestCaseReport(projectId, entityId)
@@ -78,7 +80,14 @@ export default function FullReportModal({ isOpen, onClose, projectId, reportType
             {isLoading && <p className="text-gray-500 dark:text-gray-400">Loading report…</p>}
             {error && <p className="text-red-600 dark:text-red-400">Failed to load report.</p>}
             {!isLoading && !error && reportData && (
-              <VerificationReportView reportType={reportType} reportData={reportData} />
+              <VerificationReportView
+                reportType={reportType}
+                reportData={reportData}
+                editable
+                projectId={projectId}
+                entityId={entityId}
+                onSaved={() => queryClient.invalidateQueries({ queryKey: reportQueryKey })}
+              />
             )}
           </div>
           <div className="flex-shrink-0 px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-3">

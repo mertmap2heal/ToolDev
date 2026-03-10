@@ -96,8 +96,15 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
   }
 
   const exportToPDF = async () => {
-    await loadAutoTable()
+    const autoTable = await loadAutoTable()
     const doc = new jsPDF()
+    // jspdf-autotable v5 does not auto-apply when dynamically imported; use as autoTable(doc, opts)
+    const autoTableFn = typeof autoTable === 'function' ? autoTable : (autoTable as any)?.default ?? (autoTable as any)?.autoTable
+    const docAutoTable = (opts: any) => {
+      if (typeof autoTableFn === 'function') autoTableFn(doc, opts)
+      else throw new Error('PDF tables are not available')
+    }
+    const getLastAutoTableY = () => (doc as any).lastAutoTable?.finalY ?? 20
     const pageWidth = doc.internal.pageSize.getWidth()
     let yPos = 20
 
@@ -141,7 +148,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
         ['Objective', tc.objective || 'N/A'],
       ]
 
-      ;(doc as any).autoTable({
+      docAutoTable({
         startY: yPos,
         head: [],
         body: details,
@@ -153,7 +160,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
         margin: { left: 14 },
       })
 
-      yPos = (doc as any).lastAutoTable.finalY + 10
+      yPos = getLastAutoTableY() + 10
 
       // Preconditions
       if (tc.preconditions) {
@@ -174,7 +181,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
         yPos += 6
 
         const stepsData = tc.steps.map((step: string, idx: number) => [idx + 1, step])
-        ;(doc as any).autoTable({
+        docAutoTable({
           startY: yPos,
           head: [['Step', 'Description']],
           body: stepsData,
@@ -183,7 +190,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           margin: { left: 14 },
         })
 
-        yPos = (doc as any).lastAutoTable.finalY + 10
+        yPos = getLastAutoTableY() + 10
       }
 
       // Expected Results
@@ -194,7 +201,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
         yPos += 6
 
         const resultsData = tc.expectedResults.map((result: string, idx: number) => [idx + 1, result])
-        ;(doc as any).autoTable({
+        docAutoTable({
           startY: yPos,
           head: [['#', 'Expected Result']],
           body: resultsData,
@@ -203,7 +210,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           margin: { left: 14 },
         })
 
-        yPos = (doc as any).lastAutoTable.finalY + 10
+        yPos = getLastAutoTableY() + 10
       }
 
       // Pass/Fail Criteria
@@ -237,7 +244,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           tr.testEnvironment || 'N/A',
         ])
 
-        ;(doc as any).autoTable({
+        docAutoTable({
           startY: yPos,
           head: [['Title', 'Status', 'Executed By', 'Date', 'Environment']],
           body: testResultsData,
@@ -246,7 +253,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           margin: { left: 14 },
         })
 
-        yPos = (doc as any).lastAutoTable.finalY + 10
+        yPos = getLastAutoTableY() + 10
       }
 
       // Verifies Elements
@@ -267,7 +274,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           el.name || 'N/A',
         ])
 
-        ;(doc as any).autoTable({
+        docAutoTable({
           startY: yPos,
           head: [['Type', 'ID', 'Name']],
           body: verifiesData,
@@ -276,7 +283,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           margin: { left: 14 },
         })
 
-        yPos = (doc as any).lastAutoTable.finalY + 10
+        yPos = getLastAutoTableY() + 10
       }
 
       // Custom Sections
@@ -327,7 +334,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
         ['Description', tp.description || 'N/A'],
       ]
 
-      ;(doc as any).autoTable({
+      docAutoTable({
         startY: yPos,
         head: [],
         body: details,
@@ -339,7 +346,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
         margin: { left: 14 },
       })
 
-      yPos = (doc as any).lastAutoTable.finalY + 10
+      yPos = getLastAutoTableY() + 10
 
       // Statistics
       if (reportData.statistics) {
@@ -358,7 +365,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           ['Coverage', `${stats.coveragePercentage || 0}%`],
         ]
 
-        ;(doc as any).autoTable({
+        docAutoTable({
           startY: yPos,
           head: [],
           body: statsData,
@@ -370,7 +377,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           margin: { left: 14 },
         })
 
-        yPos = (doc as any).lastAutoTable.finalY + 10
+        yPos = getLastAutoTableY() + 10
       }
 
       // Test Cases in Plan
@@ -389,7 +396,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           pc.latestResult?.status || 'Not Run',
         ])
 
-        ;(doc as any).autoTable({
+        docAutoTable({
           startY: yPos,
           head: [['#', 'Key', 'Title', 'Status', 'Mandatory', 'Result']],
           body: casesData,
@@ -398,7 +405,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           margin: { left: 14 },
         })
 
-        yPos = (doc as any).lastAutoTable.finalY + 10
+        yPos = getLastAutoTableY() + 10
       }
 
       // Linked Test Results
@@ -421,7 +428,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           tr.testEnvironment || 'N/A',
         ])
 
-        ;(doc as any).autoTable({
+        docAutoTable({
           startY: yPos,
           head: [['Title', 'Status', 'Executed By', 'Date', 'Environment']],
           body: testResultsData,
@@ -430,7 +437,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           margin: { left: 14 },
         })
 
-        yPos = (doc as any).lastAutoTable.finalY + 10
+        yPos = getLastAutoTableY() + 10
       }
 
       // Verifies Elements
@@ -451,7 +458,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           el.name || 'N/A',
         ])
 
-        ;(doc as any).autoTable({
+        docAutoTable({
           startY: yPos,
           head: [['Type', 'ID', 'Name']],
           body: verifiesData,
@@ -481,7 +488,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
         ['Environment', run.environment ? (run.environment.name || run.environment.softwareBuild || 'N/A') : 'N/A'],
       ]
 
-      ;(doc as any).autoTable({
+      docAutoTable({
         startY: yPos,
         head: [],
         body: details,
@@ -489,7 +496,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
         columnStyles: { 0: { fontStyle: 'bold', cellWidth: 45 }, 1: { cellWidth: 135 } },
         margin: { left: 14 },
       })
-      yPos = (doc as any).lastAutoTable.finalY + 10
+      yPos = getLastAutoTableY() + 10
 
       doc.setFontSize(14)
       doc.setFont('helvetica', 'bold')
@@ -503,7 +510,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
         ['Skipped', stats.skipped?.toString() || '0'],
         ['Not run', stats.notRun?.toString() || '0'],
       ]
-      ;(doc as any).autoTable({
+      docAutoTable({
         startY: yPos,
         head: [],
         body: statsData,
@@ -511,7 +518,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
         columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 }, 1: { cellWidth: 30 } },
         margin: { left: 14 },
       })
-      yPos = (doc as any).lastAutoTable.finalY + 10
+      yPos = getLastAutoTableY() + 10
 
       if (results.length > 0) {
         doc.setFontSize(14)
@@ -525,7 +532,7 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           formatDate(r.executedAt),
           (r.notes || '').slice(0, 40),
         ])
-        ;(doc as any).autoTable({
+        docAutoTable({
           startY: yPos,
           head: [['Key', 'Title', 'Status', 'Executed at', 'Notes']],
           body: resultsData,

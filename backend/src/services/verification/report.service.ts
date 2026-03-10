@@ -310,6 +310,9 @@ export const reportService = {
         exitCriteria: plan.exitCriteria,
         phase: plan.phase,
         status: plan.status,
+        ownerUserId: plan.ownerUserId ?? undefined,
+        testingEnvironmentIds: plan.testingEnvironmentIds ?? undefined,
+        testingToolIds: plan.testingToolIds ?? undefined,
       },
       statistics: {
         totalCases,
@@ -327,6 +330,11 @@ export const reportService = {
           key: pc.testCase.key,
           title: pc.testCase.title,
           status: pc.testCase.status,
+          objective: pc.testCase.objective ?? undefined,
+          preconditions: pc.testCase.preconditions ?? undefined,
+          steps: pc.testCase.steps ?? undefined,
+          expectedResults: pc.testCase.expectedResults ?? undefined,
+          passFailCriteria: pc.testCase.passFailCriteria ?? undefined,
         },
         latestResult: pc.testCase.runResults.length > 0
           ? {

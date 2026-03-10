@@ -1,9 +1,10 @@
 /**
  * Shared presentational component that renders a full verification report
  * (test case, test plan, or test run) for use in modal and full-page view.
- * Print-friendly, scrollable; no new dependencies.
+ * Print-friendly, scrollable; supports double-click to edit when editable props are provided.
  */
-import type { ReactNode } from 'react'
+import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react'
+import { verificationService } from '../../services/verification.service'
 
 export type ReportEntityType = 'test-case' | 'test-plan' | 'test-run'
 
@@ -11,6 +12,11 @@ export interface VerificationReportViewProps {
   reportType: ReportEntityType
   reportData: any
   className?: string
+  /** When true and projectId/entityId/onSaved are set, text blocks are double-clickable to edit */
+  editable?: boolean
+  projectId?: string
+  entityId?: string
+  onSaved?: () => void
 }
 
 function formatDate(date: string | Date | null | undefined): string {
@@ -43,7 +49,98 @@ function getStatusBadgeClass(status: string): string {
   return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
 }
 
-export default function VerificationReportView({ reportType, reportData, className = '' }: VerificationReportViewProps) {
+function EditableBlock({
+  value,
+  onSave,
+  multiline,
+  placeholder,
+  className = '',
+  title,
+}: {
+  value: string
+  onSave: (v: string) => void
+  multiline?: boolean
+  placeholder?: string
+  className?: string
+  title?: string
+}) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [localValue, setLocalValue] = useState(value)
+  const ref = useRef<HTMLTextAreaElement | HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (isEditing && ref.current) {
+      ref.current.focus()
+      ref.current.select?.()
+    }
+  }, [isEditing])
+
+  const handleBlur = useCallback(() => {
+    setIsEditing(false)
+    const trimmed = typeof localValue === 'string' ? localValue.trim() : ''
+    if (trimmed !== (value || '').trim()) onSave(trimmed)
+  }, [localValue, value, onSave])
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !multiline) {
+        e.preventDefault()
+        handleBlur()
+      }
+      if (e.key === 'Escape') {
+        setLocalValue(value)
+        setIsEditing(false)
+        ref.current?.blur()
+      }
+    },
+    [multiline, value, handleBlur]
+  )
+
+  const displayValue = value || placeholder || '—'
+  if (isEditing) {
+    const common = {
+      ref: ref as any,
+      value: localValue,
+      onChange: (e: React.ChangeEvent<HTMLTextAreaElement & HTMLInputElement>) => setLocalValue(e.target.value),
+      onBlur: handleBlur,
+      onKeyDown: handleKeyDown,
+      className: `w-full px-2 py-1 border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm ${className}`,
+    }
+    return (
+      <div className="min-w-0">
+        {multiline ? (
+          <textarea rows={4} {...common} />
+        ) : (
+          <input type="text" {...common} />
+        )}
+      </div>
+    )
+  }
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      title={title ?? (value ? 'Double-click to edit' : 'Double-click to add')}
+      onDoubleClick={() => {
+        setLocalValue(value || '')
+        setIsEditing(true)
+      }}
+      className={`cursor-text rounded px-1 -mx-1 hover:bg-blue-50/50 dark:hover:bg-gray-700/50 ${className}`}
+    >
+      <span className="whitespace-pre-wrap">{displayValue}</span>
+    </div>
+  )
+}
+
+export default function VerificationReportView({
+  reportType,
+  reportData,
+  className = '',
+  editable = false,
+  projectId,
+  entityId,
+  onSaved,
+}: VerificationReportViewProps) {
   if (!reportData) {
     return (
       <div className={`p-4 text-gray-500 dark:text-gray-400 ${className}`}>
@@ -53,9 +150,28 @@ export default function VerificationReportView({ reportType, reportData, classNa
   }
 
   const meta = reportData.metadata || {}
+  const canEdit = editable && !!projectId && !!onSaved
+
+  const saveCaseField = useCallback(
+    async (caseId: string, field: string, value: string | string[]) => {
+      if (!projectId || !onSaved) return
+      await verificationService.updateTestCase(projectId, caseId, { [field]: value })
+      onSaved()
+    },
+    [projectId, onSaved]
+  )
+  const savePlanField = useCallback(
+    async (planId: string, field: string, value: string | string[]) => {
+      if (!projectId || !onSaved) return
+      await verificationService.updateTestPlan(projectId, planId, { [field]: value })
+      onSaved()
+    },
+    [projectId, onSaved]
+  )
 
   if (reportType === 'test-case') {
     const tc = reportData.testCase || {}
+    const caseId = entityId || tc.id
     const steps = Array.isArray(tc.steps) ? tc.steps : []
     const expectedResults = Array.isArray(tc.expectedResults) ? tc.expectedResults : []
     const executionHistory = reportData.executionHistory || []
@@ -69,6 +185,7 @@ export default function VerificationReportView({ reportType, reportData, classNa
       <div className={`text-gray-900 dark:text-gray-100 ${className}`}>
         <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
           Generated {formatDate(meta.generatedAt)} · Report v{meta.version || '1.0'}
+          {canEdit && <span className="ml-2 text-blue-600 dark:text-blue-400">· Double-click any text to edit</span>}
         </p>
 
         <Section title="Test case details">
@@ -76,7 +193,17 @@ export default function VerificationReportView({ reportType, reportData, classNa
             <dt className="font-medium text-gray-600 dark:text-gray-400">Key</dt>
             <dd>{tc.key ?? '—'}</dd>
             <dt className="font-medium text-gray-600 dark:text-gray-400">Title</dt>
-            <dd>{tc.title ?? '—'}</dd>
+            <dd>
+              {canEdit && caseId ? (
+                <EditableBlock
+                  value={tc.title ?? ''}
+                  onSave={(v) => saveCaseField(caseId, 'title', v)}
+                  className="text-sm"
+                />
+              ) : (
+                (tc.title ?? '—')
+              )}
+            </dd>
             <dt className="font-medium text-gray-600 dark:text-gray-400">Status</dt>
             <dd>
               <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${getStatusBadgeClass(tc.status)}`}>
@@ -85,44 +212,93 @@ export default function VerificationReportView({ reportType, reportData, classNa
             </dd>
             <dt className="font-medium text-gray-600 dark:text-gray-400">Version</dt>
             <dd>{tc.version ?? '—'}</dd>
-            {tc.objective && (
+            {(tc.objective || canEdit) && (
               <>
                 <dt className="font-medium text-gray-600 dark:text-gray-400">Objective</dt>
-                <dd className="whitespace-pre-wrap">{tc.objective}</dd>
+                <dd className="text-sm">
+                  {canEdit && caseId ? (
+                    <EditableBlock
+                      value={tc.objective ?? ''}
+                      onSave={(v) => saveCaseField(caseId, 'objective', v)}
+                      multiline
+                      className="text-sm"
+                    />
+                  ) : (
+                    <span className="whitespace-pre-wrap">{tc.objective ?? '—'}</span>
+                  )}
+                </dd>
               </>
             )}
           </dl>
         </Section>
 
-        {tc.preconditions && (
+        {(tc.preconditions || canEdit) && (
           <Section title="Preconditions">
-            <p className="text-sm whitespace-pre-wrap">{tc.preconditions}</p>
+            {canEdit && caseId ? (
+              <EditableBlock
+                value={tc.preconditions ?? ''}
+                onSave={(v) => saveCaseField(caseId, 'preconditions', v)}
+                multiline
+                className="text-sm"
+              />
+            ) : (
+              <p className="text-sm whitespace-pre-wrap">{tc.preconditions ?? '—'}</p>
+            )}
           </Section>
         )}
 
-        {steps.length > 0 && (
+        {(steps.length > 0 || canEdit) && (
           <Section title="Test procedure">
-            <ol className="list-decimal list-inside space-y-2 text-sm">
-              {steps.map((step: string, i: number) => (
-                <li key={i} className="pl-1">{step || '—'}</li>
-              ))}
-            </ol>
+            {canEdit && caseId ? (
+              <EditableBlock
+                value={Array.isArray(tc.steps) ? tc.steps.join('\n') : ''}
+                onSave={(v) => saveCaseField(caseId, 'steps', v ? v.split('\n').map((s) => s.trim()).filter(Boolean) : [])}
+                multiline
+                placeholder="One step per line"
+                className="text-sm"
+              />
+            ) : (
+              <ol className="list-decimal list-inside space-y-2 text-sm">
+                {steps.map((step: string, i: number) => (
+                  <li key={i} className="pl-1">{step || '—'}</li>
+                ))}
+              </ol>
+            )}
           </Section>
         )}
 
-        {expectedResults.length > 0 && (
+        {(expectedResults.length > 0 || canEdit) && (
           <Section title="Expected results">
-            <ol className="list-decimal list-inside space-y-2 text-sm">
-              {expectedResults.map((r: string, i: number) => (
-                <li key={i} className="pl-1">{r || '—'}</li>
-              ))}
-            </ol>
+            {canEdit && caseId ? (
+              <EditableBlock
+                value={Array.isArray(tc.expectedResults) ? tc.expectedResults.join('\n') : ''}
+                onSave={(v) => saveCaseField(caseId, 'expectedResults', v ? v.split('\n').map((s) => s.trim()).filter(Boolean) : [])}
+                multiline
+                placeholder="One expected result per line"
+                className="text-sm"
+              />
+            ) : (
+              <ol className="list-decimal list-inside space-y-2 text-sm">
+                {expectedResults.map((r: string, i: number) => (
+                  <li key={i} className="pl-1">{r || '—'}</li>
+                ))}
+              </ol>
+            )}
           </Section>
         )}
 
-        {tc.passFailCriteria && (
+        {(tc.passFailCriteria || canEdit) && (
           <Section title="Pass/fail criteria">
-            <p className="text-sm whitespace-pre-wrap">{tc.passFailCriteria}</p>
+            {canEdit && caseId ? (
+              <EditableBlock
+                value={tc.passFailCriteria ?? ''}
+                onSave={(v) => saveCaseField(caseId, 'passFailCriteria', v)}
+                multiline
+                className="text-sm"
+              />
+            ) : (
+              <p className="text-sm whitespace-pre-wrap">{tc.passFailCriteria ?? '—'}</p>
+            )}
           </Section>
         )}
 
@@ -246,6 +422,7 @@ export default function VerificationReportView({ reportType, reportData, classNa
       <div className={`text-gray-900 dark:text-gray-100 ${className}`}>
         <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
           Generated {formatDate(meta.generatedAt)} · Report v{meta.version || '1.0'}
+          {canEdit && <span className="ml-2 text-blue-600 dark:text-blue-400">· Double-click any text to edit</span>}
         </p>
 
         <Section title="Test plan details">
@@ -253,7 +430,17 @@ export default function VerificationReportView({ reportType, reportData, classNa
             <dt className="font-medium text-gray-600 dark:text-gray-400">Key</dt>
             <dd>{plan.key ?? '—'}</dd>
             <dt className="font-medium text-gray-600 dark:text-gray-400">Name</dt>
-            <dd>{plan.name ?? '—'}</dd>
+            <dd>
+              {canEdit && entityId ? (
+                <EditableBlock
+                  value={plan.name ?? ''}
+                  onSave={(v) => savePlanField(entityId, 'name', v)}
+                  className="text-sm"
+                />
+              ) : (
+                (plan.name ?? '—')
+              )}
+            </dd>
             <dt className="font-medium text-gray-600 dark:text-gray-400">Status</dt>
             <dd>
               <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${getStatusBadgeClass(plan.status)}`}>
@@ -266,14 +453,87 @@ export default function VerificationReportView({ reportType, reportData, classNa
                 <dd>{plan.phase}</dd>
               </>
             )}
-            {plan.description && (
+            {plan.ownerUserId && (
+              <>
+                <dt className="font-medium text-gray-600 dark:text-gray-400">Owner</dt>
+                <dd>{plan.ownerUserId}</dd>
+              </>
+            )}
+            {(plan.description || (canEdit && entityId)) && (
               <>
                 <dt className="font-medium text-gray-600 dark:text-gray-400">Description</dt>
-                <dd className="whitespace-pre-wrap">{plan.description}</dd>
+                <dd className="text-sm">
+                  {canEdit && entityId ? (
+                    <EditableBlock
+                      value={plan.description ?? ''}
+                      onSave={(v) => savePlanField(entityId, 'description', v)}
+                      multiline
+                    />
+                  ) : (
+                    <span className="whitespace-pre-wrap">{plan.description ?? '—'}</span>
+                  )}
+                </dd>
               </>
             )}
           </dl>
         </Section>
+
+        {(plan.scope || (canEdit && entityId)) && (
+          <Section title="Scope">
+            {canEdit && entityId ? (
+              <EditableBlock
+                value={plan.scope ?? ''}
+                onSave={(v) => savePlanField(entityId, 'scope', v)}
+                multiline
+                className="text-sm"
+              />
+            ) : (
+              <p className="text-sm whitespace-pre-wrap">{plan.scope ?? '—'}</p>
+            )}
+          </Section>
+        )}
+
+        {(plan.entryCriteria || (canEdit && entityId)) && (
+          <Section title="Entry criteria">
+            {canEdit && entityId ? (
+              <EditableBlock
+                value={plan.entryCriteria ?? ''}
+                onSave={(v) => savePlanField(entityId, 'entryCriteria', v)}
+                multiline
+                className="text-sm"
+              />
+            ) : (
+              <p className="text-sm whitespace-pre-wrap">{plan.entryCriteria ?? '—'}</p>
+            )}
+          </Section>
+        )}
+
+        {(plan.exitCriteria || (canEdit && entityId)) && (
+          <Section title="Exit criteria">
+            {canEdit && entityId ? (
+              <EditableBlock
+                value={plan.exitCriteria ?? ''}
+                onSave={(v) => savePlanField(entityId, 'exitCriteria', v)}
+                multiline
+                className="text-sm"
+              />
+            ) : (
+              <p className="text-sm whitespace-pre-wrap">{plan.exitCriteria ?? '—'}</p>
+            )}
+          </Section>
+        )}
+
+        {Array.isArray(plan.testingEnvironmentIds) && plan.testingEnvironmentIds.length > 0 && (
+          <Section title="Testing environment">
+            <p className="text-sm">{plan.testingEnvironmentIds.join(', ')}</p>
+          </Section>
+        )}
+
+        {Array.isArray(plan.testingToolIds) && plan.testingToolIds.length > 0 && (
+          <Section title="Testing tools">
+            <p className="text-sm">{plan.testingToolIds.join(', ')}</p>
+          </Section>
+        )}
 
         <Section title="Statistics">
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
@@ -291,38 +551,158 @@ export default function VerificationReportView({ reportType, reportData, classNa
         </Section>
 
         {testCases.length > 0 && (
-          <Section title="Test cases">
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm border border-gray-200 dark:border-gray-600">
-                <thead>
-                  <tr className="bg-gray-50 dark:bg-gray-700/50">
-                    <th className="text-left p-2">#</th>
-                    <th className="text-left p-2">Key</th>
-                    <th className="text-left p-2">Title</th>
-                    <th className="text-left p-2">Status</th>
-                    <th className="text-left p-2">Latest result</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {testCases.map((pc: any, i: number) => (
-                    <tr key={i} className="border-t border-gray-200 dark:border-gray-600">
-                      <td className="p-2">{pc.orderIndex ?? i + 1}</td>
-                      <td className="p-2 font-mono">{pc.testCase?.key ?? '—'}</td>
-                      <td className="p-2">{pc.testCase?.title ?? '—'}</td>
-                      <td className="p-2">{pc.testCase?.status ?? '—'}</td>
-                      <td className="p-2">
-                        {pc.latestResult ? (
-                          <span className={`px-2 py-0.5 rounded text-xs ${getStatusBadgeClass(pc.latestResult.status)}`}>
-                            {pc.latestResult.status} {pc.latestResult.executedAt ? formatDate(pc.latestResult.executedAt) : ''}
-                          </span>
-                        ) : '—'}
-                      </td>
+          <>
+            <Section title="Test cases summary">
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm border border-gray-200 dark:border-gray-600">
+                  <thead>
+                    <tr className="bg-gray-50 dark:bg-gray-700/50">
+                      <th className="text-left p-2">#</th>
+                      <th className="text-left p-2">Key</th>
+                      <th className="text-left p-2">Title</th>
+                      <th className="text-left p-2">Status</th>
+                      <th className="text-left p-2">Latest result</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Section>
+                  </thead>
+                  <tbody>
+                    {testCases.map((pc: any, i: number) => (
+                      <tr key={i} className="border-t border-gray-200 dark:border-gray-600">
+                        <td className="p-2">{pc.orderIndex ?? i + 1}</td>
+                        <td className="p-2 font-mono">{pc.testCase?.key ?? '—'}</td>
+                        <td className="p-2">{pc.testCase?.title ?? '—'}</td>
+                        <td className="p-2">{pc.testCase?.status ?? '—'}</td>
+                        <td className="p-2">
+                          {pc.latestResult ? (
+                            <span className={`px-2 py-0.5 rounded text-xs ${getStatusBadgeClass(pc.latestResult.status)}`}>
+                              {pc.latestResult.status} {pc.latestResult.executedAt ? formatDate(pc.latestResult.executedAt) : ''}
+                            </span>
+                          ) : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+
+            <Section title="Test case details">
+              <div className="space-y-8">
+                {testCases.map((pc: any, i: number) => {
+                  const tc = pc.testCase || {}
+                  const steps = Array.isArray(tc.steps) ? tc.steps : []
+                  const expectedResults = Array.isArray(tc.expectedResults) ? tc.expectedResults : []
+                  return (
+                    <div
+                      key={tc.id ?? i}
+                      className="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/30 p-4"
+                    >
+                      <div className="flex flex-wrap items-center gap-2 mb-3 pb-2 border-b border-gray-200 dark:border-gray-600">
+                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">#{pc.orderIndex ?? i + 1}</span>
+                        <span className="font-mono text-sm font-medium text-gray-900 dark:text-white">{tc.key ?? '—'}</span>
+                        <span className="text-sm text-gray-700 dark:text-gray-300">{tc.title ?? '—'}</span>
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${getStatusBadgeClass(tc.status)}`}>
+                          {tc.status ?? '—'}
+                        </span>
+                        {pc.latestResult && (
+                          <span className={`px-2 py-0.5 rounded text-xs ${getStatusBadgeClass(pc.latestResult.status)}`}>
+                            Latest: {pc.latestResult.status} {pc.latestResult.executedAt ? formatDate(pc.latestResult.executedAt) : ''}
+                          </span>
+                        )}
+                      </div>
+                      {(tc.objective || (canEdit && tc.id)) && (
+                        <div className="mb-3">
+                          <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1">Objective</p>
+                          {canEdit && tc.id ? (
+                            <EditableBlock
+                              value={tc.objective ?? ''}
+                              onSave={(v) => saveCaseField(tc.id, 'objective', v)}
+                              multiline
+                              className="text-sm text-gray-900 dark:text-gray-100"
+                            />
+                          ) : (
+                            <p className="text-sm whitespace-pre-wrap text-gray-900 dark:text-gray-100">{tc.objective ?? '—'}</p>
+                          )}
+                        </div>
+                      )}
+                      {(tc.preconditions || (canEdit && tc.id)) && (
+                        <div className="mb-3">
+                          <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1">Preconditions</p>
+                          {canEdit && tc.id ? (
+                            <EditableBlock
+                              value={tc.preconditions ?? ''}
+                              onSave={(v) => saveCaseField(tc.id, 'preconditions', v)}
+                              multiline
+                              className="text-sm text-gray-900 dark:text-gray-100"
+                            />
+                          ) : (
+                            <p className="text-sm whitespace-pre-wrap text-gray-900 dark:text-gray-100">{tc.preconditions ?? '—'}</p>
+                          )}
+                        </div>
+                      )}
+                      {(steps.length > 0 || (canEdit && tc.id)) && (
+                        <div className="mb-3">
+                          <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1">Test procedure</p>
+                          {canEdit && tc.id ? (
+                            <EditableBlock
+                              value={Array.isArray(tc.steps) ? tc.steps.join('\n') : ''}
+                              onSave={(v) => saveCaseField(tc.id, 'steps', v ? v.split('\n').map((s) => s.trim()).filter(Boolean) : [])}
+                              multiline
+                              placeholder="One step per line"
+                              className="text-sm text-gray-900 dark:text-gray-100"
+                            />
+                          ) : (
+                            <ol className="list-decimal list-inside space-y-1 text-sm text-gray-900 dark:text-gray-100">
+                              {steps.map((step: string, si: number) => (
+                                <li key={si} className="pl-1">{step || '—'}</li>
+                              ))}
+                            </ol>
+                          )}
+                        </div>
+                      )}
+                      {(expectedResults.length > 0 || (canEdit && tc.id)) && (
+                        <div className="mb-3">
+                          <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1">Expected results</p>
+                          {canEdit && tc.id ? (
+                            <EditableBlock
+                              value={Array.isArray(tc.expectedResults) ? tc.expectedResults.join('\n') : ''}
+                              onSave={(v) => saveCaseField(tc.id, 'expectedResults', v ? v.split('\n').map((s) => s.trim()).filter(Boolean) : [])}
+                              multiline
+                              placeholder="One per line"
+                              className="text-sm text-gray-900 dark:text-gray-100"
+                            />
+                          ) : (
+                            <ol className="list-decimal list-inside space-y-1 text-sm text-gray-900 dark:text-gray-100">
+                              {expectedResults.map((r: string, ri: number) => (
+                                <li key={ri} className="pl-1">{r || '—'}</li>
+                              ))}
+                            </ol>
+                          )}
+                        </div>
+                      )}
+                      {(tc.passFailCriteria || (canEdit && tc.id)) && (
+                        <div>
+                          <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1">Pass/fail criteria</p>
+                          {canEdit && tc.id ? (
+                            <EditableBlock
+                              value={tc.passFailCriteria ?? ''}
+                              onSave={(v) => saveCaseField(tc.id, 'passFailCriteria', v)}
+                              multiline
+                              className="text-sm text-gray-900 dark:text-gray-100"
+                            />
+                          ) : (
+                            <p className="text-sm whitespace-pre-wrap text-gray-900 dark:text-gray-100">{tc.passFailCriteria ?? '—'}</p>
+                          )}
+                        </div>
+                      )}
+                      {!tc.objective && !tc.preconditions && steps.length === 0 && expectedResults.length === 0 && !tc.passFailCriteria && (
+                        <p className="text-sm text-gray-500 dark:text-gray-400 italic">No details for this test case.</p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </Section>
+          </>
         )}
 
         {testResults.length > 0 && (
