@@ -1,9 +1,11 @@
 import React from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Plus, Play, CheckCircle, Clock, AlertTriangle, Archive, X } from 'lucide-react'
+import { Plus, Play, CheckCircle, Clock, AlertTriangle, Archive, X, LayoutList } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import clsx from 'clsx'
 import { verificationService } from '../../services/verification.service'
 import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
+import TestRunDocumentCard from './TestRunDocumentCard'
 
 interface StartNewRunModalProps {
   isOpen: boolean
@@ -118,7 +120,12 @@ function formatDuration(seconds: number | null | undefined): string {
     return s > 0 ? `${m}m ${s}s` : `${m}m`
 }
 
-export default function TestRunList() {
+interface TestRunListProps {
+    listViewStyle?: 'table' | 'document'
+    onListViewStyleChange?: (style: 'table' | 'document') => void
+}
+
+export default function TestRunList({ listViewStyle = 'table', onListViewStyleChange }: TestRunListProps) {
     const { projectId } = useParams<{ projectId: string }>()
     const navigate = useNavigate()
     const queryClient = useQueryClient()
@@ -184,9 +191,23 @@ export default function TestRunList() {
 
     return (
         <div className="space-y-4 relative">
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Automated Test Runs</h2>
-                <div className="flex justify-end gap-2">
+                <div className="flex justify-end gap-2 flex-wrap">
+                    {onListViewStyleChange && (
+                        <button
+                            onClick={() => onListViewStyleChange(listViewStyle === 'document' ? 'table' : 'document')}
+                            className={clsx(
+                                'p-2 rounded-lg border transition-colors',
+                                listViewStyle === 'document'
+                                    ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-600'
+                                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                            )}
+                            title="Document View"
+                        >
+                            <LayoutList size={16} />
+                        </button>
+                    )}
                     <button
                         onClick={() => setStartNewRunOpen(true)}
                         className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
@@ -240,6 +261,20 @@ export default function TestRunList() {
                             {triggerMutation.isPending ? 'Triggering...' : 'Trigger blank run (CI simulation)'}
                         </button>
                     </div>
+                </div>
+            ) : listViewStyle === 'document' ? (
+                <div className="overflow-y-auto space-y-6 p-1">
+                    {testRuns.map((run: any) => (
+                        <TestRunDocumentCard
+                            key={run.id}
+                            run={run}
+                            onClick={() => drawer.openRun?.(run)}
+                            onArchive={(e) => {
+                                e.stopPropagation()
+                                setArchiveConfirmation({ id: run.id, name: run.runName })
+                            }}
+                        />
+                    ))}
                 </div>
             ) : (
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden shadow-sm">

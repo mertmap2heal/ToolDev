@@ -16,6 +16,7 @@ import {
   CheckSquare,
   Square,
   FileCode,
+  LayoutList,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { verificationService } from '../../services/verification.service'
@@ -30,6 +31,11 @@ import TestRunExecutionView from '../../components/verification/TestRunExecution
 import TraceabilityMatrixView from './TraceabilityMatrixView'
 import ExportWithTemplateModal from '../../components/verification/ExportWithTemplateModal'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
+import TestPlanDocumentCard from '../../components/verification/TestPlanDocumentCard'
+import TestCaseDocumentCard from '../../components/verification/TestCaseDocumentCard'
+import TestSetupDocumentCard from '../../components/verification/TestSetupDocumentCard'
+import TestResultDocumentCard from '../../components/verification/TestResultDocumentCard'
+import ReviewDocumentCard from '../../components/verification/ReviewDocumentCard'
 
 // Helper function to format test results status summary
 const formatTestResultsSummary = (statusSummary: Record<string, number> | undefined): string => {
@@ -260,6 +266,22 @@ export default function VerificationPage() {
     type: 'plans' | 'cases' | 'setups' | 'results' | null
   }>({ type: null })
   const columnSelectorRef = useRef<HTMLDivElement>(null)
+
+  // List view style: table or document (persisted per verification page)
+  const loadListViewStyle = (): 'table' | 'document' => {
+    try {
+      const stored = localStorage.getItem('verification-list-view')
+      if (stored === 'document' || stored === 'table') return stored
+    } catch (e) { /* ignore */ }
+    return 'table'
+  }
+  const [listViewStyle, setListViewStyle] = useState<'table' | 'document'>(() => loadListViewStyle())
+  const persistListViewStyle = (style: 'table' | 'document') => {
+    setListViewStyle(style)
+    try {
+      localStorage.setItem('verification-list-view', style)
+    } catch (e) { /* ignore */ }
+  }
 
   const queryClient = useQueryClient()
 
@@ -745,7 +767,19 @@ export default function VerificationPage() {
 
       {activeTab === 'plans' && (
         <div className="space-y-4">
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 flex-wrap">
+            <button
+              onClick={() => persistListViewStyle(listViewStyle === 'document' ? 'table' : 'document')}
+              className={clsx(
+                'p-2 rounded-lg border transition-colors',
+                listViewStyle === 'document'
+                  ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-600'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+              )}
+              title="Document View"
+            >
+              <LayoutList size={16} />
+            </button>
             <div className="relative" ref={columnSelectorOpen.type === 'plans' ? columnSelectorRef : null}>
               <button
                 onClick={() => setColumnSelectorOpen({ type: columnSelectorOpen.type === 'plans' ? null : 'plans' })}
@@ -808,6 +842,18 @@ export default function VerificationPage() {
             <div className="flex items-center justify-center p-12">
               <RefreshCw className="animate-spin text-gray-400" size={24} />
             </div>
+          ) : listViewStyle === 'document' ? (
+            filteredPlans.length > 0 ? (
+              <div className="overflow-y-auto space-y-6 p-1">
+                {filteredPlans.map((plan: any) => (
+                  <TestPlanDocumentCard key={plan.id} plan={plan} onClick={() => drawer.openPlan(plan)} />
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center">
+                <p className="text-gray-600 dark:text-gray-400">No test plans found</p>
+              </div>
+            )
           ) : filteredPlans.length > 0 ? (
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
               <table className="w-full">
@@ -1019,7 +1065,19 @@ export default function VerificationPage() {
               </div>
             </div>
           )}
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 flex-wrap">
+            <button
+              onClick={() => persistListViewStyle(listViewStyle === 'document' ? 'table' : 'document')}
+              className={clsx(
+                'p-2 rounded-lg border transition-colors',
+                listViewStyle === 'document'
+                  ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-600'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+              )}
+              title="Document View"
+            >
+              <LayoutList size={16} />
+            </button>
             <div className="relative" ref={columnSelectorOpen.type === 'cases' ? columnSelectorRef : null}>
               <button
                 onClick={() => setColumnSelectorOpen({ type: columnSelectorOpen.type === 'cases' ? null : 'cases' })}
@@ -1082,6 +1140,18 @@ export default function VerificationPage() {
             <div className="flex items-center justify-center p-12">
               <RefreshCw className="animate-spin text-gray-400" size={24} />
             </div>
+          ) : listViewStyle === 'document' ? (
+            filteredCases.length > 0 ? (
+              <div className="overflow-y-auto space-y-6 p-1">
+                {filteredCases.map((case_: any) => (
+                  <TestCaseDocumentCard key={case_.id} testCase={case_} onClick={() => drawer.openCase(case_)} />
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center">
+                <p className="text-gray-600 dark:text-gray-400">No test cases found</p>
+              </div>
+            )
           ) : filteredCases.length > 0 ? (
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
               <table className="w-full">
@@ -1306,12 +1376,24 @@ export default function VerificationPage() {
         />
       )}
       {activeTab === 'runs' && !isExecutionMode && (
-        <TestRunList />
+        <TestRunList listViewStyle={listViewStyle} onListViewStyleChange={persistListViewStyle} />
       )}
 
       {activeTab === 'setups' && (
         <div className="space-y-4">
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 flex-wrap">
+            <button
+              onClick={() => persistListViewStyle(listViewStyle === 'document' ? 'table' : 'document')}
+              className={clsx(
+                'p-2 rounded-lg border transition-colors',
+                listViewStyle === 'document'
+                  ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-600'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+              )}
+              title="Document View"
+            >
+              <LayoutList size={16} />
+            </button>
             <div className="relative" ref={columnSelectorOpen.type === 'setups' ? columnSelectorRef : null}>
               <button
                 onClick={() => setColumnSelectorOpen({ type: columnSelectorOpen.type === 'setups' ? null : 'setups' })}
@@ -1366,6 +1448,18 @@ export default function VerificationPage() {
             <div className="flex items-center justify-center p-12">
               <RefreshCw className="animate-spin text-gray-400" size={24} />
             </div>
+          ) : listViewStyle === 'document' ? (
+            filteredSetups.length > 0 ? (
+              <div className="overflow-y-auto space-y-6 p-1">
+                {filteredSetups.map((setup: any) => (
+                  <TestSetupDocumentCard key={setup.id} setup={setup} onClick={() => drawer.openSetup(setup)} />
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center">
+                <p className="text-gray-600 dark:text-gray-400">No test setups found</p>
+              </div>
+            )
           ) : filteredSetups.length > 0 ? (
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
               <table className="w-full">
@@ -1504,7 +1598,19 @@ export default function VerificationPage() {
 
       {activeTab === 'results' && (
         <div className="space-y-4">
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 flex-wrap">
+            <button
+              onClick={() => persistListViewStyle(listViewStyle === 'document' ? 'table' : 'document')}
+              className={clsx(
+                'p-2 rounded-lg border transition-colors',
+                listViewStyle === 'document'
+                  ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-600'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+              )}
+              title="Document View"
+            >
+              <LayoutList size={16} />
+            </button>
             <div className="relative" ref={columnSelectorOpen.type === 'results' ? columnSelectorRef : null}>
               <button
                 onClick={() => setColumnSelectorOpen({ type: columnSelectorOpen.type === 'results' ? null : 'results' })}
@@ -1559,6 +1665,36 @@ export default function VerificationPage() {
             <div className="flex items-center justify-center p-12">
               <RefreshCw className="animate-spin text-gray-400" size={24} />
             </div>
+          ) : listViewStyle === 'document' ? (
+            filteredResults.length > 0 ? (
+              <div className="overflow-y-auto space-y-6 p-1">
+                {filteredResults.map((result: any) => (
+                  <TestResultDocumentCard
+                    key={result.id}
+                    result={result}
+                    onClick={() => drawer.openResult(result)}
+                    onCreateChangeRequest={(e) => {
+                      e.stopPropagation()
+                      setChangeRequestModal({
+                        isOpen: true,
+                        sourceType: 'test-result',
+                        sourceId: result.id,
+                        sourceName: result.title,
+                      })
+                    }}
+                    onEdit={(e) => { e.stopPropagation(); drawer.openResult(result) }}
+                    onDelete={(e) => {
+                      e.stopPropagation()
+                      setDeleteConfirmation({ type: 'test-result', id: result.id, name: result.title })
+                    }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center">
+                <p className="text-gray-600 dark:text-gray-400">No test results found</p>
+              </div>
+            )
           ) : filteredResults.length > 0 ? (
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
               <table className="w-full">
@@ -1702,10 +1838,37 @@ export default function VerificationPage() {
 
       {activeTab === 'reviews' && (
         <div className="space-y-4">
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => persistListViewStyle(listViewStyle === 'document' ? 'table' : 'document')}
+              className={clsx(
+                'p-2 rounded-lg border transition-colors',
+                listViewStyle === 'document'
+                  ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-600'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+              )}
+              title="Document View"
+            >
+              <LayoutList size={16} />
+            </button>
+          </div>
           {loadingReviews ? (
             <div className="flex items-center justify-center p-12">
               <RefreshCw className="animate-spin text-gray-400" size={24} />
             </div>
+          ) : listViewStyle === 'document' ? (
+            (reviews as any[]).length > 0 ? (
+              <div className="overflow-y-auto space-y-6 p-1">
+                {(reviews as any[]).map((review: any) => (
+                  <ReviewDocumentCard key={review.id} review={review} />
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-12 text-center">
+                <p className="text-gray-600 dark:text-gray-400">No reviews yet.</p>
+                <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">Reviews track formal verification reviews (e.g. TRR, QSR).</p>
+              </div>
+            )
           ) : (reviews as any[]).length > 0 ? (
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
               <table className="w-full text-left">
