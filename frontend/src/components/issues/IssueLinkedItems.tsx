@@ -5,7 +5,10 @@ import { useNavigate } from 'react-router-dom'
 import { issueService } from '../../services/issue.service'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
+import { linkService } from '../../services/link.service'
+import { buildDeepLink } from '../../linkage/buildDeepLink'
 import type { Issue, IssueLink } from 'shared/types/engineering.types'
+import type { EntityType } from 'shared/types/linkage.types'
 
 const LINK_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: 'relates_to', label: 'Relates to' },
@@ -69,6 +72,16 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
 
   const functions = functionsData || []
 
+  // Incoming links (where this issue is the target) – bidirectional traceability
+  const { data: incomingLinks = [] } = useQuery({
+    queryKey: ['issue-incoming-links', projectId, issue.id],
+    queryFn: async () => {
+      const response = await linkService.getLinks(projectId, { targetId: issue.id, targetType: 'issue' })
+      return response.success && response.data ? response.data : []
+    },
+    enabled: !!projectId && !!issue.id,
+  })
+
   // Create link mutation
   const createLinkMutation = useMutation({
     mutationFn: async (data: { linkedType: string; linkedId: string; linkType: string }) => {
@@ -77,6 +90,7 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['issue', projectId, issue.id] })
       queryClient.invalidateQueries({ queryKey: ['issue-activity', projectId, issue.id] })
+      queryClient.invalidateQueries({ queryKey: ['issue-incoming-links', projectId, issue.id] })
       setIsAdding(false)
       setSelectedItemId('')
     },
@@ -89,6 +103,7 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['issue', projectId, issue.id] })
       queryClient.invalidateQueries({ queryKey: ['issue-activity', projectId, issue.id] })
+      queryClient.invalidateQueries({ queryKey: ['issue-incoming-links', projectId, issue.id] })
     },
   })
 
@@ -150,9 +165,9 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
         <h3 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
           <LinkIcon size={18} />
           Linked Items
-          {issue.links && issue.links.length > 0 && (
+          {((issue.links?.length ?? 0) + incomingLinks.length) > 0 && (
             <span className="text-sm font-normal text-gray-500 dark:text-gray-400">
-              ({issue.links.length})
+              ({(issue.links?.length ?? 0) + incomingLinks.length})
             </span>
           )}
         </h3>
@@ -285,9 +300,10 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
         </div>
       )}
 
-      {/* Linked items list */}
-      {issue.links && issue.links.length > 0 ? (
+      {/* Outgoing: this issue links to other items */}
+      {issue.links && issue.links.length > 0 && (
         <div className="space-y-2">
+          <span className="text-[10px] uppercase text-gray-500 dark:text-gray-400 font-medium tracking-wider">Linked to (outgoing)</span>
           {issue.links.map((link) => (
             <div
               key={link.id}
@@ -337,12 +353,55 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
             </div>
           ))}
         </div>
-      ) : (
-        !isAdding && (
-          <p className="text-sm text-gray-500 dark:text-gray-400 italic">
-            No linked items yet
-          </p>
-        )
+      )}
+
+      {/* Incoming: other items link to this issue (bidirectional) */}
+      {incomingLinks.length > 0 && (
+        <div className={issue.links && issue.links.length > 0 ? 'mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 space-y-2' : 'space-y-2'}>
+          <span className="text-[10px] uppercase text-amber-600 dark:text-amber-400 font-medium tracking-wider">Linked from (incoming)</span>
+          {incomingLinks.map((link) => (
+            <div
+              key={link.id}
+              className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-blue-500/50 dark:hover:border-blue-500/50 transition-all shadow-sm group"
+            >
+              <div className="mt-1 flex-shrink-0 p-1.5 rounded-lg bg-gray-50 dark:bg-gray-700/50 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 transition-colors">
+                {getIcon(link.sourceType)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <span className="text-[10px] uppercase text-amber-600 dark:text-amber-400 font-medium">Incoming</span>
+                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                    {link.sourceDisplayId || link.sourceId.slice(0, 8)}
+                  </span>
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300">
+                    {link.sourceType}
+                  </span>
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                    {String(link.linkType).replace(/_/g, ' ')}
+                  </span>
+                </div>
+                <div className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                  {link.sourceTitle || link.sourceDescription || 'Linked item'}
+                </div>
+              </div>
+              <a
+                href={buildDeepLink(projectId, { type: link.sourceType as EntityType, id: link.sourceId })}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2 text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/40 rounded-lg transition-all"
+                title="Open linked item"
+              >
+                <ExternalLink size={16} />
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!isAdding && (!issue.links || issue.links.length === 0) && incomingLinks.length === 0 && (
+        <p className="text-sm text-gray-500 dark:text-gray-400 italic">
+          No linked items yet
+        </p>
       )}
     </div>
   )

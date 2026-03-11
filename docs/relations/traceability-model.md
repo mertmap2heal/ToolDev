@@ -4,6 +4,39 @@
 
 This document defines all allowed traceability and structural relations between domain entities, their cardinalities, forbidden relations, circular dependency rules, and deletion cascade policy. The model is deterministic and machine-readable to support schema design, API contracts, and AI-driven updates.
 
+### Traceability and Structural Relations (Diagram)
+
+Allowed traceability and structural relations; see tables below for cardinality and rules.
+
+```mermaid
+flowchart LR
+  subgraph scope [Scope]
+    PBS[PBS]
+  end
+  subgraph domain [Domain]
+    Requirement[Requirement]
+    TestCase[Test Case]
+    TestPlan[Test Plan]
+    TestRun[Test Run]
+    Function[Function]
+  end
+  User[User]
+  Requirement -->|part-of 1..1| PBS
+  TestCase -->|part-of 1..1| PBS
+  TestPlan -->|part-of 1..1| PBS
+  Function -->|part-of 1..1| PBS
+  PBS -->|parent 0..1| PBS
+  TestCase -->|verifies 1..n| Requirement
+  Requirement -->|derives-from 0..1| Requirement
+  Function -->|satisfies 1..n| Requirement
+  TestRun -->|executed-in 1..1| TestCase
+  TestRun -->|executes_plan 0..1| TestPlan
+  TestPlan -->|contains 0..n| TestCase
+  Function -->|parent 0..1| Function
+  TestRun -.->|executed_by 0..1| User
+  Requirement -.->|created_by updated_by| User
+```
+
 ---
 
 ## Relation Types

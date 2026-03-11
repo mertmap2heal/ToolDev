@@ -46,6 +46,11 @@ const FUNCTION_NAMES = [
 ]
 
 const REQUIREMENT_TYPES = ['functional', 'performance', 'safety', 'interface', 'design_constraint', 'security', 'usability'] as const
+const REQUIREMENT_LEVELS = ['system', 'subsystem', 'component', 'interface'] as const
+const RISK_LEVELS = ['low', 'medium', 'high', 'critical'] as const
+const COMPLEXITY_LEVELS = ['simple', 'moderate', 'complex'] as const
+const VERIFICATION_METHODS = ['Inspection', 'Test', 'Analysis', 'Demonstration'] as const
+const SOURCES = ['Stakeholder input', 'System design'] as const
 
 function slugFromName(name: string): string {
   return name.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || 'project'
@@ -157,6 +162,23 @@ async function main() {
 
   const pid = projectId
 
+  // --- Stakeholder names (project owner + project members) for requirement owner/stakeholders ---
+  const projectWithPeople = await prisma.project.findUnique({
+    where: { id: pid },
+    select: {
+      user: { select: { name: true } },
+      teamMembers: {
+        where: { status: 'accepted' },
+        include: { user: { select: { name: true } } },
+      },
+    },
+  })
+  const stakeholderNames: string[] = []
+  if (projectWithPeople?.user?.name) stakeholderNames.push(projectWithPeople.user.name)
+  for (const m of projectWithPeople?.teamMembers ?? []) {
+    if (m.user?.name && !stakeholderNames.includes(m.user.name)) stakeholderNames.push(m.user.name)
+  }
+
   // --- PBS (Components) ---
   const componentIds: string[] = []
   let rootComponent = await prisma.component.findFirst({
@@ -259,6 +281,16 @@ async function main() {
       }
       const r = gen[i]
       const componentId = componentsForAlloc[i % componentsForAlloc.length] ?? componentsForAlloc[0]
+      const owner =
+        stakeholderNames.length > 0 ? stakeholderNames[i % stakeholderNames.length]! : undefined
+      const stakeholdersForReq: string[] = []
+      if (stakeholderNames.length > 0) {
+        const idx = i % stakeholderNames.length
+        stakeholdersForReq.push(stakeholderNames[idx]!)
+        if (stakeholderNames.length > 1) {
+          stakeholdersForReq.push(stakeholderNames[(i + 1) % stakeholderNames.length]!)
+        }
+      }
       const req = await prisma.requirement.create({
         data: {
           projectId: pid,
@@ -270,6 +302,17 @@ async function main() {
           status: 'draft',
           stage: 'definition',
           componentId,
+          ...(owner != null && { owner }),
+          ...(stakeholderNames.length > 0 && { stakeholders: stakeholdersForReq }),
+          requirementLevel: REQUIREMENT_LEVELS[i % REQUIREMENT_LEVELS.length],
+          risk: RISK_LEVELS[i % RISK_LEVELS.length],
+          complexity: COMPLEXITY_LEVELS[i % COMPLEXITY_LEVELS.length],
+          verificationMethod: VERIFICATION_METHODS[i % VERIFICATION_METHODS.length],
+          acceptanceCriteria: `Verified by ${VERIFICATION_METHODS[i % VERIFICATION_METHODS.length].toLowerCase()} per ${r.requirementType} requirements.`,
+          rationale: `Required for system design and ${r.requirementType} compliance.`,
+          assumptions: 'Standard operating conditions apply.',
+          source: SOURCES[i % SOURCES.length],
+          reviewStatus: 'draft',
         },
       })
       requirementRecords.push({ id: req.id, requirementId: req.requirementId! })
@@ -291,6 +334,49 @@ async function main() {
       }
     }
     console.log('Requirement hierarchy: REQ-002..REQ-006 set as children of REQ-001.')
+  }
+
+  // --- Ensure all requirements have owner and stakeholders (from real project people) ---
+  if (stakeholderNames.length > 0) {
+    const gen = generateRequirements(requirementRecords.length)
+    for (let i = 0; i < requirementRecords.length; i++) {
+      const rec = requirementRecords[i]!
+      const req = await prisma.requirement.findUnique({
+        where: { id: rec.id },
+        select: { owner: true, stakeholders: true, acceptanceCriteria: true, requirementLevel: true },
+      })
+      const needsOwner = req?.owner == null || req.owner === ''
+      const needsStakeholders = req?.stakeholders == null || req.stakeholders.length === 0
+      const needsOptional =
+        req?.acceptanceCriteria == null ||
+        req.acceptanceCriteria === '' ||
+        req?.requirementLevel == null
+      if (!needsOwner && !needsStakeholders && !needsOptional) continue
+      const owner = stakeholderNames[i % stakeholderNames.length]!
+      const stakeholders: string[] = [owner]
+      if (stakeholderNames.length > 1) {
+        stakeholders.push(stakeholderNames[(i + 1) % stakeholderNames.length]!)
+      }
+      const r = gen[i]!
+      await prisma.requirement.update({
+        where: { id: rec.id },
+        data: {
+          ...(needsOwner && { owner }),
+          ...(needsStakeholders && { stakeholders }),
+          ...(needsOptional && {
+            requirementLevel: REQUIREMENT_LEVELS[i % REQUIREMENT_LEVELS.length],
+            risk: RISK_LEVELS[i % RISK_LEVELS.length],
+            complexity: COMPLEXITY_LEVELS[i % COMPLEXITY_LEVELS.length],
+            verificationMethod: VERIFICATION_METHODS[i % VERIFICATION_METHODS.length],
+            acceptanceCriteria: `Verified by ${VERIFICATION_METHODS[i % VERIFICATION_METHODS.length].toLowerCase()} per ${r.requirementType} requirements.`,
+            rationale: `Required for system design and ${r.requirementType} compliance.`,
+            assumptions: 'Standard operating conditions apply.',
+            source: SOURCES[i % SOURCES.length],
+          }),
+        },
+      })
+    }
+    console.log('Requirement owner/stakeholders and optional fields ensured for all.')
   }
 
   // --- TraceLinks: Requirement -> PBS (allocated_to) ---

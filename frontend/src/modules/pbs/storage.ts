@@ -216,6 +216,65 @@ export async function loadPBSComponentTreeAsync(projectId: string): Promise<any[
   return response.success && response.data ? response.data : []
 }
 
+/** Component-like shape from backend API (create/update response). */
+export interface ComponentLike {
+  id: string
+  parentId: string | null
+  name: string
+  pbsCode?: string | null
+  description?: string | null
+  sortOrder?: number
+  createdAt?: string
+  updatedAt?: string
+}
+
+/**
+ * Add or update a component in PBS localStorage so the sidebar and Requirements tree stay in sync.
+ * Call after create/update from PBSSidebar.
+ */
+export function upsertComponentInPBS(projectId: string | undefined, component: ComponentLike): void {
+  if (!projectId) return
+  const pbsData = loadPBS(projectId)
+  const node: PBSNode = normalizeNode({
+    id: component.id,
+    parentId: component.parentId ?? null,
+    name: component.name,
+    pbsCode: component.pbsCode ?? '',
+    description: component.description ?? '',
+    orderIndex: component.sortOrder ?? 0,
+    createdAt: component.createdAt ?? new Date().toISOString(),
+    updatedAt: component.updatedAt ?? new Date().toISOString(),
+  })
+  const idx = pbsData.nodes.findIndex((n) => n.id === component.id)
+  if (idx >= 0) {
+    pbsData.nodes[idx] = { ...pbsData.nodes[idx], ...node }
+  } else {
+    pbsData.nodes.push(node)
+  }
+  savePBS(projectId, pbsData)
+}
+
+/**
+ * Remove a component (and its descendants) from PBS localStorage.
+ * Call after delete from PBSSidebar so both trees stay in sync.
+ */
+export function removeComponentFromPBS(projectId: string | undefined, componentId: string): void {
+  if (!projectId) return
+  const pbsData = loadPBS(projectId)
+  const idsToRemove = new Set<string>([componentId])
+  const collectDescendants = (parentId: string) => {
+    pbsData.nodes.forEach((n) => {
+      if (n.parentId === parentId) {
+        idsToRemove.add(n.id)
+        collectDescendants(n.id)
+      }
+    })
+  }
+  collectDescendants(componentId)
+  pbsData.nodes = pbsData.nodes.filter((n) => !idsToRemove.has(n.id))
+  savePBS(projectId, pbsData)
+}
+
 /** Check if Storage API quota is available and return usage/quota in bytes; otherwise null. */
 export async function getStorageQuota(): Promise<{ usage: number; quota: number } | null> {
   try {

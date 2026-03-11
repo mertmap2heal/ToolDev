@@ -12,10 +12,45 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import { componentService } from '../../services/component.service'
+import { loadPBSComponentTreeAsync, loadPBS, upsertComponentInPBS, removeComponentFromPBS } from '../../modules/pbs/storage'
 import type { ComponentTreeNode } from 'shared/types/project.types'
 
 interface PBSSidebarProps {
   onComponentSelect?: (componentId: string | null) => void
+}
+
+/** Ensure we have a nested tree (with children). If API returns flat list, build tree. */
+function ensureNestedTree(nodes: unknown): ComponentTreeNode[] {
+  if (!Array.isArray(nodes) || nodes.length === 0) return []
+  const first = nodes[0] as Record<string, unknown>
+  if (first && Array.isArray(first.children)) return nodes as ComponentTreeNode[]
+  const flat = nodes as Array<Record<string, unknown> & { id: string; parentId: string | null; name: string }>
+  const map = new Map<string, ComponentTreeNode>()
+  flat.forEach((n) => {
+    map.set(n.id, {
+      ...n,
+      projectId: (n.projectId as string) ?? '',
+      createdAt: (n.createdAt as string) ?? new Date().toISOString(),
+      updatedAt: (n.updatedAt as string) ?? new Date().toISOString(),
+      children: [],
+    } as unknown as ComponentTreeNode)
+  })
+  const roots: ComponentTreeNode[] = []
+  flat.forEach((n) => {
+    const node = map.get(n.id)!
+    if (n.parentId && map.has(n.parentId as string)) {
+      map.get(n.parentId as string)!.children!.push(node)
+    } else {
+      roots.push(node)
+    }
+  })
+  const sortOrder = (a: ComponentTreeNode, b: ComponentTreeNode) =>
+    ((a as { sortOrder?: number }).sortOrder ?? 0) - ((b as { sortOrder?: number }).sortOrder ?? 0)
+  roots.sort(sortOrder)
+  roots.forEach((r) => {
+    if (r.children?.length) r.children.sort(sortOrder)
+  })
+  return roots
 }
 
 function findNodeInTree(nodes: ComponentTreeNode[], id: string): ComponentTreeNode | undefined {
@@ -51,14 +86,14 @@ export default function PBSSidebar({ onComponentSelect }: PBSSidebarProps) {
   // Get current component from URL
   const currentComponentId = searchParams.get('component')
 
-  // Fetch component tree
+  // Fetch component tree (same source as Requirements page for identical tree)
   const { data: treeData, isLoading, error } = useQuery({
-    queryKey: ['component-tree', projectId],
-    queryFn: () => componentService.getComponentTree(projectId!),
+    queryKey: ['pbs-nodes', projectId],
+    queryFn: () => loadPBSComponentTreeAsync(projectId!),
     enabled: !!projectId,
   })
 
-  const componentTree = treeData?.data || []
+  const componentTree = ensureNestedTree(treeData ?? [])
 
   // Auto-expand root and select it if no component is selected
   useEffect(() => {
@@ -80,7 +115,11 @@ export default function PBSSidebar({ onComponentSelect }: PBSSidebarProps) {
         parentId: data.parentId,
         name: data.name,
       }),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      if (projectId && res?.data && loadPBS(projectId).nodes.length > 0) {
+        upsertComponentInPBS(projectId, res.data)
+      }
+      queryClient.invalidateQueries({ queryKey: ['pbs-nodes', projectId] })
       queryClient.invalidateQueries({ queryKey: ['component-tree', projectId] })
       setShowCreateModal(false)
       setNewComponentName('')
@@ -92,7 +131,11 @@ export default function PBSSidebar({ onComponentSelect }: PBSSidebarProps) {
   const deleteMutation = useMutation({
     mutationFn: (componentId: string) =>
       componentService.deleteComponent(projectId!, componentId),
-    onSuccess: () => {
+    onSuccess: (_data, componentId) => {
+      if (projectId && loadPBS(projectId).nodes.length > 0) {
+        removeComponentFromPBS(projectId, componentId)
+      }
+      queryClient.invalidateQueries({ queryKey: ['pbs-nodes', projectId] })
       queryClient.invalidateQueries({ queryKey: ['component-tree', projectId] })
       // If deleted component was selected, select root
       if (currentComponentId === contextMenu?.componentId) {
@@ -107,7 +150,11 @@ export default function PBSSidebar({ onComponentSelect }: PBSSidebarProps) {
   const updateMutation = useMutation({
     mutationFn: ({ componentId, name }: { componentId: string; name: string }) =>
       componentService.updateComponent(projectId!, componentId, { name }),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      if (projectId && res?.data && loadPBS(projectId).nodes.length > 0) {
+        upsertComponentInPBS(projectId, res.data)
+      }
+      queryClient.invalidateQueries({ queryKey: ['pbs-nodes', projectId] })
       queryClient.invalidateQueries({ queryKey: ['component-tree', projectId] })
       queryClient.invalidateQueries({ queryKey: ['component', projectId] })
       setRenameComponentId(null)
@@ -218,8 +265,11 @@ export default function PBSSidebar({ onComponentSelect }: PBSSidebarProps) {
           {/* Expand/collapse button */}
           {hasChildren ? (
             <button
+              type="button"
               onClick={(e) => handleToggleExpand(node.id, e)}
+              onMouseDown={(e) => e.stopPropagation()}
               className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+              aria-label={isExpanded ? 'Collapse' : 'Expand'}
             >
               {isExpanded ? (
                 <ChevronDown size={14} />
@@ -268,7 +318,9 @@ export default function PBSSidebar({ onComponentSelect }: PBSSidebarProps) {
 
           {/* Add child button (visible on hover) */}
           <button
+            type="button"
             onClick={(e) => handleCreateClick(node.id, e)}
+            onMouseDown={(e) => e.stopPropagation()}
             className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-700 transition-opacity"
             title="Add sub-component"
           >

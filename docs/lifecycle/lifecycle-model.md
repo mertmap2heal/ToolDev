@@ -39,6 +39,26 @@ This document defines the lifecycle (state) models for entities that have a stat
 
 All other transitions are **forbidden** (e.g. approved → draft unless under_review → draft).
 
+### State Diagram (Requirement)
+
+```mermaid
+stateDiagram-v2
+  [*] --> draft
+  draft --> under_review
+  draft --> obsolete
+  under_review --> draft
+  under_review --> approved
+  under_review --> obsolete
+  approved --> implemented
+  approved --> obsolete
+  implemented --> verified
+  implemented --> approved
+  implemented --> obsolete
+  verified --> obsolete
+  verified --> implemented
+  obsolete --> [*]
+```
+
 ### Validation by State
 
 - **approved**: MAY require at least one verifies link (test case) per policy; configurable.
@@ -69,6 +89,20 @@ All other transitions are **forbidden** (e.g. approved → draft unless under_re
 | approved | deprecated | Allowed. |
 | deprecated | — | No transition out. |
 
+### State Diagram (Test Case)
+
+```mermaid
+stateDiagram-v2
+  [*] --> draft
+  draft --> under_review
+  draft --> deprecated
+  under_review --> draft
+  under_review --> approved
+  under_review --> deprecated
+  approved --> deprecated
+  deprecated --> [*]
+```
+
 ### Validation by State
 
 - **approved**: MAY require at least one requirement (verifies) per policy.
@@ -93,6 +127,17 @@ All other transitions are **forbidden** (e.g. approved → draft unless under_re
 | draft | closed | Allowed. |
 | locked | closed | Allowed. |
 | closed | — | No transition out. |
+
+### State Diagram (Test Plan)
+
+```mermaid
+stateDiagram-v2
+  [*] --> draft
+  draft --> locked
+  draft --> closed
+  locked --> closed
+  closed --> [*]
+```
 
 ### Behavior by State
 
@@ -124,6 +169,20 @@ All other transitions are **forbidden** (e.g. approved → draft unless under_re
 | under_review | obsolete | Allowed. |
 | approved | obsolete | Allowed. |
 | obsolete | — | No transition out. |
+
+### State Diagram (Function)
+
+```mermaid
+stateDiagram-v2
+  [*] --> draft
+  draft --> under_review
+  draft --> obsolete
+  under_review --> draft
+  under_review --> approved
+  under_review --> obsolete
+  approved --> obsolete
+  obsolete --> [*]
+```
 
 ---
 
