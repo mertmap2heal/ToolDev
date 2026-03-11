@@ -221,13 +221,19 @@ export async function loadPBSComponentTreeAsync(projectId: string): Promise<any[
       const response = await componentService.getComponentTree(projectId)
       if (response.success && response.data && response.data.length > 0) {
         const backendRoot = response.data[0]
-        if (backendRoot.children?.length) return response.data
+        if (backendRoot.children?.length) {
+          ensurePbsCodesOnTree(response.data as Parameters<typeof ensurePbsCodesOnTree>[0])
+          return response.data
+        }
       }
     } else {
       return tree
     }
   }
   const response = await componentService.getComponentTree(projectId)
+  if (response.success && response.data && response.data.length > 0) {
+    ensurePbsCodesOnTree(response.data as Parameters<typeof ensurePbsCodesOnTree>[0])
+  }
   return response.success && response.data ? response.data : []
 }
 
@@ -288,6 +294,23 @@ export function removeComponentFromPBS(projectId: string | undefined, componentI
   collectDescendants(componentId)
   pbsData.nodes = pbsData.nodes.filter((n) => !idsToRemove.has(n.id))
   savePBS(projectId, pbsData)
+}
+
+/**
+ * Ensure every node in a nested component tree has a consistent pbsCode (PBS-001, PBS-001.002, ...).
+ * Mutates nodes in place. Use when returning backend tree so left and right panels show the same IDs.
+ */
+function ensurePbsCodesOnTree(
+  tree: Array<Record<string, unknown> & { id: string; pbsCode?: string | null; children?: unknown[] }>,
+  parentCode: string | null = null
+): void {
+  tree.forEach((node, i) => {
+    const existing = node.pbsCode?.trim()
+    const pbsCode = existing || (parentCode ? `${parentCode}.${String(i + 1).padStart(3, '0')}` : `PBS-${String(i + 1).padStart(3, '0')}`)
+    node.pbsCode = pbsCode
+    const children = Array.isArray(node.children) ? node.children as Array<Record<string, unknown> & { id: string; pbsCode?: string | null; children?: unknown[] }> : []
+    ensurePbsCodesOnTree(children, pbsCode)
+  })
 }
 
 /**
