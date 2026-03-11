@@ -34,6 +34,7 @@ import { issueService } from '../../services/issue.service'
 import { changeRequestService } from '../../services/changeRequest.service'
 import { traceabilityService } from '../../services/traceability.service'
 import { linkService } from '../../services/link.service'
+import { componentService } from '../../services/component.service'
 import { verificationService } from '../../services/verification.service'
 import { baselineService } from '../../services/baseline.service'
 import { LINKAGE_V1, LIFECYCLE_V1 } from '../../config/featureFlags'
@@ -54,8 +55,8 @@ interface ExpandedRow {
   requirementId: string
   children: Requirement[]
   linkedFunctions: Array<{ id: string; functionId?: string; name: string }>
-  linkedIssues: Array<{ id: string; title: string }>
-  linkedChangeRequests: Array<{ id: string; title: string }>
+  linkedIssues: Array<{ id: string; title: string; issueKey?: string }>
+  linkedChangeRequests: Array<{ id: string; title: string; crId?: string }>
   linkedItems?: Array<{ id: string; targetType: string; targetId: string; label?: string; title?: string; description?: string; displayId?: string; linkType?: string; issue?: { id: string; title: string; issueKey?: string; createdByUser?: { id: string; name: string; email: string } } }>
 }
 
@@ -532,6 +533,24 @@ export default function RequirementsPage() {
     },
     enabled: !!projectId,
   })
+
+  // Fetch component tree for PBS linked items (id, name, pbsCode). Use same source as PBS tree so pbsCode is present.
+  const { data: componentTree = [] } = useQuery({
+    queryKey: ['pbs-nodes', projectId],
+    queryFn: () => loadPBSComponentTreeAsync(projectId!),
+    enabled: !!projectId && LINKAGE_V1,
+  })
+  const flatComponents = useMemo(() => {
+    const result: { id: string; name: string; pbsCode?: string | null; description?: string | null }[] = []
+    const walk = (nodes: typeof componentTree) => {
+      for (const n of nodes) {
+        result.push({ id: n.id, name: n.name, pbsCode: n.pbsCode ?? null, description: n.description ?? null })
+        if (n.children?.length) walk(n.children)
+      }
+    }
+    walk(componentTree)
+    return result
+  }, [componentTree])
 
   // Fetch links for LINKAGE_V1 (used for linked items count and expanded row)
   const { data: links = [] } = useQuery({
@@ -1203,6 +1222,7 @@ export default function RequirementsPage() {
       .map((issue) => ({
         id: issue.id,
         title: issue.title,
+        issueKey: issue.issueKey,
       }))
 
     // Find change requests linked to this requirement
@@ -1219,6 +1239,7 @@ export default function RequirementsPage() {
       .map((cr) => ({
         id: cr.id,
         title: cr.title,
+        crId: cr.crId,
       }))
 
     // Get children
@@ -1267,6 +1288,22 @@ export default function RequirementsPage() {
               item.title = req.title
               item.description = req.description
               item.displayId = req.requirementId || req.id.substring(0, 8)
+            }
+          } else if (l.targetType === 'function') {
+            const func = functions.find((f: any) => f.id === l.targetId)
+            if (func) {
+              item.title = func.name
+              item.description = func.description
+              item.displayId = func.functionId || func.id.substring(0, 8)
+            }
+          } else if (l.targetType === 'pbs_component') {
+            const comp = flatComponents.find((c: any) => c.id === l.targetId)
+            if (comp) {
+              item.title = comp.name
+              item.description = comp.description ?? undefined
+              item.displayId = comp.pbsCode || comp.id.slice(0, 8)
+            } else {
+              item.displayId = item.displayId || l.targetDisplayId || `PBS:${l.targetId.slice(0, 8)}`
             }
           }
           return item
@@ -1951,38 +1988,62 @@ export default function RequirementsPage() {
                       Linked Items ({rowData.linkedItems.length})
                     </p>
                     <div className="space-y-1">
-                      {rowData.linkedItems.map((item) => (
-                        <div
-                          key={item.id}
-                          className="text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700"
-                        >
-                          {item.targetType === 'issue' && item.issue ? (
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => navigate(`/projects/${projectId}/issues/${item.issue!.id}`)}
-                                className="font-medium text-blue-600 dark:text-blue-400 hover:underline"
-                              >
-                                {item.issue.issueKey || `#${item.issue.id.slice(0, 8)}`} - {item.issue.title}
-                              </button>
-                              {item.issue.createdByUser && (
-                                <span className="text-xs text-gray-500 dark:text-gray-400">
-                                  by {item.issue.createdByUser.name}
+                      {rowData.linkedItems.map((item) => {
+                        const previewPayload: LinkedElementClickPayload = {
+                          sourceType: 'requirement',
+                          sourceId: req.id,
+                          targetType: item.targetType,
+                          targetId: item.targetId,
+                          isOutgoing: true,
+                          link: {
+                            sourceType: 'requirement',
+                            sourceId: req.id,
+                            targetType: item.targetType,
+                            targetId: item.targetId,
+                            targetDisplayId: item.displayId,
+                            targetTitle: item.title,
+                            targetLabel: item.title || item.displayId,
+                            linkType: item.linkType,
+                          },
+                        }
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => setLinkedElementPreview(previewPayload)}
+                            className="w-full text-left text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors"
+                          >
+                            {item.targetType === 'issue' && item.issue ? (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-mono text-xs font-medium text-gray-600 dark:text-gray-400">
+                                  {item.issue.issueKey || `#${item.issue.id.slice(0, 8)}`}
                                 </span>
-                              )}
-                              <span className="text-xs text-gray-400 dark:text-gray-500">
-                                ({item.linkType})
-                              </span>
-                            </div>
-                          ) : (
-                            <>
-                              <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
-                                {item.title ?? item.label ?? `${item.targetType} (${item.targetId.slice(0, 8)})`}
-                              </span>{' '}
-                              - {item.linkType}
-                            </>
-                          )}
-                        </div>
-                      ))}
+                                <span className="text-gray-600 dark:text-gray-400"> – </span>
+                                <span className="font-medium text-blue-600 dark:text-blue-400">
+                                  {item.issue.title}
+                                </span>
+                                {item.issue.createdByUser && (
+                                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                                    by {item.issue.createdByUser.name}
+                                  </span>
+                                )}
+                                <span className="text-xs text-gray-400 dark:text-gray-500">({item.linkType})</span>
+                              </div>
+                            ) : (
+                              <>
+                                <span className="font-mono text-xs font-medium text-gray-700 dark:text-gray-300">
+                                  {item.displayId ?? item.targetId.slice(0, 8)}
+                                </span>
+                                <span className="text-gray-600 dark:text-gray-400"> – </span>
+                                <span className="text-gray-900 dark:text-white">
+                                  {item.title ?? item.label ?? `${item.targetType} (${item.targetId.slice(0, 8)})`}
+                                </span>
+                                <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">({item.linkType})</span>
+                              </>
+                            )}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
                 </td>
@@ -2024,12 +2085,34 @@ export default function RequirementsPage() {
                     </p>
                     <div className="space-y-1">
                       {rowData.linkedIssues.map((issue) => (
-                        <div
+                        <button
                           key={issue.id}
-                          className="text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700"
+                          type="button"
+                          onClick={() => setLinkedElementPreview({
+                            sourceType: 'requirement',
+                            sourceId: req.id,
+                            targetType: 'issue',
+                            targetId: issue.id,
+                            isOutgoing: true,
+                            link: {
+                              sourceType: 'requirement',
+                              sourceId: req.id,
+                              targetType: 'issue',
+                              targetId: issue.id,
+                              targetDisplayId: issue.issueKey,
+                              targetTitle: issue.title,
+                              targetLabel: issue.title,
+                              linkType: 'relates_to',
+                            },
+                          })}
+                          className="w-full text-left text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700 hover:border-yellow-300 dark:hover:border-yellow-600 hover:bg-yellow-50/30 dark:hover:bg-yellow-900/10 transition-colors"
                         >
-                          {issue.title}
-                        </div>
+                          <span className="font-mono text-xs font-medium text-gray-600 dark:text-gray-400">
+                            {issue.issueKey || `#${issue.id.slice(0, 8)}`}
+                          </span>
+                          <span className="text-gray-600 dark:text-gray-400"> – </span>
+                          <span className="font-medium text-yellow-600 dark:text-yellow-400">{issue.title}</span>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -2047,12 +2130,34 @@ export default function RequirementsPage() {
                     </p>
                     <div className="space-y-1">
                       {rowData.linkedChangeRequests.map((cr) => (
-                        <div
+                        <button
                           key={cr.id}
-                          className="text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700"
+                          type="button"
+                          onClick={() => setLinkedElementPreview({
+                            sourceType: 'requirement',
+                            sourceId: req.id,
+                            targetType: 'change_request',
+                            targetId: cr.id,
+                            isOutgoing: true,
+                            link: {
+                              sourceType: 'requirement',
+                              sourceId: req.id,
+                              targetType: 'change_request',
+                              targetId: cr.id,
+                              targetDisplayId: cr.crId,
+                              targetTitle: cr.title,
+                              targetLabel: cr.title,
+                              linkType: 'originates_from',
+                            },
+                          })}
+                          className="w-full text-left text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50/30 dark:hover:bg-purple-900/10 transition-colors"
                         >
-                          {cr.title}
-                        </div>
+                          <span className="font-mono text-xs font-medium text-gray-600 dark:text-gray-400">
+                            {cr.crId || `#${cr.id.slice(0, 8)}`}
+                          </span>
+                          <span className="text-gray-600 dark:text-gray-400"> – </span>
+                          <span className="font-medium text-purple-600 dark:text-purple-400">{cr.title}</span>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -2453,14 +2558,6 @@ export default function RequirementsPage() {
                   />
                 )}
                 </div>
-                {linkedElementPreview && (
-                  <LinkedElementPreviewPopover
-                    payload={linkedElementPreview}
-                    projectId={projectId ?? undefined}
-                    onViewDetails={handleViewLinkedElementDetails}
-                    onClose={() => setLinkedElementPreview(null)}
-                  />
-                )}
               </div>
             </div>
             {/* Resize handle */}
@@ -3699,6 +3796,18 @@ export default function RequirementsPage() {
             setDeleteConfirmation(req)
           }}
         />
+
+        {/* Linked element preview (from table expanded row or left panel) – fixed at bottom so it works when panel is closed */}
+        {linkedElementPreview && (
+          <div className="fixed bottom-0 left-0 right-0 z-50 max-w-2xl mx-auto shadow-lg">
+            <LinkedElementPreviewPopover
+              payload={linkedElementPreview}
+              projectId={projectId ?? undefined}
+              onViewDetails={handleViewLinkedElementDetails}
+              onClose={() => setLinkedElementPreview(null)}
+            />
+          </div>
+        )}
       </div>
     </div>
   )
