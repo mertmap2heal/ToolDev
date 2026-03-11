@@ -20,7 +20,7 @@ type SortOrder = 'asc' | 'desc'
 
 export default function ChangeRequestsPage() {
   const { projectId } = useParams<{ projectId: string }>()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const focusId = searchParams.get('focusId')
   const queryClient = useQueryClient()
 
@@ -91,15 +91,35 @@ export default function ChangeRequestsPage() {
     },
   })
 
-  // Handle Deep Links
+  // Handle Deep Links; show "not found" when focusId points to missing/deleted CR
+  const [focusNotFound, setFocusNotFound] = useState(false)
   useEffect(() => {
-    if (!focusId || changeRequests.length === 0) return
+    if (!focusId) {
+      setFocusNotFound(false)
+      return
+    }
+    if (changeRequests.length === 0 && !isLoading) {
+      setFocusNotFound(true)
+      return
+    }
     const cr = changeRequests.find(item => item.id === focusId || item.crId === focusId)
     if (cr) {
       setSelectedChangeRequest(cr)
       setIsDrawerOpen(true)
+      setFocusNotFound(false)
+    } else {
+      setFocusNotFound(true)
     }
-  }, [focusId, changeRequests])
+  }, [focusId, changeRequests, isLoading])
+
+  const clearFocusAndNotFound = () => {
+    setFocusNotFound(false)
+    setSearchParams((prev) => {
+      prev.delete('focusId')
+      prev.delete('focusType')
+      return prev
+    })
+  }
 
   // Filtering & Sorting
   const filteredChangeRequests = useMemo(() => {
@@ -204,6 +224,19 @@ export default function ChangeRequestsPage() {
       <div className="flex-shrink-0 pr-6">
 
       </div>
+
+      {focusNotFound && focusId && (
+        <div className="mx-4 mb-4 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+          <span>Change request not found or deleted. The link may point to a removed item.</span>
+          <button
+            type="button"
+            onClick={clearFocusAndNotFound}
+            className="shrink-0 rounded px-2 py-1 font-medium hover:bg-amber-200/50 dark:hover:bg-amber-800/50"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-1 min-h-0">
         <div className="flex-1 overflow-y-auto space-y-6 pr-6">

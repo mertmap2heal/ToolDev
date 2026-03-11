@@ -255,6 +255,47 @@ export const traceabilityService = {
 
     const allLinks = [...links, ...issueLinksDirect, ...issueLinksInverse, ...Array.from(uniqueCrLinks.values())]
 
+    // 3b. Fetch change_request and issue entities; filter out phantom links (TraceLink pointing to non-existent CR/issue)
+    const crIds = new Set<string>()
+    const issueIds = new Set<string>()
+    allLinks.forEach((l: any) => {
+      if (l.sourceType === 'change_request') crIds.add(l.sourceId)
+      if (l.targetType === 'change_request') crIds.add(l.targetId)
+      if (l.sourceType === 'issue') issueIds.add(l.sourceId)
+      if (l.targetType === 'issue') issueIds.add(l.targetId)
+    })
+    let changeRequestDetails: { id: string; title: string; crId: string | null }[] = []
+    let issueDetails: { id: string; title: string; issueKey: string | null }[] = []
+    try {
+      const [crs, issues] = await Promise.all([
+        crIds.size > 0
+          ? prisma.changeRequest.findMany({
+              where: { id: { in: Array.from(crIds) }, projectId },
+              select: { id: true, title: true, crId: true },
+            })
+          : Promise.resolve([]),
+        issueIds.size > 0
+          ? prisma.issue.findMany({
+              where: { id: { in: Array.from(issueIds) }, projectId },
+              select: { id: true, title: true, issueKey: true },
+            })
+          : Promise.resolve([]),
+      ])
+      changeRequestDetails = crs
+      issueDetails = issues
+    } catch (err) {
+      console.error('getTraceLinks: ChangeRequest/Issue fetch failed:', err)
+    }
+    const changeRequestById = new Map(changeRequestDetails.map((c) => [c.id, c]))
+    const issueById = new Map(issueDetails.map((i) => [i.id, i]))
+    const allLinksFiltered = allLinks.filter((link: any) => {
+      if (link.targetType === 'change_request' && !changeRequestById.has(link.targetId)) return false
+      if (link.sourceType === 'change_request' && !changeRequestById.has(link.sourceId)) return false
+      if (link.targetType === 'issue' && !issueById.has(link.targetId)) return false
+      if (link.sourceType === 'issue' && !issueById.has(link.sourceId)) return false
+      return true
+    })
+
     // 4. For standard links, fetch Entity details to populate titles (from ALL links, not just TraceLink)
     const normType = (t: string) => (t ?? '').toLowerCase().replace(/-/g, '_')
     const isTestCaseType = (t: string) => { const n = normType(t); return n === 'test_case' || n === 'testcase' }
@@ -263,7 +304,7 @@ export const traceabilityService = {
     const funcIdsToFetch = new Set<string>()
     const testCaseIdsToFetch = new Set<string>()
     const paramIdsToFetch = new Set<string>()
-    allLinks.forEach((l: any) => {
+    allLinksFiltered.forEach((l: any) => {
       if (l.sourceType === 'requirement' || l.sourceType === 'hazard' || l.sourceType === 'risk') reqIdsToFetch.add(l.sourceId)
       if (l.targetType === 'requirement' || l.targetType === 'hazard' || l.targetType === 'risk') reqIdsToFetch.add(l.targetId)
       if (l.sourceType === 'function') funcIdsToFetch.add(l.sourceId)
@@ -320,7 +361,7 @@ export const traceabilityService = {
 
     const safeDate = (d: any) => (d ? new Date(d).getTime() : 0)
     const isReqType = (t: string) => t === 'requirement' || t === 'hazard' || t === 'risk'
-    return allLinks.sort((a: any, b: any) => safeDate(b.createdAt) - safeDate(a.createdAt)).map((link) => {
+    return allLinksFiltered.sort((a: any, b: any) => safeDate(b.createdAt) - safeDate(a.createdAt)).map((link) => {
       const isReqSource = isReqType(link.sourceType)
       const isReqTarget = isReqType(link.targetType)
       const isFuncSource = link.sourceType === 'function'
@@ -338,6 +379,10 @@ export const traceabilityService = {
       const tTc = isTestCaseTarget ? testCaseMap.get(link.targetId) : null
       const sParam = isParamSource ? paramMap.get(link.sourceId) : null
       const tParam = isParamTarget ? paramMap.get(link.targetId) : null
+      const tCr = link.targetType === 'change_request' ? changeRequestById.get(link.targetId) : null
+      const sCr = link.sourceType === 'change_request' ? changeRequestById.get(link.sourceId) : null
+      const tIssue = link.targetType === 'issue' ? issueById.get(link.targetId) : null
+      const sIssue = link.sourceType === 'issue' ? issueById.get(link.sourceId) : null
 
       const shortId = (id: string) => id.substring(0, 8)
       const deletedLabel = (type: string, id: string) => `Deleted ${type} (${shortId(id)})`
@@ -359,6 +404,8 @@ export const traceabilityService = {
         createdAt: link.createdAt != null ? new Date(link.createdAt).toISOString() : new Date().toISOString(),
         targetTitle:
           link.targetTitle ||
+          (tCr ? tCr.title : undefined) ||
+          (tIssue ? tIssue.title : undefined) ||
           (tReq ? tReq.title : undefined) ||
           (tFunc ? tFunc.name : undefined) ||
           (tTc ? tTc.title : undefined) ||
@@ -369,6 +416,8 @@ export const traceabilityService = {
           (isParamTarget && !tParam ? deletedLabel('parameter', link.targetId) : undefined),
         targetDisplayId:
           link.targetDisplayId ||
+          (tCr ? (tCr.crId || shortId(tCr.id)) : undefined) ||
+          (tIssue ? (tIssue.issueKey || shortId(tIssue.id)) : undefined) ||
           (tReq ? (tReq.requirementId || shortId(tReq.id)) : undefined) ||
           (tFunc ? (tFunc.functionId || shortId(tFunc.id)) : undefined) ||
           (tTc ? tTc.key : undefined) ||
@@ -379,6 +428,8 @@ export const traceabilityService = {
           (isParamTarget && !tParam ? shortId(link.targetId) : undefined),
         targetLabel:
           link.targetLabel ||
+          (tCr ? `${tCr.crId || shortId(tCr.id)} - ${tCr.title}` : undefined) ||
+          (tIssue ? `${tIssue.issueKey || shortId(tIssue.id)} - ${tIssue.title}` : undefined) ||
           (tReq ? `${tReq.requirementId || shortId(tReq.id)} - ${tReq.title}` : undefined) ||
           (tFunc ? `${tFunc.functionId || shortId(tFunc.id)} - ${tFunc.name}` : undefined) ||
           (tTc ? `${tTc.key} - ${tTc.title}` : undefined) ||
@@ -389,6 +440,8 @@ export const traceabilityService = {
           (isParamTarget && !tParam ? deletedLabel('parameter', link.targetId) : undefined),
         sourceTitle:
           link.sourceTitle ||
+          (sCr ? sCr.title : undefined) ||
+          (sIssue ? sIssue.title : undefined) ||
           (sReq ? sReq.title : undefined) ||
           (sFunc ? sFunc.name : undefined) ||
           (sTc ? sTc.title : undefined) ||
@@ -399,6 +452,8 @@ export const traceabilityService = {
           (isParamSource && !sParam ? deletedLabel('parameter', link.sourceId) : undefined),
         sourceDisplayId:
           link.sourceDisplayId ||
+          (sCr ? (sCr.crId || shortId(sCr.id)) : undefined) ||
+          (sIssue ? (sIssue.issueKey || shortId(sIssue.id)) : undefined) ||
           (sReq ? (sReq.requirementId || shortId(sReq.id)) : undefined) ||
           (sFunc ? (sFunc.functionId || shortId(sFunc.id)) : undefined) ||
           (sTc ? sTc.key : undefined) ||
@@ -409,6 +464,8 @@ export const traceabilityService = {
           (isParamSource && !sParam ? shortId(link.sourceId) : undefined),
         sourceLabel:
           link.sourceLabel ||
+          (sCr ? `${sCr.crId || shortId(sCr.id)} - ${sCr.title}` : undefined) ||
+          (sIssue ? `${sIssue.issueKey || shortId(sIssue.id)} - ${sIssue.title}` : undefined) ||
           (sReq ? `${sReq.requirementId || shortId(sReq.id)} - ${sReq.title}` : undefined) ||
           (sFunc ? `${sFunc.functionId || shortId(sFunc.id)} - ${sFunc.name}` : undefined) ||
           (sTc ? `${sTc.key} - ${sTc.title}` : undefined) ||
@@ -518,6 +575,32 @@ export const traceabilityService = {
     rationale?: string,
     performedByUserId?: string
   ): Promise<TraceLink> {
+    // Prevent phantom links: validate change_request and issue entities exist and belong to project
+    if (sourceType === 'change_request') {
+      const cr = await prisma.changeRequest.findFirst({ where: { id: sourceId, projectId } })
+      if (!cr) {
+        throw new Error(`Change request not found or does not belong to this project: ${sourceId}`)
+      }
+    }
+    if (targetType === 'change_request') {
+      const cr = await prisma.changeRequest.findFirst({ where: { id: targetId, projectId } })
+      if (!cr) {
+        throw new Error(`Change request not found or does not belong to this project: ${targetId}`)
+      }
+    }
+    if (sourceType === 'issue') {
+      const issue = await prisma.issue.findFirst({ where: { id: sourceId, projectId } })
+      if (!issue) {
+        throw new Error(`Issue not found or does not belong to this project: ${sourceId}`)
+      }
+    }
+    if (targetType === 'issue') {
+      const issue = await prisma.issue.findFirst({ where: { id: targetId, projectId } })
+      if (!issue) {
+        throw new Error(`Issue not found or does not belong to this project: ${targetId}`)
+      }
+    }
+
     const link = await prisma.traceLink.create({
       data: {
         projectId,

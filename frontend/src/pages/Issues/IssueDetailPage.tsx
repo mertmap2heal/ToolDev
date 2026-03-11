@@ -49,7 +49,7 @@ export default function IssueDetailPage() {
   const [deleteConfirmation, setDeleteConfirmation] = useState(false)
 
   // Fetch issue detail
-  const { data: issueData, isLoading } = useQuery({
+  const { data: issueData, isLoading, isError } = useQuery({
     queryKey: ['issue', projectId, issueId],
     queryFn: async () => {
       if (!projectId || !issueId) throw new Error('Missing params')
@@ -60,9 +60,11 @@ export default function IssueDetailPage() {
       throw new Error(response.error || 'Failed to load issue')
     },
     enabled: !!projectId && !!issueId,
+    retry: false,
   })
 
   const issue = issueData
+  const issueNotFound = !isLoading && (isError || (!issue && !!issueId))
 
   // Fetch current user
   const { data: currentUserData } = useQuery({
@@ -207,6 +209,34 @@ export default function IssueDetailPage() {
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>
+    )
+  }
+
+  if (issueNotFound) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-6">
+        <div className="max-w-md w-full rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20 p-6 text-center">
+          <h2 className="text-lg font-semibold text-amber-800 dark:text-amber-200 mb-2">Issue not found or deleted</h2>
+          <p className="text-sm text-amber-700 dark:text-amber-300 mb-4">
+            The link may point to an issue that was removed or does not exist.
+          </p>
+          <Link
+            to={projectId ? `/projects/${projectId}/issues` : '/'}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <ArrowLeft size={16} />
+            Back to Issues
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (

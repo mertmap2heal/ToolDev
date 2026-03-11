@@ -105,9 +105,11 @@ router.post('/:projectId', async (req, res) => {
     })
   } catch (error: any) {
     console.error('Create trace link error:', error)
-    res.status(500).json({
+    const message = error.message || 'Internal server error'
+    const isValidation = message.includes('not found') || message.includes('does not belong')
+    res.status(isValidation ? 400 : 500).json({
       success: false,
-      error: error.message || 'Internal server error',
+      error: message,
     })
   }
 })
