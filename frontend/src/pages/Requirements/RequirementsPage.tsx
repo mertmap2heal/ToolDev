@@ -1551,23 +1551,20 @@ export default function RequirementsPage() {
           {requirementColumns.has('requirementId') && (
             <td className="px-4 py-3">
               <div className="flex items-center gap-2" style={{ paddingLeft: `${level * 24}px` }}>
-                {hasChildren ? (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      toggleRow(req.id)
-                    }}
-                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
-                  >
-                    {isExpanded ? (
-                      <ChevronDown size={16} className="text-gray-600 dark:text-gray-400" />
-                    ) : (
-                      <ChevronRight size={16} className="text-gray-600 dark:text-gray-400" />
-                    )}
-                  </button>
-                ) : (
-                  <div className="w-6" />
-                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleRow(req.id)
+                  }}
+                  className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                  title={isExpanded ? 'Collapse' : 'Expand linked items, change requests, description'}
+                >
+                  {isExpanded ? (
+                    <ChevronDown size={16} className="text-gray-600 dark:text-gray-400" />
+                  ) : (
+                    <ChevronRight size={16} className="text-gray-600 dark:text-gray-400" />
+                  )}
+                </button>
                 <span
                   className="font-mono text-sm text-gray-600 dark:text-gray-400 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
                   onClick={() => setDetailRequirement(req)}
