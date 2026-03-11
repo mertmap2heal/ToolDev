@@ -204,13 +204,28 @@ export function buildPBSComponentTree(projectId: string, nodes: PBSNode[]): any[
 
 /**
  * Load PBS nodes from localStorage and build a component tree.
- * Falls back to componentService.getComponentTree when no local PBS data exists.
+ * Falls back to componentService.getComponentTree when:
+ * - no local PBS data exists,
+ * - the built tree from localStorage has zero roots (e.g. broken refs),
+ * - or the built tree has only one root with no children (incomplete local data; backend is authoritative).
  * Shared queryFn for the ['pbs-nodes', projectId] React Query key.
  */
 export async function loadPBSComponentTreeAsync(projectId: string): Promise<any[]> {
   const pbsData = await loadPBSAsync(projectId)
   if (pbsData.nodes.length > 0) {
-    return buildPBSComponentTree(projectId, pbsData.nodes)
+    const tree = buildPBSComponentTree(projectId, pbsData.nodes)
+    if (tree.length === 0) {
+      // broken refs → use backend
+    } else if (tree.length === 1 && (!tree[0].children || tree[0].children.length === 0)) {
+      // single root with no children: prefer backend so seeded/full tree shows (e.g. Demo_Project PBS)
+      const response = await componentService.getComponentTree(projectId)
+      if (response.success && response.data && response.data.length > 0) {
+        const backendRoot = response.data[0]
+        if (backendRoot.children?.length) return response.data
+      }
+    } else {
+      return tree
+    }
   }
   const response = await componentService.getComponentTree(projectId)
   return response.success && response.data ? response.data : []
@@ -273,6 +288,41 @@ export function removeComponentFromPBS(projectId: string | undefined, componentI
   collectDescendants(componentId)
   pbsData.nodes = pbsData.nodes.filter((n) => !idsToRemove.has(n.id))
   savePBS(projectId, pbsData)
+}
+
+/**
+ * Convert backend component tree (nested) to flat PBSNode[] for the PBS module left-panel tree.
+ * Used when localStorage is empty so the left "Product Structure" shows the same hierarchy as the backend.
+ */
+export function componentTreeToPBSNodes(
+  projectId: string,
+  tree: Array<{ id: string; parentId: string | null; name: string; pbsCode?: string | null; description?: string | null; sortOrder?: number; createdAt?: string; updatedAt?: string; children?: unknown[] }>
+): PBSNode[] {
+  const out: PBSNode[] = []
+  const now = new Date().toISOString()
+  function visit(
+    node: (typeof tree)[0],
+    parentId: string | null,
+    parentCode: string | null,
+    siblingIndex: number
+  ) {
+    const pbsCode = node.pbsCode?.trim() || (parentCode ? `${parentCode}.${String(siblingIndex + 1).padStart(3, '0')}` : `PBS-${String(siblingIndex + 1).padStart(3, '0')}`)
+    const n: PBSNode = normalizeNode({
+      id: node.id,
+      parentId,
+      name: node.name || 'Unnamed',
+      pbsCode,
+      description: node.description ?? '',
+      orderIndex: node.sortOrder ?? siblingIndex,
+      createdAt: node.createdAt ?? now,
+      updatedAt: node.updatedAt ?? now,
+    })
+    out.push(n)
+    const children = Array.isArray(node.children) ? node.children : []
+    children.forEach((child, i) => visit(child as (typeof tree)[0], node.id, pbsCode, i))
+  }
+  tree.forEach((root, i) => visit(root, null, null, i))
+  return out
 }
 
 /** Check if Storage API quota is available and return usage/quota in bytes; otherwise null. */

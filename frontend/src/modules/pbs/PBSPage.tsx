@@ -28,7 +28,8 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import type { PBSNode, PBSChangeLogEntry, SaveStatus } from './types'
-import { loadPBSAsync, savePBSAsync, estimatePBSStorageBytes, getStorageQuota } from './storage'
+import { loadPBSAsync, savePBSAsync, estimatePBSStorageBytes, getStorageQuota, componentTreeToPBSNodes, buildPBSComponentTree } from './storage'
+import { componentService } from '../../services/component.service'
 import { nowISO } from './utils'
 import { getNodePath } from './treeUtils'
 import { createPBSHandlers, addChangeLogEntry } from './handlers'
@@ -245,16 +246,47 @@ export default function PBSPage() {
 
   useEffect(() => {
     let cancelled = false
-    loadPBSAsync(projectId).then((data) => {
+    loadPBSAsync(projectId).then(async (data) => {
       if (!cancelled) {
         if (data.nodes.length > 0) {
+          const tree = buildPBSComponentTree(projectId ?? 'default', data.nodes)
+          const singleRootNoChildren = tree.length === 1 && (!tree[0].children || tree[0].children.length === 0)
+          if (singleRootNoChildren && projectId) {
+            const response = await componentService.getComponentTree(projectId)
+            if (cancelled) return
+            if (response.success && response.data && response.data.length > 0) {
+              const root = response.data[0] as { children?: unknown[] }
+              if (root.children?.length) {
+                const backendNodes = componentTreeToPBSNodes(projectId, response.data)
+                setNodes(backendNodes)
+                setChangeLog(data.changeLog)
+                pbsLoadReturnedEmptyRef.current = false
+                return
+              }
+            }
+          }
           setNodes(data.nodes)
           setChangeLog(data.changeLog)
           pbsLoadReturnedEmptyRef.current = false
         } else {
-          setNodes([])
-          setChangeLog([])
-          pbsLoadReturnedEmptyRef.current = true
+          if (!projectId) {
+            setNodes([])
+            setChangeLog([])
+            pbsLoadReturnedEmptyRef.current = true
+            return
+          }
+          const response = await componentService.getComponentTree(projectId)
+          if (cancelled) return
+          if (response.success && response.data && response.data.length > 0) {
+            const backendNodes = componentTreeToPBSNodes(projectId, response.data)
+            setNodes(backendNodes)
+            setChangeLog([])
+            pbsLoadReturnedEmptyRef.current = false
+          } else {
+            setNodes([])
+            setChangeLog([])
+            pbsLoadReturnedEmptyRef.current = true
+          }
         }
       }
     })
