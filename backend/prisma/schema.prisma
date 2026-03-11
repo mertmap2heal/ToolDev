@@ -182,6 +182,7 @@ model Component {
   projectId   String
   parentId    String?
   name        String
+  pbsCode     String?
   description String?
   sortOrder   Int       @default(0)
   createdAt   DateTime  @default(now())

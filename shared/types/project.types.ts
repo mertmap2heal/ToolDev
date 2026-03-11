@@ -78,6 +78,7 @@ export interface Component {
   projectId: string
   parentId: string | null
   name: string
+  pbsCode?: string | null
   description?: string | null
   sortOrder: number
   createdAt: string

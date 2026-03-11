@@ -592,6 +592,7 @@ export const syncPBSToComponents = async (req: AuthRequest, res: Response) => {
         projectId,
         parentId: node.parentId || null,
         name: node.name || 'Unnamed',
+        pbsCode: node.pbsCode || null,
         description: node.description || null,
         sortOrder: node.orderIndex ?? 0,
       }
@@ -602,6 +603,7 @@ export const syncPBSToComponents = async (req: AuthRequest, res: Response) => {
           where: { id: node.id },
           data: {
             name: data.name,
+            pbsCode: data.pbsCode,
             description: data.description,
             parentId: data.parentId,
             sortOrder: data.sortOrder,

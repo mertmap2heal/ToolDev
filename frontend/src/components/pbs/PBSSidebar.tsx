@@ -260,7 +260,7 @@ export default function PBSSidebar({ onComponentSelect }: PBSSidebarProps) {
           ) : (
             <>
               <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 flex-shrink-0" title={node.id}>
-                {node.id.slice(0, 8)}
+                {(node as { pbsCode?: string }).pbsCode || node.id.slice(0, 8)}
               </span>
               <span className="text-sm truncate flex-1">{node.name}</span>
             </>
