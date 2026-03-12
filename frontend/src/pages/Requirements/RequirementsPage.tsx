@@ -2781,14 +2781,14 @@ export default function RequirementsPage() {
                       disabled={isBaselineView}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Download size={16} className="text-gray-500 dark:text-gray-400" />
+                      <Upload size={16} className="text-gray-500 dark:text-gray-400" />
                       Import
                     </button>
                     <button
                       onClick={() => { setIsExportOpen(true); setDataDropdownOpen(false) }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
-                      <Upload size={16} className="text-gray-500 dark:text-gray-400" />
+                      <Download size={16} className="text-gray-500 dark:text-gray-400" />
                       Export
                     </button>
                     <div className="my-1 border-t border-gray-100 dark:border-gray-700" />

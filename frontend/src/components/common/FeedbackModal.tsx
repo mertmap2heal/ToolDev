@@ -77,7 +77,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
         } catch (error) {
             console.error('Feedback error:', error)
             setStatus('error')
-            setErrorMessage('Failed to send feedback. Please try again.')
+            setErrorMessage(error instanceof Error ? error.message : 'Failed to send feedback. Please try again.')
         } finally {
             setLoading(false)
         }

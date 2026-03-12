@@ -17,6 +17,7 @@ import {
   documentAdapter,
   functionAdapter,
   parameterAdapter,
+  requirementAdapter,
 } from '../../linkage/adapters'
 import type { Requirement } from 'shared/types/engineering.types'
 import type { LinkType } from 'shared/types/traceability.types'
@@ -41,10 +42,12 @@ type LinkageTargetType =
   | 'hazard'
   | 'risk'
   | 'document'
+  | 'requirement'
 
 const LINKAGE_TARGET_OPTIONS: { value: LinkageTargetType; label: string; adapter: { search: (q: string, pid: string) => Promise<EntitySummary[]> } }[] = [
   { value: 'pbs_component', label: 'PBS Components', adapter: pbsAdapter },
   { value: 'function', label: 'Functions', adapter: functionAdapter },
+  { value: 'requirement', label: 'Requirements', adapter: requirementAdapter },
   { value: 'parameter', label: 'Parameters', adapter: parameterAdapter },
   { value: 'interface', label: 'Interfaces', adapter: interfaceAdapter },
   { value: 'test_case', label: 'Test Cases', adapter: verificationAdapter },
@@ -58,6 +61,7 @@ const LINKAGE_TARGET_OPTIONS: { value: LinkageTargetType; label: string; adapter
 const LINK_TYPE_MAP: Record<LinkageTargetType, string> = {
   pbs_component: 'allocated_to',
   function: 'allocated_to',
+  requirement: 'derives',
   parameter: 'constrains',
   interface: 'related_interface',
   issue: 'tracked_by',
@@ -142,9 +146,11 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     if (LINKAGE_V1) {
       // LINKAGE_V1: requirements vs selected target type (PBS, interfaces, etc.)
       const targets = filteredTargets
+      const isReqToReq = linkageTargetType === 'requirement'
       requirements.forEach((req) => {
         map.set(req.id, new Map())
         targets.forEach((t) => {
+          if (isReqToReq && req.id === t.id) return // skip diagonal for requirement-to-requirement
           map.get(req.id)?.set(t.id, { linked: false, suspect: false })
         })
       })
@@ -315,7 +321,8 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
   >({
     mutationFn: (data: { sourceId: string; targetId: string; linkType: LinkType; direction?: string; rationale?: string }) => {
       if (LINKAGE_V1) {
-        const linkType = LINK_TYPE_MAP[linkageTargetType] || 'trace'
+        const linkType =
+          linkageTargetType === 'requirement' ? data.linkType : (LINK_TYPE_MAP[linkageTargetType] || 'trace')
         return linkService.createLink(projectId, {
           sourceType: 'requirement',
           sourceId: data.sourceId,
@@ -646,8 +653,9 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                         </div>
                       </td>
                       {targetItems.map((target: any) => {
-                        // Skip if it's requirements-requirements and it's the same requirement (not LINKAGE_V1)
-                        if (!LINKAGE_V1 && matrixType === 'requirements-requirements' && req.id === target.id) {
+                        // Skip diagonal: same requirement as row (legacy req-req or LINKAGE_V1 Requirements)
+                        if ((!LINKAGE_V1 && matrixType === 'requirements-requirements' && req.id === target.id) ||
+                            (LINKAGE_V1 && linkageTargetType === 'requirement' && req.id === target.id)) {
                           return (
                             <td
                               key={target.id}
@@ -771,7 +779,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                 </p>
               </div>
 
-              {!LINKAGE_V1 && (
+              {(!LINKAGE_V1 || (LINKAGE_V1 && linkageTargetType === 'requirement')) && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Link Type (SysML Relationship)
@@ -791,7 +799,9 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                     <option value="allocate">Allocate</option>
                   </select>
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Select the SysML relationship type between the requirement and function
+                    {linkageTargetType === 'requirement'
+                      ? 'Select the relationship type between the two requirements'
+                      : 'Select the SysML relationship type between the requirement and function'}
                   </p>
                 </div>
               )}

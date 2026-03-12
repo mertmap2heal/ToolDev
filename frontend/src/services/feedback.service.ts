@@ -8,7 +8,10 @@ export interface FeedbackData {
 
 export const feedbackService = {
     sendFeedback: async (data: FeedbackData) => {
-        const response = await apiClient.post('/feedback', data)
+        const response = await apiClient.post<{ message?: string }>('/feedback', data)
+        if (response && response.success === false) {
+            throw new Error(response.error ?? 'Failed to send feedback')
+        }
         return response.data
     },
 }

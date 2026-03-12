@@ -1,4 +1,4 @@
-import { loadPBS } from '../../modules/pbs/storage'
+import { loadPBSComponentTreeAsync, componentTreeToPBSNodes } from '../../modules/pbs/storage'
 import type { EntityRef, EntitySummary } from 'shared/types/linkage.types'
 
 function filterNodes(nodes: { id: string; name: string; pbsCode?: string }[], query: string) {
@@ -14,8 +14,9 @@ function filterNodes(nodes: { id: string; name: string; pbsCode?: string }[], qu
 
 export const pbsAdapter = {
   async search(query: string, projectId: string): Promise<EntitySummary[]> {
-    const data = loadPBS(projectId)
-    const filtered = filterNodes(data.nodes, query)
+    const tree = await loadPBSComponentTreeAsync(projectId)
+    const flatNodes = componentTreeToPBSNodes(projectId, tree)
+    const filtered = filterNodes(flatNodes, query)
     return filtered.slice(0, 50).map((n) => ({
       id: n.id,
       type: 'pbs_component' as const,
@@ -25,8 +26,9 @@ export const pbsAdapter = {
   },
 
   async getById(id: string, projectId: string): Promise<EntitySummary | null> {
-    const data = loadPBS(projectId)
-    const node = data.nodes.find((n) => n.id === id)
+    const tree = await loadPBSComponentTreeAsync(projectId)
+    const flatNodes = componentTreeToPBSNodes(projectId, tree)
+    const node = flatNodes.find((n) => n.id === id)
     if (!node) return null
     return {
       id: node.id,

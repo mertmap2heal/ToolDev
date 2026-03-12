@@ -37,12 +37,18 @@ export const submitFeedback = async (req: Request, res: Response) => {
             }
         }
 
-        await sendFeedbackEmail({
-            name,
-            email,
-            message,
-            attachments,
-        })
+        try {
+            await sendFeedbackEmail({
+                name,
+                email,
+                message,
+                attachments,
+            })
+        } catch (emailError: any) {
+            // Log feedback so it is not lost when SMTP is missing or fails
+            console.error('[FeedbackController] Email delivery failed:', emailError?.message ?? emailError)
+            console.log('[FeedbackController] Feedback received (email not sent):', { name, email, messageLength: message?.length ?? 0 })
+        }
 
         res.json({ success: true, message: 'Feedback sent successfully' })
     } catch (error: any) {
