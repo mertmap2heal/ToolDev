@@ -113,6 +113,8 @@ export default function FunctionVerificationCoverageMatrix({ projectId, onClose 
     return map
   }, [links])
 
+  // Requirement is "verified" if it has a link to a test case or test plan. If the backend
+  // standardizes on a single type (e.g. 'verification'), add it to the condition below.
   const requirementIdsWithTest = useMemo(() => {
     const set = new Set<string>()
     for (const link of links) {
@@ -341,8 +343,14 @@ export default function FunctionVerificationCoverageMatrix({ projectId, onClose 
                         {sortBy === 'total' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
                       </div>
                     </th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border border-gray-200 dark:border-gray-700">
-                      Verified Reqs
+                    <th
+                      className="px-3 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700"
+                      onClick={() => toggleSort('verified')}
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        Verified Reqs
+                        {sortBy === 'verified' && (sortOrder === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+                      </div>
                     </th>
                     <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase border border-gray-200 dark:border-gray-700">
                       Unverified Reqs
