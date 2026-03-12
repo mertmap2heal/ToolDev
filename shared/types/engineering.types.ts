@@ -195,10 +195,19 @@ export interface RequirementComparisonItem {
   priority?: string
   status?: string
   category?: string
+  /** Field names that actually changed (A vs B) for modified items */
+  changedFields?: string[]
   previous?: {
     title?: string
+    description?: string
     priority?: string
     status?: string
+    category?: string
+    owner?: string
+    verificationMethod?: string
+    acceptanceCriteria?: string
+    source?: string
+    stage?: string
   }
 }
 

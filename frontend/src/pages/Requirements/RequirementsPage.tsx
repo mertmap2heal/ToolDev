@@ -3649,9 +3649,9 @@ export default function RequirementsPage() {
               projectId={projectId}
               initialBaselineId={searchParams.get('openBaselines') === '1' ? (searchParams.get('baselineId') ?? undefined) : undefined}
               onClose={() => setIsBaselineManagerOpen(false)}
-              onViewInRequirementsPage={(id) => {
+              onViewInRequirementsPage={(id, requirementId) => {
                 setIsBaselineManagerOpen(false)
-                navigate(`/projects/${projectId}/requirements?baselineId=${id}`)
+                navigate(`/projects/${projectId}/requirements?baselineId=${id}${requirementId ? `&requirementId=${requirementId}` : ''}`)
               }}
             />
           )}

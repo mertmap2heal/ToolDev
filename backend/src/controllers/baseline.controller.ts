@@ -631,10 +631,18 @@ export const compareBaselines = async (req: AuthRequest, res: Response) => {
           added.push({ id: reqId, requirementId: reqId.substring(0, 8), title: 'Unknown' })
         }
       } else if (itemA.snapshot !== itemB.snapshot) {
-        // Modified requirement - include both versions
+        // Modified requirement - include both versions and changedFields
         const parsedA = itemA.parsed
         const parsedB = itemB.parsed
         if (parsedA && parsedB) {
+          const fieldsToCompare = [
+            'title', 'description', 'priority', 'status', 'category', 'owner',
+            'verificationMethod', 'acceptanceCriteria', 'source', 'stage',
+          ] as const
+          const str = (v: unknown) => (v == null ? '' : String(v).trim())
+          const changedFields: string[] = fieldsToCompare.filter(
+            (f) => str(parsedA[f]) !== str(parsedB[f])
+          )
           modified.push({
             id: reqId,
             requirementId: parsedB.requirementId || reqId.substring(0, 8),
@@ -643,10 +651,18 @@ export const compareBaselines = async (req: AuthRequest, res: Response) => {
             priority: parsedB.priority || '',
             status: parsedB.status || '',
             category: parsedB.category || '',
+            changedFields,
             previous: {
-              title: parsedA.title || 'Untitled',
-              priority: parsedA.priority || '',
-              status: parsedA.status || '',
+              title: parsedA.title ?? undefined,
+              description: parsedA.description ?? undefined,
+              priority: parsedA.priority ?? undefined,
+              status: parsedA.status ?? undefined,
+              category: parsedA.category ?? undefined,
+              owner: parsedA.owner ?? undefined,
+              verificationMethod: parsedA.verificationMethod ?? undefined,
+              acceptanceCriteria: parsedA.acceptanceCriteria ?? undefined,
+              source: parsedA.source ?? undefined,
+              stage: parsedA.stage ?? undefined,
             },
           })
         } else {

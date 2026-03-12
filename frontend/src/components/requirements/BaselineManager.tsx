@@ -57,8 +57,8 @@ interface BaselineManagerProps {
   onClose: () => void
   /** When set (e.g. from URL openBaselines=1&baselineId=), open the view modal for this baseline on mount */
   initialBaselineId?: string
-  /** Called when user clicks "View in Requirements Page" to navigate to requirements with baselineId in URL */
-  onViewInRequirementsPage?: (baselineId: string) => void
+  /** Called when user clicks "View in Requirements Page" to navigate to requirements with baselineId in URL; optional requirementId for focus */
+  onViewInRequirementsPage?: (baselineId: string, requirementId?: string) => void
 }
 
 /**
@@ -994,6 +994,7 @@ export default function BaselineManager({ projectId, onClose, onViewInRequiremen
           baselineAId={comparingBaselines.baselineAId}
           baselineBId={comparingBaselines.baselineBId}
           onClose={() => setComparingBaselines(null)}
+          onViewInBaseline={onViewInRequirementsPage}
         />
       )}
     </div>

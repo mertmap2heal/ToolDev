@@ -222,7 +222,7 @@ export async function loadPBSComponentTreeAsync(projectId: string): Promise<any[
       if (response.success && response.data && response.data.length > 0) {
         const backendRoot = response.data[0]
         if (backendRoot.children?.length) {
-          ensurePbsCodesOnTree(response.data as Parameters<typeof ensurePbsCodesOnTree>[0])
+          ensurePbsCodesOnTree(response.data as unknown as Parameters<typeof ensurePbsCodesOnTree>[0])
           return response.data
         }
       }
@@ -232,7 +232,7 @@ export async function loadPBSComponentTreeAsync(projectId: string): Promise<any[
   }
   const response = await componentService.getComponentTree(projectId)
   if (response.success && response.data && response.data.length > 0) {
-    ensurePbsCodesOnTree(response.data as Parameters<typeof ensurePbsCodesOnTree>[0])
+    ensurePbsCodesOnTree(response.data as unknown as Parameters<typeof ensurePbsCodesOnTree>[0])
   }
   return response.success && response.data ? response.data : []
 }
