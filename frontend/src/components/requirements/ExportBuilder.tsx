@@ -811,15 +811,17 @@ export default function ExportBuilder({
           continue
         }
         if (sec.type === 'summary') {
-          const startY = addSectionHeading(doc, sectionNum, title, style, true)
+          const startY = addSectionHeading(doc, sectionNum, title, style, opts.startOnNewPage !== false)
           doc.setFontSize(style.fontSizeBody ?? 11)
           doc.setFont(getPdfFont(style), 'normal')
           doc.text(`This document contains ${effectiveRequirements.length} requirement(s).`, marginPt, startY + 4)
           if (projectName) doc.text(`Project: ${projectName}`, marginPt, startY + 12)
+          const blankAfter = Math.min(5, Math.max(0, opts.blankPagesAfter ?? 0))
+          for (let p = 0; p < blankAfter; p++) doc.addPage()
           continue
         }
         if (sec.type === 'requirements_table') {
-          const startY = addSectionHeading(doc, sectionNum, title, style, true)
+          const startY = addSectionHeading(doc, sectionNum, title, style, opts.startOnNewPage !== false)
           autoTable(doc, {
             head: includeHeader ? [headers] : undefined,
             body: data,
@@ -834,10 +836,12 @@ export default function ExportBuilder({
               return acc
             }, {} as Record<number, { cellWidth: string }>),
           })
+          const blankAfter = Math.min(5, Math.max(0, opts.blankPagesAfter ?? 0))
+          for (let p = 0; p < blankAfter; p++) doc.addPage()
           continue
         }
         if (sec.type === 'glossary' && includeGlossary && usedGlossaryEntries.length > 0) {
-          const startY = addSectionHeading(doc, sectionNum, title, style, true)
+          const startY = addSectionHeading(doc, sectionNum, title, style, opts.startOnNewPage !== false)
           const glossaryBody = usedGlossaryEntries.map((e) =>
             glossaryShowDefinitions ? [e.term, stripHtmlForPdf(e.definition)] : [e.term]
           )
@@ -853,10 +857,12 @@ export default function ExportBuilder({
             tableLineWidth: authorityStyles.tableLineWidth,
             columnStyles: glossaryShowDefinitions ? { 1: { cellWidth: 'wrap' } } : {},
           })
+          const blankAfter = Math.min(5, Math.max(0, opts.blankPagesAfter ?? 0))
+          for (let p = 0; p < blankAfter; p++) doc.addPage()
           continue
         }
         if (sec.type === 'abbreviations' && includeAbbreviations && usedAbbreviationEntries.length > 0) {
-          const startY = addSectionHeading(doc, sectionNum, title, style, true)
+          const startY = addSectionHeading(doc, sectionNum, title, style, opts.startOnNewPage !== false)
           const abbrBody = usedAbbreviationEntries.map((e) =>
             glossaryShowDefinitions ? [e.term, stripHtmlForPdf(e.definition)] : [e.term]
           )
@@ -872,20 +878,30 @@ export default function ExportBuilder({
             tableLineWidth: authorityStyles.tableLineWidth,
             columnStyles: glossaryShowDefinitions ? { 1: { cellWidth: 'wrap' } } : {},
           })
+          const blankAfter = Math.min(5, Math.max(0, opts.blankPagesAfter ?? 0))
+          for (let p = 0; p < blankAfter; p++) doc.addPage()
           continue
         }
         if (sec.type === 'custom_text' && opts.content) {
-          const startY = addSectionHeading(doc, sectionNum, title, style, true)
+          const startY = addSectionHeading(doc, sectionNum, title, style, opts.startOnNewPage !== false)
           doc.setFontSize(style.fontSizeBody ?? 11)
           doc.setFont(getPdfFont(style), 'normal')
           doc.text(opts.content.slice(0, 2000), marginPt, startY + 4, { maxWidth: doc.getNumberOfPages() ? (doc as unknown as { getPageWidth(): number }).getPageWidth?.() - 2 * marginPt : 170 })
+          const blankAfter = Math.min(5, Math.max(0, opts.blankPagesAfter ?? 0))
+          for (let p = 0; p < blankAfter; p++) doc.addPage()
           continue
         }
         if (sec.type === 'placeholder') {
           addPlaceholderSection(doc, sectionNum, title, style, {
             placeholderStyle: opts.placeholderStyle ?? 'full_page',
             blankPageCount: opts.blankPageCount ?? 1,
+            startOnNewPage: opts.startOnNewPage,
           })
+          const isFullPage = (opts.placeholderStyle ?? 'full_page') === 'full_page'
+          if (!isFullPage) {
+            const blankAfter = Math.min(5, Math.max(0, opts.blankPagesAfter ?? 0))
+            for (let p = 0; p < blankAfter; p++) doc.addPage()
+          }
         }
       }
       addHeaderFooterToAllPages(doc, documentTitle, style)
@@ -1703,6 +1719,30 @@ export default function ExportBuilder({
                             placeholder={sec.type.replace('_', ' ')}
                             className="flex-1 min-w-[8rem] px-2 py-1 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           />
+                          {sec.type !== 'cover' && (
+                            <div className="w-full flex flex-wrap items-center gap-3 pl-1 text-sm">
+                              <label className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={sec.options?.startOnNewPage !== false}
+                                  onChange={(e) => updateSection(sec.id, { options: { ...sec.options, startOnNewPage: e.target.checked } })}
+                                  className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded"
+                                />
+                                <span className="text-gray-600 dark:text-gray-400">Start on new page</span>
+                              </label>
+                              <label className="flex items-center gap-2">
+                                <span className="text-gray-600 dark:text-gray-400">Blank pages after</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={5}
+                                  value={Math.min(5, Math.max(0, sec.options?.blankPagesAfter ?? 0))}
+                                  onChange={(e) => updateSection(sec.id, { options: { ...sec.options, blankPagesAfter: Math.min(5, Math.max(0, parseInt(e.target.value, 10) || 0)) } })}
+                                  className="w-14 px-2 py-1 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                              </label>
+                            </div>
+                          )}
                           {sec.type === 'cover' && (
                             <div className="w-full mt-2 pl-6 space-y-1.5 text-sm">
                               <label className="flex items-center gap-2">

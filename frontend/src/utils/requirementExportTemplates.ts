@@ -27,6 +27,10 @@ export interface ExportSection {
     placeholderStyle?: 'full_page' | 'heading_with_space'
     /** Placeholder full_page: number of blank pages to reserve (default 1) */
     blankPageCount?: number
+    /** Start this section on a new page (default true) */
+    startOnNewPage?: boolean
+    /** Number of blank pages to insert after this section (0–5) */
+    blankPagesAfter?: number
   }
 }
 

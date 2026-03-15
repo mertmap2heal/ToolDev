@@ -149,8 +149,10 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
     }
 
     if (sec.type === 'summary') {
+      const opts = sec.options ?? {}
       children.push(
         new Paragraph({
+          pageBreakBefore: opts.startOnNewPage !== false,
           spacing: { before: 400, after: 200 },
           children: [new TextRun({ text: `${sectionNum}. ${title}`, bold: true, size: sizeH1, font: fontFamily })],
         }),
@@ -172,10 +174,15 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
           })
         )
       }
+      const blankAfter = Math.min(5, Math.max(0, opts.blankPagesAfter ?? 0))
+      for (let p = 0; p < blankAfter; p++) {
+        children.push(new Paragraph({ children: [new PageBreak()] }))
+      }
       continue
     }
 
     if (sec.type === 'requirements_table') {
+      const opts = sec.options ?? {}
       const headerRow = new TableRow({
         tableHeader: true,
         children: options.columns.map((col) =>
@@ -199,6 +206,7 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
       )
       children.push(
         new Paragraph({
+          pageBreakBefore: opts.startOnNewPage !== false,
           spacing: { before: 400, after: 200 },
           children: [new TextRun({ text: `${sectionNum}. ${title}`, bold: true, size: sizeH1, font: fontFamily })],
         }),
@@ -208,10 +216,15 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
           borders: tableBorders,
         })
       )
+      const blankAfter = Math.min(5, Math.max(0, opts.blankPagesAfter ?? 0))
+      for (let p = 0; p < blankAfter; p++) {
+        children.push(new Paragraph({ children: [new PageBreak()] }))
+      }
       continue
     }
 
     if (sec.type === 'glossary' && options.glossaryEntries && options.glossaryEntries.length > 0) {
+      const opts = sec.options ?? {}
       const glossaryHeader = new TableRow({
         tableHeader: true,
         children: [
@@ -238,6 +251,7 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
       )
       children.push(
         new Paragraph({
+          pageBreakBefore: opts.startOnNewPage !== false,
           spacing: { before: 400, after: 200 },
           children: [new TextRun({ text: `${sectionNum}. ${title}`, bold: true, size: sizeH1, font: fontFamily })],
         }),
@@ -247,10 +261,15 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
           borders: tableBorders,
         })
       )
+      const blankAfter = Math.min(5, Math.max(0, opts.blankPagesAfter ?? 0))
+      for (let p = 0; p < blankAfter; p++) {
+        children.push(new Paragraph({ children: [new PageBreak()] }))
+      }
       continue
     }
 
     if (sec.type === 'abbreviations' && options.abbreviationEntries && options.abbreviationEntries.length > 0) {
+      const opts = sec.options ?? {}
       const abbrHeader = new TableRow({
         tableHeader: true,
         children: [
@@ -277,6 +296,7 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
       )
       children.push(
         new Paragraph({
+          pageBreakBefore: opts.startOnNewPage !== false,
           spacing: { before: 400, after: 200 },
           children: [new TextRun({ text: `${sectionNum}. ${title}`, bold: true, size: sizeH1, font: fontFamily })],
         }),
@@ -286,12 +306,18 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
           borders: tableBorders,
         })
       )
+      const blankAfter = Math.min(5, Math.max(0, opts.blankPagesAfter ?? 0))
+      for (let p = 0; p < blankAfter; p++) {
+        children.push(new Paragraph({ children: [new PageBreak()] }))
+      }
       continue
     }
 
     if (sec.type === 'custom_text' && sec.options?.content) {
+      const opts = sec.options ?? {}
       children.push(
         new Paragraph({
+          pageBreakBefore: opts.startOnNewPage !== false,
           spacing: { before: 400, after: 200 },
           children: [new TextRun({ text: `${sectionNum}. ${title}`, bold: true, size: sizeH1, font: fontFamily })],
         }),
@@ -299,6 +325,10 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
           children: [new TextRun({ text: sec.options.content.slice(0, 32000), size: sizeBody, font: fontFamily })],
         })
       )
+      const blankAfter = Math.min(5, Math.max(0, opts.blankPagesAfter ?? 0))
+      for (let p = 0; p < blankAfter; p++) {
+        children.push(new Paragraph({ children: [new PageBreak()] }))
+      }
       continue
     }
 
@@ -311,7 +341,7 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
       if (plStyle === 'full_page') {
         children.push(
           new Paragraph({
-            pageBreakBefore: true,
+            pageBreakBefore: opts.startOnNewPage !== false,
             spacing: { after: 200 },
             children: [new TextRun({ text: `${sectionNum}. ${displayTitle}`, bold: true, size: sizeH1, font: fontFamily })],
           }),
@@ -334,6 +364,7 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
       } else {
         children.push(
           new Paragraph({
+            pageBreakBefore: opts.startOnNewPage !== false,
             spacing: { before: 400, after: 200 },
             children: [new TextRun({ text: `${sectionNum}. ${displayTitle}`, bold: true, size: sizeH1, font: fontFamily })],
           })
@@ -345,6 +376,10 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
               children: [new TextRun({ text: ' ', size: sizeBody, font: fontFamily })],
             })
           )
+        }
+        const blankAfter = Math.min(5, Math.max(0, opts.blankPagesAfter ?? 0))
+        for (let p = 0; p < blankAfter; p++) {
+          children.push(new Paragraph({ children: [new PageBreak()] }))
         }
       }
     }

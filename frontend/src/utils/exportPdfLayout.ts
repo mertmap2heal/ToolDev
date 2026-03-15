@@ -218,6 +218,7 @@ export function addSectionHeading(
 export interface PlaceholderSectionOptions {
   placeholderStyle?: 'full_page' | 'heading_with_space'
   blankPageCount?: number
+  startOnNewPage?: boolean
 }
 
 /**
@@ -244,7 +245,7 @@ export function addPlaceholderSection(
   const blankPageCount = Math.min(5, Math.max(1, opts?.blankPageCount ?? 1))
 
   if (plStyle === 'heading_with_space') {
-    addSectionHeading(doc, sectionNumber, displayTitle, style, false)
+    addSectionHeading(doc, sectionNumber, displayTitle, style, opts?.startOnNewPage !== false)
     return
   }
 
