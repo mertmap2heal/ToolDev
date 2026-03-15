@@ -720,7 +720,23 @@ export default function RequirementsPBSTree({
                         : displayType === 'requirement' ? FileText
                         : displayType === 'use_case' ? Layers
                         : displayType === 'test_plan' || displayType === 'test_case' ? ClipboardList
+                        : displayType === 'pbs_component' ? Package
                         : Link2
+                      const iconColor = displayType === 'function' ? 'text-purple-400 dark:text-purple-500'
+                        : displayType === 'parameter' ? 'text-indigo-400 dark:text-indigo-500'
+                        : displayType === 'issue' ? 'text-red-400 dark:text-red-500'
+                        : displayType === 'change_request' ? 'text-orange-400 dark:text-orange-500'
+                        : displayType === 'requirement' ? 'text-blue-400 dark:text-blue-500'
+                        : displayType === 'use_case' ? 'text-cyan-400 dark:text-cyan-500'
+                        : displayType === 'test_plan' || displayType === 'test_case' ? 'text-teal-400 dark:text-teal-500'
+                        : displayType === 'pbs_component' ? 'text-emerald-400 dark:text-emerald-500'
+                        : 'text-gray-400 dark:text-gray-500'
+                      const borderColor = displayType === 'function' ? 'border-purple-200 dark:border-purple-800 hover:border-purple-300 dark:hover:border-purple-700'
+                        : displayType === 'issue' ? 'border-red-200 dark:border-red-800 hover:border-red-300 dark:hover:border-red-700'
+                        : displayType === 'change_request' ? 'border-orange-200 dark:border-orange-800 hover:border-orange-300 dark:hover:border-orange-700'
+                        : displayType === 'test_plan' || displayType === 'test_case' ? 'border-teal-200 dark:border-teal-800 hover:border-teal-300 dark:hover:border-teal-700'
+                        : displayType === 'pbs_component' ? 'border-emerald-200 dark:border-emerald-800 hover:border-emerald-300 dark:hover:border-emerald-700'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-800'
                       const handleClick = () => onLinkedElementClick?.(payload)
                       return (
                         <div
@@ -735,16 +751,15 @@ export default function RequirementsPBSTree({
                             setContextMenu({ target: { type: 'linked_element', link, payload }, x: e.clientX, y: e.clientY })
                           }}
                           className={clsx(
-                            'flex items-center gap-2 px-3 py-1 mx-2 text-xs rounded-md border-l-2 ml-4 transition-colors',
+                            'flex items-center gap-1.5 px-2 py-0.5 mx-2 text-xs rounded-md border-l-2 ml-4 transition-colors',
                             onLinkedElementClick
-                              ? 'cursor-pointer bg-gray-50/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 hover:bg-blue-50/80 dark:hover:bg-blue-900/20 hover:border-blue-200 dark:hover:border-blue-800'
-                              : 'bg-gray-50/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'
+                              ? `cursor-pointer bg-gray-50/50 dark:bg-gray-800/50 ${borderColor}`
+                              : `bg-gray-50/50 dark:bg-gray-800/50 ${borderColor}`
                           )}
                           style={{ paddingLeft: `${item.depth * 16 + 8}px` }}
-                          title={onLinkedElementClick ? 'Click to preview' : undefined}
+                          title={`${String(displayType).replace(/_/g, ' ')} — ${item.name}`}
                         >
-                          <Icon className="w-3 h-3 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                          <span className="text-gray-500 dark:text-gray-400 font-mono text-[10px] flex-shrink-0 capitalize">{String(displayType).replace(/_/g, ' ')}</span>
+                          <Icon className={`w-3 h-3 flex-shrink-0 ${iconColor}`} />
                           <span className="text-gray-600 dark:text-gray-300 truncate">{item.name}</span>
                         </div>
                       )

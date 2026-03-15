@@ -322,13 +322,16 @@ export default function Header() {
           </div>
         </div>
 
-        {/* Quick Access Bar (condensed) - visible only in project context */}
+        {/* Quick Access Bar + Breadcrumbs merged into one row */}
         {isProjectContext && (
-          <QuickAccessBar
-            projectId={projectId}
-            pinnedIds={pinnedSet}
-            onTogglePin={handleTogglePin}
-          />
+          <div className="flex items-center justify-between gap-3 mt-1 pt-1.5 border-t border-gray-100 dark:border-gray-800">
+            <Breadcrumbs />
+            <QuickAccessBar
+              projectId={projectId}
+              pinnedIds={pinnedSet}
+              onTogglePin={handleTogglePin}
+            />
+          </div>
         )}
 
         {/* Main Navigation Menu - visible when NOT in project context or in task mode */}
@@ -381,10 +384,12 @@ export default function Header() {
         )}
       </div>
 
-      {/* Breadcrumbs - always visible */}
-      <div className="px-4 py-0.5 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-        <Breadcrumbs />
-      </div>
+      {/* Breadcrumbs - only shown standalone when NOT in project context (otherwise merged into Quick Access row above) */}
+      {!isProjectContext && (
+        <div className="px-4 py-0.5 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+          <Breadcrumbs />
+        </div>
+      )}
 
       {/* Mega Menu Dropdown */}
       <HeaderMegaMenu

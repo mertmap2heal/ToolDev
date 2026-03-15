@@ -21,7 +21,7 @@ export default function QuickAccessBar({ projectId, pinnedIds, onTogglePin }: Qu
     }
 
     return (
-        <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
             <div className="text-[10px] font-medium text-gray-400 uppercase tracking-wider min-w-fit">Quick Access:</div>
             <div className="flex flex-wrap gap-1.5">
                 {pinnedModules.map((module) => (
