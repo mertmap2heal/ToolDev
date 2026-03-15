@@ -1,13 +1,13 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { X, Download, FileSpreadsheet, FileText, File, CheckSquare, Square, Code, ChevronRight, ChevronLeft } from 'lucide-react'
+import { X, Download, FileSpreadsheet, FileText, File, CheckSquare, Square, Code, ChevronRight, ChevronLeft, ChevronUp, ChevronDown } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
 import type { Requirement, SystemFunction } from 'shared/types/engineering.types'
 import type { Link } from 'shared/types/linkage.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
-import { buildRequirementsDocx, type DocxRequirementRow } from '../../utils/exportDocx'
+import { buildRequirementsDocx, buildRequirementsDocxWithSections, type DocxRequirementRow } from '../../utils/exportDocx'
 import { parameterService } from '../../services/parameter.service'
 import { definitionEntryService } from '../../services/definitionEntry.service'
 import { resolveParameterPlaceholders } from '../../utils/parameterPlaceholder'
@@ -19,8 +19,18 @@ import {
   deleteExportTemplate,
   updateExportTemplate,
   mergeColumnsWithDefaults,
+  DEFAULT_AUTHORITY_STYLE,
+  getSectionsForPreset,
   type ExportTemplate,
+  type ExportSection,
+  type ExportDocumentStyle,
 } from '../../utils/requirementExportTemplates'
+import {
+  getAuthorityTableStyles,
+  addCoverPage,
+  addHeaderFooterToAllPages,
+  addSectionHeading,
+} from '../../utils/exportPdfLayout'
 
 // Dynamic import for jspdf-autotable to prevent build issues
 // This will be loaded only when PDF export is needed
@@ -173,6 +183,9 @@ export default function ExportBuilder({
   const [isManageTemplatesOpen, setIsManageTemplatesOpen] = useState(false)
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null)
   const [editingTemplateName, setEditingTemplateName] = useState('')
+  const [sections, setSections] = useState<ExportSection[] | undefined>(undefined)
+  const [documentStyle, setDocumentStyle] = useState<ExportDocumentStyle | undefined>(undefined)
+  const [useDocumentSections, setUseDocumentSections] = useState(false)
 
   const refreshTemplates = useCallback(() => {
     if (projectId) setTemplates(getExportTemplates(projectId))
@@ -320,6 +333,9 @@ export default function ExportBuilder({
         setSelectedFunctionId(scopeTypeNew === 'function' ? fnId : '')
       }
       setSelectedTemplateId(template.id)
+      setSections(template.sections)
+      setDocumentStyle(template.documentStyle)
+      setUseDocumentSections(Array.isArray(template.sections) && template.sections.length > 0)
       setInlineError(null)
       setCurrentStep('scope')
     },
@@ -345,6 +361,8 @@ export default function ExportBuilder({
       glossaryShowDefinitions,
       glossarySortAlphabetically,
       createdAt: new Date().toISOString(),
+      sections: useDocumentSections ? sections : undefined,
+      documentStyle: documentStyle ?? undefined,
     }
     try {
       saveExportTemplate(projectId, template)
@@ -368,8 +386,38 @@ export default function ExportBuilder({
     includeAbbreviations,
     glossaryShowDefinitions,
     glossarySortAlphabetically,
+    useDocumentSections,
+    sections,
+    documentStyle,
     refreshTemplates,
   ])
+
+  const applyPreset = (preset: 'authority' | 'simple' | 'full') => {
+    setSections(getSectionsForPreset(preset))
+    setDocumentStyle(preset === 'simple' ? undefined : { ...DEFAULT_AUTHORITY_STYLE })
+  }
+
+  const moveSection = (index: number, direction: 'up' | 'down') => {
+    if (!sections?.length) return
+    const next = [...sections]
+    const j = direction === 'up' ? index - 1 : index + 1
+    if (j < 0 || j >= next.length) return
+    ;[next[index], next[j]] = [next[j], next[index]]
+    setSections(next)
+  }
+
+  const updateSection = (id: string, patch: Partial<Pick<ExportSection, 'title' | 'enabled' | 'options'>>) => {
+    if (!sections?.length) return
+    setSections(
+      sections.map((s) =>
+        s.id === id ? { ...s, ...patch, options: patch.options !== undefined ? { ...s.options, ...patch.options } : s.options } : s
+      )
+    )
+  }
+
+  const updateDocumentStyle = (patch: Partial<ExportDocumentStyle>) => {
+    setDocumentStyle((prev) => ({ ...DEFAULT_AUTHORITY_STYLE, ...prev, ...patch }))
+  }
 
   // Toggle column selection
   const toggleColumn = (key: string) => {
@@ -543,12 +591,30 @@ export default function ExportBuilder({
       })
       return row
     })
-    const blob = await buildRequirementsDocx({
-      title: projectName ? `${projectName} - Requirements Export` : 'Requirements Export',
-      requirements: rows,
-      columns: docxColumns,
-      stripHtml: (s) => stripHtml(s),
-    })
+    const documentTitle = documentStyle?.coverTitle ?? (projectName ? `${projectName} - Requirements Export` : 'Requirements Export')
+    const useSections = useDocumentSections && Array.isArray(sections) && sections.length > 0 && sections.some((s) => s.enabled)
+    const blob = useSections
+      ? await buildRequirementsDocxWithSections({
+          documentTitle,
+          projectName,
+          requirements: rows,
+          columns: docxColumns,
+          sections: sections!,
+          documentStyle: documentStyle ?? DEFAULT_AUTHORITY_STYLE,
+          glossaryEntries: includeGlossary
+            ? usedGlossaryEntries.map((e) => ({ term: e.term, definition: (e.definition || '').replace(/<[^>]*>/g, '').trim() }))
+            : undefined,
+          abbreviationEntries: includeAbbreviations
+            ? usedAbbreviationEntries.map((e) => ({ term: e.term, definition: (e.definition || '').replace(/<[^>]*>/g, '').trim() }))
+            : undefined,
+          stripHtml: (s) => stripHtml(s),
+        })
+      : await buildRequirementsDocx({
+          title: documentTitle,
+          requirements: rows,
+          columns: docxColumns,
+          stripHtml: (s) => stripHtml(s),
+        })
     const baseName = effectiveScopeFilenameSuffix ? `requirements_export_${effectiveScopeFilenameSuffix}` : 'requirements_export'
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -598,7 +664,7 @@ export default function ExportBuilder({
     }
   }
 
-  // Export to PDF
+  // Export to PDF (authority path when sections/documentStyle; else legacy)
   const exportPdf = async () => {
     const selectedCols = columns.filter((c) => c.selected)
     const headers = selectedCols.map((c) => c.label)
@@ -607,97 +673,200 @@ export default function ExportBuilder({
         let value = getValue(req, col.key)
         if (col.key === 'description' || col.key === 'acceptanceCriteria') {
           value = stripHtml(value)
-          // Truncate long descriptions for PDF
-          if (value.length > 100) {
-            value = value.substring(0, 100) + '...'
-          }
+          if (value.length > 100) value = value.substring(0, 100) + '...'
         }
         return value
       })
     )
-
+    const stripHtmlForPdf = (html: string) => (html || '').replace(/<[^>]*>/g, '').trim().slice(0, 200)
     const doc = new jsPDF({
       orientation: selectedCols.length > 6 ? 'landscape' : 'portrait',
     })
-
-    // Add title
-    doc.setFontSize(16)
-    doc.text(projectName ? `${projectName} - Requirements Export` : 'Requirements Export', 14, 15)
-    doc.setFontSize(10)
-    doc.text(`Generated: ${format(new Date(), 'PPpp')}`, 14, 22)
-    doc.text(`Total Requirements: ${effectiveRequirements.length}`, 14, 28)
-
-    // Load and use autoTable
     const autoTable = await loadAutoTable()
-    const tableResult = autoTable(doc, {
-      head: includeHeader ? [headers] : undefined,
-      body: data,
-      startY: 35,
-      styles: {
-        fontSize: 8,
-        cellPadding: 2,
-      },
-      headStyles: {
-        fillColor: [59, 130, 246],
-        textColor: 255,
-        fontStyle: 'bold',
-      },
-      alternateRowStyles: {
-        fillColor: [245, 247, 250],
-      },
-      columnStyles: selectedCols.reduce((acc, col, index) => {
-        if (col.key === 'description' || col.key === 'acceptanceCriteria') {
-          acc[index] = { cellWidth: 'wrap' }
+    const documentTitle = documentStyle?.coverTitle ?? (projectName ? `${projectName} - Requirements Export` : 'Requirements Export')
+    const useSections = useDocumentSections && Array.isArray(sections) && sections.length > 0 && sections.some((s) => s.enabled)
+    const style = documentStyle ?? DEFAULT_AUTHORITY_STYLE
+    const authorityStyles = getAuthorityTableStyles(style)
+    const marginPt = (authorityStyles.margin * 2.834645669)
+
+    if (useSections) {
+      const enabledSections = sections!.filter((s) => s.enabled)
+      let sectionNum = 0
+      for (const sec of enabledSections) {
+        sectionNum += 1
+        const title = sec.title ?? sec.type
+        const opts = sec.options ?? {}
+        if (sec.type === 'cover') {
+          addCoverPage(
+            doc,
+            {
+              documentTitle: style.coverTitle ?? documentTitle,
+              projectName: opts.showProjectName !== false ? projectName : undefined,
+              showDate: opts.showDate !== false,
+              showVersion: opts.showVersion,
+              versionLabel: opts.versionLabel,
+              classification: opts.classification,
+              preparerOrOrg: opts.preparerOrOrg,
+            },
+            style
+          )
+          doc.addPage()
+          continue
         }
-        return acc
-      }, {} as Record<number, { cellWidth: string }>),
-    })
-
-    let lastY = (tableResult as { finalY?: number }).finalY ?? 35
-
-    const stripHtmlForPdf = (html: string) => (html || '').replace(/<[^>]*>/g, '').trim().slice(0, 200)
-
-    if (includeGlossary && usedGlossaryEntries.length > 0) {
-      doc.addPage()
-      doc.setFontSize(14)
-      doc.text('Glossary', 14, 15)
-      doc.setFontSize(10)
-      const glossaryBody = usedGlossaryEntries.map((e) =>
-        glossaryShowDefinitions
-          ? [e.term, stripHtmlForPdf(e.definition)]
-          : [e.term]
-      )
-      const glossaryHead = glossaryShowDefinitions ? [['Term', 'Definition']] : [['Term']]
+        if (sec.type === 'summary') {
+          const startY = addSectionHeading(doc, sectionNum, title, style, true)
+          doc.setFontSize(style.fontSizeBody ?? 11)
+          doc.setFont('helvetica', 'normal')
+          doc.text(`This document contains ${effectiveRequirements.length} requirement(s).`, marginPt, startY + 4)
+          if (projectName) doc.text(`Project: ${projectName}`, marginPt, startY + 12)
+          continue
+        }
+        if (sec.type === 'requirements_table') {
+          const startY = addSectionHeading(doc, sectionNum, title, style, true)
+          autoTable(doc, {
+            head: includeHeader ? [headers] : undefined,
+            body: data,
+            startY,
+            styles: { fontSize: authorityStyles.fontSize, cellPadding: 2 },
+            headStyles: authorityStyles.headStyles,
+            alternateRowStyles: authorityStyles.alternateRowStyles,
+            columnStyles: selectedCols.reduce((acc, col, index) => {
+              if (col.key === 'description' || col.key === 'acceptanceCriteria') acc[index] = { cellWidth: 'wrap' }
+              return acc
+            }, {} as Record<number, { cellWidth: string }>),
+          })
+          continue
+        }
+        if (sec.type === 'glossary' && includeGlossary && usedGlossaryEntries.length > 0) {
+          const startY = addSectionHeading(doc, sectionNum, title, style, true)
+          const glossaryBody = usedGlossaryEntries.map((e) =>
+            glossaryShowDefinitions ? [e.term, stripHtmlForPdf(e.definition)] : [e.term]
+          )
+          const glossaryHead = glossaryShowDefinitions ? [['Term', 'Definition']] : [['Term']]
+          autoTable(doc, {
+            head: glossaryHead,
+            body: glossaryBody,
+            startY,
+            styles: { fontSize: authorityStyles.fontSize, cellPadding: 2 },
+            headStyles: authorityStyles.headStyles,
+            alternateRowStyles: authorityStyles.alternateRowStyles,
+            columnStyles: glossaryShowDefinitions ? { 1: { cellWidth: 'wrap' } } : {},
+          })
+          continue
+        }
+        if (sec.type === 'abbreviations' && includeAbbreviations && usedAbbreviationEntries.length > 0) {
+          const startY = addSectionHeading(doc, sectionNum, title, style, true)
+          const abbrBody = usedAbbreviationEntries.map((e) =>
+            glossaryShowDefinitions ? [e.term, stripHtmlForPdf(e.definition)] : [e.term]
+          )
+          const abbrHead = glossaryShowDefinitions ? [['Term', 'Definition']] : [['Term']]
+          autoTable(doc, {
+            head: abbrHead,
+            body: abbrBody,
+            startY,
+            styles: { fontSize: authorityStyles.fontSize, cellPadding: 2 },
+            headStyles: authorityStyles.headStyles,
+            alternateRowStyles: authorityStyles.alternateRowStyles,
+            columnStyles: glossaryShowDefinitions ? { 1: { cellWidth: 'wrap' } } : {},
+          })
+          continue
+        }
+        if (sec.type === 'custom_text' && opts.content) {
+          const startY = addSectionHeading(doc, sectionNum, title, style, true)
+          doc.setFontSize(style.fontSizeBody ?? 11)
+          doc.setFont('helvetica', 'normal')
+          doc.text(opts.content.slice(0, 2000), marginPt, startY + 4, { maxWidth: doc.getNumberOfPages() ? (doc as unknown as { getPageWidth(): number }).getPageWidth?.() - 2 * marginPt : 170 })
+        }
+      }
+      addHeaderFooterToAllPages(doc, documentTitle, style)
+    } else {
+      // Legacy PDF (optional authority styling when documentStyle is set)
+      if (documentStyle) {
+        addCoverPage(
+          doc,
+          {
+            documentTitle: style.coverTitle ?? documentTitle,
+            projectName,
+            showDate: true,
+          },
+          style
+        )
+        doc.addPage()
+      }
+      const headStyles = documentStyle
+        ? authorityStyles.headStyles
+        : { fillColor: [59, 130, 246] as [number, number, number], textColor: [255, 255, 255] as [number, number, number], fontStyle: 'bold' as const }
+      const altStyles = documentStyle ? authorityStyles.alternateRowStyles : { fillColor: [245, 247, 250] as [number, number, number] }
+      const startY = documentStyle ? marginPt + 14 : 35
+      if (!documentStyle) {
+        doc.setFontSize(16)
+        doc.text(projectName ? `${projectName} - Requirements Export` : 'Requirements Export', 14, 15)
+        doc.setFontSize(10)
+        doc.text(`Generated: ${format(new Date(), 'PPpp')}`, 14, 22)
+        doc.text(`Total Requirements: ${effectiveRequirements.length}`, 14, 28)
+      }
       autoTable(doc, {
-        head: glossaryHead,
-        body: glossaryBody,
-        startY: 22,
-        styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
-        columnStyles: glossaryShowDefinitions ? { 1: { cellWidth: 'wrap' } } : {},
+        head: includeHeader ? [headers] : undefined,
+        body: data,
+        startY: documentStyle ? startY : 35,
+        styles: { fontSize: documentStyle ? authorityStyles.fontSize : 8, cellPadding: 2 },
+        headStyles,
+        alternateRowStyles: altStyles,
+        columnStyles: selectedCols.reduce((acc, col, index) => {
+          if (col.key === 'description' || col.key === 'acceptanceCriteria') acc[index] = { cellWidth: 'wrap' }
+          return acc
+        }, {} as Record<number, { cellWidth: string }>),
       })
-      lastY = (doc as any).lastAutoTable?.finalY ?? lastY
-    }
-
-    if (includeAbbreviations && usedAbbreviationEntries.length > 0) {
-      doc.addPage()
-      doc.setFontSize(14)
-      doc.text('Abbreviations', 14, 15)
-      doc.setFontSize(10)
-      const abbrBody = usedAbbreviationEntries.map((e) =>
-        glossaryShowDefinitions
-          ? [e.term, stripHtmlForPdf(e.definition)]
-          : [e.term]
-      )
-      const abbrHead = glossaryShowDefinitions ? [['Term', 'Definition']] : [['Term']]
-      autoTable(doc, {
-        head: abbrHead,
-        body: abbrBody,
-        startY: 22,
-        styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
-        columnStyles: glossaryShowDefinitions ? { 1: { cellWidth: 'wrap' } } : {},
-      })
+      if (includeGlossary && usedGlossaryEntries.length > 0) {
+        doc.addPage()
+        if (!documentStyle) {
+          doc.setFontSize(14)
+          doc.text('Glossary', 14, 15)
+          doc.setFontSize(10)
+        } else {
+          doc.setFontSize(style.fontSizeHeading1 ?? 14)
+          doc.setFont('helvetica', 'bold')
+          doc.text('Glossary', marginPt, marginPt + 6)
+        }
+        const glossaryBody = usedGlossaryEntries.map((e) =>
+          glossaryShowDefinitions ? [e.term, stripHtmlForPdf(e.definition)] : [e.term]
+        )
+        const glossaryHead = glossaryShowDefinitions ? [['Term', 'Definition']] : [['Term']]
+        const glStartY = documentStyle ? marginPt + 14 : 22
+        autoTable(doc, {
+          head: glossaryHead,
+          body: glossaryBody,
+          startY: glStartY,
+          styles: { fontSize: documentStyle ? authorityStyles.fontSize : 8, cellPadding: 2 },
+          headStyles,
+          columnStyles: glossaryShowDefinitions ? { 1: { cellWidth: 'wrap' } } : {},
+        })
+      }
+      if (includeAbbreviations && usedAbbreviationEntries.length > 0) {
+        doc.addPage()
+        if (!documentStyle) {
+          doc.setFontSize(14)
+          doc.text('Abbreviations', 14, 15)
+          doc.setFontSize(10)
+        } else {
+          doc.setFontSize(style.fontSizeHeading1 ?? 14)
+          doc.setFont('helvetica', 'bold')
+          doc.text('Abbreviations', marginPt, marginPt + 6)
+        }
+        const abbrBody = usedAbbreviationEntries.map((e) =>
+          glossaryShowDefinitions ? [e.term, stripHtmlForPdf(e.definition)] : [e.term]
+        )
+        const abbrHead = glossaryShowDefinitions ? [['Term', 'Definition']] : [['Term']]
+        autoTable(doc, {
+          head: abbrHead,
+          body: abbrBody,
+          startY: documentStyle ? marginPt + 14 : 22,
+          styles: { fontSize: documentStyle ? authorityStyles.fontSize : 8, cellPadding: 2 },
+          headStyles,
+          columnStyles: glossaryShowDefinitions ? { 1: { cellWidth: 'wrap' } } : {},
+        })
+      }
+      if (documentStyle) addHeaderFooterToAllPages(doc, documentTitle, style)
     }
 
     const baseName = effectiveScopeFilenameSuffix ? `requirements_export_${effectiveScopeFilenameSuffix}` : 'requirements_export'
@@ -1226,6 +1395,325 @@ export default function ExportBuilder({
               </span>
             </label>
           </div>
+
+          {/* Document layout (PDF / Word only) */}
+          {(selectedFormat === 'pdf' || selectedFormat === 'word') && (
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useDocumentSections}
+                  onChange={(e) => {
+                    const on = e.target.checked
+                    setUseDocumentSections(on)
+                    if (on && (!sections?.length || sections.length === 0)) {
+                      setSections(getSectionsForPreset('authority'))
+                      setDocumentStyle({ ...DEFAULT_AUTHORITY_STYLE })
+                    }
+                  }}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Use document sections</span>
+              </label>
+              {useDocumentSections && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Apply preset</label>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const v = e.target.value as 'authority' | 'simple' | 'full'
+                        if (v) applyPreset(v)
+                        e.target.value = ''
+                      }}
+                      className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="">— Choose preset —</option>
+                      <option value="authority">Authority submission</option>
+                      <option value="simple">Simple list</option>
+                      <option value="full">Full report</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Sections</label>
+                    <ul className="space-y-2 max-h-56 overflow-y-auto">
+                      {sections?.map((sec, index) => (
+                        <li
+                          key={sec.id}
+                          className="flex flex-wrap items-start gap-2 p-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/50"
+                        >
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => moveSection(index, 'up')}
+                              disabled={index === 0}
+                              className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-40"
+                              aria-label="Move up"
+                            >
+                              <ChevronUp size={16} className="text-gray-600 dark:text-gray-400" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveSection(index, 'down')}
+                              disabled={index === (sections?.length ?? 0) - 1}
+                              className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-40"
+                              aria-label="Move down"
+                            >
+                              <ChevronDown size={16} className="text-gray-600 dark:text-gray-400" />
+                            </button>
+                          </div>
+                          <label className="flex items-center gap-1.5 shrink-0 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={sec.enabled}
+                              onChange={(e) => updateSection(sec.id, { enabled: e.target.checked })}
+                              className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                            />
+                            <span className="text-xs text-gray-600 dark:text-gray-400 capitalize">{sec.type.replace('_', ' ')}</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={sec.title ?? ''}
+                            onChange={(e) => updateSection(sec.id, { title: e.target.value || undefined })}
+                            placeholder={sec.type.replace('_', ' ')}
+                            className="flex-1 min-w-[8rem] px-2 py-1 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          />
+                          {sec.type === 'cover' && (
+                            <div className="w-full mt-2 pl-6 space-y-1.5 text-sm">
+                              <label className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={sec.options?.showProjectName !== false}
+                                  onChange={(e) => updateSection(sec.id, { options: { ...sec.options, showProjectName: e.target.checked } })}
+                                  className="w-3.5 h-3.5"
+                                />
+                                <span className="text-gray-600 dark:text-gray-400">Show project name</span>
+                              </label>
+                              <label className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={sec.options?.showDate !== false}
+                                  onChange={(e) => updateSection(sec.id, { options: { ...sec.options, showDate: e.target.checked } })}
+                                  className="w-3.5 h-3.5"
+                                />
+                                <span className="text-gray-600 dark:text-gray-400">Show date</span>
+                              </label>
+                              <label className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={!!sec.options?.showVersion}
+                                  onChange={(e) => updateSection(sec.id, { options: { ...sec.options, showVersion: e.target.checked } })}
+                                  className="w-3.5 h-3.5"
+                                />
+                                <span className="text-gray-600 dark:text-gray-400">Show version</span>
+                              </label>
+                              {sec.options?.showVersion && (
+                                <input
+                                  type="text"
+                                  value={sec.options?.versionLabel ?? ''}
+                                  onChange={(e) => updateSection(sec.id, { options: { ...sec.options, versionLabel: e.target.value || undefined } })}
+                                  placeholder="Version label"
+                                  className="w-full px-2 py-1 text-xs border rounded"
+                                />
+                              )}
+                              <input
+                                type="text"
+                                value={sec.options?.classification ?? ''}
+                                onChange={(e) => updateSection(sec.id, { options: { ...sec.options, classification: e.target.value || undefined } })}
+                                placeholder="Classification (e.g. CONFIDENTIAL)"
+                                className="w-full px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                              />
+                              <input
+                                type="text"
+                                value={sec.options?.preparerOrOrg ?? ''}
+                                onChange={(e) => updateSection(sec.id, { options: { ...sec.options, preparerOrOrg: e.target.value || undefined } })}
+                                placeholder="Preparer or organization"
+                                className="w-full px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                              />
+                            </div>
+                          )}
+                          {sec.type === 'custom_text' && (
+                            <div className="w-full mt-2 pl-6">
+                              <textarea
+                                value={sec.options?.content ?? ''}
+                                onChange={(e) => updateSection(sec.id, { options: { ...sec.options, content: e.target.value } })}
+                                placeholder="Custom text content..."
+                                rows={3}
+                                className="w-full px-2 py-1 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                              />
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </>
+              )}
+              {/* Document style: show when PDF/Word; editing creates/updates documentStyle */}
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Document style</label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  Applies to section-based export; optional cover/header/footer for single-table export.
+                </p>
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Cover title</label>
+                    <input
+                      type="text"
+                      value={documentStyle?.coverTitle ?? DEFAULT_AUTHORITY_STYLE.coverTitle ?? ''}
+                      onChange={(e) => updateDocumentStyle({ coverTitle: e.target.value || undefined })}
+                      placeholder="e.g. Requirements Export"
+                      className="w-full px-2 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Header left</label>
+                      <input
+                        type="text"
+                        value={documentStyle?.headerLeft ?? DEFAULT_AUTHORITY_STYLE.headerLeft ?? ''}
+                        onChange={(e) => updateDocumentStyle({ headerLeft: e.target.value || undefined })}
+                        placeholder="{title}"
+                        className="w-full px-2 py-1 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Header center</label>
+                      <input
+                        type="text"
+                        value={documentStyle?.headerCenter ?? ''}
+                        onChange={(e) => updateDocumentStyle({ headerCenter: e.target.value || undefined })}
+                        className="w-full px-2 py-1 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Header right</label>
+                      <input
+                        type="text"
+                        value={documentStyle?.headerRight ?? ''}
+                        onChange={(e) => updateDocumentStyle({ headerRight: e.target.value || undefined })}
+                        className="w-full px-2 py-1 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Footer left</label>
+                      <input
+                        type="text"
+                        value={documentStyle?.footerLeft ?? ''}
+                        onChange={(e) => updateDocumentStyle({ footerLeft: e.target.value || undefined })}
+                        className="w-full px-2 py-1 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Footer center</label>
+                      <input
+                        type="text"
+                        value={documentStyle?.footerCenter ?? DEFAULT_AUTHORITY_STYLE.footerCenter ?? ''}
+                        onChange={(e) => updateDocumentStyle({ footerCenter: e.target.value || undefined })}
+                        placeholder="{page} of {pageOfN}"
+                        className="w-full px-2 py-1 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Footer right</label>
+                      <input
+                        type="text"
+                        value={documentStyle?.footerRight ?? DEFAULT_AUTHORITY_STYLE.footerRight ?? ''}
+                        onChange={(e) => updateDocumentStyle({ footerRight: e.target.value || undefined })}
+                        placeholder="{date}"
+                        className="w-full px-2 py-1 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Page number format</label>
+                    <select
+                      value={documentStyle?.pageNumberFormat ?? DEFAULT_AUTHORITY_STYLE.pageNumberFormat ?? 'pageOfN'}
+                      onChange={(e) => updateDocumentStyle({ pageNumberFormat: e.target.value as 'none' | 'page' | 'pageOfN' })}
+                      className="w-full px-2 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="none">None</option>
+                      <option value="page">Page number only</option>
+                      <option value="pageOfN">Page X of N</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Margin (mm)</label>
+                      <input
+                        type="number"
+                        min={10}
+                        max={50}
+                        value={documentStyle?.marginMm ?? DEFAULT_AUTHORITY_STYLE.marginMm ?? 25}
+                        onChange={(e) => updateDocumentStyle({ marginMm: e.target.value ? Number(e.target.value) : undefined })}
+                        className="w-full px-2 py-1 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Body font size (pt)</label>
+                      <input
+                        type="number"
+                        min={8}
+                        max={14}
+                        value={documentStyle?.fontSizeBody ?? DEFAULT_AUTHORITY_STYLE.fontSizeBody ?? 11}
+                        onChange={(e) => updateDocumentStyle({ fontSizeBody: e.target.value ? Number(e.target.value) : undefined })}
+                        className="w-full px-2 py-1 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Heading 1 (pt)</label>
+                      <input
+                        type="number"
+                        min={10}
+                        max={18}
+                        value={documentStyle?.fontSizeHeading1 ?? DEFAULT_AUTHORITY_STYLE.fontSizeHeading1 ?? 14}
+                        onChange={(e) => updateDocumentStyle({ fontSizeHeading1: e.target.value ? Number(e.target.value) : undefined })}
+                        className="w-full px-2 py-1 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Heading 2 (pt)</label>
+                      <input
+                        type="number"
+                        min={9}
+                        max={16}
+                        value={documentStyle?.fontSizeHeading2 ?? DEFAULT_AUTHORITY_STYLE.fontSizeHeading2 ?? 12}
+                        onChange={(e) => updateDocumentStyle({ fontSizeHeading2: e.target.value ? Number(e.target.value) : undefined })}
+                        className="w-full px-2 py-1 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Table header (hex)</label>
+                      <input
+                        type="text"
+                        value={documentStyle?.tableHeaderBg ?? DEFAULT_AUTHORITY_STYLE.tableHeaderBg ?? '#374151'}
+                        onChange={(e) => updateDocumentStyle({ tableHeaderBg: e.target.value || undefined })}
+                        placeholder="#374151"
+                        className="w-full px-2 py-1 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Alternate row (hex)</label>
+                      <input
+                        type="text"
+                        value={documentStyle?.tableAlternateRowBg ?? DEFAULT_AUTHORITY_STYLE.tableAlternateRowBg ?? '#F9FAFB'}
+                        onChange={(e) => updateDocumentStyle({ tableAlternateRowBg: e.target.value || undefined })}
+                        placeholder="#F9FAFB"
+                        className="w-full px-2 py-1 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Placeholders: {'{title}'}, {'{date}'}, {'{page}'}, {'{pageOfN}'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
             </>
           )}
 

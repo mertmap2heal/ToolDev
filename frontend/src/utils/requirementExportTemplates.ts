@@ -4,9 +4,47 @@
  */
 
 const STORAGE_KEY_PREFIX = 'requirement-export-templates-'
-const STORAGE_VERSION = 1
+const STORAGE_VERSION = 2
 
 export type ExportTemplateFormat = 'csv' | 'excel' | 'pdf' | 'word' | 'reqif'
+
+export type ExportSectionType = 'cover' | 'summary' | 'requirements_table' | 'glossary' | 'abbreviations' | 'custom_text'
+
+export interface ExportSection {
+  id: string
+  type: ExportSectionType
+  title?: string
+  enabled: boolean
+  options?: {
+    showProjectName?: boolean
+    showDate?: boolean
+    showVersion?: boolean
+    versionLabel?: string
+    classification?: string
+    preparerOrOrg?: string
+    content?: string
+  }
+}
+
+export interface ExportDocumentStyle {
+  coverTitle?: string
+  headerLeft?: string
+  headerCenter?: string
+  headerRight?: string
+  footerLeft?: string
+  footerCenter?: string
+  footerRight?: string
+  pageNumberFormat?: 'none' | 'page' | 'pageOfN'
+  marginMm?: number
+  fontFamily?: string
+  fontSizeBody?: number
+  fontSizeHeading1?: number
+  fontSizeHeading2?: number
+  tableHeaderBg?: string
+  tableHeaderFg?: string
+  tableBorderColor?: string
+  tableAlternateRowBg?: string
+}
 
 export interface ExportColumn {
   key: string
@@ -29,6 +67,8 @@ export interface ExportTemplate {
   glossaryShowDefinitions: boolean
   glossarySortAlphabetically: boolean
   createdAt?: string
+  sections?: ExportSection[]
+  documentStyle?: ExportDocumentStyle
 }
 
 interface StoredPayload {
@@ -42,6 +82,7 @@ function storageKey(projectId: string): string {
 
 /**
  * Returns all saved export templates for the project. On parse error returns [].
+ * Version 1 payloads are returned as-is (sections and documentStyle remain undefined for legacy behavior).
  */
 export function getExportTemplates(projectId: string): ExportTemplate[] {
   if (!projectId) return []
@@ -50,6 +91,7 @@ export function getExportTemplates(projectId: string): ExportTemplate[] {
     if (!raw) return []
     const data = JSON.parse(raw) as StoredPayload
     if (!data || !Array.isArray(data.templates)) return []
+    if (data.version === STORAGE_VERSION) return data.templates
     return data.templates
   } catch {
     return []
@@ -123,4 +165,55 @@ export function mergeColumnsWithDefaults(
     if (!defaultColumns.some((d) => d.key === s.key)) result.push({ ...s })
   })
   return result
+}
+
+/** Default authority document style (neutral, submission-ready) */
+export const DEFAULT_AUTHORITY_STYLE: ExportDocumentStyle = {
+  coverTitle: 'Requirements Export',
+  footerCenter: 'Page {page} of {pageOfN}',
+  footerRight: '{date}',
+  headerLeft: '{title}',
+  pageNumberFormat: 'pageOfN',
+  marginMm: 25,
+  fontSizeBody: 11,
+  fontSizeHeading1: 14,
+  fontSizeHeading2: 12,
+  tableHeaderBg: '#374151',
+  tableHeaderFg: '#ffffff',
+  tableBorderColor: '#E5E7EB',
+  tableAlternateRowBg: '#F9FAFB',
+}
+
+/** Build default sections for a preset */
+export function getSectionsForPreset(preset: 'authority' | 'simple' | 'full'): ExportSection[] {
+  const base = (type: ExportSectionType, title: string, options?: ExportSection['options']): ExportSection => ({
+    id: crypto.randomUUID(),
+    type,
+    title,
+    enabled: true,
+    options,
+  })
+  switch (preset) {
+    case 'authority':
+      return [
+        base('cover', 'Cover', { showProjectName: true, showDate: true }),
+        base('summary', 'Summary'),
+        base('requirements_table', 'Requirements'),
+        base('glossary', 'Glossary'),
+        base('abbreviations', 'Abbreviations'),
+      ]
+    case 'simple':
+      return [base('requirements_table', 'Requirements')]
+    case 'full':
+      return [
+        base('cover', 'Cover', { showProjectName: true, showDate: true }),
+        base('summary', 'Summary'),
+        base('requirements_table', 'Requirements'),
+        base('glossary', 'Glossary'),
+        base('abbreviations', 'Abbreviations'),
+        base('custom_text', 'Appendix', { content: '' }),
+      ]
+    default:
+      return [base('requirements_table', 'Requirements')]
+  }
 }

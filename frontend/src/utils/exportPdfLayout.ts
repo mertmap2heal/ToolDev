@@ -1,0 +1,194 @@
+/**
+ * Authority-grade PDF layout: cover page, headers/footers, section headings, table styling.
+ * Used by ExportBuilder when documentStyle or sections are set.
+ */
+import type { jsPDF } from 'jspdf'
+import type { ExportDocumentStyle, ExportSection } from './requirementExportTemplates'
+import { DEFAULT_AUTHORITY_STYLE } from './requirementExportTemplates'
+import { format } from 'date-fns'
+
+function parseHex(hex: string): [number, number, number] {
+  const n = hex.replace('#', '')
+  const r = parseInt(n.slice(0, 2), 16)
+  const g = parseInt(n.slice(2, 4), 16)
+  const b = parseInt(n.slice(4, 6), 16)
+  return [r, g, b]
+}
+
+const DEFAULT_HEADER_BG = [55, 65, 81] as [number, number, number]
+const DEFAULT_HEADER_FG = [255, 255, 255] as [number, number, number]
+const DEFAULT_BORDER = [229, 231, 235] as [number, number, number]
+const DEFAULT_ALT_ROW = [249, 250, 251] as [number, number, number]
+
+export function getAuthorityTableStyles(style?: ExportDocumentStyle | null): {
+  headStyles: { fillColor: [number, number, number]; textColor: [number, number, number]; fontStyle: string }
+  alternateRowStyles: { fillColor: [number, number, number] }
+  margin: number
+  fontSize: number
+} {
+  const s = style ?? DEFAULT_AUTHORITY_STYLE
+  const margin = s.marginMm ?? DEFAULT_AUTHORITY_STYLE.marginMm ?? 25
+  const fontSize = s.fontSizeBody ?? DEFAULT_AUTHORITY_STYLE.fontSizeBody ?? 11
+  return {
+    headStyles: {
+      fillColor: s.tableHeaderBg ? parseHex(s.tableHeaderBg) : DEFAULT_HEADER_BG,
+      textColor: s.tableHeaderFg ? parseHex(s.tableHeaderFg) : DEFAULT_HEADER_FG,
+      fontStyle: 'bold',
+    },
+    alternateRowStyles: {
+      fillColor: s.tableAlternateRowBg ? parseHex(s.tableAlternateRowBg) : DEFAULT_ALT_ROW,
+    },
+    margin,
+    fontSize: fontSize - 1,
+  }
+}
+
+export interface CoverPageOptions {
+  documentTitle: string
+  projectName?: string
+  showDate?: boolean
+  showVersion?: boolean
+  versionLabel?: string
+  classification?: string
+  preparerOrOrg?: string
+}
+
+const MM_TO_PT = 2.834645669
+
+export function addCoverPage(
+  doc: jsPDF,
+  opts: CoverPageOptions,
+  style?: ExportDocumentStyle | null
+): void {
+  const s = style ?? DEFAULT_AUTHORITY_STYLE
+  const margin = (s.marginMm ?? 25) * MM_TO_PT
+  const d = doc as unknown as { getPageWidth(): number; getPageHeight(): number }
+  const pageW = d.getPageWidth?.() ?? 210
+  const pageH = d.getPageHeight?.() ?? 297
+  const centerX = pageW / 2
+  let y = pageH * 0.35
+
+  const fontSizeH1 = s.fontSizeHeading1 ?? 14
+  const fontSizeBody = s.fontSizeBody ?? 11
+
+  doc.setFontSize(fontSizeH1 + 4)
+  doc.setFont('helvetica', 'bold')
+  doc.text(opts.documentTitle, centerX, y, { align: 'center' })
+  y += 12
+
+  if (opts.projectName) {
+    doc.setFontSize(fontSizeBody + 1)
+    doc.setFont('helvetica', 'normal')
+    doc.text(opts.projectName, centerX, y, { align: 'center' })
+    y += 8
+  }
+  if (opts.showDate !== false) {
+    doc.setFontSize(fontSizeBody)
+    doc.text(`Date: ${format(new Date(), 'yyyy-MM-dd')}`, centerX, y, { align: 'center' })
+    y += 6
+  }
+  if (opts.showVersion && opts.versionLabel) {
+    doc.text(`Version: ${opts.versionLabel}`, centerX, y, { align: 'center' })
+    y += 6
+  }
+  if (opts.classification) {
+    y += 6
+    doc.setFont('helvetica', 'bold')
+    doc.text(opts.classification, centerX, y, { align: 'center' })
+    doc.setFont('helvetica', 'normal')
+    y += 8
+  }
+  if (opts.preparerOrOrg) {
+    doc.setFontSize(fontSizeBody - 1)
+    doc.text(opts.preparerOrOrg, centerX, pageH - margin - 10, { align: 'center' })
+  }
+}
+
+function substitutePlaceholders(
+  text: string,
+  pageNum: number,
+  totalPages: number,
+  documentTitle: string
+): string {
+  return text
+    .replace(/\{page\}/g, String(pageNum))
+    .replace(/\{pageOfN\}/g, `${pageNum} of ${totalPages}`)
+    .replace(/\{date\}/g, format(new Date(), 'yyyy-MM-dd'))
+    .replace(/\{title\}/g, documentTitle)
+}
+
+export function addHeaderFooter(
+  doc: jsPDF,
+  pageNum: number,
+  totalPages: number,
+  documentTitle: string,
+  style?: ExportDocumentStyle | null
+): void {
+  const s = style ?? DEFAULT_AUTHORITY_STYLE
+  const margin = (s.marginMm ?? 25) * MM_TO_PT
+  const d = doc as unknown as { getPageWidth(): number; getPageHeight(): number }
+  const pageW = d.getPageWidth?.() ?? 210
+  const pageH = d.getPageHeight?.() ?? 297
+  const fontSize = (s.fontSizeBody ?? 11) - 1
+  const formatType = s.pageNumberFormat ?? 'pageOfN'
+
+  doc.setFontSize(fontSize)
+  doc.setFont('helvetica', 'normal')
+
+  const headerL = s.headerLeft ? substitutePlaceholders(s.headerLeft, pageNum, totalPages, documentTitle) : ''
+  const headerC = s.headerCenter ? substitutePlaceholders(s.headerCenter, pageNum, totalPages, documentTitle) : ''
+  const headerR = s.headerRight ? substitutePlaceholders(s.headerRight, pageNum, totalPages, documentTitle) : ''
+  const footerL = s.footerLeft ? substitutePlaceholders(s.footerLeft, pageNum, totalPages, documentTitle) : ''
+  const footerC = s.footerCenter
+    ? substitutePlaceholders(s.footerCenter, pageNum, totalPages, documentTitle)
+    : formatType === 'pageOfN'
+      ? `Page ${pageNum} of ${totalPages}`
+      : formatType === 'page'
+        ? String(pageNum)
+        : ''
+  const footerR = s.footerRight ? substitutePlaceholders(s.footerRight, pageNum, totalPages, documentTitle) : ''
+
+  const yHeader = margin
+  const yFooter = pageH - margin
+
+  if (headerL) doc.text(headerL, margin, yHeader)
+  if (headerC) doc.text(headerC, pageW / 2, yHeader, { align: 'center' })
+  if (headerR) doc.text(headerR, pageW - margin, yHeader, { align: 'right' })
+  if (footerL) doc.text(footerL, margin, yFooter)
+  if (footerC) doc.text(footerC, pageW / 2, yFooter, { align: 'center' })
+  if (footerR) doc.text(footerR, pageW - margin, yFooter, { align: 'right' })
+}
+
+/** Call after all content is added to document. Adds header/footer to every page. */
+export function addHeaderFooterToAllPages(
+  doc: jsPDF,
+  documentTitle: string,
+  style?: ExportDocumentStyle | null
+): void {
+  const total = doc.getNumberOfPages()
+  for (let i = 1; i <= total; i++) {
+    doc.setPage(i)
+    addHeaderFooter(doc, i, total, documentTitle, style)
+  }
+}
+
+/** Returns startY for content after the heading (in mm). Section number is 1-based. */
+export function addSectionHeading(
+  doc: jsPDF,
+  sectionNumber: number,
+  title: string,
+  style?: ExportDocumentStyle | null,
+  startNewPage?: boolean
+): number {
+  const s = style ?? DEFAULT_AUTHORITY_STYLE
+  const marginMm = s.marginMm ?? 25
+  const margin = marginMm * MM_TO_PT
+  const fontSizeH1 = s.fontSizeHeading1 ?? 14
+
+  if (startNewPage) doc.addPage()
+  doc.setFontSize(fontSizeH1)
+  doc.setFont('helvetica', 'bold')
+  const headingText = `${sectionNumber}. ${title}`
+  doc.text(headingText, margin, margin + 6)
+  return margin + 14
+}
