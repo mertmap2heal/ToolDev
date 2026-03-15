@@ -194,7 +194,7 @@ export function addHeaderFooterToAllPages(
   }
 }
 
-/** Returns startY for content after the heading (in mm). Section number is 1-based. */
+/** Returns startY for content after the heading (in pt). Section number is 1-based. */
 export function addSectionHeading(
   doc: jsPDF,
   sectionNumber: number,
@@ -213,4 +213,58 @@ export function addSectionHeading(
   const headingText = `${sectionNumber}. ${title}`
   doc.text(headingText, margin, margin + 6)
   return margin + 14
+}
+
+export interface PlaceholderSectionOptions {
+  placeholderStyle?: 'full_page' | 'heading_with_space'
+  blankPageCount?: number
+}
+
+/**
+ * Renders a placeholder section: full blank page(s) with optional heading, or heading with blank space below.
+ * Section number is 1-based.
+ */
+export function addPlaceholderSection(
+  doc: jsPDF,
+  sectionNumber: number,
+  title: string,
+  style?: ExportDocumentStyle | null,
+  opts?: PlaceholderSectionOptions
+): void {
+  const s = style ?? DEFAULT_AUTHORITY_STYLE
+  const marginMm = s.marginMm ?? 25
+  const margin = marginMm * MM_TO_PT
+  const fontSizeH1 = s.fontSizeHeading1 ?? 14
+  const fontSizeBody = s.fontSizeBody ?? 11
+  const font = getPdfFont(style)
+  const displayTitle = title || 'Reserved'
+  const hintColor = [156, 163, 175] as [number, number, number] // gray-400
+
+  const plStyle = opts?.placeholderStyle ?? 'full_page'
+  const blankPageCount = Math.min(5, Math.max(1, opts?.blankPageCount ?? 1))
+
+  if (plStyle === 'heading_with_space') {
+    addSectionHeading(doc, sectionNumber, displayTitle, style, false)
+    return
+  }
+
+  // full_page: new page(s), optional section number + title at top, optional hint
+  doc.addPage()
+  doc.setFontSize(fontSizeH1)
+  doc.setFont(font, 'bold')
+  doc.text(`${sectionNumber}. ${displayTitle}`, margin, margin + 6)
+  doc.setFontSize(fontSizeBody - 1)
+  doc.setFont(font, 'normal')
+  doc.setTextColor(hintColor[0], hintColor[1], hintColor[2])
+  doc.text('Reserved for manual completion.', margin, margin + 14)
+  doc.setTextColor(0, 0, 0)
+
+  for (let i = 1; i < blankPageCount; i++) {
+    doc.addPage()
+    doc.setFontSize(fontSizeBody - 1)
+    doc.setFont(font, 'normal')
+    doc.setTextColor(hintColor[0], hintColor[1], hintColor[2])
+    doc.text('Reserved for manual completion.', margin, margin + 6)
+    doc.setTextColor(0, 0, 0)
+  }
 }

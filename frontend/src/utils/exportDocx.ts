@@ -46,6 +46,7 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
     Footer,
     AlignmentType,
     BorderStyle,
+    PageBreak,
   } = await import('docx')
 
   const style = options.documentStyle ?? DEFAULT_AUTHORITY_STYLE
@@ -298,6 +299,54 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
           children: [new TextRun({ text: sec.options.content.slice(0, 32000), size: sizeBody, font: fontFamily })],
         })
       )
+      continue
+    }
+
+    if (sec.type === 'placeholder') {
+      const opts = sec.options ?? {}
+      const plStyle = opts.placeholderStyle ?? 'full_page'
+      const blankPageCount = Math.min(5, Math.max(1, opts.blankPageCount ?? 1))
+      const displayTitle = title || 'Reserved'
+
+      if (plStyle === 'full_page') {
+        children.push(
+          new Paragraph({
+            pageBreakBefore: true,
+            spacing: { after: 200 },
+            children: [new TextRun({ text: `${sectionNum}. ${displayTitle}`, bold: true, size: sizeH1, font: fontFamily })],
+          }),
+          new Paragraph({
+            spacing: { after: 400 },
+            children: [new TextRun({ text: 'Reserved for manual completion.', size: sizeBody - 2, font: fontFamily })],
+          })
+        )
+        for (let p = 1; p < blankPageCount; p++) {
+          children.push(
+            new Paragraph({
+              children: [new PageBreak()],
+            }),
+            new Paragraph({
+              spacing: { after: 200 },
+              children: [new TextRun({ text: 'Reserved for manual completion.', size: sizeBody - 2, font: fontFamily })],
+            })
+          )
+        }
+      } else {
+        children.push(
+          new Paragraph({
+            spacing: { before: 400, after: 200 },
+            children: [new TextRun({ text: `${sectionNum}. ${displayTitle}`, bold: true, size: sizeH1, font: fontFamily })],
+          })
+        )
+        for (let k = 0; k < 4; k++) {
+          children.push(
+            new Paragraph({
+              spacing: { before: 400, after: 400 },
+              children: [new TextRun({ text: ' ', size: sizeBody, font: fontFamily })],
+            })
+          )
+        }
+      }
     }
   }
 

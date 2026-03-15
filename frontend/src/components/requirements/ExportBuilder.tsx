@@ -31,6 +31,7 @@ import {
   addCoverPage,
   addHeaderFooterToAllPages,
   addSectionHeading,
+  addPlaceholderSection,
 } from '../../utils/exportPdfLayout'
 
 // Dynamic import for jspdf-autotable to prevent build issues
@@ -188,6 +189,11 @@ export default function ExportBuilder({
   const [documentStyle, setDocumentStyle] = useState<ExportDocumentStyle | undefined>(undefined)
   const [useDocumentSections, setUseDocumentSections] = useState(false)
   const [templateUpdatedMessage, setTemplateUpdatedMessage] = useState<string | null>(null)
+  const [isCreateTemplateOpen, setIsCreateTemplateOpen] = useState(false)
+  const [createTemplateFormat, setCreateTemplateFormat] = useState<ExportFormat>('pdf')
+  const [createTemplatePreset, setCreateTemplatePreset] = useState<'authority' | 'simple' | 'full' | 'submission_with_placeholders'>('authority')
+  const [createTemplateName, setCreateTemplateName] = useState('')
+  const [documentPresetSelect, setDocumentPresetSelect] = useState<string>('')
 
   const refreshTemplates = useCallback(() => {
     if (projectId) setTemplates(getExportTemplates(projectId))
@@ -394,6 +400,43 @@ export default function ExportBuilder({
     refreshTemplates,
   ])
 
+  const handleCreateNewTemplate = useCallback(() => {
+    const name = createTemplateName.trim().slice(0, 80)
+    if (!name || !projectId) return
+    const format = createTemplateFormat
+    const isPdfOrWord = format === 'pdf' || format === 'word'
+    const preset = createTemplatePreset
+    const template: ExportTemplate = {
+      id: crypto.randomUUID(),
+      name,
+      format,
+      columns: defaultColumns.map((c) => ({ key: c.key, label: c.label, selected: c.selected })),
+      scopeType: 'all',
+      selectedComponentId: undefined,
+      selectedFunctionId: undefined,
+      includeHeader: true,
+      parameterExportMode: 'name',
+      includeGlossary: true,
+      includeAbbreviations: true,
+      glossaryShowDefinitions: true,
+      glossarySortAlphabetically: true,
+      createdAt: new Date().toISOString(),
+      sections: isPdfOrWord ? getSectionsForPreset(preset) : undefined,
+      documentStyle: isPdfOrWord ? (preset === 'simple' ? undefined : { ...DEFAULT_AUTHORITY_STYLE }) : undefined,
+    }
+    try {
+      saveExportTemplate(projectId, template)
+      refreshTemplates()
+      setIsCreateTemplateOpen(false)
+      setCreateTemplateName('')
+      setInlineError(null)
+      setSelectedTemplateId(template.id)
+      applyTemplate(template)
+    } catch (e) {
+      setInlineError(e instanceof Error ? e.message : 'Could not save template.')
+    }
+  }, [projectId, createTemplateName, createTemplateFormat, createTemplatePreset, refreshTemplates, applyTemplate])
+
   const handleUpdateTemplate = useCallback(() => {
     if (!projectId || !selectedTemplateId) return
     const existing = templates.find((t) => t.id === selectedTemplateId)
@@ -446,7 +489,7 @@ export default function ExportBuilder({
     refreshTemplates,
   ])
 
-  const applyPreset = (preset: 'authority' | 'simple' | 'full') => {
+  const applyPreset = (preset: 'authority' | 'simple' | 'full' | 'submission_with_placeholders') => {
     setSections(getSectionsForPreset(preset))
     setDocumentStyle(preset === 'simple' ? undefined : { ...DEFAULT_AUTHORITY_STYLE })
   }
@@ -836,6 +879,13 @@ export default function ExportBuilder({
           doc.setFontSize(style.fontSizeBody ?? 11)
           doc.setFont(getPdfFont(style), 'normal')
           doc.text(opts.content.slice(0, 2000), marginPt, startY + 4, { maxWidth: doc.getNumberOfPages() ? (doc as unknown as { getPageWidth(): number }).getPageWidth?.() - 2 * marginPt : 170 })
+          continue
+        }
+        if (sec.type === 'placeholder') {
+          addPlaceholderSection(doc, sectionNum, title, style, {
+            placeholderStyle: opts.placeholderStyle ?? 'full_page',
+            blankPageCount: opts.blankPageCount ?? 1,
+          })
         }
       }
       addHeaderFooterToAllPages(doc, documentTitle, style)
@@ -957,6 +1007,7 @@ export default function ExportBuilder({
       (scopeType === 'function' && !!selectedFunctionId))
 
   const canSaveAsTemplate =
+    currentStep !== 'format' &&
     selectedCount > 0 &&
     canExport &&
     (scopeType === 'all' || (scopeType === 'component' && !!selectedComponentId) || (scopeType === 'function' && !!selectedFunctionId))
@@ -1005,8 +1056,7 @@ export default function ExportBuilder({
 
   const steps: { id: ExportStep; label: string }[] = [
     { id: 'format', label: 'Format' },
-    { id: 'scope', label: 'Scope' },
-    { id: 'options', label: 'Options' },
+    { id: 'scope', label: 'Scope and options' },
     { id: 'review', label: 'Review' },
   ]
   const currentStepIndex = steps.findIndex((s) => s.id === currentStep) + 1
@@ -1029,7 +1079,7 @@ export default function ExportBuilder({
                 Export Requirements{effectiveScopeLabel ? ` — ${effectiveScopeLabel}` : ''}
               </h2>
               <p id="export-dialog-desc" className="text-sm text-gray-500 dark:text-gray-400">
-                Step {currentStepIndex} of 4 · {effectiveRequirements.length} requirement{effectiveRequirements.length !== 1 ? 's' : ''} in scope
+                Step {currentStepIndex} of {steps.length} · {effectiveRequirements.length} requirement{effectiveRequirements.length !== 1 ? 's' : ''} in scope
               </p>
             </div>
           </div>
@@ -1133,16 +1183,34 @@ export default function ExportBuilder({
             </div>
           </div>
           {projectId && (
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Saved templates</label>
-                <div className="flex gap-2 flex-wrap items-center">
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Templates</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Save and reuse export configurations for this project.</p>
+              </div>
+              <div className="p-4 space-y-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setIsCreateTemplateOpen(true); setCreateTemplateFormat(selectedFormat); setCreateTemplateName(''); setCreateTemplatePreset('authority'); setInlineError(null) }}
+                    className="px-3 py-2 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                  >
+                    Create new template
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIsManageTemplatesOpen(true); setInlineError(null) }}
+                    className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
+                  >
+                    Manage templates
+                  </button>
                   {selectedTemplateId != null && (
                     <button
                       type="button"
                       onClick={handleUpdateTemplate}
                       disabled={!canSaveAsTemplate}
-                      className="px-3 py-2 text-sm border border-blue-300 dark:border-blue-600 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/50 disabled:opacity-50"
+                      title={!canSaveAsTemplate ? 'Complete Scope and Options steps, then return here to update this template.' : undefined}
+                      className="px-3 py-2 text-sm font-medium rounded-lg border border-blue-300 dark:border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Update this template
                     </button>
@@ -1151,52 +1219,107 @@ export default function ExportBuilder({
                     type="button"
                     onClick={() => { setIsSaveTemplateOpen(true); setInlineError(null) }}
                     disabled={!canSaveAsTemplate}
-                    className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+                    title={!canSaveAsTemplate ? 'Complete Scope and Options steps, then return here to save this configuration as a template.' : undefined}
+                    className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Save current as template
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => { setIsManageTemplatesOpen(true); setInlineError(null) }}
-                    className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
-                  >
-                    Manage templates
-                  </button>
+                </div>
+                {isCreateTemplateOpen && (
+                  <div className="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 p-4 space-y-3">
+                    <h4 className="text-sm font-medium text-gray-900 dark:text-white">New template</h4>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Format</label>
+                        <select
+                          value={createTemplateFormat}
+                          onChange={(e) => setCreateTemplateFormat(e.target.value as ExportFormat)}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        >
+                          <option value="csv">CSV</option>
+                          <option value="excel">Excel</option>
+                          <option value="pdf">PDF</option>
+                          <option value="word">Word</option>
+                          <option value="reqif">ReqIF</option>
+                        </select>
+                      </div>
+                      {(createTemplateFormat === 'pdf' || createTemplateFormat === 'word') && (
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Preset</label>
+                          <select
+                            value={createTemplatePreset}
+                            onChange={(e) => setCreateTemplatePreset(e.target.value as 'authority' | 'simple' | 'full' | 'submission_with_placeholders')}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          >
+                            <option value="authority">Authority submission</option>
+                            <option value="simple">Simple list</option>
+                            <option value="full">Full report</option>
+                            <option value="submission_with_placeholders">Submission with placeholders</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Template name</label>
+                      <input
+                        type="text"
+                        value={createTemplateName}
+                        onChange={(e) => setCreateTemplateName(e.target.value)}
+                        placeholder="e.g. Customer report"
+                        maxLength={80}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button type="button" onClick={() => { setIsCreateTemplateOpen(false); setCreateTemplateName('') }} className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">Cancel</button>
+                      <button type="button" onClick={handleCreateNewTemplate} disabled={!createTemplateName.trim()} className="px-3 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">Create</button>
+                    </div>
+                  </div>
+                )}
+                {currentStep === 'format' && !canSaveAsTemplate && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Configure format, scope, and options in the steps below. Return here to save or update a template.
+                  </p>
+                )}
+                {templateUpdatedMessage && (
+                  <p className="text-sm text-green-600 dark:text-green-400">{templateUpdatedMessage}</p>
+                )}
+                <div>
+                  <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Saved templates</h4>
+                  {templates.length === 0 ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 py-3 px-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+                      No templates yet. Create one above, or configure export in the next steps and use &quot;Save current as template&quot;.
+                    </p>
+                  ) : (
+                    <ul className="border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-200 dark:divide-gray-700 max-h-44 overflow-y-auto">
+                      {templates.map((t) => (
+                        <li
+                          key={t.id}
+                          className={clsx(
+                            'flex items-center justify-between gap-3 px-3 py-2.5',
+                            selectedTemplateId === t.id && 'bg-blue-50 dark:bg-blue-900/20 border-l-2 border-l-blue-500'
+                          )}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <span className="text-sm font-medium text-gray-900 dark:text-white truncate block">{t.name}</span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">{t.format}</span>
+                          </div>
+                          {selectedTemplateId === t.id && (
+                            <span className="text-xs font-medium text-blue-600 dark:text-blue-400 shrink-0">Applied</span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => applyTemplate(t)}
+                            className="shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            Apply
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
-              {templateUpdatedMessage && (
-                <p className="text-sm text-green-600 dark:text-green-400 mb-2">{templateUpdatedMessage}</p>
-              )}
-              {templates.length === 0 ? (
-                <p className="text-sm text-gray-500 dark:text-gray-400 py-2">No saved templates. Configure export and click &quot;Save current as template&quot;.</p>
-              ) : (
-                <ul className="border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-200 dark:divide-gray-700 max-h-40 overflow-y-auto">
-                  {templates.map((t) => (
-                    <li
-                      key={t.id}
-                      className={clsx(
-                        'flex items-center justify-between px-3 py-2',
-                        selectedTemplateId === t.id && 'bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-500'
-                      )}
-                    >
-                      <span className="text-sm text-gray-900 dark:text-white">
-                        {t.name}
-                        {selectedTemplateId === t.id && (
-                          <span className="ml-2 text-xs text-blue-600 dark:text-blue-400 font-medium">(applied)</span>
-                        )}
-                      </span>
-                      <span className="text-xs px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300">{t.format}</span>
-                      <button
-                        type="button"
-                        onClick={() => applyTemplate(t)}
-                        className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded"
-                      >
-                        Apply
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
           )}
           {isSaveTemplateOpen && (
@@ -1217,37 +1340,49 @@ export default function ExportBuilder({
             </div>
           )}
           {isManageTemplatesOpen && (
-            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-2">
-              <h4 className="text-sm font-medium text-gray-900 dark:text-white">Manage templates</h4>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Edit: apply template, change options in Steps 2–4, then use &quot;Update this template&quot; on Step 1 to save.</p>
-              <ul className="divide-y divide-gray-200 dark:divide-gray-700 max-h-48 overflow-y-auto">
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Manage templates</h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Apply, duplicate, rename, or delete. To create a new template, close this dialog and use &quot;Create new template&quot; on the main page.</p>
+              </div>
+              <div className="p-4 space-y-3">
+              <ul className="divide-y divide-gray-200 dark:divide-gray-700 max-h-48 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700">
                 {templates.map((t) => (
-                  <li key={t.id} className="flex items-center justify-between py-2 gap-2">
+                  <li key={t.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
                     {editingTemplateId === t.id ? (
                       <>
                         <input
                           type="text"
                           value={editingTemplateName}
                           onChange={(e) => setEditingTemplateName(e.target.value)}
-                          className="flex-1 min-w-0 px-2 py-1 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 mr-2"
+                          className="flex-1 min-w-0 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
                         />
-                        <button type="button" onClick={() => { updateExportTemplate(projectId!, t.id, { name: editingTemplateName.trim() }); refreshTemplates(); setEditingTemplateId(null); setEditingTemplateName('') }} className="text-xs text-blue-600 shrink-0">Save</button>
-                        <button type="button" onClick={() => { setEditingTemplateId(null); setEditingTemplateName('') }} className="text-xs text-gray-500 shrink-0">Cancel</button>
+                        <div className="flex gap-2 shrink-0">
+                          <button type="button" onClick={() => { updateExportTemplate(projectId!, t.id, { name: editingTemplateName.trim() }); refreshTemplates(); setEditingTemplateId(null); setEditingTemplateName('') }} className="px-2 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Save</button>
+                          <button type="button" onClick={() => { setEditingTemplateId(null); setEditingTemplateName('') }} className="px-2 py-1.5 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200">Cancel</button>
+                        </div>
                       </>
                     ) : (
                       <>
-                        <span className="text-sm truncate min-w-0">{t.name}</span>
-                        <div className="flex gap-1 shrink-0">
-                          <button type="button" onClick={() => { applyTemplate(t); setIsManageTemplatesOpen(false) }} className="text-xs text-blue-600 hover:underline" title="Apply and close to edit options, then use Update this template">Edit</button>
-                          <button type="button" onClick={() => { setEditingTemplateId(t.id); setEditingTemplateName(t.name) }} className="text-xs text-gray-600 dark:text-gray-400 hover:underline">Rename</button>
-                          <button type="button" onClick={() => { if (window.confirm(`Delete template "${t.name}"?`)) { deleteExportTemplate(projectId!, t.id); refreshTemplates(); if (selectedTemplateId === t.id) setSelectedTemplateId(null) } }} className="text-xs text-red-600 hover:underline">Delete</button>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-sm font-medium text-gray-900 dark:text-white truncate block">{t.name}</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">{t.format}</span>
+                        </div>
+                        <div className="flex gap-2 shrink-0 flex-wrap">
+                          <button type="button" onClick={() => { applyTemplate(t); setIsManageTemplatesOpen(false) }} className="px-2 py-1 text-xs font-medium rounded border border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20" title="Apply and edit in Steps 2–4">Apply</button>
+                          <button type="button" onClick={() => { const copy: ExportTemplate = { ...t, id: crypto.randomUUID(), name: (`Copy of ${t.name}`).slice(0, 80), createdAt: new Date().toISOString(), columns: t.columns.map((c) => ({ ...c })), sections: t.sections?.map((s) => ({ ...s, id: crypto.randomUUID(), options: s.options ? { ...s.options } : undefined })), documentStyle: t.documentStyle ? { ...t.documentStyle } : undefined }; saveExportTemplate(projectId!, copy); refreshTemplates(); setSelectedTemplateId(copy.id); applyTemplate(copy); setIsManageTemplatesOpen(false) }} className="px-2 py-1 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">Duplicate</button>
+                          <button type="button" onClick={() => { setEditingTemplateId(t.id); setEditingTemplateName(t.name) }} className="px-2 py-1 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">Rename</button>
+                          <button type="button" onClick={() => { if (window.confirm(`Delete template "${t.name}"?`)) { deleteExportTemplate(projectId!, t.id); refreshTemplates(); if (selectedTemplateId === t.id) setSelectedTemplateId(null) } }} className="px-2 py-1 text-xs font-medium rounded border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">Delete</button>
                         </div>
                       </>
                     )}
                   </li>
                 ))}
               </ul>
-              <button type="button" onClick={() => setIsManageTemplatesOpen(false)} className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">Done</button>
+              <div className="flex justify-end pt-2 border-t border-gray-200 dark:border-gray-700">
+                <button type="button" onClick={() => setIsManageTemplatesOpen(false)} className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">Done</button>
+              </div>
+              </div>
             </div>
           )}
             </>
@@ -1255,13 +1390,12 @@ export default function ExportBuilder({
 
           {currentStep === 'scope' && (
             <>
-          {/* Step 2: Scope */}
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Requirements in scope: <strong>{effectiveRequirements.length}</strong></p>
+          {/* Step 2: Scope and options */}
+          <div className="space-y-6">
+          <section>
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Scope</h3>
           {enableScopeSelection && (componentTree.length > 0 || flatFunctions.length > 0) ? (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Scope
-              </label>
               <div className="space-y-2">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -1362,13 +1496,11 @@ export default function ExportBuilder({
           ) : (
             <p className="text-sm text-gray-500 dark:text-gray-400">All requirements in this view.</p>
           )}
-            </>
-          )}
+          </section>
 
-          {currentStep === 'options' && (
-            <>
-          {/* Step 3: Columns & options */}
-          {/* Parameter display in exported text */}
+          {/* Content and layout options */}
+          <section>
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Content and layout</h3>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Parameter display
@@ -1509,11 +1641,14 @@ export default function ExportBuilder({
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Apply preset</label>
                     <select
-                      value=""
+                      value={documentPresetSelect}
                       onChange={(e) => {
-                        const v = e.target.value as 'authority' | 'simple' | 'full'
-                        if (v) applyPreset(v)
-                        e.target.value = ''
+                        const v = e.target.value as '' | 'authority' | 'simple' | 'full' | 'submission_with_placeholders'
+                        setDocumentPresetSelect(v)
+                        if (v) {
+                          applyPreset(v)
+                          setDocumentPresetSelect('')
+                        }
                       }}
                       className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     >
@@ -1521,6 +1656,7 @@ export default function ExportBuilder({
                       <option value="authority">Authority submission</option>
                       <option value="simple">Simple list</option>
                       <option value="full">Full report</option>
+                      <option value="submission_with_placeholders">Submission with placeholders</option>
                     </select>
                   </div>
                   <div>
@@ -1630,6 +1766,34 @@ export default function ExportBuilder({
                                 rows={3}
                                 className="w-full px-2 py-1 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                               />
+                            </div>
+                          )}
+                          {sec.type === 'placeholder' && (
+                            <div className="w-full mt-2 pl-6 space-y-1.5 text-sm">
+                              <div>
+                                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Placeholder style</label>
+                                <select
+                                  value={sec.options?.placeholderStyle ?? 'full_page'}
+                                  onChange={(e) => updateSection(sec.id, { options: { ...sec.options, placeholderStyle: e.target.value as 'full_page' | 'heading_with_space' } })}
+                                  className="w-full px-2 py-1 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                >
+                                  <option value="full_page">Full blank page(s)</option>
+                                  <option value="heading_with_space">Heading with blank space below</option>
+                                </select>
+                              </div>
+                              {(sec.options?.placeholderStyle ?? 'full_page') === 'full_page' && (
+                                <div>
+                                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Blank page count</label>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={5}
+                                    value={Math.min(5, Math.max(1, sec.options?.blankPageCount ?? 1))}
+                                    onChange={(e) => updateSection(sec.id, { options: { ...sec.options, blankPageCount: Math.min(5, Math.max(1, parseInt(e.target.value, 10) || 1)) } })}
+                                    className="w-20 px-2 py-1 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                  />
+                                </div>
+                              )}
                             </div>
                           )}
                         </li>
@@ -1816,12 +1980,14 @@ export default function ExportBuilder({
               </div>
             </div>
           )}
+          </section>
+          </div>
             </>
           )}
 
           {currentStep === 'review' && (
             <>
-          {/* Step 4: Review & export */}
+          {/* Step 3: Review & export */}
           <div className="space-y-3">
             <h3 className="text-sm font-medium text-gray-900 dark:text-white">Summary</h3>
             <ul className="text-sm text-gray-600 dark:text-gray-400 list-disc list-inside space-y-1">
@@ -1880,7 +2046,7 @@ export default function ExportBuilder({
           {currentStep !== 'format' && (
             <button
               type="button"
-              onClick={() => { setInlineError(null); setCurrentStep(currentStep === 'scope' ? 'format' : currentStep === 'options' ? 'scope' : 'options') }}
+              onClick={() => { setInlineError(null); setCurrentStep(currentStep === 'scope' ? 'format' : 'scope') }}
               className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-1"
             >
               <ChevronLeft size={16} />
@@ -1896,16 +2062,14 @@ export default function ExportBuilder({
                 else if (currentStep === 'scope') {
                   if (scopeType === 'component' && !selectedComponentId) setInlineError('Select a component to export.')
                   else if (scopeType === 'function' && !selectedFunctionId) setInlineError('Select a function to export.')
-                  else setCurrentStep('options')
-                } else if (currentStep === 'options') {
-                  if (selectedCount === 0) setInlineError('Select at least one column to export.')
+                  else if (selectedCount === 0) setInlineError('Select at least one column to export.')
                   else setCurrentStep('review')
                 }
               }}
               disabled={
                 (currentStep === 'scope' && scopeType === 'component' && !selectedComponentId) ||
                 (currentStep === 'scope' && scopeType === 'function' && !selectedFunctionId) ||
-                (currentStep === 'options' && selectedCount === 0)
+                (currentStep === 'scope' && selectedCount === 0)
               }
               className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-1 disabled:opacity-50"
             >

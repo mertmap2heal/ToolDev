@@ -65,8 +65,9 @@ From IEEE 830–style templates and common SRS guides:
 - **Headers/footers:** Document title or short name; **page numbering** (e.g. "Page X of N"); **date or revision**.
 - **Body:** Numbered sections; **new page for major sections**; consistent typography and margins (e.g. 25 mm); **tables** with clear headers and **repeated header row** on new pages.
 - **Supporting material:** Glossary, abbreviations, references (custom_text and glossary/abbreviations sections).
+- **Placeholder and blank pages:** Submissions often include **reserved space** for approvals, sign-off, or notes to be filled manually (on paper or in Word/PDF). A **placeholder** section type supports this: either full blank page(s) with optional section number and title at top, or a section heading with a large blank area on the same page.
 
-**Current alignment:** Cover (title, project, date, version, classification, preparer), header/footer with placeholders, page numbering, section numbering, new page per section, margins/font sizes, neutral table styling, repeat header row (Word), and glossary/abbreviations are implemented. Remaining gaps vs. ideal: **revision history** as a first-class section and **table of contents** (future).
+**Current alignment:** Cover (title, project, date, version, classification, preparer), header/footer with placeholders, page numbering, section numbering, new page per section, margins/font sizes, neutral table styling, repeat header row (Word), glossary/abbreviations, and **placeholder sections** (full blank page(s) or heading with blank space) are implemented. Remaining gaps vs. ideal: **revision history** as a first-class section and **table of contents** (future).
 
 ---
 
@@ -84,7 +85,7 @@ From IEEE 830–style templates and common SRS guides:
 |------|----------------|----------------------|--------|
 | **Formats** | CSV, Excel, PDF, Word, ReqIF | DOCX, XLSX, PDF, ReqIF typical | Aligned |
 | **Cover** | Title, project, date, version, classification, preparer | Same + revision tied to history | Add optional revision history section |
-| **Structure** | Cover, summary, requirements table, glossary, abbreviations, custom text | IEEE 830–like + TOC | Optional TOC and revision history |
+| **Structure** | Cover, summary, requirements table, glossary, abbreviations, custom text, **placeholder** (blank pages / space) | IEEE 830–like + TOC + reserved space for approval/notes | Placeholder aligned; optional TOC and revision history |
 | **Headers/footers** | Configurable L/C/R, placeholders, page X of N | Same | Aligned |
 | **Tables** | Neutral header, borders, repeat header (Word) | Same | Aligned |
 | **Traceability** | In-app; ReqIF for exchange | ReqIF + document structure | Aligned |

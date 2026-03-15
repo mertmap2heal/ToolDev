@@ -506,9 +506,10 @@ On save, automatically creates a `RequirementVersion` record:
 
 **Document sections (PDF/Word):**
 - **Toggle**: "Use document sections" enables an ordered list of sections; when off, single-table (legacy) behavior.
-- **Section types**: Cover, Summary, Requirements table, Glossary, Abbreviations, Custom text. Each section can be enabled/disabled and given a custom title; order is configurable (Up/Down).
-- **Per-section options**: Cover (show project name, date, version, version label, classification, preparer/organization); Custom text (free-form content).
-- **Presets**: "Authority submission" (cover, summary, requirements, glossary, abbreviations); "Simple list" (requirements table only); "Full report" (adds custom text appendix). Applying a preset sets sections and, for authority/full, default document style.
+- **Section types**: Cover, Summary, Requirements table, Glossary, Abbreviations, Custom text, **Placeholder**. Each section can be enabled/disabled and given a custom title; order is configurable (Up/Down).
+- **Per-section options**: Cover (show project name, date, version, version label, classification, preparer/organization); Custom text (free-form content); **Placeholder** (placeholder style: full blank page(s) or heading with blank space below; blank page count 1–5 when full page).
+- **Placeholder and blank pages**: Placeholder sections reserve space for manual completion (e.g. approval, sign-off, notes). **Full blank page(s)**: new page(s) with optional section number and title at top and hint "Reserved for manual completion"; configurable blank page count (1–5). **Heading with blank space below**: section heading on current page and a large blank area on the same page. Content already starts on new pages per section; placeholders make reserved space explicit.
+- **Presets**: "Authority submission" (cover, summary, requirements, glossary, abbreviations); "Simple list" (requirements table only); "Full report" (adds custom text appendix); **"Submission with placeholders"** (authority sections plus Approval/Sign-off placeholder and Notes placeholder). Applying a preset sets sections and, for authority/full/submission_with_placeholders, default document style.
 
 **Authority-grade styling (PDF/Word):**
 - **Document style** (optional): Cover title; header/footer left/center/right with placeholders `{title}`, `{date}`, `{page}`, `{pageOfN}`; page number format (none, page, page of N); margin (mm); body and heading font sizes; table header and alternate row colors (neutral defaults: dark gray header, light gray alternate rows). Used for section-based export and, when set, for single-table export (cover, header/footer, table styling).

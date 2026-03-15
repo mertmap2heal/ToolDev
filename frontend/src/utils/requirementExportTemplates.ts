@@ -8,7 +8,7 @@ const STORAGE_VERSION = 2
 
 export type ExportTemplateFormat = 'csv' | 'excel' | 'pdf' | 'word' | 'reqif'
 
-export type ExportSectionType = 'cover' | 'summary' | 'requirements_table' | 'glossary' | 'abbreviations' | 'custom_text'
+export type ExportSectionType = 'cover' | 'summary' | 'requirements_table' | 'glossary' | 'abbreviations' | 'custom_text' | 'placeholder'
 
 export interface ExportSection {
   id: string
@@ -23,6 +23,10 @@ export interface ExportSection {
     classification?: string
     preparerOrOrg?: string
     content?: string
+    /** Placeholder: full blank page(s) or heading with space below */
+    placeholderStyle?: 'full_page' | 'heading_with_space'
+    /** Placeholder full_page: number of blank pages to reserve (default 1) */
+    blankPageCount?: number
   }
 }
 
@@ -185,7 +189,7 @@ export const DEFAULT_AUTHORITY_STYLE: ExportDocumentStyle = {
 }
 
 /** Build default sections for a preset */
-export function getSectionsForPreset(preset: 'authority' | 'simple' | 'full'): ExportSection[] {
+export function getSectionsForPreset(preset: 'authority' | 'simple' | 'full' | 'submission_with_placeholders'): ExportSection[] {
   const base = (type: ExportSectionType, title: string, options?: ExportSection['options']): ExportSection => ({
     id: crypto.randomUUID(),
     type,
@@ -212,6 +216,16 @@ export function getSectionsForPreset(preset: 'authority' | 'simple' | 'full'): E
         base('glossary', 'Glossary'),
         base('abbreviations', 'Abbreviations'),
         base('custom_text', 'Appendix', { content: '' }),
+      ]
+    case 'submission_with_placeholders':
+      return [
+        base('cover', 'Cover', { showProjectName: true, showDate: true }),
+        base('summary', 'Summary'),
+        base('requirements_table', 'Requirements'),
+        base('glossary', 'Glossary'),
+        base('abbreviations', 'Abbreviations'),
+        base('placeholder', 'Approval / Sign-off', { placeholderStyle: 'full_page', blankPageCount: 1 }),
+        base('placeholder', 'Notes', { placeholderStyle: 'heading_with_space' }),
       ]
     default:
       return [base('requirements_table', 'Requirements')]
