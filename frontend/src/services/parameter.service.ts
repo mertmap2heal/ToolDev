@@ -15,13 +15,17 @@ export interface GetParametersQuery {
   tags?: string
   sort?: string
   order?: 'asc' | 'desc'
+  /** When true, response items include requirementCount (number of requirements referencing the parameter). */
+  includeUsageCounts?: boolean
 }
+
+export type ParameterWithUsage = Parameter & { requirementCount?: number }
 
 export const parameterService = {
   async getParameters(
     projectId: string,
     query?: GetParametersQuery
-  ): Promise<ApiResponse<Parameter[]>> {
+  ): Promise<ApiResponse<ParameterWithUsage[]>> {
     const params = new URLSearchParams()
     if (query?.search) params.set('search', query.search)
     if (query?.status) params.set('status', query.status)
@@ -30,8 +34,9 @@ export const parameterService = {
     if (query?.tags) params.set('tags', query.tags)
     if (query?.sort) params.set('sort', query.sort)
     if (query?.order) params.set('order', query.order)
+    if (query?.includeUsageCounts) params.set('includeUsageCounts', 'true')
     const q = params.toString()
-    return apiClient.get<Parameter[]>(`/parameters/${projectId}${q ? `?${q}` : ''}`)
+    return apiClient.get<ParameterWithUsage[]>(`/parameters/${projectId}${q ? `?${q}` : ''}`)
   },
 
   async getParameter(projectId: string, parameterId: string): Promise<ApiResponse<Parameter>> {
@@ -73,7 +78,19 @@ export const parameterService = {
   async getVersions(
     projectId: string,
     parameterId: string
-  ): Promise<ApiResponse<Array<{ id: string; parameterId: string; version: number; snapshot: Record<string, unknown>; createdAt: string; createdById?: string | null }>>> {
+  ): Promise<
+    ApiResponse<
+      Array<{
+        id: string
+        parameterId: string
+        version: number
+        snapshot: Record<string, unknown>
+        createdAt: string
+        createdById?: string | null
+        createdBy?: { id: string; name: string; email: string } | null
+      }>
+    >
+  > {
     return apiClient.get(`/parameters/${projectId}/versions/${parameterId}`)
   },
 

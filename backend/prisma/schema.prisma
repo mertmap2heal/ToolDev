@@ -33,6 +33,7 @@ model User {
   issueSystemNotes IssueSystemNote[]
   assignedIssues   Issue[]           @relation("IssueAssignee")
   createdIssues    Issue[]           @relation("IssueCreator")
+  parameterVersions ParameterVersion[]
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -635,11 +636,12 @@ model ParameterVersion {
   id          String   @id @default(uuid())
   parameterId String
   version     Int      // incrementing version number
-  snapshot    Json     // { defaultValue, unit, tolerance, status, minValue, maxValue, ... }
+  snapshot    Json     // full auditable fields: name, description, dataType, defaultValue, unit, tolerance, minValue, maxValue, status, ownerType, formula, version, etc.
   createdAt   DateTime @default(now())
   createdById String?
 
   parameter Parameter @relation(fields: [parameterId], references: [id], onDelete: Cascade)
+  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([parameterId])
 }

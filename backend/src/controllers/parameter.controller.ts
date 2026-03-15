@@ -42,10 +42,66 @@ function buildParameterWhere(projectId: string, query: Record<string, string | u
   return where
 }
 
+/** Build full auditable snapshot for ParameterVersion (name, description, value fields, status, etc.). */
+function buildParameterVersionSnapshot(p: {
+  name: string
+  description?: string | null
+  dataType?: string | null
+  defaultValue?: string | null
+  unit?: string | null
+  tolerance?: string | null
+  minValue?: string | null
+  maxValue?: string | null
+  version?: string | null
+  status?: string | null
+  ownerType?: string | null
+  formula?: string | null
+  tags?: unknown
+  updatedAt: Date
+}) {
+  return {
+    name: p.name,
+    description: p.description ?? null,
+    dataType: p.dataType ?? null,
+    defaultValue: p.defaultValue ?? null,
+    unit: p.unit ?? null,
+    tolerance: p.tolerance ?? null,
+    minValue: p.minValue ?? null,
+    maxValue: p.maxValue ?? null,
+    version: p.version ?? null,
+    status: p.status ?? null,
+    ownerType: p.ownerType ?? null,
+    formula: p.formula ?? null,
+    tags: p.tags ?? null,
+    updatedAt: p.updatedAt,
+  }
+}
+
+const PARAM_PLACEHOLDER_REGEX = /\{\{\s*param\s*:\s*([a-f0-9-]{36})\s*\}\}/gi
+
+/** Aggregate requirement usage counts per parameter id from requirement title/description. */
+function aggregateParameterUsageCounts(
+  requirements: { id: string; title: string; description: string }[]
+): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const r of requirements) {
+    const text = `${r.title ?? ''} ${r.description ?? ''}`
+    let m: RegExpExecArray | null
+    const re = new RegExp(PARAM_PLACEHOLDER_REGEX.source, 'gi')
+    while ((m = re.exec(text)) !== null) {
+      if (m[1]) {
+        const id = m[1].toLowerCase()
+        counts.set(id, (counts.get(id) ?? 0) + 1)
+      }
+    }
+  }
+  return counts
+}
+
 export const getParameters = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
-    const { search, status, ownerType, folderId, tags, sort = 'updatedAt', order = 'desc' } = req.query as Record<string, string>
+    const { search, status, ownerType, folderId, tags, sort = 'updatedAt', order = 'desc', includeUsageCounts } = req.query as Record<string, string>
 
     const where = buildParameterWhere(projectId, { search, status, ownerType, folderId, tags })
     // Prisma does not support array_contains on Json; filter tags in memory if needed
@@ -68,6 +124,26 @@ export const getParameters = async (req: AuthRequest, res: Response) => {
           return tagList.some((tag) => t.includes(tag))
         })
       }
+    }
+
+    if (includeUsageCounts === 'true' || includeUsageCounts === '1') {
+      const reqs = await prisma.requirement.findMany({
+        where: {
+          projectId,
+          deletedAt: null,
+          OR: [
+            { title: { contains: '{{param:' } },
+            { description: { contains: '{{param:' } },
+          ],
+        },
+        select: { id: true, title: true, description: true },
+      })
+      const usageCounts = aggregateParameterUsageCounts(reqs)
+      const withCounts = filtered.map((p) => ({
+        ...p,
+        requirementCount: usageCounts.get(p.id.toLowerCase()) ?? 0,
+      }))
+      return res.json({ success: true, data: withCounts })
     }
 
     res.json({ success: true, data: filtered })
@@ -172,16 +248,7 @@ export const updateParameter = async (req: AuthRequest, res: Response) => {
       },
     })
 
-    const snapshot = {
-      defaultValue: updatedParameter.defaultValue,
-      unit: updatedParameter.unit,
-      tolerance: updatedParameter.tolerance,
-      minValue: updatedParameter.minValue,
-      maxValue: updatedParameter.maxValue,
-      status: updatedParameter.status,
-      version: updatedParameter.version,
-      updatedAt: updatedParameter.updatedAt,
-    }
+    const snapshot = buildParameterVersionSnapshot(updatedParameter)
     const lastVersion = await prisma.parameterVersion.findFirst({
       where: { parameterId: id },
       orderBy: { version: 'desc' },
@@ -193,10 +260,23 @@ export const updateParameter = async (req: AuthRequest, res: Response) => {
         parameterId: id,
         version: nextVersion,
         snapshot: snapshot as object,
+        createdById: req.userId ?? undefined,
       },
     })
 
-    res.json({ success: true, data: updatedParameter })
+    const placeholder = `{{param:${id}}}`
+    const requirementCount = await prisma.requirement.count({
+      where: {
+        projectId: updatedParameter.projectId,
+        deletedAt: null,
+        OR: [
+          { title: { contains: placeholder } },
+          { description: { contains: placeholder } },
+        ],
+      },
+    })
+
+    res.json({ success: true, data: updatedParameter, requirementCount })
   } catch (error: any) {
     console.error('Update parameter error:', error)
     if (error.code === 'P2002') {
@@ -277,17 +357,13 @@ export const createParameter = async (req: AuthRequest, res: Response) => {
       },
     })
 
+    const snapshot = buildParameterVersionSnapshot(parameter)
     await prisma.parameterVersion.create({
       data: {
         parameterId: parameter.id,
         version: 1,
-        snapshot: {
-          defaultValue: parameter.defaultValue,
-          unit: parameter.unit,
-          tolerance: parameter.tolerance,
-          status: parameter.status,
-          version: parameter.version,
-        },
+        snapshot: snapshot as object,
+        createdById: req.userId ?? undefined,
       },
     })
 
@@ -389,6 +465,9 @@ export const getParameterVersions = async (req: AuthRequest, res: Response) => {
     const versions = await prisma.parameterVersion.findMany({
       where: { parameterId },
       orderBy: { version: 'desc' },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true } },
+      },
     })
 
     res.json({ success: true, data: versions })

@@ -4,9 +4,10 @@ import { Search, X, Trash2, Edit2, Plus, Filter, ChevronDown, ChevronUp, FileTex
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
-import { parameterService } from '../../services/parameter.service'
+import { parameterService, type ParameterWithUsage } from '../../services/parameter.service'
 import DeleteConfirmationModal from '../../components/projects/DeleteConfirmationModal'
 import EditParameterModal from '../../components/parameters/EditParameterModal'
+import ParameterDetailDrawer from '../../components/parameters/ParameterDetailDrawer'
 import SourceDetailsModal from '../../components/parameters/SourceDetailsModal'
 import CreateParameterModal from '../../components/parameters/CreateParameterModal'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
@@ -19,6 +20,7 @@ export default function ParametersPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string; name: string } | null>(null)
   const [editingParameter, setEditingParameter] = useState<Parameter | null>(null)
+  const [detailParameter, setDetailParameter] = useState<Parameter | null>(null)
   const [viewingSource, setViewingSource] = useState<Parameter | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
@@ -30,12 +32,12 @@ export default function ParametersPage() {
   const queryClient = useQueryClient()
 
   const { data: parameters = [], isLoading } = useQuery({
-    queryKey: ['parameters', projectId],
+    queryKey: ['parameters', projectId, true],
     queryFn: async () => {
       if (!projectId) throw new Error('Project ID required')
-      const response = await parameterService.getParameters(projectId)
+      const response = await parameterService.getParameters(projectId, { includeUsageCounts: true })
       if (response.success && response.data) {
-        return response.data
+        return response.data as ParameterWithUsage[]
       }
       throw new Error(response.error || 'Failed to load parameters')
     },
@@ -268,6 +270,11 @@ export default function ParametersPage() {
           </p>
         </div>
       )}
+      {parameters.length > 0 && !isLoading && (
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Parameter values are referenced in requirements; updates apply everywhere the parameter is used.
+        </p>
+      )}
 
       {/* Parameters Table */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
@@ -297,6 +304,9 @@ export default function ParametersPage() {
                   Status
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Requirements
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Created
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-16">
@@ -307,13 +317,13 @@ export default function ParametersPage() {
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={10} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                     Loading parameters...
                   </td>
                 </tr>
               ) : filteredParameters.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={10} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                     {parameters.length === 0
                       ? 'No parameters found. Use @parameterName@ in function descriptions to automatically create parameters.'
                       : 'No parameters match your search or filter criteria.'}
@@ -326,7 +336,13 @@ export default function ParametersPage() {
                     className="hover:bg-gray-50 dark:hover:bg-gray-700/50"
                   >
                     <td className="px-4 py-3">
-                      <span className="font-medium text-gray-900 dark:text-white">{param.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setDetailParameter(param)}
+                        className="font-medium text-blue-600 dark:text-blue-400 hover:underline text-left"
+                      >
+                        {param.name}
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-md">
                       <p className="truncate" title={param.description || ''}>
@@ -364,6 +380,19 @@ export default function ParametersPage() {
                       )}>
                         {param.status ?? 'draft'}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {(param as ParameterWithUsage).requirementCount != null ? (
+                        <button
+                          type="button"
+                          onClick={() => setDetailParameter(param)}
+                          className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                        >
+                          {(param as ParameterWithUsage).requirementCount}
+                        </button>
+                      ) : (
+                        <span className="text-gray-500 dark:text-gray-400">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                       {format(new Date(param.createdAt), 'MMM dd, yyyy')}
@@ -422,6 +451,13 @@ export default function ParametersPage() {
 
       {projectId && (
         <>
+          <ParameterDetailDrawer
+            isOpen={!!detailParameter}
+            onClose={() => setDetailParameter(null)}
+            projectId={projectId}
+            parameter={detailParameter}
+            onEdit={setEditingParameter}
+          />
           <EditParameterModal
             isOpen={!!editingParameter}
             onClose={() => setEditingParameter(null)}
