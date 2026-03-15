@@ -27,6 +27,7 @@ import {
 } from '../../utils/requirementExportTemplates'
 import {
   getAuthorityTableStyles,
+  getPdfFont,
   addCoverPage,
   addHeaderFooterToAllPages,
   addSectionHeading,
@@ -186,6 +187,7 @@ export default function ExportBuilder({
   const [sections, setSections] = useState<ExportSection[] | undefined>(undefined)
   const [documentStyle, setDocumentStyle] = useState<ExportDocumentStyle | undefined>(undefined)
   const [useDocumentSections, setUseDocumentSections] = useState(false)
+  const [templateUpdatedMessage, setTemplateUpdatedMessage] = useState<string | null>(null)
 
   const refreshTemplates = useCallback(() => {
     if (projectId) setTemplates(getExportTemplates(projectId))
@@ -375,6 +377,58 @@ export default function ExportBuilder({
   }, [
     projectId,
     saveTemplateName,
+    selectedFormat,
+    columns,
+    scopeType,
+    selectedComponentId,
+    selectedFunctionId,
+    includeHeader,
+    parameterExportMode,
+    includeGlossary,
+    includeAbbreviations,
+    glossaryShowDefinitions,
+    glossarySortAlphabetically,
+    useDocumentSections,
+    sections,
+    documentStyle,
+    refreshTemplates,
+  ])
+
+  const handleUpdateTemplate = useCallback(() => {
+    if (!projectId || !selectedTemplateId) return
+    const existing = templates.find((t) => t.id === selectedTemplateId)
+    if (!existing) return
+    const template: ExportTemplate = {
+      ...existing,
+      id: selectedTemplateId,
+      name: existing.name,
+      format: selectedFormat,
+      columns: columns.map((c) => ({ key: c.key, label: c.label, selected: c.selected })),
+      scopeType,
+      selectedComponentId: scopeType === 'component' ? selectedComponentId || undefined : undefined,
+      selectedFunctionId: scopeType === 'function' ? selectedFunctionId || undefined : undefined,
+      includeHeader,
+      parameterExportMode,
+      includeGlossary,
+      includeAbbreviations,
+      glossaryShowDefinitions,
+      glossarySortAlphabetically,
+      sections: useDocumentSections ? sections : undefined,
+      documentStyle: documentStyle ?? undefined,
+    }
+    try {
+      saveExportTemplate(projectId, template)
+      refreshTemplates()
+      setInlineError(null)
+      setTemplateUpdatedMessage('Template updated.')
+      setTimeout(() => setTemplateUpdatedMessage(null), 2500)
+    } catch (e) {
+      setInlineError(e instanceof Error ? e.message : 'Could not update template.')
+    }
+  }, [
+    projectId,
+    selectedTemplateId,
+    templates,
     selectedFormat,
     columns,
     scopeType,
@@ -716,7 +770,7 @@ export default function ExportBuilder({
         if (sec.type === 'summary') {
           const startY = addSectionHeading(doc, sectionNum, title, style, true)
           doc.setFontSize(style.fontSizeBody ?? 11)
-          doc.setFont('helvetica', 'normal')
+          doc.setFont(getPdfFont(style), 'normal')
           doc.text(`This document contains ${effectiveRequirements.length} requirement(s).`, marginPt, startY + 4)
           if (projectName) doc.text(`Project: ${projectName}`, marginPt, startY + 12)
           continue
@@ -730,6 +784,8 @@ export default function ExportBuilder({
             styles: { fontSize: authorityStyles.fontSize, cellPadding: 2 },
             headStyles: authorityStyles.headStyles,
             alternateRowStyles: authorityStyles.alternateRowStyles,
+            tableLineColor: authorityStyles.tableLineColor,
+            tableLineWidth: authorityStyles.tableLineWidth,
             columnStyles: selectedCols.reduce((acc, col, index) => {
               if (col.key === 'description' || col.key === 'acceptanceCriteria') acc[index] = { cellWidth: 'wrap' }
               return acc
@@ -750,6 +806,8 @@ export default function ExportBuilder({
             styles: { fontSize: authorityStyles.fontSize, cellPadding: 2 },
             headStyles: authorityStyles.headStyles,
             alternateRowStyles: authorityStyles.alternateRowStyles,
+            tableLineColor: authorityStyles.tableLineColor,
+            tableLineWidth: authorityStyles.tableLineWidth,
             columnStyles: glossaryShowDefinitions ? { 1: { cellWidth: 'wrap' } } : {},
           })
           continue
@@ -767,6 +825,8 @@ export default function ExportBuilder({
             styles: { fontSize: authorityStyles.fontSize, cellPadding: 2 },
             headStyles: authorityStyles.headStyles,
             alternateRowStyles: authorityStyles.alternateRowStyles,
+            tableLineColor: authorityStyles.tableLineColor,
+            tableLineWidth: authorityStyles.tableLineWidth,
             columnStyles: glossaryShowDefinitions ? { 1: { cellWidth: 'wrap' } } : {},
           })
           continue
@@ -774,7 +834,7 @@ export default function ExportBuilder({
         if (sec.type === 'custom_text' && opts.content) {
           const startY = addSectionHeading(doc, sectionNum, title, style, true)
           doc.setFontSize(style.fontSizeBody ?? 11)
-          doc.setFont('helvetica', 'normal')
+          doc.setFont(getPdfFont(style), 'normal')
           doc.text(opts.content.slice(0, 2000), marginPt, startY + 4, { maxWidth: doc.getNumberOfPages() ? (doc as unknown as { getPageWidth(): number }).getPageWidth?.() - 2 * marginPt : 170 })
         }
       }
@@ -812,6 +872,7 @@ export default function ExportBuilder({
         styles: { fontSize: documentStyle ? authorityStyles.fontSize : 8, cellPadding: 2 },
         headStyles,
         alternateRowStyles: altStyles,
+        ...(documentStyle && { tableLineColor: authorityStyles.tableLineColor, tableLineWidth: authorityStyles.tableLineWidth }),
         columnStyles: selectedCols.reduce((acc, col, index) => {
           if (col.key === 'description' || col.key === 'acceptanceCriteria') acc[index] = { cellWidth: 'wrap' }
           return acc
@@ -825,7 +886,7 @@ export default function ExportBuilder({
           doc.setFontSize(10)
         } else {
           doc.setFontSize(style.fontSizeHeading1 ?? 14)
-          doc.setFont('helvetica', 'bold')
+          doc.setFont(getPdfFont(style), 'bold')
           doc.text('Glossary', marginPt, marginPt + 6)
         }
         const glossaryBody = usedGlossaryEntries.map((e) =>
@@ -839,6 +900,7 @@ export default function ExportBuilder({
           startY: glStartY,
           styles: { fontSize: documentStyle ? authorityStyles.fontSize : 8, cellPadding: 2 },
           headStyles,
+          ...(documentStyle && { tableLineColor: authorityStyles.tableLineColor, tableLineWidth: authorityStyles.tableLineWidth }),
           columnStyles: glossaryShowDefinitions ? { 1: { cellWidth: 'wrap' } } : {},
         })
       }
@@ -850,7 +912,7 @@ export default function ExportBuilder({
           doc.setFontSize(10)
         } else {
           doc.setFontSize(style.fontSizeHeading1 ?? 14)
-          doc.setFont('helvetica', 'bold')
+          doc.setFont(getPdfFont(style), 'bold')
           doc.text('Abbreviations', marginPt, marginPt + 6)
         }
         const abbrBody = usedAbbreviationEntries.map((e) =>
@@ -863,6 +925,7 @@ export default function ExportBuilder({
           startY: documentStyle ? marginPt + 14 : 22,
           styles: { fontSize: documentStyle ? authorityStyles.fontSize : 8, cellPadding: 2 },
           headStyles,
+          ...(documentStyle && { tableLineColor: authorityStyles.tableLineColor, tableLineWidth: authorityStyles.tableLineWidth }),
           columnStyles: glossaryShowDefinitions ? { 1: { cellWidth: 'wrap' } } : {},
         })
       }
@@ -1073,7 +1136,17 @@ export default function ExportBuilder({
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Saved templates</label>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap items-center">
+                  {selectedTemplateId != null && (
+                    <button
+                      type="button"
+                      onClick={handleUpdateTemplate}
+                      disabled={!canSaveAsTemplate}
+                      className="px-3 py-2 text-sm border border-blue-300 dark:border-blue-600 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/50 disabled:opacity-50"
+                    >
+                      Update this template
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => { setIsSaveTemplateOpen(true); setInlineError(null) }}
@@ -1091,13 +1164,27 @@ export default function ExportBuilder({
                   </button>
                 </div>
               </div>
+              {templateUpdatedMessage && (
+                <p className="text-sm text-green-600 dark:text-green-400 mb-2">{templateUpdatedMessage}</p>
+              )}
               {templates.length === 0 ? (
                 <p className="text-sm text-gray-500 dark:text-gray-400 py-2">No saved templates. Configure export and click &quot;Save current as template&quot;.</p>
               ) : (
                 <ul className="border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-200 dark:divide-gray-700 max-h-40 overflow-y-auto">
                   {templates.map((t) => (
-                    <li key={t.id} className="flex items-center justify-between px-3 py-2">
-                      <span className="text-sm text-gray-900 dark:text-white">{t.name}</span>
+                    <li
+                      key={t.id}
+                      className={clsx(
+                        'flex items-center justify-between px-3 py-2',
+                        selectedTemplateId === t.id && 'bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-500'
+                      )}
+                    >
+                      <span className="text-sm text-gray-900 dark:text-white">
+                        {t.name}
+                        {selectedTemplateId === t.id && (
+                          <span className="ml-2 text-xs text-blue-600 dark:text-blue-400 font-medium">(applied)</span>
+                        )}
+                      </span>
                       <span className="text-xs px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300">{t.format}</span>
                       <button
                         type="button"
@@ -1132,33 +1219,35 @@ export default function ExportBuilder({
           {isManageTemplatesOpen && (
             <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-2">
               <h4 className="text-sm font-medium text-gray-900 dark:text-white">Manage templates</h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Edit: apply template, change options in Steps 2–4, then use &quot;Update this template&quot; on Step 1 to save.</p>
               <ul className="divide-y divide-gray-200 dark:divide-gray-700 max-h-48 overflow-y-auto">
                 {templates.map((t) => (
-                  <li key={t.id} className="flex items-center justify-between py-2">
+                  <li key={t.id} className="flex items-center justify-between py-2 gap-2">
                     {editingTemplateId === t.id ? (
                       <>
                         <input
                           type="text"
                           value={editingTemplateName}
                           onChange={(e) => setEditingTemplateName(e.target.value)}
-                          className="flex-1 px-2 py-1 text-sm border rounded mr-2"
+                          className="flex-1 min-w-0 px-2 py-1 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 mr-2"
                         />
-                        <button type="button" onClick={() => { updateExportTemplate(projectId!, t.id, { name: editingTemplateName.trim() }); refreshTemplates(); setEditingTemplateId(null); setEditingTemplateName('') }} className="text-xs text-blue-600 mr-1">Save</button>
-                        <button type="button" onClick={() => { setEditingTemplateId(null); setEditingTemplateName('') }} className="text-xs text-gray-500">Cancel</button>
+                        <button type="button" onClick={() => { updateExportTemplate(projectId!, t.id, { name: editingTemplateName.trim() }); refreshTemplates(); setEditingTemplateId(null); setEditingTemplateName('') }} className="text-xs text-blue-600 shrink-0">Save</button>
+                        <button type="button" onClick={() => { setEditingTemplateId(null); setEditingTemplateName('') }} className="text-xs text-gray-500 shrink-0">Cancel</button>
                       </>
                     ) : (
                       <>
-                        <span className="text-sm">{t.name}</span>
-                        <div className="flex gap-1">
-                          <button type="button" onClick={() => { setEditingTemplateId(t.id); setEditingTemplateName(t.name) }} className="text-xs text-blue-600">Rename</button>
-                          <button type="button" onClick={() => { if (window.confirm(`Delete template "${t.name}"?`)) { deleteExportTemplate(projectId!, t.id); refreshTemplates() } }} className="text-xs text-red-600">Delete</button>
+                        <span className="text-sm truncate min-w-0">{t.name}</span>
+                        <div className="flex gap-1 shrink-0">
+                          <button type="button" onClick={() => { applyTemplate(t); setIsManageTemplatesOpen(false) }} className="text-xs text-blue-600 hover:underline" title="Apply and close to edit options, then use Update this template">Edit</button>
+                          <button type="button" onClick={() => { setEditingTemplateId(t.id); setEditingTemplateName(t.name) }} className="text-xs text-gray-600 dark:text-gray-400 hover:underline">Rename</button>
+                          <button type="button" onClick={() => { if (window.confirm(`Delete template "${t.name}"?`)) { deleteExportTemplate(projectId!, t.id); refreshTemplates(); if (selectedTemplateId === t.id) setSelectedTemplateId(null) } }} className="text-xs text-red-600 hover:underline">Delete</button>
                         </div>
                       </>
                     )}
                   </li>
                 ))}
               </ul>
-              <button type="button" onClick={() => setIsManageTemplatesOpen(false)} className="px-3 py-2 text-sm border rounded-lg">Done</button>
+              <button type="button" onClick={() => setIsManageTemplatesOpen(false)} className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">Done</button>
             </div>
           )}
             </>
@@ -1565,6 +1654,19 @@ export default function ExportBuilder({
                       placeholder="e.g. Requirements Export"
                       className="w-full px-2 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-0.5">Font family</label>
+                    <select
+                      value={documentStyle?.fontFamily ?? ''}
+                      onChange={(e) => updateDocumentStyle({ fontFamily: e.target.value || undefined })}
+                      className="w-full px-2 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="">Default (Helvetica / system)</option>
+                      <option value="Times New Roman">Times New Roman</option>
+                      <option value="Helvetica">Helvetica</option>
+                      <option value="Courier New">Courier New</option>
+                    </select>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     <div>

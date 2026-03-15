@@ -20,11 +20,24 @@ const DEFAULT_HEADER_FG = [255, 255, 255] as [number, number, number]
 const DEFAULT_BORDER = [229, 231, 235] as [number, number, number]
 const DEFAULT_ALT_ROW = [249, 250, 251] as [number, number, number]
 
+/** jsPDF built-in font names */
+export type PdfFontName = 'helvetica' | 'times' | 'courier'
+
+/** Map documentStyle.fontFamily to jsPDF built-in font (helvetica, times, courier). */
+export function getPdfFont(style?: ExportDocumentStyle | null): PdfFontName {
+  const name = (style ?? DEFAULT_AUTHORITY_STYLE).fontFamily?.toLowerCase?.() ?? ''
+  if (name.includes('times') || name === 'serif') return 'times'
+  if (name.includes('courier') || name === 'monospace') return 'courier'
+  return 'helvetica'
+}
+
 export function getAuthorityTableStyles(style?: ExportDocumentStyle | null): {
   headStyles: { fillColor: [number, number, number]; textColor: [number, number, number]; fontStyle: string }
   alternateRowStyles: { fillColor: [number, number, number] }
   margin: number
   fontSize: number
+  tableLineColor: [number, number, number]
+  tableLineWidth: number
 } {
   const s = style ?? DEFAULT_AUTHORITY_STYLE
   const margin = s.marginMm ?? DEFAULT_AUTHORITY_STYLE.marginMm ?? 25
@@ -40,6 +53,8 @@ export function getAuthorityTableStyles(style?: ExportDocumentStyle | null): {
     },
     margin,
     fontSize: fontSize - 1,
+    tableLineColor: s.tableBorderColor ? parseHex(s.tableBorderColor) : DEFAULT_BORDER,
+    tableLineWidth: 0.1,
   }
 }
 
@@ -70,15 +85,21 @@ export function addCoverPage(
 
   const fontSizeH1 = s.fontSizeHeading1 ?? 14
   const fontSizeBody = s.fontSizeBody ?? 11
+  const font = getPdfFont(style)
 
   doc.setFontSize(fontSizeH1 + 4)
-  doc.setFont('helvetica', 'bold')
+  doc.setFont(font, 'bold')
   doc.text(opts.documentTitle, centerX, y, { align: 'center' })
+  y += 10
+  const lineColor = s.tableBorderColor ? parseHex(s.tableBorderColor) : DEFAULT_BORDER
+  doc.setDrawColor(lineColor[0], lineColor[1], lineColor[2])
+  doc.setLineWidth(0.3)
+  doc.line(margin, y, pageW - margin, y)
   y += 12
 
   if (opts.projectName) {
     doc.setFontSize(fontSizeBody + 1)
-    doc.setFont('helvetica', 'normal')
+    doc.setFont(font, 'normal')
     doc.text(opts.projectName, centerX, y, { align: 'center' })
     y += 8
   }
@@ -93,9 +114,9 @@ export function addCoverPage(
   }
   if (opts.classification) {
     y += 6
-    doc.setFont('helvetica', 'bold')
+    doc.setFont(font, 'bold')
     doc.text(opts.classification, centerX, y, { align: 'center' })
-    doc.setFont('helvetica', 'normal')
+    doc.setFont(font, 'normal')
     y += 8
   }
   if (opts.preparerOrOrg) {
@@ -131,9 +152,10 @@ export function addHeaderFooter(
   const pageH = d.getPageHeight?.() ?? 297
   const fontSize = (s.fontSizeBody ?? 11) - 1
   const formatType = s.pageNumberFormat ?? 'pageOfN'
+  const font = getPdfFont(style)
 
   doc.setFontSize(fontSize)
-  doc.setFont('helvetica', 'normal')
+  doc.setFont(font, 'normal')
 
   const headerL = s.headerLeft ? substitutePlaceholders(s.headerLeft, pageNum, totalPages, documentTitle) : ''
   const headerC = s.headerCenter ? substitutePlaceholders(s.headerCenter, pageNum, totalPages, documentTitle) : ''
@@ -187,7 +209,7 @@ export function addSectionHeading(
 
   if (startNewPage) doc.addPage()
   doc.setFontSize(fontSizeH1)
-  doc.setFont('helvetica', 'bold')
+  doc.setFont(getPdfFont(style), 'bold')
   const headingText = `${sectionNumber}. ${title}`
   doc.text(headingText, margin, margin + 6)
   return margin + 14

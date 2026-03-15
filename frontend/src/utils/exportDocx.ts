@@ -45,6 +45,7 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
     Header,
     Footer,
     AlignmentType,
+    BorderStyle,
   } = await import('docx')
 
   const style = options.documentStyle ?? DEFAULT_AUTHORITY_STYLE
@@ -53,14 +54,30 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
   const sizeH1 = ((style.fontSizeHeading1 ?? 14) * 2)
   const sizeH2 = ((style.fontSizeHeading2 ?? 12) * 2)
   const marginTwip = style.marginMm != null ? Math.round((style.marginMm / 25.4) * 1440) : 1440
+  const fontFamily = style.fontFamily || 'Times New Roman'
+  const borderColorHex = style.tableBorderColor?.replace('#', '') ?? 'E5E7EB'
 
   const headerBg = style.tableHeaderBg?.replace('#', '') ?? '374151'
   const headerFg = style.tableHeaderFg?.replace('#', '') ?? 'FFFFFF'
 
+  const singleBorder = {
+    style: BorderStyle.SINGLE,
+    size: 6,
+    color: borderColorHex,
+  }
+  const tableBorders = {
+    top: singleBorder,
+    bottom: singleBorder,
+    left: singleBorder,
+    right: singleBorder,
+    insideHorizontal: singleBorder,
+    insideVertical: singleBorder,
+  }
+
   const createParagraph = (text: string, bold = false, size = sizeBody) =>
     new Paragraph({
       spacing: { after: 80 },
-      children: [new TextRun({ text: text.slice(0, 32000), bold, size })],
+      children: [new TextRun({ text: text.slice(0, 32000), bold, size, font: fontFamily })],
     })
 
   type DocxChild = InstanceType<typeof Paragraph> | InstanceType<typeof Table>
@@ -79,7 +96,7 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
         new Paragraph({
           spacing: { after: 400 },
           alignment: AlignmentType.CENTER,
-          children: [new TextRun({ text: options.documentTitle, bold: true, size: sizeH1 + 4 })],
+          children: [new TextRun({ text: options.documentTitle, bold: true, size: sizeH1 + 4, font: fontFamily })],
         })
       )
       if (opts.showProjectName !== false && options.projectName) {
@@ -87,7 +104,7 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
           new Paragraph({
             spacing: { after: 200 },
             alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: options.projectName, size: sizeBody + 2 })],
+            children: [new TextRun({ text: options.projectName, size: sizeBody + 2, font: fontFamily })],
           })
         )
       }
@@ -96,7 +113,7 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
           new Paragraph({
             spacing: { after: 200 },
             alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: `Date: ${format(new Date(), 'yyyy-MM-dd')}`, size: sizeBody })],
+            children: [new TextRun({ text: `Date: ${format(new Date(), 'yyyy-MM-dd')}`, size: sizeBody, font: fontFamily })],
           })
         )
       }
@@ -104,7 +121,7 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
         coverChildren.push(
           new Paragraph({
             alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: `Version: ${opts.versionLabel}`, size: sizeBody })],
+            children: [new TextRun({ text: `Version: ${opts.versionLabel}`, size: sizeBody, font: fontFamily })],
           })
         )
       }
@@ -113,7 +130,7 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
           new Paragraph({
             spacing: { before: 300, after: 200 },
             alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: opts.classification, bold: true, size: sizeBody })],
+            children: [new TextRun({ text: opts.classification, bold: true, size: sizeBody, font: fontFamily })],
           })
         )
       }
@@ -122,7 +139,7 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
           new Paragraph({
             spacing: { before: 600 },
             alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: opts.preparerOrOrg, size: sizeBody - 2 })],
+            children: [new TextRun({ text: opts.preparerOrOrg, size: sizeBody - 2, font: fontFamily })],
           })
         )
       }
@@ -134,7 +151,7 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
       children.push(
         new Paragraph({
           spacing: { before: 400, after: 200 },
-          children: [new TextRun({ text: `${sectionNum}. ${title}`, bold: true, size: sizeH1 })],
+          children: [new TextRun({ text: `${sectionNum}. ${title}`, bold: true, size: sizeH1, font: fontFamily })],
         }),
         new Paragraph({
           spacing: { after: 200 },
@@ -142,6 +159,7 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
             new TextRun({
               text: `This document contains ${options.requirements.length} requirement(s).`,
               size: sizeBody,
+              font: fontFamily,
             }),
           ],
         })
@@ -149,7 +167,7 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
       if (options.projectName) {
         children.push(
           new Paragraph({
-            children: [new TextRun({ text: `Project: ${options.projectName}`, size: sizeBody })],
+            children: [new TextRun({ text: `Project: ${options.projectName}`, size: sizeBody, font: fontFamily })],
           })
         )
       }
@@ -181,11 +199,12 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
       children.push(
         new Paragraph({
           spacing: { before: 400, after: 200 },
-          children: [new TextRun({ text: `${sectionNum}. ${title}`, bold: true, size: sizeH1 })],
+          children: [new TextRun({ text: `${sectionNum}. ${title}`, bold: true, size: sizeH1, font: fontFamily })],
         }),
         new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           rows: [headerRow, ...dataRows],
+          borders: tableBorders,
         })
       )
       continue
@@ -219,11 +238,12 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
       children.push(
         new Paragraph({
           spacing: { before: 400, after: 200 },
-          children: [new TextRun({ text: `${sectionNum}. ${title}`, bold: true, size: sizeH1 })],
+          children: [new TextRun({ text: `${sectionNum}. ${title}`, bold: true, size: sizeH1, font: fontFamily })],
         }),
         new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           rows: [glossaryHeader, ...glossaryRows],
+          borders: tableBorders,
         })
       )
       continue
@@ -257,11 +277,12 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
       children.push(
         new Paragraph({
           spacing: { before: 400, after: 200 },
-          children: [new TextRun({ text: `${sectionNum}. ${title}`, bold: true, size: sizeH1 })],
+          children: [new TextRun({ text: `${sectionNum}. ${title}`, bold: true, size: sizeH1, font: fontFamily })],
         }),
         new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           rows: [abbrHeader, ...abbrRows],
+          borders: tableBorders,
         })
       )
       continue
@@ -271,10 +292,10 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
       children.push(
         new Paragraph({
           spacing: { before: 400, after: 200 },
-          children: [new TextRun({ text: `${sectionNum}. ${title}`, bold: true, size: sizeH1 })],
+          children: [new TextRun({ text: `${sectionNum}. ${title}`, bold: true, size: sizeH1, font: fontFamily })],
         }),
         new Paragraph({
-          children: [new TextRun({ text: sec.options.content.slice(0, 32000), size: sizeBody })],
+          children: [new TextRun({ text: sec.options.content.slice(0, 32000), size: sizeBody, font: fontFamily })],
         })
       )
     }
@@ -287,6 +308,7 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
       new TextRun({
         text: footerCenterText.replace(/\{pageOfN\}/g, '').replace(/\{date\}/g, format(new Date(), 'yyyy-MM-dd')).trim() || `Generated: ${format(new Date(), 'yyyy-MM-dd')}`,
         size: sizeBody - 2,
+        font: fontFamily,
       }),
     ],
   })
@@ -312,6 +334,7 @@ export async function buildRequirementsDocxWithSections(options: BuildDocxWithSe
                   new TextRun({
                     text: style.headerLeft?.replace(/\{title\}/g, options.documentTitle) ?? options.documentTitle,
                     size: sizeBody - 2,
+                    font: fontFamily,
                   }),
                 ],
               }),

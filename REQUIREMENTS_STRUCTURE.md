@@ -485,9 +485,9 @@ On save, automatically creates a `RequirementVersion` record:
 **Purpose:** Step-based wizard for exporting requirements in various formats, with optional custom templates (saved per project in localStorage). Supports **document sections** (cover, summary, requirements table, glossary, abbreviations, custom text) and **authority-grade styling** for PDF and Word so exports are suitable for regulators, auditors, or customers.
 
 **Wizard Steps:**
-1. **Format & template**: Choose standard format (CSV, Excel, PDF, Word, ReqIF) or apply a saved template; save current settings as template; manage templates (rename, delete).
+1. **Format & template**: Choose standard format (CSV, Excel, PDF, Word, ReqIF) or apply a saved template; **update this template** (when a template is applied, save current settings back to that template); save current settings as new template; manage templates (rename, delete).
 2. **Scope**: All requirements, or by component, or by function; requirement count shown.
-3. **Options**: Column selection, parameter display (names vs resolved), glossary/abbreviations options, include column headers. For PDF/Word: **Document layout** (use document sections, section list with reorder/enable/title, per-section options, presets) and **Document style** (cover title, header/footer with placeholders, page number format, margins, font sizes, table colors).
+3. **Options**: Column selection, parameter display (names vs resolved), glossary/abbreviations options, include column headers. For PDF/Word: **Document layout** (use document sections, section list with reorder/enable/title, per-section options, presets) and **Document style** (cover title, font family, header/footer with placeholders, page number format, margins, font sizes, table colors). Document style font family and table borders produce authority-ready PDF/Word output.
 4. **Review**: Summary, preview table (first 10 rows for table formats; ReqIF shows message only), then Export.
 
 **Supported Formats:**
@@ -512,14 +512,17 @@ On save, automatically creates a `RequirementVersion` record:
 
 **Authority-grade styling (PDF/Word):**
 - **Document style** (optional): Cover title; header/footer left/center/right with placeholders `{title}`, `{date}`, `{page}`, `{pageOfN}`; page number format (none, page, page of N); margin (mm); body and heading font sizes; table header and alternate row colors (neutral defaults: dark gray header, light gray alternate rows). Used for section-based export and, when set, for single-table export (cover, header/footer, table styling).
-- **PDF**: Cover page, section headings with numbering, authority table styles (via `frontend/src/utils/exportPdfLayout.ts`), headers/footers on all pages.
-- **Word**: Section-based document with cover, summary, requirements table, glossary, abbreviations, custom text; configurable styles and header/footer.
+- **PDF**: Cover page (with optional title line), section headings with numbering, authority table styles and table borders (via `frontend/src/utils/exportPdfLayout.ts`), font family (e.g. Times) when set, headers/footers on all pages.
+- **Word**: Section-based document with cover, summary, requirements table (repeat header row), glossary, abbreviations, custom text; configurable font family, table borders, styles and header/footer.
 
 **Templates (localStorage):**
 - Stored under key `requirement-export-templates-${projectId}`; structure `{ version: 2, templates: ExportTemplate[] }`. Version 2 adds optional `sections` and `documentStyle`; version 1 payloads remain unchanged (legacy single-table).
 - Apply template: fills format, columns (merged with current defaults), scope, all options, and when present sections/documentStyle; if stored component/function ID no longer exists, scope is reset to "All" and a message is shown.
+- **Update this template**: When a template is applied, user can change any options (columns, scope, document layout, document style) and click "Update this template" to save back to the same template (no new template created).
 - Save as template: enabled when at least one column is selected and scope is valid; name trimmed, max 80 chars; stores sections and documentStyle when set; QuotaExceededError caught and shown in-modal.
 - Template utility: `frontend/src/utils/requirementExportTemplates.ts` (getExportTemplates, saveExportTemplate, deleteExportTemplate, updateExportTemplate, mergeColumnsWithDefaults, getSectionsForPreset, DEFAULT_AUTHORITY_STYLE).
+
+**Industry alignment:** Export formats and authority-grade layout align with ISO/IEC/IEEE 29148, IEEE 830, INCOSE, OMG ReqIF, and common practices in FDA, DO-178C, and ISO 26262 contexts. See [docs/requirements-export-standards.md](docs/requirements-export-standards.md) for a detailed analysis of requirement export standards and gaps (e.g. optional revision history section, table of contents).
 
 ### 4.9 Import Wizard
 
@@ -2375,19 +2378,19 @@ export interface BulkImportResult {
 **Features:**
 - **Wizard steps:** Format & template → Scope → Options (columns, parameter, glossary; for PDF/Word: document layout and document style) → Review & export (summary, preview, Export).
 - **Formats:** CSV, Excel, PDF, Word (DOCX), ReqIF (backend).
-- **Templates:** Save current settings as template (includes sections and documentStyle when set); apply template (column merge with defaults, stale scope reset, sections/documentStyle restored); manage templates (rename, delete). Stored in `requirementExportTemplates.ts` (localStorage key `requirement-export-templates-${projectId}`, storage version 2).
+- **Templates:** Save current settings as template (includes sections and documentStyle when set); **update existing template** ("Update this template" when a template is applied); apply template (column merge with defaults, stale scope reset, sections/documentStyle restored); manage templates (rename, delete). Stored in `requirementExportTemplates.ts` (localStorage key `requirement-export-templates-${projectId}`, storage version 2).
 - **Scope:** All, or by component/function when enabled; requirement count shown.
 - **Field selection:** Column toggles; parameter display (names vs resolved); glossary/abbreviations options.
 - **Document layout (PDF/Word):** Toggle "Use document sections"; ordered section list (cover, summary, requirements table, glossary, abbreviations, custom text) with enable/disable, title, reorder; per-section options (cover: project/date/version/classification/preparer; custom text: content); presets (Authority submission, Simple list, Full report).
-- **Document style (PDF/Word):** Cover title; header/footer left/center/right (placeholders `{title}`, `{date}`, `{page}`, `{pageOfN}`); page number format; margin (mm); font sizes; table header/alternate row colors. Enables authority-grade, submission-ready output.
+- **Document style (PDF/Word):** Cover title; font family (e.g. Times New Roman, Helvetica); header/footer left/center/right (placeholders `{title}`, `{date}`, `{page}`, `{pageOfN}`); page number format; margin (mm); font sizes; table header/alternate row colors and table borders. Enables authority-grade, submission-ready output.
 - **Preview:** First 10 rows for table formats; ReqIF shows message only.
 - **Validation:** Inline errors and banner; no alert(); Back/Next with step validation.
 
 **Integration:**
 - Reads requirements from current view (effectiveRequirements from scope).
 - Applies current column/parameter/glossary options to CSV, Excel, PDF, Word (client); ReqIF via backend `/reqif/${projectId}/export`.
-- For PDF: when sections are enabled uses `exportPdfLayout.ts` (cover, section headings, authority table styles, header/footer); when only documentStyle is set uses same styling on legacy single-table flow.
-- For Word: when sections are enabled uses `buildRequirementsDocxWithSections` (sections, documentStyle, glossary/abbreviations); otherwise legacy `buildRequirementsDocx`.
+- For PDF: when sections are enabled uses `exportPdfLayout.ts` (cover, section headings, authority table styles and borders, font family, header/footer); when only documentStyle is set uses same styling on legacy single-table flow.
+- For Word: when sections are enabled uses `buildRequirementsDocxWithSections` (sections, documentStyle, font family, table borders, repeat header row, glossary/abbreviations); otherwise legacy `buildRequirementsDocx`.
 - Generates formatted files (download); template persistence is frontend-only.
 
 ### 12.4 Import Wizard
@@ -2580,6 +2583,7 @@ After updating:
 **Last Updated**: 2025-03-15
 
 **Recent Changes**:
+- Export Builder: "Update this template" to edit existing templates in place; document style font family and table borders for nicer PDF/Word output (Section 4.8, 12.3).
 - Export Builder: document sections and authority-grade styling (Section 4.8, 12.3). Templates support optional sections (cover, summary, requirements table, glossary, abbreviations, custom text) with reorder/enable/options and document style (cover title, header/footer, page numbers, margins, fonts, table colors). PDF uses exportPdfLayout; Word uses buildRequirementsDocxWithSections when sections enabled. Storage version 2.
 - Export Builder: documented step-based wizard (Format → Scope → Options → Review), custom templates (localStorage), column merge, stale scope handling, and template utility (Section 4.8, 12.3).
 - Fixed UpdateRequirementDto documentation (removed changeReason field, added requirementId and parentId)
