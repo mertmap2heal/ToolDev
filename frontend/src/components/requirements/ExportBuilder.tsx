@@ -7,6 +7,7 @@ import type { Requirement, SystemFunction } from 'shared/types/engineering.types
 import type { Link } from 'shared/types/linkage.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
+import { buildRequirementsDocx, type DocxRequirementRow } from '../../utils/exportDocx'
 import { parameterService } from '../../services/parameter.service'
 import { definitionEntryService } from '../../services/definitionEntry.service'
 import { resolveParameterPlaceholders } from '../../utils/parameterPlaceholder'
@@ -52,7 +53,7 @@ interface ExportBuilderProps {
   allocationLinks?: Link[]
 }
 
-type ExportFormat = 'csv' | 'excel' | 'pdf' | 'reqif'
+type ExportFormat = 'csv' | 'excel' | 'pdf' | 'word' | 'reqif'
 
 interface ExportColumn {
   key: keyof Requirement | 'requirementId'
@@ -405,6 +406,38 @@ export default function ExportBuilder({
     XLSX.writeFile(workbook, `${baseName}.xlsx`)
   }
 
+  // Export to Word (DOCX)
+  const exportWord = async () => {
+    const selectedCols = columns.filter((c) => c.selected)
+    const docxColumns = selectedCols.map((c) => ({ key: c.key, label: c.label }))
+    const rows: DocxRequirementRow[] = effectiveRequirements.map((req) => {
+      const row: DocxRequirementRow = {}
+      selectedCols.forEach((col) => {
+        let value = getValue(req, col.key)
+        if (col.key === 'description' || col.key === 'acceptanceCriteria') {
+          value = stripHtml(value)
+        }
+        row[col.key] = value
+      })
+      return row
+    })
+    const blob = await buildRequirementsDocx({
+      title: projectName ? `${projectName} - Requirements Export` : 'Requirements Export',
+      requirements: rows,
+      columns: docxColumns,
+      stripHtml: (s) => stripHtml(s),
+    })
+    const baseName = effectiveScopeFilenameSuffix ? `requirements_export_${effectiveScopeFilenameSuffix}` : 'requirements_export'
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${baseName}.docx`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   // Export to ReqIF
   const exportReqIF = async () => {
     try {
@@ -592,6 +625,9 @@ export default function ExportBuilder({
         case 'pdf':
           await exportPdf()
           break
+        case 'word':
+          await exportWord()
+          break
         case 'reqif':
           await exportReqIF()
           break
@@ -743,7 +779,7 @@ export default function ExportBuilder({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Export Format
             </label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-5 gap-2">
               <button
                 onClick={() => setSelectedFormat('csv')}
                 className={clsx(
@@ -779,6 +815,18 @@ export default function ExportBuilder({
               >
                 <File size={24} className="text-red-600" />
                 <span className="text-sm font-medium text-gray-900 dark:text-white">PDF</span>
+              </button>
+              <button
+                onClick={() => setSelectedFormat('word')}
+                className={clsx(
+                  'flex flex-col items-center gap-2 p-3 border rounded-lg transition-colors',
+                  selectedFormat === 'word'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                )}
+              >
+                <FileText size={24} className="text-blue-600" />
+                <span className="text-sm font-medium text-gray-900 dark:text-white">Word</span>
               </button>
               <button
                 onClick={() => setSelectedFormat('reqif')}

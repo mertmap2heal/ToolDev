@@ -129,6 +129,22 @@ export const requirementService = {
     return apiClient.delete<void>(`/requirements/${projectId}/comments/${commentId}`)
   },
 
+  async getRequirementsDashboard(projectId: string): Promise<
+    ApiResponse<{
+      totalRequirements: number
+      byReviewStatus: Record<string, number>
+      byVerificationStatus: Record<string, number>
+      coveragePercent: number
+      coverageCount: number
+      totalWithTestLink: number
+      suspectLinksCount: number
+      baselineCount: number
+      recentBaselines: Array<{ id: string; name: string; createdAt: string; status: string }>
+    }>
+  > {
+    return apiClient.get(`/requirements/${projectId}/dashboard`)
+  },
+
   async getAuditEvents(
     projectId: string,
     entityType: string,
@@ -141,6 +157,24 @@ export const requirementService = {
 
   async bulkImportRequirements(projectId: string, data: BulkImportRequest): Promise<ApiResponse<BulkImportResult>> {
     return apiClient.post<BulkImportResult>(`/requirements/${projectId}/bulk-import`, data)
+  },
+
+  /** Import requirements from ReqIF XML. Body: { content: string }. Returns created, skipped, linksCreated, errors. */
+  async importReqif(
+    projectId: string,
+    content: string
+  ): Promise<
+    ApiResponse<{
+      created: number
+      skipped: number
+      linksCreated: number
+      errors: Array<{ row?: number; message: string }>
+    }>
+  > {
+    return apiClient.post<{ created: number; skipped: number; linksCreated: number; errors: Array<{ row?: number; message: string }> }>(
+      `/requirements/${projectId}/import/reqif`,
+      { content }
+    )
   },
 
   // Custom Requirement Types

@@ -8,6 +8,7 @@ import { requirementValidationService } from '../services/requirementValidation.
 import { requirementSubscriptionService } from '../services/requirementSubscription.service'
 import { buildRequirementChangeSummary, notifyRequirementSubscribers } from '../services/requirementNotification.service'
 import { extractParameterIds } from '../utils/parameterPlaceholder'
+import { parseReqIF } from '../services/reqifParser'
 import { collectComponentIdAndDescendants } from '../utils/componentHelpers'
 import fs from 'fs'
 import path from 'path'
@@ -2675,6 +2676,218 @@ export const updateRequirementComponent = async (req: AuthRequest, res: Response
     res.status(500).json({
       success: false,
       error: 'Internal server error',
+    })
+  }
+}
+
+/**
+ * GET /projects/:projectId/requirements/dashboard
+ * Returns aggregate metrics for the RM dashboard: counts by review/verification status,
+ * coverage (requirements linked to test cases), suspect links count, baselines.
+ */
+export const getRequirementsDashboard = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+    if (!projectId) {
+      return res.status(400).json({ success: false, error: 'Project ID is required' })
+    }
+
+    const baseWhere = { projectId, deletedAt: null }
+
+    const [
+      totalRequirements,
+      reviewStatusGroups,
+      verificationStatusGroups,
+      baselineCount,
+      recentBaselines,
+      allLinks,
+      suspectLinks,
+    ] = await Promise.all([
+      prisma.requirement.count({ where: baseWhere }),
+      prisma.requirement.groupBy({
+        by: ['reviewStatus'],
+        where: baseWhere,
+        _count: { id: true },
+      }),
+      prisma.requirement.groupBy({
+        by: ['verificationStatus'],
+        where: baseWhere,
+        _count: { id: true },
+      }),
+      prisma.baseline.count({ where: { projectId } }),
+      prisma.baseline.findMany({
+        where: { projectId },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: { id: true, name: true, createdAt: true, status: true },
+      }),
+      traceabilityService.getTraceLinks(projectId),
+      traceabilityService.getSuspectLinks(projectId),
+    ])
+
+    const normType = (t: string) => (t ?? '').toLowerCase().replace(/-/g, '_')
+    const isTestCase = (t: string) => {
+      const n = normType(t)
+      return n === 'test_case' || n === 'testcase'
+    }
+    const requirementIdsWithTestLink = new Set<string>()
+    for (const link of allLinks) {
+      const st = (link as any).sourceType
+      const tt = (link as any).targetType
+      const sid = (link as any).sourceId
+      const tid = (link as any).targetId
+      if (st === 'requirement' && isTestCase(tt)) requirementIdsWithTestLink.add(sid)
+      if (tt === 'requirement' && isTestCase(st)) requirementIdsWithTestLink.add(tid)
+    }
+    const totalWithTestLink = requirementIdsWithTestLink.size
+    const coveragePercent =
+      totalRequirements > 0 ? Math.round((totalWithTestLink / totalRequirements) * 100) : 0
+
+    const byReviewStatus: Record<string, number> = {}
+    for (const g of reviewStatusGroups) {
+      const key = g.reviewStatus ?? 'draft'
+      byReviewStatus[key] = g._count.id
+    }
+    const byVerificationStatus: Record<string, number> = {}
+    for (const g of verificationStatusGroups) {
+      const key = g.verificationStatus ?? 'not_verified'
+      byVerificationStatus[key] = g._count.id
+    }
+
+    res.json({
+      success: true,
+      data: {
+        totalRequirements,
+        byReviewStatus,
+        byVerificationStatus,
+        coveragePercent,
+        coverageCount: totalWithTestLink,
+        totalWithTestLink,
+        suspectLinksCount: suspectLinks.length,
+        baselineCount,
+        recentBaselines: recentBaselines.map((b) => ({
+          id: b.id,
+          name: b.name,
+          createdAt: b.createdAt.toISOString(),
+          status: b.status,
+        })),
+      },
+    })
+  } catch (error: any) {
+    console.error('Get requirements dashboard error:', error)
+    res.status(500).json({
+      success: false,
+      error: error?.message || 'Internal server error',
+    })
+  }
+}
+
+const MAX_REQIF_SIZE = 5 * 1024 * 1024 // 5MB
+
+/**
+ * POST /projects/:projectId/requirements/import/reqif
+ * Body: JSON { content: string } (ReqIF XML string).
+ * Parses ReqIF, creates requirements (skips duplicates by requirementId), creates TraceLinks for relations.
+ * Returns { created, skipped, linksCreated, errors }.
+ */
+export const importReqif = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+    if (!projectId) {
+      return res.status(400).json({ success: false, error: 'Project ID is required' })
+    }
+    const body = req.body as { content?: string }
+    const content = body?.content
+    if (typeof content !== 'string' || !content.trim()) {
+      return res.status(400).json({ success: false, error: 'Request body must include content (ReqIF XML string)' })
+    }
+    if (content.length > MAX_REQIF_SIZE) {
+      return res.status(400).json({
+        success: false,
+      error: `File too large. Maximum size is ${MAX_REQIF_SIZE / 1024 / 1024}MB`,
+      })
+    }
+    const { requirements: reqs, relations } = parseReqIF(content)
+    let created = 0
+    let skipped = 0
+    const errors: Array<{ row?: number; message: string }> = []
+    const identifierToId = new Map<string, string>()
+
+    const existingByReqId = await prisma.requirement.findMany({
+      where: { projectId, deletedAt: null },
+      select: { id: true, requirementId: true },
+    })
+    const existingMap = new Map<string, string>()
+    for (const r of existingByReqId) {
+      if (r.requirementId) existingMap.set(r.requirementId, r.id)
+    }
+
+    for (let i = 0; i < reqs.length; i++) {
+      const r = reqs[i]
+      const identifier = (r.identifier || '').trim()
+      const title = (r.title || r.identifier || 'Untitled').trim()
+      const description = (r.description ?? '').trim() || ' '
+      if (!identifier) {
+        errors.push({ row: i + 1, message: 'Missing identifier' })
+        continue
+      }
+      if (existingMap.has(identifier)) {
+        identifierToId.set(identifier, existingMap.get(identifier)!)
+        skipped++
+        continue
+      }
+      try {
+        const createdReq = await prisma.requirement.create({
+          data: {
+            projectId,
+            requirementId: identifier,
+            title,
+            description,
+            priority: 'medium',
+            status: 'draft',
+            stage: '',
+          },
+        })
+        existingMap.set(identifier, createdReq.id)
+        identifierToId.set(identifier, createdReq.id)
+        created++
+      } catch (err: any) {
+        errors.push({ row: i + 1, message: err?.message || 'Failed to create requirement' })
+      }
+    }
+
+    let linksCreated = 0
+    for (const rel of relations) {
+      const sourceId = identifierToId.get(rel.sourceRef) ?? existingMap.get(rel.sourceRef)
+      const targetId = identifierToId.get(rel.targetRef) ?? existingMap.get(rel.targetRef)
+      if (!sourceId || !targetId) continue
+      try {
+        await traceabilityService.createTraceLink(
+          projectId,
+          'requirement',
+          sourceId,
+          'requirement',
+          targetId,
+          rel.type || 'trace',
+          undefined,
+          'Imported from ReqIF',
+          req.userId
+        )
+        linksCreated++
+      } catch {
+        // ignore duplicate or invalid link
+      }
+    }
+
+    res.json({
+      success: true,
+      data: { created, skipped, linksCreated, errors },
+    })
+  } catch (error: any) {
+    console.error('ReqIF import error:', error)
+    res.status(500).json({
+      success: false,
+      error: error?.message || 'Internal server error',
     })
   }
 }

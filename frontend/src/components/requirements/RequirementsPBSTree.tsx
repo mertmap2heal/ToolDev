@@ -65,8 +65,23 @@ interface FlatTreeItem {
   requirementId?: string
   componentId?: string
   componentDisplayId?: string // pbsCode or shortened id for display
+  componentDisplayLabel?: string // normalized "OPBS-001.002-Navigation Module"
   requirement?: Requirement
   link?: LinkLike
+}
+
+/** ID part only for PBS component (OPBS-001.002 or OPBS-xxxxxxxx) */
+function getPBSDisplayId(comp: { name: string; pbsCode?: string } | undefined, componentId: string): string {
+  const code = comp?.pbsCode?.trim()
+  if (code) return code.startsWith('OPBS') ? code : code.startsWith('PBS') ? 'O' + code : code
+  return 'OPBS-' + componentId.slice(0, 8)
+}
+
+/** Format PBS component for display: OPBS-001.002-Navigation Module (ID-NAME, no space) */
+function formatPBSComponentLabel(comp: { name: string; pbsCode?: string } | undefined, componentId: string): string {
+  const name = comp?.name?.trim() ?? ''
+  const idPart = getPBSDisplayId(comp, componentId)
+  return name ? `${idPart}-${name}` : idPart
 }
 
 /** Collect all node IDs in the tree recursively */
@@ -140,6 +155,8 @@ function buildFlatTree(
         const reqs = reqsByComponent.get(node.id) || []
         const hasChildren = (node.children && node.children.length > 0) || reqs.length > 0
 
+        const pbsCode = (node as { pbsCode?: string }).pbsCode
+        const compInfo = { name: node.name, pbsCode }
         items.push({
             id: `comp-${node.id}`,
             type: 'component',
@@ -148,7 +165,8 @@ function buildFlatTree(
             parentComponentId: null,
             hasChildren,
             componentId: node.id,
-            componentDisplayId: (node as { pbsCode?: string }).pbsCode || node.id.slice(0, 8),
+            componentDisplayId: pbsCode || node.id.slice(0, 8),
+            componentDisplayLabel: formatPBSComponentLabel(compInfo, node.id),
         })
 
         if (expandedNodes.has(node.id)) {
@@ -399,6 +417,16 @@ export default function RequirementsPBSTree({
           enriched = { ...enriched, sourceLabel: `${displayId} - ${req.title}`, sourceTitle: req.title, sourceDisplayId: displayId }
         }
       }
+      if (l.targetType === 'pbs_component' && !l.targetLabel && !l.targetTitle) {
+        const comp = componentMap.get(l.targetId)
+        const label = formatPBSComponentLabel(comp, l.targetId)
+        enriched = { ...enriched, targetLabel: label, targetTitle: label, targetDisplayId: getPBSDisplayId(comp, l.targetId) }
+      }
+      if (l.sourceType === 'pbs_component' && !l.sourceLabel && !l.sourceTitle) {
+        const comp = componentMap.get(l.sourceId)
+        const label = formatPBSComponentLabel(comp, l.sourceId)
+        enriched = { ...enriched, sourceLabel: label, sourceTitle: label, sourceDisplayId: getPBSDisplayId(comp, l.sourceId) }
+      }
       return enriched
     }
     const map = new Map<string, LinkLike[]>()
@@ -421,7 +449,7 @@ export default function RequirementsPBSTree({
         if (!seen.has(k)) {
           seen.add(k)
           const comp = componentMap.get(req.componentId)
-          const targetLabel = comp ? (comp.pbsCode ? `${comp.pbsCode} - ${comp.name}` : comp.name) : req.componentId.slice(0, 8)
+          const targetLabel = formatPBSComponentLabel(comp, req.componentId)
           combined.push({
             sourceType: 'requirement',
             sourceId: req.id,
@@ -430,7 +458,7 @@ export default function RequirementsPBSTree({
             linkType: 'allocated_to',
             targetLabel,
             targetTitle: targetLabel,
-            targetDisplayId: comp?.pbsCode ?? req.componentId.slice(0, 8),
+            targetDisplayId: getPBSDisplayId(comp, req.componentId),
             _displayTargetType: 'pbs_component',
           } as LinkLike)
         }
@@ -800,7 +828,7 @@ export default function RequirementsPBSTree({
 
                     // Component row
                     const count = reqCounts.get(item.componentId!) || 0
-                    const displayId = item.componentDisplayId || item.componentId!.slice(0, 8)
+                    const displayLabel = item.componentDisplayLabel ?? `${item.componentDisplayId || item.componentId!.slice(0, 8)}-${item.name}`
                     return (
                         <div
                             key={item.id}
@@ -831,11 +859,8 @@ export default function RequirementsPBSTree({
                                 <span className="w-4 flex-shrink-0" />
                             )}
                             <Package className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-blue-500' : 'text-amber-500/80 dark:text-amber-400/80'}`} />
-                            <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 flex-shrink-0" title={item.componentId}>
-                                {displayId}
-                            </span>
-                            <span className="truncate flex-1" title={item.name}>
-                                {item.name}
+                            <span className="truncate flex-1" title={item.componentId}>
+                                {displayLabel}
                             </span>
                             {count > 0 && (
                                 <span className={`flex-shrink-0 text-xs font-medium px-2 py-0.5 rounded-full transition-colors

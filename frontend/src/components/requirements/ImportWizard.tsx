@@ -1,9 +1,8 @@
 import { useState, useCallback, useMemo } from 'react'
-import { X, Upload, FileText, FileSpreadsheet, File, ChevronRight, ChevronLeft, AlertCircle, CheckCircle, AlertTriangle, Download, Loader } from 'lucide-react'
+import { X, Upload, FileText, FileSpreadsheet, File, ChevronRight, ChevronLeft, AlertCircle, CheckCircle, AlertTriangle, Download, Loader, Link2 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import Papa from 'papaparse'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiClient } from '../../services/api'
 import { requirementService } from '../../services/requirement.service'
 import type { CreateRequirementDto, Requirement, RequirementType, RequirementLevel, RiskLevel, ComplexityLevel } from 'shared/types/engineering.types'
 import clsx from 'clsx'
@@ -37,6 +36,7 @@ interface ImportResult {
   updated: number
   skipped: number
   errors: Array<{ row: number; errors: string[] }>
+  linksCreated?: number
 }
 
 const requirementFields = [
@@ -121,6 +121,7 @@ export default function ImportWizard({ projectId, onClose }: ImportWizardProps) 
   const [columnMapping, setColumnMapping] = useState<Map<string, string | null>>(new Map())
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([])
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const [isReqifImporting, setIsReqifImporting] = useState(false)
 
   const queryClient = useQueryClient()
 
@@ -200,9 +201,13 @@ export default function ImportWizard({ projectId, onClose }: ImportWizardProps) 
           return
         }
       } else if (fileFormat === 'reqif') {
-        // For ReqIF, send directly to backend for parsing and import
         const text = await file.text()
-        await importReqIF(text)
+        setIsReqifImporting(true)
+        try {
+          await importReqIF(text)
+        } finally {
+          setIsReqifImporting(false)
+        }
         return
       }
 
@@ -405,20 +410,25 @@ export default function ImportWizard({ projectId, onClose }: ImportWizardProps) 
     },
   })
 
-  // Import ReqIF file directly
+  // Import ReqIF file directly via requirements import endpoint
   const importReqIF = useCallback(async (reqifXml: string) => {
     try {
-      const response = await apiClient.post<ImportResult>(`/reqif/${projectId}/import`, {
-        reqifXml,
-      })
-
-      if (response.success && response.data) {
-        setImportResult(response.data)
-        queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
-        setCurrentStep('import')
-      } else {
+      const response = await requirementService.importReqif(projectId, reqifXml)
+      if (!response.success || !response.data) {
         throw new Error(response.error || 'Failed to import ReqIF file')
       }
+      const d = response.data
+      const mappedResult: ImportResult = {
+        success: true,
+        created: d.created,
+        updated: 0,
+        skipped: d.skipped,
+        errors: d.errors.map((e) => ({ row: (e.row ?? 1) - 1, errors: [e.message] })),
+        linksCreated: d.linksCreated,
+      }
+      setImportResult(mappedResult)
+      queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
+      setCurrentStep('import')
     } catch (error: any) {
       console.error('ReqIF import error:', error)
       alert(`Failed to import ReqIF file: ${error?.message || 'Unknown error'}`)
@@ -539,10 +549,25 @@ export default function ImportWizard({ projectId, onClose }: ImportWizardProps) 
                 <div className="flex items-center justify-end gap-2">
                   <button
                     onClick={parseFile}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
+                    disabled={isReqifImporting}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg flex items-center gap-2"
                   >
-                    <ChevronRight size={16} />
-                    Next: Map Columns
+                    {fileFormat === 'reqif' && isReqifImporting ? (
+                      <>
+                        <Loader size={16} className="animate-spin" />
+                        Importing ReqIF...
+                      </>
+                    ) : fileFormat === 'reqif' ? (
+                      <>
+                        <Upload size={16} />
+                        Import ReqIF
+                      </>
+                    ) : (
+                      <>
+                        <ChevronRight size={16} />
+                        Next: Map Columns
+                      </>
+                    )}
                   </button>
                 </div>
               )}
@@ -1016,7 +1041,7 @@ function ImportResultsStep({ result, onClose, onExportErrors }: ImportResultsSte
       </div>
 
       {/* Results Summary */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className={clsx('grid gap-4', result.linksCreated != null ? 'grid-cols-4' : 'grid-cols-3')}>
         <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg text-center">
           <CheckCircle size={32} className="mx-auto mb-2 text-green-600 dark:text-green-400" />
           <p className="text-2xl font-bold text-green-600 dark:text-green-400">{result.created}</p>
@@ -1032,6 +1057,13 @@ function ImportResultsStep({ result, onClose, onExportErrors }: ImportResultsSte
           <p className="text-2xl font-bold text-gray-600 dark:text-gray-400">{result.skipped}</p>
           <p className="text-sm text-gray-600 dark:text-gray-400">Skipped</p>
         </div>
+        {result.linksCreated != null && (
+          <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-center">
+            <Link2 size={32} className="mx-auto mb-2 text-purple-600 dark:text-purple-400" />
+            <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{result.linksCreated}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Links created</p>
+          </div>
+        )}
       </div>
 
       {/* Errors */}

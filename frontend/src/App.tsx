@@ -6,6 +6,7 @@ import LoginPage from './pages/Login/LoginPage'
 import DashboardPage from './pages/Dashboard/DashboardPage'
 import RequirementsPage from './pages/Requirements/RequirementsPage'
 import RequirementsSettingsPage from './pages/Requirements/RequirementsSettingsPage'
+import RequirementsDashboardPage from './pages/Requirements/RequirementsDashboardPage'
 import SystemFunctionsPage from './pages/SystemFunctions/SystemFunctionsPage'
 import ArchitecturePage from './pages/Architecture/ArchitecturePage'
 import VerificationLayoutPage from './pages/Verification/VerificationLayoutPage'
@@ -108,6 +109,7 @@ function App() {
             <Route path="projects/:projectId/stakeholder" element={<StakeholderPage />} />
             <Route path="projects/:projectId/product-breakdown-structure" element={<PBSPage />} />
             <Route path="projects/:projectId/requirements/settings" element={<RequirementsSettingsPage />} />
+            <Route path="projects/:projectId/requirements/dashboard" element={<RequirementsDashboardPage />} />
             <Route path="projects/:projectId/requirements" element={<RequirementsPage />} />
             <Route path="projects/:projectId/tasks" element={<TasksPage />} />
             <Route path="tasks">

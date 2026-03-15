@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { X, Download, FileSpreadsheet, FileText, File, CheckSquare, Square } from 'lucide-react'
+import { buildRequirementsDocx, type DocxRequirementRow } from '../../utils/exportDocx'
 import { baselineService } from '../../services/baseline.service'
 import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
@@ -29,7 +30,7 @@ interface BaselineExportModalProps {
   onClose: () => void
 }
 
-type ExportFormat = 'csv' | 'excel' | 'pdf' | 'json'
+type ExportFormat = 'csv' | 'excel' | 'pdf' | 'word' | 'json'
 
 interface ExportColumn {
   key: string
@@ -188,6 +189,35 @@ export default function BaselineExportModal({ projectId, baselineId, onClose }: 
     URL.revokeObjectURL(link.href)
   }
 
+  const exportToWord = async () => {
+    const selectedCols = getSelectedColumns()
+    const docxColumns = selectedCols.map((c) => ({ key: c.key, label: c.label }))
+    const stripHtml = (s: string) => (s || '').replace(/<[^>]*>/g, '').trim()
+    const rows: DocxRequirementRow[] = requirements.map((req: any) => {
+      const row: DocxRequirementRow = {}
+      selectedCols.forEach((col) => {
+        let value = req[col.key]
+        if (value === null || value === undefined) value = ''
+        row[col.key] = typeof value === 'string' ? stripHtml(value) : value
+      })
+      return row
+    })
+    const blob = await buildRequirementsDocx({
+      title: `${baseline?.name || 'Baseline'} - Export`,
+      requirements: rows,
+      columns: docxColumns,
+      stripHtml,
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${baseline?.name || 'baseline'}_${format(new Date(), 'yyyy-MM-dd')}.docx`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   const exportToPDF = async () => {
     try {
       const autoTable = await loadAutoTable()
@@ -249,6 +279,9 @@ export default function BaselineExportModal({ projectId, baselineId, onClose }: 
         case 'pdf':
           await exportToPDF()
           break
+        case 'word':
+          await exportToWord()
+          break
         case 'json':
           await exportToJSON()
           break
@@ -301,24 +334,25 @@ export default function BaselineExportModal({ projectId, baselineId, onClose }: 
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Export Format
                 </label>
-                <div className="grid grid-cols-4 gap-3">
-                  {(['csv', 'excel', 'pdf', 'json'] as ExportFormat[]).map((format) => (
+                <div className="grid grid-cols-5 gap-3">
+                  {(['csv', 'excel', 'pdf', 'word', 'json'] as ExportFormat[]).map((fmt) => (
                     <button
-                      key={format}
-                      onClick={() => setExportFormat(format)}
+                      key={fmt}
+                      onClick={() => setExportFormat(fmt)}
                       className={clsx(
                         'p-3 border-2 rounded-lg flex flex-col items-center gap-2 transition-colors',
-                        exportFormat === format
+                        exportFormat === fmt
                           ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                           : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
                       )}
                     >
-                      {format === 'csv' && <FileText size={24} className="text-gray-600 dark:text-gray-400" />}
-                      {format === 'excel' && <FileSpreadsheet size={24} className="text-gray-600 dark:text-gray-400" />}
-                      {format === 'pdf' && <File size={24} className="text-gray-600 dark:text-gray-400" />}
-                      {format === 'json' && <File size={24} className="text-gray-600 dark:text-gray-400" />}
+                      {fmt === 'csv' && <FileText size={24} className="text-gray-600 dark:text-gray-400" />}
+                      {fmt === 'excel' && <FileSpreadsheet size={24} className="text-gray-600 dark:text-gray-400" />}
+                      {fmt === 'pdf' && <File size={24} className="text-gray-600 dark:text-gray-400" />}
+                      {fmt === 'word' && <FileText size={24} className="text-blue-600 dark:text-blue-400" />}
+                      {fmt === 'json' && <File size={24} className="text-gray-600 dark:text-gray-400" />}
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
-                        {format}
+                        {fmt === 'word' ? 'Word' : fmt}
                       </span>
                     </button>
                   ))}

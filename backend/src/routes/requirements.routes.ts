@@ -6,6 +6,8 @@ import {
   getAllRequirements,
   getRequirement,
   getAuditEvents,
+  getRequirementsDashboard,
+  importReqif,
   createRequirement,
   updateRequirement,
   deleteRequirement,
@@ -42,6 +44,10 @@ router.delete('/:projectId/custom-types/:typeId', deleteCustomRequirementType)
 
 // Migration endpoint
 router.post('/:projectId/migrate-category-to-type', migrateCategoryToRequirementType)
+
+// RM dashboard (must be before /:projectId to avoid "dashboard" as projectId)
+router.get('/:projectId/dashboard', getRequirementsDashboard)
+router.post('/:projectId/import/reqif', importReqif)
 
 router.get('/:projectId', getRequirements)
 router.get('/:projectId/all', getAllRequirements)

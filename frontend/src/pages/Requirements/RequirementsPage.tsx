@@ -2615,6 +2615,15 @@ export default function RequirementsPage() {
               </button>
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">Requirements</h2>
               <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">{totalRequirements}</span>
+              {projectId && (
+                <Link
+                  to={`/projects/${projectId}/requirements/dashboard`}
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                >
+                  <BarChart3 size={14} />
+                  Dashboard
+                </Link>
+              )}
               {leftPanelTab === 'pbs' && selectedComponentId && (
                 <button
                   onClick={() => setSelectedComponentId(null)}
