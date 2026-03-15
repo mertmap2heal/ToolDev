@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { X, Download, FileSpreadsheet, FileText, File, CheckSquare, Square, Code } from 'lucide-react'
+import { X, Download, FileSpreadsheet, FileText, File, CheckSquare, Square, Code, ChevronRight, ChevronLeft } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
 import type { Requirement, SystemFunction } from 'shared/types/engineering.types'
@@ -13,6 +13,14 @@ import { definitionEntryService } from '../../services/definitionEntry.service'
 import { resolveParameterPlaceholders } from '../../utils/parameterPlaceholder'
 import type { ResolveMode } from '../../utils/parameterPlaceholder'
 import type { DefinitionEntry } from 'shared/types/engineering.types'
+import {
+  getExportTemplates,
+  saveExportTemplate,
+  deleteExportTemplate,
+  updateExportTemplate,
+  mergeColumnsWithDefaults,
+  type ExportTemplate,
+} from '../../utils/requirementExportTemplates'
 
 // Dynamic import for jspdf-autotable to prevent build issues
 // This will be loaded only when PDF export is needed
@@ -54,6 +62,8 @@ interface ExportBuilderProps {
 }
 
 type ExportFormat = 'csv' | 'excel' | 'pdf' | 'word' | 'reqif'
+
+export type ExportStep = 'format' | 'scope' | 'options' | 'review'
 
 interface ExportColumn {
   key: keyof Requirement | 'requirementId'
@@ -153,6 +163,30 @@ export default function ExportBuilder({
   const [includeAbbreviations, setIncludeAbbreviations] = useState(true)
   const [glossaryShowDefinitions, setGlossaryShowDefinitions] = useState(true)
   const [glossarySortAlphabetically, setGlossarySortAlphabetically] = useState(true)
+  const [currentStep, setCurrentStep] = useState<ExportStep>('format')
+  const [templates, setTemplates] = useState<ExportTemplate[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [inlineError, setInlineError] = useState<string | null>(null)
+  const [scopeResetMessage, setScopeResetMessage] = useState<string | null>(null)
+  const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false)
+  const [saveTemplateName, setSaveTemplateName] = useState('')
+  const [isManageTemplatesOpen, setIsManageTemplatesOpen] = useState(false)
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null)
+  const [editingTemplateName, setEditingTemplateName] = useState('')
+
+  const refreshTemplates = useCallback(() => {
+    if (projectId) setTemplates(getExportTemplates(projectId))
+  }, [projectId])
+  useEffect(() => {
+    refreshTemplates()
+  }, [refreshTemplates])
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
 
   const { data: parameters = [] } = useQuery({
     queryKey: ['parameters', projectId],
@@ -248,6 +282,94 @@ export default function ExportBuilder({
       .replace(/[^a-zA-Z0-9_-]/g, '')
       .slice(0, 40)}`
   }, [propsScopeFilenameSuffix, effectiveScopeLabel, scopeType])
+
+  const applyTemplate = useCallback(
+    (template: ExportTemplate) => {
+      setSelectedFormat(template.format as ExportFormat)
+      setColumns(
+        mergeColumnsWithDefaults(
+          template.columns as ExportColumn[],
+          defaultColumns
+        ) as ExportColumn[]
+      )
+      setIncludeHeader(template.includeHeader)
+      setParameterExportMode(template.parameterExportMode)
+      setIncludeGlossary(template.includeGlossary)
+      setIncludeAbbreviations(template.includeAbbreviations)
+      setGlossaryShowDefinitions(template.glossaryShowDefinitions)
+      setGlossarySortAlphabetically(template.glossarySortAlphabetically)
+      setScopeResetMessage(null)
+      const scopeTypeNew = template.scopeType
+      const compId = template.selectedComponentId ?? ''
+      const fnId = template.selectedFunctionId ?? ''
+      const compExists = !compId || flatComponents.some((c) => c.id === compId)
+      const fnExists = !fnId || flatFunctions.some((f) => f.id === fnId)
+      if (scopeTypeNew === 'component' && !compExists) {
+        setScopeType('all')
+        setSelectedComponentId('')
+        setSelectedFunctionId('')
+        setScopeResetMessage('Template scope was reset: selected component is no longer available.')
+      } else if (scopeTypeNew === 'function' && !fnExists) {
+        setScopeType('all')
+        setSelectedComponentId('')
+        setSelectedFunctionId('')
+        setScopeResetMessage('Template scope was reset: selected function is no longer available.')
+      } else {
+        setScopeType(scopeTypeNew)
+        setSelectedComponentId(scopeTypeNew === 'component' ? compId : '')
+        setSelectedFunctionId(scopeTypeNew === 'function' ? fnId : '')
+      }
+      setSelectedTemplateId(template.id)
+      setInlineError(null)
+      setCurrentStep('scope')
+    },
+    [flatComponents, flatFunctions]
+  )
+
+  const handleSaveTemplate = useCallback(() => {
+    const name = saveTemplateName.trim().slice(0, 80)
+    if (!name) return
+    if (!projectId) return
+    const template: ExportTemplate = {
+      id: crypto.randomUUID(),
+      name,
+      format: selectedFormat,
+      columns: columns.map((c) => ({ key: c.key, label: c.label, selected: c.selected })),
+      scopeType,
+      selectedComponentId: scopeType === 'component' ? selectedComponentId || undefined : undefined,
+      selectedFunctionId: scopeType === 'function' ? selectedFunctionId || undefined : undefined,
+      includeHeader,
+      parameterExportMode,
+      includeGlossary,
+      includeAbbreviations,
+      glossaryShowDefinitions,
+      glossarySortAlphabetically,
+      createdAt: new Date().toISOString(),
+    }
+    try {
+      saveExportTemplate(projectId, template)
+      refreshTemplates()
+      setIsSaveTemplateOpen(false)
+      setSaveTemplateName('')
+    } catch (e) {
+      setInlineError(e instanceof Error ? e.message : 'Could not save template.')
+    }
+  }, [
+    projectId,
+    saveTemplateName,
+    selectedFormat,
+    columns,
+    scopeType,
+    selectedComponentId,
+    selectedFunctionId,
+    includeHeader,
+    parameterExportMode,
+    includeGlossary,
+    includeAbbreviations,
+    glossaryShowDefinitions,
+    glossarySortAlphabetically,
+    refreshTemplates,
+  ])
 
   // Toggle column selection
   const toggleColumn = (key: string) => {
@@ -593,6 +715,8 @@ export default function ExportBuilder({
     URL.revokeObjectURL(url)
   }
 
+  const selectedCount = columns.filter((c) => c.selected).length
+
   const canExport =
     effectiveRequirements.length > 0 &&
     (!enableScopeSelection ||
@@ -600,16 +724,22 @@ export default function ExportBuilder({
       (scopeType === 'component' && !!selectedComponentId) ||
       (scopeType === 'function' && !!selectedFunctionId))
 
+  const canSaveAsTemplate =
+    selectedCount > 0 &&
+    canExport &&
+    (scopeType === 'all' || (scopeType === 'component' && !!selectedComponentId) || (scopeType === 'function' && !!selectedFunctionId))
+
   // Handle export
   const handleExport = async () => {
     const selectedCols = columns.filter((c) => c.selected)
+    setInlineError(null)
     if (selectedCols.length === 0) {
-      alert('Please select at least one column to export')
+      setInlineError('Please select at least one column to export.')
       return
     }
     if (!canExport) {
-      if (scopeType === 'component') alert('Please select a component to export')
-      else if (scopeType === 'function') alert('Please select a function to export')
+      if (scopeType === 'component') setInlineError('Please select a component to export.')
+      else if (scopeType === 'function') setInlineError('Please select a function to export.')
       return
     }
 
@@ -635,42 +765,241 @@ export default function ExportBuilder({
       onClose()
     } catch (error) {
       console.error('Export error:', error)
-      alert('Failed to export. Please try again.')
+      setInlineError(error instanceof Error ? error.message : 'Failed to export. Please try again.')
     } finally {
       setIsExporting(false)
     }
   }
 
-  const selectedCount = columns.filter((c) => c.selected).length
+  const steps: { id: ExportStep; label: string }[] = [
+    { id: 'format', label: 'Format' },
+    { id: 'scope', label: 'Scope' },
+    { id: 'options', label: 'Options' },
+    { id: 'review', label: 'Review' },
+  ]
+  const currentStepIndex = steps.findIndex((s) => s.id === currentStep) + 1
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[500px] max-h-[80vh] flex flex-col">
+      <div
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[85vh] flex flex-col"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="export-dialog-title"
+        aria-describedby="export-dialog-desc"
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-3">
             <Download className="text-blue-500" size={24} />
             <div>
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+              <h2 id="export-dialog-title" className="text-xl font-bold text-gray-900 dark:text-white">
                 Export Requirements{effectiveScopeLabel ? ` — ${effectiveScopeLabel}` : ''}
               </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {effectiveRequirements.length} requirement{effectiveRequirements.length !== 1 ? 's' : ''} to export
+              <p id="export-dialog-desc" className="text-sm text-gray-500 dark:text-gray-400">
+                Step {currentStepIndex} of 4 · {effectiveRequirements.length} requirement{effectiveRequirements.length !== 1 ? 's' : ''} in scope
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+            aria-label="Close"
           >
             <X size={20} className="text-gray-600 dark:text-gray-400" />
           </button>
         </div>
 
-        {/* Content */}
+        {/* Step indicator */}
+        <div className="flex border-b border-gray-200 dark:border-gray-700 px-4 pt-2" aria-label="Export steps">
+          {steps.map((step, i) => (
+            <button
+              key={step.id}
+              type="button"
+              onClick={() => setCurrentStep(step.id)}
+              className={clsx(
+                'px-3 py-2 text-sm font-medium rounded-t-lg transition-colors',
+                currentStep === step.id
+                  ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              )}
+              aria-current={currentStep === step.id ? 'step' : undefined}
+              aria-label={`Step ${i + 1}, ${step.label}`}
+            >
+              {i + 1}. {step.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Inline error / scope reset message */}
+        {(inlineError || scopeResetMessage) && (
+          <div className="mx-4 mt-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-200">
+            {inlineError ?? scopeResetMessage}
+          </div>
+        )}
+
+        {/* Content - step panels */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {/* Scope Selection */}
-          {enableScopeSelection && (componentTree.length > 0 || flatFunctions.length > 0) && (
+          {currentStep === 'format' && (
+            <>
+          {/* Step 1: Format & template */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Export Format
+            </label>
+            <div className="grid grid-cols-5 gap-2">
+              <button
+                onClick={() => { setSelectedFormat('csv'); setSelectedTemplateId(null) }}
+                className={clsx(
+                  'flex flex-col items-center gap-2 p-3 border rounded-lg transition-colors',
+                  selectedFormat === 'csv' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                )}
+              >
+                <FileText size={24} className="text-green-600" />
+                <span className="text-sm font-medium text-gray-900 dark:text-white">CSV</span>
+              </button>
+              <button
+                onClick={() => { setSelectedFormat('excel'); setSelectedTemplateId(null) }}
+                className={clsx(
+                  'flex flex-col items-center gap-2 p-3 border rounded-lg transition-colors',
+                  selectedFormat === 'excel' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                )}
+              >
+                <FileSpreadsheet size={24} className="text-green-700" />
+                <span className="text-sm font-medium text-gray-900 dark:text-white">Excel</span>
+              </button>
+              <button
+                onClick={() => { setSelectedFormat('pdf'); setSelectedTemplateId(null) }}
+                className={clsx(
+                  'flex flex-col items-center gap-2 p-3 border rounded-lg transition-colors',
+                  selectedFormat === 'pdf' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                )}
+              >
+                <File size={24} className="text-red-600" />
+                <span className="text-sm font-medium text-gray-900 dark:text-white">PDF</span>
+              </button>
+              <button
+                onClick={() => { setSelectedFormat('word'); setSelectedTemplateId(null) }}
+                className={clsx(
+                  'flex flex-col items-center gap-2 p-3 border rounded-lg transition-colors',
+                  selectedFormat === 'word' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                )}
+              >
+                <FileText size={24} className="text-blue-600" />
+                <span className="text-sm font-medium text-gray-900 dark:text-white">Word</span>
+              </button>
+              <button
+                onClick={() => { setSelectedFormat('reqif'); setSelectedTemplateId(null) }}
+                className={clsx(
+                  'flex flex-col items-center gap-2 p-3 border rounded-lg transition-colors',
+                  selectedFormat === 'reqif' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                )}
+              >
+                <Code size={24} className="text-purple-600" />
+                <span className="text-sm font-medium text-gray-900 dark:text-white">ReqIF</span>
+              </button>
+            </div>
+          </div>
+          {projectId && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Saved templates</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setIsSaveTemplateOpen(true); setInlineError(null) }}
+                    disabled={!canSaveAsTemplate}
+                    className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
+                  >
+                    Save current as template
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIsManageTemplatesOpen(true); setInlineError(null) }}
+                    className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+                  >
+                    Manage templates
+                  </button>
+                </div>
+              </div>
+              {templates.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400 py-2">No saved templates. Configure export and click &quot;Save current as template&quot;.</p>
+              ) : (
+                <ul className="border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-200 dark:divide-gray-700 max-h-40 overflow-y-auto">
+                  {templates.map((t) => (
+                    <li key={t.id} className="flex items-center justify-between px-3 py-2">
+                      <span className="text-sm text-gray-900 dark:text-white">{t.name}</span>
+                      <span className="text-xs px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300">{t.format}</span>
+                      <button
+                        type="button"
+                        onClick={() => applyTemplate(t)}
+                        className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded"
+                      >
+                        Apply
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {isSaveTemplateOpen && (
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Template name</label>
+              <input
+                type="text"
+                value={saveTemplateName}
+                onChange={(e) => setSaveTemplateName(e.target.value)}
+                placeholder="e.g. Customer report"
+                maxLength={80}
+                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+              <div className="flex gap-2">
+                <button type="button" onClick={() => { setIsSaveTemplateOpen(false); setSaveTemplateName('') }} className="px-3 py-2 text-sm border rounded-lg">Cancel</button>
+                <button type="button" onClick={handleSaveTemplate} disabled={!saveTemplateName.trim()} className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-50">Save</button>
+              </div>
+            </div>
+          )}
+          {isManageTemplatesOpen && (
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-2">
+              <h4 className="text-sm font-medium text-gray-900 dark:text-white">Manage templates</h4>
+              <ul className="divide-y divide-gray-200 dark:divide-gray-700 max-h-48 overflow-y-auto">
+                {templates.map((t) => (
+                  <li key={t.id} className="flex items-center justify-between py-2">
+                    {editingTemplateId === t.id ? (
+                      <>
+                        <input
+                          type="text"
+                          value={editingTemplateName}
+                          onChange={(e) => setEditingTemplateName(e.target.value)}
+                          className="flex-1 px-2 py-1 text-sm border rounded mr-2"
+                        />
+                        <button type="button" onClick={() => { updateExportTemplate(projectId!, t.id, { name: editingTemplateName.trim() }); refreshTemplates(); setEditingTemplateId(null); setEditingTemplateName('') }} className="text-xs text-blue-600 mr-1">Save</button>
+                        <button type="button" onClick={() => { setEditingTemplateId(null); setEditingTemplateName('') }} className="text-xs text-gray-500">Cancel</button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-sm">{t.name}</span>
+                        <div className="flex gap-1">
+                          <button type="button" onClick={() => { setEditingTemplateId(t.id); setEditingTemplateName(t.name) }} className="text-xs text-blue-600">Rename</button>
+                          <button type="button" onClick={() => { if (window.confirm(`Delete template "${t.name}"?`)) { deleteExportTemplate(projectId!, t.id); refreshTemplates() } }} className="text-xs text-red-600">Delete</button>
+                        </div>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <button type="button" onClick={() => setIsManageTemplatesOpen(false)} className="px-3 py-2 text-sm border rounded-lg">Done</button>
+            </div>
+          )}
+            </>
+          )}
+
+          {currentStep === 'scope' && (
+            <>
+          {/* Step 2: Scope */}
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Requirements in scope: <strong>{effectiveRequirements.length}</strong></p>
+          {enableScopeSelection && (componentTree.length > 0 || flatFunctions.length > 0) ? (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Scope
@@ -772,77 +1101,15 @@ export default function ExportBuilder({
                 )}
               </div>
             </div>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400">All requirements in this view.</p>
+          )}
+            </>
           )}
 
-          {/* Format Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Export Format
-            </label>
-            <div className="grid grid-cols-5 gap-2">
-              <button
-                onClick={() => setSelectedFormat('csv')}
-                className={clsx(
-                  'flex flex-col items-center gap-2 p-3 border rounded-lg transition-colors',
-                  selectedFormat === 'csv'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                )}
-              >
-                <FileText size={24} className="text-green-600" />
-                <span className="text-sm font-medium text-gray-900 dark:text-white">CSV</span>
-              </button>
-              <button
-                onClick={() => setSelectedFormat('excel')}
-                className={clsx(
-                  'flex flex-col items-center gap-2 p-3 border rounded-lg transition-colors',
-                  selectedFormat === 'excel'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                )}
-              >
-                <FileSpreadsheet size={24} className="text-green-700" />
-                <span className="text-sm font-medium text-gray-900 dark:text-white">Excel</span>
-              </button>
-              <button
-                onClick={() => setSelectedFormat('pdf')}
-                className={clsx(
-                  'flex flex-col items-center gap-2 p-3 border rounded-lg transition-colors',
-                  selectedFormat === 'pdf'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                )}
-              >
-                <File size={24} className="text-red-600" />
-                <span className="text-sm font-medium text-gray-900 dark:text-white">PDF</span>
-              </button>
-              <button
-                onClick={() => setSelectedFormat('word')}
-                className={clsx(
-                  'flex flex-col items-center gap-2 p-3 border rounded-lg transition-colors',
-                  selectedFormat === 'word'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                )}
-              >
-                <FileText size={24} className="text-blue-600" />
-                <span className="text-sm font-medium text-gray-900 dark:text-white">Word</span>
-              </button>
-              <button
-                onClick={() => setSelectedFormat('reqif')}
-                className={clsx(
-                  'flex flex-col items-center gap-2 p-3 border rounded-lg transition-colors',
-                  selectedFormat === 'reqif'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                )}
-              >
-                <Code size={24} className="text-purple-600" />
-                <span className="text-sm font-medium text-gray-900 dark:text-white">ReqIF</span>
-              </button>
-            </div>
-          </div>
-
+          {currentStep === 'options' && (
+            <>
+          {/* Step 3: Columns & options */}
           {/* Parameter display in exported text */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -959,24 +1226,113 @@ export default function ExportBuilder({
               </span>
             </label>
           </div>
+            </>
+          )}
+
+          {currentStep === 'review' && (
+            <>
+          {/* Step 4: Review & export */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white">Summary</h3>
+            <ul className="text-sm text-gray-600 dark:text-gray-400 list-disc list-inside space-y-1">
+              <li>Format: {selectedFormat.toUpperCase()}</li>
+              <li>Scope: {effectiveScopeLabel ?? 'All requirements'}</li>
+              <li>Columns: {selectedCount} selected</li>
+              <li>Parameter display: {parameterExportMode === 'name' ? 'Names' : 'Resolved values'}</li>
+              <li>Glossary: {includeGlossary ? 'Yes' : 'No'}, Abbreviations: {includeAbbreviations ? 'Yes' : 'No'}</li>
+            </ul>
+            {selectedFormat === 'pdf' && (
+              <p className="text-xs text-gray-500 dark:text-gray-400">Long text is truncated in PDF export.</p>
+            )}
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Preview</h3>
+            {selectedFormat === 'reqif' ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">ReqIF export will include all requirements in scope. No row preview.</p>
+            ) : (
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-100 dark:bg-gray-700">
+                      {columns.filter((c) => c.selected).map((c) => (
+                        <th key={c.key} className="px-2 py-1.5 text-left font-medium text-gray-900 dark:text-white">{c.label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {effectiveRequirements.slice(0, 10).map((req) => (
+                      <tr key={req.id} className="border-t border-gray-200 dark:border-gray-700">
+                        {columns.filter((c) => c.selected).map((col) => {
+                          let val = col.key === 'requirementId' ? (req.requirementId || req.id.slice(0, 8)) : (req[col.key as keyof Requirement] ?? '')
+                          if (typeof val === 'string' && (col.key === 'description' || col.key === 'acceptanceCriteria')) val = stripHtml(val)
+                          if (typeof val === 'string' && val.length > 80) val = val.slice(0, 80) + '…'
+                          return <td key={col.key} className="px-2 py-1.5 text-gray-700 dark:text-gray-300 max-w-[200px] truncate" title={String(val)}>{String(val)}</td>
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+            </>
+          )}
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 p-4 border-t border-gray-200 dark:border-gray-700">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+            className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
           >
             Cancel
           </button>
-          <button
-            onClick={handleExport}
-            disabled={isExporting || selectedCount === 0 || !canExport}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg flex items-center gap-2"
-          >
-            <Download size={16} />
-            {isExporting ? 'Exporting...' : `Export ${selectedFormat.toUpperCase()}`}
-          </button>
+          {currentStep !== 'format' && (
+            <button
+              type="button"
+              onClick={() => { setInlineError(null); setCurrentStep(currentStep === 'scope' ? 'format' : currentStep === 'options' ? 'scope' : 'options') }}
+              className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-1"
+            >
+              <ChevronLeft size={16} />
+              Back
+            </button>
+          )}
+          {currentStep !== 'review' ? (
+            <button
+              type="button"
+              onClick={() => {
+                setInlineError(null)
+                if (currentStep === 'format') setCurrentStep('scope')
+                else if (currentStep === 'scope') {
+                  if (scopeType === 'component' && !selectedComponentId) setInlineError('Select a component to export.')
+                  else if (scopeType === 'function' && !selectedFunctionId) setInlineError('Select a function to export.')
+                  else setCurrentStep('options')
+                } else if (currentStep === 'options') {
+                  if (selectedCount === 0) setInlineError('Select at least one column to export.')
+                  else setCurrentStep('review')
+                }
+              }}
+              disabled={
+                (currentStep === 'scope' && scopeType === 'component' && !selectedComponentId) ||
+                (currentStep === 'scope' && scopeType === 'function' && !selectedFunctionId) ||
+                (currentStep === 'options' && selectedCount === 0)
+              }
+              className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-1 disabled:opacity-50"
+            >
+              Next
+              <ChevronRight size={16} />
+            </button>
+          ) : (
+            <button
+              onClick={handleExport}
+              disabled={isExporting || selectedCount === 0 || !canExport}
+              className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg flex items-center gap-2"
+              aria-label={`Export as ${selectedFormat.toUpperCase()}`}
+            >
+              <Download size={16} />
+              {isExporting ? 'Exporting…' : `Export ${selectedFormat.toUpperCase()}`}
+            </button>
+          )}
         </div>
       </div>
     </div>

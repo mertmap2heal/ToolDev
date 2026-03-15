@@ -482,19 +482,33 @@ On save, automatically creates a `RequirementVersion` record:
 
 **File**: `frontend/src/components/requirements/ExportBuilder.tsx`
 
-**Purpose:** Wizard for exporting requirements in various formats.
+**Purpose:** Step-based wizard for exporting requirements in various formats, with optional custom templates (saved per project in localStorage).
+
+**Wizard Steps:**
+1. **Format & template**: Choose standard format (CSV, Excel, PDF, Word, ReqIF) or apply a saved template; save current settings as template; manage templates (rename, delete).
+2. **Scope**: All requirements, or by component, or by function; requirement count shown.
+3. **Options**: Column selection, parameter display (names vs resolved), glossary/abbreviations options, include column headers.
+4. **Review**: Summary, preview table (first 10 rows for table formats; ReqIF shows message only), then Export.
 
 **Supported Formats:**
-- **ReqIF**: Requirements Interchange Format (ISO/IEC 42010)
-- **Excel**: Microsoft Excel (.xlsx)
 - **CSV**: Comma-separated values
-- **PDF**: Portable Document Format
+- **Excel**: Microsoft Excel (.xlsx)
+- **PDF**: Portable Document Format (long text truncated)
+- **Word**: DOCX (via `frontend/src/utils/exportDocx.ts`)
+- **ReqIF**: Requirements Interchange Format (ISO/IEC 42010, backend export)
 
 **Export Options:**
-- **Scope**: All requirements, selected, filtered, baseline
-- **Fields**: Select which fields to include
-- **Formatting**: Include hierarchy, include comments, include attachments
-- **Filtering**: Apply current filters to export
+- **Scope**: All requirements, or by component/function when `enableScopeSelection` and tree data are provided.
+- **Columns**: Select which fields to include; merge with defaults when applying templates so new app columns are preserved.
+- **Parameter display**: Names (e.g. MAX_CRUISE_SPEED) or resolved values.
+- **Glossary/Abbreviations**: Include used terms only, with optional definitions and alphabetical sort.
+- **Include column headers**: Toggle for table formats.
+
+**Templates (localStorage):**
+- Stored under key `requirement-export-templates-${projectId}`; structure `{ version: 1, templates: ExportTemplate[] }`.
+- Apply template: fills format, columns (merged with current defaults), scope, and all options; if stored component/function ID no longer exists, scope is reset to "All" and a message is shown.
+- Save as template: enabled when at least one column is selected and scope is valid; name trimmed, max 80 chars; QuotaExceededError caught and shown in-modal.
+- Template utility: `frontend/src/utils/requirementExportTemplates.ts` (getExportTemplates, saveExportTemplate, deleteExportTemplate, updateExportTemplate, mergeColumnsWithDefaults).
 
 ### 4.9 Import Wizard
 
@@ -2345,20 +2359,21 @@ export interface BulkImportResult {
 
 ### 12.3 Export Builder
 
-**Purpose:** Export requirements in various formats.
+**Purpose:** Step-based wizard to export requirements in various formats, with optional custom templates (localStorage per project).
 
 **Features:**
-- ReqIF export (ISO/IEC 42010)
-- Excel export
-- CSV export
-- PDF export
-- Field selection
-- Filter application
+- **Wizard steps:** Format & template → Scope → Options (columns, parameter, glossary) → Review & export (summary, preview, Export).
+- **Formats:** CSV, Excel, PDF, Word (DOCX), ReqIF (backend).
+- **Templates:** Save current settings as template; apply template (column merge with defaults, stale scope reset); manage templates (rename, delete). Stored in `requirementExportTemplates.ts` (localStorage key `requirement-export-templates-${projectId}`).
+- **Scope:** All, or by component/function when enabled; requirement count shown.
+- **Field selection:** Column toggles; parameter display (names vs resolved); glossary/abbreviations options.
+- **Preview:** First 10 rows for table formats; ReqIF shows message only.
+- **Validation:** Inline errors and banner; no alert(); Back/Next with step validation.
 
 **Integration:**
-- Reads requirements from current view
-- Applies filters to export
-- Generates formatted files
+- Reads requirements from current view (effectiveRequirements from scope).
+- Applies current column/parameter/glossary options to CSV, Excel, PDF, Word (client); ReqIF via backend `/reqif/${projectId}/export`.
+- Generates formatted files (download); template persistence is frontend-only.
 
 ### 12.4 Import Wizard
 
@@ -2547,9 +2562,10 @@ After updating:
 
 ### 13.5 Last Updated
 
-**Last Updated**: 2025-01-27
+**Last Updated**: 2025-03-15
 
 **Recent Changes**:
+- Export Builder: documented step-based wizard (Format → Scope → Options → Review), custom templates (localStorage), column merge, stale scope handling, and template utility (Section 4.8, 12.3).
 - Fixed UpdateRequirementDto documentation (removed changeReason field, added requirementId and parentId)
 - Updated version creation documentation to reflect actual implementation
 - Fixed BulkImportRequest and BulkImportResult structures to match actual types
