@@ -78,10 +78,20 @@ export function getVerificationTabForNodeType(nodeType: VerificationNodeType): V
   return VERIFICATION_NODE_TYPE_TO_TAB[nodeType] ?? 'overview'
 }
 
-/** Build verification URL with tab and optional focus (for use from Requirements page or deep links). */
+/** Build verification URL with tab and optional focus/filters (for use from Requirements page, deep links, drill-down). */
 export function buildVerificationUrl(
   projectId: string,
-  options: { tab?: VerificationTabId | string; focusType?: string; focusId?: string; openCreate?: string; openCreateCase?: string; openCreateSetup?: string; openCreateRun?: string }
+  options: {
+    tab?: VerificationTabId | string
+    focusType?: string
+    focusId?: string
+    openCreate?: string
+    openCreateCase?: string
+    openCreateSetup?: string
+    openCreateRun?: string
+    status?: string
+    moc?: string
+  }
 ): string {
   const params = new URLSearchParams()
   params.set('tab', (options.tab && VERIFICATION_VALID_TAB_IDS.includes(options.tab) ? options.tab : 'overview'))
@@ -91,6 +101,8 @@ export function buildVerificationUrl(
   if (options.openCreateCase) params.set('openCreateCase', options.openCreateCase)
   if (options.openCreateSetup) params.set('openCreateSetup', options.openCreateSetup)
   if (options.openCreateRun) params.set('openCreateRun', options.openCreateRun)
+  if (options.status) params.set('status', options.status)
+  if (options.moc) params.set('moc', options.moc)
   const qs = params.toString()
   return `/projects/${projectId}/verification${qs ? `?${qs}` : ''}`
 }

@@ -383,20 +383,27 @@ function VerificationLayoutInner() {
               ? { label: drawer.selectedRun.runName || 'Run', tab: 'runs' }
               : null
 
-    if (!entity) {
-      setBreadcrumbItems(null)
-      return
-    }
-
     const projectName = projectData?.name || 'Project'
-    setBreadcrumbItems([
-      { label: 'Home', path: '/' },
-      { label: projectName, path: `/projects/${projectId}` },
-      { label: 'Verification', path: basePath },
-      { label: VERIFICATION_TAB_LABELS[entity.tab] || entity.tab, path: `${basePath}?tab=${entity.tab}` },
-      { label: entity.label },
-    ])
+    const tabLabel = VERIFICATION_TAB_LABELS[activeTabParam] || activeTabParam
+
+    if (entity) {
+      setBreadcrumbItems([
+        { label: 'Home', path: '/' },
+        { label: projectName, path: `/projects/${projectId}` },
+        { label: 'Verification', path: basePath },
+        { label: VERIFICATION_TAB_LABELS[entity.tab] || entity.tab, path: `${basePath}?tab=${entity.tab}` },
+        { label: entity.label },
+      ])
+    } else {
+      setBreadcrumbItems([
+        { label: 'Home', path: '/' },
+        { label: projectName, path: `/projects/${projectId}` },
+        { label: 'Verification', path: basePath },
+        { label: tabLabel },
+      ])
+    }
   }, [
+    activeTabParam,
     setBreadcrumbItems,
     projectId,
     projectData?.name,
@@ -512,6 +519,13 @@ function VerificationLayoutInner() {
             {VERIFICATION_MAIN_TABS.map((tab) => {
               const Icon = tab.icon
               const active = !isTemplates && activeTabParam === tab.id
+              const count =
+                tab.id === 'plans' ? plans.length
+                  : tab.id === 'cases' ? testCases.length
+                    : tab.id === 'setups' ? testSetups.length
+                      : tab.id === 'runs' ? (Array.isArray(testRunsData) ? testRunsData.length : 0)
+                        : null
+              const label = count != null ? `${tab.label} (${count})` : tab.label
               return (
                 <button
                   key={tab.id}
@@ -524,7 +538,7 @@ function VerificationLayoutInner() {
                   )}
                 >
                   <Icon size={16} />
-                  {tab.label}
+                  {label}
                 </button>
               )
             })}

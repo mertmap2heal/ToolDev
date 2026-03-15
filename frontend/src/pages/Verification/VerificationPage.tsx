@@ -36,7 +36,7 @@ import TestCaseDocumentCard from '../../components/verification/TestCaseDocument
 import TestSetupDocumentCard from '../../components/verification/TestSetupDocumentCard'
 import TestResultDocumentCard from '../../components/verification/TestResultDocumentCard'
 import ReviewDocumentCard from '../../components/verification/ReviewDocumentCard'
-import { VERIFICATION_VALID_TAB_IDS } from '../../config/verificationTabs'
+import { VERIFICATION_VALID_TAB_IDS, buildVerificationUrl } from '../../config/verificationTabs'
 
 // Helper function to format test results status summary
 const formatTestResultsSummary = (statusSummary: Record<string, number> | undefined): string => {
@@ -169,6 +169,8 @@ export default function VerificationPage() {
   const openCreateCase = searchParams.get('openCreateCase')
   const openCreateSetup = searchParams.get('openCreateSetup')
   const openCreateRun = searchParams.get('openCreateRun')
+  const statusFilter = searchParams.get('status') || ''
+  const mocFilter = searchParams.get('moc') || ''
   const [searchQuery, setSearchQuery] = useState('')
 
   // Modal states
@@ -366,6 +368,16 @@ export default function VerificationPage() {
       return response.success && response.data ? response.data : []
     },
     enabled: !!projectId,
+  })
+
+  // Fetch MoCs for Test Cases filter dropdown
+  const { data: mocsList = [] } = useQuery({
+    queryKey: ['verification-mocs'],
+    queryFn: async () => {
+      const res = await verificationService.getMocs()
+      return res.success && Array.isArray(res.data) ? res.data : []
+    },
+    enabled: activeTab === 'cases',
   })
 
   // Fetch test setups (also when on cases tab for bulk link/unlink)
@@ -624,10 +636,16 @@ export default function VerificationPage() {
     plan.key?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const filteredCases = (Array.isArray(testCases) ? testCases : []).filter((case_: any) =>
-    case_.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    case_.key?.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const filteredCases = (Array.isArray(testCases) ? testCases : []).filter((case_: any) => {
+    const matchesSearch =
+      case_.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      case_.key?.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesStatus = !statusFilter || (case_.status === statusFilter)
+    const caseMoc = case_.moc?.code ?? case_.linkedMocCode ?? case_.moc
+    const mocStr = caseMoc != null ? String(caseMoc) : ''
+    const matchesMoc = !mocFilter || mocStr === mocFilter
+    return matchesSearch && matchesStatus && matchesMoc
+  })
 
   const filteredSetups = (Array.isArray(testSetups) ? testSetups : []).filter((setup: any) =>
     setup.name?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -639,8 +657,38 @@ export default function VerificationPage() {
     result.description?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
+  const viewingEntity =
+    drawer.isPlanDrawerOpen && drawer.selectedPlan
+      ? { type: 'Test Plan', key: drawer.selectedPlan.key, name: drawer.selectedPlan.name, onClose: drawer.closePlan }
+      : drawer.isCaseDrawerOpen && drawer.selectedCase
+        ? { type: 'Test Case', key: drawer.selectedCase.key, name: drawer.selectedCase.title, onClose: drawer.closeCase }
+        : drawer.isSetupDrawerOpen && drawer.selectedSetup
+          ? { type: 'Test Setup', key: null, name: drawer.selectedSetup.name, onClose: drawer.closeSetup }
+          : drawer.isResultDrawerOpen && drawer.selectedResult
+            ? { type: 'Test Result', key: null, name: drawer.selectedResult.title, onClose: drawer.closeResult }
+            : drawer.isRunDrawerOpen && drawer.selectedRun
+              ? { type: 'Test Run', key: null, name: drawer.selectedRun.runName || 'Run', onClose: drawer.closeRun }
+              : null
+
   return (
     <div className="flex-1 min-h-0 overflow-y-auto space-y-6">
+      {/* Context bar: show when a drawer is open */}
+      {viewingEntity && (
+        <div className="flex items-center justify-between gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <span className="text-sm text-gray-700 dark:text-gray-300">
+            Viewing: <span className="font-medium text-gray-900 dark:text-white">{viewingEntity.type}{viewingEntity.key ? ` ${viewingEntity.key}` : ''} – {viewingEntity.name || '—'}</span>
+          </span>
+          <button
+            type="button"
+            onClick={viewingEntity.onClose}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            <X size={14} />
+            Close
+          </button>
+        </div>
+      )}
+
       {/* Search */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
         <div className="relative">
@@ -672,9 +720,13 @@ export default function VerificationPage() {
             </div>
           ) : overview ? (
             <>
-              {/* Metrics Cards */}
+              {/* Metrics Cards (clickable for drill-down) */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                <button
+                  type="button"
+                  onClick={() => projectId && navigate(buildVerificationUrl(projectId, { tab: 'plans' }))}
+                  className="text-left bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:border-blue-300 dark:hover:border-blue-600 transition-colors cursor-pointer"
+                >
                   <div className="text-sm text-gray-500 dark:text-gray-400">Test Plans</div>
                   <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
                     {overview.testPlans?.total || 0}
@@ -687,8 +739,13 @@ export default function VerificationPage() {
                       {overview.testPlans.withTestResults} with test results
                     </div>
                   )}
-                </div>
-                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <div className="text-xs text-gray-400 dark:text-gray-500 mt-2">Click to view</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => projectId && navigate(buildVerificationUrl(projectId, { tab: 'cases' }))}
+                  className="text-left bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:border-blue-300 dark:hover:border-blue-600 transition-colors cursor-pointer"
+                >
                   <div className="text-sm text-gray-500 dark:text-gray-400">Test Cases</div>
                   <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
                     {overview.testCases?.total || 0}
@@ -701,25 +758,33 @@ export default function VerificationPage() {
                       {overview.testCases.withTestResults} with test results
                     </div>
                   )}
-                </div>
-                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <div className="text-xs text-gray-400 dark:text-gray-500 mt-2">Click to view</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => projectId && navigate(buildVerificationUrl(projectId, { tab: 'traceability' }))}
+                  className="text-left bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:border-blue-300 dark:hover:border-blue-600 transition-colors cursor-pointer"
+                >
                   <div className="text-sm text-gray-500 dark:text-gray-400">Coverage</div>
                   <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
                     {overview.coverage?.overall || 0}%
                   </div>
                   <div className="text-xs text-gray-500 mt-1">Overall verification</div>
-                </div>
+                  <div className="text-xs text-gray-400 dark:text-gray-500 mt-2">Click for traceability matrix</div>
+                </button>
               </div>
 
-              {/* MoC Coverage Dashboard */}
+              {/* MoC Coverage Dashboard (tiles clickable -> Test Cases filtered by MoC) */}
               {(overview.coverage as { byMoc?: Record<string, unknown> } | undefined)?.byMoc && Object.keys((overview.coverage as { byMoc?: Record<string, unknown> }).byMoc ?? {}).length > 0 && (
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                   <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-4">MoC Coverage by Code</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {Object.entries((overview.coverage as { byMoc?: Record<string, unknown> }).byMoc ?? {}).map(([mocCode, data]: [string, any]) => (
-                      <div
+                      <button
                         key={mocCode}
-                        className="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-gray-50 dark:bg-gray-700/50"
+                        type="button"
+                        onClick={() => projectId && navigate(buildVerificationUrl(projectId, { tab: 'cases', moc: mocCode }))}
+                        className="text-left border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors cursor-pointer"
                       >
                         <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">MoC {mocCode}</div>
                         <div className="text-lg font-bold text-gray-900 dark:text-white mt-1">{data.percentage || 0}%</div>
@@ -732,7 +797,7 @@ export default function VerificationPage() {
                             style={{ width: `${Math.min(100, data.percentage || 0)}%` }}
                           />
                         </div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -1019,6 +1084,23 @@ export default function VerificationPage() {
 
       {activeTab === 'cases' && (
         <div className="space-y-4">
+          {(statusFilter || mocFilter) && (
+            <div className="flex items-center justify-between gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg">
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                Active filters:
+                {statusFilter && <span className="ml-1.5 font-medium text-gray-900 dark:text-white">Status: {statusFilter}</span>}
+                {statusFilter && mocFilter && <span className="mx-1.5 text-gray-400">·</span>}
+                {mocFilter && <span className="font-medium text-gray-900 dark:text-white">MoC: {mocFilter}</span>}
+              </span>
+              <button
+                type="button"
+                onClick={() => setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('status'); n.delete('moc'); return n }, { replace: true })}
+                className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Clear filters
+              </button>
+            </div>
+          )}
           {selectedCaseIds.size > 0 && (
             <div className="flex items-center justify-between gap-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
               <span className="text-sm font-medium text-gray-900 dark:text-white">
@@ -1064,7 +1146,34 @@ export default function VerificationPage() {
               </div>
             </div>
           )}
-          <div className="flex justify-end gap-2 flex-wrap">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-gray-500 dark:text-gray-400">Filters:</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setSearchParams((p) => { const n = new URLSearchParams(p); const v = e.target.value; if (v) n.set('status', v); else n.delete('status'); return n }, { replace: true })}
+                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              >
+                <option value="">All statuses</option>
+                <option value="DRAFT">Draft</option>
+                <option value="REVIEWED">Reviewed</option>
+                <option value="APPROVED">Approved</option>
+                <option value="READY">Ready</option>
+              </select>
+              <select
+                value={mocFilter}
+                onChange={(e) => setSearchParams((p) => { const n = new URLSearchParams(p); const v = e.target.value; if (v) n.set('moc', v); else n.delete('moc'); return n }, { replace: true })}
+                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              >
+                <option value="">All MoCs</option>
+                {mocsList.map((m: any) => (
+                  <option key={m.code ?? m.id} value={String(m.code ?? m.id ?? '')}>
+                    MoC {m.code ?? m.id}: {m.name ?? '—'}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => persistListViewStyle(listViewStyle === 'document' ? 'table' : 'document')}
               className={clsx(
@@ -1134,6 +1243,7 @@ export default function VerificationPage() {
               <Plus size={16} />
               Create Test Case
             </button>
+            </div>
           </div>
           {loadingCases ? (
             <div className="flex items-center justify-center p-12">
