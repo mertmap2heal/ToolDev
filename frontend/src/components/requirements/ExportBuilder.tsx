@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { X, Download, FileSpreadsheet, FileText, File, CheckSquare, Square, Code, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Upload, AlertTriangle, Clock, Eye, Share2, Globe, Lock, Building2, Loader2 } from 'lucide-react'
+import { X, Download, FileSpreadsheet, FileText, File, CheckSquare, Square, Code, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Upload, AlertTriangle, Clock, Eye, Share2, Globe, Lock, Building2, Loader2, Check } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
 import type { Requirement, SystemFunction } from 'shared/types/engineering.types'
@@ -248,6 +248,17 @@ export default function ExportBuilder({
   // Template JSON import
   const templateJsonInputRef = useRef<HTMLInputElement>(null)
 
+  // In-app confirmation dialog (replaces window.confirm)
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string
+    message: string
+    onConfirm: () => void
+  } | null>(null)
+
+  // Archived (soft-deleted) templates
+  const [deletedTemplates, setDeletedTemplates] = useState<RequirementExportTemplate[]>([])
+  const [isDeletedPanelOpen, setIsDeletedPanelOpen] = useState(false)
+
   const toUiTemplate = useCallback((t: RequirementExportTemplate): ExportTemplate => {
     const p = (t.payload ?? {}) as Partial<ExportTemplate>
     return {
@@ -271,7 +282,15 @@ export default function ExportBuilder({
       glossaryShowDefinitions: p.glossaryShowDefinitions ?? true,
       glossarySortAlphabetically: p.glossarySortAlphabetically ?? true,
       createdAt: (p.createdAt as any) ?? t.createdAt,
-      sections: p.sections,
+      sections: Array.isArray(p.sections)
+        ? p.sections.map((s: any, i: number) => ({
+            id: s.id ?? s.sectionId ?? `sec-${i}`,
+            type: s.type ?? s.sectionType ?? 'requirements_table',
+            title: s.title ?? s.label ?? undefined,
+            enabled: s.enabled ?? true,
+            options: s.options ?? undefined,
+          }))
+        : p.sections,
       documentStyle: p.documentStyle,
     }
   }, [])
@@ -323,6 +342,14 @@ export default function ExportBuilder({
     if (!projectId) return
     scheduledExportService.list(projectId).then((res) => {
       if (res.success && res.data) setScheduledExports(res.data)
+    })
+  }, [projectId])
+
+  // Load deleted (archived) templates
+  useEffect(() => {
+    if (!projectId) return
+    requirementExportTemplateService.listDeleted(projectId).then((res) => {
+      if (res.success && res.data) setDeletedTemplates(res.data)
     })
   }, [projectId])
 
@@ -1529,25 +1556,54 @@ export default function ExportBuilder({
           </button>
         </div>
 
-        {/* Step indicator */}
-        <div className="flex border-b border-gray-200 dark:border-gray-700 px-4 pt-2" aria-label="Export steps">
-          {steps.map((step, i) => (
-            <button
-              key={step.id}
-              type="button"
-              onClick={() => setCurrentStep(step.id)}
-              className={clsx(
-                'px-3 py-2 text-sm font-medium rounded-t-lg transition-colors',
-                currentStep === step.id
-                  ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              )}
-              aria-current={currentStep === step.id ? 'step' : undefined}
-              aria-label={`Step ${i + 1}, ${step.label}`}
-            >
-              {i + 1}. {step.label}
-            </button>
-          ))}
+        {/* Step progress indicator */}
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50" aria-label="Export steps">
+          <div className="flex items-center justify-center gap-0">
+            {steps.map((step, i) => {
+              const isCompleted = i < currentStepIndex - 1
+              const isCurrent = currentStep === step.id
+              return (
+                <div key={step.id} className="flex items-center">
+                  {/* Step node */}
+                  <button
+                    type="button"
+                    onClick={() => setCurrentStep(step.id)}
+                    aria-current={isCurrent ? 'step' : undefined}
+                    aria-label={`Step ${i + 1}: ${step.label}${isCompleted ? ' (completed)' : ''}`}
+                    className="flex flex-col items-center gap-1.5 group focus:outline-none"
+                  >
+                    <div className={clsx(
+                      'w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold border-2 transition-all duration-200',
+                      isCompleted
+                        ? 'bg-green-500 border-green-500 text-white'
+                        : isCurrent
+                          ? 'bg-blue-600 border-blue-600 text-white ring-4 ring-blue-100 dark:ring-blue-900/40'
+                          : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 group-hover:border-gray-400 dark:group-hover:border-gray-500'
+                    )}>
+                      {isCompleted ? <Check size={14} /> : i + 1}
+                    </div>
+                    <span className={clsx(
+                      'text-xs font-medium whitespace-nowrap transition-colors',
+                      isCompleted ? 'text-green-600 dark:text-green-400'
+                        : isCurrent ? 'text-blue-600 dark:text-blue-400'
+                        : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-400'
+                    )}>
+                      {step.label}
+                    </span>
+                  </button>
+                  {/* Connector line */}
+                  {i < steps.length - 1 && (
+                    <div className={clsx(
+                      'h-0.5 w-16 mx-1 mb-5 rounded-full transition-colors duration-300',
+                      i < currentStepIndex - 1
+                        ? 'bg-green-400 dark:bg-green-600'
+                        : 'bg-gray-200 dark:bg-gray-700'
+                    )} />
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
 
         {/* Inline error / scope reset message */}
@@ -1694,13 +1750,14 @@ export default function ExportBuilder({
                         </label>
                         <button
                           type="button"
-                          onClick={() => {
-                            if (!window.confirm(`Remove template "${t.name}"?`)) return
-                            corporateDocxTemplateService.remove(projectId!, t.id).then(() => {
+                          onClick={() => setConfirmDialog({
+                            title: 'Remove word template',
+                            message: `Remove "${t.name}" from the corporate templates list?`,
+                            onConfirm: () => corporateDocxTemplateService.remove(projectId!, t.id).then(() => {
                               setCorporateDocxTemplates(prev => prev.filter(x => x.id !== t.id))
                               if (selectedCorporateDocxId === t.id) setSelectedCorporateDocxId(null)
-                            })
-                          }}
+                            }),
+                          })}
                           className="text-xs text-red-500 hover:text-red-700 shrink-0 px-1"
                         >
                           ×
@@ -1804,13 +1861,14 @@ export default function ExportBuilder({
                         </label>
                         <button
                           type="button"
-                          onClick={() => {
-                            if (!window.confirm(`Delete mapping "${m.name}"?`)) return
-                            excelColumnMappingService.remove(projectId!, m.id).then(() => {
+                          onClick={() => setConfirmDialog({
+                            title: 'Delete mapping',
+                            message: `Delete column mapping "${m.name}"? This cannot be undone.`,
+                            onConfirm: () => excelColumnMappingService.remove(projectId!, m.id).then(() => {
                               setExcelColumnMappings(prev => prev.filter(x => x.id !== m.id))
                               if (selectedMappingId === m.id) setSelectedMappingId(null)
-                            })
-                          }}
+                            }),
+                          })}
                           className="text-xs text-red-500 hover:text-red-700 px-1 shrink-0"
                         >
                           ×
@@ -2102,17 +2160,22 @@ export default function ExportBuilder({
                           <button type="button" onClick={() => { setEditingTemplateId(t.id); setEditingTemplateName(t.name) }} className="px-2 py-1 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">Rename</button>
                           <button
                             type="button"
-                            onClick={() => {
-                              if (!window.confirm(`Delete template "${t.name}"?`)) return
-                              requirementExportTemplateService.remove(projectId!, t.id).then((res) => {
+                            onClick={() => setConfirmDialog({
+                              title: 'Delete template',
+                              message: `Move "${t.name}" to the archive? You can restore it later.`,
+                              onConfirm: () => requirementExportTemplateService.remove(projectId!, t.id).then((res) => {
                                 if (res.success) {
                                   setTemplates((prev) => prev.filter((x) => x.id !== t.id))
                                   if (selectedTemplateId === t.id) setSelectedTemplateId(null)
+                                  // Add to deleted list for immediate archive panel display
+                                  requirementExportTemplateService.listDeleted(projectId!).then(r => {
+                                    if (r.success && r.data) setDeletedTemplates(r.data)
+                                  })
                                 } else {
                                   setInlineError(res.error || 'Could not delete template.')
                                 }
-                              })
-                            }}
+                              }),
+                            })}
                             className="px-2 py-1 text-xs font-medium rounded border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
                           >
                             Delete
@@ -2162,6 +2225,72 @@ export default function ExportBuilder({
                 </div>
                 <button type="button" onClick={() => setIsManageTemplatesOpen(false)} className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">Done</button>
               </div>
+
+              {/* Recently deleted archive panel */}
+              {deletedTemplates.length > 0 && (
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsDeletedPanelOpen(v => !v)}
+                    className="w-full flex items-center justify-between px-1 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <AlertTriangle size={12} className="text-amber-500" />
+                      Recently deleted ({deletedTemplates.length})
+                    </span>
+                    {isDeletedPanelOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  </button>
+                  {isDeletedPanelOpen && (
+                    <ul className="mt-2 space-y-1.5">
+                      {deletedTemplates.map(t => (
+                        <li key={t.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-amber-100 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-900/10">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">{t.name}</p>
+                            <p className="text-xs text-gray-400 dark:text-gray-500">
+                              {t.format.toUpperCase()} · deleted {t.deletedAt ? new Date(t.deletedAt).toLocaleDateString() : ''}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!projectId) return
+                                requirementExportTemplateService.restore(projectId, t.id).then(res => {
+                                  if (res.success && res.data) {
+                                    setDeletedTemplates(prev => prev.filter(x => x.id !== t.id))
+                                    const ui = toUiTemplate(res.data)
+                                    setTemplates(prev => [ui, ...prev])
+                                  }
+                                })
+                              }}
+                              className="px-2 py-1 text-xs font-medium rounded border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
+                            >
+                              Restore
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDialog({
+                                title: 'Delete permanently',
+                                message: `Permanently delete "${t.name}"? This cannot be undone.`,
+                                onConfirm: () => {
+                                  if (!projectId) return
+                                  requirementExportTemplateService.permanentDelete(projectId, t.id).then(res => {
+                                    if (res.success) setDeletedTemplates(prev => prev.filter(x => x.id !== t.id))
+                                  })
+                                },
+                              })}
+                              className="px-2 py-1 text-xs font-medium rounded border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                            >
+                              Delete permanently
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
               </div>
             </div>
           )}
@@ -2209,10 +2338,13 @@ export default function ExportBuilder({
                           </label>
                           <button
                             type="button"
-                            onClick={() => {
-                              if (!window.confirm(`Delete scheduled export "${se.name}"?`)) return
-                              scheduledExportService.remove(projectId!, se.id).then(() => setScheduledExports(prev => prev.filter(x => x.id !== se.id)))
-                            }}
+                            onClick={() => setConfirmDialog({
+                              title: 'Delete schedule',
+                              message: `Delete scheduled export "${se.name}"? This cannot be undone.`,
+                              onConfirm: () => scheduledExportService.remove(projectId!, se.id).then(() =>
+                                setScheduledExports(prev => prev.filter(x => x.id !== se.id))
+                              ),
+                            })}
                             className="text-xs text-red-500 hover:text-red-700 px-1"
                           >
                             ×
@@ -2681,25 +2813,30 @@ export default function ExportBuilder({
               {useDocumentSections && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Apply preset</label>
-                    <select
-                      value={documentPresetSelect}
-                      onChange={(e) => {
-                        const v = e.target.value as '' | 'authority' | 'simple' | 'full' | 'submission_with_placeholders'
-                        setDocumentPresetSelect(v)
-                        if (v) {
-                          applyPreset(v)
-                          setDocumentPresetSelect('')
-                        }
-                      }}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    >
-                      <option value="">— Choose preset —</option>
-                      <option value="authority">Authority submission</option>
-                      <option value="simple">Simple list</option>
-                      <option value="full">Full report</option>
-                      <option value="submission_with_placeholders">Submission with placeholders</option>
-                    </select>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Apply preset</label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {([
+                        ['authority', 'Authority submission'],
+                        ['simple', 'Simple list'],
+                        ['full', 'Full report'],
+                        ['submission_with_placeholders', 'With placeholders'],
+                      ] as const).map(([val, label]) => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => { applyPreset(val); setDocumentPresetSelect(val) }}
+                          className={clsx(
+                            'px-2 py-1.5 text-xs rounded-lg border transition-colors text-left flex items-center gap-1.5',
+                            documentPresetSelect === val
+                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium'
+                              : 'border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                          )}
+                        >
+                          {documentPresetSelect === val && <Check size={11} className="shrink-0" />}
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Sections</label>
@@ -2736,13 +2873,13 @@ export default function ExportBuilder({
                               onChange={(e) => updateSection(sec.id, { enabled: e.target.checked })}
                               className="w-4 h-4 text-blue-600 border-gray-300 rounded"
                             />
-                            <span className="text-xs text-gray-600 dark:text-gray-400 capitalize">{sec.type.replace('_', ' ')}</span>
+                            <span className="text-xs text-gray-600 dark:text-gray-400 capitalize">{(sec.type ?? '').replace('_', ' ')}</span>
                           </label>
                           <input
                             type="text"
                             value={sec.title ?? ''}
                             onChange={(e) => updateSection(sec.id, { title: e.target.value || undefined })}
-                            placeholder={sec.type.replace('_', ' ')}
+                            placeholder={(sec.type ?? '').replace('_', ' ')}
                             className="flex-1 min-w-[8rem] px-2 py-1 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                           />
                           {sec.type !== 'cover' && (
@@ -3205,6 +3342,32 @@ export default function ExportBuilder({
           )}
         </div>
 
+        {/* In-app confirmation dialog */}
+        {confirmDialog && (
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-20 rounded-lg">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4 space-y-4">
+              <h3 className="text-base font-semibold text-gray-900 dark:text-white">{confirmDialog.title}</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-300">{confirmDialog.message}</p>
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDialog(null)}
+                  className="px-4 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { confirmDialog.onConfirm(); setConfirmDialog(null) }}
+                  className="px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Export progress overlay for large exports */}
         {isExporting && exportProgress > 0 && (
           <div className="absolute inset-0 bg-white/90 dark:bg-gray-800/90 flex flex-col items-center justify-center z-10 rounded-lg gap-4">
@@ -3223,57 +3386,66 @@ export default function ExportBuilder({
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 p-4 border-t border-gray-200 dark:border-gray-700">
-          <button
-            onClick={onClose}
-            className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-          >
-            Cancel
-          </button>
-          {currentStep !== 'format' && (
+        <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+          {/* Left: context + cancel */}
+          <div className="flex items-center gap-3">
             <button
-              type="button"
-              onClick={() => { setInlineError(null); setCurrentStep(currentStep === 'scope' ? 'format' : 'scope') }}
-              className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-1"
+              onClick={onClose}
+              className="px-3 py-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
-              <ChevronLeft size={16} />
-              Back
+              Cancel
             </button>
-          )}
-          {currentStep !== 'review' ? (
-            <button
-              type="button"
-              onClick={() => {
-                setInlineError(null)
-                if (currentStep === 'format') setCurrentStep('scope')
-                else if (currentStep === 'scope') {
-                  if (scopeType === 'custom' && selectedComponentIds.length === 0 && selectedFunctionIds.length === 0) {
-                    setInlineError('Select at least one component or function for the custom scope (or switch to “All requirements”).')
+            <span className="hidden sm:block text-xs text-gray-400 dark:text-gray-500 select-none">
+              Step {currentStepIndex} of {steps.length} — {steps[currentStepIndex - 1]?.label}
+            </span>
+          </div>
+          {/* Right: Back + Next/Export */}
+          <div className="flex items-center gap-2">
+            {currentStep !== 'format' && (
+              <button
+                type="button"
+                onClick={() => { setInlineError(null); setCurrentStep(currentStep === 'scope' ? 'format' : 'scope') }}
+                className="px-4 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700 flex items-center gap-1.5 transition-colors"
+              >
+                <ChevronLeft size={15} />
+                Back
+              </button>
+            )}
+            {currentStep !== 'review' ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setInlineError(null)
+                  if (currentStep === 'format') setCurrentStep('scope')
+                  else if (currentStep === 'scope') {
+                    if (scopeType === 'custom' && selectedComponentIds.length === 0 && selectedFunctionIds.length === 0) {
+                      setInlineError('Select at least one component or function for the custom scope (or switch to "All requirements").')
+                    }
+                    else if (selectedCount === 0) setInlineError('Select at least one column to export.')
+                    else setCurrentStep('review')
                   }
-                  else if (selectedCount === 0) setInlineError('Select at least one column to export.')
-                  else setCurrentStep('review')
+                }}
+                disabled={
+                  (currentStep === 'scope' && scopeType === 'custom' && selectedComponentIds.length === 0 && selectedFunctionIds.length === 0) ||
+                  (currentStep === 'scope' && selectedCount === 0)
                 }
-              }}
-              disabled={
-                (currentStep === 'scope' && scopeType === 'custom' && selectedComponentIds.length === 0 && selectedFunctionIds.length === 0) ||
-                (currentStep === 'scope' && selectedCount === 0)
-              }
-              className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-1 disabled:opacity-50"
-            >
-              Next
-              <ChevronRight size={16} />
-            </button>
-          ) : (
-            <button
-              onClick={handleExport}
-              disabled={isExporting || selectedCount === 0 || !canExport}
-              className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg flex items-center gap-2"
-              aria-label={`Export as ${selectedFormat.toUpperCase()}`}
-            >
-              <Download size={16} />
-              {isExporting ? 'Exporting…' : `Export ${selectedFormat.toUpperCase()}`}
-            </button>
-          )}
+                className="px-5 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+              >
+                {currentStep === 'format' ? 'Next: Scope' : 'Next: Review'}
+                <ChevronRight size={15} />
+              </button>
+            ) : (
+              <button
+                onClick={handleExport}
+                disabled={isExporting || selectedCount === 0 || !canExport}
+                className="px-5 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-colors shadow-sm"
+                aria-label={`Export as ${selectedFormat.toUpperCase()}`}
+              >
+                <Download size={15} />
+                {isExporting ? 'Exporting…' : `Export ${selectedFormat.toUpperCase()}`}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -186,15 +186,17 @@ model Project {
 // Requirements export templates (ExportBuilder) - enterprise export wizard presets.
 // Stored server-side for cross-device availability.
 model RequirementExportTemplate {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   projectId   String
   name        String
-  format      String   // csv | excel | pdf | word | reqif
-  payload     Json     // full template config (columns, scope, filters, sections, documentStyle, etc.)
-  visibility  String   @default("project") // private | project | org
+  format      String    // csv | excel | pdf | word | reqif
+  payload     Json      // full template config (columns, scope, filters, sections, documentStyle, etc.)
+  visibility  String    @default("project") // private | project | org
   createdById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  deletedById String?
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -202,6 +204,7 @@ model RequirementExportTemplate {
   @@index([projectId])
   @@index([projectId, format])
   @@index([projectId, visibility])
+  @@index([deletedAt])
 }
 
 // Background export jobs – track client-initiated large exports (>500 reqs) for progress monitoring.

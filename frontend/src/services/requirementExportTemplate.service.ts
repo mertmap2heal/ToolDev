@@ -13,6 +13,8 @@ export interface RequirementExportTemplate {
   createdById?: string | null
   createdAt: string
   updatedAt: string
+  deletedAt?: string | null
+  deletedById?: string | null
 }
 
 export interface CreateRequirementExportTemplateDto {
@@ -34,6 +36,10 @@ export const requirementExportTemplateService = {
     return apiClient.get<RequirementExportTemplate[]>(`/templates/${projectId}`)
   },
 
+  async listDeleted(projectId: string): Promise<ApiResponse<RequirementExportTemplate[]>> {
+    return apiClient.get<RequirementExportTemplate[]>(`/templates/${projectId}/archive/deleted`)
+  },
+
   async getOne(projectId: string, id: string): Promise<ApiResponse<RequirementExportTemplate>> {
     return apiClient.get<RequirementExportTemplate>(`/templates/${projectId}/${id}`)
   },
@@ -53,5 +59,12 @@ export const requirementExportTemplateService = {
   async remove(projectId: string, id: string): Promise<ApiResponse<{ id: string }>> {
     return apiClient.delete<{ id: string }>(`/templates/${projectId}/${id}`)
   },
-}
 
+  async restore(projectId: string, id: string): Promise<ApiResponse<RequirementExportTemplate>> {
+    return apiClient.post<RequirementExportTemplate>(`/templates/${projectId}/${id}/restore`, {})
+  },
+
+  async permanentDelete(projectId: string, id: string): Promise<ApiResponse<{ id: string }>> {
+    return apiClient.delete<{ id: string }>(`/templates/${projectId}/${id}/permanent`)
+  },
+}

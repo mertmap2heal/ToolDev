@@ -13,6 +13,17 @@ export const list = async (req: AuthRequest, res: Response) => {
   }
 }
 
+export const listDeleted = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+    const items = await service.listDeleted(projectId)
+    res.json({ success: true, data: items })
+  } catch (error: any) {
+    console.error('List deleted templates error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+}
+
 export const getOne = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId, id } = req.params
@@ -80,12 +91,35 @@ export const update = async (req: AuthRequest, res: Response) => {
 export const remove = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId, id } = req.params
-    const deleted = await service.remove(projectId, id)
+    const deleted = await service.remove(projectId, id, req.userId)
     if (!deleted) return res.status(404).json({ success: false, error: 'Template not found' })
-    res.json({ success: true, data: deleted })
+    res.json({ success: true, data: { id: deleted.id } })
   } catch (error: any) {
     console.error('Delete export template error:', error)
     res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
   }
 }
 
+export const restore = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id } = req.params
+    const item = await service.restore(projectId, id, req.userId)
+    if (!item) return res.status(404).json({ success: false, error: 'Archived template not found' })
+    res.json({ success: true, data: item })
+  } catch (error: any) {
+    console.error('Restore export template error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+}
+
+export const permanentDelete = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id } = req.params
+    const deleted = await service.permanentDelete(projectId, id)
+    if (!deleted) return res.status(404).json({ success: false, error: 'Archived template not found' })
+    res.json({ success: true, data: deleted })
+  } catch (error: any) {
+    console.error('Permanent delete template error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+}

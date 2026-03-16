@@ -19,14 +19,21 @@ function normalizeVisibility(input: unknown): TemplateVisibility {
 
 export async function list(projectId: string) {
   return prisma.requirementExportTemplate.findMany({
-    where: { projectId },
+    where: { projectId, deletedAt: null },
     orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+  })
+}
+
+export async function listDeleted(projectId: string) {
+  return prisma.requirementExportTemplate.findMany({
+    where: { projectId, deletedAt: { not: null } },
+    orderBy: { deletedAt: 'desc' },
   })
 }
 
 export async function getOne(projectId: string, id: string) {
   return prisma.requirementExportTemplate.findFirst({
-    where: { projectId, id },
+    where: { projectId, id, deletedAt: null },
   })
 }
 
@@ -102,11 +109,34 @@ export async function update(
   }
 }
 
-export async function remove(projectId: string, id: string) {
-  // Ensure project ownership scope
+/** Soft-delete: sets deletedAt/deletedById, template becomes invisible in list/getOne. */
+export async function remove(projectId: string, id: string, userId?: string) {
   const existing = await getOne(projectId, id)
+  if (!existing) return null
+  return prisma.requirementExportTemplate.update({
+    where: { id },
+    data: { deletedAt: new Date(), deletedById: userId ?? null },
+  })
+}
+
+/** Restore a soft-deleted template back to the active list. */
+export async function restore(projectId: string, id: string, userId?: string) {
+  const existing = await prisma.requirementExportTemplate.findFirst({
+    where: { projectId, id, deletedAt: { not: null } },
+  })
+  if (!existing) return null
+  return prisma.requirementExportTemplate.update({
+    where: { id },
+    data: { deletedAt: null, deletedById: null },
+  })
+}
+
+/** Permanently destroy an already-archived template. */
+export async function permanentDelete(projectId: string, id: string) {
+  const existing = await prisma.requirementExportTemplate.findFirst({
+    where: { projectId, id, deletedAt: { not: null } },
+  })
   if (!existing) return null
   await prisma.requirementExportTemplate.delete({ where: { id } })
   return { id }
 }
-
