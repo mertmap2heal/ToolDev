@@ -113,13 +113,22 @@ export async function buildTraceabilityMatrixDocx(options: BuildTraceabilityMatr
       }),
     ]
     for (const c of options.matrix.cols) {
-      const ids = options.matrix.cells[r.id]?.[c.id] ?? []
-      const text =
-        ids.length <= maxIds ? ids.join(', ') : `${ids.slice(0, maxIds).join(', ')}, +${ids.length - maxIds} more`
-      cells.push(
-        new TableCell({
-          children: [new Paragraph({ children: [new TextRun({ text: text.slice(0, 32000), size: sizeBody, font: fontFamily })] })],
+      const entries = options.matrix.cells[r.id]?.[c.id] ?? []
+      let paragraphs: any[]
+      if (entries.length === 0) {
+        paragraphs = [new Paragraph({ children: [new TextRun({ text: '', size: sizeBody, font: fontFamily })] })]
+      } else {
+        const formatted = entries.map((e: any) => {
+          if (typeof e === 'string') return e
+          return `${e.arrow} ${e.linkType}${e.isSuspect ? ' (?)' : ''}`
         })
+        const visible = formatted.length <= maxIds ? formatted : [...formatted.slice(0, maxIds), `+${formatted.length - maxIds} more`]
+        paragraphs = visible.map((line: string) =>
+          new Paragraph({ children: [new TextRun({ text: line.slice(0, 32000), size: sizeBody, font: fontFamily })] })
+        )
+      }
+      cells.push(
+        new TableCell({ children: paragraphs })
       )
     }
     return new TableRow({ children: cells })

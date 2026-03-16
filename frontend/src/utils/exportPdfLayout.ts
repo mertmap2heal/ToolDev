@@ -301,9 +301,17 @@ export function addTraceabilityMatrixSection(
   const body = matrix.rows.map((r) => {
     const rowCells: string[] = [r.key]
     for (const c of matrix.cols) {
-      const ids = matrix.cells[r.id]?.[c.id] ?? []
-      if (ids.length <= maxIds) rowCells.push(ids.join(', '))
-      else rowCells.push(`${ids.slice(0, maxIds).join(', ')}, +${ids.length - maxIds} more`)
+      const entries = matrix.cells[r.id]?.[c.id] ?? []
+      if (entries.length === 0) {
+        rowCells.push('')
+      } else {
+        const formatted = entries.map((e) => {
+          if (typeof e === 'string') return e
+          return `${e.arrow} ${e.linkType}${e.isSuspect ? ' (?)' : ''}`
+        })
+        if (formatted.length <= maxIds) rowCells.push(formatted.join('\n'))
+        else rowCells.push(`${formatted.slice(0, maxIds).join('\n')}\n+${formatted.length - maxIds} more`)
+      }
     }
     return rowCells
   })

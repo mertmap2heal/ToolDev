@@ -24,7 +24,8 @@ import {
 import type { Requirement } from 'shared/types/engineering.types'
 import type { LinkType } from 'shared/types/traceability.types'
 import type { EntitySummary } from 'shared/types/linkage.types'
-import type { TraceabilityMatrixModel } from 'shared/types/traceabilityMatrix.types'
+import type { TraceabilityMatrixModel, TraceabilityMatrixCellEntry } from 'shared/types/traceabilityMatrix.types'
+import { formatCellEntries } from 'shared/types/traceabilityMatrix.types'
 import clsx from 'clsx'
 import { DEFAULT_AUTHORITY_STYLE } from '../../utils/requirementExportTemplates'
 import { addCoverPage, addHeaderFooterToAllPages, addTraceabilityMatrixSection } from '../../utils/exportPdfLayout'
@@ -155,18 +156,19 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     return linkageTargets.filter((t) => (t as EntitySummary).type === linkageTargetType)
   }, [LINKAGE_V1, linkageTargets, linkageTargetType])
 
+  type CellInfo = { linked: boolean; suspect: boolean; linkId?: string; linkType?: string; arrow?: '→' | '←' | '↔' }
+
   // Build a map of source -> target links based on matrix type
   const linkMap = useMemo(() => {
-    const map = new Map<string, Map<string, { linked: boolean; suspect: boolean; linkId?: string }>>()
+    const map = new Map<string, Map<string, CellInfo>>()
 
     if (LINKAGE_V1) {
-      // LINKAGE_V1: requirements vs selected target type (PBS, interfaces, etc.)
       const targets = filteredTargets
       const isReqToReq = linkageTargetType === 'requirement'
       requirements.forEach((req) => {
         map.set(req.id, new Map())
         targets.forEach((t) => {
-          if (isReqToReq && req.id === t.id) return // skip diagonal for requirement-to-requirement
+          if (isReqToReq && req.id === t.id) return
           map.get(req.id)?.set(t.id, { linked: false, suspect: false })
         })
       })
@@ -181,12 +183,32 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
               linked: true,
               suspect: link.isSuspect || link.status === 'suspect' || false,
               linkId: link.id,
+              linkType: link.linkType,
+              arrow: '→',
             })
+          }
+        }
+        // Also check reverse direction
+        if (
+          link.sourceType === linkageTargetType &&
+          link.targetType === 'requirement'
+        ) {
+          const reqMap = map.get(link.targetId)
+          if (reqMap && reqMap.has(link.sourceId)) {
+            const existing = reqMap.get(link.sourceId)
+            if (!existing?.linked) {
+              reqMap.set(link.sourceId, {
+                linked: true,
+                suspect: link.isSuspect || link.status === 'suspect' || false,
+                linkId: link.id,
+                linkType: link.linkType,
+                arrow: '←',
+              })
+            }
           }
         }
       })
     } else if (matrixType === 'requirements-functions') {
-      // Initialize map for all requirements -> functions
       requirements.forEach((req) => {
         map.set(req.id, new Map())
         functions.forEach((func) => {
@@ -194,7 +216,6 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
         })
       })
 
-      // Fill in links from traceLinks
       traceLinks.forEach((link) => {
         if (link.sourceType === 'requirement' && link.targetType === 'function') {
           const reqMap = map.get(link.sourceId)
@@ -203,12 +224,25 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
               linked: true,
               suspect: link.isSuspect || false,
               linkId: link.id,
+              linkType: link.linkType,
+              arrow: '→',
+            })
+          }
+        }
+        if (link.sourceType === 'function' && link.targetType === 'requirement') {
+          const reqMap = map.get(link.targetId)
+          if (reqMap && !reqMap.get(link.sourceId)?.linked) {
+            reqMap.set(link.sourceId, {
+              linked: true,
+              suspect: link.isSuspect || false,
+              linkId: link.id,
+              linkType: link.linkType,
+              arrow: '←',
             })
           }
         }
       })
 
-      // Also check direct sourceReqId links on functions
       functions.forEach((func) => {
         if (func.sourceReqId) {
           const reqMap = map.get(func.sourceReqId)
@@ -216,12 +250,13 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
             reqMap.set(func.id, {
               linked: true,
               suspect: false,
+              linkType: 'allocated_to',
+              arrow: '→',
             })
           }
         }
       })
     } else if (matrixType === 'requirements-requirements') {
-      // Initialize map for all requirements -> requirements
       requirements.forEach((req) => {
         map.set(req.id, new Map())
         requirements.forEach((targetReq) => {
@@ -231,7 +266,6 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
         })
       })
 
-      // Fill in links from traceLinks
       traceLinks.forEach((link) => {
         if (link.sourceType === 'requirement' && link.targetType === 'requirement') {
           const reqMap = map.get(link.sourceId)
@@ -240,6 +274,8 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
               linked: true,
               suspect: link.isSuspect || false,
               linkId: link.id,
+              linkType: link.linkType,
+              arrow: '→',
             })
           }
         }
@@ -327,6 +363,18 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     if (!status || !status.linked) return 'none'
     if (status.suspect) return 'suspect'
     return 'linked'
+  }
+
+  // Get full cell info including link type and arrow
+  const getCellInfo = (sourceId: string, targetId: string): CellInfo | undefined => {
+    return linkMap.get(sourceId)?.get(targetId)
+  }
+
+  /** Format link type for display (e.g. "verified_by" → "Verified by") */
+  const formatLinkType = (lt: string): string => {
+    return lt
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase())
   }
 
   // Create link mutation (returns TraceLink or Link depending on LINKAGE_V1)
@@ -448,7 +496,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     })
   }
 
-  // Export matrix as CSV
+  // Export matrix as CSV – cells now show "→ linkType" instead of just "X"
   const exportToCsv = () => {
     const sourceLabel = 'ID'
     const sourceTitleLabel = 'Requirement Title'
@@ -464,10 +512,12 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
         req.requirementId || req.id.substring(0, 8),
         req.title,
         ...targetItems.map((target: any) => {
-          const status = getCellStatus(req.id, target.id)
-          if (status === 'linked') return 'X'
-          if (status === 'suspect') return '?'
-          return ''
+          const info = getCellInfo(req.id, target.id)
+          if (!info?.linked) return ''
+          const arrow = info.arrow || '→'
+          const lt = info.linkType || 'linked'
+          const suffix = info.suspect ? ' (?)' : ''
+          return `${arrow} ${lt}${suffix}`
         }),
       ]
       return row
@@ -513,13 +563,15 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     const cells: TraceabilityMatrixModel['cells'] = {}
     for (const r of rows) {
       for (const c of cols) {
-        const status = getCellStatus(r.id, c.id)
-        if (status === 'linked') {
+        const info = getCellInfo(r.id, c.id)
+        if (info?.linked) {
           if (!cells[r.id]) cells[r.id] = {}
-          cells[r.id][c.id] = [c.key]
-        } else if (status === 'suspect') {
-          if (!cells[r.id]) cells[r.id] = {}
-          cells[r.id][c.id] = [`${c.key} (?)`]
+          cells[r.id][c.id] = [{
+            displayId: c.key,
+            linkType: info.linkType || 'trace',
+            arrow: info.arrow || '→',
+            isSuspect: info.suspect || false,
+          }]
         }
       }
     }
@@ -549,8 +601,8 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
       const dataRows = matrix.rows.map((row) => {
         const rowCells: (string | null)[] = [row.key, row.label]
         for (const col of matrix.cols) {
-          const ids = matrix.cells[row.id]?.[col.id] ?? []
-          rowCells.push(ids.join(', '))
+          const entries = matrix.cells[row.id]?.[col.id] ?? []
+          rowCells.push(entries.map((e) => `${e.arrow} ${e.linkType}${e.isSuspect ? ' (?)' : ''}`).join(', '))
         }
         return rowCells
       })
@@ -812,6 +864,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                         }
 
                         const status = getCellStatus(req.id, target.id)
+                        const cellInfo = getCellInfo(req.id, target.id)
                         const sourceLabel = req.requirementId || req.title
                         const targetLabel = LINKAGE_V1
                           ? (target.label || target.id)
@@ -819,11 +872,18 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                             ? (target.functionId || target.name)
                             : (target.requirementId || target.title)
 
+                        const linkLabel = cellInfo?.linkType
+                          ? `${cellInfo.arrow || '→'} ${formatLinkType(cellInfo.linkType)}`
+                          : ''
+                        const tooltipExtra = cellInfo?.linkType
+                          ? ` [${cellInfo.arrow || '→'} ${cellInfo.linkType}]`
+                          : ''
+
                         return (
                           <td
                             key={target.id}
                             className={clsx(
-                              'px-2 py-2 text-center border border-gray-200 dark:border-gray-700 cursor-pointer transition-colors',
+                              'px-1 py-1 text-center border border-gray-200 dark:border-gray-700 cursor-pointer transition-colors',
                               status === 'linked' && 'bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50',
                               status === 'suspect' && 'bg-yellow-100 dark:bg-yellow-900/30 hover:bg-yellow-200 dark:hover:bg-yellow-900/50',
                               status === 'none' && 'bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'
@@ -831,17 +891,26 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                             onClick={() => handleCellClick(req.id, target.id)}
                             title={
                               status === 'linked'
-                                ? `${sourceLabel} → ${targetLabel}: Linked (Click to delete)`
+                                ? `${sourceLabel} ${cellInfo?.arrow || '→'} ${targetLabel}${tooltipExtra}\nClick to delete`
                                 : status === 'suspect'
-                                  ? `${sourceLabel} → ${targetLabel}: Suspect Link (Click to delete)`
-                                  : `${sourceLabel} → ${targetLabel}: Not linked (Click to create link)`
+                                  ? `${sourceLabel} ${cellInfo?.arrow || '→'} ${targetLabel}${tooltipExtra} (Suspect)\nClick to delete`
+                                  : `${sourceLabel} → ${targetLabel}: Not linked\nClick to create link`
                             }
                           >
                             {status === 'linked' && (
-                              <Check size={16} className="mx-auto text-green-600 dark:text-green-400" />
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="text-[10px] leading-tight font-medium text-green-700 dark:text-green-300 whitespace-nowrap">
+                                  {linkLabel || <Check size={14} className="text-green-600 dark:text-green-400" />}
+                                </span>
+                              </div>
                             )}
                             {status === 'suspect' && (
-                              <AlertTriangle size={16} className="mx-auto text-yellow-600 dark:text-yellow-400" />
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="text-[10px] leading-tight font-medium text-yellow-700 dark:text-yellow-300 whitespace-nowrap">
+                                  {linkLabel || <AlertTriangle size={14} className="text-yellow-600 dark:text-yellow-400" />}
+                                </span>
+                                <AlertTriangle size={10} className="text-yellow-600 dark:text-yellow-400" />
+                              </div>
                             )}
                             {status === 'none' && (
                               <Plus size={14} className="mx-auto text-gray-400 opacity-50" />

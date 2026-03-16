@@ -2,6 +2,7 @@ import type { TraceLink } from '../../../shared/types/traceability.types'
 import type {
   TraceabilityMatrixAxisItem,
   TraceabilityMatrixCells,
+  TraceabilityMatrixCellEntry,
   TraceabilityMatrixModel,
 } from '../../../shared/types/traceabilityMatrix.types'
 import { traceabilityService } from './traceability.service'
@@ -30,7 +31,7 @@ function ensureCell(
   cells: TraceabilityMatrixCells,
   rowId: string,
   colId: string
-): string[] {
+): TraceabilityMatrixCellEntry[] {
   if (!cells[rowId]) {
     cells[rowId] = {}
   }
@@ -44,16 +45,14 @@ export const traceabilityMatrixService = {
   /**
    * Build a generic traceability matrix for the given project and axis types.
    *
-   * Rows and columns are logical artifact types (e.g. "requirement", "verification").
-   * Cells contain lists of IDs for the column-side artifacts (e.g. TEST-001, COMP-005).
+   * Each cell contains structured entries with relationship type and direction
+   * arrows, consistent with INCOSE/SysML traceability conventions.
    */
   async buildMatrix(
     projectId: string,
     rowType: string,
     colType: string
   ): Promise<TraceabilityMatrixModel> {
-    // Fetch links in both directions so that the matrix is insensitive to how
-    // the underlying link was created (source vs target).
     const [forward, reverse] = await Promise.all([
       traceabilityService.getTraceLinks(projectId, { sourceType: rowType, targetType: colType }),
       traceabilityService.getTraceLinks(projectId, { sourceType: colType, targetType: rowType }),
@@ -69,52 +68,66 @@ export const traceabilityMatrixService = {
       let rowId: string | null = null
       let colId: string | null = null
       let colDisplayId: string | undefined
+      let arrow: '→' | '←' | '↔'
 
       if (link.sourceType === rowType && link.targetType === colType) {
+        // Forward link: row → col
         rowId = link.sourceId
         colId = link.targetId
         colDisplayId = link.targetDisplayId
+        arrow = '→'
 
         if (!rowMap.has(rowId)) {
           rowMap.set(
             rowId,
-            buildAxisItem(rowId, rowType, link.sourceDisplayId, link.sourceLabel ?? link.sourceTitle)
+            buildAxisItem(rowId, rowType, link.sourceDisplayId, (link as any).sourceLabel ?? link.sourceTitle)
           )
         }
         if (!colMap.has(colId)) {
           colMap.set(
             colId,
-            buildAxisItem(colId, colType, link.targetDisplayId, link.targetLabel ?? link.targetTitle)
+            buildAxisItem(colId, colType, link.targetDisplayId, (link as any).targetLabel ?? link.targetTitle)
           )
         }
       } else if (link.sourceType === colType && link.targetType === rowType) {
+        // Reverse link: col → row, so from the row's perspective the arrow is ←
         rowId = link.targetId
         colId = link.sourceId
         colDisplayId = link.sourceDisplayId
+        arrow = '←'
 
         if (!rowMap.has(rowId)) {
           rowMap.set(
             rowId,
-            buildAxisItem(rowId, rowType, link.targetDisplayId, link.targetLabel ?? link.targetTitle)
+            buildAxisItem(rowId, rowType, link.targetDisplayId, (link as any).targetLabel ?? link.targetTitle)
           )
         }
         if (!colMap.has(colId)) {
           colMap.set(
             colId,
-            buildAxisItem(colId, colType, link.sourceDisplayId, link.sourceLabel ?? link.sourceTitle)
+            buildAxisItem(colId, colType, link.sourceDisplayId, (link as any).sourceLabel ?? link.sourceTitle)
           )
         }
       } else {
-        // Link not relevant for this axis combination.
         continue
       }
 
       if (!rowId || !colId) continue
 
       const cell = ensureCell(cells, rowId, colId)
-      const value = colDisplayId || shortId(colId)
-      if (!cell.includes(value)) {
-        cell.push(value)
+      const entry: TraceabilityMatrixCellEntry = {
+        displayId: colDisplayId || shortId(colId),
+        linkType: link.linkType,
+        arrow,
+        isSuspect: link.isSuspect || false,
+      }
+
+      // Avoid duplicate entries for the same link type + direction
+      const isDuplicate = cell.some(
+        (e) => e.linkType === entry.linkType && e.arrow === entry.arrow && e.displayId === entry.displayId
+      )
+      if (!isDuplicate) {
+        cell.push(entry)
       }
     }
 
@@ -128,4 +141,3 @@ export const traceabilityMatrixService = {
     }
   },
 }
-

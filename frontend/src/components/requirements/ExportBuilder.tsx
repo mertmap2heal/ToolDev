@@ -1507,8 +1507,11 @@ export default function ExportBuilder({
           const dataRows = matrixData.rows.map((row) => {
             const rowCells: (string | null)[] = [row.key]
             for (const col of matrixData.cols) {
-              const ids = matrixData.cells[row.id]?.[col.id] ?? []
-              rowCells.push(ids.join(', '))
+              const entries = matrixData.cells[row.id]?.[col.id] ?? []
+              const text = entries.map((e: any) =>
+                typeof e === 'string' ? e : `${e.arrow} ${e.linkType}${e.isSuspect ? ' (?)' : ''}`
+              ).join(', ')
+              rowCells.push(text)
             }
             return rowCells
           })
@@ -1517,12 +1520,16 @@ export default function ExportBuilder({
           XLSX.utils.book_append_sheet(wb, ws, 'Matrix')
 
           if (traceMatrixConfig.includeFlatSheet) {
-            const flatRows: any[][] = [['RowKey', 'RowId', 'ColKey', 'ColId', 'Ids']]
+            const flatRows: any[][] = [['RowKey', 'RowId', 'ColKey', 'ColId', 'LinkType', 'Direction']]
             for (const row of matrixData.rows) {
               for (const col of matrixData.cols) {
-                const ids = matrixData.cells[row.id]?.[col.id]
-                if (ids && ids.length > 0) {
-                  flatRows.push([row.key, row.id, col.key, col.id, ids.join(', ')])
+                const entries = matrixData.cells[row.id]?.[col.id]
+                if (entries && entries.length > 0) {
+                  for (const e of entries) {
+                    const lt = typeof e === 'string' ? e : e.linkType
+                    const arrow = typeof e === 'string' ? '' : e.arrow
+                    flatRows.push([row.key, row.id, col.key, col.id, lt, arrow])
+                  }
                 }
               }
             }
