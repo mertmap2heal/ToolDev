@@ -28,6 +28,7 @@ import type { TraceabilityMatrixModel, TraceabilityMatrixCellEntry } from 'share
 import { formatCellEntries } from 'shared/types/traceabilityMatrix.types'
 import clsx from 'clsx'
 import { DEFAULT_AUTHORITY_STYLE } from '../../utils/requirementExportTemplates'
+import { invalidateLinkCaches } from '../../utils/invalidateLinkCaches'
 import { addCoverPage, addHeaderFooterToAllPages, addTraceabilityMatrixSection } from '../../utils/exportPdfLayout'
 import { buildTraceabilityMatrixDocx } from '../../utils/exportDocx'
 
@@ -409,13 +410,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
       })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
-      if (LINKAGE_V1) {
-        queryClient.invalidateQueries({ queryKey: ['links', projectId] })
-        queryClient.invalidateQueries({ queryKey: ['linkage-targets', projectId, linkageTargetType] })
-      }
-      queryClient.refetchQueries({ queryKey: ['trace-links', projectId] })
-      if (LINKAGE_V1) queryClient.refetchQueries({ queryKey: ['links', projectId] })
+      invalidateLinkCaches(queryClient, projectId)
       setShowLinkDialog(false)
       setSelectedReq(null)
       setSelectedFunc(null)
@@ -436,10 +431,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
       return LINKAGE_V1 ? linkService.deleteLink(projectId, linkId) : traceabilityService.deleteTraceLink(projectId, linkId)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
-      if (LINKAGE_V1) queryClient.invalidateQueries({ queryKey: ['links', projectId] })
-      queryClient.refetchQueries({ queryKey: ['trace-links', projectId] })
-      if (LINKAGE_V1) queryClient.refetchQueries({ queryKey: ['links', projectId] })
+      invalidateLinkCaches(queryClient, projectId)
       setSelectedReq(null)
       setSelectedFunc(null)
       setSelectedTargetReq(null)

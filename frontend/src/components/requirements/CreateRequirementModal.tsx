@@ -9,6 +9,7 @@ import { componentService } from '../../services/component.service'
 import { templateService } from '../../services/template.service'
 import { verificationService } from '../../services/verification.service'
 import { linkService } from '../../services/link.service'
+import { invalidateLinkCaches } from '../../utils/invalidateLinkCaches'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import { useLifecycleStore } from '../../store/lifecycleStore'
 import { LINKAGE_V1, LIFECYCLE_V1, LIFECYCLE_SELECT_V1 } from '../../config/featureFlags'
@@ -592,10 +593,7 @@ export default function CreateRequirementModal({
     onSuccess: (response) => {
       if (response.success) {
         queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
-        queryClient.invalidateQueries({ queryKey: ['links', projectId] })
-        queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
-        queryClient.invalidateQueries({ queryKey: ['requirement-links-out', projectId] })
-        queryClient.invalidateQueries({ queryKey: ['requirement-links-in', projectId] })
+        invalidateLinkCaches(queryClient, projectId)
         onClose()
         resetForm()
       } else {
@@ -977,8 +975,7 @@ export default function CreateRequirementModal({
           )
         )
         await Promise.allSettled(linkPromises)
-        queryClient.invalidateQueries({ queryKey: ['traceability', projectId] })
-        queryClient.invalidateQueries({ queryKey: ['document-trace-links'] })
+        invalidateLinkCaches(queryClient, projectId)
       }
     } catch {
       // Errors handled by mutation onError

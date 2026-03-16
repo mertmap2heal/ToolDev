@@ -7,6 +7,7 @@ import { linkService } from '../../services/link.service'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { LINKAGE_V1, LIFECYCLE_V1 } from '../../config/featureFlags'
+import { invalidateLinkCaches } from '../../utils/invalidateLinkCaches'
 import { buildDeepLink } from '../../linkage/buildDeepLink'
 import type { TraceLink } from 'shared/types/traceability.types'
 import type { Link } from 'shared/types/linkage.types'
@@ -70,7 +71,7 @@ export default function SuspectLinksReview({ projectId, onClose, onCreateChangeR
       LINKAGE_V1 ? linkService.clearSuspect(projectId, linkId, comment) : traceabilityService.clearSuspectLink(projectId, linkId, comment),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['suspect-links', projectId] })
-      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+      invalidateLinkCaches(queryClient, projectId)
     },
   })
 
@@ -80,7 +81,7 @@ export default function SuspectLinksReview({ projectId, onClose, onCreateChangeR
       LINKAGE_V1 ? linkService.deleteLink(projectId, linkId) : traceabilityService.deleteTraceLink(projectId, linkId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['suspect-links', projectId] })
-      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+      invalidateLinkCaches(queryClient, projectId)
     },
   })
 

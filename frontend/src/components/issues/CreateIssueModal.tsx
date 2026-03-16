@@ -7,6 +7,7 @@ import { parameterService } from '../../services/parameter.service'
 import { requirementService } from '../../services/requirement.service'
 import { authService } from '../../services/auth.service'
 import { useAuthStore } from '../../store/authStore'
+import { invalidateLinkCaches } from '../../utils/invalidateLinkCaches'
 import type { CreateIssueDto, IssueType, SystemFunction, Parameter } from 'shared/types/engineering.types'
 
 interface CreateIssueModalProps {
@@ -171,16 +172,10 @@ export default function CreateIssueModal({
       }
       if (response.success) {
         queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
-        // Invalidate links and requirements to show the new link in other views
-        queryClient.invalidateQueries({ queryKey: ['links', projectId] })
         queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
-        queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+        invalidateLinkCaches(queryClient, projectId)
 
-        queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
-
-        // Invalidate specific requirement queries if created from a requirement
         if (initialSourceType === 'requirement' && initialSourceId) {
-          queryClient.invalidateQueries({ queryKey: ['requirement-links', projectId, initialSourceId] })
           queryClient.invalidateQueries({ queryKey: ['requirement', projectId, initialSourceId] })
         }
 

@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
+import { invalidateLinkCaches } from '../../../utils/invalidateLinkCaches'
 import ReactFlow, {
   Node,
   Edge,
@@ -322,7 +323,7 @@ function DiagramEditorContent({ projectId, onClose }: DiagramEditorProps) {
       })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+      invalidateLinkCaches(queryClient, projectId)
     },
   })
 
@@ -346,7 +347,7 @@ function DiagramEditorContent({ projectId, onClose }: DiagramEditorProps) {
   const deleteTraceLinkMutation = useMutation({
     mutationFn: (id: string) => traceabilityService.deleteTraceLink(projectId, id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+      invalidateLinkCaches(queryClient, projectId)
     },
   })
 

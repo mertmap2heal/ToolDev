@@ -13,6 +13,7 @@ import { linkService } from '../../services/link.service'
 import { traceabilityService } from '../../services/traceability.service'
 import { componentService } from '../../services/component.service'
 import { LINKAGE_V1, LIFECYCLE_V1 } from '../../config/featureFlags'
+import { invalidateLinkCaches } from '../../utils/invalidateLinkCaches'
 import { lifecycleService } from '../../services/lifecycle.service'
 import { verificationService } from '../../services/verification.service'
 
@@ -508,9 +509,7 @@ export default function RequirementDetailDrawer({
     },
     onSuccess: (_data, { deleteLinkedItem: didDelete }) => {
       setBreakLinkModal(null)
-      queryClient.invalidateQueries({ queryKey: ['requirement-links', projectId, requirement?.id] })
-      queryClient.invalidateQueries({ queryKey: ['incoming-links', projectId, requirement?.id] })
-      queryClient.invalidateQueries({ queryKey: ['traceability', projectId] })
+      invalidateLinkCaches(queryClient, projectId)
       queryClient.invalidateQueries({ queryKey: ['requirement', projectId, requirement?.id] })
       queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
       queryClient.invalidateQueries({ queryKey: ['functions', projectId] })

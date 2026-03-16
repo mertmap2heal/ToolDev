@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { invalidateLinkCaches } from '../../../utils/invalidateLinkCaches'
 import {
   X,
   Check,
@@ -396,7 +397,7 @@ export default function EnhancedTraceabilityMatrix({
       })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+      invalidateLinkCaches(queryClient, projectId)
       setShowLinkDialog(false)
       setSelectedSource(null)
       setSelectedTarget(null)
@@ -408,7 +409,7 @@ export default function EnhancedTraceabilityMatrix({
   const deleteLinkMutation = useMutation({
     mutationFn: (linkId: string) => traceabilityService.deleteTraceLink(projectId, linkId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+      invalidateLinkCaches(queryClient, projectId)
     },
   })
 

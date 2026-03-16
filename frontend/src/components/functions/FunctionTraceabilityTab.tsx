@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { linkService } from '../../services/link.service'
+import { invalidateLinkCaches } from '../../utils/invalidateLinkCaches'
 import { buildDeepLink } from '../../linkage/buildDeepLink'
 import type { Link, CreateLinkDto, LinkType } from 'shared/types/linkage.types'
 import { Plus, Trash2, ExternalLink, AlertCircle } from 'lucide-react'
@@ -48,8 +49,7 @@ export default function FunctionTraceabilityTab({ funcId, projectId }: FunctionT
   const createMutation = useMutation({
     mutationFn: (dto: CreateLinkDto) => linkService.createLink(projectId, dto),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['function-trace-links-outgoing', projectId, funcId] })
-      queryClient.invalidateQueries({ queryKey: ['function-trace-links-incoming', projectId, funcId] })
+      invalidateLinkCaches(queryClient, projectId)
       setShowAdd(false)
       setForm({ sourceType: 'function', sourceId: funcId })
     },
@@ -58,8 +58,7 @@ export default function FunctionTraceabilityTab({ funcId, projectId }: FunctionT
   const deleteMutation = useMutation({
     mutationFn: (linkId: string) => linkService.deleteLink(projectId, linkId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['function-trace-links-outgoing', projectId, funcId] })
-      queryClient.invalidateQueries({ queryKey: ['function-trace-links-incoming', projectId, funcId] })
+      invalidateLinkCaches(queryClient, projectId)
     },
   })
 

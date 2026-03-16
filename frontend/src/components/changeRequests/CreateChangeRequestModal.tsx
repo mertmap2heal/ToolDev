@@ -7,6 +7,7 @@ import { issueService } from '../../services/issue.service'
 import { parameterService } from '../../services/parameter.service'
 import { requirementService } from '../../services/requirement.service'
 import { authService } from '../../services/auth.service'
+import { invalidateLinkCaches } from '../../utils/invalidateLinkCaches'
 import type { CreateChangeRequestDto, SystemFunction, Issue, Parameter, Requirement } from 'shared/types/engineering.types'
 
 interface CreateChangeRequestModalProps {
@@ -271,14 +272,11 @@ export default function CreateChangeRequestModal({
         }
       }
       queryClient.invalidateQueries({ queryKey: ['change-requests', projectId] })
-      queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
+      invalidateLinkCaches(queryClient, projectId)
 
-      // Invalidate requirement links so the Links tab shows the new CR (links come from traceability which includes CR links)
       const sourceType = response.data?.sourceType ?? initialSourceType
       const sourceId = response.data?.sourceId ?? initialSourceId
       if (sourceType === 'requirement' && sourceId) {
-        queryClient.invalidateQueries({ queryKey: ['requirement-links', projectId, sourceId] })
-        queryClient.invalidateQueries({ queryKey: ['requirement-links', projectId] })
         queryClient.invalidateQueries({ queryKey: ['requirement', projectId, sourceId] })
       }
 

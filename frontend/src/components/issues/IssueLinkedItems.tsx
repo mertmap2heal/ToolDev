@@ -7,6 +7,7 @@ import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { linkService } from '../../services/link.service'
 import { buildDeepLink } from '../../linkage/buildDeepLink'
+import { invalidateLinkCaches } from '../../utils/invalidateLinkCaches'
 import type { Issue, IssueLink } from 'shared/types/engineering.types'
 import type { EntityType } from 'shared/types/linkage.types'
 
@@ -88,9 +89,9 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
       return issueService.createLink(projectId, issue.id, data)
     },
     onSuccess: () => {
+      invalidateLinkCaches(queryClient, projectId)
       queryClient.invalidateQueries({ queryKey: ['issue', projectId, issue.id] })
       queryClient.invalidateQueries({ queryKey: ['issue-activity', projectId, issue.id] })
-      queryClient.invalidateQueries({ queryKey: ['issue-incoming-links', projectId, issue.id] })
       setIsAdding(false)
       setSelectedItemId('')
     },
@@ -101,9 +102,9 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
       return issueService.deleteLink(projectId, linkId)
     },
     onSuccess: () => {
+      invalidateLinkCaches(queryClient, projectId)
       queryClient.invalidateQueries({ queryKey: ['issue', projectId, issue.id] })
       queryClient.invalidateQueries({ queryKey: ['issue-activity', projectId, issue.id] })
-      queryClient.invalidateQueries({ queryKey: ['issue-incoming-links', projectId, issue.id] })
     },
   })
 
