@@ -65,9 +65,24 @@ export interface ExportTemplate {
   name: string
   format: ExportTemplateFormat
   columns: ExportColumn[]
-  scopeType: 'all' | 'component' | 'function'
+  /** Optional export-time sorting (applied before file generation). */
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
+  scopeType: 'all' | 'custom'
+  /** Multi-select scope (Phase 2). */
+  selectedComponentIds?: string[]
+  selectedFunctionIds?: string[]
+  /** Legacy single-select fields (kept for backward compatibility during migration). */
   selectedComponentId?: string
   selectedFunctionId?: string
+  /** Phase 2 export-time filters/search */
+  exportSearch?: string
+  filters?: {
+    status?: string
+    priority?: string
+    category?: string
+    owner?: string
+  }
   includeHeader: boolean
   parameterExportMode: 'name' | 'resolved'
   includeGlossary: boolean

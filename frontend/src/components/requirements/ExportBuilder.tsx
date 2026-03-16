@@ -14,10 +14,6 @@ import { resolveParameterPlaceholders } from '../../utils/parameterPlaceholder'
 import type { ResolveMode } from '../../utils/parameterPlaceholder'
 import type { DefinitionEntry } from 'shared/types/engineering.types'
 import {
-  getExportTemplates,
-  saveExportTemplate,
-  deleteExportTemplate,
-  updateExportTemplate,
   mergeColumnsWithDefaults,
   DEFAULT_AUTHORITY_STYLE,
   getSectionsForPreset,
@@ -25,6 +21,7 @@ import {
   type ExportSection,
   type ExportDocumentStyle,
 } from '../../utils/requirementExportTemplates'
+import { requirementExportTemplateService, type RequirementExportTemplate } from '../../services/requirementExportTemplate.service'
 import {
   getAuthorityTableStyles,
   getPdfFont,
@@ -173,15 +170,23 @@ export default function ExportBuilder({
   const [includeHeader, setIncludeHeader] = useState(true)
   const [isExporting, setIsExporting] = useState(false)
   const [parameterExportMode, setParameterExportMode] = useState<ResolveMode>('name')
-  const [scopeType, setScopeType] = useState<'all' | 'component' | 'function'>('all')
-  const [selectedComponentId, setSelectedComponentId] = useState<string>('')
-  const [selectedFunctionId, setSelectedFunctionId] = useState<string>('')
+  const [scopeType, setScopeType] = useState<'all' | 'custom'>('all')
+  const [selectedComponentIds, setSelectedComponentIds] = useState<string[]>([])
+  const [selectedFunctionIds, setSelectedFunctionIds] = useState<string[]>([])
   const [componentSearch, setComponentSearch] = useState('')
   const [functionSearch, setFunctionSearch] = useState('')
+  const [isAdvancedFiltersOpen, setIsAdvancedFiltersOpen] = useState(false)
+  const [exportSearch, setExportSearch] = useState('')
+  const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [filterPriority, setFilterPriority] = useState<string>('all')
+  const [filterCategory, setFilterCategory] = useState<string>('all')
+  const [filterOwner, setFilterOwner] = useState<string>('all')
   const [includeGlossary, setIncludeGlossary] = useState(true)
   const [includeAbbreviations, setIncludeAbbreviations] = useState(true)
   const [glossaryShowDefinitions, setGlossaryShowDefinitions] = useState(true)
   const [glossarySortAlphabetically, setGlossarySortAlphabetically] = useState(true)
+  const [exportSortBy, setExportSortBy] = useState<'requirementId' | 'priority' | 'status' | 'createdAt' | 'updatedAt'>('requirementId')
+  const [exportSortOrder, setExportSortOrder] = useState<'asc' | 'desc'>('asc')
   const [currentStep, setCurrentStep] = useState<ExportStep>('format')
   const [templates, setTemplates] = useState<ExportTemplate[]>([])
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
@@ -202,12 +207,122 @@ export default function ExportBuilder({
   const [createTemplateName, setCreateTemplateName] = useState('')
   const [documentPresetSelect, setDocumentPresetSelect] = useState<string>('')
 
-  const refreshTemplates = useCallback(() => {
-    if (projectId) setTemplates(getExportTemplates(projectId))
-  }, [projectId])
+  const toUiTemplate = useCallback((t: RequirementExportTemplate): ExportTemplate => {
+    const p = (t.payload ?? {}) as Partial<ExportTemplate>
+    return {
+      id: t.id,
+      name: t.name,
+      format: t.format,
+      columns: Array.isArray(p.columns) ? (p.columns as any) : defaultColumns.map((c) => ({ key: c.key, label: c.label, selected: c.selected })),
+      sortBy: p.sortBy,
+      sortOrder: p.sortOrder,
+      scopeType: (p.scopeType as any) ?? 'all',
+      selectedComponentIds: (p as any).selectedComponentIds,
+      selectedFunctionIds: (p as any).selectedFunctionIds,
+      selectedComponentId: p.selectedComponentId,
+      selectedFunctionId: p.selectedFunctionId,
+      exportSearch: (p as any).exportSearch,
+      filters: (p as any).filters,
+      includeHeader: p.includeHeader ?? true,
+      parameterExportMode: (p.parameterExportMode as any) ?? 'name',
+      includeGlossary: p.includeGlossary ?? true,
+      includeAbbreviations: p.includeAbbreviations ?? true,
+      glossaryShowDefinitions: p.glossaryShowDefinitions ?? true,
+      glossarySortAlphabetically: p.glossarySortAlphabetically ?? true,
+      createdAt: (p.createdAt as any) ?? t.createdAt,
+      sections: p.sections,
+      documentStyle: p.documentStyle,
+    }
+  }, [])
+
+  const refreshTemplates = useCallback(async () => {
+    if (!projectId) return
+    const res = await requirementExportTemplateService.list(projectId)
+    if (res.success && res.data) {
+      setTemplates(res.data.map(toUiTemplate))
+      return res.data
+    }
+    try {
+      const legacy = await import('../../utils/requirementExportTemplates')
+      const local = legacy.getExportTemplates(projectId).map((t: any) => {
+        if (t.scopeType === 'custom' || t.scopeType === 'all') return t
+        if (t.scopeType === 'component') {
+          return { ...t, scopeType: 'custom', selectedComponentIds: t.selectedComponentId ? [t.selectedComponentId] : [], selectedFunctionIds: [] }
+        }
+        if (t.scopeType === 'function') {
+          return { ...t, scopeType: 'custom', selectedComponentIds: [], selectedFunctionIds: t.selectedFunctionId ? [t.selectedFunctionId] : [] }
+        }
+        return { ...t, scopeType: 'all' }
+      })
+      setTemplates(local)
+    } catch {
+      setTemplates([])
+    }
+    return []
+  }, [projectId, toUiTemplate])
+
+  // Auto-migrate legacy localStorage templates to server on first open (best-effort).
   useEffect(() => {
-    refreshTemplates()
-  }, [refreshTemplates])
+    let cancelled = false
+    ;(async () => {
+      if (!projectId) return
+      try {
+        const serverTemplates = await refreshTemplates()
+        // If server already has templates, don't auto-migrate.
+        if (Array.isArray(serverTemplates) && serverTemplates.length > 0) return
+
+        // Lazy-load legacy localStorage helper only for migration.
+        const legacy = await import('../../utils/requirementExportTemplates')
+        const local = legacy.getExportTemplates(projectId)
+        if (!Array.isArray(local) || local.length === 0) return
+
+        for (const t of local) {
+          try {
+            await requirementExportTemplateService.create(projectId, {
+              name: t.name,
+              format: t.format as any,
+              payload: {
+                columns: t.columns,
+                sortBy: (t as any).sortBy,
+                sortOrder: (t as any).sortOrder,
+                scopeType: (t as any).scopeType === 'custom'
+                  ? 'custom'
+                  : (t as any).scopeType === 'component' || (t as any).scopeType === 'function'
+                    ? 'custom'
+                    : 'all',
+                selectedComponentIds: (t as any).scopeType === 'component'
+                  ? (t.selectedComponentId ? [t.selectedComponentId] : [])
+                  : (t as any).selectedComponentIds ?? (t.selectedComponentId ? [t.selectedComponentId] : []),
+                selectedFunctionIds: (t as any).scopeType === 'function'
+                  ? (t.selectedFunctionId ? [t.selectedFunctionId] : [])
+                  : (t as any).selectedFunctionIds ?? (t.selectedFunctionId ? [t.selectedFunctionId] : []),
+                exportSearch: (t as any).exportSearch ?? '',
+                filters: (t as any).filters,
+                includeHeader: t.includeHeader,
+                parameterExportMode: t.parameterExportMode,
+                includeGlossary: t.includeGlossary,
+                includeAbbreviations: t.includeAbbreviations,
+                glossaryShowDefinitions: t.glossaryShowDefinitions,
+                glossarySortAlphabetically: t.glossarySortAlphabetically,
+                createdAt: t.createdAt,
+                sections: t.sections,
+                documentStyle: t.documentStyle,
+              },
+            })
+          } catch {
+            // Ignore per-template failures (e.g., duplicate name) and continue best-effort.
+          }
+        }
+
+        if (!cancelled) await refreshTemplates()
+      } catch {
+        // Ignore migration failures; templates remain usable in-session.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [projectId, refreshTemplates])
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -305,37 +420,89 @@ export default function ExportBuilder({
   const effectiveRequirements = useMemo(() => {
     if (!enableScopeSelection) return requirements
     if (scopeType === 'all') return requirements
-    if (scopeType === 'component' && selectedComponentId) {
-      return requirements.filter((r) => r.componentId === selectedComponentId)
-    }
-    if (scopeType === 'function' && selectedFunctionId) {
-      return requirements.filter((r) =>
+    const componentSet = new Set(selectedComponentIds)
+    const functionSet = new Set(selectedFunctionIds)
+    if (componentSet.size === 0 && functionSet.size === 0) return []
+    return requirements.filter((r) => {
+      const byComponent = r.componentId ? componentSet.has(r.componentId) : false
+      const byFunction =
+        functionSet.size > 0 &&
         allocationLinks.some(
           (l) =>
             l.sourceType === 'requirement' &&
             l.targetType === 'function' &&
-            l.targetId === selectedFunctionId &&
             l.linkType === 'allocated_to' &&
-            l.sourceId === r.id
+            l.sourceId === r.id &&
+            functionSet.has(l.targetId)
         )
-      )
+      return byComponent || byFunction
+    })
+  }, [enableScopeSelection, requirements, scopeType, selectedComponentIds, selectedFunctionIds, allocationLinks])
+
+  const filterOptions = useMemo(() => {
+    const statuses = new Set<string>()
+    const categories = new Set<string>()
+    const owners = new Set<string>()
+    requirements.forEach((r) => {
+      if (r.status) statuses.add(r.status)
+      if (r.category) categories.add(r.category)
+      if (r.owner) owners.add(r.owner)
+    })
+    return {
+      statuses: Array.from(statuses).sort(),
+      categories: Array.from(categories).sort(),
+      owners: Array.from(owners).sort(),
     }
-    return requirements
-  }, [enableScopeSelection, requirements, scopeType, selectedComponentId, selectedFunctionId, allocationLinks])
+  }, [requirements])
+
+  const filteredRequirements = useMemo(() => {
+    const q = exportSearch.trim().toLowerCase()
+    return effectiveRequirements.filter((r) => {
+      if (filterStatus !== 'all' && r.status !== filterStatus) return false
+      if (filterPriority !== 'all' && String(r.priority || '').toLowerCase() !== filterPriority) return false
+      if (filterCategory !== 'all' && (r.category || '') !== filterCategory) return false
+      if (filterOwner !== 'all' && (r.owner || '') !== filterOwner) return false
+      if (!q) return true
+      const id = (r.requirementId || r.id.substring(0, 8)).toLowerCase()
+      const title = (r.title || '').toLowerCase()
+      const desc = (r.description || '').replace(/<[^>]*>/g, '').toLowerCase()
+      return id.includes(q) || title.includes(q) || desc.includes(q)
+    })
+  }, [effectiveRequirements, exportSearch, filterStatus, filterPriority, filterCategory, filterOwner])
+
+  const exportRequirements = useMemo(() => {
+    const list = [...filteredRequirements]
+    const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
+    const dir = exportSortOrder === 'asc' ? 1 : -1
+    const getReqId = (r: Requirement) => (r.requirementId || r.id.substring(0, 8)).toLowerCase()
+    list.sort((a, b) => {
+      if (exportSortBy === 'requirementId') return getReqId(a).localeCompare(getReqId(b)) * dir
+      if (exportSortBy === 'priority') {
+        const pa = priorityRank[String(a.priority || '').toLowerCase()] ?? 99
+        const pb = priorityRank[String(b.priority || '').toLowerCase()] ?? 99
+        return (pa - pb) * dir
+      }
+      if (exportSortBy === 'status') return String(a.status || '').localeCompare(String(b.status || '')) * dir
+      if (exportSortBy === 'createdAt' || exportSortBy === 'updatedAt') {
+        const ta = new Date((a as any)[exportSortBy] || 0).getTime()
+        const tb = new Date((b as any)[exportSortBy] || 0).getTime()
+        return (ta - tb) * dir
+      }
+      return 0
+    })
+    return list
+  }, [filteredRequirements, exportSortBy, exportSortOrder])
 
   const effectiveScopeLabel = useMemo(() => {
     if (propsScopeLabel) return propsScopeLabel
     if (!enableScopeSelection || scopeType === 'all') return undefined
-    if (scopeType === 'component' && selectedComponentId) {
-      const c = flatComponents.find((x) => x.id === selectedComponentId)
-      return c ? `Component: ${c.displayLabel}` : undefined
-    }
-    if (scopeType === 'function' && selectedFunctionId) {
-      const f = flatFunctions.find((x) => x.id === selectedFunctionId)
-      return f ? `Function: ${f.displayLabel}` : undefined
-    }
-    return undefined
-  }, [enableScopeSelection, propsScopeLabel, scopeType, selectedComponentId, selectedFunctionId, flatComponents, flatFunctions])
+    const cCount = selectedComponentIds.length
+    const fCount = selectedFunctionIds.length
+    if (cCount === 0 && fCount === 0) return 'Custom scope (empty)'
+    if (cCount > 0 && fCount > 0) return `Custom scope (${cCount} component(s), ${fCount} function(s))`
+    if (cCount > 0) return `Custom scope (${cCount} component(s))`
+    return `Custom scope (${fCount} function(s))`
+  }, [enableScopeSelection, propsScopeLabel, scopeType, selectedComponentIds, selectedFunctionIds])
 
   const effectiveScopeFilenameSuffix = useMemo(() => {
     if (propsScopeFilenameSuffix) return propsScopeFilenameSuffix
@@ -356,6 +523,13 @@ export default function ExportBuilder({
           defaultColumns
         ) as ExportColumn[]
       )
+      setExportSortBy((template.sortBy as any) ?? 'requirementId')
+      setExportSortOrder(template.sortOrder ?? 'asc')
+      setExportSearch(template.exportSearch ?? '')
+      setFilterStatus(template.filters?.status ?? 'all')
+      setFilterPriority(template.filters?.priority ?? 'all')
+      setFilterCategory(template.filters?.category ?? 'all')
+      setFilterOwner(template.filters?.owner ?? 'all')
       setIncludeHeader(template.includeHeader)
       setParameterExportMode(template.parameterExportMode)
       setIncludeGlossary(template.includeGlossary)
@@ -363,25 +537,20 @@ export default function ExportBuilder({
       setGlossaryShowDefinitions(template.glossaryShowDefinitions)
       setGlossarySortAlphabetically(template.glossarySortAlphabetically)
       setScopeResetMessage(null)
-      const scopeTypeNew = template.scopeType
-      const compId = template.selectedComponentId ?? ''
-      const fnId = template.selectedFunctionId ?? ''
-      const compExists = !compId || flatComponents.some((c) => c.id === compId)
-      const fnExists = !fnId || flatFunctions.some((f) => f.id === fnId)
-      if (scopeTypeNew === 'component' && !compExists) {
+      const scopeTypeNew: 'all' | 'custom' = template.scopeType === 'custom' ? 'custom' : 'all'
+      const compIdsRaw = template.selectedComponentIds ?? (template.selectedComponentId ? [template.selectedComponentId] : [])
+      const fnIdsRaw = template.selectedFunctionIds ?? (template.selectedFunctionId ? [template.selectedFunctionId] : [])
+      const compIds = compIdsRaw.filter((id) => flatComponents.some((c) => c.id === id))
+      const fnIds = fnIdsRaw.filter((id) => flatFunctions.some((f) => f.id === id))
+      if (scopeTypeNew === 'custom' && compIds.length === 0 && fnIds.length === 0) {
         setScopeType('all')
-        setSelectedComponentId('')
-        setSelectedFunctionId('')
-        setScopeResetMessage('Template scope was reset: selected component is no longer available.')
-      } else if (scopeTypeNew === 'function' && !fnExists) {
-        setScopeType('all')
-        setSelectedComponentId('')
-        setSelectedFunctionId('')
-        setScopeResetMessage('Template scope was reset: selected function is no longer available.')
+        setSelectedComponentIds([])
+        setSelectedFunctionIds([])
+        setScopeResetMessage('Template scope was reset: selected items are no longer available.')
       } else {
         setScopeType(scopeTypeNew)
-        setSelectedComponentId(scopeTypeNew === 'component' ? compId : '')
-        setSelectedFunctionId(scopeTypeNew === 'function' ? fnId : '')
+        setSelectedComponentIds(scopeTypeNew === 'custom' ? compIds : [])
+        setSelectedFunctionIds(scopeTypeNew === 'custom' ? fnIds : [])
       }
       setSelectedTemplateId(template.id)
       setSections(template.sections)
@@ -397,40 +566,62 @@ export default function ExportBuilder({
     const name = saveTemplateName.trim().slice(0, 80)
     if (!name) return
     if (!projectId) return
-    const template: ExportTemplate = {
-      id: crypto.randomUUID(),
-      name,
-      format: selectedFormat,
-      columns: columns.map((c) => ({ key: c.key, label: c.label, selected: c.selected })),
-      scopeType,
-      selectedComponentId: scopeType === 'component' ? selectedComponentId || undefined : undefined,
-      selectedFunctionId: scopeType === 'function' ? selectedFunctionId || undefined : undefined,
-      includeHeader,
-      parameterExportMode,
-      includeGlossary,
-      includeAbbreviations,
-      glossaryShowDefinitions,
-      glossarySortAlphabetically,
-      createdAt: new Date().toISOString(),
-      sections: useDocumentSections ? sections : undefined,
-      documentStyle: documentStyle ?? undefined,
-    }
-    try {
-      saveExportTemplate(projectId, template)
-      refreshTemplates()
-      setIsSaveTemplateOpen(false)
-      setSaveTemplateName('')
-    } catch (e) {
-      setInlineError(e instanceof Error ? e.message : 'Could not save template.')
-    }
+    requirementExportTemplateService
+      .create(projectId, {
+        name,
+        format: selectedFormat,
+        payload: {
+          columns: columns.map((c) => ({ key: c.key, label: c.label, selected: c.selected })),
+          sortBy: exportSortBy,
+          sortOrder: exportSortOrder,
+          scopeType,
+          selectedComponentIds: scopeType === 'custom' ? selectedComponentIds : [],
+          selectedFunctionIds: scopeType === 'custom' ? selectedFunctionIds : [],
+          exportSearch,
+          filters: {
+            status: filterStatus,
+            priority: filterPriority,
+            category: filterCategory,
+            owner: filterOwner,
+          },
+          includeHeader,
+          parameterExportMode,
+          includeGlossary,
+          includeAbbreviations,
+          glossaryShowDefinitions,
+          glossarySortAlphabetically,
+          createdAt: new Date().toISOString(),
+          sections: useDocumentSections ? sections : undefined,
+          documentStyle: documentStyle ?? undefined,
+        },
+      })
+      .then((res) => {
+        if (res.success && res.data) {
+          const ui = toUiTemplate(res.data)
+          setTemplates((prev) => [ui, ...prev])
+          setSelectedTemplateId(ui.id)
+          setIsSaveTemplateOpen(false)
+          setSaveTemplateName('')
+          setInlineError(null)
+        } else {
+          setInlineError(res.error || 'Could not save template.')
+        }
+      })
   }, [
     projectId,
     saveTemplateName,
     selectedFormat,
     columns,
     scopeType,
-    selectedComponentId,
-    selectedFunctionId,
+    selectedComponentIds,
+    selectedFunctionIds,
+    exportSearch,
+    filterStatus,
+    filterPriority,
+    filterCategory,
+    filterOwner,
+    exportSortBy,
+    exportSortOrder,
     includeHeader,
     parameterExportMode,
     includeGlossary,
@@ -440,7 +631,7 @@ export default function ExportBuilder({
     useDocumentSections,
     sections,
     documentStyle,
-    refreshTemplates,
+    toUiTemplate,
   ])
 
   const handleCreateNewTemplate = useCallback(() => {
@@ -449,65 +640,84 @@ export default function ExportBuilder({
     const format = createTemplateFormat
     const isPdfOrWord = format === 'pdf' || format === 'word'
     const preset = createTemplatePreset
-    const template: ExportTemplate = {
-      id: crypto.randomUUID(),
-      name,
-      format,
-      columns: defaultColumns.map((c) => ({ key: c.key, label: c.label, selected: c.selected })),
-      scopeType: 'all',
-      selectedComponentId: undefined,
-      selectedFunctionId: undefined,
-      includeHeader: true,
-      parameterExportMode: 'name',
-      includeGlossary: true,
-      includeAbbreviations: true,
-      glossaryShowDefinitions: true,
-      glossarySortAlphabetically: true,
-      createdAt: new Date().toISOString(),
-      sections: isPdfOrWord ? getSectionsForPreset(preset) : undefined,
-      documentStyle: isPdfOrWord ? (preset === 'simple' ? undefined : { ...DEFAULT_AUTHORITY_STYLE }) : undefined,
-    }
     try {
-      saveExportTemplate(projectId, template)
-      refreshTemplates()
+      requirementExportTemplateService.create(projectId, {
+        name,
+        format,
+        payload: {
+          columns: defaultColumns.map((c) => ({ key: c.key, label: c.label, selected: c.selected })),
+          sortBy: 'requirementId',
+          sortOrder: 'asc',
+          scopeType: 'all',
+          includeHeader: true,
+          parameterExportMode: 'name',
+          includeGlossary: true,
+          includeAbbreviations: true,
+          glossaryShowDefinitions: true,
+          glossarySortAlphabetically: true,
+          createdAt: new Date().toISOString(),
+          sections: isPdfOrWord ? getSectionsForPreset(preset) : undefined,
+          documentStyle: isPdfOrWord ? (preset === 'simple' ? undefined : { ...DEFAULT_AUTHORITY_STYLE }) : undefined,
+        },
+      }).then((res) => {
+        if (res.success && res.data) {
+          const ui = toUiTemplate(res.data)
+          setTemplates((prev) => [ui, ...prev.filter((x) => x.id !== ui.id)])
+          setSelectedTemplateId(ui.id)
+          applyTemplate(ui)
+        } else {
+          setInlineError(res.error || 'Could not save template.')
+        }
+      })
       setIsCreateTemplateOpen(false)
       setCreateTemplateName('')
       setInlineError(null)
-      setSelectedTemplateId(template.id)
-      applyTemplate(template)
     } catch (e) {
       setInlineError(e instanceof Error ? e.message : 'Could not save template.')
     }
-  }, [projectId, createTemplateName, createTemplateFormat, createTemplatePreset, refreshTemplates, applyTemplate])
+  }, [projectId, createTemplateName, createTemplateFormat, createTemplatePreset, applyTemplate, toUiTemplate])
 
   const handleUpdateTemplate = useCallback(() => {
     if (!projectId || !selectedTemplateId) return
     const existing = templates.find((t) => t.id === selectedTemplateId)
     if (!existing) return
-    const template: ExportTemplate = {
-      ...existing,
-      id: selectedTemplateId,
-      name: existing.name,
-      format: selectedFormat,
-      columns: columns.map((c) => ({ key: c.key, label: c.label, selected: c.selected })),
-      scopeType,
-      selectedComponentId: scopeType === 'component' ? selectedComponentId || undefined : undefined,
-      selectedFunctionId: scopeType === 'function' ? selectedFunctionId || undefined : undefined,
-      includeHeader,
-      parameterExportMode,
-      includeGlossary,
-      includeAbbreviations,
-      glossaryShowDefinitions,
-      glossarySortAlphabetically,
-      sections: useDocumentSections ? sections : undefined,
-      documentStyle: documentStyle ?? undefined,
-    }
     try {
-      saveExportTemplate(projectId, template)
-      refreshTemplates()
-      setInlineError(null)
-      setTemplateUpdatedMessage('Template updated.')
-      setTimeout(() => setTemplateUpdatedMessage(null), 2500)
+      requirementExportTemplateService.update(projectId, selectedTemplateId, {
+        format: selectedFormat,
+        payload: {
+          columns: columns.map((c) => ({ key: c.key, label: c.label, selected: c.selected })),
+          sortBy: exportSortBy,
+          sortOrder: exportSortOrder,
+          scopeType,
+          selectedComponentIds: scopeType === 'custom' ? selectedComponentIds : [],
+          selectedFunctionIds: scopeType === 'custom' ? selectedFunctionIds : [],
+          exportSearch,
+          filters: {
+            status: filterStatus,
+            priority: filterPriority,
+            category: filterCategory,
+            owner: filterOwner,
+          },
+          includeHeader,
+          parameterExportMode,
+          includeGlossary,
+          includeAbbreviations,
+          glossaryShowDefinitions,
+          glossarySortAlphabetically,
+          sections: useDocumentSections ? sections : undefined,
+          documentStyle: documentStyle ?? undefined,
+        },
+      }).then((res) => {
+        if (res.success && res.data) {
+          const ui = toUiTemplate(res.data)
+          setTemplates((prev) => prev.map((t) => (t.id === ui.id ? ui : t)))
+          setInlineError(null)
+          setTemplateUpdatedMessage('Template updated.')
+          setTimeout(() => setTemplateUpdatedMessage(null), 2500)
+        } else {
+          setInlineError(res.error || 'Could not update template.')
+        }
+      })
     } catch (e) {
       setInlineError(e instanceof Error ? e.message : 'Could not update template.')
     }
@@ -518,8 +728,15 @@ export default function ExportBuilder({
     selectedFormat,
     columns,
     scopeType,
-    selectedComponentId,
-    selectedFunctionId,
+    selectedComponentIds,
+    selectedFunctionIds,
+    exportSortBy,
+    exportSortOrder,
+    exportSearch,
+    filterStatus,
+    filterPriority,
+    filterCategory,
+    filterOwner,
     includeHeader,
     parameterExportMode,
     includeGlossary,
@@ -529,7 +746,7 @@ export default function ExportBuilder({
     useDocumentSections,
     sections,
     documentStyle,
-    refreshTemplates,
+    toUiTemplate,
   ])
 
   const applyPreset = (preset: 'authority' | 'simple' | 'full' | 'submission_with_placeholders') => {
@@ -576,6 +793,22 @@ export default function ExportBuilder({
     setColumns((prev) => prev.map((col) => ({ ...col, selected: false })))
   }
 
+  const updateColumnLabel = (key: string, label: string) => {
+    setColumns((prev) => prev.map((c) => (c.key === key ? { ...c, label } : c)))
+  }
+
+  const moveColumn = (key: string, direction: 'up' | 'down') => {
+    setColumns((prev) => {
+      const i = prev.findIndex((c) => c.key === key)
+      if (i < 0) return prev
+      const j = direction === 'up' ? i - 1 : i + 1
+      if (j < 0 || j >= prev.length) return prev
+      const next = [...prev]
+      ;[next[i], next[j]] = [next[j], next[i]]
+      return next
+    })
+  }
+
   // Get value for a requirement field
   const getValue = (req: Requirement, key: string): string => {
     if (key === 'requirementId') {
@@ -605,7 +838,7 @@ export default function ExportBuilder({
   }
 
   const combinedDescriptionText = useMemo(() => {
-    return effectiveRequirements
+    return exportRequirements
       .map((r) => {
         let desc = r.description || ''
         if (desc.includes('{{param:') && parameterMap.size > 0) {
@@ -614,7 +847,7 @@ export default function ExportBuilder({
         return stripHtml(desc)
       })
       .join('\n')
-  }, [effectiveRequirements, parameterMap, parameterExportMode])
+  }, [exportRequirements, parameterMap, parameterExportMode])
 
   const usedGlossaryEntries = useMemo(() => {
     if (!includeGlossary || definitionEntries.length === 0) return []
@@ -640,7 +873,7 @@ export default function ExportBuilder({
       'HasVerification',
       'CoverageStatus',
     ]
-    const rows = effectiveRequirements.map((req) => {
+    const rows = exportRequirements.map((req) => {
       const baseValues = selectedCols.map((col) => {
         let value = getValue(req, col.key)
         if (col.key === 'description' || col.key === 'acceptanceCriteria') {
@@ -674,7 +907,7 @@ export default function ExportBuilder({
     if (projectName) metadataLines.push(`ProjectName,${projectName.replace(/"/g, '""')}`)
     if (effectiveScopeLabel) metadataLines.push(`Scope,${effectiveScopeLabel.replace(/"/g, '""')}`)
     metadataLines.push(`ExportedAtUtc,${nowIso}`)
-    metadataLines.push(`TotalRequirements,${effectiveRequirements.length}`)
+    metadataLines.push(`TotalRequirements,${exportRequirements.length}`)
 
     const csvContent = [
       ...metadataLines,
@@ -696,7 +929,7 @@ export default function ExportBuilder({
       'HasVerification',
       'CoverageStatus',
     ]
-    const data = effectiveRequirements.map((req) => {
+    const data = exportRequirements.map((req) => {
       const row: Record<string, string> = {}
       selectedCols.forEach((col) => {
         let value = getValue(req, col.key)
@@ -756,7 +989,7 @@ export default function ExportBuilder({
   const exportWord = async () => {
     const selectedCols = columns.filter((c) => c.selected)
     const docxColumns = selectedCols.map((c) => ({ key: c.key, label: c.label }))
-    const rows: DocxRequirementRow[] = effectiveRequirements.map((req) => {
+    const rows: DocxRequirementRow[] = exportRequirements.map((req) => {
       const row: DocxRequirementRow = {}
       selectedCols.forEach((col) => {
         let value = getValue(req, col.key)
@@ -805,7 +1038,7 @@ export default function ExportBuilder({
   // Export to ReqIF
   const exportReqIF = async () => {
     try {
-      const requirementIds = effectiveRequirements.map((r) => r.id).join(',')
+      const requirementIds = exportRequirements.map((r) => r.id).join(',')
       const params = new URLSearchParams()
       if (requirementIds) params.set('requirementIds', requirementIds)
       params.set('parameterMode', parameterExportMode)
@@ -844,17 +1077,17 @@ export default function ExportBuilder({
   const exportPdf = async () => {
     const selectedCols = columns.filter((c) => c.selected)
     const headers = selectedCols.map((c) => c.label)
-    const data = effectiveRequirements.map((req) =>
+    const data = exportRequirements.map((req) =>
       selectedCols.map((col) => {
         let value = getValue(req, col.key)
         if (col.key === 'description' || col.key === 'acceptanceCriteria') {
           value = stripHtml(value)
-          if (value.length > 100) value = value.substring(0, 100) + '...'
+          // No truncation: let table layout wrap long text.
         }
         return value
       })
     )
-    const stripHtmlForPdf = (html: string) => (html || '').replace(/<[^>]*>/g, '').trim().slice(0, 200)
+    const stripHtmlForPdf = (html: string) => (html || '').replace(/<[^>]*>/g, '').trim()
     const doc = new jsPDF({
       orientation: selectedCols.length > 6 ? 'landscape' : 'portrait',
     })
@@ -893,7 +1126,7 @@ export default function ExportBuilder({
           const startY = addSectionHeading(doc, sectionNum, title, style, opts.startOnNewPage !== false)
           doc.setFontSize(style.fontSizeBody ?? 11)
           doc.setFont(getPdfFont(style), 'normal')
-          doc.text(`This document contains ${effectiveRequirements.length} requirement(s).`, marginPt, startY + 4)
+          doc.text(`This document contains ${exportRequirements.length} requirement(s).`, marginPt, startY + 4)
           if (projectName) doc.text(`Project: ${projectName}`, marginPt, startY + 12)
           const blankAfter = Math.min(5, Math.max(0, opts.blankPagesAfter ?? 0))
           for (let p = 0; p < blankAfter; p++) doc.addPage()
@@ -1096,16 +1329,13 @@ export default function ExportBuilder({
 
   const canExport =
     effectiveRequirements.length > 0 &&
-    (!enableScopeSelection ||
-      (scopeType === 'all') ||
-      (scopeType === 'component' && !!selectedComponentId) ||
-      (scopeType === 'function' && !!selectedFunctionId))
+    (!enableScopeSelection || scopeType === 'all' || scopeType === 'custom')
 
   const canSaveAsTemplate =
     currentStep !== 'format' &&
     selectedCount > 0 &&
     canExport &&
-    (scopeType === 'all' || (scopeType === 'component' && !!selectedComponentId) || (scopeType === 'function' && !!selectedFunctionId))
+    (scopeType === 'all' || scopeType === 'custom')
 
   // Handle export
   const handleExport = async () => {
@@ -1116,8 +1346,11 @@ export default function ExportBuilder({
       return
     }
     if (!canExport) {
-      if (scopeType === 'component') setInlineError('Please select a component to export.')
-      else if (scopeType === 'function') setInlineError('Please select a function to export.')
+      if (enableScopeSelection && scopeType === 'custom') {
+        setInlineError('Select at least one component or function for the custom scope (or switch to “All requirements”).')
+      } else {
+        setInlineError('No requirements match the current scope/filters.')
+      }
       return
     }
 
@@ -1438,7 +1671,29 @@ export default function ExportBuilder({
                           className="flex-1 min-w-0 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
                         />
                         <div className="flex gap-2 shrink-0">
-                          <button type="button" onClick={() => { updateExportTemplate(projectId!, t.id, { name: editingTemplateName.trim() }); refreshTemplates(); setEditingTemplateId(null); setEditingTemplateName('') }} className="px-2 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700">Save</button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextName = editingTemplateName.trim()
+                              requirementExportTemplateService
+                                .update(projectId!, t.id, { name: nextName })
+                                .then((res) => {
+                                  if (res.success && res.data) {
+                                    const ui = toUiTemplate(res.data)
+                                    setTemplates((prev) => prev.map((x) => (x.id === ui.id ? ui : x)))
+                                  } else {
+                                    setInlineError(res.error || 'Could not rename template.')
+                                  }
+                                })
+                                .finally(() => {
+                                  setEditingTemplateId(null)
+                                  setEditingTemplateName('')
+                                })
+                            }}
+                            className="px-2 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                          >
+                            Save
+                          </button>
                           <button type="button" onClick={() => { setEditingTemplateId(null); setEditingTemplateName('') }} className="px-2 py-1.5 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200">Cancel</button>
                         </div>
                       </>
@@ -1450,9 +1705,72 @@ export default function ExportBuilder({
                         </div>
                         <div className="flex gap-2 shrink-0 flex-wrap">
                           <button type="button" onClick={() => { applyTemplate(t); setIsManageTemplatesOpen(false) }} className="px-2 py-1 text-xs font-medium rounded border border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20" title="Apply and edit in Steps 2–4">Apply</button>
-                          <button type="button" onClick={() => { const copy: ExportTemplate = { ...t, id: crypto.randomUUID(), name: (`Copy of ${t.name}`).slice(0, 80), createdAt: new Date().toISOString(), columns: t.columns.map((c) => ({ ...c })), sections: t.sections?.map((s) => ({ ...s, id: crypto.randomUUID(), options: s.options ? { ...s.options } : undefined })), documentStyle: t.documentStyle ? { ...t.documentStyle } : undefined }; saveExportTemplate(projectId!, copy); refreshTemplates(); setSelectedTemplateId(copy.id); applyTemplate(copy); setIsManageTemplatesOpen(false) }} className="px-2 py-1 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">Duplicate</button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const copyName = (`Copy of ${t.name}`).slice(0, 80)
+                              requirementExportTemplateService
+                                .create(projectId!, {
+                                  name: copyName,
+                                  format: t.format as any,
+                                  payload: {
+                                    columns: t.columns.map((c) => ({ ...c })),
+                                    sortBy: (t as any).sortBy,
+                                    sortOrder: (t as any).sortOrder,
+                                    scopeType: t.scopeType,
+                                    selectedComponentIds: (t as any).selectedComponentIds ?? [],
+                                    selectedFunctionIds: (t as any).selectedFunctionIds ?? [],
+                                    exportSearch: (t as any).exportSearch ?? '',
+                                    filters: (t as any).filters,
+                                    includeHeader: t.includeHeader,
+                                    parameterExportMode: t.parameterExportMode,
+                                    includeGlossary: t.includeGlossary,
+                                    includeAbbreviations: t.includeAbbreviations,
+                                    glossaryShowDefinitions: t.glossaryShowDefinitions,
+                                    glossarySortAlphabetically: t.glossarySortAlphabetically,
+                                    createdAt: new Date().toISOString(),
+                                    sections: t.sections?.map((s) => ({
+                                      ...s,
+                                      id: crypto.randomUUID(),
+                                      options: s.options ? { ...s.options } : undefined,
+                                    })),
+                                    documentStyle: t.documentStyle ? { ...t.documentStyle } : undefined,
+                                  },
+                                })
+                                .then((res) => {
+                                  if (res.success && res.data) {
+                                    const ui = toUiTemplate(res.data)
+                                    setTemplates((prev) => [ui, ...prev])
+                                    setSelectedTemplateId(ui.id)
+                                    applyTemplate(ui)
+                                    setIsManageTemplatesOpen(false)
+                                  } else {
+                                    setInlineError(res.error || 'Could not duplicate template.')
+                                  }
+                                })
+                            }}
+                            className="px-2 py-1 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                          >
+                            Duplicate
+                          </button>
                           <button type="button" onClick={() => { setEditingTemplateId(t.id); setEditingTemplateName(t.name) }} className="px-2 py-1 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">Rename</button>
-                          <button type="button" onClick={() => { if (window.confirm(`Delete template "${t.name}"?`)) { deleteExportTemplate(projectId!, t.id); refreshTemplates(); if (selectedTemplateId === t.id) setSelectedTemplateId(null) } }} className="px-2 py-1 text-xs font-medium rounded border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">Delete</button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!window.confirm(`Delete template "${t.name}"?`)) return
+                              requirementExportTemplateService.remove(projectId!, t.id).then((res) => {
+                                if (res.success) {
+                                  setTemplates((prev) => prev.filter((x) => x.id !== t.id))
+                                  if (selectedTemplateId === t.id) setSelectedTemplateId(null)
+                                } else {
+                                  setInlineError(res.error || 'Could not delete template.')
+                                }
+                              })
+                            }}
+                            className="px-2 py-1 text-xs font-medium rounded border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          >
+                            Delete
+                          </button>
                         </div>
                       </>
                     )}
@@ -1475,103 +1793,108 @@ export default function ExportBuilder({
           <section className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3">
             <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Scope</h3>
           {enableScopeSelection && (componentTree.length > 0 || flatFunctions.length > 0) ? (
-            <div>
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="scope"
-                    checked={scopeType === 'all'}
-                    onChange={() => {
-                      setScopeType('all')
-                      setSelectedComponentId('')
-                      setSelectedFunctionId('')
-                    }}
-                    className="w-4 h-4 text-blue-600 border-gray-300"
-                  />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">All requirements</span>
-                </label>
-                {componentTree.length > 0 && (
-                  <div>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="scope"
-                        checked={scopeType === 'component'}
-                        onChange={() => {
-                          setScopeType('component')
-                          setSelectedFunctionId('')
-                        }}
-                        className="w-4 h-4 text-blue-600 border-gray-300"
-                      />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">By component</span>
-                    </label>
-                    {scopeType === 'component' && (
-                      <div className="mt-2 ml-6">
-                        <input
-                          type="text"
-                          placeholder="Search components..."
-                          value={componentSearch}
-                          onChange={(e) => setComponentSearch(e.target.value)}
-                          className="w-full px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white mb-2"
-                        />
-                        <select
-                          value={selectedComponentId}
-                          onChange={(e) => setSelectedComponentId(e.target.value)}
-                          className="w-full px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white max-h-40 overflow-y-auto"
-                        >
-                          <option value="">— Select component —</option>
-                          {filteredComponents.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.displayLabel}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
+            <div className="space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="scope"
+                  checked={scopeType === 'all'}
+                  onChange={() => {
+                    setScopeType('all')
+                    setSelectedComponentIds([])
+                    setSelectedFunctionIds([])
+                  }}
+                  className="w-4 h-4 text-blue-600 border-gray-300"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">All requirements</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="scope"
+                  checked={scopeType === 'custom'}
+                  onChange={() => setScopeType('custom')}
+                  className="w-4 h-4 text-blue-600 border-gray-300"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Custom selection (components and/or functions)</span>
+              </label>
+
+              {scopeType === 'custom' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-6">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Components</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{selectedComponentIds.length} selected</span>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Search components..."
+                      value={componentSearch}
+                      onChange={(e) => setComponentSearch(e.target.value)}
+                      className="w-full px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                    <div className="max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-2 space-y-1">
+                      {filteredComponents.map((c) => {
+                        const checked = selectedComponentIds.includes(c.id)
+                        return (
+                          <label key={c.id} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const on = e.target.checked
+                                setSelectedComponentIds((prev) => on ? Array.from(new Set([...prev, c.id])) : prev.filter((x) => x !== c.id))
+                              }}
+                              className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                            />
+                            <span className="truncate">{c.displayLabel}</span>
+                          </label>
+                        )
+                      })}
+                      {filteredComponents.length === 0 && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400 px-1 py-2">No matching components.</div>
+                      )}
+                    </div>
                   </div>
-                )}
-                {flatFunctions.length > 0 && (
-                  <div>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="scope"
-                        checked={scopeType === 'function'}
-                        onChange={() => {
-                          setScopeType('function')
-                          setSelectedComponentId('')
-                        }}
-                        className="w-4 h-4 text-blue-600 border-gray-300"
-                      />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">By function</span>
-                    </label>
-                    {scopeType === 'function' && (
-                      <div className="mt-2 ml-6">
-                        <input
-                          type="text"
-                          placeholder="Search functions..."
-                          value={functionSearch}
-                          onChange={(e) => setFunctionSearch(e.target.value)}
-                          className="w-full px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white mb-2"
-                        />
-                        <select
-                          value={selectedFunctionId}
-                          onChange={(e) => setSelectedFunctionId(e.target.value)}
-                          className="w-full px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white max-h-40 overflow-y-auto"
-                        >
-                          <option value="">— Select function —</option>
-                          {filteredFunctions.map((f) => (
-                            <option key={f.id} value={f.id}>
-                              {f.displayLabel}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Functions</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{selectedFunctionIds.length} selected</span>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Search functions..."
+                      value={functionSearch}
+                      onChange={(e) => setFunctionSearch(e.target.value)}
+                      className="w-full px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                    <div className="max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-2 space-y-1">
+                      {filteredFunctions.map((f) => {
+                        const checked = selectedFunctionIds.includes(f.id)
+                        return (
+                          <label key={f.id} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const on = e.target.checked
+                                setSelectedFunctionIds((prev) => on ? Array.from(new Set([...prev, f.id])) : prev.filter((x) => x !== f.id))
+                              }}
+                              className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                            />
+                            <span className="truncate">{f.displayLabel}</span>
+                          </label>
+                        )
+                      })}
+                      {filteredFunctions.length === 0 && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400 px-1 py-2">No matching functions.</div>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           ) : (
             <p className="text-sm text-gray-500 dark:text-gray-400">All requirements in this view.</p>
@@ -1581,6 +1904,104 @@ export default function ExportBuilder({
           {/* Content and layout options */}
           <section className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
             <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Content and layout</h3>
+            {/* Advanced filtering (Phase 2) */}
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setIsAdvancedFiltersOpen((v) => !v)}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+              >
+                <span className="font-medium">Advanced filters</span>
+                {isAdvancedFiltersOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+              {isAdvancedFiltersOpen && (
+                <div className="p-3 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Search (title, description, ID)
+                    </label>
+                    <input
+                      type="text"
+                      value={exportSearch}
+                      onChange={(e) => setExportSearch(e.target.value)}
+                      placeholder="e.g. braking, FMEA, REQ-123"
+                      className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Status</label>
+                      <select
+                        value={filterStatus}
+                        onChange={(e) => setFilterStatus(e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="all">All</option>
+                        {filterOptions.statuses.map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Priority</label>
+                      <select
+                        value={filterPriority}
+                        onChange={(e) => setFilterPriority(e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="all">All</option>
+                        <option value="low">low</option>
+                        <option value="medium">medium</option>
+                        <option value="high">high</option>
+                        <option value="critical">critical</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Category</label>
+                      <select
+                        value={filterCategory}
+                        onChange={(e) => setFilterCategory(e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="all">All</option>
+                        {filterOptions.categories.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Owner</label>
+                      <select
+                        value={filterOwner}
+                        onChange={(e) => setFilterOwner(e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        <option value="all">All</option>
+                        {filterOptions.owners.map((o) => (
+                          <option key={o} value={o}>{o}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                    <span>Matches: {filteredRequirements.length} requirement(s)</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExportSearch('')
+                        setFilterStatus('all')
+                        setFilterPriority('all')
+                        setFilterCategory('all')
+                        setFilterOwner('all')
+                      }}
+                      className="px-2 py-1 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    >
+                      Clear filters
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Parameter display
@@ -1593,6 +2014,39 @@ export default function ExportBuilder({
               <option value="name">Names (e.g. MAX_CRUISE_SPEED)</option>
               <option value="resolved">Resolved values (e.g. 250 ±5 km/h)</option>
             </select>
+          </div>
+
+          {/* Export sorting */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Sort exported requirements by
+              </label>
+              <select
+                value={exportSortBy}
+                onChange={(e) => setExportSortBy(e.target.value as any)}
+                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="requirementId">ID</option>
+                <option value="priority">Priority</option>
+                <option value="status">Status</option>
+                <option value="createdAt">Created</option>
+                <option value="updatedAt">Updated</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Sort order
+              </label>
+              <select
+                value={exportSortOrder}
+                onChange={(e) => setExportSortOrder(e.target.value as any)}
+                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="asc">Ascending</option>
+                <option value="desc">Descending</option>
+              </select>
+            </div>
           </div>
 
           {/* Column Selection */}
@@ -1617,15 +2071,17 @@ export default function ExportBuilder({
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-2">
-              {columns.map((col) => (
-                <label
+            <div className="space-y-1 max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-2">
+              {columns.map((col, idx) => (
+                <div
                   key={col.key}
-                  className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded cursor-pointer"
+                  className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded"
                 >
                   <button
+                    type="button"
                     onClick={() => toggleColumn(col.key)}
                     className="text-gray-600 dark:text-gray-400"
+                    title={col.selected ? 'Included' : 'Excluded'}
                   >
                     {col.selected ? (
                       <CheckSquare size={18} className="text-blue-600" />
@@ -1633,8 +2089,34 @@ export default function ExportBuilder({
                       <Square size={18} />
                     )}
                   </button>
-                  <span className="text-sm text-gray-700 dark:text-gray-300">{col.label}</span>
-                </label>
+                  <input
+                    type="text"
+                    value={col.label}
+                    onChange={(e) => updateColumnLabel(col.key, e.target.value)}
+                    className="flex-1 min-w-0 px-2 py-1 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    aria-label={`Column header for ${String(col.key)}`}
+                  />
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => moveColumn(col.key, 'up')}
+                      disabled={idx === 0}
+                      className="p-1 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 disabled:opacity-40"
+                      title="Move up"
+                    >
+                      <ChevronUp size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveColumn(col.key, 'down')}
+                      disabled={idx === columns.length - 1}
+                      className="p-1 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 disabled:opacity-40"
+                      title="Move down"
+                    >
+                      <ChevronDown size={14} />
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
           </div>
@@ -2164,15 +2646,15 @@ export default function ExportBuilder({
                 setInlineError(null)
                 if (currentStep === 'format') setCurrentStep('scope')
                 else if (currentStep === 'scope') {
-                  if (scopeType === 'component' && !selectedComponentId) setInlineError('Select a component to export.')
-                  else if (scopeType === 'function' && !selectedFunctionId) setInlineError('Select a function to export.')
+                  if (scopeType === 'custom' && selectedComponentIds.length === 0 && selectedFunctionIds.length === 0) {
+                    setInlineError('Select at least one component or function for the custom scope (or switch to “All requirements”).')
+                  }
                   else if (selectedCount === 0) setInlineError('Select at least one column to export.')
                   else setCurrentStep('review')
                 }
               }}
               disabled={
-                (currentStep === 'scope' && scopeType === 'component' && !selectedComponentId) ||
-                (currentStep === 'scope' && scopeType === 'function' && !selectedFunctionId) ||
+                (currentStep === 'scope' && scopeType === 'custom' && selectedComponentIds.length === 0 && selectedFunctionIds.length === 0) ||
                 (currentStep === 'scope' && selectedCount === 0)
               }
               className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-1 disabled:opacity-50"

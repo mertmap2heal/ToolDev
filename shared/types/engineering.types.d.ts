@@ -167,6 +167,8 @@ export interface CreateBaselineDto {
     name: string;
     description?: string;
     requirementIds?: string[];
+    componentIds?: string[];
+    functionIds?: string[];
     baselineType?: string;
     reviewType?: string;
     milestoneId?: string;
@@ -182,10 +184,19 @@ export interface RequirementComparisonItem {
     priority?: string;
     status?: string;
     category?: string;
+    /** Field names that actually changed (A vs B) for modified items */
+    changedFields?: string[];
     previous?: {
         title?: string;
+        description?: string;
         priority?: string;
         status?: string;
+        category?: string;
+        owner?: string;
+        verificationMethod?: string;
+        acceptanceCriteria?: string;
+        source?: string;
+        stage?: string;
     };
 }
 /** Link change between baselines (LINKAGE_V1) */
@@ -445,6 +456,7 @@ export interface UpdateIssueDto {
     description?: string;
     priority?: Issue['priority'];
     status?: Issue['status'];
+    issueType?: IssueType;
     assigneeId?: string | null;
     labelIds?: string[];
     startDate?: string | null;
