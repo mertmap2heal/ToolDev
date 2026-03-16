@@ -9,6 +9,7 @@ export interface RequirementExportTemplate {
   name: string
   format: RequirementExportTemplateFormat
   payload: unknown
+  visibility?: string
   createdById?: string | null
   createdAt: string
   updatedAt: string
@@ -18,12 +19,14 @@ export interface CreateRequirementExportTemplateDto {
   name: string
   format: RequirementExportTemplateFormat
   payload: unknown
+  visibility?: string
 }
 
 export interface UpdateRequirementExportTemplateDto {
   name?: string
   format?: RequirementExportTemplateFormat
   payload?: unknown
+  visibility?: string
 }
 
 export const requirementExportTemplateService = {

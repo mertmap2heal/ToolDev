@@ -129,6 +129,10 @@ model Project {
   actors                 Actor[]
   requirementTemplates   RequirementTemplate[]
   requirementExportTemplates RequirementExportTemplate[]
+  exportJobs             ExportJob[]
+  corporateDocxTemplates CorporateDocxTemplate[]
+  excelColumnMappings    ExcelColumnMapping[]
+  scheduledExports       ScheduledExport[]
   diagrams               Diagram[]
   customRequirementTypes CustomRequirementType[]
   items                  Item[]
@@ -187,6 +191,7 @@ model RequirementExportTemplate {
   name        String
   format      String   // csv | excel | pdf | word | reqif
   payload     Json     // full template config (columns, scope, filters, sections, documentStyle, etc.)
+  visibility  String   @default("project") // private | project | org
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -196,6 +201,87 @@ model RequirementExportTemplate {
   @@unique([projectId, name])
   @@index([projectId])
   @@index([projectId, format])
+  @@index([projectId, visibility])
+}
+
+// Background export jobs – track client-initiated large exports (>500 reqs) for progress monitoring.
+model ExportJob {
+  id          String   @id @default(uuid())
+  projectId   String
+  createdById String?
+  format      String   // csv | excel | pdf | word | reqif
+  status      String   @default("pending") // pending | running | done | failed
+  progress    Int      @default(0) // 0-100
+  totalCount  Int      @default(0)
+  doneCount   Int      @default(0)
+  label       String?  // human-readable label e.g. "All reqs – PDF export"
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([projectId, status])
+  @@index([createdById])
+}
+
+// Corporate DOCX template upload – users can upload branded .docx files with {placeholder} tags.
+model CorporateDocxTemplate {
+  id           String   @id @default(uuid())
+  projectId    String
+  name         String
+  description  String?
+  fileBase64   String   // Base64-encoded .docx file
+  placeholders String?  // JSON array of placeholder names found in the template
+  createdById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, name])
+  @@index([projectId])
+}
+
+// Excel column mapping presets – map system fields to specific named columns or ranges in a corporate spreadsheet.
+model ExcelColumnMapping {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  description String?
+  mappings    Json     // Array of { systemField: string; excelColumn: string; namedRange?: string }
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, name])
+  @@index([projectId])
+}
+
+// Scheduled export hooks – config storage for future automation; no actual scheduling engine.
+model ScheduledExport {
+  id            String    @id @default(uuid())
+  projectId     String
+  name          String
+  description   String?
+  templateId    String?   // optional reference to RequirementExportTemplate.id
+  scheduleExpr  String?   // cron expression placeholder (not executed server-side yet)
+  format        String    @default("pdf") // csv | excel | pdf | word | reqif
+  enabled       Boolean   @default(false)
+  lastRunAt     DateTime?
+  lastRunStatus String?   // pending | done | failed
+  createdById   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, name])
+  @@index([projectId])
+  @@index([projectId, enabled])
 }
 
 model Component {

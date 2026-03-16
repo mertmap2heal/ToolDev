@@ -20,6 +20,10 @@ import baselinesRoutes from './baselines.routes'
 import useCasesRoutes from './usecases.routes'
 import requirementValidationRoutes from './requirementValidation.routes'
 import templatesRoutes from './templates.routes'
+import exportJobsRoutes from './exportJobs.routes'
+import corporateDocxTemplatesRoutes from './corporateDocxTemplates.routes'
+import excelColumnMappingsRoutes from './excelColumnMappings.routes'
+import scheduledExportsRoutes from './scheduledExports.routes'
 import reqifRoutes from './reqif.routes'
 import diagramsRoutes from './diagrams.routes'
 import requirementReviewsRoutes from './requirementReviews.routes'
@@ -76,6 +80,10 @@ router.use('/baselines', baselinesRoutes)
 router.use('/usecases', useCasesRoutes)
 router.use('/requirement-validation', requirementValidationRoutes)
 router.use('/templates', templatesRoutes)
+router.use('/export-jobs', exportJobsRoutes)
+router.use('/corporate-docx-templates', corporateDocxTemplatesRoutes)
+router.use('/excel-column-mappings', excelColumnMappingsRoutes)
+router.use('/scheduled-exports', scheduledExportsRoutes)
 router.use('/reqif', reqifRoutes)
 router.use('/diagrams', diagramsRoutes)
 router.use('/projects', requirementReviewsRoutes)

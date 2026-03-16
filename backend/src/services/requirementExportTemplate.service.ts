@@ -3,11 +3,18 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
 export type RequirementExportTemplateFormat = 'csv' | 'excel' | 'pdf' | 'word' | 'reqif'
+export type TemplateVisibility = 'private' | 'project' | 'org'
 
 function normalizeFormat(input: unknown): RequirementExportTemplateFormat {
   const v = String(input ?? '').toLowerCase()
   if (v === 'csv' || v === 'excel' || v === 'pdf' || v === 'word' || v === 'reqif') return v
   return 'pdf'
+}
+
+function normalizeVisibility(input: unknown): TemplateVisibility {
+  const v = String(input ?? '').toLowerCase()
+  if (v === 'private' || v === 'project' || v === 'org') return v
+  return 'project'
 }
 
 export async function list(projectId: string) {
@@ -25,7 +32,7 @@ export async function getOne(projectId: string, id: string) {
 
 export async function create(
   projectId: string,
-  dto: { name: string; format: RequirementExportTemplateFormat; payload: unknown },
+  dto: { name: string; format: RequirementExportTemplateFormat; payload: unknown; visibility?: string },
   userId?: string
 ) {
   const name = (dto.name ?? '').trim().slice(0, 80)
@@ -36,6 +43,7 @@ export async function create(
   }
   const format = normalizeFormat(dto.format)
   const payload = (dto.payload ?? {}) as unknown
+  const visibility = normalizeVisibility(dto.visibility)
 
   try {
     return await prisma.requirementExportTemplate.create({
@@ -44,6 +52,7 @@ export async function create(
         name,
         format,
         payload: payload as any,
+        visibility,
         createdById: userId ?? null,
       },
     })
@@ -61,7 +70,7 @@ export async function create(
 export async function update(
   projectId: string,
   id: string,
-  dto: { name?: string; format?: RequirementExportTemplateFormat; payload?: unknown }
+  dto: { name?: string; format?: RequirementExportTemplateFormat; payload?: unknown; visibility?: string }
 ) {
   const patch: Record<string, unknown> = {}
   if (dto.name !== undefined) {
@@ -75,6 +84,7 @@ export async function update(
   }
   if (dto.format !== undefined) patch.format = normalizeFormat(dto.format)
   if (dto.payload !== undefined) patch.payload = dto.payload as any
+  if (dto.visibility !== undefined) patch.visibility = normalizeVisibility(dto.visibility)
 
   try {
     return await prisma.requirementExportTemplate.update({
