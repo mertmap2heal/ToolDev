@@ -3827,6 +3827,7 @@ export default function RequirementsPage() {
                 componentTree={!isFromContextMenu ? componentTreeForExport : undefined}
                 functions={!isFromContextMenu ? functions : undefined}
                 allocationLinks={!isFromContextMenu ? allocationLinks : undefined}
+                requirementTestCaseLinks={requirementTestCaseLinks}
               />
             )
           })()}

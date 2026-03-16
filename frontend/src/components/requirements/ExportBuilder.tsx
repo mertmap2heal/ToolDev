@@ -57,6 +57,11 @@ interface ComponentTreeNode {
   children?: ComponentTreeNode[]
 }
 
+type RequirementTestCaseLinkLike = {
+  sourceId: string
+  targetId: string
+}
+
 interface ExportBuilderProps {
   requirements: Requirement[]
   projectName?: string
@@ -71,6 +76,7 @@ interface ExportBuilderProps {
   componentTree?: ComponentTreeNode[]
   functions?: SystemFunction[]
   allocationLinks?: Link[]
+  requirementTestCaseLinks?: RequirementTestCaseLinkLike[]
 }
 
 type ExportFormat = 'csv' | 'excel' | 'pdf' | 'word' | 'reqif'
@@ -160,6 +166,7 @@ export default function ExportBuilder({
   componentTree = [],
   functions = [],
   allocationLinks = [],
+  requirementTestCaseLinks = [],
 }: ExportBuilderProps) {
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('csv')
   const [columns, setColumns] = useState<ExportColumn[]>(defaultColumns)
@@ -257,6 +264,42 @@ export default function ExportBuilder({
           )
         : flatFunctions,
     [flatFunctions, functionSearch]
+  )
+
+  const allocationByReqId = useMemo(() => {
+    const map = new Map<string, Link[]>()
+    allocationLinks.forEach((l) => {
+      if (l.sourceType !== 'requirement' || l.targetType !== 'function' || l.linkType !== 'allocated_to') return
+      const existing = map.get(l.sourceId) ?? []
+      existing.push(l)
+      map.set(l.sourceId, existing)
+    })
+    return map
+  }, [allocationLinks])
+
+  const testsByReqId = useMemo(() => {
+    const map = new Map<string, RequirementTestCaseLinkLike[]>()
+    requirementTestCaseLinks.forEach((l) => {
+      const existing = map.get(l.sourceId) ?? []
+      existing.push(l)
+      map.set(l.sourceId, existing)
+    })
+    return map
+  }, [requirementTestCaseLinks])
+
+  const getCoverageInfo = useCallback(
+    (reqId: string) => {
+      const allocations = allocationByReqId.get(reqId) ?? []
+      const tests = testsByReqId.get(reqId) ?? []
+      const hasAllocation = allocations.length > 0
+      const hasVerification = tests.length > 0
+      let coverageStatus: 'OK' | 'Missing Tests' | 'Missing Allocation' | 'Missing Both' = 'OK'
+      if (!hasAllocation && !hasVerification) coverageStatus = 'Missing Both'
+      else if (!hasAllocation) coverageStatus = 'Missing Allocation'
+      else if (!hasVerification) coverageStatus = 'Missing Tests'
+      return { hasAllocation, hasVerification, coverageStatus }
+    },
+    [allocationByReqId, testsByReqId]
   )
 
   const effectiveRequirements = useMemo(() => {
@@ -590,29 +633,55 @@ export default function ExportBuilder({
   // Export to CSV
   const exportCsv = () => {
     const selectedCols = columns.filter((c) => c.selected)
-    const headers = selectedCols.map((c) => c.label)
-    const rows = effectiveRequirements.map((req) =>
-      selectedCols.map((col) => {
+    const baseHeaders = selectedCols.map((c) => c.label)
+    const headers = [
+      ...baseHeaders,
+      'HasAllocation',
+      'HasVerification',
+      'CoverageStatus',
+    ]
+    const rows = effectiveRequirements.map((req) => {
+      const baseValues = selectedCols.map((col) => {
         let value = getValue(req, col.key)
-        // Strip HTML from description
         if (col.key === 'description' || col.key === 'acceptanceCriteria') {
           value = stripHtml(value)
         }
-        // Escape quotes and wrap in quotes if contains comma
         value = value.replace(/"/g, '""')
         if (value.includes(',') || value.includes('\n') || value.includes('"')) {
           value = `"${value}"`
         }
         return value
       })
-    )
+      const { hasAllocation, hasVerification, coverageStatus } = getCoverageInfo(req.id)
+      const covValues = [
+        hasAllocation ? 'Yes' : 'No',
+        hasVerification ? 'Yes' : 'No',
+        coverageStatus,
+      ].map((v) => {
+        let value = v.replace(/"/g, '""')
+        if (value.includes(',') || value.includes('\n') || value.includes('"')) {
+          value = `"${value}"`
+        }
+        return value
+      })
+      return [...baseValues, ...covValues]
+    })
+
+    const metadataLines: string[] = []
+    const nowIso = new Date().toISOString()
+    metadataLines.push(`Profile,${'Aerospace Traceability (Core)'}`)
+    metadataLines.push(`ProjectId,${projectId}`)
+    if (projectName) metadataLines.push(`ProjectName,${projectName.replace(/"/g, '""')}`)
+    if (effectiveScopeLabel) metadataLines.push(`Scope,${effectiveScopeLabel.replace(/"/g, '""')}`)
+    metadataLines.push(`ExportedAtUtc,${nowIso}`)
+    metadataLines.push(`TotalRequirements,${effectiveRequirements.length}`)
 
     const csvContent = [
+      ...metadataLines,
+      '',
       includeHeader ? headers.join(',') : null,
       ...rows.map((row) => row.join(',')),
-    ]
-      .filter(Boolean)
-      .join('\n')
+    ].filter(Boolean).join('\n')
 
     const baseName = effectiveScopeFilenameSuffix ? `requirements_export_${effectiveScopeFilenameSuffix}` : 'requirements_export'
     downloadFile(csvContent, `${baseName}.csv`, 'text/csv')
@@ -621,17 +690,27 @@ export default function ExportBuilder({
   // Export to Excel
   const exportExcel = () => {
     const selectedCols = columns.filter((c) => c.selected)
-    const headers = selectedCols.map((c) => c.label)
-    const data = effectiveRequirements.map((req) =>
-      selectedCols.reduce((acc, col) => {
+    const headers = [
+      ...selectedCols.map((c) => c.label),
+      'HasAllocation',
+      'HasVerification',
+      'CoverageStatus',
+    ]
+    const data = effectiveRequirements.map((req) => {
+      const row: Record<string, string> = {}
+      selectedCols.forEach((col) => {
         let value = getValue(req, col.key)
         if (col.key === 'description' || col.key === 'acceptanceCriteria') {
           value = stripHtml(value)
         }
-        acc[col.label] = value
-        return acc
-      }, {} as Record<string, string>)
-    )
+        row[col.label] = value
+      })
+      const { hasAllocation, hasVerification, coverageStatus } = getCoverageInfo(req.id)
+      row.HasAllocation = hasAllocation ? 'Yes' : 'No'
+      row.HasVerification = hasVerification ? 'Yes' : 'No'
+      row.CoverageStatus = coverageStatus
+      return row
+    })
 
     const worksheet = XLSX.utils.json_to_sheet(data, {
       header: includeHeader ? headers : undefined,
@@ -1244,7 +1323,7 @@ export default function ExportBuilder({
                 {isCreateTemplateOpen && (
                   <div className="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 p-4 space-y-3">
                     <h4 className="text-sm font-medium text-gray-900 dark:text-white">New template</h4>
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-3 sm:grid-cols-1">
                       <div>
                         <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Format</label>
                         <select
@@ -1259,21 +1338,6 @@ export default function ExportBuilder({
                           <option value="reqif">ReqIF</option>
                         </select>
                       </div>
-                      {(createTemplateFormat === 'pdf' || createTemplateFormat === 'word') && (
-                        <div>
-                          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Preset</label>
-                          <select
-                            value={createTemplatePreset}
-                            onChange={(e) => setCreateTemplatePreset(e.target.value as 'authority' | 'simple' | 'full' | 'submission_with_placeholders')}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          >
-                            <option value="authority">Authority submission</option>
-                            <option value="simple">Simple list</option>
-                            <option value="full">Full report</option>
-                            <option value="submission_with_placeholders">Submission with placeholders</option>
-                          </select>
-                        </div>
-                      )}
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Template name</label>
@@ -1408,7 +1472,7 @@ export default function ExportBuilder({
             <>
           {/* Step 2: Scope and options */}
           <div className="space-y-6">
-          <section>
+          <section className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3">
             <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Scope</h3>
           {enableScopeSelection && (componentTree.length > 0 || flatFunctions.length > 0) ? (
             <div>
@@ -1515,7 +1579,7 @@ export default function ExportBuilder({
           </section>
 
           {/* Content and layout options */}
-          <section>
+          <section className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
             <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Content and layout</h3>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
