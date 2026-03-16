@@ -6,6 +6,7 @@ import type { jsPDF } from 'jspdf'
 import type { ExportDocumentStyle, ExportSection } from './requirementExportTemplates'
 import { DEFAULT_AUTHORITY_STYLE } from './requirementExportTemplates'
 import { format } from 'date-fns'
+import type { TraceabilityMatrixModel } from 'shared/types/traceabilityMatrix.types'
 
 function parseHex(hex: string): [number, number, number] {
   const n = hex.replace('#', '')
@@ -268,4 +269,53 @@ export function addPlaceholderSection(
     doc.text('Reserved for manual completion.', margin, margin + 6)
     doc.setTextColor(0, 0, 0)
   }
+}
+
+export interface TraceabilityMatrixPdfOptions {
+  /** If true, start section on a new page (default true). */
+  startOnNewPage?: boolean
+  /** Max IDs rendered per cell before truncation. Default 8. */
+  maxIdsPerCell?: number
+}
+
+/**
+ * Adds a traceability matrix section using authority-grade styling.
+ *
+ * Note: caller provides `autoTable` (jspdf-autotable) to avoid bundling issues.
+ */
+export function addTraceabilityMatrixSection(
+  doc: jsPDF,
+  autoTable: any,
+  sectionNumber: number,
+  title: string,
+  matrix: TraceabilityMatrixModel,
+  style?: ExportDocumentStyle | null,
+  opts?: TraceabilityMatrixPdfOptions
+): void {
+  const s = style ?? DEFAULT_AUTHORITY_STYLE
+  const authorityStyles = getAuthorityTableStyles(s)
+  const startY = addSectionHeading(doc, sectionNumber, title, s, opts?.startOnNewPage !== false)
+
+  const maxIds = Math.max(1, opts?.maxIdsPerCell ?? 8)
+  const head = [''].concat(matrix.cols.map((c) => c.label || c.key))
+  const body = matrix.rows.map((r) => {
+    const rowCells: string[] = [r.key]
+    for (const c of matrix.cols) {
+      const ids = matrix.cells[r.id]?.[c.id] ?? []
+      if (ids.length <= maxIds) rowCells.push(ids.join(', '))
+      else rowCells.push(`${ids.slice(0, maxIds).join(', ')}, +${ids.length - maxIds} more`)
+    }
+    return rowCells
+  })
+
+  autoTable(doc, {
+    head: [head],
+    body,
+    startY,
+    styles: { fontSize: authorityStyles.fontSize - 2, cellPadding: 1.5 },
+    headStyles: authorityStyles.headStyles,
+    alternateRowStyles: authorityStyles.alternateRowStyles,
+    tableLineColor: authorityStyles.tableLineColor,
+    tableLineWidth: authorityStyles.tableLineWidth,
+  })
 }

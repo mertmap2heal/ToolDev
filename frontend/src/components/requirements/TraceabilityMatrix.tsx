@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X, Check, AlertTriangle, Link as LinkIcon, Download, Plus, Loader } from 'lucide-react'
+import * as XLSX from 'xlsx'
+import { jsPDF } from 'jspdf'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { traceabilityService } from '../../services/traceability.service'
@@ -22,7 +24,20 @@ import {
 import type { Requirement } from 'shared/types/engineering.types'
 import type { LinkType } from 'shared/types/traceability.types'
 import type { EntitySummary } from 'shared/types/linkage.types'
+import type { TraceabilityMatrixModel } from 'shared/types/traceabilityMatrix.types'
 import clsx from 'clsx'
+import { DEFAULT_AUTHORITY_STYLE } from '../../utils/requirementExportTemplates'
+import { addCoverPage, addHeaderFooterToAllPages, addTraceabilityMatrixSection } from '../../utils/exportPdfLayout'
+import { buildTraceabilityMatrixDocx } from '../../utils/exportDocx'
+
+// Dynamic import for jspdf-autotable to prevent build issues (mirrors ExportBuilder)
+let autoTableModule: any = null
+async function loadAutoTable() {
+  if (!autoTableModule) {
+    autoTableModule = await import('jspdf-autotable')
+  }
+  return autoTableModule.default || autoTableModule
+}
 
 interface TraceabilityMatrixProps {
   projectId: string
@@ -90,6 +105,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
   const [selectedLinkType, setSelectedLinkType] = useState<LinkType>('satisfies')
   const [linkDirection, setLinkDirection] = useState<string>('')
   const [linkRationale, setLinkRationale] = useState<string>('')
+  const [exportFormat, setExportFormat] = useState<'csv' | 'excel' | 'pdf' | 'word'>('csv')
 
   const queryClient = useQueryClient()
 
@@ -467,6 +483,121 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     URL.revokeObjectURL(url)
   }
 
+  const buildExportMatrixModel = (): TraceabilityMatrixModel => {
+    const rows = filteredRequirements.map((r: Requirement) => ({
+      id: r.id,
+      key: r.requirementId || r.id.substring(0, 8),
+      label: r.title || (r.requirementId || r.id.substring(0, 8)),
+      type: 'requirement',
+    }))
+
+    const cols = targetItems.map((t: any) => {
+      const key = LINKAGE_V1
+        ? (t.label || t.id)
+        : matrixType === 'requirements-functions'
+          ? (t.functionId || t.id.substring(0, 8))
+          : (t.requirementId || t.id.substring(0, 8))
+      const label = LINKAGE_V1
+        ? (t.label || key)
+        : matrixType === 'requirements-functions'
+          ? (t.name || key)
+          : (t.title || key)
+      return {
+        id: t.id,
+        key,
+        label,
+        type: LINKAGE_V1 ? linkageTargetType : (matrixType === 'requirements-functions' ? 'function' : 'requirement'),
+      }
+    })
+
+    const cells: TraceabilityMatrixModel['cells'] = {}
+    for (const r of rows) {
+      for (const c of cols) {
+        const status = getCellStatus(r.id, c.id)
+        if (status === 'linked') {
+          if (!cells[r.id]) cells[r.id] = {}
+          cells[r.id][c.id] = [c.key]
+        } else if (status === 'suspect') {
+          if (!cells[r.id]) cells[r.id] = {}
+          cells[r.id][c.id] = [`${c.key} (?)`]
+        }
+      }
+    }
+
+    return {
+      projectId,
+      rowType: 'requirement',
+      colType: LINKAGE_V1 ? linkageTargetType : (matrixType === 'requirements-functions' ? 'function' : 'requirement'),
+      rows,
+      cols,
+      cells,
+    }
+  }
+
+  const exportMatrix = async () => {
+    if (exportFormat === 'csv') {
+      exportToCsv()
+      return
+    }
+
+    const matrix = buildExportMatrixModel()
+    const fileBase = `traceability_matrix_${LINKAGE_V1 ? linkageTargetType : matrixType}`
+
+    if (exportFormat === 'excel') {
+      const wb = XLSX.utils.book_new()
+      const headerRow = ['Requirement', 'Title'].concat(matrix.cols.map((c) => c.label || c.key))
+      const dataRows = matrix.rows.map((row) => {
+        const rowCells: (string | null)[] = [row.key, row.label]
+        for (const col of matrix.cols) {
+          const ids = matrix.cells[row.id]?.[col.id] ?? []
+          rowCells.push(ids.join(', '))
+        }
+        return rowCells
+      })
+      const ws = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows])
+      XLSX.utils.book_append_sheet(wb, ws, 'Matrix')
+      XLSX.writeFile(wb, `${fileBase}.xlsx`)
+      return
+    }
+
+    if (exportFormat === 'pdf') {
+      const doc = new jsPDF({ orientation: 'landscape' })
+      const autoTable = await loadAutoTable()
+      const title = 'Traceability Matrix'
+      const sectionTitle = LINKAGE_V1
+        ? `Requirements ↔ ${LINKAGE_TARGET_OPTIONS.find((o) => o.value === linkageTargetType)?.label ?? linkageTargetType}`
+        : matrixType === 'requirements-functions'
+          ? 'Requirements ↔ Functions'
+          : 'Requirements ↔ Requirements'
+      const style = DEFAULT_AUTHORITY_STYLE
+      addCoverPage(doc, { documentTitle: title, showDate: true }, style)
+      addTraceabilityMatrixSection(doc, autoTable, 1, sectionTitle, matrix, style, { startOnNewPage: true })
+      addHeaderFooterToAllPages(doc, title, style)
+      doc.save(`${fileBase}.pdf`)
+      return
+    }
+
+    // word
+    const sectionTitle = LINKAGE_V1
+      ? `Requirements ↔ ${LINKAGE_TARGET_OPTIONS.find((o) => o.value === linkageTargetType)?.label ?? linkageTargetType}`
+      : matrixType === 'requirements-functions'
+        ? 'Requirements ↔ Functions'
+        : 'Requirements ↔ Requirements'
+    const blob = await buildTraceabilityMatrixDocx({
+      documentTitle: `Traceability Matrix – ${sectionTitle}`,
+      matrix,
+      documentStyle: DEFAULT_AUTHORITY_STYLE,
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${fileBase}.docx`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   const isLoading = loadingReqs || loadingLinks || (LINKAGE_V1 ? loadingLinkageTargets : loadingFuncs)
 
   return (
@@ -588,12 +719,22 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                 />
                 Suspect Only
               </label>
+              <select
+                value={exportFormat}
+                onChange={(e) => setExportFormat(e.target.value as any)}
+                className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="csv">CSV</option>
+                <option value="excel">Excel</option>
+                <option value="pdf">PDF</option>
+                <option value="word">Word</option>
+              </select>
               <button
-                onClick={exportToCsv}
+                onClick={exportMatrix}
                 className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-1"
               >
                 <Download size={14} />
-                Export CSV
+                Export
               </button>
             </div>
           </div>

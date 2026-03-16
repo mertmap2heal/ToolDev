@@ -33,7 +33,16 @@ import {
   addHeaderFooterToAllPages,
   addSectionHeading,
   addPlaceholderSection,
+  addTraceabilityMatrixSection,
 } from '../../utils/exportPdfLayout'
+import type { TraceabilityMatrixModel } from 'shared/types/traceabilityMatrix.types'
+import { buildTraceabilityMatrixDocx } from '../../utils/exportDocx'
+
+interface TraceabilityMatrixConfig {
+  rowType: string
+  colType: string
+  includeFlatSheet?: boolean
+}
 
 // Dynamic import for jspdf-autotable to prevent build issues
 // This will be loaded only when PDF export is needed
@@ -230,6 +239,9 @@ export default function ExportBuilder({
   const [isUploadingDocx, setIsUploadingDocx] = useState(false)
   const [docxUploadError, setDocxUploadError] = useState<string | null>(null)
   const docxFileInputRef = useRef<HTMLInputElement>(null)
+
+  // Traceability matrix configuration (for Excel/PDF/Word matrix exports)
+  const [traceMatrixConfig, setTraceMatrixConfig] = useState<TraceabilityMatrixConfig | null>(null)
 
   // Excel column mappings (Excel format)
   const [excelColumnMappings, setExcelColumnMappings] = useState<ExcelColumnMapping[]>([])
@@ -647,6 +659,17 @@ export default function ExportBuilder({
       setSelectedTemplateId(template.id)
       setSections(template.sections)
       setDocumentStyle(template.documentStyle)
+      // Restore traceability matrix config if present in payload
+      const anyTemplate = template as any
+      if (anyTemplate.traceabilityMatrix) {
+        setTraceMatrixConfig({
+          rowType: anyTemplate.traceabilityMatrix.rowType,
+          colType: anyTemplate.traceabilityMatrix.colType,
+          includeFlatSheet: anyTemplate.traceabilityMatrix.includeFlatSheet,
+        })
+      } else {
+        setTraceMatrixConfig(null)
+      }
       setUseDocumentSections(Array.isArray(template.sections) && template.sections.length > 0)
       setInlineError(null)
       setCurrentStep('scope')
@@ -686,6 +709,7 @@ export default function ExportBuilder({
           createdAt: new Date().toISOString(),
           sections: useDocumentSections ? sections : undefined,
           documentStyle: documentStyle ?? undefined,
+          traceabilityMatrix: traceMatrixConfig ?? undefined,
         },
       })
       .then((res) => {
@@ -752,6 +776,7 @@ export default function ExportBuilder({
           createdAt: new Date().toISOString(),
           sections: isPdfOrWord ? getSectionsForPreset(preset) : undefined,
           documentStyle: isPdfOrWord ? (preset === 'simple' ? undefined : { ...DEFAULT_AUTHORITY_STYLE }) : undefined,
+          traceabilityMatrix: undefined,
         },
       }).then((res) => {
         if (res.success && res.data) {
@@ -1435,7 +1460,7 @@ export default function ExportBuilder({
   const handleExport = async () => {
     const selectedCols = columns.filter((c) => c.selected)
     setInlineError(null)
-    if (selectedCols.length === 0) {
+    if (!traceMatrixConfig && selectedCols.length === 0) {
       setInlineError('Please select at least one column to export.')
       return
     }
@@ -1444,6 +1469,119 @@ export default function ExportBuilder({
         setInlineError('Select at least one component or function for the custom scope (or switch to "All requirements").')
       } else {
         setInlineError('No requirements match the current scope/filters.')
+      }
+      return
+    }
+
+    // Traceability matrix export path for Excel/PDF/Word when configured
+    if (traceMatrixConfig && projectId && (selectedFormat === 'excel' || selectedFormat === 'pdf' || selectedFormat === 'word')) {
+      try {
+        const isLarge = exportRequirements.length >= LARGE_EXPORT_THRESHOLD
+        exportAbortRef.current = false
+        setIsExporting(true)
+        setExportProgress(5)
+        setExportProgressLabel('Fetching traceability matrix…')
+
+        const params = new URLSearchParams({
+          rowType: traceMatrixConfig.rowType,
+          colType: traceMatrixConfig.colType,
+          format: selectedFormat === 'word' ? 'docx' : selectedFormat,
+        })
+        const res = await fetch(`/api/traceability/${projectId}/export/matrix?` + params.toString(), {
+          credentials: 'include',
+        })
+        if (!res.ok) {
+          const body = await res.json().catch(() => null)
+          throw new Error(body?.error || `Failed to export traceability matrix (${res.status})`)
+        }
+        const json = await res.json()
+        const matrixData = json?.data?.matrix as TraceabilityMatrixModel | undefined
+        if (!matrixData) {
+          throw new Error('Server did not return matrix data.')
+        }
+
+        if (selectedFormat === 'excel') {
+          setExportProgressLabel('Building spreadsheet…')
+          const wb = XLSX.utils.book_new()
+          const headerRow = [''].concat(matrixData.cols.map((c) => c.label || c.key))
+          const dataRows = matrixData.rows.map((row) => {
+            const rowCells: (string | null)[] = [row.key]
+            for (const col of matrixData.cols) {
+              const ids = matrixData.cells[row.id]?.[col.id] ?? []
+              rowCells.push(ids.join(', '))
+            }
+            return rowCells
+          })
+          const wsData = [headerRow, ...dataRows]
+          const ws = XLSX.utils.aoa_to_sheet(wsData)
+          XLSX.utils.book_append_sheet(wb, ws, 'Matrix')
+
+          if (traceMatrixConfig.includeFlatSheet) {
+            const flatRows: any[][] = [['RowKey', 'RowId', 'ColKey', 'ColId', 'Ids']]
+            for (const row of matrixData.rows) {
+              for (const col of matrixData.cols) {
+                const ids = matrixData.cells[row.id]?.[col.id]
+                if (ids && ids.length > 0) {
+                  flatRows.push([row.key, row.id, col.key, col.id, ids.join(', ')])
+                }
+              }
+            }
+            const flatWs = XLSX.utils.aoa_to_sheet(flatRows)
+            XLSX.utils.book_append_sheet(wb, flatWs, 'Links')
+          }
+
+          const baseName = `traceability_matrix_${traceMatrixConfig.rowType}_${traceMatrixConfig.colType}`
+          XLSX.writeFile(wb, `${baseName}.xlsx`)
+        } else {
+          const baseName = `traceability_matrix_${traceMatrixConfig.rowType}_${traceMatrixConfig.colType}`
+          if (selectedFormat === 'pdf') {
+            setExportProgressLabel('Rendering PDF…')
+            const doc = new jsPDF({ orientation: 'landscape' })
+            const autoTableModule = await loadAutoTable()
+            const autoTable = autoTableModule as any
+            const style = documentStyle ?? DEFAULT_AUTHORITY_STYLE
+            const title = `${traceMatrixConfig.rowType} ↔ ${traceMatrixConfig.colType} Traceability Matrix`
+            // Cover page + matrix section
+            addCoverPage(
+              doc,
+              { documentTitle: style.coverTitle ?? title, projectName, showDate: true },
+              style
+            )
+            addTraceabilityMatrixSection(doc, autoTable, 1, title, matrixData, style, { startOnNewPage: true })
+            addHeaderFooterToAllPages(doc, title, style)
+            doc.save(`${baseName}.pdf`)
+          } else {
+            setExportProgressLabel('Building Word document…')
+            const title = `${traceMatrixConfig.rowType} ↔ ${traceMatrixConfig.colType} Traceability Matrix`
+            const blob = await buildTraceabilityMatrixDocx({
+              documentTitle: title,
+              projectName,
+              matrix: matrixData,
+              documentStyle: documentStyle ?? DEFAULT_AUTHORITY_STYLE,
+            })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `${baseName}.docx`
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+          }
+        }
+
+        setExportProgress(100)
+        setExportProgressLabel('Export complete!')
+        await new Promise((r) => setTimeout(r, isLarge ? 900 : 0))
+        onClose()
+        return
+      } catch (error) {
+        console.error('Traceability matrix export error:', error)
+        setInlineError(error instanceof Error ? error.message : 'Traceability matrix export failed.')
+      } finally {
+        setIsExporting(false)
+        setExportProgress(0)
+        setExportProgressLabel('')
       }
       return
     }
@@ -1881,6 +2019,76 @@ export default function ExportBuilder({
                   <button type="button" onClick={() => setSelectedMappingId(null)} className="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
                     Clear selection (use default columns)
                   </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Traceability Matrix (Excel/PDF/Word) */}
+          {(selectedFormat === 'excel' || selectedFormat === 'pdf' || selectedFormat === 'word') && (
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Traceability Matrix</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Export a configurable matrix where each cell shows linked IDs (e.g., <span className="font-mono">TEST-001, TEST-005</span>).
+                </p>
+              </div>
+              <div className="p-3 space-y-3">
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                  <input
+                    type="checkbox"
+                    checked={!!traceMatrixConfig}
+                    onChange={(e) => {
+                      if (e.target.checked) setTraceMatrixConfig({ rowType: 'requirement', colType: 'verification', includeFlatSheet: true })
+                      else setTraceMatrixConfig(null)
+                    }}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                  />
+                  Enable traceability matrix export
+                </label>
+
+                {traceMatrixConfig && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Rows</label>
+                      <select
+                        value={traceMatrixConfig.rowType}
+                        onChange={(e) => setTraceMatrixConfig((prev) => prev ? { ...prev, rowType: e.target.value } : prev)}
+                        className="w-full px-2 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                      >
+                        <option value="requirement">Requirements</option>
+                        <option value="function">Functions</option>
+                        <option value="parameter">Parameters</option>
+                        <option value="architecture">Architectures</option>
+                        <option value="verification">Verification</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Columns</label>
+                      <select
+                        value={traceMatrixConfig.colType}
+                        onChange={(e) => setTraceMatrixConfig((prev) => prev ? { ...prev, colType: e.target.value } : prev)}
+                        className="w-full px-2 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                      >
+                        <option value="verification">Verification</option>
+                        <option value="architecture">Architectures</option>
+                        <option value="function">Functions</option>
+                        <option value="parameter">Parameters</option>
+                        <option value="requirement">Requirements</option>
+                      </select>
+                    </div>
+                    <div className="flex items-end">
+                      <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                        <input
+                          type="checkbox"
+                          checked={traceMatrixConfig.includeFlatSheet !== false}
+                          onChange={(e) => setTraceMatrixConfig((prev) => prev ? { ...prev, includeFlatSheet: e.target.checked } : prev)}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                        />
+                        Include flat link sheet (Excel)
+                      </label>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

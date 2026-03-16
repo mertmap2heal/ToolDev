@@ -1,6 +1,7 @@
 import type { ExportSection, ExportDocumentStyle } from './requirementExportTemplates'
 import { DEFAULT_AUTHORITY_STYLE } from './requirementExportTemplates'
 import { format } from 'date-fns'
+import type { TraceabilityMatrixModel } from 'shared/types/traceabilityMatrix.types'
 
 export interface DocxColumn {
   key: string
@@ -26,6 +27,131 @@ export interface BuildDocxWithSectionsOptions {
   glossaryEntries?: DocxGlossaryEntry[]
   abbreviationEntries?: DocxGlossaryEntry[]
   stripHtml?: (value: string) => string
+}
+
+export interface BuildTraceabilityMatrixDocxOptions {
+  documentTitle: string
+  projectName?: string
+  matrix: TraceabilityMatrixModel
+  documentStyle?: ExportDocumentStyle | null
+  maxIdsPerCell?: number
+}
+
+export async function buildTraceabilityMatrixDocx(options: BuildTraceabilityMatrixDocxOptions): Promise<Blob> {
+  const {
+    Document,
+    Paragraph,
+    TextRun,
+    Table,
+    TableRow,
+    TableCell,
+    WidthType,
+    Packer,
+    Header,
+    Footer,
+    AlignmentType,
+    BorderStyle,
+  } = await import('docx')
+
+  const style = options.documentStyle ?? DEFAULT_AUTHORITY_STYLE
+  const sizeBody = ((style.fontSizeBody ?? 11) * 2)
+  const sizeH1 = ((style.fontSizeHeading1 ?? 14) * 2)
+  const marginTwip = style.marginMm != null ? Math.round((style.marginMm / 25.4) * 1440) : 1440
+  const fontFamily = style.fontFamily || 'Times New Roman'
+  const borderColorHex = style.tableBorderColor?.replace('#', '') ?? 'E5E7EB'
+  const headerBg = style.tableHeaderBg?.replace('#', '') ?? '374151'
+  const headerFg = style.tableHeaderFg?.replace('#', '') ?? 'FFFFFF'
+  const maxIds = Math.max(1, options.maxIdsPerCell ?? 8)
+
+  const singleBorder = { style: BorderStyle.SINGLE, size: 6, color: borderColorHex }
+  const tableBorders = {
+    top: singleBorder,
+    bottom: singleBorder,
+    left: singleBorder,
+    right: singleBorder,
+    insideHorizontal: singleBorder,
+    insideVertical: singleBorder,
+  }
+
+  const header = new Header({
+    children: [
+      new Paragraph({
+        alignment: AlignmentType.LEFT,
+        children: [new TextRun({ text: style.headerLeft?.replace(/\{title\}/g, options.documentTitle) ?? options.documentTitle, size: sizeBody - 2, font: fontFamily })],
+      }),
+    ],
+  })
+  const footer = new Footer({
+    children: [
+      new Paragraph({
+        alignment: AlignmentType.RIGHT,
+        children: [new TextRun({ text: style.footerRight?.replace(/\{date\}/g, format(new Date(), 'yyyy-MM-dd')) ?? format(new Date(), 'yyyy-MM-dd'), size: sizeBody - 2, font: fontFamily })],
+      }),
+    ],
+  })
+
+  const headRow = new TableRow({
+    tableHeader: true,
+    children: [
+      new TableCell({
+        shading: { fill: headerBg, color: headerFg },
+        children: [new Paragraph({ children: [new TextRun({ text: '', bold: true, size: sizeBody, font: fontFamily })] })],
+      }),
+      ...options.matrix.cols.map((c) =>
+        new TableCell({
+          shading: { fill: headerBg, color: headerFg },
+          children: [new Paragraph({ children: [new TextRun({ text: (c.label || c.key).slice(0, 120), bold: true, size: sizeBody, font: fontFamily })] })],
+        })
+      ),
+    ],
+  })
+
+  const rows = options.matrix.rows.map((r) => {
+    const cells: any[] = [
+      new TableCell({
+        children: [new Paragraph({ children: [new TextRun({ text: r.key, bold: true, size: sizeBody, font: fontFamily })] })],
+      }),
+    ]
+    for (const c of options.matrix.cols) {
+      const ids = options.matrix.cells[r.id]?.[c.id] ?? []
+      const text =
+        ids.length <= maxIds ? ids.join(', ') : `${ids.slice(0, maxIds).join(', ')}, +${ids.length - maxIds} more`
+      cells.push(
+        new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: text.slice(0, 32000), size: sizeBody, font: fontFamily })] })],
+        })
+      )
+    }
+    return new TableRow({ children: cells })
+  })
+
+  const doc = new Document({
+    sections: [
+      {
+        properties: {
+          page: { margin: { top: marginTwip, bottom: marginTwip, left: marginTwip, right: marginTwip } },
+        },
+        headers: { default: header },
+        footers: { default: footer },
+        children: [
+          new Paragraph({
+            spacing: { after: 200 },
+            children: [new TextRun({ text: options.documentTitle, bold: true, size: sizeH1, font: fontFamily })],
+          }),
+          ...(options.projectName
+            ? [new Paragraph({ spacing: { after: 200 }, children: [new TextRun({ text: `Project: ${options.projectName}`, size: sizeBody, font: fontFamily })] })]
+            : []),
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [headRow, ...rows],
+            borders: tableBorders,
+          }),
+        ],
+      },
+    ],
+  })
+
+  return await Packer.toBlob(doc)
 }
 
 /**

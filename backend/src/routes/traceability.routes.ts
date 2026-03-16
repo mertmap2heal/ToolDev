@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
 import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import { traceabilityService } from '../services/traceability.service'
+import { traceabilityMatrixService } from '../services/traceabilityMatrix.service'
 
 const router = Router()
 
@@ -48,6 +49,46 @@ router.get('/:projectId/graph', async (req, res) => {
     })
   } catch (error: any) {
     console.error('Get traceability graph error:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error',
+    })
+  }
+})
+
+// Export traceability matrix for a project
+router.get('/:projectId/export/matrix', async (req, res) => {
+  try {
+    const { projectId } = req.params
+    const rowType = (req.query.rowType as string | undefined)?.toLowerCase() ?? 'requirement'
+    const colType = (req.query.colType as string | undefined)?.toLowerCase() ?? 'verification'
+    const format = (req.query.format as string | undefined)?.toLowerCase() ?? 'excel'
+
+    if (!rowType || !colType) {
+      return res.status(400).json({
+        success: false,
+        error: 'rowType and colType are required query parameters',
+      })
+    }
+
+    if (!['excel', 'pdf', 'docx'].includes(format)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid format. Expected one of: excel, pdf, docx',
+      })
+    }
+
+    const matrix = await traceabilityMatrixService.buildMatrix(projectId, rowType, colType)
+
+    res.json({
+      success: true,
+      data: {
+        format,
+        matrix,
+      },
+    })
+  } catch (error: any) {
+    console.error('Export traceability matrix error:', error)
     res.status(500).json({
       success: false,
       error: error.message || 'Internal server error',
