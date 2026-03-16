@@ -243,7 +243,7 @@ export default function RequirementsPage() {
     } catch (e) { /* ignore */ }
   }, [])
 
-  const [isPBSPanelOpen, setIsPBSPanelOpen] = useState<boolean>(true)
+  const [isPBSPanelOpen, setIsPBSPanelOpen] = useState<boolean>(false)
   const [pbsPanelWidth, setPbsPanelWidth] = useState<number>(280)
   const pbsResizing = useRef(false)
   const pbsStartX = useRef(0)
