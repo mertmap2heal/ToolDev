@@ -272,6 +272,17 @@ export default function Sidebar() {
     })
   }
 
+  // Expand sidebar AND ensure the given section is open
+  const expandToSection = (key: SectionId) => {
+    saveCollapsed(false)
+    setCollapsedState(false)
+    setSections(prev => {
+      const next = { ...prev, [key]: true }
+      saveSectionState(next)
+      return next
+    })
+  }
+
   const toggleSection = (key: SectionId) => {
     setSections(prev => {
       const next = { ...prev, [key]: !prev[key] }
@@ -407,19 +418,19 @@ export default function Sidebar() {
               icon={GitBranch}
               label={CATEGORIES.find(c => c.id === 'development')?.label ?? 'Development'}
               active={activeCategory === 'development'}
-              onClick={toggle}
+              onClick={() => expandToSection('development')}
             />
             <CategoryIcon
               icon={Boxes}
               label={CATEGORIES.find(c => c.id === 'system')?.label ?? 'System Definition'}
               active={activeCategory === 'system'}
-              onClick={toggle}
+              onClick={() => expandToSection('system')}
             />
             <CategoryIcon
               icon={Shield}
               label={CATEGORIES.find(c => c.id === 'assurance')?.label ?? 'Assurance'}
               active={activeCategory === 'assurance'}
-              onClick={toggle}
+              onClick={() => expandToSection('assurance')}
             />
           </div>
         ) : (
