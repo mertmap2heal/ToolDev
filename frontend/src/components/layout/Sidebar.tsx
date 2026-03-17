@@ -9,6 +9,9 @@ import {
   Home,
   ChevronDown,
   ChevronRight,
+  GitBranch,
+  Boxes,
+  Shield,
   type LucideIcon,
 } from 'lucide-react'
 import { MODULES, CATEGORIES } from '../../config/ModuleConfiguration'
@@ -160,6 +163,50 @@ function SectionLabel({ label, sectionKey, collapsed, open, onToggle }: SectionL
 }
 
 // ---------------------------------------------------------------------------
+// CategoryIcon — used in collapsed project sidebar only
+// ---------------------------------------------------------------------------
+
+interface CategoryIconProps {
+  icon: LucideIcon
+  label: string
+  active: boolean
+  onClick: () => void
+}
+
+function CategoryIcon({ icon: Icon, label, active, onClick }: CategoryIconProps) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        padding: '7px 0',
+        borderRadius: 5,
+        border: 'none',
+        cursor: 'pointer',
+        color: active ? 'var(--theme-accent)' : hovered ? 'var(--theme-text)' : 'var(--theme-text-muted)',
+        backgroundColor: active
+          ? 'var(--theme-sidebar-item-active)'
+          : hovered
+          ? 'var(--theme-sidebar-item-hover)'
+          : 'transparent',
+        borderLeft: active ? '2px solid var(--theme-accent)' : '2px solid transparent',
+        transition: 'background-color 0.1s, color 0.1s',
+        flexShrink: 0,
+      }}
+    >
+      <Icon size={16} style={{ opacity: active ? 1 : 0.7 }} />
+    </button>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // CollapseButton
 // ---------------------------------------------------------------------------
 
@@ -235,6 +282,11 @@ export default function Sidebar() {
 
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + '/')
+
+  // Which category is currently active (for collapsed state highlighting)
+  const activeCategory = MODULES.find(m =>
+    location.pathname.includes(`/${m.route}`)
+  )?.category ?? null
 
   const systemModules  = MODULES.filter(m => m.category === 'system')
   const devModules     = MODULES.filter(m => m.category === 'development')
@@ -341,73 +393,103 @@ export default function Sidebar() {
           )}
         </div>
 
-        {/* Scrollable nav */}
-        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '4px 6px' }}>
-          <NavItem
-            icon={Home}
-            label="Overview"
-            to={`/projects/${projectId}`}
-            collapsed={collapsed}
-            active={location.pathname === `/projects/${projectId}`}
-          />
-
-          {/* Development */}
-          <SectionLabel
-            label={CATEGORIES.find(c => c.id === 'development')?.label ?? 'Development'}
-            sectionKey="development"
-            collapsed={collapsed}
-            open={sections.development}
-            onToggle={toggleSection}
-          />
-          {(collapsed || sections.development) && devModules.map(m => (
+        {/* Nav — collapsed shows 3 category icons only; expanded shows full accordion */}
+        {collapsed ? (
+          <div style={{ flex: 1, padding: '4px 6px', display: 'flex', flexDirection: 'column' }}>
             <NavItem
-              key={m.id}
-              icon={m.icon}
-              label={m.label}
-              to={`/projects/${projectId}/${m.route}`}
-              collapsed={collapsed}
-              active={isActive(`/projects/${projectId}/${m.route}`)}
+              icon={Home}
+              label="Overview"
+              to={`/projects/${projectId}`}
+              collapsed={true}
+              active={location.pathname === `/projects/${projectId}`}
             />
-          ))}
-
-          {/* System Definition */}
-          <SectionLabel
-            label={CATEGORIES.find(c => c.id === 'system')?.label ?? 'System Definition'}
-            sectionKey="system"
-            collapsed={collapsed}
-            open={sections.system}
-            onToggle={toggleSection}
-          />
-          {(collapsed || sections.system) && systemModules.map(m => (
+            <CategoryIcon
+              icon={GitBranch}
+              label={CATEGORIES.find(c => c.id === 'development')?.label ?? 'Development'}
+              active={activeCategory === 'development'}
+              onClick={toggle}
+            />
+            <CategoryIcon
+              icon={Boxes}
+              label={CATEGORIES.find(c => c.id === 'system')?.label ?? 'System Definition'}
+              active={activeCategory === 'system'}
+              onClick={toggle}
+            />
+            <CategoryIcon
+              icon={Shield}
+              label={CATEGORIES.find(c => c.id === 'assurance')?.label ?? 'Assurance'}
+              active={activeCategory === 'assurance'}
+              onClick={toggle}
+            />
+          </div>
+        ) : (
+          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '4px 6px' }}>
             <NavItem
-              key={m.id}
-              icon={m.icon}
-              label={m.label}
-              to={`/projects/${projectId}/${m.route}`}
-              collapsed={collapsed}
-              active={isActive(`/projects/${projectId}/${m.route}`)}
+              icon={Home}
+              label="Overview"
+              to={`/projects/${projectId}`}
+              collapsed={false}
+              active={location.pathname === `/projects/${projectId}`}
             />
-          ))}
 
-          {/* Assurance */}
-          <SectionLabel
-            label={CATEGORIES.find(c => c.id === 'assurance')?.label ?? 'Assurance'}
-            sectionKey="assurance"
-            collapsed={collapsed}
-            open={sections.assurance}
-            onToggle={toggleSection}
-          />
-          {(collapsed || sections.assurance) && assuranceModules.map(m => (
-            <NavItem
-              key={m.id}
-              icon={m.icon}
-              label={m.label}
-              to={`/projects/${projectId}/${m.route}`}
-              collapsed={collapsed}
-              active={isActive(`/projects/${projectId}/${m.route}`)}
+            {/* Development */}
+            <SectionLabel
+              label={CATEGORIES.find(c => c.id === 'development')?.label ?? 'Development'}
+              sectionKey="development"
+              collapsed={false}
+              open={sections.development}
+              onToggle={toggleSection}
             />
-          ))}
-        </div>
+            {sections.development && devModules.map(m => (
+              <NavItem
+                key={m.id}
+                icon={m.icon}
+                label={m.label}
+                to={`/projects/${projectId}/${m.route}`}
+                collapsed={false}
+                active={isActive(`/projects/${projectId}/${m.route}`)}
+              />
+            ))}
+
+            {/* System Definition */}
+            <SectionLabel
+              label={CATEGORIES.find(c => c.id === 'system')?.label ?? 'System Definition'}
+              sectionKey="system"
+              collapsed={false}
+              open={sections.system}
+              onToggle={toggleSection}
+            />
+            {sections.system && systemModules.map(m => (
+              <NavItem
+                key={m.id}
+                icon={m.icon}
+                label={m.label}
+                to={`/projects/${projectId}/${m.route}`}
+                collapsed={false}
+                active={isActive(`/projects/${projectId}/${m.route}`)}
+              />
+            ))}
+
+            {/* Assurance */}
+            <SectionLabel
+              label={CATEGORIES.find(c => c.id === 'assurance')?.label ?? 'Assurance'}
+              sectionKey="assurance"
+              collapsed={false}
+              open={sections.assurance}
+              onToggle={toggleSection}
+            />
+            {sections.assurance && assuranceModules.map(m => (
+              <NavItem
+                key={m.id}
+                icon={m.icon}
+                label={m.label}
+                to={`/projects/${projectId}/${m.route}`}
+                collapsed={false}
+                active={isActive(`/projects/${projectId}/${m.route}`)}
+              />
+            ))}
+          </div>
+        )}
 
         {bottomArea}
       </aside>
