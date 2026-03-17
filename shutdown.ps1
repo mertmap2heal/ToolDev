@@ -1,6 +1,6 @@
 # Shutdown script for Engineering Tool Development
 # Stops the frontend (port 3000), backend (port 5000), and PostgreSQL container.
-# Data is preserved — use docker-compose down -v only if you want to wipe the DB.
+# Data is preserved - use docker-compose down -v only if you want to wipe the DB.
 
 param(
     [switch]$KeepDb   # Pass -KeepDb to leave the PostgreSQL container running
@@ -62,7 +62,7 @@ if ($KeepDb) {
     Write-Host "[3/3] Stopping PostgreSQL container..."
 
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-        Write-Host "  docker not found in PATH — skipping."
+        Write-Host "  docker not found in PATH - skipping."
     } else {
         docker ps --filter "name=engineering-tool-db" --filter "status=running" --format "{{.Names}}" | Out-Null
         $running = docker ps --filter "name=engineering-tool-db" --filter "status=running" --format "{{.Names}}"
