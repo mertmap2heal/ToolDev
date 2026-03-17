@@ -7,36 +7,45 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Home,
+  ChevronDown,
+  ChevronRight,
   type LucideIcon,
 } from 'lucide-react'
 import { MODULES, CATEGORIES } from '../../config/ModuleConfiguration'
 import { useAuthStore } from '../../store/authStore'
+import { useProjectStore } from '../../store/projectStore'
 import Logo from '../Logo'
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const STORAGE_KEY = 'sidebar-collapsed'
+const COLLAPSED_KEY = 'sidebar-collapsed'
+const SECTIONS_KEY = 'sidebar-sections'
+
+type SectionId = 'development' | 'system' | 'assurance'
+type SectionState = Record<SectionId, boolean>
 
 function getCollapsed(): boolean {
-  try {
-    return localStorage.getItem(STORAGE_KEY) === 'true'
-  } catch {
-    return false
-  }
+  try { return localStorage.getItem(COLLAPSED_KEY) === 'true' } catch { return false }
+}
+function saveCollapsed(v: boolean) {
+  try { localStorage.setItem(COLLAPSED_KEY, String(v)) } catch { /* ignore */ }
 }
 
-function setCollapsed(value: boolean) {
+function getSectionState(): SectionState {
   try {
-    localStorage.setItem(STORAGE_KEY, String(value))
-  } catch {
-    // ignore
-  }
+    const raw = localStorage.getItem(SECTIONS_KEY)
+    if (raw) return { development: true, system: true, assurance: true, ...JSON.parse(raw) }
+  } catch { /* ignore */ }
+  return { development: true, system: true, assurance: true }
+}
+function saveSectionState(s: SectionState) {
+  try { localStorage.setItem(SECTIONS_KEY, JSON.stringify(s)) } catch { /* ignore */ }
 }
 
 // ---------------------------------------------------------------------------
-// Sub-components
+// NavItem
 // ---------------------------------------------------------------------------
 
 interface NavItemProps {
@@ -48,6 +57,7 @@ interface NavItemProps {
 }
 
 function NavItem({ icon: Icon, label, to, collapsed, active }: NavItemProps) {
+  const [hovered, setHovered] = useState(false)
   return (
     <Link
       to={to}
@@ -55,66 +65,128 @@ function NavItem({ icon: Icon, label, to, collapsed, active }: NavItemProps) {
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: collapsed ? 0 : 8,
-        padding: collapsed ? '6px 0' : '5px 10px',
+        gap: 8,
+        padding: collapsed ? '7px 0' : '6px 10px',
         justifyContent: collapsed ? 'center' : 'flex-start',
-        borderRadius: 6,
+        borderRadius: 5,
         fontSize: 12,
         fontWeight: active ? 500 : 400,
         cursor: 'pointer',
         textDecoration: 'none',
-        position: 'relative',
-        color: active ? 'var(--theme-text)' : 'var(--theme-text-muted)',
+        color: active
+          ? 'var(--theme-text)'
+          : hovered
+          ? 'var(--theme-text)'
+          : 'var(--theme-text-muted)',
         backgroundColor: active
           ? 'var(--theme-sidebar-item-active)'
+          : hovered
+          ? 'var(--theme-sidebar-item-hover)'
           : 'transparent',
         borderLeft: active ? '2px solid var(--theme-accent)' : '2px solid transparent',
-        transition: 'background-color 0.12s, color 0.12s',
+        transition: 'background-color 0.1s, color 0.1s',
+        flexShrink: 0,
       }}
-      onMouseEnter={(e) => {
-        if (!active) {
-          (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--theme-sidebar-item-hover)'
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!active) {
-          (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'
-        }
-      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
-      <Icon size={14} style={{ flexShrink: 0 }} />
-      {!collapsed && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>}
+      <Icon size={14} style={{ flexShrink: 0, opacity: active ? 1 : 0.75 }} />
+      {!collapsed && (
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: '1.3' }}>
+          {label}
+        </span>
+      )}
     </Link>
   )
 }
 
+// ---------------------------------------------------------------------------
+// SectionLabel (accordion header)
+// ---------------------------------------------------------------------------
+
 interface SectionLabelProps {
   label: string
+  sectionKey: SectionId
   collapsed: boolean
+  open: boolean
+  onToggle: (key: SectionId) => void
 }
 
-function SectionLabel({ label, collapsed }: SectionLabelProps) {
+function SectionLabel({ label, sectionKey, collapsed, open, onToggle }: SectionLabelProps) {
   if (collapsed) {
     return (
       <div style={{
         height: 1,
-        margin: '6px 8px',
+        margin: '8px 10px',
         backgroundColor: 'var(--theme-border)',
+        opacity: 0.6,
       }} />
     )
   }
+  const [hovered, setHovered] = useState(false)
   return (
-    <div style={{
-      padding: '10px 10px 3px',
-      fontSize: 10,
-      fontWeight: 600,
-      letterSpacing: '0.06em',
-      textTransform: 'uppercase',
-      color: 'var(--theme-text-muted)',
-      opacity: 0.7,
-    }}>
-      {label}
-    </div>
+    <button
+      onClick={() => onToggle(sectionKey)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        width: '100%',
+        padding: '8px 10px 4px',
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        color: hovered ? 'var(--theme-text)' : 'var(--theme-text-muted)',
+        textAlign: 'left',
+        transition: 'color 0.1s',
+      }}
+    >
+      <span style={{
+        fontSize: 10,
+        fontWeight: 600,
+        letterSpacing: '0.07em',
+        textTransform: 'uppercase',
+      }}>
+        {label}
+      </span>
+      {open
+        ? <ChevronDown size={10} style={{ opacity: 0.6, flexShrink: 0 }} />
+        : <ChevronRight size={10} style={{ opacity: 0.6, flexShrink: 0 }} />
+      }
+    </button>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// CollapseButton
+// ---------------------------------------------------------------------------
+
+function CollapseBtn({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <button
+      onClick={onToggle}
+      title={collapsed ? 'Expand sidebar (Ctrl+B)' : 'Collapse sidebar (Ctrl+B)'}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '4px 6px',
+        background: hovered ? 'var(--theme-sidebar-item-hover)' : 'none',
+        border: 'none',
+        borderRadius: 5,
+        cursor: 'pointer',
+        color: hovered ? 'var(--theme-text)' : 'var(--theme-text-muted)',
+        flexShrink: 0,
+        transition: 'background 0.1s, color 0.1s',
+      }}
+    >
+      {collapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+    </button>
   )
 }
 
@@ -124,20 +196,21 @@ function SectionLabel({ label, collapsed }: SectionLabelProps) {
 
 export default function Sidebar() {
   const [collapsed, setCollapsedState] = useState(getCollapsed)
+  const [sections, setSections] = useState<SectionState>(getSectionState)
   const location = useLocation()
   const { projectId } = useParams<{ projectId: string }>()
   const { user } = useAuthStore()
+  const { projects } = useProjectStore()
 
-  // Ctrl+B to toggle collapse (VS Code convention)
+  const project = projects.find(p => p.id === projectId)
+  const projectName = project?.name ?? (projectId ? 'Project' : null)
+
+  // Ctrl+B keyboard shortcut
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
         e.preventDefault()
-        setCollapsedState((prev) => {
-          const next = !prev
-          setCollapsed(next)
-          return next
-        })
+        toggle()
       }
     }
     window.addEventListener('keydown', handler)
@@ -145,9 +218,17 @@ export default function Sidebar() {
   }, [])
 
   const toggle = () => {
-    setCollapsedState((prev) => {
+    setCollapsedState(prev => {
       const next = !prev
-      setCollapsed(next)
+      saveCollapsed(next)
+      return next
+    })
+  }
+
+  const toggleSection = (key: SectionId) => {
+    setSections(prev => {
+      const next = { ...prev, [key]: !prev[key] }
+      saveSectionState(next)
       return next
     })
   }
@@ -155,10 +236,9 @@ export default function Sidebar() {
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + '/')
 
-  // ---- Project context navigation ----
-  const systemModules = MODULES.filter((m) => m.category === 'system')
-  const assuranceModules = MODULES.filter((m) => m.category === 'assurance')
-  const devModules = MODULES.filter((m) => m.category === 'development')
+  const systemModules  = MODULES.filter(m => m.category === 'system')
+  const devModules     = MODULES.filter(m => m.category === 'development')
+  const assuranceModules = MODULES.filter(m => m.category === 'assurance')
 
   const sidebarStyle: React.CSSProperties = {
     display: 'flex',
@@ -173,62 +253,113 @@ export default function Sidebar() {
     overflow: 'hidden',
   }
 
-  const collapseBtn = (
-    <button
-      onClick={toggle}
-      title={collapsed ? 'Expand sidebar (Ctrl+B)' : 'Collapse sidebar (Ctrl+B)'}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '100%',
-        padding: '8px 0',
-        background: 'none',
-        border: 'none',
-        cursor: 'pointer',
-        color: 'var(--theme-text-muted)',
-      }}
-    >
-      {collapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
-    </button>
+  // ---- Shared bottom area ----
+  const bottomArea = (
+    <div style={{
+      flexShrink: 0,
+      borderTop: '1px solid var(--theme-border)',
+      padding: '4px 6px',
+    }}>
+      <NavItem icon={Settings} label="Settings" to="/settings" collapsed={collapsed} active={isActive('/settings')} />
+      {!collapsed && user && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '5px 10px 6px',
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            width: 22,
+            height: 22,
+            borderRadius: '50%',
+            backgroundColor: 'var(--theme-accent)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#fff',
+            fontSize: 10,
+            fontWeight: 700,
+            flexShrink: 0,
+          }}>
+            {(user.name ?? user.email ?? '?')[0].toUpperCase()}
+          </div>
+          <span style={{
+            fontSize: 11,
+            color: 'var(--theme-text-muted)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>
+            {user.name ?? user.email}
+          </span>
+        </div>
+      )}
+    </div>
   )
 
   // ---- Project sidebar ----
   if (projectId) {
     return (
       <aside style={sidebarStyle}>
-        {/* Header area */}
+        {/* Header */}
         <div style={{
           height: 44,
           display: 'flex',
           alignItems: 'center',
-          padding: collapsed ? '0' : '0 12px',
-          justifyContent: collapsed ? 'center' : 'flex-start',
+          padding: collapsed ? '0 8px' : '0 6px 0 12px',
+          justifyContent: collapsed ? 'center' : 'space-between',
           borderBottom: '1px solid var(--theme-border)',
           flexShrink: 0,
+          gap: 6,
         }}>
           {collapsed ? (
-            <Home size={16} style={{ color: 'var(--theme-text-muted)' }} />
+            <CollapseBtn collapsed={collapsed} onToggle={toggle} />
           ) : (
-            <span style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: 'var(--theme-text)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}>
-              Project
-            </span>
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0, flex: 1 }}>
+                <span style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--theme-accent)',
+                  flexShrink: 0,
+                }} />
+                <span style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--theme-text)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {projectName}
+                </span>
+              </div>
+              <CollapseBtn collapsed={collapsed} onToggle={toggle} />
+            </>
           )}
         </div>
 
         {/* Scrollable nav */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '4px 6px' }}>
-          <NavItem icon={Home} label="Overview" to={`/projects/${projectId}`} collapsed={collapsed} active={location.pathname === `/projects/${projectId}`} />
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '4px 6px' }}>
+          <NavItem
+            icon={Home}
+            label="Overview"
+            to={`/projects/${projectId}`}
+            collapsed={collapsed}
+            active={location.pathname === `/projects/${projectId}`}
+          />
 
-          <SectionLabel label="Development" collapsed={collapsed} />
-          {devModules.map((m) => (
+          {/* Development */}
+          <SectionLabel
+            label={CATEGORIES.find(c => c.id === 'development')?.label ?? 'Development'}
+            sectionKey="development"
+            collapsed={collapsed}
+            open={sections.development}
+            onToggle={toggleSection}
+          />
+          {(collapsed || sections.development) && devModules.map(m => (
             <NavItem
               key={m.id}
               icon={m.icon}
@@ -239,8 +370,15 @@ export default function Sidebar() {
             />
           ))}
 
-          <SectionLabel label={CATEGORIES.find(c => c.id === 'system')?.label ?? 'System'} collapsed={collapsed} />
-          {systemModules.map((m) => (
+          {/* System Definition */}
+          <SectionLabel
+            label={CATEGORIES.find(c => c.id === 'system')?.label ?? 'System Definition'}
+            sectionKey="system"
+            collapsed={collapsed}
+            open={sections.system}
+            onToggle={toggleSection}
+          />
+          {(collapsed || sections.system) && systemModules.map(m => (
             <NavItem
               key={m.id}
               icon={m.icon}
@@ -251,8 +389,15 @@ export default function Sidebar() {
             />
           ))}
 
-          <SectionLabel label={CATEGORIES.find(c => c.id === 'assurance')?.label ?? 'Assurance'} collapsed={collapsed} />
-          {assuranceModules.map((m) => (
+          {/* Assurance */}
+          <SectionLabel
+            label={CATEGORIES.find(c => c.id === 'assurance')?.label ?? 'Assurance'}
+            sectionKey="assurance"
+            collapsed={collapsed}
+            open={sections.assurance}
+            onToggle={toggleSection}
+          />
+          {(collapsed || sections.assurance) && assuranceModules.map(m => (
             <NavItem
               key={m.id}
               icon={m.icon}
@@ -264,15 +409,7 @@ export default function Sidebar() {
           ))}
         </div>
 
-        {/* Bottom pinned */}
-        <div style={{
-          flexShrink: 0,
-          borderTop: '1px solid var(--theme-border)',
-          padding: '4px 6px',
-        }}>
-          <NavItem icon={Settings} label="Settings" to="/settings" collapsed={collapsed} active={isActive('/settings')} />
-          {collapseBtn}
-        </div>
+        {bottomArea}
       </aside>
     )
   }
@@ -280,72 +417,36 @@ export default function Sidebar() {
   // ---- Global sidebar ----
   return (
     <aside style={sidebarStyle}>
-      {/* Logo */}
+      {/* Header */}
       <div style={{
         height: 44,
         display: 'flex',
         alignItems: 'center',
-        padding: collapsed ? '0' : '0 12px',
-        justifyContent: collapsed ? 'center' : 'flex-start',
+        padding: collapsed ? '0 8px' : '0 6px 0 12px',
+        justifyContent: collapsed ? 'center' : 'space-between',
         borderBottom: '1px solid var(--theme-border)',
         flexShrink: 0,
+        gap: 6,
       }}>
         {collapsed ? (
-          <Link to="/" style={{ display: 'flex', alignItems: 'center' }}>
-            <Logo size="sm" showText={false} />
-          </Link>
+          <CollapseBtn collapsed={collapsed} onToggle={toggle} />
         ) : (
-          <Link to="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-            <Logo size="sm" showText={true} />
-          </Link>
+          <>
+            <Link to="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', minWidth: 0 }}>
+              <Logo size="sm" showText={true} />
+            </Link>
+            <CollapseBtn collapsed={collapsed} onToggle={toggle} />
+          </>
         )}
       </div>
 
       {/* Nav */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 6px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '4px 6px' }}>
         <NavItem icon={LayoutDashboard} label="Dashboard" to="/" collapsed={collapsed} active={location.pathname === '/'} />
         <NavItem icon={Package} label="Inventory" to="/inventory/items" collapsed={collapsed} active={isActive('/inventory')} />
       </div>
 
-      {/* Bottom */}
-      <div style={{
-        flexShrink: 0,
-        borderTop: '1px solid var(--theme-border)',
-        padding: '4px 6px',
-      }}>
-        <NavItem icon={Settings} label="Settings" to="/settings" collapsed={collapsed} active={isActive('/settings')} />
-        {!collapsed && user && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '6px 10px',
-            fontSize: 11,
-            color: 'var(--theme-text-muted)',
-            overflow: 'hidden',
-          }}>
-            <div style={{
-              width: 20,
-              height: 20,
-              borderRadius: '50%',
-              backgroundColor: 'var(--theme-accent)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#fff',
-              fontSize: 10,
-              fontWeight: 600,
-              flexShrink: 0,
-            }}>
-              {(user.name ?? user.email ?? '?')[0].toUpperCase()}
-            </div>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {user.name ?? user.email}
-            </span>
-          </div>
-        )}
-        {collapseBtn}
-      </div>
+      {bottomArea}
     </aside>
   )
 }
