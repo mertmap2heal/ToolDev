@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -244,6 +244,12 @@ function CollapseBtn({ collapsed, onToggle }: { collapsed: boolean; onToggle: ()
 export default function Sidebar() {
   const [collapsed, setCollapsedState] = useState(getCollapsed)
   const [sections, setSections] = useState<SectionState>(getSectionState)
+  const [highlighted, setHighlighted] = useState<SectionId | null>(null)
+  const sectionRefs = useRef<Record<SectionId, HTMLDivElement | null>>({
+    development: null,
+    system: null,
+    assurance: null,
+  })
   const location = useLocation()
   const { projectId } = useParams<{ projectId: string }>()
   const { user } = useAuthStore()
@@ -272,7 +278,7 @@ export default function Sidebar() {
     })
   }
 
-  // Expand sidebar AND ensure the given section is open
+  // Expand sidebar, open the section, scroll to it, and briefly highlight it
   const expandToSection = (key: SectionId) => {
     saveCollapsed(false)
     setCollapsedState(false)
@@ -281,6 +287,13 @@ export default function Sidebar() {
       saveSectionState(next)
       return next
     })
+    setHighlighted(key)
+    // Wait for sidebar transition (200ms) then scroll
+    setTimeout(() => {
+      sectionRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 220)
+    // Clear highlight after 1.4s
+    setTimeout(() => setHighlighted(null), 1400)
   }
 
   const toggleSection = (key: SectionId) => {
@@ -444,61 +457,88 @@ export default function Sidebar() {
             />
 
             {/* Development */}
-            <SectionLabel
-              label={CATEGORIES.find(c => c.id === 'development')?.label ?? 'Development'}
-              sectionKey="development"
-              collapsed={false}
-              open={sections.development}
-              onToggle={toggleSection}
-            />
-            {sections.development && devModules.map(m => (
-              <NavItem
-                key={m.id}
-                icon={m.icon}
-                label={m.label}
-                to={`/projects/${projectId}/${m.route}`}
+            <div
+              ref={el => { sectionRefs.current.development = el }}
+              style={{
+                borderRadius: 6,
+                backgroundColor: highlighted === 'development' ? 'var(--theme-accent-subtle)' : 'transparent',
+                transition: 'background-color 0.6s ease',
+              }}
+            >
+              <SectionLabel
+                label={CATEGORIES.find(c => c.id === 'development')?.label ?? 'Development'}
+                sectionKey="development"
                 collapsed={false}
-                active={isActive(`/projects/${projectId}/${m.route}`)}
+                open={sections.development}
+                onToggle={toggleSection}
               />
-            ))}
+              {sections.development && devModules.map(m => (
+                <NavItem
+                  key={m.id}
+                  icon={m.icon}
+                  label={m.label}
+                  to={`/projects/${projectId}/${m.route}`}
+                  collapsed={false}
+                  active={isActive(`/projects/${projectId}/${m.route}`)}
+                />
+              ))}
+            </div>
 
             {/* System Definition */}
-            <SectionLabel
-              label={CATEGORIES.find(c => c.id === 'system')?.label ?? 'System Definition'}
-              sectionKey="system"
-              collapsed={false}
-              open={sections.system}
-              onToggle={toggleSection}
-            />
-            {sections.system && systemModules.map(m => (
-              <NavItem
-                key={m.id}
-                icon={m.icon}
-                label={m.label}
-                to={`/projects/${projectId}/${m.route}`}
+            <div
+              ref={el => { sectionRefs.current.system = el }}
+              style={{
+                borderRadius: 6,
+                backgroundColor: highlighted === 'system' ? 'var(--theme-accent-subtle)' : 'transparent',
+                transition: 'background-color 0.6s ease',
+              }}
+            >
+              <SectionLabel
+                label={CATEGORIES.find(c => c.id === 'system')?.label ?? 'System Definition'}
+                sectionKey="system"
                 collapsed={false}
-                active={isActive(`/projects/${projectId}/${m.route}`)}
+                open={sections.system}
+                onToggle={toggleSection}
               />
-            ))}
+              {sections.system && systemModules.map(m => (
+                <NavItem
+                  key={m.id}
+                  icon={m.icon}
+                  label={m.label}
+                  to={`/projects/${projectId}/${m.route}`}
+                  collapsed={false}
+                  active={isActive(`/projects/${projectId}/${m.route}`)}
+                />
+              ))}
+            </div>
 
             {/* Assurance */}
-            <SectionLabel
-              label={CATEGORIES.find(c => c.id === 'assurance')?.label ?? 'Assurance'}
-              sectionKey="assurance"
-              collapsed={false}
-              open={sections.assurance}
-              onToggle={toggleSection}
-            />
-            {sections.assurance && assuranceModules.map(m => (
-              <NavItem
-                key={m.id}
-                icon={m.icon}
-                label={m.label}
-                to={`/projects/${projectId}/${m.route}`}
+            <div
+              ref={el => { sectionRefs.current.assurance = el }}
+              style={{
+                borderRadius: 6,
+                backgroundColor: highlighted === 'assurance' ? 'var(--theme-accent-subtle)' : 'transparent',
+                transition: 'background-color 0.6s ease',
+              }}
+            >
+              <SectionLabel
+                label={CATEGORIES.find(c => c.id === 'assurance')?.label ?? 'Assurance'}
+                sectionKey="assurance"
                 collapsed={false}
-                active={isActive(`/projects/${projectId}/${m.route}`)}
+                open={sections.assurance}
+                onToggle={toggleSection}
               />
-            ))}
+              {sections.assurance && assuranceModules.map(m => (
+                <NavItem
+                  key={m.id}
+                  icon={m.icon}
+                  label={m.label}
+                  to={`/projects/${projectId}/${m.route}`}
+                  collapsed={false}
+                  active={isActive(`/projects/${projectId}/${m.route}`)}
+                />
+              ))}
+            </div>
           </div>
         )}
 
