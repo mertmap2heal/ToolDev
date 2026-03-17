@@ -104,6 +104,25 @@ failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine
 
 ---
 
+## Merging branches can introduce undeclared npm dependencies
+
+**Symptom:** App fails to start after a branch merge with:
+```
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'socket.io'
+[vite] Pre-transform error: Cannot find module '@tailwindcss/typography'
+[vite] Pre-transform error: Failed to resolve import "reactflow"
+```
+
+**Root cause:** The merged branch added `import` statements for packages that were used in code but never added to `package.json`. Because `node_modules/` already existed from before the merge, `npm install` was not re-run and the missing packages were never installed.
+
+**Rule:** After any branch merge, run `.\start.ps1 --install` to force reinstall all dependencies. The `setup.ps1` script also now validates that all declared packages in `package.json` are physically present in `node_modules` after install, and warns if any are missing.
+
+**Packages that were missing after the lifecycle-management merge:**
+- Backend: `socket.io` (used in `src/realtime/realtime.ts` but not declared)
+- Frontend: `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`, `@tiptap/*` (13 packages), `reactflow`, `@tailwindcss/typography`, `docx`, `html-to-image`, `jspdf`, `jspdf-autotable`, `papaparse`, `react-drawio`, `xlsx`
+
+---
+
 ## Git: never commit directly to `main` or `master`
 
 **Symptom:** History on protected branches becomes hard to revert; no PR review gate; CI may not run.
