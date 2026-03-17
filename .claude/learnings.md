@@ -119,7 +119,21 @@ Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'socket.io'
 
 **Packages that were missing after the lifecycle-management merge:**
 - Backend: `socket.io` (used in `src/realtime/realtime.ts` but not declared)
-- Frontend: `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`, `@tiptap/*` (13 packages), `reactflow`, `@tailwindcss/typography`, `docx`, `html-to-image`, `jspdf`, `jspdf-autotable`, `papaparse`, `react-drawio`, `xlsx`
+- Frontend: `socket.io-client` (used in `src/pages/PlatformAdmin/DataFlowAdminPanel.tsx`), `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`, `@tiptap/*` (13 packages), `reactflow`, `@tailwindcss/typography`, `docx`, `html-to-image`, `jspdf`, `jspdf-autotable`, `papaparse`, `react-drawio`, `xlsx`
+
+**How to detect undeclared imports before they become runtime errors:**
+```bash
+# Run from frontend/ or backend/ - prints any package imported in source but absent from node_modules
+node -e "
+const fs=require('fs'),path=require('path');
+const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
+const declared=new Set(Object.keys({...pkg.dependencies,...pkg.devDependencies}));
+function walk(d){return fs.readdirSync(d).flatMap(f=>{const p=path.join(d,f);return fs.statSync(p).isDirectory()?walk(p):/\.(ts|tsx)$/.test(f)?[p]:[]});}
+const re=/from ['\""]([^'\"./][^'\"]*)['\""]/g;const used=new Set();
+for(const f of walk('src')){let m;const s=fs.readFileSync(f,'utf8');while((m=re.exec(s)))used.add(m[1].startsWith('@')?m[1].split('/').slice(0,2).join('/'):m[1].split('/')[0]);}
+console.log([...used].filter(p=>!declared.has(p)&&!fs.existsSync('node_modules/'+p)).sort().join('\n')||'all clear');
+"
+```
 
 ---
 
