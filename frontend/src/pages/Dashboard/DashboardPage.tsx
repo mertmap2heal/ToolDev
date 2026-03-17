@@ -1,8 +1,7 @@
 import { useState } from 'react'
-import { Search, Filter, MoreVertical, Play, Trash2, Settings2, ChevronDown, ChevronUp, Users, BarChart3, FileDown, ListChecks, LogOut } from 'lucide-react'
-import { format } from 'date-fns'
+import { useNavigate } from 'react-router-dom'
+import { Search, Filter, Trash2, Users, BarChart3, LogOut, FileDown, ListChecks } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import ProjectGrid from '../../components/projects/ProjectGrid'
 import CreateProjectButton from '../../components/projects/CreateProjectButton'
 import DeleteConfirmationModal from '../../components/projects/DeleteConfirmationModal'
 import ProjectTeamModal from '../../components/projects/ProjectTeamModal'
@@ -10,18 +9,177 @@ import { projectService } from '../../services/project.service'
 import { useProjectStore } from '../../store/projectStore'
 import type { Project } from 'shared/types/project.types'
 
-// --- New: Analytics & Audit Log Modal ---
-import { useMemo } from 'react'
+function StatCard({ label, value, subtitle }: { label: string; value: string | number; subtitle: string }) {
+  return (
+    <div
+      style={{
+        padding: '16px 20px',
+        borderRadius: 8,
+        border: '1px solid var(--theme-border)',
+        backgroundColor: 'var(--theme-surface)',
+      }}
+    >
+      <div style={{ fontSize: 11, color: 'var(--theme-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 28, fontWeight: 600, color: 'var(--theme-text)', lineHeight: 1 }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--theme-text-muted)', marginTop: 4 }}>
+        {subtitle}
+      </div>
+    </div>
+  )
+}
+
+interface DashboardProjectCardProps {
+  project: Project
+  selected: boolean
+  isDeleting: boolean
+  onSelect: (id: string, checked: boolean) => void
+  onDelete: (e: React.MouseEvent, id: string, name: string) => void
+  onTeam: (project: Project) => void
+  onAnalytics: (project: Project) => void
+  onAudit: (project: Project) => void
+}
+
+function DashboardProjectCard({
+  project,
+  selected,
+  isDeleting,
+  onSelect,
+  onDelete,
+  onTeam,
+  onAnalytics,
+  onAudit,
+}: DashboardProjectCardProps) {
+  const navigate = useNavigate()
+
+  const statusColors: Record<string, string> = {
+    active: '#22c55e',
+    completed: '#3b82f6',
+    archived: '#9ca3af',
+    planning: '#f59e0b',
+  }
+  const statusDot = statusColors[project.status] ?? '#9ca3af'
+
+  return (
+    <div
+      onClick={() => navigate(`/projects/${project.slug ?? project.id}`)}
+      style={{
+        borderRadius: 8,
+        border: `1px solid ${selected ? 'var(--theme-accent)' : 'var(--theme-border)'}`,
+        backgroundColor: 'var(--theme-surface)',
+        padding: '14px 16px',
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        transition: 'border-color 0.12s, box-shadow 0.12s',
+        position: 'relative',
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)'
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.boxShadow = 'none'
+      }}
+    >
+      {/* Card header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={(e) => onSelect(project.id, e.target.checked)}
+          onClick={(e) => e.stopPropagation()}
+          style={{ marginTop: 2, flexShrink: 0 }}
+        />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: statusDot, flexShrink: 0 }} />
+            <span style={{ fontWeight: 500, fontSize: 13, color: 'var(--theme-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {project.name}
+            </span>
+          </div>
+          {project.domain && (
+            <span style={{ fontSize: 11, color: 'var(--theme-text-muted)' }}>{project.domain}</span>
+          )}
+        </div>
+        <span style={{
+          fontSize: 10,
+          fontWeight: 500,
+          padding: '2px 7px',
+          borderRadius: 10,
+          backgroundColor: project.status === 'active' ? 'rgba(34,197,94,0.12)' : 'var(--theme-sidebar-item-active)',
+          color: project.status === 'active' ? '#22c55e' : 'var(--theme-text-muted)',
+          textTransform: 'capitalize',
+          flexShrink: 0,
+        }}>
+          {project.status}
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+          <span style={{ fontSize: 10, color: 'var(--theme-text-muted)' }}>Progress</span>
+          <span style={{ fontSize: 10, color: 'var(--theme-text-muted)' }}>{project.progress}%</span>
+        </div>
+        <div style={{ height: 3, backgroundColor: 'var(--theme-border)', borderRadius: 2 }}>
+          <div style={{ height: 3, width: `${project.progress}%`, backgroundColor: 'var(--theme-accent)', borderRadius: 2 }} />
+        </div>
+      </div>
+
+      {/* Footer: date + actions */}
+      <div
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span style={{ fontSize: 10, color: 'var(--theme-text-muted)' }}>
+          {new Date(project.updatedAt).toLocaleDateString()}
+        </span>
+        <div style={{ display: 'flex', gap: 2 }}>
+          {[
+            { icon: Users, title: 'Team', action: () => onTeam(project) },
+            { icon: BarChart3, title: 'Analytics', action: () => onAnalytics(project) },
+            { icon: LogOut, title: 'Audit', action: () => onAudit(project) },
+            { icon: Trash2, title: 'Delete', action: (e: React.MouseEvent) => onDelete(e, project.id, project.name), danger: true, disabled: isDeleting },
+          ].map(({ icon: Icon, title, action, danger, disabled }) => (
+            <button
+              key={title}
+              onClick={(e) => { e.stopPropagation(); action(e as React.MouseEvent) }}
+              disabled={disabled}
+              title={title}
+              style={{
+                padding: '3px 5px',
+                borderRadius: 4,
+                border: 'none',
+                background: 'none',
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                color: danger ? '#ef4444' : 'var(--theme-text-muted)',
+                opacity: disabled ? 0.4 : 1,
+              }}
+            >
+              <Icon size={13} />
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterValue, setFilterValue] = useState('all')
-  const [sortValue, setSortValue] = useState('name')
   const [showRunningOnly, setShowRunningOnly] = useState(false)
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null)
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string; name: string } | null>(null)
   const [teamModalProject, setTeamModalProject] = useState<Project | null>(null)
-  const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([])
   const [showBulkMenu, setShowBulkMenu] = useState(false)
   const [analyticsModalProject, setAnalyticsModalProject] = useState<Project | null>(null)
@@ -36,7 +194,6 @@ export default function DashboardPage() {
       const response = await projectService.getProjects()
       if (!response.success) {
         const msg = response.error || 'Failed to load projects'
-        console.error('Error fetching projects:', msg)
         throw new Error(msg)
       }
       const list = response.data ?? []
@@ -56,7 +213,6 @@ export default function DashboardPage() {
       setDeleteConfirmation(null)
     },
     onError: (error: any) => {
-      console.error('Delete project error:', error)
       alert(error?.error || 'Failed to delete project')
       setProjectToDelete(null)
       setDeleteConfirmation(null)
@@ -67,33 +223,16 @@ export default function DashboardPage() {
     e.stopPropagation()
     setDeleteConfirmation({ id: projectId, name: projectName })
   }
-
   const handleConfirmDelete = () => {
     if (deleteConfirmation) {
       setProjectToDelete(deleteConfirmation.id)
       deleteProjectMutation.mutate(deleteConfirmation.id)
     }
   }
-
   const handleCancelDelete = () => {
     setDeleteConfirmation(null)
     setProjectToDelete(null)
   }
-
-  let displayedProjects = projectsData || projects || []
-  if (filterValue !== 'all') displayedProjects = displayedProjects.filter(p => p.status === filterValue)
-  if (dateRange) {
-    displayedProjects = displayedProjects.filter(p => {
-      const updated = new Date(p.updatedAt)
-      return updated >= new Date(dateRange.from) && updated <= new Date(dateRange.to)
-    })
-  }
-  const runningProjects = displayedProjects.filter(p => p.status === 'active')
-  const totalProjects = displayedProjects.length
-  const totalProgress = displayedProjects.length > 0
-    ? Math.round(displayedProjects.reduce((sum, p) => sum + p.progress, 0) / displayedProjects.length)
-    : 0
-  // --- Bulk Actions ---
   const handleSelectProject = (id: string, checked: boolean) => {
     setSelectedProjectIds((prev) => checked ? [...prev, id] : prev.filter(pid => pid !== id))
   }
@@ -101,7 +240,6 @@ export default function DashboardPage() {
     setSelectedProjectIds(checked ? displayedProjects.map(p => p.id) : [])
   }
   const handleBulkDelete = () => {
-    if (selectedProjectIds.length === 0) return
     selectedProjectIds.forEach(id => deleteProjectMutation.mutate(id))
     setSelectedProjectIds([])
   }
@@ -118,302 +256,220 @@ export default function DashboardPage() {
     }
   }
 
+  let displayedProjects = (projectsData || projects || [])
+    .filter(p => filterValue === 'all' || p.status === filterValue)
+    .filter(p => !dateRange || (() => {
+      const u = new Date(p.updatedAt)
+      return u >= new Date(dateRange.from) && u <= new Date(dateRange.to)
+    })())
+    .filter(p => !showRunningOnly || p.status === 'active')
+    .filter(p => !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+
+  const runningProjects = (projectsData || projects || []).filter(p => p.status === 'active')
+  const totalProjects = (projectsData || projects || []).length
+  const allProgress = (projectsData || projects || [])
+  const totalProgress = allProgress.length > 0
+    ? Math.round(allProgress.reduce((sum, p) => sum + p.progress, 0) / allProgress.length)
+    : 0
+
+  const inputStyle: React.CSSProperties = {
+    padding: '5px 10px',
+    borderRadius: 6,
+    border: '1px solid var(--theme-border)',
+    backgroundColor: 'var(--theme-bg)',
+    color: 'var(--theme-text)',
+    fontSize: 12,
+    outline: 'none',
+  }
+
   return (
-    <div className="space-y-6 overflow-x-hidden">
-      {/* Overview Stats Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Projects</h2>
-          <a href="#" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
-            Give feedback
-          </a>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-sm text-gray-600 dark:text-gray-400 text-left">Total Projects</span>
-              <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="text-2xl font-semibold text-gray-900 dark:text-white text-left">
-              {totalProjects}
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-sm text-gray-600 dark:text-gray-400 text-left">Active Projects</span>
-              <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="text-2xl font-semibold text-gray-900 dark:text-white text-left">
-              {runningProjects.length}
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-sm text-gray-600 dark:text-gray-400 text-left">Average Progress</span>
-              <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="text-2xl font-semibold text-gray-900 dark:text-white text-left">
-              {totalProgress}%
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 flex items-center justify-end">
-          <a href="#" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
-            Show charts
-          </a>
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1280 }}>
+      {/* Page header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h1 style={{ fontSize: 16, fontWeight: 600, color: 'var(--theme-text)', margin: 0 }}>Projects</h1>
+        <CreateProjectButton />
       </div>
 
-      {/* Projects Table Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-        {/* Search and Filter Bar */}
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex flex-wrap gap-4 items-center">
-          <div className="flex-1 relative min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-            <input
-              type="text"
-              placeholder="Search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <select
-            value={filterValue}
-            onChange={e => setFilterValue(e.target.value)}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+      {/* Stats row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <StatCard label="Total Projects" value={totalProjects} subtitle="across all domains" />
+        <StatCard label="Active" value={runningProjects.length} subtitle="currently running" />
+        <StatCard label="Avg Progress" value={`${totalProgress}%`} subtitle="mean completion" />
+      </div>
+
+      {/* Search + filter bar */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 160 }}>
+          <Search size={13} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--theme-text-muted)', pointerEvents: 'none' }} />
+          <input
+            type="text"
+            placeholder="Search projects..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ ...inputStyle, paddingLeft: 28, width: '100%', boxSizing: 'border-box' }}
+          />
+        </div>
+        <select
+          value={filterValue}
+          onChange={e => setFilterValue(e.target.value)}
+          style={inputStyle}
+        >
+          <option value="all">All statuses</option>
+          <option value="active">Active</option>
+          <option value="completed">Completed</option>
+          <option value="archived">Archived</option>
+        </select>
+
+        <input
+          type="date"
+          value={dateRange?.from || ''}
+          onChange={e => setDateRange(r => ({ from: e.target.value, to: r?.to ?? '' }))}
+          style={inputStyle}
+        />
+        <input
+          type="date"
+          value={dateRange?.to || ''}
+          onChange={e => setDateRange(r => ({ from: r?.from ?? '', to: e.target.value }))}
+          style={inputStyle}
+        />
+        <button
+          onClick={() => setShowRunningOnly(v => !v)}
+          title="Active only"
+          style={{
+            ...inputStyle,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            cursor: 'pointer',
+            color: showRunningOnly ? 'var(--theme-accent)' : 'var(--theme-text-muted)',
+            borderColor: showRunningOnly ? 'var(--theme-accent)' : 'var(--theme-border)',
+          }}
+        >
+          <Filter size={13} />
+        </button>
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setShowBulkMenu(v => !v)}
+            style={{
+              ...inputStyle,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              cursor: 'pointer',
+              color: showBulkMenu ? 'var(--theme-accent)' : 'var(--theme-text-muted)',
+              borderColor: showBulkMenu ? 'var(--theme-accent)' : 'var(--theme-border)',
+            }}
           >
-            <option value="all">All Statuses</option>
-            <option value="active">Active</option>
-            <option value="completed">Completed</option>
-            <option value="archived">Archived</option>
-          </select>
-          <input
-            type="date"
-            value={dateRange?.from || ''}
-            onChange={e => setDateRange(r => ({ from: e.target.value, to: r?.to ?? '' }))}
-            className="px-2 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          />
-          <input
-            type="date"
-            value={dateRange?.to || ''}
-            onChange={e => setDateRange(r => ({ from: r?.from ?? '', to: e.target.value }))}
-            className="px-2 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          />
-          <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded" onClick={() => setShowRunningOnly(v => !v)}>
-            <Filter size={16} className={showRunningOnly ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'} />
+            <ListChecks size={13} />
           </button>
-          <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded" onClick={() => setShowBulkMenu(v => !v)}>
-            <ListChecks size={16} className={showBulkMenu ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'} />
-          </button>
-          {showBulkMenu && (
-            <div className="absolute z-10 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4 flex flex-col gap-2">
-              <button onClick={handleBulkDelete} className="flex items-center gap-2 text-red-600 hover:underline"><Trash2 size={16} /> Delete Selected</button>
-              <button onClick={handleBulkExport} className="flex items-center gap-2 text-blue-600 hover:underline"><FileDown size={16} /> Export Selected</button>
+          {showBulkMenu && selectedProjectIds.length > 0 && (
+            <div style={{
+              position: 'absolute',
+              right: 0,
+              top: '100%',
+              marginTop: 4,
+              backgroundColor: 'var(--theme-surface)',
+              border: '1px solid var(--theme-border)',
+              borderRadius: 6,
+              padding: 8,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+              zIndex: 20,
+              minWidth: 160,
+            }}>
+              <button onClick={handleBulkDelete} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>
+                <Trash2 size={13} /> Delete selected ({selectedProjectIds.length})
+              </button>
+              <button onClick={handleBulkExport} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--theme-accent)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>
+                <FileDown size={13} /> Export selected
+              </button>
             </div>
           )}
         </div>
-
-        {/* Projects Table */}
-        {isLoading ? (
-          <div className="p-8 text-left text-gray-500 dark:text-gray-400">
-            Loading projects...
-          </div>
-        ) : error ? (
-          <div className="p-8 text-left">
-            <p className="text-red-600 dark:text-red-400 mb-2 font-medium">
-              {error instanceof Error ? error.message : 'Error loading projects.'}
-            </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              Check that the backend is running, the database is connected, and you are logged in.
-            </p>
-            <div className="flex flex-wrap gap-2 mb-4">
-              <button
-                onClick={() => refetch()}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
-              >
-                Retry
-              </button>
-              <a
-                href="/api/health"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium"
-              >
-                Check backend health
-              </a>
-            </div>
-            <details className="text-sm text-gray-500 dark:text-gray-400">
-              <summary className="cursor-pointer font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Troubleshooting steps
-              </summary>
-              <ol className="list-decimal list-inside space-y-1 mt-2">
-                <li>Start the backend: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">cd backend && npm run dev</code></li>
-                <li>Ensure PostgreSQL is running (e.g. <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">docker compose up -d</code>)</li>
-                <li>If you were logged out, go to the login page and sign in again</li>
-              </ol>
-            </details>
-          </div>
-        ) : displayedProjects.length === 0 ? (
-          <div className="p-8 text-left text-gray-500 dark:text-gray-400">
-            <p className="mb-4">No projects found.</p>
-            <CreateProjectButton />
-          </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto scrollbar-hide">
-              <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                  <tr>
-                    <th className="px-4 py-3 text-left">
-                      <input type="checkbox" className="w-4 h-4 text-blue-600 border-gray-300 rounded" checked={selectedProjectIds.length === displayedProjects.length && displayedProjects.length > 0} onChange={e => handleSelectAll(e.target.checked)} />
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Name
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Progress
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Domain
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Last Updated
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {displayedProjects
-                    .filter(p => !showRunningOnly || p.status === 'active')
-                    .filter(p => !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                    .map((project) => (
-                      <tr
-                        key={project.id}
-                        className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
-                        onClick={() => window.location.href = `/projects/${project.slug ?? project.id}`}
-                      >
-                        <td className="px-4 py-3">
-                          <input type="checkbox" className="w-4 h-4 text-blue-600 border-gray-300 rounded" checked={selectedProjectIds.includes(project.id)} onChange={e => handleSelectProject(project.id, e.target.checked)} onClick={e => e.stopPropagation()} />
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${project.status === 'active' ? 'bg-green-500' : 'bg-gray-400'}`} />
-                            <span className="font-medium text-gray-900 dark:text-white">{project.name}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${project.status === 'active'
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                              : project.status === 'completed'
-                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                            }`}>
-                            {project.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2 max-w-[100px]">
-                              <div
-                                className="bg-blue-500 h-2 rounded-full"
-                                style={{ width: `${project.progress}%` }}
-                              />
-                            </div>
-                            <span className="text-sm text-gray-600 dark:text-gray-400">{project.progress}%</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                          {project.domain}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                          {new Date(project.updatedAt).toLocaleDateString()}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              onClick={() => setTeamModalProject(project)}
-                              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-                              title="Manage team"
-                            >
-                              <Users size={16} className="text-gray-600 dark:text-gray-400" />
-                            </button>
-                            <button className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded" title="Analytics" onClick={() => setAnalyticsModalProject(project)}>
-                              <BarChart3 size={16} className="text-blue-600 dark:text-blue-400" />
-                            </button>
-                            <button className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded" title="Audit Log" onClick={() => setAuditLogModalProject(project)}>
-                              <LogOut size={16} className="text-gray-600 dark:text-gray-400" />
-                            </button>
-                            <button className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
-                              <Settings2 size={16} className="text-gray-600 dark:text-gray-400" />
-                            </button>
-                            <button className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
-                              <Play size={16} className="text-gray-600 dark:text-gray-400" />
-                            </button>
-                            <button className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
-                              <MoreVertical size={16} className="text-gray-600 dark:text-gray-400" />
-                            </button>
-                            {/* Analytics Modal */}
-                            {analyticsModalProject && (
-                              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
-                                  <h2 className="text-xl font-bold mb-4">Project Analytics: {analyticsModalProject.name}</h2>
-                                  {/* TODO: Fetch and display analytics data here */}
-                                  <button className="mt-4 px-4 py-2 bg-blue-600 text-white rounded" onClick={() => setAnalyticsModalProject(null)}>Close</button>
-                                </div>
-                              </div>
-                            )}
-                            {/* Audit Log Modal */}
-                            {auditLogModalProject && (
-                              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
-                                  <h2 className="text-xl font-bold mb-4">Audit Log: {auditLogModalProject.name}</h2>
-                                  {/* TODO: Fetch and display audit log data here */}
-                                  <button className="mt-4 px-4 py-2 bg-blue-600 text-white rounded" onClick={() => setAuditLogModalProject(null)}>Close</button>
-                                </div>
-                              </div>
-                            )}
-                            <button
-                              onClick={(e) => handleDeleteClick(e, project.id, project.name)}
-                              disabled={deleteProjectMutation.isPending && projectToDelete === project.id}
-                              className="p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-600 dark:text-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Delete project"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">
-                  Showing {displayedProjects.filter(p => !showRunningOnly || p.status === 'active').length} items
-                </span>
-                <CreateProjectButton />
-              </div>
-            </div>
-          </>
+        {displayedProjects.length > 0 && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--theme-text-muted)', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={selectedProjectIds.length === displayedProjects.length}
+              onChange={(e) => handleSelectAll(e.target.checked)}
+            />
+            Select all
+          </label>
         )}
       </div>
+
+      {/* Content */}
+      {isLoading ? (
+        <div style={{ color: 'var(--theme-text-muted)', fontSize: 13, padding: '32px 0' }}>Loading projects...</div>
+      ) : error ? (
+        <div style={{ padding: '24px', borderRadius: 8, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)' }}>
+          <p style={{ color: '#ef4444', fontSize: 13, marginBottom: 8, fontWeight: 500 }}>
+            {error instanceof Error ? error.message : 'Error loading projects.'}
+          </p>
+          <p style={{ color: 'var(--theme-text-muted)', fontSize: 12, marginBottom: 12 }}>
+            Check that the backend is running, the database is connected, and you are logged in.
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => refetch()}
+              style={{ padding: '6px 14px', backgroundColor: 'var(--theme-accent)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}
+            >
+              Retry
+            </button>
+            <a
+              href="/api/health"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ padding: '6px 14px', backgroundColor: 'var(--theme-sidebar-item-active)', color: 'var(--theme-text)', borderRadius: 6, fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+            >
+              Check backend health
+            </a>
+          </div>
+        </div>
+      ) : displayedProjects.length === 0 ? (
+        <div style={{ color: 'var(--theme-text-muted)', fontSize: 13, padding: '32px 0' }}>
+          <p style={{ marginBottom: 12 }}>No projects found.</p>
+          <CreateProjectButton />
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+          {displayedProjects.map((project) => (
+            <DashboardProjectCard
+              key={project.id}
+              project={project}
+              selected={selectedProjectIds.includes(project.id)}
+              isDeleting={deleteProjectMutation.isPending && projectToDelete === project.id}
+              onSelect={handleSelectProject}
+              onDelete={handleDeleteClick}
+              onTeam={setTeamModalProject}
+              onAnalytics={setAnalyticsModalProject}
+              onAudit={setAuditLogModalProject}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Analytics Modal */}
+      {analyticsModalProject && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+          <div style={{ backgroundColor: 'var(--theme-surface)', border: '1px solid var(--theme-border)', borderRadius: 8, padding: 24, width: '100%', maxWidth: 600, maxHeight: '90vh', overflowY: 'auto' }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--theme-text)', marginBottom: 16 }}>Project Analytics: {analyticsModalProject.name}</h2>
+            <button onClick={() => setAnalyticsModalProject(null)} style={{ padding: '6px 14px', backgroundColor: 'var(--theme-accent)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Audit Log Modal */}
+      {auditLogModalProject && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+          <div style={{ backgroundColor: 'var(--theme-surface)', border: '1px solid var(--theme-border)', borderRadius: 8, padding: 24, width: '100%', maxWidth: 600, maxHeight: '90vh', overflowY: 'auto' }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--theme-text)', marginBottom: 16 }}>Audit Log: {auditLogModalProject.name}</h2>
+            <button onClick={() => setAuditLogModalProject(null)} style={{ padding: '6px 14px', backgroundColor: 'var(--theme-accent)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Close</button>
+          </div>
+        </div>
+      )}
+
       <DeleteConfirmationModal
         isOpen={deleteConfirmation !== null}
         projectName={deleteConfirmation?.name || ''}

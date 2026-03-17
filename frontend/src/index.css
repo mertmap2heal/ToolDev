@@ -17,26 +17,34 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* Default: Light theme */
-  --theme-bg: #ffffff;
-  --theme-surface: #f9fafb;
-  --theme-sidebar: #f3f4f6;
-  --theme-text: rgba(0, 0, 0, 0.87);
-  --theme-text-muted: #6b7280;
-  --theme-border: #e5e7eb;
+  /* Default: Light theme (GitHub Light-inspired) */
+  --theme-bg:                  #ffffff;
+  --theme-surface:             #f6f8fa;
+  --theme-sidebar:             #f6f8fa;
+  --theme-text:                #1f2328;
+  --theme-text-muted:          #656d76;
+  --theme-border:              #d0d7de;
+  --theme-accent:              #0969da;
+  --theme-accent-subtle:       #ddf4ff;
+  --theme-sidebar-item-hover:  rgba(175, 184, 193, 0.20);
+  --theme-sidebar-item-active: rgba(175, 184, 193, 0.30);
   color-scheme: light;
   color: var(--theme-text);
   background-color: var(--theme-bg);
 }
 
-/* ── Midnight Blue ── */
+/* ── Midnight (GitHub Dark-inspired) ── */
 html[data-theme="midnight"] {
-  --theme-bg: #0f172a;
-  --theme-surface: #1e293b;
-  --theme-sidebar: #0c1425;
-  --theme-text: #cbd5e1;
-  --theme-text-muted: #94a3b8;
-  --theme-border: #334155;
+  --theme-bg:                  #0d1117;
+  --theme-surface:             #161b22;
+  --theme-sidebar:             #010409;
+  --theme-text:                #e6edf3;
+  --theme-text-muted:          #8b949e;
+  --theme-border:              #30363d;
+  --theme-accent:              #2f81f7;
+  --theme-accent-subtle:       #1f3a5f;
+  --theme-sidebar-item-hover:  rgba(177, 186, 196, 0.08);
+  --theme-sidebar-item-active: rgba(177, 186, 196, 0.14);
   color-scheme: dark;
   color: var(--theme-text);
   background-color: var(--theme-bg);
