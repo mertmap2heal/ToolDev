@@ -2,14 +2,16 @@ import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Search, X, Trash2, Edit2, Plus, Filter, ChevronDown, ChevronUp, FileText } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import ProjectNavigation from '../../components/projects/ProjectNavigation'
-import { parameterService } from '../../services/parameter.service'
+
+import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
+import { parameterService, type ParameterWithUsage } from '../../services/parameter.service'
 import DeleteConfirmationModal from '../../components/projects/DeleteConfirmationModal'
 import EditParameterModal from '../../components/parameters/EditParameterModal'
+import ParameterDetailDrawer from '../../components/parameters/ParameterDetailDrawer'
 import SourceDetailsModal from '../../components/parameters/SourceDetailsModal'
 import CreateParameterModal from '../../components/parameters/CreateParameterModal'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
-import type { Parameter } from '../../../shared/types/engineering.types'
+import type { Parameter } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
 
@@ -18,6 +20,7 @@ export default function ParametersPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string; name: string } | null>(null)
   const [editingParameter, setEditingParameter] = useState<Parameter | null>(null)
+  const [detailParameter, setDetailParameter] = useState<Parameter | null>(null)
   const [viewingSource, setViewingSource] = useState<Parameter | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
@@ -25,15 +28,16 @@ export default function ParametersPage() {
   const [dataTypeFilter, setDataTypeFilter] = useState<string>('all')
   const [unitFilter, setUnitFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
   const queryClient = useQueryClient()
 
   const { data: parameters = [], isLoading } = useQuery({
-    queryKey: ['parameters', projectId],
+    queryKey: ['parameters', projectId, true],
     queryFn: async () => {
       if (!projectId) throw new Error('Project ID required')
-      const response = await parameterService.getParameters(projectId)
+      const response = await parameterService.getParameters(projectId, { includeUsageCounts: true })
       if (response.success && response.data) {
-        return response.data
+        return response.data as ParameterWithUsage[]
       }
       throw new Error(response.error || 'Failed to load parameters')
     },
@@ -98,6 +102,11 @@ export default function ParametersPage() {
       }
     }
 
+    // Status filter
+    if (statusFilter !== 'all' && (param.status ?? 'draft') !== statusFilter) {
+      return false
+    }
+
     return true
   })
 
@@ -119,23 +128,26 @@ export default function ParametersPage() {
 
   return (
     <div className="space-y-6">
-      <ProjectNavigation />
+
 
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Parameters</h2>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
-        >
-          <Plus size={16} />
-          <span>Create a new parameter</span>
-        </button>
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white">Parameters</h2>
+        <div className="flex items-center gap-3">
+          {projectId && <SafetyLinkPanel variant="relevance" count={1} />}
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors text-sm"
+          >
+            <Plus size={16} />
+            <span>Create a new parameter</span>
+          </button>
+        </div>
       </div>
 
       {/* Search */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
           <input
             type="text"
             placeholder="Search parameters..."
@@ -161,13 +173,13 @@ export default function ParametersPage() {
           className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
         >
           <div className="flex items-center gap-2">
-            <Filter size={18} className="text-gray-600 dark:text-gray-400" />
+            <Filter size={16} className="text-gray-600 dark:text-gray-400" />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Filters</span>
           </div>
           {isFiltersExpanded ? (
-            <ChevronUp size={18} className="text-gray-600 dark:text-gray-400" />
+            <ChevronUp size={16} className="text-gray-600 dark:text-gray-400" />
           ) : (
-            <ChevronDown size={18} className="text-gray-600 dark:text-gray-400" />
+            <ChevronDown size={16} className="text-gray-600 dark:text-gray-400" />
           )}
         </button>
         {isFiltersExpanded && (
@@ -228,6 +240,23 @@ export default function ParametersPage() {
                   <option value="unassigned">Unassigned</option>
                 </select>
               </div>
+
+              {/* Status Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+                  Status
+                </label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="draft">Draft</option>
+                  <option value="approved">Approved</option>
+                  <option value="obsolete">Obsolete</option>
+                </select>
+              </div>
             </div>
           </div>
         )}
@@ -240,6 +269,11 @@ export default function ParametersPage() {
             <strong>Tip:</strong> Parameters are automatically extracted when you use the pattern <code className="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">@parameterName@</code> in function descriptions.
           </p>
         </div>
+      )}
+      {parameters.length > 0 && !isLoading && (
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Parameter values are referenced in requirements; updates apply everywhere the parameter is used.
+        </p>
       )}
 
       {/* Parameters Table */}
@@ -267,6 +301,12 @@ export default function ParametersPage() {
                   Source
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Requirements
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Created
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-16">
@@ -277,13 +317,13 @@ export default function ParametersPage() {
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={10} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                     Loading parameters...
                   </td>
                 </tr>
               ) : filteredParameters.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={10} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                     {parameters.length === 0
                       ? 'No parameters found. Use @parameterName@ in function descriptions to automatically create parameters.'
                       : 'No parameters match your search or filter criteria.'}
@@ -296,7 +336,13 @@ export default function ParametersPage() {
                     className="hover:bg-gray-50 dark:hover:bg-gray-700/50"
                   >
                     <td className="px-4 py-3">
-                      <span className="font-medium text-gray-900 dark:text-white">{param.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setDetailParameter(param)}
+                        className="font-medium text-blue-600 dark:text-blue-400 hover:underline text-left"
+                      >
+                        {param.name}
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-md">
                       <p className="truncate" title={param.description || ''}>
@@ -315,6 +361,7 @@ export default function ParametersPage() {
                     <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
                       {param.sourceFunction ? (
                         <button
+                          type="button"
                           onClick={() => setViewingSource(param)}
                           className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline cursor-pointer"
                         >
@@ -322,6 +369,29 @@ export default function ParametersPage() {
                         </button>
                       ) : (
                         <span className="text-gray-400 dark:text-gray-500">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                      <span className={clsx(
+                        'px-2 py-0.5 rounded text-xs font-medium',
+                        (param.status ?? 'draft') === 'approved' && 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200',
+                        (param.status ?? 'draft') === 'obsolete' && 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400',
+                        (param.status ?? 'draft') === 'draft' && 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200'
+                      )}>
+                        {param.status ?? 'draft'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {(param as ParameterWithUsage).requirementCount != null ? (
+                        <button
+                          type="button"
+                          onClick={() => setDetailParameter(param)}
+                          className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                        >
+                          {(param as ParameterWithUsage).requirementCount}
+                        </button>
+                      ) : (
+                        <span className="text-gray-500 dark:text-gray-400">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
@@ -381,6 +451,13 @@ export default function ParametersPage() {
 
       {projectId && (
         <>
+          <ParameterDetailDrawer
+            isOpen={!!detailParameter}
+            onClose={() => setDetailParameter(null)}
+            projectId={projectId}
+            parameter={detailParameter}
+            onEdit={setEditingParameter}
+          />
           <EditParameterModal
             isOpen={!!editingParameter}
             onClose={() => setEditingParameter(null)}

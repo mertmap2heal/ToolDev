@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { WorkflowProgress, LifecycleStage } from '../../../shared/types/workflow.types'
+import type { WorkflowProgress, LifecycleStage } from 'shared/types/workflow.types'
 
 interface WorkflowState {
   progress: WorkflowProgress | null

@@ -1,8 +1,8 @@
 import { X } from 'lucide-react'
-import type { ChangeRequest } from '../../../shared/types/engineering.types'
-import type { SystemFunction } from '../../../shared/types/engineering.types'
-import type { Issue } from '../../../shared/types/engineering.types'
-import type { Parameter } from '../../../shared/types/engineering.types'
+import type { ChangeRequest } from 'shared/types/engineering.types'
+import type { SystemFunction } from 'shared/types/engineering.types'
+import type { Issue } from 'shared/types/engineering.types'
+import type { Parameter } from 'shared/types/engineering.types'
 import { format } from 'date-fns'
 
 interface ChangeRequestDetailsModalProps {

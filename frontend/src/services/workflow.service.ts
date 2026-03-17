@@ -1,6 +1,6 @@
 import { apiClient } from './api'
-import type { WorkflowProgress } from '../../../shared/types/workflow.types'
-import type { ApiResponse } from '../../../shared/types/api.types'
+import type { WorkflowProgress } from 'shared/types/workflow.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 export const workflowService = {
   async getWorkflowProgress(projectId: string): Promise<ApiResponse<WorkflowProgress>> {

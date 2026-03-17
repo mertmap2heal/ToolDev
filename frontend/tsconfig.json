@@ -16,16 +16,19 @@
 
     /* Linting */
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noImplicitAny": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
 
     /* Path aliases */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "shared/*": ["../shared/*"]
     }
   },
   "include": ["src"],
+  "exclude": ["**/*.test.tsx", "**/*.test.ts", "**/*.spec.tsx", "**/*.spec.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

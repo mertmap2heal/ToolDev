@@ -2,19 +2,75 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  scroll-behavior: smooth;
+}
+
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
+  line-height: 1.4;
   font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(0, 0, 0, 0.87);
-  background-color: #ffffff;
+  font-size: 13px;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* Default: Light theme */
+  --theme-bg: #ffffff;
+  --theme-surface: #f9fafb;
+  --theme-sidebar: #f3f4f6;
+  --theme-text: rgba(0, 0, 0, 0.87);
+  --theme-text-muted: #6b7280;
+  --theme-border: #e5e7eb;
+  color-scheme: light;
+  color: var(--theme-text);
+  background-color: var(--theme-bg);
+}
+
+/* ── Midnight Blue ── */
+html[data-theme="midnight"] {
+  --theme-bg: #0f172a;
+  --theme-surface: #1e293b;
+  --theme-sidebar: #0c1425;
+  --theme-text: #cbd5e1;
+  --theme-text-muted: #94a3b8;
+  --theme-border: #334155;
+  color-scheme: dark;
+  color: var(--theme-text);
+  background-color: var(--theme-bg);
+}
+
+/* ── Settings form input ── */
+.settings-input {
+  @apply w-full px-3 py-1.5 text-xs rounded-lg border transition-colors;
+  background-color: var(--theme-bg);
+  border-color: var(--theme-border);
+  color: var(--theme-text);
+}
+.settings-input:focus {
+  @apply outline-none ring-2 ring-blue-500/30 border-blue-500;
+}
+.settings-input::placeholder {
+  color: var(--theme-text-muted);
+  opacity: 0.6;
+}
+
+/* ── Accessibility: reduce motion ── */
+html.reduce-motion * {
+  animation-duration: 0.001ms !important;
+  transition-duration: 0.001ms !important;
+}
+
+/* ── Accessibility: high contrast ── */
+html.high-contrast {
+  --theme-text: #000000;
+  --theme-border: #000000;
+}
+html.high-contrast[data-theme="midnight"] {
+  --theme-text: #ffffff;
+  --theme-border: #e2e8f0;
 }
 
 body {
@@ -26,4 +82,24 @@ body {
 #root {
   width: 100%;
   min-height: 100vh;
+}
+
+/* Parameter refs in requirement description editor: show as bold, clickable inline chip */
+.param-ref {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold cursor-pointer;
+  @apply bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300;
+  @apply border border-blue-200 dark:border-blue-700;
+}
+.param-ref:hover {
+  @apply bg-blue-200 dark:bg-blue-900/60;
+}
+
+/* Glossary/abbreviation terms in requirement description: highlight + underline, tooltip on hover */
+.glossary-term {
+  @apply border-b-2 border-dotted border-blue-500 dark:border-blue-400 cursor-help;
+  @apply bg-blue-50/80 dark:bg-blue-900/20;
+  @apply px-0.5 rounded-sm;
+}
+.glossary-term:hover {
+  @apply bg-blue-100 dark:bg-blue-900/40;
 }

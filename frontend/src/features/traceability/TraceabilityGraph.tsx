@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Network } from 'lucide-react'
-import type { TraceabilityGraph as TraceabilityGraphType } from '../../../shared/types/traceability.types'
+import type { TraceabilityGraph as TraceabilityGraphType } from 'shared/types/traceability.types'
 
 interface TraceabilityGraphProps {
   projectId: string

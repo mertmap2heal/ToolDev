@@ -1,0 +1,47 @@
+{
+  "runId": "cac910e8-a6d0-4d7a-b312-13f173a9593e",
+  "runName": "Run 2/21/2026, 11:10:37 PM",
+  "planKey": "TP-SEED-001",
+  "planId": "9cc3b366-8e24-4dd3-8377-5a25533aa1b8",
+  "planName": "HIL Qualification Test Plan – Phase 1",
+  "statusCounts": {
+    "NOT_RUN": 1
+  },
+  "aggregatedStatus": "NOT_RUN",
+  "executedAt": "2026-02-21T22:10:42.065Z",
+  "durationSeconds": 1,
+  "environment": null,
+  "scenarioResults": [
+    {
+      "testCaseId": "f613234b-a67d-4b97-aef4-d1ca1cd90f67",
+      "testCaseKey": "TC-SEED-001",
+      "testCaseTitle": "Functional Test – Data Acquisition Over CAN",
+      "testCaseVersion": "1.0",
+      "resultStatus": "NOT_RUN",
+      "testCaseVersionSnapshot": {
+        "steps": [
+          "Power on the DUT and allow it to enter operational mode.",
+          "Start the CAN message generator and inject test vectors per test data set TD-001.",
+          "Monitor the system output for 60 seconds and record all received frames.",
+          "Compare recorded frames against expected results in ER-001."
+        ],
+        "title": "Functional Test – Data Acquisition Over CAN",
+        "version": "1.0",
+        "objective": "Verify that the system correctly acquires and processes CAN bus data from the DUT under nominal operating conditions.",
+        "preconditions": "1. DUT is powered and in operational mode.\n2. CAN bus is configured and connected.\n3. Test setup HIL-Bench-01 is calibrated and ready.",
+        "expectedResults": [
+          "DUT enters operational mode within 5 seconds of power-on.",
+          "All test vectors are received and acknowledged without errors.",
+          "Recorded frame count matches expected count (256 frames).",
+          "No bus errors or frame loss detected during the test."
+        ],
+        "passFailCriteria": "PASS if all expected results are met. FAIL if any frame loss, bus error, or deviation from expected results occurs."
+      },
+      "actualResults": null,
+      "actualResultBlocks": [],
+      "executedAt": null,
+      "isSuspect": false,
+      "isOutOfSync": false
+    }
+  ]
+}

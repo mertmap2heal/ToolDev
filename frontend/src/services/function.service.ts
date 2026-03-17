@@ -1,10 +1,17 @@
 import { apiClient } from './api'
-import type { SystemFunction, CreateSystemFunctionDto } from '../../../shared/types/engineering.types'
-import type { ApiResponse } from '../../../shared/types/api.types'
+import type { SystemFunction, CreateSystemFunctionDto } from 'shared/types/engineering.types'
+import type { ApiResponse } from 'shared/types/api.types'
 
 export const functionService = {
   async getFunctions(projectId: string): Promise<ApiResponse<SystemFunction[]>> {
-    return apiClient.get<SystemFunction[]>(`/functions/${projectId}`)
+    const response = await apiClient.get<SystemFunction[]>(`/functions/${projectId}`)
+    if (response.success && response.data && !Array.isArray(response.data)) {
+      return {
+        ...response,
+        data: [],
+      }
+    }
+    return response
   },
 
   async getFunction(projectId: string, functionId: string): Promise<ApiResponse<SystemFunction>> {
@@ -21,5 +28,16 @@ export const functionService = {
 
   async deleteFunction(projectId: string, functionId: string): Promise<ApiResponse<void>> {
     return apiClient.delete<void>(`/functions/${projectId}/${functionId}`)
+  },
+
+  async moveFunction(projectId: string, functionId: string, newParentId: string | null, newSortOrder: number): Promise<ApiResponse<SystemFunction>> {
+    return apiClient.put<SystemFunction>(`/functions/${projectId}/${functionId}/move`, {
+      newParentId,
+      newSortOrder,
+    })
+  },
+
+  async updateFunctionComponent(projectId: string, functionId: string, componentId: string | null): Promise<ApiResponse<SystemFunction>> {
+    return apiClient.patch<SystemFunction>(`/functions/${projectId}/${functionId}/component`, { componentId })
   },
 }

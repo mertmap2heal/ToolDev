@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { projectService } from '../../services/project.service'
-import type { CreateProjectDto } from '../../../shared/types/project.types'
+import type { CreateProjectDto } from 'shared/types/project.types'
 
 interface CreateProjectModalProps {
   isOpen: boolean

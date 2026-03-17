@@ -2,19 +2,18 @@ import { Link, useParams, useLocation } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { projectService } from '../../services/project.service'
-
-interface BreadcrumbItem {
-  label: string
-  path?: string
-}
+import { useBreadcrumb } from '../../contexts/BreadcrumbContext'
+import type { BreadcrumbItem } from '../../contexts/BreadcrumbContext'
 
 interface BreadcrumbsProps {
-  items?: BreadcrumbItem[]
+  items?: BreadcrumbItem[] | null
 }
 
-export default function Breadcrumbs({ items }: BreadcrumbsProps) {
+export default function Breadcrumbs({ items: itemsProp }: BreadcrumbsProps) {
   const { projectId } = useParams<{ projectId: string }>()
   const location = useLocation()
+  const breadcrumbCtx = useBreadcrumb()
+  const itemsFromContext = breadcrumbCtx?.items ?? null
   
   // Fetch project name if we're on a project page
   const { data: projectData } = useQuery({
@@ -29,21 +28,31 @@ export default function Breadcrumbs({ items }: BreadcrumbsProps) {
 
   // Auto-generate breadcrumbs based on route
   const generateBreadcrumbs = (): BreadcrumbItem[] => {
-    if (items) return items // Use provided items if available
+    if (itemsProp) return itemsProp // Use provided items prop if available
+    if (itemsFromContext) return itemsFromContext // Use context (e.g. verification drawer open)
     
     const pathSegments = location.pathname.split('/').filter(Boolean)
     const breadcrumbs: BreadcrumbItem[] = [
       { label: 'Home', path: '/' }
     ]
 
+    if (pathSegments[0] === 'admin') {
+      breadcrumbs.push({ label: 'Admin' })
+      return breadcrumbs
+    }
+
     if (pathSegments[0] === 'projects' && projectId) {
       // Add project name if available
       const projectName = projectData?.name || 'Project'
       breadcrumbs.push({ label: projectName })
       
-      // Add current page
+      // Add current page (kebab-case to title case, e.g. configuration-management -> Configuration Management)
       if (pathSegments[2]) {
-        const pageName = pathSegments[2].charAt(0).toUpperCase() + pathSegments[2].slice(1)
+        const slug = pathSegments[2]
+        const pageName = slug
+          .split('-')
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(' ')
         breadcrumbs.push({ label: pageName })
       }
     }
@@ -54,7 +63,7 @@ export default function Breadcrumbs({ items }: BreadcrumbsProps) {
   const breadcrumbItems = generateBreadcrumbs()
 
   return (
-    <nav className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+    <nav className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
       {breadcrumbItems.map((item, index) => (
         <div key={index} className="flex items-center gap-2">
           {item.path ? (

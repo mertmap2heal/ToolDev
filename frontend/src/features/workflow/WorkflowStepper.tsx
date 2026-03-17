@@ -1,5 +1,5 @@
 import { Check, Lock } from 'lucide-react'
-import type { WorkflowStep } from '../../../shared/types/workflow.types'
+import type { WorkflowStep } from 'shared/types/workflow.types'
 import clsx from 'clsx'
 
 interface WorkflowStepperProps {

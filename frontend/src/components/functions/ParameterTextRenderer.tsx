@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
 import ParameterDetailsModal from '../parameters/ParameterDetailsModal'
-import type { Parameter } from '../../../shared/types/engineering.types'
+import type { Parameter } from 'shared/types/engineering.types'
 
 interface ParameterTextRendererProps {
   text: string
@@ -80,6 +80,7 @@ export default function ParameterTextRenderer({ text, projectId }: ParameterText
           isOpen={!!selectedParameter}
           onClose={() => setClickedParameter(null)}
           parameter={selectedParameter}
+          projectId={projectId}
         />
       )}
     </>

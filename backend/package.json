@@ -10,25 +10,47 @@
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "check-db": "tsx src/scripts/check-and-fix-projects.ts",
+    "seed:users": "tsx src/scripts/seed-users.ts",
+    "seed:mocs": "tsx prisma/seed-mocs.ts",
+    "seed:test-case": "tsx src/scripts/seed-test-case.ts",
+    "seed:test-plan": "tsx src/scripts/seed-test-plan.ts",
+    "seed:test-run": "tsx src/scripts/seed-test-run.ts",
+    "seed:demo": "tsx src/scripts/seed-demo-project.ts",
+    "backfill:parameter-ids": "tsx src/scripts/backfill-parameter-ids.ts",
+    "db:push": "prisma db push --accept-data-loss",
+    "db:gen": "prisma generate",
+    "setup-db": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup-database.ps1",
+    "test": "vitest run"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
-    "jsonwebtoken": "^9.0.2",
+    "@prisma/client": "^5.7.1",
+    "archiver": "^7.0.1",
     "bcryptjs": "^2.4.3",
-    "zod": "^3.22.4",
-    "@prisma/client": "^5.7.1"
+    "cors": "^2.8.5",
+    "docx": "^9.5.1",
+    "dotenv": "^16.3.1",
+    "exceljs": "^4.4.0",
+    "express": "^4.18.2",
+    "fast-xml-parser": "^5.3.3",
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^8.0.1",
+    "pdfkit": "^0.17.2",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
-    "@types/cors": "^2.8.17",
-    "@types/jsonwebtoken": "^9.0.5",
     "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.5",
     "@types/node": "^20.10.5",
+    "@types/nodemailer": "^7.0.9",
+    "@types/supertest": "^6.0.3",
     "prisma": "^5.7.1",
+    "supertest": "^7.2.2",
     "tsx": "^4.7.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.18"
   }
 }

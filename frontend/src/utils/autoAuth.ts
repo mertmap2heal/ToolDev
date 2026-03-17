@@ -14,6 +14,8 @@ let autoAuthAttempted = false
 
 export async function ensureAuthenticated(): Promise<boolean> {
   // Check if we already have a token
+  // If token exists, assume it's valid for now
+  // Invalid tokens will be caught by API interceptor and trigger re-auth
   const existingToken = authService.getToken()
   if (existingToken) {
     return true

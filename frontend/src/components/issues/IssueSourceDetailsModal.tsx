@@ -1,6 +1,6 @@
 import { X } from 'lucide-react'
-import type { Issue } from '../../../shared/types/engineering.types'
-import type { SystemFunction } from '../../../shared/types/engineering.types'
+import type { Issue } from 'shared/types/engineering.types'
+import type { SystemFunction } from 'shared/types/engineering.types'
 
 interface IssueSourceDetailsModalProps {
   isOpen: boolean

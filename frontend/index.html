@@ -5,6 +5,27 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Engineering Project Development Tool</title>
+    <script>
+      // Suppress extension/third-party promise rejections so they don't appear as app errors
+      window.addEventListener('unhandledrejection', function(e) {
+        var r = e.reason;
+        var name = r && r.name;
+        var msg = (r && r.message) ? String(r.message) : '';
+        var msgName = (r && typeof r.messageName === 'string') ? r.messageName : '';
+        if (name === 'RegisterClientLocalizationsError' || name === 'MessageNotSentError' ||
+            msg.indexOf('Receiving end does not exist') !== -1 || msg.indexOf("reading 'translations'") !== -1 ||
+            msgName === 'cookieManager.injectClientScript') {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      });
+      // Prevent flash of wrong theme
+      (function() {
+        var theme = localStorage.getItem('app-theme') || 'midnight';
+        if (theme === 'midnight') document.documentElement.classList.add('dark');
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import ProjectCard from './ProjectCard'
-import type { Project } from '../../../shared/types/project.types'
+import type { Project } from 'shared/types/project.types'
 
 interface ProjectGridProps {
   projects: Project[]
@@ -55,7 +55,7 @@ export default function ProjectGrid({ projects, searchQuery, filterValue, sortVa
       {filteredProjects.map((project) => (
         <div
           key={project.id}
-          onClick={() => navigate(`/projects/${project.id}/requirements`)}
+          onClick={() => navigate(`/projects/${project.slug ?? project.id}`)}
           className="cursor-pointer"
         >
           <ProjectCard project={project} />
