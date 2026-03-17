@@ -173,6 +173,31 @@ if ($LASTEXITCODE -ne 0) {
 Pop-Location
 Write-Host "  Schema up to date."
 
+# --- 3d. Seed default users if the database has none ---
+Write-Host "  Checking for existing users..."
+Push-Location (Join-Path $ROOT "backend")
+$userCount = node -e "
+const { PrismaClient } = require('@prisma/client');
+const p = new PrismaClient();
+p.user.count().then(n => { console.log(n); p.\$disconnect(); }).catch(() => { console.log(-1); p.\$disconnect(); });
+" 2>$null
+
+if ($userCount -eq "0") {
+    Write-Host "  No users found - seeding default accounts..."
+    npm run seed:users
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  WARNING: seed:users failed - you can run it manually: cd backend && npm run seed:users"
+    } else {
+        Write-Host "  Default accounts created:"
+        Write-Host "    admin            / password      (Platform Admin)"
+        Write-Host "    mert.caferoglu   / Mmcf_6378     (User)"
+        Write-Host "    christian.mandle / mandle1998    (User)"
+    }
+} else {
+    Write-Host "  Users already exist - skipping seed."
+}
+Pop-Location
+
 # ============================================================
 # [4/4] LAUNCH SERVERS
 # ============================================================
