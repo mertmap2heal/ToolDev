@@ -31,8 +31,15 @@ const MODULE_DESCRIPTIONS: Record<string, string> = {
   'audit':                      'Browse the full project audit log',
 }
 
+// Column accent colors per category
+const CATEGORY_ACCENT: Record<string, string> = {
+  development: 'var(--theme-accent)',
+  system:      '#8b5cf6',
+  assurance:   '#10b981',
+}
+
 // ---------------------------------------------------------------------------
-// ModuleCard
+// ModuleCard — compact row style for columns
 // ---------------------------------------------------------------------------
 
 interface ModuleCardProps {
@@ -41,101 +48,121 @@ interface ModuleCardProps {
   description: string
   to: string
   active: boolean
+  accent: string
 }
 
-function ModuleCard({ icon: Icon, label, description, to, active }: ModuleCardProps) {
+function ModuleCard({ icon: Icon, label, description, to, active, accent }: ModuleCardProps) {
   const navigate = useNavigate()
   return (
     <button
       onClick={() => navigate(to)}
       style={{
         display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-        padding: '14px 16px',
-        borderRadius: 8,
-        border: `1px solid ${active ? 'var(--theme-accent)' : 'var(--theme-border)'}`,
+        alignItems: 'flex-start',
+        gap: 10,
+        padding: '10px 12px',
+        borderRadius: 6,
+        border: '1px solid var(--theme-border)',
+        borderLeft: `3px solid ${active ? accent : 'var(--theme-border)'}`,
         backgroundColor: active ? 'var(--theme-accent-subtle)' : 'var(--theme-surface)',
         cursor: 'pointer',
         textAlign: 'left',
-        transition: 'border-color 0.12s, box-shadow 0.12s, background-color 0.12s',
         width: '100%',
+        transition: 'border-left-color 0.12s, box-shadow 0.12s, background-color 0.12s',
       }}
       onMouseEnter={e => {
         const el = e.currentTarget as HTMLElement
-        el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)'
-        if (!active) el.style.borderColor = 'var(--theme-accent)'
+        el.style.boxShadow = '0 2px 6px rgba(0,0,0,0.10)'
+        el.style.borderLeftColor = accent
       }}
       onMouseLeave={e => {
         const el = e.currentTarget as HTMLElement
         el.style.boxShadow = 'none'
-        if (!active) el.style.borderColor = 'var(--theme-border)'
+        el.style.borderLeftColor = active ? accent : 'var(--theme-border)'
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{
-          width: 30,
-          height: 30,
-          borderRadius: 6,
-          backgroundColor: active ? 'var(--theme-accent)' : 'var(--theme-sidebar-item-active)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-        }}>
-          <Icon size={15} style={{ color: active ? '#fff' : 'var(--theme-accent)' }} />
-        </div>
-        <span style={{
-          fontSize: 12,
-          fontWeight: 600,
-          color: 'var(--theme-text)',
-          lineHeight: 1.3,
-        }}>
-          {label}
-        </span>
-      </div>
-      <p style={{
-        fontSize: 11,
-        color: 'var(--theme-text-muted)',
-        margin: 0,
-        lineHeight: 1.5,
+      <div style={{
+        width: 26,
+        height: 26,
+        borderRadius: 5,
+        backgroundColor: active ? accent : 'var(--theme-sidebar-item-active)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        marginTop: 1,
       }}>
-        {description}
-      </p>
+        <Icon size={13} style={{ color: active ? '#fff' : accent }} />
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--theme-text)', lineHeight: 1.3, marginBottom: 2 }}>
+          {label}
+        </div>
+        <div style={{ fontSize: 10, color: 'var(--theme-text-muted)', lineHeight: 1.4 }}>
+          {description}
+        </div>
+      </div>
     </button>
   )
 }
 
 // ---------------------------------------------------------------------------
-// SectionGroup
+// Column — one vertical category column
 // ---------------------------------------------------------------------------
 
-interface SectionGroupProps {
+interface ColumnProps {
+  categoryId: string
   label: string
   modules: typeof MODULES
   projectId: string
-  currentPath: string
+  accent: string
 }
 
-function SectionGroup({ label, modules, projectId, currentPath }: SectionGroupProps) {
+function Column({ categoryId, label, modules, projectId, accent }: ColumnProps) {
   return (
-    <div>
-      <h2 style={{
-        fontSize: 11,
-        fontWeight: 700,
-        letterSpacing: '0.07em',
-        textTransform: 'uppercase',
-        color: 'var(--theme-text-muted)',
-        marginBottom: 10,
-        marginTop: 0,
-      }}>
-        {label}
-      </h2>
+    <div style={{
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 0,
+      minWidth: 0,
+    }}>
+      {/* Column header */}
       <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-        gap: 10,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '10px 12px',
+        borderRadius: '8px 8px 0 0',
+        backgroundColor: 'var(--theme-surface)',
+        border: '1px solid var(--theme-border)',
+        borderBottom: `2px solid ${accent}`,
+        marginBottom: 8,
       }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: accent, flexShrink: 0 }} />
+        <span style={{
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          color: 'var(--theme-text)',
+        }}>
+          {label}
+        </span>
+        <span style={{
+          marginLeft: 'auto',
+          fontSize: 10,
+          color: 'var(--theme-text-muted)',
+          backgroundColor: 'var(--theme-sidebar-item-active)',
+          borderRadius: 10,
+          padding: '1px 7px',
+        }}>
+          {modules.length}
+        </span>
+      </div>
+
+      {/* Module cards stacked vertically */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {modules.map(m => (
           <ModuleCard
             key={m.id}
@@ -143,7 +170,8 @@ function SectionGroup({ label, modules, projectId, currentPath }: SectionGroupPr
             label={m.label}
             description={MODULE_DESCRIPTIONS[m.id] ?? ''}
             to={`/projects/${projectId}/${m.route}`}
-            active={currentPath.includes(`/${m.route}`)}
+            active={location.pathname.includes(`/${m.route}`)}
+            accent={accent}
           />
         ))}
       </div>
@@ -173,81 +201,82 @@ export default function ProjectLandingPage() {
   const statusDot = statusColors[project?.status ?? ''] ?? 'var(--theme-text-muted)'
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1100 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* Project header */}
       {project && (
         <div style={{
-          padding: '16px 20px',
+          padding: '14px 18px',
           borderRadius: 8,
           border: '1px solid var(--theme-border)',
           backgroundColor: 'var(--theme-surface)',
           display: 'flex',
           alignItems: 'center',
-          gap: 16,
+          gap: 12,
           flexWrap: 'wrap',
         }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <span style={{ width: 9, height: 9, borderRadius: '50%', backgroundColor: statusDot, flexShrink: 0 }} />
-              <h1 style={{ fontSize: 16, fontWeight: 700, color: 'var(--theme-text)', margin: 0 }}>
-                {project.name}
-              </h1>
-              {project.domain && (
-                <span style={{
-                  fontSize: 10,
-                  fontWeight: 500,
-                  padding: '2px 8px',
-                  borderRadius: 10,
-                  backgroundColor: 'var(--theme-sidebar-item-active)',
-                  color: 'var(--theme-text-muted)',
-                }}>
-                  {project.domain}
-                </span>
-              )}
+          <span style={{ width: 9, height: 9, borderRadius: '50%', backgroundColor: statusDot, flexShrink: 0 }} />
+          <h1 style={{ fontSize: 15, fontWeight: 700, color: 'var(--theme-text)', margin: 0 }}>
+            {project.name}
+          </h1>
+          {project.domain && (
+            <span style={{
+              fontSize: 10,
+              fontWeight: 500,
+              padding: '2px 8px',
+              borderRadius: 10,
+              backgroundColor: 'var(--theme-sidebar-item-active)',
+              color: 'var(--theme-text-muted)',
+            }}>
+              {project.domain}
+            </span>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+            <div style={{ width: 120, height: 4, backgroundColor: 'var(--theme-border)', borderRadius: 2 }}>
+              <div style={{ height: 4, width: `${project.progress}%`, backgroundColor: 'var(--theme-accent)', borderRadius: 2 }} />
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ flex: 1, maxWidth: 200, height: 4, backgroundColor: 'var(--theme-border)', borderRadius: 2 }}>
-                <div style={{ height: 4, width: `${project.progress}%`, backgroundColor: 'var(--theme-accent)', borderRadius: 2 }} />
-              </div>
-              <span style={{ fontSize: 11, color: 'var(--theme-text-muted)' }}>{project.progress}% complete</span>
-              <span style={{
-                fontSize: 11,
-                padding: '2px 8px',
-                borderRadius: 10,
-                textTransform: 'capitalize',
-                backgroundColor: project.status === 'active' ? 'rgba(34,197,94,0.12)' : 'var(--theme-sidebar-item-active)',
-                color: project.status === 'active' ? '#22c55e' : 'var(--theme-text-muted)',
-              }}>
-                {project.status}
-              </span>
-            </div>
+            <span style={{ fontSize: 11, color: 'var(--theme-text-muted)', whiteSpace: 'nowrap' }}>
+              {project.progress}% complete
+            </span>
+            <span style={{
+              fontSize: 10,
+              padding: '2px 8px',
+              borderRadius: 10,
+              textTransform: 'capitalize',
+              backgroundColor: project.status === 'active' ? 'rgba(34,197,94,0.12)' : 'var(--theme-sidebar-item-active)',
+              color: project.status === 'active' ? '#22c55e' : 'var(--theme-text-muted)',
+            }}>
+              {project.status}
+            </span>
           </div>
         </div>
       )}
 
-      {/* Module sections */}
+      {/* Three-column V-model style layout */}
       {projectId && (
-        <>
-          <SectionGroup
+        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+          <Column
+            categoryId="development"
             label={CATEGORIES.find(c => c.id === 'development')?.label ?? 'Development & Control'}
             modules={devModules}
             projectId={projectId}
-            currentPath={location.pathname}
+            accent={CATEGORY_ACCENT.development}
           />
-          <SectionGroup
+          <Column
+            categoryId="system"
             label={CATEGORIES.find(c => c.id === 'system')?.label ?? 'System Definition'}
             modules={systemModules}
             projectId={projectId}
-            currentPath={location.pathname}
+            accent={CATEGORY_ACCENT.system}
           />
-          <SectionGroup
+          <Column
+            categoryId="assurance"
             label={CATEGORIES.find(c => c.id === 'assurance')?.label ?? 'Assurance'}
             modules={assuranceModules}
             projectId={projectId}
-            currentPath={location.pathname}
+            accent={CATEGORY_ACCENT.assurance}
           />
-        </>
+        </div>
       )}
     </div>
   )
