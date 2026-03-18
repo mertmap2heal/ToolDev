@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
 import UnitPicker from './UnitPicker'
+import { TypeCombobox } from './TypeCombobox'
 import type { CreateParameterDto, Parameter } from 'shared/types/engineering.types'
 
 interface CreateParameterModalProps {
@@ -180,12 +181,10 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
               Data Type
             </label>
-            <input
-              type="text"
+            <TypeCombobox
+              projectId={projectId}
               value={formData.dataType || ''}
-              onChange={(e) => handleChange('dataType', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              placeholder="e.g., float, int, string, boolean"
+              onChange={v => handleChange('dataType', v)}
             />
           </div>
 

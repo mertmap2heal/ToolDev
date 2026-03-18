@@ -2,6 +2,13 @@ import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
 import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import {
+  getParameterTypes,
+  createParameterTypeHandler,
+  updateParameterTypeHandler,
+  deleteParameterTypeHandler,
+  getParameterTypeUsage,
+} from '../controllers/parameterType.controller'
+import {
   getParameters,
   getParameter,
   createParameter,
@@ -24,6 +31,13 @@ const router = Router()
 
 router.use(authenticateToken)
 router.param('projectId', projectIdParam)
+
+// Parameter type registry
+router.get('/:projectId/types', getParameterTypes)
+router.post('/:projectId/types', createParameterTypeHandler)
+router.patch('/:projectId/types/:id', updateParameterTypeHandler)
+router.delete('/:projectId/types/:id', deleteParameterTypeHandler)
+router.get('/:projectId/types/:id/usage', getParameterTypeUsage)
 
 router.get('/:projectId/resolve', resolveAllParameters)
 router.get('/:projectId/resolve/:id', resolveParameter)

@@ -517,6 +517,29 @@ export interface UpdateIssueCommentDto {
 export type ParameterStatus = 'draft' | 'approved' | 'obsolete'
 export type ParameterOwnerType = 'component' | 'function' | 'system' | 'team'
 
+export interface ParameterTypeTranslations {
+  c_header?: string
+  matlab?: string
+  python?: string
+  ada?: string
+  simulink?: string
+  ros?: string
+  dds?: string
+  autosar?: string
+  xtce?: string
+}
+
+export interface ParameterType {
+  id: string
+  projectId: string | null   // null for built-in types
+  name: string
+  description?: string | null
+  color?: string | null
+  translations?: ParameterTypeTranslations | null
+  builtIn: boolean
+  createdAt?: string | null
+}
+
 export interface Parameter {
   id: string
   projectId: string
