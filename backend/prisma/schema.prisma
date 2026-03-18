@@ -181,6 +181,7 @@ model Project {
   certChecklists        CertChecklist[]
   certSignOffs          CertSignOff[]
   definitionEntries     DefinitionEntry[]
+  parameterTypes        ParameterType[]
 }
 
 // Requirements export templates (ExportBuilder) - enterprise export wizard presets.
@@ -753,6 +754,25 @@ model ParameterVersion {
   createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([parameterId])
+}
+
+// Per-project custom parameter type registry.
+// Built-in types (float32, int32, etc.) are returned statically by the API
+// and are not stored here. Only user-defined additions live in this table.
+model ParameterType {
+  id           String   @id @default(uuid())
+  projectId    String
+  name         String
+  description  String?
+  color        String?  // hex colour for UI badge, e.g. "#0ea5e9"
+  translations Json?    // { c_header, matlab, python, ada, simulink, ros, dds, autosar, xtce }
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, name])
+  @@index([projectId])
 }
 
 model ChangeRequest {

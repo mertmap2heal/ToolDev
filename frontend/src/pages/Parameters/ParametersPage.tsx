@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import {
   Search, X, Trash2, Edit2, Plus, Filter, ChevronDown, ChevronUp,
   FileText, Upload, Download, GitBranch, RefreshCw, CheckCircle,
-  AlertTriangle,
+  AlertTriangle, Tag,
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
@@ -16,6 +16,7 @@ import SourceDetailsModal from '../../components/parameters/SourceDetailsModal'
 import CreateParameterModal from '../../components/parameters/CreateParameterModal'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import PublishToGitModal, { type GitPublishStoredConfig } from '../../components/parameters/PublishToGitModal'
+import { ParameterTypesPanel } from '../../components/parameters/ParameterTypesPanel'
 import type { Parameter } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
@@ -101,6 +102,7 @@ export default function ParametersPage() {
   const [viewingSource, setViewingSource] = useState<Parameter | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
+  const [isTypesExpanded, setIsTypesExpanded] = useState(false)
   const [changeRequestModal, setChangeRequestModal] = useState<{ isOpen: boolean; sourceId: string; sourceName: string } | null>(null)
   const [dataTypeFilter, setDataTypeFilter] = useState<string>('all')
   const [unitFilter, setUnitFilter] = useState<string>('all')
@@ -558,6 +560,33 @@ export default function ParametersPage() {
           </div>
         )}
       </div>
+
+      {/* ── Type Registry ── */}
+      {projectId && (
+        <div style={{ borderRadius: 8, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', overflow: 'hidden' }}>
+          <button
+            onClick={() => setIsTypesExpanded(!isTypesExpanded)}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Tag size={13} style={{ color: 'var(--theme-text-muted)' }} />
+              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--theme-text)' }}>Type Registry</span>
+            </div>
+            {isTypesExpanded
+              ? <ChevronUp size={14} style={{ color: 'var(--theme-text-muted)' }} />
+              : <ChevronDown size={14} style={{ color: 'var(--theme-text-muted)' }} />
+            }
+          </button>
+          {isTypesExpanded && (
+            <div style={{ padding: '12px 14px', borderTop: '1px solid var(--theme-border)' }}>
+              <ParameterTypesPanel projectId={projectId} />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Info / tip ── */}
       {parameters.length === 0 && !isLoading && (
