@@ -12,6 +12,7 @@ import {
   SUPPORTED_EXPORT_FORMATS,
   ExportFormat,
 } from './parameterExport.service'
+import { buildCIPipeline } from './ciPipeline.service'
 
 export interface GitHubConfig {
   baseUrl: string    // https://github.com  or  https://github.mycompany.com
@@ -208,8 +209,7 @@ export async function pushAllFormatsGitHub(
 
   const treeItems = formats.map(format => {
     const meta = getExportMeta(format)
-    const content = exportParameters(format, params)
-    return { path: meta.filename, mode: '100644', type: 'blob', content }
+    return { path: meta.filename, mode: '100644', type: 'blob', content: exportParameters(format, params) }
   })
 
   // README
@@ -219,6 +219,10 @@ export async function pushAllFormatsGitHub(
     type: 'blob',
     content: buildReadme(params.length, formats),
   })
+
+  // CI/CD pipeline file (.github/workflows/release.yml)
+  const ci = buildCIPipeline('github', formats, targetBranch)
+  treeItems.push({ path: ci.filename, mode: '100644', type: 'blob', content: ci.content })
 
   // 4. Create new tree
   const treeData = await ghFetch(

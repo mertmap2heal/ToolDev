@@ -1,8 +1,8 @@
 /**
  * Parameter Export Service
  * Generates parameter sets in aerospace/embedded engineering formats.
- * Pure text generation — no external dependencies required.
  */
+
 
 export interface ExportParameter {
   parameterId?: string | null
@@ -82,65 +82,90 @@ export function formatMATLAB(params: ExportParameter[]): string {
 }
 
 // ---------------------------------------------------------------------------
-// Simulink Data Dictionary XML (.sldd)
-// Native XML format consumed directly by Simulink without running a script.
-// Includes Value, DataType, Unit, Min, Max, Description per parameter.
+// Simulink Data Dictionary script (create_parameters_sldd.m)
+// Generates a MATLAB script that uses Simulink.data.dictionary API to create
+// parameters.sldd. Run in MATLAB/Simulink R2014a or later.
 // ---------------------------------------------------------------------------
-export function formatSimulinkDict(params: ExportParameter[]): string {
-  const now = new Date().toISOString()
+export function formatSimulinkDictScript(params: ExportParameter[]): string {
   const lines: string[] = [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    `<!-- Simulink Data Dictionary — generated ${now} -->`,
-    `<!-- Parameters: ${params.length} — DO NOT EDIT, regenerate from the engineering tool -->`,
-    '<ModelDataFile>',
-    '  <Section Name="Design Data">',
+    '% Auto-generated Simulink Data Dictionary creation script',
+    `% Generated: ${new Date().toISOString()}`,
+    `% Parameters: ${params.length}`,
+    '% Run this script in MATLAB to create parameters.sldd',
+    '% Requires Simulink R2014a or later',
+    '',
+    "ddFile = 'parameters.sldd';",
+    '',
+    '% Remove existing file so we always start fresh',
+    "if exist(ddFile, 'file')",
+    '    delete(ddFile);',
+    'end',
+    '',
+    '% Create data dictionary and get Design Data section',
+    'dd  = Simulink.data.dictionary.create(ddFile);',
+    "dds = getSection(dd, 'Design Data');",
+    '',
   ]
 
   for (const p of params) {
     const varName = sanitizeName(p.name)
-    const value = escapeXml(p.defaultValue ?? '0')
-    const unit = p.unit ? escapeXml(p.unit) : ''
-    const desc = p.description ? escapeXml(p.description) : ''
-    const minVal = (p.minValue !== null && p.minValue !== undefined) ? escapeXml(p.minValue) : '-Inf'
-    const maxVal = (p.maxValue !== null && p.maxValue !== undefined) ? escapeXml(p.maxValue) : 'Inf'
+    const value   = p.defaultValue ?? '0'
+    const dt      = (p.dataType ?? '').toLowerCase()
+    const isBool  = dt === 'boolean' || dt === 'bool'
+    const isStr   = dt === 'string'  || dt === 'text'
 
-    // Map dataType to Simulink/MATLAB type string
-    let slType = 'double'
-    if (p.dataType) {
-      const dt = p.dataType.toLowerCase()
-      if (dt === 'integer' || dt === 'int') slType = 'int32'
-      else if (dt === 'float') slType = 'single'
-      else if (dt === 'boolean' || dt === 'bool') slType = 'boolean'
-      else if (dt === 'uint8') slType = 'uint8'
-      else if (dt === 'int8') slType = 'int8'
-      else if (dt === 'uint16') slType = 'uint16'
-      else if (dt === 'int16') slType = 'int16'
-      else if (dt === 'uint32') slType = 'uint32'
+    const unit  = p.unit        ? ` [${p.unit}]`         : ''
+    const desc  = p.description ? ` ${p.description}`    : ''
+    lines.push(`% ${p.parameterId ?? varName}${desc}${unit}`)
+
+    if (isStr) {
+      lines.push(`p = Simulink.Parameter('${value.replace(/'/g, "''")}');`)
+    } else if (isBool) {
+      lines.push(`p = Simulink.Parameter(${value.toLowerCase() === 'true' ? 'true' : 'false'});`)
+    } else {
+      lines.push(`p = Simulink.Parameter(${value});`)
+      if (p.minValue !== null && p.minValue !== undefined) lines.push(`p.Min = ${p.minValue};`)
+      if (p.maxValue !== null && p.maxValue !== undefined) lines.push(`p.Max = ${p.maxValue};`)
     }
-
-    lines.push(`    <Entry Name="${escapeXml(varName)}" Owner="Simulink.Parameter" LastModified="${now}">`)
-    lines.push('      <MXARRAY type="Simulink.Parameter" version="2">')
-    lines.push('        <Array type="mxSTRUCT_CLASS" size="[1 1]">')
-    lines.push('          <Simulink.Parameter>')
-    lines.push(`            <Value class="${slType}">${value}</Value>`)
-    lines.push('            <CoderInfo>')
-    lines.push('              <StorageClass>Auto</StorageClass>')
-    lines.push('            </CoderInfo>')
-    if (desc) lines.push(`            <Description>${desc}</Description>`)
-    lines.push(`            <DataType>${slType}</DataType>`)
-    lines.push(`            <Min>${minVal}</Min>`)
-    lines.push(`            <Max>${maxVal}</Max>`)
-    if (unit) lines.push(`            <Unit>${unit}</Unit>`)
-    lines.push('            <Complexity>real</Complexity>')
-    lines.push('            <Dimensions>[1 1]</Dimensions>')
-    lines.push('          </Simulink.Parameter>')
-    lines.push('        </Array>')
-    lines.push('      </MXARRAY>')
-    lines.push('    </Entry>')
+    if (p.unit)        lines.push(`p.DocUnits = '${p.unit.replace(/'/g, "''")}';`)
+    if (p.description) lines.push(`p.Description = '${p.description.replace(/'/g, "''")}';`)
+    lines.push(`addEntry(dds, '${varName}', p);`)
+    lines.push('')
   }
 
-  lines.push('  </Section>')
-  lines.push('</ModelDataFile>')
+  lines.push('% Save and close')
+  lines.push('saveChanges(dd);')
+  lines.push("disp(['Created ' ddFile ' with " + params.length + " parameter(s)']);")
+
+  return lines.join('\n')
+}
+
+// ---------------------------------------------------------------------------
+// MATLAB workspace file script (create_parameters_mat.m)
+// Generates a MATLAB script that saves parameters to parameters.mat.
+// Simpler than the full MATLAB export — focused on workspace + mat file only.
+// ---------------------------------------------------------------------------
+export function formatMATScript(params: ExportParameter[]): string {
+  const lines: string[] = [
+    '% Auto-generated MATLAB workspace script',
+    `% Generated: ${new Date().toISOString()}`,
+    `% Parameters: ${params.length}`,
+    '% Run this script to load parameters into the workspace and save parameters.mat',
+    '',
+  ]
+
+  for (const p of params) {
+    const varName = sanitizeName(p.name)
+    const value   = p.defaultValue ?? '0'
+    const unit    = p.unit        ? ` [${p.unit}]`      : ''
+    const desc    = p.description ? ` - ${p.description}` : ''
+    lines.push(`% ${varName}${desc}${unit}`)
+    lines.push(`${varName} = ${value};`)
+    lines.push('')
+  }
+
+  lines.push("save('parameters.mat');")
+  lines.push("disp(['Saved " + params.length + " parameter(s) to parameters.mat']);")
 
   return lines.join('\n')
 }
@@ -732,7 +757,8 @@ export function formatDDSIDL(params: ExportParameter[]): string {
 export function getExportMeta(format: string): ExportMeta {
   const map: Record<string, ExportMeta> = {
     matlab:        { filename: 'parameters.m',            contentType: 'text/plain' },
-    simulink:      { filename: 'parameters.sldd',          contentType: 'application/xml' },
+    simulink:      { filename: 'create_parameters_sldd.m',  contentType: 'text/plain' },
+    mat:           { filename: 'create_parameters_mat.m',   contentType: 'text/plain' },
     python:        { filename: 'parameters.py',           contentType: 'text/x-python' },
     c_header:      { filename: 'parameters.h',            contentType: 'text/plain' },
     ada:           { filename: 'parameters.ads',          contentType: 'text/plain' },
@@ -754,7 +780,8 @@ export function getExportMeta(format: string): ExportMeta {
 export function exportParameters(format: string, params: ExportParameter[]): string {
   switch (format) {
     case 'matlab':    return formatMATLAB(params)
-    case 'simulink':  return formatSimulinkDict(params)
+    case 'simulink':  return formatSimulinkDictScript(params)
+    case 'mat':       return formatMATScript(params)
     case 'python':    return formatPython(params)
     case 'c_header':  return formatCHeader(params)
     case 'ada':       return formatAda(params)
@@ -771,7 +798,7 @@ export function exportParameters(format: string, params: ExportParameter[]): str
 }
 
 export const SUPPORTED_EXPORT_FORMATS = [
-  'matlab', 'simulink', 'python', 'c_header', 'ada',
+  'matlab', 'simulink', 'mat', 'python', 'c_header', 'ada',
   'json', 'yaml', 'csv', 'xml', 'xtce', 'autosar', 'ros', 'dds',
 ] as const
 

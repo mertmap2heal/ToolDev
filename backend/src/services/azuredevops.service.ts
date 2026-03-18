@@ -15,6 +15,7 @@ import {
   SUPPORTED_EXPORT_FORMATS,
   ExportFormat,
 } from './parameterExport.service'
+import { buildCIPipeline } from './ciPipeline.service'
 
 export interface AzureDevOpsConfig {
   baseUrl: string    // https://dev.azure.com  or  https://ado.mycompany.com
@@ -198,6 +199,9 @@ export async function pushAllFormatsAzure(
   const message = commitMessage
     ?? `chore: update parameter set (${params.length} parameters, ${new Date().toISOString()})`
 
+  // CI/CD pipeline file
+  const ci = buildCIPipeline('azuredevops', formats, repoDefaultBranch)
+
   // Build file changes
   const buildChanges = (changeType: 'add' | 'edit') => [
     ...formats.map(format => {
@@ -214,6 +218,14 @@ export async function pushAllFormatsAzure(
       item: { path: '/README.md' },
       newContent: {
         content: Buffer.from(buildReadme(params.length, formats)).toString('base64'),
+        contentType: 'base64Encoded',
+      },
+    },
+    {
+      changeType,
+      item: { path: `/${ci.filename}` },
+      newContent: {
+        content: Buffer.from(ci.content).toString('base64'),
         contentType: 'base64Encoded',
       },
     },

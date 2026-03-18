@@ -10,6 +10,7 @@ import {
   ExportParameter,
   SUPPORTED_EXPORT_FORMATS,
 } from './parameterExport.service'
+import { buildCIPipeline } from './ciPipeline.service'
 
 export interface GitLabConfig {
   baseUrl: string    // e.g. https://gitlab.com  (no trailing slash)
@@ -119,6 +120,18 @@ export async function protectGitLabBranch(config: GitLabConfig, repoId: number, 
   }
 }
 
+export async function unprotectGitLabBranch(config: GitLabConfig, repoId: number, branch: string): Promise<void> {
+  try {
+    await gitlabFetch(
+      `${apiBase(config)}/projects/${repoId}/protected_branches/${encodeURIComponent(branch)}`,
+      config.token,
+      'DELETE'
+    )
+  } catch {
+    // May not be protected — non-fatal
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Create a new GitLab project (repository)
 // ---------------------------------------------------------------------------
@@ -212,6 +225,11 @@ export async function pushAllFormats(
     content: buildReadme(params.length),
     encoding: 'text',
   })
+
+  // CI/CD pipeline file
+  const ci = buildCIPipeline('gitlab', [...formatsToUse], branch)
+  const ciAction = existingPaths.has(ci.filename) ? 'update' : 'create'
+  actions.push({ action: ciAction, file_path: ci.filename, content: ci.content, encoding: 'text' })
 
   const message = commitMessage
     ?? `chore: update parameter set (${params.length} parameters, ${new Date().toISOString()})`

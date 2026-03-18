@@ -19,6 +19,7 @@ import {
   generateSubmoduleInstructions as genInstructionsGitLab,
   validateGitLabToken,
   protectGitLabBranch,
+  unprotectGitLabBranch,
   GitLabConfig,
 } from '../services/gitlab.service'
 import {
@@ -90,6 +91,24 @@ function buildParameterWhere(projectId: string, query: Record<string, string | u
   }
   return where
 }
+
+/**
+ * Auto-increment the minor version for approved parameters when substantive
+ * fields change. Format: "X.Y" → "X.Y+1". Falls back gracefully for other formats.
+ */
+function incrementMinorVersion(version: string): string {
+  const match = version.match(/^(\d+)\.(\d+)$/)
+  if (match) return `${match[1]}.${parseInt(match[2], 10) + 1}`
+  const intMatch = version.match(/^(\d+)$/)
+  if (intMatch) return `${parseInt(intMatch[1], 10)}.1`
+  return `${version}.1` // unknown format — append suffix
+}
+
+/** Fields whose change on an approved parameter triggers a version bump. */
+const VERSION_BUMP_FIELDS = new Set([
+  'name', 'defaultValue', 'dataType', 'unit', 'tolerance',
+  'minValue', 'maxValue', 'formula', 'description',
+])
 
 /** Build full auditable snapshot for ParameterVersion (name, description, value fields, status, etc.). */
 function buildParameterVersionSnapshot(p: {
@@ -287,6 +306,14 @@ export const updateParameter = async (req: AuthRequest, res: Response) => {
     if (formula !== undefined) updateData.formula = formula
     if (sourceFunctionId !== undefined) updateData.sourceFunctionId = sourceFunctionId === '' ? null : sourceFunctionId
     if (name !== undefined) updateData.name = name
+
+    // Auto-increment minor version whenever a substantive field changes,
+    // regardless of status (draft, approved, or obsolete).
+    // Metadata-only changes (tags, folder, ownerType, status, etc.) do NOT bump.
+    const substantiveChange = Object.keys(updateData).some(k => VERSION_BUMP_FIELDS.has(k))
+    if (substantiveChange) {
+      updateData.version = incrementMinorVersion(parameter.version)
+    }
 
     const updatedParameter = await prisma.parameter.update({
       where: { id },
@@ -710,9 +737,8 @@ export async function exportParametersHandler(req: AuthRequest, res: Response) {
       formula: p.formula,
     }))
 
-    const content = formatExport(format, params)
     const meta = getExportMeta(format)
-
+    const content = formatExport(format, params)
     res.setHeader('Content-Type', meta.contentType)
     res.setHeader('Content-Disposition', `attachment; filename="${meta.filename}"`)
     res.send(content)
@@ -1065,7 +1091,11 @@ export async function gitPublishSyncHandler(req: AuthRequest, res: Response) {
       case 'gitlab': {
         const numericId = parseInt(repoId, 10)
         const config: GitLabConfig = { baseUrl, token }
-        const push = await pushAllFormatsGitLab(config, numericId, params, branch ?? 'main', undefined, formats)
+        const targetBranch = branch ?? 'main'
+        // Temporarily lift branch protection so the tool can push, then re-protect
+        await unprotectGitLabBranch(config, numericId, targetBranch)
+        const push = await pushAllFormatsGitLab(config, numericId, params, targetBranch, undefined, formats)
+        await protectGitLabBranch(config, numericId, targetBranch)
         commitSha = push.commitSha; pushedAt = push.pushedAt
         break
       }
