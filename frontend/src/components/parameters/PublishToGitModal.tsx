@@ -125,7 +125,8 @@ const FORMAT_GROUPS = [
     label: 'MATLAB / Simulink',
     formats: [
       { key: 'matlab',   label: 'MATLAB script (.m)' },
-      { key: 'simulink', label: 'Simulink Data Dictionary (.m)' },
+      { key: 'mat',      label: 'MATLAB workspace script — creates .mat (.m)' },
+      { key: 'simulink', label: 'Simulink Data Dictionary script — creates .sldd (.m)' },
     ],
   },
   {

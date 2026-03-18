@@ -15,6 +15,7 @@ import {
   SUPPORTED_EXPORT_FORMATS,
   ExportFormat,
 } from './parameterExport.service'
+import { buildCIPipeline } from './ciPipeline.service'
 
 export interface BitbucketConfig {
   baseUrl: string    // https://bitbucket.org  or  https://bitbucket.mycompany.com
@@ -240,6 +241,15 @@ export async function pushAllFormatsBitbucket(
     `Content-Disposition: form-data; name="README.md"; filename="README.md"\r\n` +
     `Content-Type: text/plain\r\n\r\n` +
     readme + '\r\n'
+  )
+
+  // CI/CD pipeline file (bitbucket-pipelines.yml)
+  const ci = buildCIPipeline('bitbucket', formats, repo.defaultBranch)
+  parts.push(
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="${ci.filename}"; filename="${ci.filename}"\r\n` +
+    `Content-Type: text/plain\r\n\r\n` +
+    ci.content + '\r\n'
   )
 
   // Commit message field

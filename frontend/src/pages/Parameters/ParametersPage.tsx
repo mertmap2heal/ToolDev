@@ -28,7 +28,8 @@ const EXPORT_GROUPS = [
     label: 'MATLAB / Simulink',
     formats: [
       { key: 'matlab',   label: 'MATLAB script (.m)' },
-      { key: 'simulink', label: 'Simulink Data Dictionary creator (.m)' },
+      { key: 'mat',      label: 'MATLAB workspace script — creates .mat (.m)' },
+      { key: 'simulink', label: 'Simulink Data Dictionary script — creates .sldd (.m)' },
     ],
   },
   {
@@ -60,7 +61,7 @@ const EXPORT_GROUPS = [
 ]
 
 const FORMAT_EXTENSIONS: Record<string, string> = {
-  matlab: 'parameters.m', simulink: 'create_parameters_sldd.m',
+  matlab: 'parameters.m', simulink: 'create_parameters_sldd.m', mat: 'create_parameters_mat.m',
   python: 'parameters.py', c_header: 'parameters.h', ada: 'parameters.ads',
   xtce: 'parameters.xtce', autosar: 'parameters.arxml', ros: 'parameters_ros.yaml',
   dds: 'parameters.idl', json: 'parameters.json', yaml: 'parameters.yaml',
