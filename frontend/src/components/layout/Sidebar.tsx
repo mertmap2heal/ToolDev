@@ -12,11 +12,15 @@ import {
   GitBranch,
   Boxes,
   Shield,
+  X,
+  Sun,
+  Moon,
   type LucideIcon,
 } from 'lucide-react'
 import { MODULES, CATEGORIES } from '../../config/ModuleConfiguration'
 import { useAuthStore } from '../../store/authStore'
 import { useProjectStore } from '../../store/projectStore'
+import { useThemeStore } from '../../store/themeStore'
 import Logo from '../Logo'
 
 // ---------------------------------------------------------------------------
@@ -69,7 +73,7 @@ function NavItem({ icon: Icon, label, to, collapsed, active }: NavItemProps) {
         display: 'flex',
         alignItems: 'center',
         gap: 8,
-        padding: collapsed ? '7px 0' : '6px 10px',
+        padding: collapsed ? '8px 0' : '8px 12px',
         justifyContent: collapsed ? 'center' : 'flex-start',
         borderRadius: 5,
         fontSize: 12,
@@ -93,7 +97,7 @@ function NavItem({ icon: Icon, label, to, collapsed, active }: NavItemProps) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <Icon size={14} style={{ flexShrink: 0, opacity: active ? 1 : 0.75 }} />
+      <Icon size={15} style={{ flexShrink: 0, opacity: active ? 1 : 0.75 }} />
       {!collapsed && (
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: '1.3' }}>
           {label}
@@ -241,7 +245,12 @@ function CollapseBtn({ collapsed, onToggle }: { collapsed: boolean; onToggle: ()
 // Main component
 // ---------------------------------------------------------------------------
 
-export default function Sidebar() {
+interface SidebarProps {
+  mobileOpen: boolean
+  onMobileClose: () => void
+}
+
+export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const [collapsed, setCollapsedState] = useState(getCollapsed)
   const [sections, setSections] = useState<SectionState>(getSectionState)
   const [highlighted, setHighlighted] = useState<SectionId | null>(null)
@@ -252,8 +261,18 @@ export default function Sidebar() {
   })
   const location = useLocation()
   const { projectId } = useParams<{ projectId: string }>()
+  const prevPath = useRef(location.pathname)
+
+  // Close mobile nav on route change
+  useEffect(() => {
+    if (location.pathname !== prevPath.current) {
+      prevPath.current = location.pathname
+      onMobileClose()
+    }
+  }, [location.pathname, onMobileClose])
   const { user } = useAuthStore()
   const { projects } = useProjectStore()
+  const { theme, toggleTheme } = useThemeStore()
 
   const project = projects.find(p => p.id === projectId)
   const projectName = project?.name ?? (projectId ? 'Project' : null)
@@ -316,18 +335,32 @@ export default function Sidebar() {
   const devModules     = MODULES.filter(m => m.category === 'development')
   const assuranceModules = MODULES.filter(m => m.category === 'assurance')
 
+  // On mobile the sidebar is always full expanded (no collapsed icon mode)
+  const effectiveCollapsed = mobileOpen ? false : collapsed
+  const desktopWidth = collapsed ? 48 : 220
   const sidebarStyle: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
     flexShrink: 0,
     height: '100%',
-    width: collapsed ? 48 : 220,
-    minWidth: collapsed ? 48 : 220,
+    width: mobileOpen ? 280 : desktopWidth,
+    minWidth: mobileOpen ? 280 : desktopWidth,
     borderRight: '1px solid var(--theme-border)',
     backgroundColor: 'var(--theme-sidebar)',
-    transition: 'width 0.2s ease-in-out, min-width 0.2s ease-in-out',
+    transition: 'width 0.2s ease-in-out, min-width 0.2s ease-in-out, transform 0.2s ease-in-out',
     overflow: 'hidden',
   }
+
+  const mobileCloseBtn = (
+    <button
+      onClick={onMobileClose}
+      className="md:hidden p-1 rounded"
+      style={{ color: 'var(--theme-text-muted)', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}
+      aria-label="Close navigation"
+    >
+      <X size={16} />
+    </button>
+  )
 
   // ---- Shared bottom area ----
   const bottomArea = (
@@ -336,8 +369,8 @@ export default function Sidebar() {
       borderTop: '1px solid var(--theme-border)',
       padding: '4px 6px',
     }}>
-      <NavItem icon={Settings} label="Settings" to="/settings" collapsed={collapsed} active={isActive('/settings')} />
-      {!collapsed && user && (
+      <NavItem icon={Settings} label="Settings" to="/settings" collapsed={effectiveCollapsed} active={isActive('/settings')} />
+      {!effectiveCollapsed && user && (
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -366,31 +399,62 @@ export default function Sidebar() {
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
+            flex: 1,
           }}>
             {user.name ?? user.email}
           </span>
+          {/* Theme toggle — visible in sidebar on mobile since StatusBar is hidden */}
+          {mobileOpen && (
+            <button
+              onClick={toggleTheme}
+              title={theme === 'midnight' ? 'Switch to light theme' : 'Switch to dark theme'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '4px',
+                background: 'none',
+                border: 'none',
+                borderRadius: 4,
+                cursor: 'pointer',
+                color: 'var(--theme-text-muted)',
+                flexShrink: 0,
+              }}
+            >
+              {theme === 'midnight' ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
+          )}
         </div>
       )}
     </div>
   )
 
+  const asideClassName = [
+    'fixed inset-y-0 left-0 z-50',
+    mobileOpen ? 'translate-x-0' : '-translate-x-full',
+    'md:relative md:inset-auto md:translate-x-0 md:z-auto',
+  ].join(' ')
+
   // ---- Project sidebar ----
   if (projectId) {
     return (
-      <aside style={sidebarStyle}>
+      <aside className={asideClassName} style={sidebarStyle}>
         {/* Header */}
         <div style={{
           height: 44,
           display: 'flex',
           alignItems: 'center',
-          padding: collapsed ? '0 8px' : '0 6px 0 12px',
-          justifyContent: collapsed ? 'center' : 'space-between',
+          padding: effectiveCollapsed ? '0 8px' : '0 6px 0 12px',
+          justifyContent: effectiveCollapsed ? 'center' : 'space-between',
           borderBottom: '1px solid var(--theme-border)',
           flexShrink: 0,
           gap: 6,
         }}>
-          {collapsed ? (
-            <CollapseBtn collapsed={collapsed} onToggle={toggle} />
+          {effectiveCollapsed ? (
+            <>
+              <CollapseBtn collapsed={effectiveCollapsed} onToggle={toggle} />
+              {mobileCloseBtn}
+            </>
           ) : (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0, flex: 1 }}>
@@ -412,13 +476,14 @@ export default function Sidebar() {
                   {projectName}
                 </span>
               </div>
-              <CollapseBtn collapsed={collapsed} onToggle={toggle} />
+              <CollapseBtn collapsed={effectiveCollapsed} onToggle={toggle} />
+              {mobileCloseBtn}
             </>
           )}
         </div>
 
         {/* Nav — collapsed shows 3 category icons only; expanded shows full accordion */}
-        {collapsed ? (
+        {effectiveCollapsed ? (
           <div style={{ flex: 1, padding: '4px 6px', display: 'flex', flexDirection: 'column' }}>
             <NavItem
               icon={Home}
@@ -549,34 +614,38 @@ export default function Sidebar() {
 
   // ---- Global sidebar ----
   return (
-    <aside style={sidebarStyle}>
+    <aside className={asideClassName} style={sidebarStyle}>
       {/* Header */}
       <div style={{
         height: 44,
         display: 'flex',
         alignItems: 'center',
-        padding: collapsed ? '0 8px' : '0 6px 0 12px',
-        justifyContent: collapsed ? 'center' : 'space-between',
+        padding: effectiveCollapsed ? '0 8px' : '0 6px 0 12px',
+        justifyContent: effectiveCollapsed ? 'center' : 'space-between',
         borderBottom: '1px solid var(--theme-border)',
         flexShrink: 0,
         gap: 6,
       }}>
-        {collapsed ? (
-          <CollapseBtn collapsed={collapsed} onToggle={toggle} />
+        {effectiveCollapsed ? (
+          <>
+            <CollapseBtn collapsed={effectiveCollapsed} onToggle={toggle} />
+            {mobileCloseBtn}
+          </>
         ) : (
           <>
             <Link to="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', minWidth: 0 }}>
               <Logo size="sm" showText={true} />
             </Link>
-            <CollapseBtn collapsed={collapsed} onToggle={toggle} />
+            <CollapseBtn collapsed={effectiveCollapsed} onToggle={toggle} />
+            {mobileCloseBtn}
           </>
         )}
       </div>
 
       {/* Nav */}
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '4px 6px' }}>
-        <NavItem icon={LayoutDashboard} label="Dashboard" to="/" collapsed={collapsed} active={location.pathname === '/'} />
-        <NavItem icon={Package} label="Inventory" to="/inventory/items" collapsed={collapsed} active={isActive('/inventory')} />
+        <NavItem icon={LayoutDashboard} label="Dashboard" to="/" collapsed={effectiveCollapsed} active={location.pathname === '/'} />
+        <NavItem icon={Package} label="Inventory" to="/inventory/items" collapsed={effectiveCollapsed} active={isActive('/inventory')} />
       </div>
 
       {bottomArea}

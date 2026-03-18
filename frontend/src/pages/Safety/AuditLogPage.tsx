@@ -7,7 +7,7 @@ export default function AuditLogPage() {
   const [selected, setSelected] = useState<(typeof MOCK_AUDIT_LOG)[0] | null>(null)
 
   return (
-    <div className="flex gap-6">
+    <div className="flex flex-col md:flex-row gap-6">
       <div className="flex-1 space-y-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Audit Log</h2>
@@ -15,8 +15,8 @@ export default function AuditLogPage() {
             Mock log. Detail shows before/after placeholders.
           </p>
         </div>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-x-auto">
+          <table className="w-full min-w-[480px] text-sm">
             <thead className="bg-gray-50 dark:bg-gray-900/50">
               <tr>
                 <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">Action</th>
@@ -50,7 +50,7 @@ export default function AuditLogPage() {
         </div>
       </div>
       {selected && (
-        <div className="w-96 shrink-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+        <div className="w-full md:w-96 md:shrink-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Detail</h3>
           <div className="space-y-3 text-sm">
             <div><span className="text-gray-500">Action:</span> {selected.action}</div>

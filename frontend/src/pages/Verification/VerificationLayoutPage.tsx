@@ -514,8 +514,8 @@ function VerificationLayoutInner() {
           {projectId && <SafetyLinkPanel variant="evidence" count={2} />}
         </div>
 
-        <div className="flex-shrink-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-          <div className="flex border-b border-gray-200 dark:border-gray-700">
+        <div className="flex-shrink-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-x-auto">
+          <div className="flex border-b border-gray-200 dark:border-gray-700 min-w-max">
             {VERIFICATION_MAIN_TABS.map((tab) => {
               const Icon = tab.icon
               const active = !isTemplates && activeTabParam === tab.id
@@ -531,7 +531,7 @@ function VerificationLayoutInner() {
                   key={tab.id}
                   onClick={() => handleMainTab(tab.id)}
                   className={clsx(
-                    'flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors',
+                    'flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap',
                     active
                       ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'

@@ -100,19 +100,20 @@ export default function SettingsPage() {
       </div>
 
       {/* Body: sidebar + content */}
-      <div className="flex-1 flex min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
         {/* Sidebar Nav */}
         <nav
-          className="flex-shrink-0 w-56 border-r overflow-y-auto py-3 px-2"
+          className="flex-shrink-0 w-full md:w-56 border-b md:border-b-0 md:border-r overflow-x-auto md:overflow-y-auto py-2 md:py-3 px-2"
           style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-surface)' }}
         >
+          <div className="flex md:block">
           {navItems.map((item) => {
             const active = activeSection === item.id
             return (
               <button
                 key={item.id}
                 onClick={() => setActiveSection(item.id)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors mb-0.5 group ${
+                className={`flex-shrink-0 flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors mb-0.5 group ${
                   active
                     ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/50'
@@ -127,6 +128,7 @@ export default function SettingsPage() {
               </button>
             )
           })}
+          </div>
         </nav>
 
         {/* Content */}

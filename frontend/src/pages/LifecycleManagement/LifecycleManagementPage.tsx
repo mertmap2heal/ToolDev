@@ -353,7 +353,7 @@ function LifecycleLibraryContent({ searchQuery = '' }: { searchQuery?: string })
 
   return (
     <div className="space-y-6">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Lifecycle Library</h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
@@ -3479,7 +3479,7 @@ function StatusDefinitionsContent({ searchQuery = '' }: { searchQuery?: string }
 
   return (
     <div className="space-y-4">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Status Definitions</h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">

@@ -221,9 +221,9 @@ export default function SystemFunctionsPage() {
     <div className="flex flex-col h-[calc(100vh-64px)]">
       {/* Top bar */}
       <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center flex-shrink-0">
               <Settings size={16} className="text-blue-600 dark:text-blue-400" />
             </div>
             <div>
@@ -232,7 +232,7 @@ export default function SystemFunctionsPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Stats summary */}
             <div className="hidden lg:flex items-center gap-4 mr-4 text-xs text-gray-500 dark:text-gray-400">
               <span className="flex items-center gap-1.5">

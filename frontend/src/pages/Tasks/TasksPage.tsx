@@ -179,14 +179,14 @@ export default function TasksPage() {
     return (
       <div className="flex flex-col min-h-0">
         {/* ─── Header ─── */}
-        <div className="flex items-start justify-between gap-4 mb-5">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-5">
           <div>
             <h1 className="text-lg font-bold text-gray-900 dark:text-white">Project Tasks</h1>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
               Track, assign, and manage all work items for <span className="font-medium text-gray-700 dark:text-gray-300">{projectName}</span>
             </p>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={handleRefresh}
               className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -207,7 +207,8 @@ export default function TasksPage() {
         </div>
 
         {/* ─── Task Tools Quick Nav ─── */}
-        <div className="flex items-center gap-1 mb-4 py-2 px-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-x-auto">
+        <div className="overflow-x-auto mb-4">
+          <div className="flex items-center gap-1 py-2 px-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg min-w-max">
           {[
             { id: 'tasks', icon: List, label: 'Tasks' },
             { id: 'reports', icon: BarChart3, label: 'Reports' },
@@ -234,6 +235,7 @@ export default function TasksPage() {
               </button>
             )
           })}
+          </div>
         </div>
 
         {/* ─── Stats KPI Bar ─── */}
@@ -245,8 +247,8 @@ export default function TasksPage() {
         {selectedTool === 'tasks' && (
           <>
             {/* Toolbar: View Switcher + Quick Filters + Bulk Actions */}
-            <div className="flex items-center justify-between gap-3 mb-4 mt-4">
-          <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 mb-4 mt-4 overflow-x-auto">
+          <div className="flex items-center gap-2 min-w-max">
             {/* View Switcher */}
             <ViewSwitcher viewType={viewType} onChange={setViewType} />
 
@@ -297,14 +299,14 @@ export default function TasksPage() {
           </div>
 
           {/* Search */}
-          <div className="relative">
+          <div className="relative flex-1 min-w-[160px]">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search tasks…"
-              className="pl-8 pr-3 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 w-52"
+              className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
             {searchQuery && (
               <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -420,14 +422,14 @@ export default function TasksPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Header */}
-        <div className="flex items-start justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-4">
           <div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">All Tasks</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
               {projectId ? 'Filtered by project' : 'Across all projects'}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <ViewSwitcher viewType={viewType} onChange={setViewType} />
             <button onClick={handleRefresh} className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors" title="Refresh">
               <RefreshCw size={13} />

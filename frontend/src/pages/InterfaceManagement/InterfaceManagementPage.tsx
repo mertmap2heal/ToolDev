@@ -278,7 +278,7 @@ export default function InterfaceManagementPage() {
 
         {/* Utilities row */}
         <div className="flex flex-wrap items-center gap-4">
-          <div className="relative flex-1 min-w-[200px] max-w-md">
+          <div className="relative flex-1 w-full sm:min-w-[200px] sm:max-w-md">
             <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
               size={16}
@@ -375,7 +375,7 @@ export default function InterfaceManagementPage() {
           </button>
           {isFiltersExpanded && (
             <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Type</label>
                   <div className="space-y-2">

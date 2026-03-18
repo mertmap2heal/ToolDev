@@ -27,7 +27,6 @@ export default function StatusBar() {
   const moduleName = matchedModule?.label ?? ''
 
   const barStyle: React.CSSProperties = {
-    display: 'flex',
     alignItems: 'center',
     height: 24,
     padding: '0 12px',
@@ -41,7 +40,7 @@ export default function StatusBar() {
   }
 
   return (
-    <div style={barStyle}>
+    <div className="hidden sm:flex" style={barStyle}>
       {/* Left: project + module */}
       <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
         <FolderOpen size={11} />
