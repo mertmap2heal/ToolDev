@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
+import UnitPicker from './UnitPicker'
 import type { Parameter, UpdateParameterDto } from 'shared/types/engineering.types'
 
 interface EditParameterModalProps {
@@ -209,12 +210,9 @@ export default function EditParameterModal({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
               Unit
             </label>
-            <input
-              type="text"
+            <UnitPicker
               value={formData.unit || ''}
-              onChange={(e) => handleChange('unit', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              placeholder="e.g., °C, Pa, m/s, kg"
+              onChange={(v) => handleChange('unit', v)}
             />
           </div>
 
