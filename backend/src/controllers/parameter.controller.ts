@@ -1,6 +1,55 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { PrismaClient } from '@prisma/client'
+import {
+  exportParameters as formatExport,
+  getExportMeta,
+  SUPPORTED_EXPORT_FORMATS,
+  ExportParameter,
+} from '../services/parameterExport.service'
+import {
+  importParameters as parseImport,
+  detectFormat,
+} from '../services/parameterImport.service'
+import {
+  createGitLabRepo,
+  pushAllFormats as pushAllFormatsGitLab,
+  getLatestCommit as getLatestCommitGitLab,
+  getRepoInfo as getRepoInfoGitLab,
+  generateSubmoduleInstructions as genInstructionsGitLab,
+  validateGitLabToken,
+  protectGitLabBranch,
+  GitLabConfig,
+} from '../services/gitlab.service'
+import {
+  createGitHubRepo,
+  pushAllFormatsGitHub,
+  getLatestCommitGitHub,
+  getRepoInfoGitHub,
+  generateSubmoduleInstructionsGitHub,
+  validateGitHubToken,
+  protectGitHubBranch,
+} from '../services/github.service'
+import {
+  createBitbucketRepo,
+  pushAllFormatsBitbucket,
+  getLatestCommitBitbucket,
+  getRepoInfoBitbucket,
+  generateSubmoduleInstructionsBitbucket,
+  validateBitbucketToken,
+  protectBitbucketBranch,
+  BitbucketConfig,
+} from '../services/bitbucket.service'
+import {
+  createAzureRepo,
+  pushAllFormatsAzure,
+  getLatestCommitAzure,
+  getRepoInfoAzure,
+  generateSubmoduleInstructionsAzure,
+  validateAzureToken,
+  protectAzureBranch,
+  AzureDevOpsConfig,
+} from '../services/azuredevops.service'
 
 const prisma = new PrismaClient()
 
@@ -623,5 +672,518 @@ export const deleteParameter = async (req: AuthRequest, res: Response) => {
       success: false,
       error: 'Internal server error',
     })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Export parameters — GET /:projectId/export/:format
+// ---------------------------------------------------------------------------
+export async function exportParametersHandler(req: AuthRequest, res: Response) {
+  try {
+    const { projectId, format } = req.params
+
+    if (!SUPPORTED_EXPORT_FORMATS.includes(format as typeof SUPPORTED_EXPORT_FORMATS[number])) {
+      return res.status(400).json({
+        success: false,
+        error: `Unsupported format "${format}". Supported: ${SUPPORTED_EXPORT_FORMATS.join(', ')}`,
+      })
+    }
+
+    const dbParams = await prisma.parameter.findMany({
+      where: { projectId },
+      orderBy: [{ parameterId: 'asc' }, { name: 'asc' }],
+    })
+
+    const params: ExportParameter[] = dbParams.map(p => ({
+      parameterId: p.parameterId,
+      name: p.name,
+      description: p.description,
+      dataType: p.dataType,
+      defaultValue: p.defaultValue,
+      unit: p.unit,
+      tolerance: p.tolerance,
+      minValue: p.minValue,
+      maxValue: p.maxValue,
+      status: p.status,
+      version: p.version,
+      tags: Array.isArray(p.tags) ? (p.tags as string[]) : [],
+      formula: p.formula,
+    }))
+
+    const content = formatExport(format, params)
+    const meta = getExportMeta(format)
+
+    res.setHeader('Content-Type', meta.contentType)
+    res.setHeader('Content-Disposition', `attachment; filename="${meta.filename}"`)
+    res.send(content)
+  } catch (error) {
+    console.error('Export parameters error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Import parameters — POST /:projectId/import
+// Body: { format?: string, filename?: string, content: string }
+// ---------------------------------------------------------------------------
+export async function importParametersHandler(req: AuthRequest, res: Response) {
+  try {
+    const { projectId } = req.params
+    const { format, filename, content } = req.body as {
+      format?: string
+      filename?: string
+      content: string
+    }
+
+    if (!content) {
+      return res.status(400).json({ success: false, error: 'Missing "content" in request body' })
+    }
+
+    const resolvedFormat = format ?? (filename ? detectFormat(filename, content) : null)
+    if (!resolvedFormat) {
+      return res.status(400).json({
+        success: false,
+        error: 'Could not detect format. Provide "format" (csv | json | c_header | matlab)',
+      })
+    }
+
+    const { parsed, warnings } = parseImport(resolvedFormat, content)
+
+    if (parsed.length === 0) {
+      return res.status(422).json({ success: false, error: 'No parameters found in file', warnings })
+    }
+
+    let imported = 0
+    let skipped = 0
+    const errors: string[] = []
+
+    for (const p of parsed) {
+      try {
+        const existing = await prisma.parameter.findFirst({
+          where: { projectId, name: p.name },
+        })
+
+        if (existing) {
+          // Update only fields that differ
+          const updatePayload: Record<string, unknown> = {
+            description:  p.description  ?? existing.description,
+            dataType:     p.dataType     ?? existing.dataType,
+            defaultValue: p.defaultValue ?? existing.defaultValue,
+            unit:         p.unit         ?? existing.unit,
+            tolerance:    p.tolerance    ?? existing.tolerance,
+            minValue:     p.minValue     ?? existing.minValue,
+            maxValue:     p.maxValue     ?? existing.maxValue,
+            formula:      p.formula      ?? existing.formula,
+          }
+          if (p.tags) updatePayload.tags = p.tags
+          await prisma.parameter.update({
+            where: { id: existing.id },
+            data: updatePayload,
+          })
+          skipped++ // counted as "updated"
+        } else {
+          const newParameterId = await generateParameterId(projectId)
+          await prisma.parameter.create({
+            data: {
+              projectId,
+              parameterId: newParameterId,
+              name: p.name,
+              description:  p.description,
+              dataType:     p.dataType,
+              defaultValue: p.defaultValue,
+              unit:         p.unit,
+              tolerance:    p.tolerance,
+              minValue:     p.minValue,
+              maxValue:     p.maxValue,
+              formula:      p.formula,
+              tags:         p.tags ?? [],
+              status:       'draft',
+            },
+          })
+          imported++
+        }
+      } catch (err) {
+        errors.push(`"${p.name}": ${(err as Error).message}`)
+      }
+    }
+
+    res.json({
+      success: true,
+      data: { imported, updated: skipped, errors, warnings },
+      message: `Import complete: ${imported} created, ${skipped} updated${errors.length ? `, ${errors.length} errors` : ''}`,
+    })
+  } catch (error) {
+    console.error('Import parameters error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+type GitPlatform = 'gitlab' | 'github' | 'bitbucket' | 'azuredevops'
+
+function mapDbParams(dbParams: Awaited<ReturnType<typeof prisma.parameter.findMany>>): ExportParameter[] {
+  return dbParams.map(p => ({
+    parameterId: p.parameterId, name: p.name, description: p.description,
+    dataType: p.dataType, defaultValue: p.defaultValue, unit: p.unit,
+    tolerance: p.tolerance, minValue: p.minValue, maxValue: p.maxValue,
+    status: p.status, version: p.version,
+    tags: Array.isArray(p.tags) ? (p.tags as string[]) : [],
+    formula: p.formula,
+  }))
+}
+
+// ---------------------------------------------------------------------------
+// Git Token Validation — POST /:projectId/git/validate-token
+// Verifies credentials against the platform API and returns the username.
+// ---------------------------------------------------------------------------
+export async function gitValidateTokenHandler(req: AuthRequest, res: Response) {
+  try {
+    const { platform, baseUrl, token, username, org, project } = req.body as {
+      platform: GitPlatform
+      baseUrl: string
+      token: string
+      username?: string
+      org?: string
+      project?: string
+    }
+
+    if (!platform || !baseUrl || !token) {
+      return res.status(400).json({ success: false, error: 'platform, baseUrl, and token are required' })
+    }
+
+    let result: { valid: boolean; username?: string; error?: string }
+
+    switch (platform) {
+      case 'gitlab':
+        result = await validateGitLabToken({ baseUrl, token })
+        break
+      case 'github':
+        result = await validateGitHubToken({ baseUrl, token })
+        break
+      case 'bitbucket':
+        if (!username) return res.status(400).json({ success: false, error: 'username is required for Bitbucket' })
+        result = await validateBitbucketToken({ baseUrl, username, appPassword: token })
+        break
+      case 'azuredevops':
+        if (!org || !project) return res.status(400).json({ success: false, error: 'org and project are required for Azure DevOps' })
+        result = await validateAzureToken({ baseUrl, token, org, project })
+        break
+      default:
+        return res.status(400).json({ success: false, error: `Unknown platform: ${platform}` })
+    }
+
+    if (result.valid) {
+      res.json({ success: true, data: { valid: true, username: result.username } })
+    } else {
+      res.status(401).json({ success: false, error: result.error ?? 'Invalid token' })
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Git Publish Setup — POST /:projectId/git/setup
+// Creates a new repository on the specified platform and pushes selected formats.
+// ---------------------------------------------------------------------------
+export async function gitPublishSetupHandler(req: AuthRequest, res: Response) {
+  try {
+    const { projectId } = req.params
+    const {
+      platform, baseUrl, token, repoName, description, visibility,
+      // GitLab extras
+      namespaceId,
+      // Bitbucket extras
+      username, workspace,
+      // Azure DevOps extras
+      org, project,
+      // Format selection
+      selectedFormats,
+      // Tag filtering
+      selectedTags,
+    } = req.body as {
+      platform: GitPlatform
+      baseUrl: string
+      token: string
+      repoName: string
+      description?: string
+      visibility?: 'private' | 'internal' | 'public'
+      namespaceId?: number
+      username?: string
+      workspace?: string
+      org?: string
+      project?: string
+      selectedFormats?: string[]
+      selectedTags?: string[]
+    }
+
+    if (!platform || !baseUrl || !token || !repoName) {
+      return res.status(400).json({ success: false, error: 'platform, baseUrl, token and repoName are required' })
+    }
+
+    const dbParams = await prisma.parameter.findMany({ where: { projectId }, orderBy: { name: 'asc' } })
+    const allParams = mapDbParams(dbParams)
+    const params = selectedTags?.length
+      ? allParams.filter(p => p.tags?.some(t => selectedTags.includes(t)))
+      : allParams
+
+    const projectRecord = await prisma.project.findUnique({ where: { id: projectId }, select: { name: true } })
+    const projectDesc = description ?? `Engineering parameter set for ${projectRecord?.name ?? projectId}`
+    const formats = selectedFormats ?? SUPPORTED_EXPORT_FORMATS as unknown as string[]
+
+    let repoId: string | number = ''
+    let repoUrl = ''
+    let httpUrl = ''
+    let sshUrl = ''
+    let defaultBranch = 'main'
+    let commitSha = ''
+    let pushedAt = ''
+    let instructions: { https: string; ssh: string; updateCmd: string }
+
+    switch (platform) {
+      case 'gitlab': {
+        const config: GitLabConfig = { baseUrl, token }
+        const repo = await createGitLabRepo(config, {
+          name: repoName,
+          description: projectDesc,
+          visibility,
+          namespaceId,
+        })
+        const push = await pushAllFormatsGitLab(config, repo.id, params, defaultBranch, undefined, formats)
+        repoId = repo.id; repoUrl = repo.webUrl; httpUrl = repo.httpUrl; sshUrl = repo.sshUrl
+        defaultBranch = repo.defaultBranch; commitSha = push.commitSha; pushedAt = push.pushedAt
+        instructions = genInstructionsGitLab(repo)
+        await protectGitLabBranch(config, repo.id, repo.defaultBranch)
+        break
+      }
+      case 'github': {
+        const config = { baseUrl, token }
+        const repo = await createGitHubRepo(config, { name: repoName, description: projectDesc, isPrivate: visibility !== 'public' })
+        const push = await pushAllFormatsGitHub(config, repo, params, formats, repo.defaultBranch)
+        repoId = `${repo.owner}/${repo.name}`; repoUrl = repo.webUrl; httpUrl = repo.httpUrl; sshUrl = repo.sshUrl
+        defaultBranch = repo.defaultBranch; commitSha = push.commitSha; pushedAt = push.pushedAt
+        instructions = generateSubmoduleInstructionsGitHub(repo)
+        await protectGitHubBranch(config, repo.owner, repo.name, repo.defaultBranch)
+        break
+      }
+      case 'bitbucket': {
+        if (!username || !workspace) {
+          return res.status(400).json({ success: false, error: 'username and workspace are required for Bitbucket' })
+        }
+        const config: BitbucketConfig = { baseUrl, username, appPassword: token }
+        const repo = await createBitbucketRepo(config, { workspace, slug: repoName, description: projectDesc, isPrivate: visibility !== 'public' })
+        const push = await pushAllFormatsBitbucket(config, repo, params, formats)
+        repoId = repo.fullName; repoUrl = repo.webUrl; httpUrl = repo.httpUrl; sshUrl = repo.sshUrl
+        defaultBranch = repo.defaultBranch; commitSha = push.commitSha; pushedAt = push.pushedAt
+        instructions = generateSubmoduleInstructionsBitbucket(repo)
+        await protectBitbucketBranch(config, workspace, repoName, repo.defaultBranch)
+        break
+      }
+      case 'azuredevops': {
+        if (!org || !project) {
+          return res.status(400).json({ success: false, error: 'org and project are required for Azure DevOps' })
+        }
+        const config: AzureDevOpsConfig = { baseUrl, token, org, project }
+        const repo = await createAzureRepo(config, { name: repoName })
+        const push = await pushAllFormatsAzure(config, repo.id, repo.defaultBranch, params, formats)
+        repoId = repo.id; repoUrl = repo.webUrl; httpUrl = repo.httpUrl; sshUrl = repo.sshUrl
+        defaultBranch = repo.defaultBranch; commitSha = push.commitSha; pushedAt = push.pushedAt
+        instructions = generateSubmoduleInstructionsAzure(repo)
+        await protectAzureBranch(config, project, repo.id, repo.defaultBranch)
+        break
+      }
+      default:
+        return res.status(400).json({ success: false, error: `Unknown platform: ${platform}` })
+    }
+
+    res.json({
+      success: true,
+      data: {
+        platform,
+        repoId: String(repoId),
+        repoUrl,
+        httpUrl,
+        sshUrl,
+        defaultBranch,
+        commitSha,
+        pushedAt,
+        parameterCount: params.length,
+        selectedFormats: formats,
+        instructions,
+      },
+      message: `Repository created on ${platform} with ${params.length} parameters in ${formats.length} formats`,
+    })
+  } catch (error) {
+    console.error('Git publish setup error:', error)
+    res.status(500).json({ success: false, error: (error as Error).message ?? 'Internal server error' })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Git Publish Sync — POST /:projectId/git/sync
+// Pushes latest parameters to an existing repository.
+// ---------------------------------------------------------------------------
+export async function gitPublishSyncHandler(req: AuthRequest, res: Response) {
+  try {
+    const { projectId } = req.params
+    const {
+      platform, baseUrl, token, repoId, branch, selectedFormats, selectedTags,
+      // Platform-specific
+      username, workspace, org, project,
+    } = req.body as {
+      platform: GitPlatform
+      baseUrl: string
+      token: string
+      repoId: string
+      branch?: string
+      selectedFormats?: string[]
+      selectedTags?: string[]
+      username?: string
+      workspace?: string
+      org?: string
+      project?: string
+    }
+
+    if (!platform || !baseUrl || !token || !repoId) {
+      return res.status(400).json({ success: false, error: 'platform, baseUrl, token and repoId are required' })
+    }
+
+    const dbParams = await prisma.parameter.findMany({ where: { projectId }, orderBy: { name: 'asc' } })
+    const allParams = mapDbParams(dbParams)
+    const params = selectedTags?.length
+      ? allParams.filter(p => p.tags?.some(t => selectedTags.includes(t)))
+      : allParams
+    const formats = selectedFormats ?? SUPPORTED_EXPORT_FORMATS as unknown as string[]
+
+    let commitSha = ''
+    let pushedAt = ''
+
+    switch (platform) {
+      case 'gitlab': {
+        const numericId = parseInt(repoId, 10)
+        const config: GitLabConfig = { baseUrl, token }
+        const push = await pushAllFormatsGitLab(config, numericId, params, branch ?? 'main', undefined, formats)
+        commitSha = push.commitSha; pushedAt = push.pushedAt
+        break
+      }
+      case 'github': {
+        // repoId is "owner/repo"
+        const [owner, repoName] = repoId.split('/')
+        const config = { baseUrl, token }
+        // Get repo info to pass to push
+        const repoInfo = await getRepoInfoGitHub(config, owner, repoName)
+        const push = await pushAllFormatsGitHub(config, repoInfo, params, formats, branch ?? repoInfo.defaultBranch)
+        commitSha = push.commitSha; pushedAt = push.pushedAt
+        break
+      }
+      case 'bitbucket': {
+        if (!username || !workspace) {
+          return res.status(400).json({ success: false, error: 'username and workspace are required for Bitbucket' })
+        }
+        const config: BitbucketConfig = { baseUrl, username, appPassword: token }
+        const repoInfo = await getRepoInfoBitbucket(config, workspace, repoId)
+        const push = await pushAllFormatsBitbucket(config, repoInfo, params, formats)
+        commitSha = push.commitSha; pushedAt = push.pushedAt
+        break
+      }
+      case 'azuredevops': {
+        if (!org || !project) {
+          return res.status(400).json({ success: false, error: 'org and project are required for Azure DevOps' })
+        }
+        const config: AzureDevOpsConfig = { baseUrl, token, org, project }
+        const repoInfo = await getRepoInfoAzure(config, repoId)
+        const push = await pushAllFormatsAzure(config, repoId, repoInfo.defaultBranch, params, formats, branch)
+        commitSha = push.commitSha; pushedAt = push.pushedAt
+        break
+      }
+      default:
+        return res.status(400).json({ success: false, error: `Unknown platform: ${platform}` })
+    }
+
+    res.json({
+      success: true,
+      data: { commitSha, pushedAt, parameterCount: params.length },
+      message: `${params.length} parameters synced to ${platform}`,
+    })
+  } catch (error) {
+    console.error('Git publish sync error:', error)
+    res.status(500).json({ success: false, error: (error as Error).message ?? 'Internal server error' })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Git Publish Status — GET /:projectId/git/status
+// Query: platform, baseUrl, token, repoId, branch?, username?, workspace?, org?, project?
+// ---------------------------------------------------------------------------
+export async function gitPublishStatusHandler(req: AuthRequest, res: Response) {
+  try {
+    const {
+      platform, baseUrl, token, repoId, branch,
+      username, workspace, org, project,
+    } = req.query as Record<string, string>
+
+    if (!platform || !baseUrl || !token || !repoId) {
+      return res.status(400).json({ success: false, error: 'platform, baseUrl, token and repoId are required' })
+    }
+
+    let latestCommit: { sha: string; createdAt: string; message: string; webUrl: string }
+    let repoInfo: { name: string; webUrl: string; httpUrl: string; sshUrl: string }
+
+    switch (platform as GitPlatform) {
+      case 'gitlab': {
+        const numericId = parseInt(repoId, 10)
+        const config: GitLabConfig = { baseUrl, token }
+        const [commit, info] = await Promise.all([
+          getLatestCommitGitLab(config, numericId, branch ?? 'main'),
+          getRepoInfoGitLab(config, numericId),
+        ])
+        latestCommit = commit; repoInfo = info
+        break
+      }
+      case 'github': {
+        const [owner, repoName] = repoId.split('/')
+        const config = { baseUrl, token }
+        const [commit, info] = await Promise.all([
+          getLatestCommitGitHub(config, owner, repoName, branch ?? 'main'),
+          getRepoInfoGitHub(config, owner, repoName),
+        ])
+        latestCommit = commit; repoInfo = info
+        break
+      }
+      case 'bitbucket': {
+        if (!username || !workspace) {
+          return res.status(400).json({ success: false, error: 'username and workspace are required' })
+        }
+        const config: BitbucketConfig = { baseUrl, username, appPassword: token }
+        const [commit, info] = await Promise.all([
+          getLatestCommitBitbucket(config, workspace, repoId),
+          getRepoInfoBitbucket(config, workspace, repoId),
+        ])
+        latestCommit = commit; repoInfo = info
+        break
+      }
+      case 'azuredevops': {
+        if (!org || !project) {
+          return res.status(400).json({ success: false, error: 'org and project are required' })
+        }
+        const config: AzureDevOpsConfig = { baseUrl, token, org, project }
+        const [commit, info] = await Promise.all([
+          getLatestCommitAzure(config, repoId, branch ?? 'main'),
+          getRepoInfoAzure(config, repoId),
+        ])
+        latestCommit = commit; repoInfo = info
+        break
+      }
+      default:
+        return res.status(400).json({ success: false, error: `Unknown platform: ${platform}` })
+    }
+
+    res.json({ success: true, data: { latestCommit, repoInfo } })
+  } catch (error) {
+    console.error('Git publish status error:', error)
+    res.status(500).json({ success: false, error: (error as Error).message ?? 'Internal server error' })
   }
 }

@@ -109,4 +109,116 @@ export const parameterService = {
   > {
     return apiClient.get(`/parameters/${projectId}/impact/${parameterId}`)
   },
+
+  // ---------------------------------------------------------------------------
+  // Export
+  // ---------------------------------------------------------------------------
+  async exportParameters(projectId: string, format: string): Promise<Blob> {
+    return apiClient.getBlob(`/parameters/${projectId}/export/${format}`)
+  },
+
+  // ---------------------------------------------------------------------------
+  // Import
+  // ---------------------------------------------------------------------------
+  async importParameters(
+    projectId: string,
+    payload: { format?: string; filename?: string; content: string }
+  ): Promise<ApiResponse<{ imported: number; updated: number; errors: string[]; warnings: string[] }>> {
+    return apiClient.post(`/parameters/${projectId}/import`, payload)
+  },
+
+  // ---------------------------------------------------------------------------
+  // Git Publish (multi-platform)
+  // ---------------------------------------------------------------------------
+  async gitPublishSetup(
+    projectId: string,
+    payload: {
+      platform: 'gitlab' | 'github' | 'bitbucket' | 'azuredevops'
+      baseUrl: string
+      token: string
+      repoName: string
+      description?: string
+      visibility?: 'private' | 'internal' | 'public'
+      selectedFormats: string[]
+      selectedTags?: string[]
+      // GitLab
+      namespaceId?: number
+      // Bitbucket
+      username?: string
+      workspace?: string
+      // Azure DevOps
+      org?: string
+      project?: string
+    }
+  ): Promise<ApiResponse<{
+    platform: string
+    repoId: string
+    repoUrl: string
+    httpUrl: string
+    sshUrl: string
+    defaultBranch: string
+    commitSha: string
+    pushedAt: string
+    parameterCount: number
+    selectedFormats: string[]
+    instructions: { https: string; ssh: string; updateCmd: string }
+  }>> {
+    return apiClient.post(`/parameters/${projectId}/git/setup`, payload)
+  },
+
+  async gitPublishSync(
+    projectId: string,
+    payload: {
+      platform: 'gitlab' | 'github' | 'bitbucket' | 'azuredevops'
+      baseUrl: string
+      token: string
+      repoId: string
+      branch?: string
+      selectedFormats?: string[]
+      selectedTags?: string[]
+      username?: string
+      workspace?: string
+      org?: string
+      project?: string
+    }
+  ): Promise<ApiResponse<{ commitSha: string; pushedAt: string; parameterCount: number }>> {
+    return apiClient.post(`/parameters/${projectId}/git/sync`, payload)
+  },
+
+  async gitPublishStatus(
+    projectId: string,
+    query: {
+      platform: string
+      baseUrl: string
+      token: string
+      repoId: string
+      branch?: string
+      username?: string
+      workspace?: string
+      org?: string
+      project?: string
+    }
+  ): Promise<ApiResponse<{
+    latestCommit: { sha: string; createdAt: string; message: string; webUrl: string }
+    repoInfo: { name: string; webUrl: string; httpUrl: string; sshUrl: string }
+  }>> {
+    const params = new URLSearchParams(
+      Object.fromEntries(Object.entries(query).filter(([, v]) => v !== undefined)) as Record<string, string>
+    )
+    return apiClient.get(`/parameters/${projectId}/git/status?${params}`)
+  },
+
+  async gitValidateToken(
+    projectId: string,
+    payload: {
+      platform: 'gitlab' | 'github' | 'bitbucket' | 'azuredevops'
+      baseUrl: string
+      token: string
+      username?: string
+      org?: string
+      project?: string
+    }
+  ): Promise<ApiResponse<{ valid: boolean; username: string }>> {
+    return apiClient.post(`/parameters/${projectId}/git/validate-token`, payload)
+  },
 }
