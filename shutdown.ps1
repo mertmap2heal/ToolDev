@@ -78,6 +78,19 @@ if ($KeepDb) {
     }
 }
 
+# ============================================================
+# [+] STOP NGROK (if running)
+# ============================================================
+Write-Host ""
+Write-Host "[+] Stopping ngrok..."
+$ngrokProcs = Get-Process -Name "ngrok" -ErrorAction SilentlyContinue
+if ($ngrokProcs) {
+    $ngrokProcs | Stop-Process -Force
+    Write-Host "  ngrok stopped."
+} else {
+    Write-Host "  ngrok is not running."
+}
+
 Write-Host ""
 Write-Host "========================================="
 Write-Host " All services stopped."
