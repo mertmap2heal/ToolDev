@@ -241,14 +241,14 @@ export default function ChangeRequestsPage() {
       <div className="flex flex-1 min-h-0">
         <div className="flex-1 overflow-y-auto space-y-6 pr-6">
           {/* Header / Toolbar */}
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-gray-900 dark:text-white">Change Requests</h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 Manage and track changes to requirements and design artifacts.
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap gap-2">
               <button className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
                 <Download size={16} />
                 Export
@@ -265,7 +265,7 @@ export default function ChangeRequestsPage() {
 
           {/* Search & Filters Card */}
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="relative flex-1">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input

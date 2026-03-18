@@ -479,7 +479,7 @@ export default function DocumentationPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-4">
-          <div className="relative flex-1 min-w-[200px] max-w-md">
+          <div className="relative flex-1 w-full sm:min-w-[200px] sm:max-w-md">
             <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
               size={16}
@@ -514,8 +514,8 @@ export default function DocumentationPage() {
             Import
           </button>
         </div>
-        <div className="flex-shrink-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-          <div className="flex border-b border-gray-200 dark:border-gray-700">
+        <div className="flex-shrink-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-x-auto">
+          <div className="flex border-b border-gray-200 dark:border-gray-700 min-w-max">
             {TABS.map((tab) => {
               const Icon = tab.icon
               const active = activeTab === tab.id
@@ -525,7 +525,7 @@ export default function DocumentationPage() {
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
                   className={clsx(
-                    'flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors border-b-2 -mb-px',
+                    'flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap',
                     active
                       ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                       : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import Header from './Header'
 import Sidebar from './Sidebar'
@@ -17,6 +17,7 @@ export default function MainLayout() {
   const location = useLocation()
   const { user, setUser } = useAuthStore()
   const { activeCompanyName } = usePlatformAdminStore()
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   const isSuperiorAdmin = user?.role === 'SUPERIOR_ADMIN' || user?.isSuperiorAdmin === true
   useEffect(() => {
@@ -51,10 +52,17 @@ export default function MainLayout() {
         <ForceChangePasswordModal onSuccess={handleForceChangePasswordSuccess} />
       )}
       <BreadcrumbProvider>
-        <Sidebar />
-        <div className={`flex-1 min-w-0 flex flex-col overflow-hidden transition-all duration-300 ${isOpen ? '' : ''}`}>
-          <Header />
-          <main className="flex-1 overflow-y-auto overflow-x-hidden p-4" style={{ backgroundColor: 'var(--theme-bg)' }}>
+        {/* Mobile overlay backdrop */}
+        {mobileNavOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-black/50 md:hidden"
+            onClick={() => setMobileNavOpen(false)}
+          />
+        )}
+        <Sidebar mobileOpen={mobileNavOpen} onMobileClose={() => setMobileNavOpen(false)} />
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+          <Header onMobileMenuOpen={() => setMobileNavOpen(true)} />
+          <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 md:p-4" style={{ backgroundColor: 'var(--theme-bg)' }}>
             <Outlet />
           </main>
           <StatusBar />

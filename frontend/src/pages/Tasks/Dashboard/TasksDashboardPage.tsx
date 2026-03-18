@@ -150,14 +150,14 @@ export default function TasksDashboardPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Header */}
-        <div className="flex items-start justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-6">
           <div>
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">Task Dashboard</h1>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
               Performance overview and productivity metrics
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Date Range Selector */}
             <div className="flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-0.5">
               {DATE_RANGES.map((r, i) => (

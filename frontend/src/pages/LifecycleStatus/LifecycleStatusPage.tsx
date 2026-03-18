@@ -102,7 +102,7 @@ export default function LifecycleStatusPage() {
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
         {/* Header */}
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white">Lifecycle Status</h2>
             {projectId && <SafetyLinkPanel variant="by-phase" count={3} />}
           </div>
@@ -139,7 +139,7 @@ export default function LifecycleStatusPage() {
             </button>
             {isFiltersExpanded && (
               <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
                       Item Type

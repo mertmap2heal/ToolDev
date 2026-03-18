@@ -356,9 +356,9 @@ export default function ParametersPage() {
       )}
 
       {/* ── Toolbar ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 className="text-lg font-bold" style={{ color: 'var(--theme-text)' }}>Parameters</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {projectId && <SafetyLinkPanel variant="relevance" count={1} />}
 
           {/* Publish to Git */}

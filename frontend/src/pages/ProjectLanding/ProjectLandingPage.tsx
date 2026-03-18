@@ -121,7 +121,6 @@ interface ColumnProps {
 function Column({ categoryId, label, modules, projectId, accent }: ColumnProps) {
   return (
     <div style={{
-      flex: 1,
       display: 'flex',
       flexDirection: 'column',
       gap: 0,
@@ -231,7 +230,7 @@ export default function ProjectLandingPage() {
               {project.domain}
             </span>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
             <div style={{ width: 120, height: 4, backgroundColor: 'var(--theme-border)', borderRadius: 2 }}>
               <div style={{ height: 4, width: `${project.progress}%`, backgroundColor: 'var(--theme-accent)', borderRadius: 2 }} />
             </div>
@@ -254,7 +253,7 @@ export default function ProjectLandingPage() {
 
       {/* Three-column V-model style layout */}
       {projectId && (
-        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Column
             categoryId="development"
             label={CATEGORIES.find(c => c.id === 'development')?.label ?? 'Development & Control'}

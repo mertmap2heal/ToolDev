@@ -2604,7 +2604,8 @@ export default function RequirementsPage() {
             </div>
           )}
 
-          <div className="flex items-center justify-between sticky top-0 z-20 bg-gray-50 dark:bg-gray-900 py-2 -mx-1 px-1">
+          <div className="flex flex-col gap-2 sticky top-0 z-20 bg-gray-50 dark:bg-gray-900 py-2 -mx-1 px-1">
+            <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsPBSPanelOpen(!isPBSPanelOpen)}
@@ -2651,6 +2652,18 @@ export default function RequirementsPage() {
                   Clear selection
                 </button>
               )}
+            </div>
+            <button
+              onClick={() => {
+                setParentRequirement(null)
+                setIsCreateModalOpen(true)
+              }}
+              disabled={isBaselineView}
+              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-colors flex-shrink-0"
+            >
+              <Plus size={16} />
+              <span className="hidden sm:inline text-sm">Create Requirement</span>
+            </button>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               {selectedRequirements.size > 0 && !isBaselineView && (
@@ -2933,18 +2946,6 @@ export default function RequirementsPage() {
                 )}
               </div>
               {projectId && <SafetyLinkPanel variant="linked" count={linkedSafetyCount} />}
-              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
-              <button
-                onClick={() => {
-                  setParentRequirement(null)
-                  setIsCreateModalOpen(true)
-                }}
-                disabled={isBaselineView}
-                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-colors"
-              >
-                <Plus size={16} />
-                <span className="text-sm">Create Requirement</span>
-              </button>
             </div>
           </div>
 

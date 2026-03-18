@@ -6,6 +6,7 @@ import {
   Search,
   Loader2,
   Sparkles,
+  Menu,
 } from 'lucide-react'
 import UserMenu from './UserMenu'
 import GlobalSearch from '../search/GlobalSearch'
@@ -16,7 +17,7 @@ import { projectService } from '../../services/project.service'
 import type { Notification } from 'shared/types/project.types'
 import FeedbackModal from '../common/FeedbackModal'
 
-export default function Header() {
+export default function Header({ onMobileMenuOpen }: { onMobileMenuOpen: () => void }) {
   const [bellOpen, setBellOpen] = useState(false)
   const bellRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
@@ -99,12 +100,36 @@ export default function Header() {
         backgroundColor: 'var(--theme-surface)',
       }}
     >
+      {/* Mobile: hamburger */}
+      <button
+        className="md:hidden p-1.5 rounded-md shrink-0"
+        onClick={onMobileMenuOpen}
+        aria-label="Open navigation"
+        style={{ color: 'var(--theme-text-muted)' }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--theme-sidebar-item-hover)' }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent' }}
+      >
+        <Menu size={18} />
+      </button>
+
       {/* Left: Breadcrumbs */}
       <div className="flex-1 min-w-0">
         <Breadcrumbs />
       </div>
 
-      {/* Center: Search pill */}
+      {/* Mobile: search icon button */}
+      <button
+        onClick={() => setIsSearchOpen(true)}
+        className="flex lg:hidden p-1.5 rounded-md shrink-0"
+        aria-label="Search"
+        style={{ color: 'var(--theme-text-muted)' }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--theme-sidebar-item-hover)' }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent' }}
+      >
+        <Search size={18} />
+      </button>
+
+      {/* Desktop: Search pill */}
       <button
         onClick={() => setIsSearchOpen(true)}
         className="hidden lg:flex items-center gap-2 pl-3 pr-2 py-1 rounded-full text-xs w-52 cursor-text transition-colors"
@@ -176,7 +201,7 @@ export default function Header() {
 
           {bellOpen && (
             <div
-              className="absolute right-0 mt-2 w-96 max-h-[80vh] overflow-y-auto py-2 rounded-lg shadow-lg z-50"
+              className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-1rem)] max-h-[80vh] overflow-y-auto py-2 rounded-lg shadow-lg z-50"
               style={{
                 backgroundColor: 'var(--theme-surface)',
                 border: '1px solid var(--theme-border)',

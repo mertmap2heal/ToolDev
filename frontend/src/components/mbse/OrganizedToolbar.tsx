@@ -164,9 +164,10 @@ export default function OrganizedToolbar({
 
   return (
     <div className={clsx(
-      'flex items-center gap-1 px-4 py-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700',
+      'overflow-x-auto bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700',
       className
     )}>
+    <div className="flex items-center gap-1 px-4 py-2 min-w-max">
       {/* View Menu */}
       <DropdownMenu
         trigger={
@@ -366,6 +367,7 @@ export default function OrganizedToolbar({
           <Download size={16} className="text-cyan-500" />
         </button>
       </div>
+    </div>
     </div>
   )
 }

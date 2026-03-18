@@ -162,7 +162,7 @@ function CertificationContent() {
         </div>
 
         <div className="flex flex-wrap items-center gap-4">
-          <div className="relative flex-1 min-w-[200px] max-w-md">
+          <div className="relative flex-1 w-full sm:min-w-[200px] sm:max-w-md">
             <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
               size={16}

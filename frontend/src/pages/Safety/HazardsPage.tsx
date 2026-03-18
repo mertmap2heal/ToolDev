@@ -61,7 +61,7 @@ export default function HazardsPage() {
   return (
     <div className="flex h-[calc(100vh-12rem)]">
       <div className="flex-1 flex flex-col overflow-hidden space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
             Hazards
           </h2>
@@ -106,7 +106,7 @@ export default function HazardsPage() {
             )}
           </button>
           {isFiltersExpanded && (
-            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                   Severity
