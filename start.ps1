@@ -199,10 +199,10 @@ if ($userCount -eq "0") {
 Pop-Location
 
 # ============================================================
-# [4/4] LAUNCH SERVERS
+# [4/5] LAUNCH SERVERS
 # ============================================================
 Write-Host ""
-Write-Host "[4/4] Launching servers..."
+Write-Host "[4/5] Launching servers..."
 
 $backendDir  = Join-Path $ROOT "backend"
 $frontendDir = Join-Path $ROOT "frontend"
@@ -215,6 +215,45 @@ Start-Sleep -Seconds 2
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$frontendDir'; Write-Host 'Frontend starting...'; npm run dev" -WindowStyle Normal
 Write-Host "  Frontend window opened -> http://localhost:3000"
 
+# ============================================================
+# [5/5] NGROK (optional - remote access tunnel)
+# ============================================================
+Write-Host ""
+Write-Host "[5/5] Starting ngrok tunnel..."
+
+$ngrokUrl = $null
+
+if (Get-Command ngrok -ErrorAction SilentlyContinue) {
+    # Kill any leftover ngrok process before starting a fresh one
+    $stale = Get-Process -Name "ngrok" -ErrorAction SilentlyContinue
+    if ($stale) {
+        $stale | Stop-Process -Force
+        Start-Sleep -Seconds 1
+        Write-Host "  Stopped existing ngrok process."
+    }
+
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", "ngrok http 3000" -WindowStyle Normal
+    Write-Host "  ngrok window opened. Fetching public URL..."
+
+    $elapsed = 0
+    do {
+        Start-Sleep -Seconds 2
+        $elapsed += 2
+        try {
+            $resp = Invoke-RestMethod -Uri "http://localhost:4040/api/tunnels" -ErrorAction SilentlyContinue
+            $ngrokUrl = $resp.tunnels | Where-Object { $_.proto -eq "https" } | Select-Object -ExpandProperty public_url -First 1
+        } catch { }
+    } while (-not $ngrokUrl -and $elapsed -lt 20)
+
+    if ($ngrokUrl) {
+        Write-Host "  ngrok public URL: $ngrokUrl"
+    } else {
+        Write-Host "  ngrok started - check the ngrok window for your public URL."
+    }
+} else {
+    Write-Host "  ngrok not found in PATH - skipping. Install ngrok for remote access."
+}
+
 Write-Host ""
 Write-Host "========================================="
 Write-Host " All services started!"
@@ -223,6 +262,9 @@ Write-Host ""
 Write-Host "  Frontend : http://localhost:3000"
 Write-Host "  Backend  : http://localhost:5000/api/v1"
 Write-Host "  Health   : http://localhost:5000/api/health"
+if ($ngrokUrl) {
+    Write-Host "  Remote   : $ngrokUrl"
+}
 Write-Host ""
 Write-Host "  Close the opened terminal windows to stop the servers."
 Write-Host "  To stop the database: docker-compose down"
