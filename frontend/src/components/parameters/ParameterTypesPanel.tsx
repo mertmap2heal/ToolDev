@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Pencil, Check, X, Info } from 'lucide-react'
+import { Plus, Trash2, Pencil, Check, X, Info, Code2 } from 'lucide-react'
 import { parameterTypeService } from '../../services/parameterType.service'
-import type { ParameterType, ParameterTypeTranslations } from 'shared/types/engineering.types'
+import type { ParameterType, ParameterTypeTranslations, ParameterValueFormat } from 'shared/types/engineering.types'
 
 interface Props {
   projectId: string
@@ -33,11 +33,15 @@ interface TypeFormState {
   description: string
   color: string
   translations: Record<string, string>
+  valueFormat: ParameterValueFormat
 }
+
+const EMPTY_FORMAT: ParameterValueFormat = { template: '', example: '', hint: '', pattern: '', dimensions: '', structure: undefined }
 
 const EMPTY_FORM: TypeFormState = {
   name: '', description: '', color: '#0ea5e9',
   translations: Object.fromEntries(TRANSLATION_KEYS.map(k => [k.key, ''])),
+  valueFormat: { ...EMPTY_FORMAT },
 }
 
 function TypeForm({
@@ -143,6 +147,101 @@ function TypeForm({
         </div>
       )}
 
+      {/* Value format definition */}
+      {(() => {
+        const [showFormat, setShowFormat] = useState(
+          !!(form.valueFormat?.template || form.valueFormat?.example || form.valueFormat?.hint || form.valueFormat?.pattern || form.valueFormat?.dimensions)
+        )
+        const setFmt = (field: keyof ParameterValueFormat, value: string) =>
+          setForm(f => ({ ...f, valueFormat: { ...f.valueFormat, [field]: value || undefined } }))
+        return (
+          <>
+            <button
+              type="button"
+              onClick={() => setShowFormat(s => !s)}
+              className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              <Code2 className="w-3.5 h-3.5" />
+              {showFormat ? 'Hide' : 'Add'} value format / input guidance
+            </button>
+            {showFormat && (
+              <div className="space-y-2 pl-1 border-l-2 border-blue-200 dark:border-blue-800 ml-1">
+                <p className="text-xs text-gray-400 dark:text-gray-500">
+                  Define how values of this type should be entered. Users will see this as a hint when filling in parameter values.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Structure</label>
+                    <select
+                      value={form.valueFormat?.structure ?? ''}
+                      onChange={e => setFmt('structure', e.target.value)}
+                      className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="">— auto-detect —</option>
+                      <option value="scalar">Scalar (single value)</option>
+                      <option value="array">Array / vector</option>
+                      <option value="matrix">Matrix (2-D)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Dimensions</label>
+                    <input
+                      type="text"
+                      value={form.valueFormat?.dimensions ?? ''}
+                      onChange={e => setFmt('dimensions', e.target.value)}
+                      className="w-full px-2 py-1.5 text-xs font-mono border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="e.g. 3x3, 4x1, 9"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Template</label>
+                  <input
+                    type="text"
+                    value={form.valueFormat?.template ?? ''}
+                    onChange={e => setFmt('template', e.target.value)}
+                    className="w-full px-2 py-1.5 text-xs font-mono border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="e.g. [[r0c0,r0c1,r0c2],[r1c0,...],...]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Example value</label>
+                  <input
+                    type="text"
+                    value={form.valueFormat?.example ?? ''}
+                    onChange={e => setFmt('example', e.target.value)}
+                    className="w-full px-2 py-1.5 text-xs font-mono border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="e.g. [[1,0,0],[0,1,0],[0,0,1]]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Hint text</label>
+                  <input
+                    type="text"
+                    value={form.valueFormat?.hint ?? ''}
+                    onChange={e => setFmt('hint', e.target.value)}
+                    className="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="Row-major order. Each row is [x, y, z]."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                    Validation pattern <span className="font-normal text-gray-400">(regex, optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.valueFormat?.pattern ?? ''}
+                    onChange={e => setFmt('pattern', e.target.value)}
+                    className="w-full px-2 py-1.5 text-xs font-mono border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder="e.g. ^\[\[.*\]\]$"
+                  />
+                </div>
+              </div>
+            )}
+          </>
+        )
+      })()}
+
       <div className="flex gap-2 pt-1">
         <button
           type="button"
@@ -179,28 +278,26 @@ export function ParameterTypesPanel({ projectId }: Props) {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['parameter-types', projectId] })
 
+  const buildTypePayload = (form: TypeFormState) => ({
+    name: form.name.trim(),
+    description: form.description.trim() || undefined,
+    color: form.color || undefined,
+    translations: Object.fromEntries(
+      Object.entries(form.translations).filter(([, v]) => v.trim())
+    ),
+    valueFormat: Object.values(form.valueFormat).some(v => v)
+      ? Object.fromEntries(Object.entries(form.valueFormat).filter(([, v]) => v))
+      : undefined,
+  })
+
   const createMutation = useMutation({
-    mutationFn: (form: TypeFormState) => parameterTypeService.createType(projectId, {
-      name: form.name.trim(),
-      description: form.description.trim() || undefined,
-      color: form.color || undefined,
-      translations: Object.fromEntries(
-        Object.entries(form.translations).filter(([, v]) => v.trim())
-      ),
-    }),
+    mutationFn: (form: TypeFormState) => parameterTypeService.createType(projectId, buildTypePayload(form)),
     onSuccess: () => { invalidate(); setAdding(false) },
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, form }: { id: string; form: TypeFormState }) =>
-      parameterTypeService.updateType(projectId, id, {
-        name: form.name.trim(),
-        description: form.description.trim() || undefined,
-        color: form.color || undefined,
-        translations: Object.fromEntries(
-          Object.entries(form.translations).filter(([, v]) => v.trim())
-        ),
-      }),
+      parameterTypeService.updateType(projectId, id, buildTypePayload(form)),
     onSuccess: () => { invalidate(); setEditingId(null) },
   })
 
@@ -220,6 +317,14 @@ export function ParameterTypesPanel({ projectId }: Props) {
     translations: Object.fromEntries(
       TRANSLATION_KEYS.map(k => [k.key, (t.translations as Record<string, string> | null | undefined)?.[k.key] ?? ''])
     ),
+    valueFormat: {
+      template: t.valueFormat?.template ?? '',
+      example: t.valueFormat?.example ?? '',
+      hint: t.valueFormat?.hint ?? '',
+      pattern: t.valueFormat?.pattern ?? '',
+      dimensions: t.valueFormat?.dimensions ?? '',
+      structure: t.valueFormat?.structure,
+    },
   })
 
   if (isLoading) {

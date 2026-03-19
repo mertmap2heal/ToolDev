@@ -25,6 +25,15 @@ export interface ParameterTypeTranslations {
   xtce?: string
 }
 
+export interface ValueFormat {
+  template?: string    // structural pattern, e.g. "[x, y, z]" or "[[r0c0,...],...]"
+  example?: string     // concrete filled-in example
+  hint?: string        // free-text description of how to enter values
+  pattern?: string     // regex string for validation
+  dimensions?: string  // e.g. "3x1", "4x4", "3"
+  structure?: 'scalar' | 'array' | 'matrix'
+}
+
 export interface ParameterTypeRecord {
   id: string
   projectId: string | null   // null for built-ins
@@ -32,6 +41,7 @@ export interface ParameterTypeRecord {
   description: string | null
   color: string | null
   translations: ParameterTypeTranslations | null
+  valueFormat?: ValueFormat | null
   builtIn: boolean
   createdAt: string | null
 }
@@ -39,6 +49,7 @@ export interface ParameterTypeRecord {
 // ---------------------------------------------------------------------------
 // Built-in type catalogue
 // ---------------------------------------------------------------------------
+// Built-in types have no valueFormat — their value constraints are well-known from the type name
 export const BUILT_IN_TYPES: Omit<ParameterTypeRecord, 'projectId' | 'createdAt'>[] = [
   // --- Floating-point -------------------------------------------------------
   {
@@ -190,6 +201,7 @@ export async function listParameterTypes(projectId: string): Promise<ParameterTy
   const builtIns: ParameterTypeRecord[] = BUILT_IN_TYPES.map(t => ({
     ...t,
     projectId: null,
+    valueFormat: null,
     createdAt: null,
   }))
 
@@ -200,6 +212,7 @@ export async function listParameterTypes(projectId: string): Promise<ParameterTy
     description: t.description,
     color: t.color,
     translations: t.translations as ParameterTypeTranslations | null,
+    valueFormat: t.valueFormat as ValueFormat | null,
     builtIn: false,
     createdAt: t.createdAt.toISOString(),
   }))
@@ -209,7 +222,7 @@ export async function listParameterTypes(projectId: string): Promise<ParameterTy
 
 export async function createParameterType(
   projectId: string,
-  data: { name: string; description?: string; color?: string; translations?: Record<string, string> }
+  data: { name: string; description?: string; color?: string; translations?: Record<string, string>; valueFormat?: ValueFormat }
 ): Promise<ParameterTypeRecord> {
   const t = await prisma.parameterType.create({
     data: {
@@ -218,6 +231,7 @@ export async function createParameterType(
       description: data.description?.trim() ?? null,
       color: data.color ?? null,
       translations: data.translations ?? undefined,
+      valueFormat: data.valueFormat ?? undefined,
     },
   })
   return {
@@ -235,7 +249,7 @@ export async function createParameterType(
 export async function updateParameterType(
   id: string,
   projectId: string,
-  data: { name?: string; description?: string; color?: string; translations?: Record<string, string> }
+  data: { name?: string; description?: string; color?: string; translations?: Record<string, string>; valueFormat?: ValueFormat | null }
 ): Promise<ParameterTypeRecord> {
   const t = await prisma.parameterType.update({
     where: { id },
@@ -244,6 +258,7 @@ export async function updateParameterType(
       ...(data.description !== undefined ? { description: data.description.trim() || null } : {}),
       ...(data.color !== undefined ? { color: data.color || null } : {}),
       ...(data.translations !== undefined ? { translations: data.translations } : {}),
+      ...(data.valueFormat !== undefined ? { valueFormat: data.valueFormat ?? undefined } : {}),
     },
   })
   if (t.projectId !== projectId) throw new Error('Not found')

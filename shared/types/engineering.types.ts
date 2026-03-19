@@ -529,6 +529,15 @@ export interface ParameterTypeTranslations {
   xtce?: string
 }
 
+export interface ParameterValueFormat {
+  template?: string    // structural pattern, e.g. "[x, y, z]"
+  example?: string     // concrete filled-in example
+  hint?: string        // free-text description of how to enter values
+  pattern?: string     // regex string for validation
+  dimensions?: string  // e.g. "3x1", "4x4", "3"
+  structure?: 'scalar' | 'array' | 'matrix'
+}
+
 export interface ParameterType {
   id: string
   projectId: string | null   // null for built-in types
@@ -536,8 +545,19 @@ export interface ParameterType {
   description?: string | null
   color?: string | null
   translations?: ParameterTypeTranslations | null
+  valueFormat?: ParameterValueFormat | null
   builtIn: boolean
   createdAt?: string | null
+}
+
+export interface ProjectUnit {
+  id: string
+  projectId: string
+  name: string
+  symbol: string
+  description?: string | null
+  category?: string | null
+  createdAt: string
 }
 
 export interface Parameter {

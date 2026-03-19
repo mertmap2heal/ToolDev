@@ -2,8 +2,11 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
-import { ParameterFormFields } from './ParameterFormFields'
+import { ParameterFormFields, runValueValidation } from './ParameterFormFields'
 import { ParameterTypesPanel } from './ParameterTypesPanel'
+import { ProjectUnitsPanel } from './ProjectUnitsPanel'
+import { useQuery } from '@tanstack/react-query'
+import { parameterTypeService } from '../../services/parameterType.service'
 import type { CreateParameterDto, Parameter } from 'shared/types/engineering.types'
 
 interface CreateParameterModalProps {
@@ -18,6 +21,15 @@ interface CreateParameterModalProps {
 
 export default function CreateParameterModal({ isOpen, onClose, projectId, onCreated, overlayClassName }: CreateParameterModalProps) {
   const [showTypesPanel, setShowTypesPanel] = useState(false)
+  const [showUnitsPanel, setShowUnitsPanel] = useState(false)
+  const [valueError, setValueError] = useState<string | null>(null)
+
+  const { data: types } = useQuery({
+    queryKey: ['parameter-types', projectId],
+    queryFn: () => parameterTypeService.getTypes(projectId).then(r => r.data ?? []),
+    staleTime: 30_000,
+    enabled: isOpen,
+  })
   const [formData, setFormData] = useState<CreateParameterDto>({
     name: '',
     description: '',
@@ -87,6 +99,18 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
     const newErrors: Record<string, string> = {}
     if (!formData.name.trim()) {
       newErrors.name = 'Parameter name is required'
+    }
+
+    const matchedType = types?.find(t => t.name === formData.dataType)
+    const valErr = runValueValidation(
+      { defaultValue: formData.defaultValue || '', dataType: formData.dataType || '', enumValues: formData.enumValues || '', dimensions: formData.dimensions || '' },
+      matchedType?.valueFormat
+    )
+    if (valErr) {
+      setValueError(valErr)
+      newErrors.defaultValue = valErr
+    } else {
+      setValueError(null)
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -198,6 +222,8 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
             }}
             onChange={(field, value) => handleChange(field as keyof CreateParameterDto, value)}
             onManageTypes={() => setShowTypesPanel(true)}
+            onManageUnits={() => setShowUnitsPanel(true)}
+            valueError={valueError}
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -284,16 +310,27 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
         <div className="fixed inset-y-0 right-0 w-80 bg-white dark:bg-gray-800 shadow-2xl border-l border-gray-200 dark:border-gray-700 z-60 flex flex-col">
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
             <h3 className="font-semibold text-gray-900 dark:text-white">Manage Types</h3>
-            <button
-              type="button"
-              onClick={() => setShowTypesPanel(false)}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-            >
+            <button type="button" onClick={() => setShowTypesPanel(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors">
               <X size={16} className="text-gray-500 dark:text-gray-400" />
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-4">
             <ParameterTypesPanel projectId={projectId} />
+          </div>
+        </div>
+      )}
+
+      {/* Unit Management slide-in panel */}
+      {showUnitsPanel && (
+        <div className="fixed inset-y-0 right-0 w-80 bg-white dark:bg-gray-800 shadow-2xl border-l border-gray-200 dark:border-gray-700 z-60 flex flex-col">
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 className="font-semibold text-gray-900 dark:text-white">Manage Units</h3>
+            <button type="button" onClick={() => setShowUnitsPanel(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors">
+              <X size={16} className="text-gray-500 dark:text-gray-400" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <ProjectUnitsPanel projectId={projectId} />
           </div>
         </div>
       )}
