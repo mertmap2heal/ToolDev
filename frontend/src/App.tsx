@@ -25,6 +25,7 @@ import IssueDashboard from './features/issues/pages/IssueDashboard'
 import IssueDetailPage from './pages/Issues/IssueDetailPage'
 import IssuesPage from './pages/Issues/IssuesPage'
 import ParametersPage from './pages/Parameters/ParametersPage'
+import ParameterSettingsPage from './pages/Parameters/ParameterSettingsPage'
 import ChangeRequestsPage from './pages/ChangeRequests/ChangeRequestsPage'
 import TasksPage from './pages/Tasks/TasksPage'
 import TasksDashboardPage from './pages/Tasks/Dashboard/TasksDashboardPage'
@@ -126,6 +127,7 @@ function App() {
               <Route path="settings" element={<TaskSettingsPage />} />
             </Route>
               <Route path="projects/:projectId/functions" element={<SystemFunctionsPage />} />
+            <Route path="projects/:projectId/parameters/settings" element={<ParameterSettingsPage />} />
             <Route path="projects/:projectId/parameters" element={<ParametersPage />} />
             <Route path="projects/:projectId/change-requests" element={<ChangeRequestsPage />} />
             <Route path="projects/:projectId/architecture" element={<ArchitecturePage />} />
