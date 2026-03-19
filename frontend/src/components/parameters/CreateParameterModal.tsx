@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
-import UnitPicker from './UnitPicker'
-import { TypeCombobox } from './TypeCombobox'
+import { ParameterFormFields } from './ParameterFormFields'
+import { ParameterTypesPanel } from './ParameterTypesPanel'
 import type { CreateParameterDto, Parameter } from 'shared/types/engineering.types'
 
 interface CreateParameterModalProps {
@@ -17,6 +17,7 @@ interface CreateParameterModalProps {
 }
 
 export default function CreateParameterModal({ isOpen, onClose, projectId, onCreated, overlayClassName }: CreateParameterModalProps) {
+  const [showTypesPanel, setShowTypesPanel] = useState(false)
   const [formData, setFormData] = useState<CreateParameterDto>({
     name: '',
     description: '',
@@ -26,6 +27,8 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
     tolerance: '',
     minValue: '',
     maxValue: '',
+    enumValues: '',
+    dimensions: '',
     status: 'draft',
     ownerType: undefined,
     tags: undefined,
@@ -50,6 +53,8 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
           tolerance: '',
           minValue: '',
           maxValue: '',
+          enumValues: '',
+          dimensions: '',
           status: 'draft',
           ownerType: undefined,
           tags: undefined,
@@ -98,6 +103,8 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
       tolerance: formData.tolerance?.trim() || undefined,
       minValue: formData.minValue?.trim() || undefined,
       maxValue: formData.maxValue?.trim() || undefined,
+      enumValues: formData.enumValues?.trim() || undefined,
+      dimensions: formData.dimensions?.trim() || undefined,
       status: formData.status ?? 'draft',
       ownerType: formData.ownerType,
       tags: formData.tags,
@@ -176,73 +183,22 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
             />
           </div>
 
-          {/* Data Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-              Data Type
-            </label>
-            <TypeCombobox
-              projectId={projectId}
-              value={formData.dataType || ''}
-              onChange={v => handleChange('dataType', v)}
-            />
-          </div>
-
-          {/* Value */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-              Value
-            </label>
-            <input
-              type="text"
-              value={formData.defaultValue || ''}
-              onChange={(e) => handleChange('defaultValue', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              placeholder="Enter default value"
-            />
-          </div>
-
-          {/* Unit */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-              Unit
-            </label>
-            <UnitPicker
-              value={formData.unit || ''}
-              onChange={(v) => handleChange('unit', v)}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">Tolerance</label>
-              <input
-                type="text"
-                value={formData.tolerance || ''}
-                onChange={(e) => handleChange('tolerance', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="e.g., ±5"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">Min</label>
-              <input
-                type="text"
-                value={formData.minValue || ''}
-                onChange={(e) => handleChange('minValue', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">Max</label>
-              <input
-                type="text"
-                value={formData.maxValue || ''}
-                onChange={(e) => handleChange('maxValue', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-          </div>
+          {/* Type-aware fields */}
+          <ParameterFormFields
+            projectId={projectId}
+            values={{
+              dataType: formData.dataType || '',
+              defaultValue: formData.defaultValue || '',
+              unit: formData.unit || '',
+              tolerance: formData.tolerance || '',
+              minValue: formData.minValue || '',
+              maxValue: formData.maxValue || '',
+              enumValues: formData.enumValues || '',
+              dimensions: formData.dimensions || '',
+            }}
+            onChange={(field, value) => handleChange(field as keyof CreateParameterDto, value)}
+            onManageTypes={() => setShowTypesPanel(true)}
+          />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -322,6 +278,25 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
           </div>
         </form>
       </div>
+
+      {/* Type Management slide-in panel */}
+      {showTypesPanel && (
+        <div className="fixed inset-y-0 right-0 w-80 bg-white dark:bg-gray-800 shadow-2xl border-l border-gray-200 dark:border-gray-700 z-60 flex flex-col">
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 className="font-semibold text-gray-900 dark:text-white">Manage Types</h3>
+            <button
+              type="button"
+              onClick={() => setShowTypesPanel(false)}
+              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+            >
+              <X size={16} className="text-gray-500 dark:text-gray-400" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <ParameterTypesPanel projectId={projectId} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
