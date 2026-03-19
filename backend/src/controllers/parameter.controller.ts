@@ -266,6 +266,7 @@ export const updateParameter = async (req: AuthRequest, res: Response) => {
       formula,
       enumValues,
       dimensions,
+      platforms,
       sourceFunctionId,
       parameterId: parameterIdFromBody,
     } = body
@@ -308,6 +309,7 @@ export const updateParameter = async (req: AuthRequest, res: Response) => {
     if (formula !== undefined) updateData.formula = formula
     if (enumValues !== undefined) updateData.enumValues = enumValues === '' ? null : enumValues
     if (dimensions !== undefined) updateData.dimensions = dimensions === '' ? null : dimensions
+    if (platforms !== undefined) updateData.platforms = Array.isArray(platforms) ? platforms : null
     if (sourceFunctionId !== undefined) updateData.sourceFunctionId = sourceFunctionId === '' ? null : sourceFunctionId
     if (name !== undefined) updateData.name = name
 
@@ -390,6 +392,7 @@ export const createParameter = async (req: AuthRequest, res: Response) => {
       formula,
       enumValues,
       dimensions,
+      platforms,
       sourceFunctionId,
       parameterId: providedParameterId,
     } = body
@@ -433,6 +436,7 @@ export const createParameter = async (req: AuthRequest, res: Response) => {
         formula: (formula as string)?.trim() ?? null,
         enumValues: (enumValues as string)?.trim() || null,
         dimensions: (dimensions as string)?.trim() || null,
+        platforms: Array.isArray(platforms) ? platforms : null,
         sourceFunctionId: (sourceFunctionId as string) || null,
       },
       include: {

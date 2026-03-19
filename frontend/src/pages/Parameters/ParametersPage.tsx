@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import {
   Search, X, Trash2, Edit2, Plus, Filter, ChevronDown, ChevronUp,
   FileText, Upload, Download, GitBranch, RefreshCw, CheckCircle,
-  AlertTriangle, Tag, Ruler,
+  AlertTriangle, Tag, Ruler, Radio,
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
@@ -18,6 +18,7 @@ import CreateChangeRequestModal from '../../components/changeRequests/CreateChan
 import PublishToGitModal, { type GitPublishStoredConfig } from '../../components/parameters/PublishToGitModal'
 import { ParameterTypesPanel } from '../../components/parameters/ParameterTypesPanel'
 import { ProjectUnitsPanel } from '../../components/parameters/ProjectUnitsPanel'
+import CommunicationsTab from './CommunicationsTab'
 import type { Parameter } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
@@ -105,6 +106,7 @@ export default function ParametersPage() {
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
   const [isTypesExpanded, setIsTypesExpanded] = useState(false)
   const [isUnitsExpanded, setIsUnitsExpanded] = useState(false)
+  const [activeTab, setActiveTab] = useState<'parameters' | 'communications'>('parameters')
   const [changeRequestModal, setChangeRequestModal] = useState<{ isOpen: boolean; sourceId: string; sourceName: string } | null>(null)
   const [dataTypeFilter, setDataTypeFilter] = useState<string>('all')
   const [unitFilter, setUnitFilter] = useState<string>('all')
@@ -333,6 +335,38 @@ export default function ParametersPage() {
   // ============================================================
   return (
     <div className="space-y-4">
+
+      {/* ── Tab navigation ── */}
+      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--theme-border)', paddingBottom: 0 }}>
+        {([
+          { key: 'parameters', label: 'Parameters', icon: null },
+          { key: 'communications', label: 'Communications', icon: <Radio size={13} /> },
+        ] as const).map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '7px 14px', fontSize: 13, fontWeight: 500,
+              border: 'none', borderBottom: activeTab === tab.key ? '2px solid var(--theme-accent)' : '2px solid transparent',
+              backgroundColor: 'transparent', cursor: 'pointer',
+              color: activeTab === tab.key ? 'var(--theme-accent)' : 'var(--theme-text-muted)',
+              marginBottom: -1,
+            }}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Communications tab ── */}
+      {activeTab === 'communications' && projectId && (
+        <CommunicationsTab projectId={projectId} />
+      )}
+
+      {/* ── Parameters tab content ── */}
+      {activeTab === 'parameters' && <>
 
       {/* ── Staleness banner ── */}
       {isStale && (
@@ -904,6 +938,8 @@ export default function ParametersPage() {
           onConfigChange={setStoredGitConfig}
         />
       )}
+
+      </> /* end parameters tab */}
     </div>
   )
 }

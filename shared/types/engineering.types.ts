@@ -581,6 +581,7 @@ export interface Parameter {
   formula?: string
   enumValues?: string
   dimensions?: string
+  platforms?: string[] | null
   sourceFunctionId?: string
   sourceFunction?: {
     id: string
@@ -608,6 +609,7 @@ export interface CreateParameterDto {
   formula?: string
   enumValues?: string
   dimensions?: string
+  platforms?: string[] | null
   sourceFunctionId?: string
 }
 
@@ -627,7 +629,58 @@ export interface UpdateParameterDto {
   formula?: string
   enumValues?: string
   dimensions?: string
+  platforms?: string[] | null
   sourceParameterId?: string | null
+}
+
+// ── Communication buses / messages / fields ──────────────────────────────────
+
+export type CommProtocol = 'can' | 'ros' | 'dds' | 'xtce' | 'mavlink' | 'autosar' | 'mqtt' | 'custom'
+export type CommDirection = 'publish' | 'subscribe' | 'send' | 'receive' | 'bidirectional'
+
+export interface CommBus {
+  id: string
+  projectId: string
+  name: string
+  description?: string | null
+  protocol: CommProtocol | string
+  config?: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+  _count?: { messages: number }
+}
+
+export interface CommMessage {
+  id: string
+  busId: string
+  name: string
+  messageId?: string | null
+  direction?: CommDirection | string | null
+  description?: string | null
+  metadata?: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+  _count?: { fields: number }
+}
+
+export interface CommField {
+  id: string
+  messageId: string
+  parameterId?: string | null
+  fieldName: string
+  description?: string | null
+  dataType?: string | null
+  order: number
+  config?: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+  parameter?: {
+    id: string
+    name: string
+    dataType?: string | null
+    unit?: string | null
+    defaultValue?: string | null
+  } | null
 }
 
 /** Resolved parameter value for placeholder substitution (e.g. in requirements). */

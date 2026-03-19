@@ -12,6 +12,7 @@ import aiRoutes from './ai.routes'
 import documentationRoutes from './documentation.routes'
 import issuesRoutes from './issues.routes'
 import parametersRoutes from './parameters.routes'
+import commRoutes from './comm.routes'
 import definitionEntriesRoutes from './definitionEntries.routes'
 import changeRequestsRoutes from './changeRequests.routes'
 import viewsRoutes from './views.routes'
@@ -72,6 +73,7 @@ router.use('/ai', aiRoutes)
 router.use('/documentation', documentationRoutes)
 router.use('/issues', issuesRoutes)
 router.use('/parameters', parametersRoutes)
+router.use('/comm', commRoutes)
 router.use('/definitions', definitionEntriesRoutes)
 router.use('/change-requests', changeRequestsRoutes)
 router.use('/views', viewsRoutes)

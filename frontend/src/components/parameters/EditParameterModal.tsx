@@ -5,6 +5,7 @@ import { parameterService } from '../../services/parameter.service'
 import { ParameterFormFields, runValueValidation } from './ParameterFormFields'
 import { ParameterTypesPanel } from './ParameterTypesPanel'
 import { ProjectUnitsPanel } from './ProjectUnitsPanel'
+import { PlatformPicker } from './PlatformPicker'
 import { parameterTypeService } from '../../services/parameterType.service'
 import type { Parameter, UpdateParameterDto } from 'shared/types/engineering.types'
 
@@ -24,6 +25,7 @@ export default function EditParameterModal({
   const [showTypesPanel, setShowTypesPanel] = useState(false)
   const [showUnitsPanel, setShowUnitsPanel] = useState(false)
   const [valueError, setValueError] = useState<string | null>(null)
+  const [platforms, setPlatforms] = useState<string[] | null>(null)
 
   const { data: types } = useQuery({
     queryKey: ['parameter-types', projectId],
@@ -79,6 +81,7 @@ export default function EditParameterModal({
         formula: parameter.formula || '',
         sourceParameterId: parameter.sourceParameterId ?? null,
       })
+      setPlatforms((parameter.platforms as string[] | null | undefined) ?? null)
       setErrors({})
     }
   }, [parameter])
@@ -138,6 +141,7 @@ export default function EditParameterModal({
       maxValue: formData.maxValue?.trim() || undefined,
       enumValues: formData.enumValues?.trim() || undefined,
       dimensions: formData.dimensions?.trim() || undefined,
+      platforms: platforms,
       status: formData.status,
       ownerType: formData.ownerType,
       tags: formData.tags,
@@ -290,6 +294,14 @@ export default function EditParameterModal({
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               placeholder="e.g., PARAM_A + PARAM_B"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
+              Platform availability
+              <span className="ml-1.5 text-xs font-normal text-gray-400 dark:text-gray-500">(leave empty = all platforms)</span>
+            </label>
+            <PlatformPicker value={platforms} onChange={setPlatforms} />
           </div>
 
           {/* Source Function (read-only info) */}

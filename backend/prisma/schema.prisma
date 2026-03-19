@@ -183,6 +183,7 @@ model Project {
   definitionEntries     DefinitionEntry[]
   parameterTypes        ParameterType[]
   projectUnits          ProjectUnit[]
+  commBuses             CommBus[]
 }
 
 // Requirements export templates (ExportBuilder) - enterprise export wizard presets.
@@ -728,6 +729,7 @@ model Parameter {
   formula          String?  // optional formula/rule (display or future evaluation)
   enumValues       String?  // JSON: [{name,value}] for enum types
   dimensions       String?  // shape/size for vector/matrix types, e.g. "3x1", "4x4"
+  platforms        Json?    // string[] — target keys this param is available for; null = all
   sourceFunctionId String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -737,6 +739,7 @@ model Parameter {
   sourceParameter  Parameter?      @relation("DerivedParameter", fields: [sourceParameterId], references: [id], onDelete: SetNull)
   derivedParameters Parameter[]    @relation("DerivedParameter")
   versions        ParameterVersion[]
+  commFields      CommField[]
 
   @@unique([projectId, name])
   @@unique([projectId, parameterId])
@@ -793,6 +796,63 @@ model ProjectUnit {
 
   @@unique([projectId, symbol])
   @@index([projectId])
+}
+
+// ── Communication Models ─────────────────────────────────────────────────────
+
+/// A named communication bus or channel (e.g. "Vehicle CAN High", "Ground Uplink UDP").
+model CommBus {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  description String?
+  protocol    String   // can | ros | dds | xtce | mavlink | autosar | mqtt | custom
+  config      Json?    // protocol-specific config: { baudrate, namespace, domain, ... }
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  messages    CommMessage[]
+
+  @@index([projectId])
+}
+
+/// A message/frame/topic definition on a CommBus.
+model CommMessage {
+  id          String   @id @default(uuid())
+  busId       String
+  name        String
+  messageId   String?  // CAN frame ID (hex), ROS topic, DDS topic, MAVLink msg ID, etc.
+  direction   String?  // publish | subscribe | send | receive | bidirectional
+  description String?
+  metadata    Json?    // protocol-specific: { dlc, cycleTime, sender } for CAN; { queueSize, msgType } for ROS; etc.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  bus         CommBus    @relation(fields: [busId], references: [id], onDelete: Cascade)
+  fields      CommField[]
+
+  @@index([busId])
+}
+
+/// A signal/field within a CommMessage. May optionally link to a Parameter.
+model CommField {
+  id          String   @id @default(uuid())
+  messageId   String
+  parameterId String?  // optional link — null for standalone fields (padding, counters, etc.)
+  fieldName   String
+  description String?
+  dataType    String?  // overrides parameter dataType if set
+  order       Int      @default(0)
+  config      Json?    // protocol-specific: CAN { startBit, bitLength, scale, offset, byteOrder, valueType }; ROS { rosType }; etc.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  message     CommMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  parameter   Parameter?  @relation(fields: [parameterId], references: [id], onDelete: SetNull)
+
+  @@index([messageId])
+  @@index([parameterId])
 }
 
 model ChangeRequest {
