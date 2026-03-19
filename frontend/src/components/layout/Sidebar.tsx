@@ -441,7 +441,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       <aside className={asideClassName} style={sidebarStyle}>
         {/* Header */}
         <div style={{
-          height: 44,
+          height: '2.75rem',
           display: 'flex',
           alignItems: 'center',
           padding: effectiveCollapsed ? '0 8px' : '0 6px 0 12px',
