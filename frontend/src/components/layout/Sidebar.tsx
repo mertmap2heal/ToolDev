@@ -9,9 +9,9 @@ import {
   Home,
   ChevronDown,
   ChevronRight,
-  GitBranch,
-  Boxes,
-  Shield,
+  Wrench,
+  Cpu,
+  Microscope,
   X,
   Sun,
   Moon,
@@ -477,19 +477,19 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
               active={location.pathname === `/projects/${projectId}`}
             />
             <CategoryIcon
-              icon={GitBranch}
+              icon={Wrench}
               label={CATEGORIES.find(c => c.id === 'development')?.label ?? 'Development'}
               active={activeCategory === 'development'}
               onClick={() => expandToSection('development')}
             />
             <CategoryIcon
-              icon={Boxes}
+              icon={Cpu}
               label={CATEGORIES.find(c => c.id === 'system')?.label ?? 'System Definition'}
               active={activeCategory === 'system'}
               onClick={() => expandToSection('system')}
             />
             <CategoryIcon
-              icon={Shield}
+              icon={Microscope}
               label={CATEGORIES.find(c => c.id === 'assurance')?.label ?? 'Assurance'}
               active={activeCategory === 'assurance'}
               onClick={() => expandToSection('assurance')}

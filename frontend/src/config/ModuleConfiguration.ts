@@ -4,7 +4,6 @@ import {
     CheckCircle2,
     AlertCircle,
     FileCheck,
-    Settings,
     BookOpen,
     Sliders,
     GitBranch,
@@ -14,11 +13,13 @@ import {
     Shield,
     ShieldCheck,
     Award,
-    CheckCircle,
     AlertTriangle,
     Network,
     Layers,
     FolderTree,
+    Workflow,
+    ScrollText,
+    BadgeCheck,
     type LucideIcon,
 } from 'lucide-react'
 
@@ -38,7 +39,7 @@ export const MODULES: ModuleDefinition[] = [
     { id: 'stakeholder', label: 'Stakeholder', icon: Users, route: 'stakeholder', category: 'system' },
     { id: 'product-breakdown-structure', label: 'Product Breakdown Structure', icon: FolderTree, route: 'product-breakdown-structure', category: 'system' },
     { id: 'mbse-models', label: 'MBSE Models', icon: Boxes, route: 'mbse-models', category: 'system' },
-    { id: 'functions', label: 'Functions', icon: Settings, route: 'functions', category: 'system' },
+    { id: 'functions', label: 'Functions', icon: Workflow, route: 'functions', category: 'system' },
     { id: 'interface-management', label: 'Interface Management', icon: Network, route: 'interface-management', category: 'system' },
     { id: 'parameters', label: 'Parameters', icon: Sliders, route: 'parameters', category: 'system' },
 
@@ -54,12 +55,12 @@ export const MODULES: ModuleDefinition[] = [
 
     // Assurance & Certification
     { id: 'verification', label: 'Verification', icon: CheckCircle2, route: 'verification', category: 'assurance' },
-    { id: 'validation', label: 'Validation', icon: CheckCircle, route: 'validation', category: 'assurance' },
+    { id: 'validation', label: 'Validation', icon: BadgeCheck, route: 'validation', category: 'assurance' },
     { id: 'safety-analysis', label: 'Safety Analysis', icon: Shield, route: 'safety-analysis', category: 'assurance' },
     { id: 'risk-management', label: 'Risk Management', icon: AlertTriangle, route: 'risk-management', category: 'assurance' },
     { id: 'compliance-check', label: 'Compliance Check', icon: ShieldCheck, route: 'compliance-check', category: 'assurance' },
     { id: 'certification', label: 'Certification', icon: Award, route: 'certification', category: 'assurance' },
-    { id: 'audit', label: 'Audit Log', icon: ClipboardList, route: 'audit', category: 'assurance' },
+    { id: 'audit', label: 'Audit Log', icon: ScrollText, route: 'audit', category: 'assurance' },
 ]
 
 export const CATEGORIES: { id: ModuleCategory; label: string }[] = [
