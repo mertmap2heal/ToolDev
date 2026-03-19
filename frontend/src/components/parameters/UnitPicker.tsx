@@ -16,15 +16,32 @@ import {
   type UnitDef,
 } from '../../config/units'
 
+export const UNITLESS_SYMBOL = '-'
+export const UNITLESS_ENTRY: UnitDef = {
+  symbol: UNITLESS_SYMBOL,
+  name: 'Unitless / dimensionless',
+  category: 'Special',
+  quantity: 'dimensionless',
+}
+
+export interface ProjectUnitDef {
+  id: string
+  symbol: string
+  name: string
+  category: string | null
+}
+
 interface Props {
   value: string
   onChange: (value: string) => void
   placeholder?: string
   disabled?: boolean
   id?: string
+  /** Project-specific custom units — shown in dropdown alongside standard units */
+  projectUnits?: ProjectUnitDef[]
 }
 
-export default function UnitPicker({ value, onChange, placeholder = '°C, Pa, m/s, kg…', disabled, id }: Props) {
+export default function UnitPicker({ value, onChange, placeholder = '°C, Pa, m/s, kg…', disabled, id, projectUnits = [] }: Props) {
   const inputId = useId()
   const resolvedId = id ?? inputId
 
@@ -38,10 +55,35 @@ export default function UnitPicker({ value, onChange, placeholder = '°C, Pa, m/
   // Keep local query in sync when value changes externally
   useEffect(() => { setQuery(value ?? '') }, [value])
 
-  const results = searchUnits(query)
-  const known = !query || isKnownUnit(query)
+  const isUnitless = query === UNITLESS_SYMBOL || query.toLowerCase() === 'unitless' || query.toLowerCase() === 'dimensionless'
+  const isKnownProject = projectUnits.some(u => u.symbol.toLowerCase() === query.toLowerCase())
+
+  // Base results from the standard library, filtered to exclude '-' which we pin
+  const baseResults = searchUnits(query).filter(u => u.symbol !== UNITLESS_SYMBOL)
+
+  // Project unit results
+  const projectResults: UnitDef[] = projectUnits
+    .filter(u => {
+      if (!query.trim()) return true
+      const q = query.toLowerCase()
+      return u.symbol.toLowerCase().includes(q) || u.name.toLowerCase().includes(q)
+    })
+    .map(u => ({
+      symbol: u.symbol,
+      name: u.name,
+      category: 'Project' as UnitDef['category'],
+      quantity: u.category ?? 'custom',
+    }))
+
+  // Unitless entry: shown when query is empty, "unit", "less", "-", or "dimension"
+  const showUnitless = !query || /^(unit|less|dimen|-|none|n\/a)/.test(query.toLowerCase())
+  const unitlessResult: UnitDef[] = showUnitless ? [UNITLESS_ENTRY] : []
+
+  const results: UnitDef[] = [...unitlessResult, ...projectResults, ...baseResults]
+
+  const known = isUnitless || isKnownProject || !query || isKnownUnit(query)
   const suggestion = !known ? suggestUnit(query) : null
-  const breakdown = query ? getSIBreakdown(query) : null
+  const breakdown = query && !isUnitless ? getSIBreakdown(query) : null
 
   // Close on outside click
   useEffect(() => {
@@ -106,6 +148,7 @@ export default function UnitPicker({ value, onChange, placeholder = '°C, Pa, m/
     'Imperial':   '#f59e0b',
     'Common':     '#22c55e',
     'Special':    '#6b7280',
+    'Project':    '#0ea5e9',
   }
 
   return (

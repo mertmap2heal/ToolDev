@@ -1,11 +1,17 @@
 /**
  * Type-aware form fields shared between CreateParameterModal and EditParameterModal.
  * Renders different controls based on the detected type category.
+ * Validates values in real-time against the type's format definition.
  */
-import { useState, useCallback } from 'react'
-import { Plus, Trash2, Settings } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { Plus, Trash2, Settings, Ruler, AlertCircle, Info } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import UnitPicker from './UnitPicker'
 import { TypeCombobox } from './TypeCombobox'
+import { validateParameterValue } from './validateParameterValue'
+import { parameterTypeService } from '../../services/parameterType.service'
+import { projectUnitService } from '../../services/projectUnit.service'
+import type { ParameterValueFormat } from 'shared/types/engineering.types'
 
 export interface ParameterFormValues {
   dataType: string
@@ -27,6 +33,10 @@ interface Props {
   onChange: (field: keyof ParameterFormValues, value: string) => void
   /** Called when user wants to open the type management panel */
   onManageTypes?: () => void
+  /** Called when user wants to open the unit management panel */
+  onManageUnits?: () => void
+  /** External validation error for value field (e.g. from form submit attempt) */
+  valueError?: string | null
 }
 
 // ── type category detection ────────────────────────────────────────────────
@@ -46,10 +56,10 @@ function detectCategory(dataType: string): TypeCategory {
 
 // ── asymmetric tolerance helpers ───────────────────────────────────────────
 
-function parseTolerance(raw: string): { pos: string; neg: string; symmetric: boolean } {
+function parseTolerance(raw: string): { pos: string; neg: string } {
   const m = raw.match(/^\+([^/]+)\/-(.+)$/)
-  if (m) return { pos: m[1], neg: m[2], symmetric: false }
-  return { pos: raw.replace(/^[+-]/, ''), neg: raw.replace(/^[+-]/, ''), symmetric: true }
+  if (m) return { pos: m[1], neg: m[2] }
+  return { pos: raw.replace(/^[+-]/, ''), neg: raw.replace(/^[+-]/, '') }
 }
 
 function formatTolerance(pos: string, neg: string): string {
@@ -99,8 +109,8 @@ function EnumEditor({
   return (
     <div className="space-y-1.5">
       <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5 text-xs text-gray-500 dark:text-gray-400 px-1">
-        <span>Enum member name</span>
-        <span>Numeric / string value</span>
+        <span>Member name</span>
+        <span>Value</span>
         <span />
       </div>
       {entries.map((e, i) => (
@@ -140,12 +150,63 @@ function EnumEditor({
   )
 }
 
+// ── value format hint box ──────────────────────────────────────────────────
+
+function FormatHint({ fmt }: { fmt: ParameterValueFormat }) {
+  if (!fmt.hint && !fmt.template && !fmt.example) return null
+  return (
+    <div className="flex gap-2 p-2.5 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg text-xs">
+      <Info className="w-3.5 h-3.5 text-blue-500 flex-shrink-0 mt-0.5" />
+      <div className="space-y-0.5 min-w-0">
+        {fmt.hint && <p className="text-blue-700 dark:text-blue-300">{fmt.hint}</p>}
+        {fmt.template && (
+          <p className="text-gray-500 dark:text-gray-400">
+            Template: <code className="font-mono bg-blue-100 dark:bg-blue-900/50 px-1 rounded">{fmt.template}</code>
+          </p>
+        )}
+        {fmt.example && (
+          <p className="text-gray-500 dark:text-gray-400">
+            Example: <code className="font-mono bg-blue-100 dark:bg-blue-900/50 px-1 rounded">{fmt.example}</code>
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── main component ─────────────────────────────────────────────────────────
 
 const INPUT_CLS = 'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm'
+const INPUT_ERR_CLS = 'w-full px-4 py-2 border border-red-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm'
 const LABEL_CLS = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left'
 
-export function ParameterFormFields({ projectId, values, onChange, onManageTypes }: Props) {
+export function ParameterFormFields({ projectId, values, onChange, onManageTypes, onManageUnits, valueError }: Props) {
+  const [valueValidationError, setValueValidationError] = useState<string | null>(null)
+
+  // Fetch type definitions to get valueFormat for the current type
+  const { data: types } = useQuery({
+    queryKey: ['parameter-types', projectId],
+    queryFn: () => parameterTypeService.getTypes(projectId).then(r => r.data ?? []),
+    staleTime: 30_000,
+  })
+
+  // Fetch project-specific units
+  const { data: projectUnitData } = useQuery({
+    queryKey: ['project-units', projectId],
+    queryFn: () => projectUnitService.getUnits(projectId).then(r => r.data ?? []),
+    staleTime: 30_000,
+  })
+
+  const projectUnits = (projectUnitData ?? []).map(u => ({
+    id: u.id,
+    symbol: u.symbol,
+    name: u.name,
+    category: u.category ?? null,
+  }))
+
+  const matchedType = types?.find(t => t.name === values.dataType)
+  const valueFormat = matchedType?.valueFormat ?? null
+
   const category = detectCategory(values.dataType)
   const { pos: tolPos, neg: tolNeg } = parseTolerance(values.tolerance)
 
@@ -157,6 +218,27 @@ export function ParameterFormFields({ projectId, values, onChange, onManageTypes
   const showMinMax = category === 'numeric' || category === 'vector' || category === 'other'
   const showEnum = category === 'enum'
   const showDimensions = category === 'vector'
+
+  // Real-time value validation (debounced via useEffect)
+  useEffect(() => {
+    if (!values.defaultValue) {
+      setValueValidationError(null)
+      return
+    }
+    const timer = setTimeout(() => {
+      const err = validateParameterValue(
+        values.defaultValue,
+        values.dataType,
+        values.enumValues,
+        values.dimensions,
+        valueFormat
+      )
+      setValueValidationError(err)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [values.defaultValue, values.dataType, values.enumValues, values.dimensions, valueFormat])
+
+  const displayValueError = valueError ?? valueValidationError
 
   return (
     <div className="space-y-5">
@@ -182,11 +264,11 @@ export function ParameterFormFields({ projectId, values, onChange, onManageTypes
         />
         {category !== 'other' && (
           <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-            {category === 'numeric' && 'Numeric type — value, min/max, tolerance and unit fields are shown below.'}
-            {category === 'boolean' && 'Boolean type — only true/false values apply.'}
-            {category === 'string' && 'String type — numeric constraints are hidden.'}
-            {category === 'enum' && 'Enum type — define members below and pick the default value.'}
-            {category === 'vector' && 'Vector/matrix type — specify dimensions and unit below.'}
+            {category === 'numeric' && 'Numeric — value, min/max, tolerance and unit shown below.'}
+            {category === 'boolean' && 'Boolean — only true/false values apply.'}
+            {category === 'string' && 'String — numeric constraints are hidden.'}
+            {category === 'enum' && 'Enum — define members below and pick the default.'}
+            {category === 'vector' && 'Vector/matrix — specify dimensions and unit below.'}
           </p>
         )}
       </div>
@@ -208,7 +290,7 @@ export function ParameterFormFields({ projectId, values, onChange, onManageTypes
           <select
             value={values.defaultValue}
             onChange={e => onChange('defaultValue', e.target.value)}
-            className={INPUT_CLS}
+            className={displayValueError ? INPUT_ERR_CLS : INPUT_CLS}
           >
             <option value="">— select default member —</option>
             {enumDefaultOptions.map(e => (
@@ -220,9 +302,21 @@ export function ParameterFormFields({ projectId, values, onChange, onManageTypes
             type="text"
             value={values.defaultValue}
             onChange={e => onChange('defaultValue', e.target.value)}
-            className={INPUT_CLS}
-            placeholder={category === 'enum' ? 'Define members below first' : 'Enter default value'}
+            className={displayValueError ? INPUT_ERR_CLS : INPUT_CLS}
+            placeholder={category === 'enum' ? 'Define members below first' : valueFormat?.example ? `e.g. ${valueFormat.example}` : 'Enter default value'}
           />
+        )}
+        {displayValueError && (
+          <div className="flex items-start gap-1.5 mt-1.5">
+            <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-red-600 dark:text-red-400">{displayValueError}</p>
+          </div>
+        )}
+        {/* Format hint box */}
+        {valueFormat && !displayValueError && (
+          <div className="mt-1.5">
+            <FormatHint fmt={valueFormat} />
+          </div>
         )}
       </div>
 
@@ -254,8 +348,24 @@ export function ParameterFormFields({ projectId, values, onChange, onManageTypes
       {/* Unit */}
       {showUnit && (
         <div>
-          <label className={LABEL_CLS}>Unit</label>
-          <UnitPicker value={values.unit} onChange={v => onChange('unit', v)} />
+          <div className="flex items-center justify-between mb-2">
+            <label className={LABEL_CLS.replace(' mb-2', '')}>Unit</label>
+            {onManageUnits && (
+              <button
+                type="button"
+                onClick={onManageUnits}
+                className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              >
+                <Ruler className="w-3 h-3" />
+                Manage units
+              </button>
+            )}
+          </div>
+          <UnitPicker
+            value={values.unit}
+            onChange={v => onChange('unit', v)}
+            projectUnits={projectUnits}
+          />
         </div>
       )}
 
@@ -321,5 +431,22 @@ export function ParameterFormFields({ projectId, values, onChange, onManageTypes
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * Run value validation imperatively (for use in form submit handlers).
+ * Returns an error string or null.
+ */
+export function runValueValidation(
+  values: Pick<ParameterFormValues, 'defaultValue' | 'dataType' | 'enumValues' | 'dimensions'>,
+  valueFormat?: ParameterValueFormat | null
+): string | null {
+  return validateParameterValue(
+    values.defaultValue,
+    values.dataType,
+    values.enumValues,
+    values.dimensions,
+    valueFormat
   )
 }

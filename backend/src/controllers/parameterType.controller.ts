@@ -21,7 +21,7 @@ export const getParameterTypes = async (req: AuthRequest, res: Response) => {
 export const createParameterTypeHandler = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
-    const { name, description, color, translations } = req.body as Record<string, unknown>
+    const { name, description, color, translations, valueFormat } = req.body as Record<string, unknown>
     if (!name || typeof name !== 'string' || !name.trim()) {
       return res.status(400).json({ success: false, error: 'name is required' })
     }
@@ -30,6 +30,7 @@ export const createParameterTypeHandler = async (req: AuthRequest, res: Response
       description: description as string | undefined,
       color: color as string | undefined,
       translations: translations as Record<string, string> | undefined,
+      valueFormat: valueFormat as import('../services/parameterType.service').ValueFormat | undefined,
     })
     res.status(201).json({ success: true, data: t })
   } catch (error) {
@@ -44,12 +45,13 @@ export const createParameterTypeHandler = async (req: AuthRequest, res: Response
 export const updateParameterTypeHandler = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId, id } = req.params
-    const { name, description, color, translations } = req.body as Record<string, unknown>
+    const { name, description, color, translations, valueFormat } = req.body as Record<string, unknown>
     const t = await updateParameterType(id, projectId, {
       name: name as string | undefined,
       description: description as string | undefined,
       color: color as string | undefined,
       translations: translations as Record<string, string> | undefined,
+      valueFormat: valueFormat as import('../services/parameterType.service').ValueFormat | null | undefined,
     })
     res.json({ success: true, data: t })
   } catch (error) {

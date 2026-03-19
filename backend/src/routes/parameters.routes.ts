@@ -9,6 +9,13 @@ import {
   getParameterTypeUsage,
 } from '../controllers/parameterType.controller'
 import {
+  getProjectUnits,
+  createProjectUnitHandler,
+  updateProjectUnitHandler,
+  deleteProjectUnitHandler,
+  getProjectUnitUsage,
+} from '../controllers/projectUnit.controller'
+import {
   getParameters,
   getParameter,
   createParameter,
@@ -38,6 +45,13 @@ router.post('/:projectId/types', createParameterTypeHandler)
 router.patch('/:projectId/types/:id', updateParameterTypeHandler)
 router.delete('/:projectId/types/:id', deleteParameterTypeHandler)
 router.get('/:projectId/types/:id/usage', getParameterTypeUsage)
+
+// Project unit registry
+router.get('/:projectId/units', getProjectUnits)
+router.post('/:projectId/units', createProjectUnitHandler)
+router.patch('/:projectId/units/:id', updateProjectUnitHandler)
+router.delete('/:projectId/units/:id', deleteProjectUnitHandler)
+router.get('/:projectId/units/:symbol/usage', getProjectUnitUsage)
 
 router.get('/:projectId/resolve', resolveAllParameters)
 router.get('/:projectId/resolve/:id', resolveParameter)
