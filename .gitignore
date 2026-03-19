@@ -40,3 +40,6 @@ coverage/
 # Misc
 *.pem
 .cache/
+.mcp.json
+.playwright-mcp/
+*.png

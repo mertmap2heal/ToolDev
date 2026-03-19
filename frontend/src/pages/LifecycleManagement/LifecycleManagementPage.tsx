@@ -273,6 +273,98 @@ function LifecycleLibraryContent({ searchQuery = '' }: { searchQuery?: string })
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingLifecycle, setEditingLifecycle] = useState<any>(null)
 
+  // Seed standard lifecycles once when the store has none
+  useEffect(() => {
+    const hasStandard = lifecycles.some(lc => lc.type === 'standard')
+    if (hasStandard) return
+    const today = new Date().toISOString().split('T')[0]!
+    const makeStatuses = (names: string[]) =>
+      names.map((name, i) => ({ id: `s${i}`, name, color: i === 0 ? 'blue' : i === names.length - 1 ? 'green' : 'gray' }))
+    const makeSteps = (names: string[]) =>
+      names.map((_, i) => ({ id: `step${i}`, statusId: `s${i}`, order: i }))
+    const standards = [
+      {
+        id: 'std-arp4754a',
+        name: 'ARP4754A System Development',
+        description: 'Aircraft system development lifecycle per SAE ARP4754A. Covers system requirements, architecture, implementation, verification and validation.',
+        type: 'standard' as const,
+        version: '1.0',
+        lastModified: today,
+        applicableItemTypes: ['Requirement', 'Function', 'Task'],
+        statuses: makeStatuses(['Proposed', 'Draft', 'In Review', 'Approved', 'Baselined', 'In Implementation', 'Verified', 'Validated', 'Released']),
+        steps: makeSteps(['Proposed', 'Draft', 'In Review', 'Approved', 'Baselined', 'In Implementation', 'Verified', 'Validated', 'Released']),
+        statusCount: 9,
+        itemCount: 0,
+      },
+      {
+        id: 'std-do178c',
+        name: 'DO-178C Software Development',
+        description: 'Software development lifecycle for airborne systems per RTCA DO-178C. Covers planning, requirements, design, coding, integration and verification.',
+        type: 'standard' as const,
+        version: '1.0',
+        lastModified: today,
+        applicableItemTypes: ['Requirement', 'Task', 'Issue'],
+        statuses: makeStatuses(['Planning', 'Requirements', 'Design', 'Implementation', 'Integration', 'Verification', 'Certification', 'Released']),
+        steps: makeSteps(['Planning', 'Requirements', 'Design', 'Implementation', 'Integration', 'Verification', 'Certification', 'Released']),
+        statusCount: 8,
+        itemCount: 0,
+      },
+      {
+        id: 'std-do254',
+        name: 'DO-254 Hardware Development',
+        description: 'Hardware development assurance lifecycle for airborne electronic systems per RTCA DO-254.',
+        type: 'standard' as const,
+        version: '1.0',
+        lastModified: today,
+        applicableItemTypes: ['Requirement', 'Task'],
+        statuses: makeStatuses(['Concept', 'Requirements', 'Design', 'Implementation', 'Production Transition', 'Verification', 'Acceptance']),
+        steps: makeSteps(['Concept', 'Requirements', 'Design', 'Implementation', 'Production Transition', 'Verification', 'Acceptance']),
+        statusCount: 7,
+        itemCount: 0,
+      },
+      {
+        id: 'std-requirement',
+        name: 'Requirements Lifecycle',
+        description: 'Standard lifecycle for engineering requirements management — from elicitation through baselined approval and obsolescence.',
+        type: 'standard' as const,
+        version: '1.0',
+        lastModified: today,
+        applicableItemTypes: ['Requirement'],
+        statuses: makeStatuses(['Proposed', 'Draft', 'In Review', 'Approved', 'Baselined', 'Obsolete']),
+        steps: makeSteps(['Proposed', 'Draft', 'In Review', 'Approved', 'Baselined', 'Obsolete']),
+        statusCount: 6,
+        itemCount: 0,
+      },
+      {
+        id: 'std-verification',
+        name: 'Verification & Test Lifecycle',
+        description: 'Lifecycle for test cases, test plans and verification activities covering definition through closure.',
+        type: 'standard' as const,
+        version: '1.0',
+        lastModified: today,
+        applicableItemTypes: ['Task', 'Issue'],
+        statuses: makeStatuses(['Draft', 'Ready', 'In Execution', 'Pass', 'Fail', 'Closed']),
+        steps: makeSteps(['Draft', 'Ready', 'In Execution', 'Pass', 'Fail', 'Closed']),
+        statusCount: 6,
+        itemCount: 0,
+      },
+      {
+        id: 'std-change-request',
+        name: 'Change Request Lifecycle',
+        description: 'Lifecycle for engineering change requests from submission through disposition and implementation.',
+        type: 'standard' as const,
+        version: '1.0',
+        lastModified: today,
+        applicableItemTypes: ['Change Request'],
+        statuses: makeStatuses(['Submitted', 'Under Review', 'Impact Assessment', 'Approved', 'In Implementation', 'Verified', 'Closed', 'Rejected']),
+        steps: makeSteps(['Submitted', 'Under Review', 'Impact Assessment', 'Approved', 'In Implementation', 'Verified', 'Closed', 'Rejected']),
+        statusCount: 8,
+        itemCount: 0,
+      },
+    ]
+    setLifecycles([...lifecycles, ...standards])
+  }, [])
+
   // Get created libraries (those with type 'project' that were created via Library Builder)
   // Libraries have id starting with 'library-' to distinguish them from lifecycles
   const createdLibraries = lifecycles.filter(lc => lc.type === 'project' && lc.id?.startsWith('library-'))

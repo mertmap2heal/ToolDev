@@ -42,10 +42,11 @@ export default function Breadcrumbs({ items: itemsProp }: BreadcrumbsProps) {
     }
 
     if (pathSegments[0] === 'projects' && projectId) {
-      // Add project name if available
+      // Add project name if available — link back to overview when on a sub-page
       const projectName = projectData?.name || 'Project'
-      breadcrumbs.push({ label: projectName })
-      
+      const isSubPage = !!pathSegments[2]
+      breadcrumbs.push({ label: projectName, path: isSubPage ? `/projects/${projectId}` : undefined })
+
       // Add current page (kebab-case to title case, e.g. configuration-management -> Configuration Management)
       if (pathSegments[2]) {
         const slug = pathSegments[2]

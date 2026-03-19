@@ -18,6 +18,7 @@
     "seed:test-plan": "tsx src/scripts/seed-test-plan.ts",
     "seed:test-run": "tsx src/scripts/seed-test-run.ts",
     "seed:demo": "tsx src/scripts/seed-demo-project.ts",
+    "seed:full-demo": "tsx src/scripts/seed-full-demo.ts",
     "backfill:parameter-ids": "tsx src/scripts/backfill-parameter-ids.ts",
     "db:push": "prisma db push --accept-data-loss",
     "db:gen": "prisma generate",

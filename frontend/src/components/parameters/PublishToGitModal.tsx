@@ -777,12 +777,15 @@ export default function PublishToGitModal({
                         : `${parameters.filter(p => p.tags?.some(t => selectedTags.includes(t))).length} / ${parameters.length}`}
                     </span>
                     <span style={{ flex: 1 }} />
-                    <button
+                    <span
+                      role="button"
+                      tabIndex={0}
                       onClick={e => { e.stopPropagation(); setSelectedTags([]) }}
-                      style={{ fontSize: 10, color: 'var(--theme-accent)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); setSelectedTags([]) } }}
+                      style={{ fontSize: 10, color: 'var(--theme-accent)', cursor: 'pointer', padding: '2px 6px' }}
                     >
                       All
-                    </button>
+                    </span>
                   </button>
                   {tagsOpen && (
                     <div style={{ padding: '10px 12px', borderTop: '1px solid var(--theme-border)', display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -832,18 +835,24 @@ export default function PublishToGitModal({
                     {selectedFormats.length} / {ALL_FORMAT_KEYS.length}
                   </span>
                   <span style={{ flex: 1 }} />
-                  <button
+                  <span
+                    role="button"
+                    tabIndex={0}
                     onClick={e => { e.stopPropagation(); setSelectedFormats(ALL_FORMAT_KEYS) }}
-                    style={{ fontSize: 10, color: 'var(--theme-accent)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); setSelectedFormats(ALL_FORMAT_KEYS) } }}
+                    style={{ fontSize: 10, color: 'var(--theme-accent)', cursor: 'pointer', padding: '2px 6px' }}
                   >
                     All
-                  </button>
-                  <button
+                  </span>
+                  <span
+                    role="button"
+                    tabIndex={0}
                     onClick={e => { e.stopPropagation(); setSelectedFormats([]) }}
-                    style={{ fontSize: 10, color: 'var(--theme-text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); setSelectedFormats([]) } }}
+                    style={{ fontSize: 10, color: 'var(--theme-text-muted)', cursor: 'pointer', padding: '2px 6px' }}
                   >
                     None
-                  </button>
+                  </span>
                 </button>
 
                 {formatsOpen && (

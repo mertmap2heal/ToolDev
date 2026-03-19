@@ -457,25 +457,9 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
             </>
           ) : (
             <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0, flex: 1 }}>
-                <span style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  backgroundColor: 'var(--theme-accent)',
-                  flexShrink: 0,
-                }} />
-                <span style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: 'var(--theme-text)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}>
-                  {projectName}
-                </span>
-              </div>
+              <Link to="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', minWidth: 0, flex: 1 }}>
+                <Logo size="sm" showText={true} />
+              </Link>
               <CollapseBtn collapsed={effectiveCollapsed} onToggle={toggle} />
               {mobileCloseBtn}
             </>
