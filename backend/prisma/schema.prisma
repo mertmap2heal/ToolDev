@@ -725,6 +725,8 @@ model Parameter {
   folderId         String?
   sourceParameterId String?  // for derived parameters
   formula          String?  // optional formula/rule (display or future evaluation)
+  enumValues       String?  // JSON: [{name,value}] for enum types
+  dimensions       String?  // shape/size for vector/matrix types, e.g. "3x1", "4x4"
   sourceFunctionId String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

@@ -559,6 +559,8 @@ export interface Parameter {
   folderId?: string
   sourceParameterId?: string
   formula?: string
+  enumValues?: string
+  dimensions?: string
   sourceFunctionId?: string
   sourceFunction?: {
     id: string
@@ -584,6 +586,8 @@ export interface CreateParameterDto {
   ownerType?: ParameterOwnerType
   tags?: string[]
   formula?: string
+  enumValues?: string
+  dimensions?: string
   sourceFunctionId?: string
 }
 
@@ -601,6 +605,8 @@ export interface UpdateParameterDto {
   ownerType?: ParameterOwnerType
   tags?: string[]
   formula?: string
+  enumValues?: string
+  dimensions?: string
   sourceParameterId?: string | null
 }
 

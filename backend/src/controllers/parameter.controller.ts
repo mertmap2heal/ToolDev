@@ -107,7 +107,7 @@ function incrementMinorVersion(version: string): string {
 /** Fields whose change on an approved parameter triggers a version bump. */
 const VERSION_BUMP_FIELDS = new Set([
   'name', 'defaultValue', 'dataType', 'unit', 'tolerance',
-  'minValue', 'maxValue', 'formula', 'description',
+  'minValue', 'maxValue', 'formula', 'description', 'enumValues', 'dimensions',
 ])
 
 /** Build full auditable snapshot for ParameterVersion (name, description, value fields, status, etc.). */
@@ -264,6 +264,8 @@ export const updateParameter = async (req: AuthRequest, res: Response) => {
       folderId,
       sourceParameterId,
       formula,
+      enumValues,
+      dimensions,
       sourceFunctionId,
       parameterId: parameterIdFromBody,
     } = body
@@ -304,6 +306,8 @@ export const updateParameter = async (req: AuthRequest, res: Response) => {
     if (folderId !== undefined) updateData.folderId = folderId === '' ? null : folderId
     if (sourceParameterId !== undefined) updateData.sourceParameterId = sourceParameterId === '' ? null : sourceParameterId
     if (formula !== undefined) updateData.formula = formula
+    if (enumValues !== undefined) updateData.enumValues = enumValues === '' ? null : enumValues
+    if (dimensions !== undefined) updateData.dimensions = dimensions === '' ? null : dimensions
     if (sourceFunctionId !== undefined) updateData.sourceFunctionId = sourceFunctionId === '' ? null : sourceFunctionId
     if (name !== undefined) updateData.name = name
 
@@ -384,6 +388,8 @@ export const createParameter = async (req: AuthRequest, res: Response) => {
       folderId,
       sourceParameterId,
       formula,
+      enumValues,
+      dimensions,
       sourceFunctionId,
       parameterId: providedParameterId,
     } = body
@@ -425,6 +431,8 @@ export const createParameter = async (req: AuthRequest, res: Response) => {
         folderId: (folderId as string) || null,
         sourceParameterId: (sourceParameterId as string) || null,
         formula: (formula as string)?.trim() ?? null,
+        enumValues: (enumValues as string)?.trim() || null,
+        dimensions: (dimensions as string)?.trim() || null,
         sourceFunctionId: (sourceFunctionId as string) || null,
       },
       include: {
