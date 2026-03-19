@@ -1,9 +1,8 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import { buildRequirementChangeSummary, notifyRequirementSubscribers } from './requirementNotification.service'
 import { XMLBuilder, XMLParser } from 'fast-xml-parser'
 import { resolveParameterPlaceholders } from '../utils/parameterPlaceholder'
 
-const prisma = new PrismaClient()
 
 interface ReqIFSpecObject {
   identifier: string

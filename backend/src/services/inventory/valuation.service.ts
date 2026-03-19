@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 
-const prisma = new PrismaClient()
 
 /**
  * FIFO (First In First Out) valuation service

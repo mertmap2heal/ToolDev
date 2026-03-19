@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import { randomUUID } from 'crypto'
 import path from 'path'
 import fs from 'fs'
@@ -7,7 +7,6 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-const prisma = new PrismaClient()
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '../../../uploads/verification/custom-sections')

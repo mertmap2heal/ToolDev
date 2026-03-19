@@ -1,9 +1,8 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import { randomUUID } from 'crypto'
 
-const prisma = new PrismaClient()
 
 export const getComments = async (req: AuthRequest, res: Response) => {
   try {

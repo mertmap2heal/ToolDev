@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import { TestPlanStatus } from '../../types/verification.types'
 
-const prisma = new PrismaClient()
 
 describe('Verification Workflow Integration', () => {
   let projectId: string

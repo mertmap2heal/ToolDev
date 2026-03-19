@@ -1,9 +1,8 @@
 import { Request, Response } from 'express'
 import { sendFeedbackEmail } from '../services/email.service.js'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth.middleware.js'
 
-const prisma = new PrismaClient()
 
 export const submitFeedback = async (req: Request, res: Response) => {
     console.log('[FeedbackController] submitFeedback called')

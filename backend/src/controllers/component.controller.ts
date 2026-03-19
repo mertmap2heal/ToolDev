@@ -1,9 +1,8 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import { buildRequirementChangeSummary, notifyRequirementSubscribers } from '../services/requirementNotification.service'
 
-const prisma = new PrismaClient()
 
 /**
  * Get all components for a project as a tree structure

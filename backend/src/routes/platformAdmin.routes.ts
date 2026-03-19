@@ -1,11 +1,10 @@
 import { Router, Response } from 'express'
 import bcrypt from 'bcryptjs'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import { authenticateToken, requireSuperiorAdmin, type AuthRequest } from '../middleware/auth.middleware'
 import { checkCompanyUserLimit } from '../controllers/auth.controller'
 
 const router = Router()
-const prisma = new PrismaClient()
 
 /** All routes require auth + SUPERIOR_ADMIN */
 router.use(authenticateToken)

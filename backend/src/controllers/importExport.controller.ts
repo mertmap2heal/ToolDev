@@ -1,10 +1,9 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import { randomUUID } from 'crypto'
 import taskService from '../services/task.service'
 
-const prisma = new PrismaClient()
 
 export const exportTasks = async (req: AuthRequest, res: Response) => {
   try {

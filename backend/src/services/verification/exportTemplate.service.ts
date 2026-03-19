@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import {
   Document,
   Packer,
@@ -13,7 +13,6 @@ import {
 import { reportService } from './report.service'
 import { templateService } from './template.service'
 
-const prisma = new PrismaClient()
 
 type EntityType = 'TEST_CASE' | 'TEST_PLAN'
 

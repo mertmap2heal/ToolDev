@@ -3,6 +3,7 @@
  * Manual vs Automated workflows differ in audit requirements and allowed transitions.
  */
 import type { VerTestRunResult } from '@prisma/client'
+import { prisma } from '../../../lib/prisma'
 
 export interface ExecutionStrategy {
   canUpdateStatus(result: VerTestRunResult, newStatus: string): boolean
@@ -32,8 +33,6 @@ export class ManualExecutionStrategy implements ExecutionStrategy {
     newValue?: unknown
     performedByUserId?: string | null
   }): Promise<void> {
-    const { PrismaClient } = await import('@prisma/client')
-    const prisma = new PrismaClient()
     await prisma.verAuditEvent.create({
       data: {
         projectId: params.projectId,
@@ -64,8 +63,6 @@ export class AutomatedExecutionStrategy implements ExecutionStrategy {
     performedByUserId?: string | null
   }): Promise<void> {
     // Minimal audit for automation - still record but automation source
-    const { PrismaClient } = await import('@prisma/client')
-    const prisma = new PrismaClient()
     await prisma.verAuditEvent.create({
       data: {
         projectId: params.projectId,

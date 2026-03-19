@@ -2,11 +2,10 @@ import { Request, Response } from 'express'
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import type { AuthRequest } from '../middleware/auth.middleware'
 import { sendInviteEmail, sendForgotPasswordEmail } from '../services/email.service'
 
-const prisma = new PrismaClient()
 
 async function requireAdmin(req: AuthRequest, res: Response): Promise<{ email: string } | null> {
   const currentUserId = req.userId

@@ -1,9 +1,8 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import * as complianceService from '../services/compliance.service'
 
-const prisma = new PrismaClient()
 
 export async function getRules(req: AuthRequest, res: Response) {
   try {

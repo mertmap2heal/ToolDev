@@ -5,10 +5,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import request from 'supertest'
 import { app } from '../../server'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import bcrypt from 'bcryptjs'
 
-const prisma = new PrismaClient()
 
 describe('Platform Admin (Superior Admin)', () => {
   let normalUserToken: string

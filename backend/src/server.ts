@@ -3,7 +3,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from './lib/prisma'
 import routes from './routes/index.js'
 import feedbackRoutes from './routes/feedback.routes.js'
 import http from 'http'
@@ -12,7 +12,6 @@ import { setupRealtime } from './realtime/realtime.js'
 dotenv.config({ override: true })
 
 console.log('Server: loading Prisma and routes...')
-const prisma = new PrismaClient()
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)

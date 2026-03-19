@@ -1,12 +1,11 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import { linkageAuditService } from '../services/linkageAudit.service'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
-const prisma = new PrismaClient()
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const issueUploadsDir = path.join(__dirname, '../../uploads/issues')

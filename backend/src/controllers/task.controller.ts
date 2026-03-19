@@ -1,6 +1,7 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import taskService from '../services/task.service'
+import { prisma } from '../lib/prisma'
 
 export const createTask = async (req: AuthRequest, res: Response) => {
   try {
@@ -260,8 +261,6 @@ export const bulkUpdateTasks = async (req: AuthRequest, res: Response) => {
 export const getActivity = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
-    const { PrismaClient } = require('@prisma/client')
-    const prisma = new PrismaClient()
 
     const activities = await prisma.activityFeed.findMany({
       where: { taskId: id },
@@ -287,8 +286,6 @@ export const getActivity = async (req: AuthRequest, res: Response) => {
 export const getCalendarTasks = async (req: AuthRequest, res: Response) => {
   try {
     const { project_id, start_date, end_date } = req.query
-    const { PrismaClient } = require('@prisma/client')
-    const prisma = new PrismaClient()
 
     const startDate = start_date ? new Date(start_date as string) : undefined
     const endDate = end_date ? new Date(end_date as string) : undefined

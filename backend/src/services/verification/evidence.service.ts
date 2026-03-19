@@ -1,11 +1,10 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import {
   EvidenceType,
   LinkedEntityType,
   EvidenceRelation,
 } from '../../types/verification.types'
 
-const prisma = new PrismaClient()
 
 /**
  * Evidence service for managing evidence and validation rules

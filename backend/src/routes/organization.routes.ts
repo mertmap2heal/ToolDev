@@ -1,9 +1,8 @@
 import { Router, Response } from 'express'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import { authenticateToken, type AuthRequest } from '../middleware/auth.middleware'
 
 const router = Router()
-const prisma = new PrismaClient()
 
 const UNNAMED_KEY = '__null__'
 

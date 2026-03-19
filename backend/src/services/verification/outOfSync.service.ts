@@ -1,9 +1,8 @@
 /**
  * Out-of-Sync detection for Test Run Results when parent TestCase changes.
  */
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 
-const prisma = new PrismaClient()
 
 export const outOfSyncService = {
   /**

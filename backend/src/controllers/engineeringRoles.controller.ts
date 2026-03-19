@@ -1,8 +1,7 @@
 import { Response } from 'express'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import type { AuthRequest } from '../middleware/auth.middleware'
 
-const prisma = new PrismaClient()
 
 const PREDEFINED_ROLES = [
     'Systems Engineer',

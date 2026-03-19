@@ -1,6 +1,6 @@
 import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import { auditService } from '../../services/verification/audit.service'
 import { testResultService } from '../../services/verification/testResult.service'
 import { AuditAction } from '../../types/verification.types'
@@ -11,7 +11,6 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-const prisma = new PrismaClient()
 
 export const getTestResults = async (req: AuthRequest, res: Response) => {
   try {

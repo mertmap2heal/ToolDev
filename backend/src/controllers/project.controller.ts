@@ -55,9 +55,8 @@ export const importProjects = async (req: AuthRequest, res: Response) => {
 };
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 
-const prisma = new PrismaClient()
 
 function slugFromName(name: string): string {
   return (

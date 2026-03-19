@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import taskService from './task.service'
 
-const prisma = new PrismaClient()
 
 export interface CreateTemplateDto {
   name: string

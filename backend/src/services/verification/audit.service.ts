@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import { AuditAction, VerAuditEvent } from '../../types/verification.types'
 
-const prisma = new PrismaClient()
 
 /**
  * Audit service for verification module

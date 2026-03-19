@@ -1,8 +1,7 @@
 import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 
-const prisma = new PrismaClient()
 
 export const ingestAutomatedResult = async (req: AuthRequest, res: Response): Promise<Response | void> => {
     try {

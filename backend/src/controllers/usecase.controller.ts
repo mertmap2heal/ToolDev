@@ -1,8 +1,7 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 
-const prisma = new PrismaClient()
 
 // Helper to generate use case ID
 async function generateUseCaseId(projectId: string): Promise<string> {

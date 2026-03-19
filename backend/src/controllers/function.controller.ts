@@ -1,10 +1,9 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import { extractParameters } from '../utils/parameterExtractor'
 import { traceabilityService } from '../services/traceability.service'
 
-const prisma = new PrismaClient()
 
 export const createFunction = async (req: AuthRequest, res: Response) => {
   try {

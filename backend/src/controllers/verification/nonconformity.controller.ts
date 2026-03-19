@@ -1,11 +1,10 @@
 import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import { auditService } from '../../services/verification/audit.service'
 import { statusTransitionService } from '../../services/verification/statusTransition.service'
 import { AuditAction, NonconformityStatus } from '../../types/verification.types'
 
-const prisma = new PrismaClient()
 
 export const getNonconformities = async (req: AuthRequest, res: Response) => {
   try {

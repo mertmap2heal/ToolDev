@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { evidenceService } from '../../services/verification/evidence.service'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 
-const prisma = new PrismaClient()
 
 describe('Evidence Rules', () => {
   beforeAll(async () => {

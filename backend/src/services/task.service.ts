@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import { randomUUID } from 'crypto'
 
-const prisma = new PrismaClient()
 
 // Access Control Placeholder (future):
 // RBAC/permissions will be implemented later.

@@ -2,6 +2,7 @@ import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import automationService from '../services/automation.service'
 import taskService from '../services/task.service'
+import { prisma } from '../lib/prisma'
 
 export const getRules = async (req: AuthRequest, res: Response) => {
   try {
@@ -85,8 +86,6 @@ export const testRule = async (req: AuthRequest, res: Response) => {
 export const getRuns = async (req: AuthRequest, res: Response) => {
   try {
     const { rule_id, limit } = req.query
-    const { PrismaClient } = require('@prisma/client')
-    const prisma = new PrismaClient()
 
     const runs = await prisma.automationRun.findMany({
       where: rule_id ? { ruleId: rule_id as string } : undefined,

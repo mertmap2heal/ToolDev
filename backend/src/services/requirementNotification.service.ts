@@ -1,7 +1,7 @@
-import { PrismaClient, Requirement } from '@prisma/client'
+import { Requirement } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import { sendRequirementUpdateEmail } from './email.service'
 
-const prisma = new PrismaClient()
 const APP_URL = process.env.APP_URL ?? 'http://localhost:3000'
 
 const LONG_TEXT_FIELDS = new Set(['description', 'acceptanceCriteria'])

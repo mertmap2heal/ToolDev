@@ -1,6 +1,6 @@
 import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import {
   capitalizeFirstLetter,
   getSystemDefaults,
@@ -8,7 +8,6 @@ import {
   type CustomOptionType,
 } from '../../services/verification/customOption.service'
 
-const prisma = new PrismaClient()
 
 /**
  * Get all options (system + custom) for a given option type

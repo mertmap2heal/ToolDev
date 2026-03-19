@@ -9,9 +9,8 @@
  * to each export format's native type system.
  */
 
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 
-const prisma = new PrismaClient()
 
 export interface ParameterTypeTranslations {
   c_header?: string

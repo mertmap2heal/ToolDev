@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 
-const prisma = new PrismaClient()
 
 async function ensureProjectExists(projectId: string): Promise<void> {
   const project = await prisma.project.findUnique({

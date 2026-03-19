@@ -1,9 +1,8 @@
 import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import { coverageService } from '../../services/verification/coverage.service'
 
-const prisma = new PrismaClient()
 
 export const getOverview = async (req: AuthRequest, res: Response) => {
   try {

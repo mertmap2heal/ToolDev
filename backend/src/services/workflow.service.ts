@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import type { WorkflowProgress, LifecycleStage } from '../../../shared/types/workflow.types'
 
-const prisma = new PrismaClient()
 
 const lifecycleStages: LifecycleStage[] = [
   'requirements',

@@ -2,14 +2,13 @@
  * Test Execution Service
  * Handles duration timer, status management, rich results, and sync logic.
  */
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import path from 'path'
 import fs from 'fs'
 import { auditService } from './audit.service'
 import { AuditAction } from '../../types/verification.types'
 import { getExecutionStrategy } from './execution/ExecutionStrategy'
 
-const prisma = new PrismaClient()
 
 const VALID_RESULT_STATUSES = ['NOT_RUN', 'PASS', 'FAIL', 'BLOCKED', 'SKIPPED', 'PASSED_WITH_ERRORS']
 

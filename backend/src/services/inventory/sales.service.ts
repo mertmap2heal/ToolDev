@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import { inventoryService } from './inventory.service'
 
-const prisma = new PrismaClient()
 
 export interface CreateCustomerInput {
   code: string

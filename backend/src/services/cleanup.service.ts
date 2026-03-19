@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import { linkageAuditService } from './linkageAudit.service'
 
-const prisma = new PrismaClient()
 
 /**
  * Permanently deletes requirements that have been in the trash for more than 7 days.

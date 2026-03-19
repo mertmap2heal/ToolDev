@@ -2,10 +2,9 @@
  * Builder Pattern for constructing test cycles (runs).
  * Encapsulates plan validation, case membership, and creation of VerTestRun + VerTestRunResult rows.
  */
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import type { VerTestRun } from '@prisma/client'
 
-const prisma = new PrismaClient()
 
 export interface TestCycleBuilderOptions {
   projectId: string

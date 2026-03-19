@@ -1,10 +1,9 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import ExcelJS from 'exceljs'
 import PDFDocument from 'pdfkit'
 import archiver from 'archiver'
 import type { Readable } from 'stream'
 
-const prisma = new PrismaClient()
 
 export type ExportFormat = 'xlsx' | 'pdf'
 

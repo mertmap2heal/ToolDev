@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import type { Requirement } from '../../../shared/types/engineering.types'
 
-const prisma = new PrismaClient()
 
 export interface ValidationResult {
   isValid: boolean

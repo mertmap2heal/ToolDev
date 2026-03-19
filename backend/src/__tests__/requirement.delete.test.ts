@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import request from 'supertest'
 import { app } from '../server'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import jwt from 'jsonwebtoken'
 
-const prisma = new PrismaClient()
 
 describe('Requirement Soft Delete Workflow', () => {
     let projectId: string

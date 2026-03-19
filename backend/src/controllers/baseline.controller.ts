@@ -1,9 +1,8 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import { collectComponentIdAndDescendants } from '../utils/componentHelpers'
 
-const prisma = new PrismaClient()
 
 async function logBaselineAudit(
   projectId: string,

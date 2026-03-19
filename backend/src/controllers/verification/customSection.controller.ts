@@ -1,11 +1,10 @@
 import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import { customSectionService } from '../../services/verification/customSection.service'
 import { auditService } from '../../services/verification/audit.service'
 import { AuditAction } from '../../types/verification.types'
 
-const prisma = new PrismaClient()
 
 export const getCustomSections = async (req: AuthRequest, res: Response) => {
   try {

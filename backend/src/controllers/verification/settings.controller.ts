@@ -1,6 +1,7 @@
 import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
 import { verificationService } from '../../services/verification/verification.service'
+import { prisma } from '../../lib/prisma'
 
 export const getSettings = async (req: AuthRequest, res: Response) => {
   try {
@@ -17,8 +18,6 @@ export const updateSettings = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
     const { allowedMocCodes, mocRulesByCriticality, lifecycleRules, namingRules, permissionsMap } = req.body
-    const { PrismaClient } = require('@prisma/client')
-    const prisma = new PrismaClient()
     const settings = await prisma.verSettings.upsert({
       where: { projectId },
       update: {

@@ -1,7 +1,7 @@
-import { PrismaClient, Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import { valuationService } from './valuation.service'
 
-const prisma = new PrismaClient()
 
 export type TrackingPolicy = 'NONE' | 'LOT' | 'SERIAL'
 export type NegativeStockPolicy = 'STRICT' | 'ALLOW_WITH_WARNING'

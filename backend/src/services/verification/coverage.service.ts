@@ -1,10 +1,9 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import {
   CoverageSummary,
   PlanCoverage,
 } from '../../types/verification.types'
 
-const prisma = new PrismaClient()
 
 /**
  * Coverage calculation service

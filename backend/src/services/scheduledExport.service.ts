@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 
-const prisma = new PrismaClient()
 
 function normalizeFormat(input: unknown): string {
   const v = String(input ?? '').toLowerCase()

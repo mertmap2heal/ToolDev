@@ -1,6 +1,6 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import {
   exportParameters as formatExport,
   getExportMeta,
@@ -52,7 +52,6 @@ import {
   AzureDevOpsConfig,
 } from '../services/azuredevops.service'
 
-const prisma = new PrismaClient()
 
 async function generateParameterId(projectId: string): Promise<string> {
   const prefix = 'PARAM'

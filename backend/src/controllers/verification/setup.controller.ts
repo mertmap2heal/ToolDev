@@ -1,6 +1,6 @@
 import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import { auditService } from '../../services/verification/audit.service'
 import { statusTransitionService } from '../../services/verification/statusTransition.service'
 import { AuditAction, EntityStatus } from '../../types/verification.types'
@@ -12,7 +12,6 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-const prisma = new PrismaClient()
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '../../../uploads/verification/manuals')

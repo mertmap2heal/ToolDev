@@ -1,9 +1,8 @@
 import { Response } from 'express'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import type { AuthRequest } from '../../middleware/auth.middleware'
 import * as certExport from '../../services/certificationExport.service'
 
-const prisma = new PrismaClient()
 
 // ----- Context -----
 export async function getContext(req: AuthRequest, res: Response) {

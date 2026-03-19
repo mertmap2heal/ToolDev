@@ -1,11 +1,10 @@
 import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import { auditService } from '../../services/verification/audit.service'
 import { evidenceService } from '../../services/verification/evidence.service'
 import { AuditAction } from '../../types/verification.types'
 
-const prisma = new PrismaClient()
 
 export const getEvidence = async (req: AuthRequest, res: Response) => {
   try {

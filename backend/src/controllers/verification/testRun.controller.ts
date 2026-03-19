@@ -4,7 +4,7 @@
  */
 import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import { testExecutionService } from '../../services/verification/TestExecutionService'
 import { createTestCycleBuilder } from '../../services/verification/TestCycleBuilder'
 import path from 'path'
@@ -15,7 +15,6 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-const prisma = new PrismaClient()
 
 const EVIDENCE_UPLOAD_DIR = path.join(__dirname, '../../../uploads/verification/run-results-evidence')
 if (!fs.existsSync(EVIDENCE_UPLOAD_DIR)) {

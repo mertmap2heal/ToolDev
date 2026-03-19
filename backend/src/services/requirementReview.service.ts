@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import { notifyRequirementSubscribers } from './requirementNotification.service'
 
-const prisma = new PrismaClient()
 
 export type ReviewStatus = 'draft' | 'in_review' | 'approved' | 'rejected' | 'cancelled'
 export type ReviewerStatus = 'pending' | 'in_progress' | 'approved' | 'rejected' | 'deferred'

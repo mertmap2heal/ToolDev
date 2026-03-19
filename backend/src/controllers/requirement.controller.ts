@@ -1,6 +1,6 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import { createVersionSnapshot } from './version.controller'
 import { traceabilityService } from '../services/traceability.service'
 import { linkageAuditService } from '../services/linkageAudit.service'
@@ -13,7 +13,6 @@ import { collectComponentIdAndDescendants } from '../utils/componentHelpers'
 import fs from 'fs'
 import path from 'path'
 
-const prisma = new PrismaClient()
 
 /** INCOSE-aligned: sync TraceLinks requirement -> parameter (constrained_by) from {{param:id}} in title/description. */
 async function syncRequirementParameterLinks(

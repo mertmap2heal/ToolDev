@@ -1,6 +1,6 @@
 import { Response } from 'express'
 import { AuthRequest } from '../../middleware/auth.middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import { auditService } from '../../services/verification/audit.service'
 import { statusTransitionService } from '../../services/verification/statusTransition.service'
 import { verificationService } from '../../services/verification/verification.service'
@@ -9,7 +9,6 @@ import { outOfSyncService } from '../../services/verification/outOfSync.service'
 import { linkageAuditService } from '../../services/linkageAudit.service'
 import { AuditAction, TestCaseStatus } from '../../types/verification.types'
 
-const prisma = new PrismaClient()
 
 export const getTestCases = async (req: AuthRequest, res: Response) => {
   try {

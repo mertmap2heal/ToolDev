@@ -2,9 +2,8 @@
  * Traceability Matrix Service
  * Requirement -> TestCase -> TestRun coverage and gap analysis.
  */
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 
-const prisma = new PrismaClient()
 
 export interface TraceabilityMatrixRow {
   requirementId: string

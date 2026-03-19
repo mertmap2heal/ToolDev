@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 
-const prisma = new PrismaClient()
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024 // 5 MB base64-encoded limit
 
