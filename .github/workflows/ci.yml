@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, master, develop ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, master, develop ]
 
 jobs:
   lint:
@@ -14,9 +14,15 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: |
+            shared/package-lock.json
+            backend/package-lock.json
+            frontend/package-lock.json
       - name: Install dependencies
         run: |
-          cd frontend && npm ci
+          cd shared && npm ci
+          cd ../frontend && npm ci
           cd ../backend && npm ci
       - name: Lint frontend
         run: cd frontend && npm run lint
@@ -25,15 +31,154 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: engineering_user
+          POSTGRES_PASSWORD: engineering_password
+          POSTGRES_DB: engineering_tool
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
         with:
           node-version: '18'
-      - name: Install dependencies
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend dependencies
+        run: cd backend && npm ci
+      - name: Run backend unit tests
+        run: cd backend && npm test
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret
+
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: engineering_user
+          POSTGRES_PASSWORD: engineering_password
+          POSTGRES_DB: engineering_tool
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: |
+            shared/package-lock.json
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install shared dependencies
+        run: cd shared && npm ci
+
+      - name: Install backend dependencies
+        run: cd backend && npm ci
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Install Playwright browsers
+        run: cd frontend && npx playwright install --with-deps chromium
+
+      - name: Create backend .env
         run: |
-          cd frontend && npm ci
-          cd ../backend && npm ci
-      - name: Run tests
+          cat > backend/.env << 'ENVEOF'
+          DATABASE_URL="postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool"
+          JWT_SECRET="ci-test-secret-key"
+          NODE_ENV=development
+          PORT=5000
+          ENVEOF
+
+      - name: Generate Prisma client and push schema
         run: |
-          echo "Tests will be added here"
+          cd backend && npx prisma generate
+          cd backend && npx prisma db push --skip-generate
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+
+      - name: Seed users
+        run: cd backend && npm run seed:users
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+
+      - name: Seed demo project
+        run: cd backend && npm run seed:demo
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+
+      - name: Start backend
+        run: cd backend && npm run dev &
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret-key
+          NODE_ENV: development
+          PORT: 5000
+
+      - name: Wait for backend to be ready
+        run: |
+          echo "Waiting for backend..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:5000/api/health > /dev/null 2>&1; then
+              echo "Backend is ready"
+              break
+            fi
+            echo "Attempt $i/30..."
+            sleep 3
+          done
+
+      - name: Start frontend dev server
+        run: cd frontend && npm run dev &
+
+      - name: Wait for frontend to be ready
+        run: |
+          echo "Waiting for frontend..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000 > /dev/null 2>&1; then
+              echo "Frontend is ready"
+              break
+            fi
+            echo "Attempt $i/30..."
+            sleep 3
+          done
+
+      - name: Run Playwright e2e tests
+        run: cd frontend && npm run test:e2e
+        env:
+          E2E_USERNAME: christian.mandle
+          E2E_PASSWORD: mandle1998
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: playwright-report
+          path: frontend/e2e/report/
+          retention-days: 7
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: playwright-test-results
+          path: frontend/test-results/
+          retention-days: 7

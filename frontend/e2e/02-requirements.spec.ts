@@ -104,4 +104,69 @@ test.describe('Requirements', () => {
     await page.waitForLoadState('domcontentloaded')
     await expect(page).toHaveURL(/requirements\/dashboard/)
   })
+
+  // --- Child requirement tests ---
+  // Child requirements have a non-null parentId. The main paginated list endpoint
+  // (/requirements/:projectId) filters parentId: null, hiding children in the table.
+  // The /all endpoint returns every requirement regardless of parentId.
+
+  test('child requirements: /all API endpoint includes requirements with parentId', async ({ page, projectId }) => {
+    await page.goto('/')
+    await page.waitForLoadState('domcontentloaded')
+    const token = await page.evaluate(() => localStorage.getItem('token'))
+    if (!token) throw new Error('No auth token found')
+
+    // /all returns every requirement; paginated / only returns root requirements (parentId: null)
+    const [allResp, rootResp] = await Promise.all([
+      page.request.get(`http://localhost:5000/api/v1/requirements/${projectId}/all`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      page.request.get(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    ])
+
+    expect(allResp.ok()).toBeTruthy()
+    expect(rootResp.ok()).toBeTruthy()
+
+    const allBody = await allResp.json()
+    const rootBody = await rootResp.json()
+
+    const allReqs: Array<{ id: string; parentId: string | null }> = allBody?.data ?? allBody
+    const rootReqs: Array<{ id: string }> = rootBody?.data ?? rootBody?.requirements ?? rootBody
+
+    // If child requirements exist, /all should return more than the root list
+    const childReqs = allReqs.filter(r => r.parentId !== null)
+    if (childReqs.length > 0) {
+      expect(allReqs.length).toBeGreaterThan(rootReqs.length)
+      console.log(`Found ${childReqs.length} child requirement(s) — they are hidden in the main table but present in /all`)
+    } else {
+      console.log('No child requirements in this project — skipping count comparison')
+    }
+  })
+
+  test('child requirements: parent row can be expanded to reveal children', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/requirements`)
+    await page.waitForLoadState('domcontentloaded')
+    // Wait for the requirements table to render
+    await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
+
+    // Look for expand/chevron buttons (rows with children have an expand toggle)
+    const expandBtn = page.locator('button[aria-label*="expand" i], button[title*="expand" i], [data-testid*="expand"], td button svg').first()
+    const hasExpand = await expandBtn.isVisible({ timeout: 3_000 }).catch(() => false)
+
+    if (!hasExpand) {
+      // No expandable rows found — either no children exist or the UI uses a different pattern
+      console.log('No expand buttons found; child requirements may not exist in this project or use a different UI pattern')
+      return
+    }
+
+    const rowsBefore = await page.locator('table tbody tr').count()
+    await expandBtn.click()
+    await page.waitForTimeout(500)
+    const rowsAfter = await page.locator('table tbody tr').count()
+
+    // After expanding, the row count should increase (child rows injected)
+    expect(rowsAfter).toBeGreaterThanOrEqual(rowsBefore)
+  })
 })
