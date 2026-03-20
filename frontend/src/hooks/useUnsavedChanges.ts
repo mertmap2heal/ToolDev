@@ -58,13 +58,16 @@ export function useUnsavedChanges(
       setShowWarning(false)
       const timer = setTimeout(() => {
         justOpenedRef.current = false
-      }, 150)
+      }, 500)
       return () => clearTimeout(timer)
     }
 
     if (!isOpen) {
       setShowWarning(false)
-      setIsDirty(false)
+      // Do NOT reset isDirty here — if the user chose "Keep for later", the form
+      // data is preserved (component stays mounted) and the Clear-all button should
+      // reappear on next open. isDirty is only cleared explicitly via resetDirty()
+      // (successful submit) or handleDiscardAll/handleDiscardInPlace (user discards).
     }
   }, [isOpen])
 
