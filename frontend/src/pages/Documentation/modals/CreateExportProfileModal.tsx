@@ -105,13 +105,16 @@ export default function CreateExportProfileModal({
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">
             {initial ? 'Edit profile' : 'Create export profile'}
           </h2>
-          <button
-            onClick={guardClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-            aria-label="Close"
-          >
-            <X size={20} className="text-gray-600 dark:text-gray-400" />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button
+              onClick={guardClose}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              aria-label="Close"
+            >
+              <X size={20} className="text-gray-600 dark:text-gray-400" />
+            </button>
+          </div>
         </div>
         <div className="p-6 space-y-4">
           <div>

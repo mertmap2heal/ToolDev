@@ -1864,6 +1864,7 @@ export default function CreateRequirementModal({
                         </label>
                         <select
                           value={formData.parentId || ''}
+                          onWheel={(e) => e.currentTarget.blur()}
                           onChange={(e) => handleChange('parentId', e.target.value || undefined)}
                           className={clsx(
                             'w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
@@ -1877,11 +1878,24 @@ export default function CreateRequirementModal({
                             </option>
                           ))}
                         </select>
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          {availableParents.length === 0
-                            ? 'No parent requirements yet. Create requirements to build hierarchy.'
-                            : 'Determines the structural position in the requirement tree.'}
-                        </p>
+                        {formData.parentId ? (
+                          <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 px-3 py-2">
+                            <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-500" />
+                            <p className="text-xs text-amber-700 dark:text-amber-300">
+                              <strong>Will be hidden from main table.</strong> This requirement will be nested under{' '}
+                              <span className="font-mono">
+                                {availableParents.find(p => p.id === formData.parentId)?.requirementId ?? 'the selected parent'}
+                              </span>
+                              {' '}and will not appear in the root-level Requirements table. Only set a parent if you intend a hierarchy.
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {availableParents.length === 0
+                              ? 'No parent requirements yet. Create requirements to build hierarchy.'
+                              : 'Nesting under a parent hides this requirement from the main table. Leave as None unless intentional.'}
+                          </p>
+                        )}
                       </div>
 
                       {/* Link Rationale */}

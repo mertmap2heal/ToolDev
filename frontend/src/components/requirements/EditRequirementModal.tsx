@@ -1761,7 +1761,22 @@ export default function EditRequirementModal({
                         </label>
                         <select
                           value={formData.parentId || ''}
-                          onChange={(e) => handleChange('parentId', e.target.value || undefined)}
+                          onWheel={(e) => e.currentTarget.blur()}
+                          onChange={(e) => {
+                            const newParentId = e.target.value || undefined
+                            // Warn when assigning a parent to a previously root-level requirement
+                            if (newParentId && !requirement.parentId) {
+                              const parentReq = availableParents.find(p => p.id === newParentId)
+                              const confirmed = window.confirm(
+                                `Warning: Setting a parent will hide "${requirement.requirementId}" from the main Requirements table.\n\n` +
+                                `It will only be visible when expanding "${parentReq?.requirementId ?? 'the parent'} - ${parentReq?.title ?? ''}" in the hierarchy.\n\n` +
+                                `Any linked parameters, trace links, or references will still point to this requirement, but users may not be able to find it in the table.\n\n` +
+                                `Are you sure you want to nest this requirement under a parent?`
+                              )
+                              if (!confirmed) return
+                            }
+                            handleChange('parentId', newParentId)
+                          }}
                           className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         >
                           <option value="">None (Top-level requirement)</option>
@@ -1771,9 +1786,22 @@ export default function EditRequirementModal({
                             </option>
                           ))}
                         </select>
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          Determines the structural position in the requirement tree.
-                        </p>
+                        {formData.parentId ? (
+                          <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 px-3 py-2">
+                            <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-500" />
+                            <p className="text-xs text-amber-700 dark:text-amber-300">
+                              <strong>Hidden from main table.</strong> This requirement is nested under{' '}
+                              <span className="font-mono">
+                                {availableParents.find(p => p.id === formData.parentId)?.requirementId ?? 'a parent'}
+                              </span>
+                              {' '}and will not appear in the root-level Requirements table. To make it visible again, set parent to &ldquo;None&rdquo;.
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            Nesting under a parent hides this requirement from the main table. Leave as None unless intentional.
+                          </p>
+                        )}
                       </div>
 
                       {/* Link Rationale */}
