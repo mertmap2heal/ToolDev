@@ -1,5 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import ReactDOM from 'react-dom'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { X, Plus, Trash2, ChevronDown, ChevronRight, Layers, FileText, Link as LinkIcon, Tag, Activity, FileCheck, Shield, Target, GitBranch, CheckCircle2, AlertTriangle, ClipboardCheck, BarChart3, Info, ArrowRight, Sliders } from 'lucide-react'
 import clsx from 'clsx'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -241,7 +242,10 @@ export default function EditRequirementModal({
   projectId,
   requirement,
 }: EditRequirementModalProps) {
-  const [formData, setFormData] = useState<UpdateRequirementDto>({})
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
+  const [formData, setFormDataBase] = useState<UpdateRequirementDto>({})
+  const setFormData = (v: UpdateRequirementDto | ((prev: UpdateRequirementDto) => UpdateRequirementDto)) => { setFormDataBase(v as any); markDirty() }
   const [descriptionEditorRef, setDescriptionEditorRef] = useState<Editor | null>(null)
   const [parameterPickerOpen, setParameterPickerOpen] = useState(false)
   const [definitionModalOpen, setDefinitionModalOpen] = useState(false)
@@ -295,6 +299,73 @@ export default function EditRequirementModal({
   const [selectedRelationshipType, setSelectedRelationshipType] = useState('derives_from')
   const [relationshipRationale, setRelationshipRationale] = useState('')
 
+  onDiscardRef.current = () => {
+    if (requirement) {
+      setFormDataBase({
+        requirementId: requirement.requirementId,
+        lifecycleId: requirement.lifecycleId ?? undefined,
+        statusId: requirement.statusId,
+        title: requirement.title,
+        requirementType: requirement.requirementType,
+        requirementLevel: requirement.requirementLevel,
+        risk: requirement.risk,
+        complexity: requirement.complexity,
+        rationale: requirement.rationale,
+        assumptions: requirement.assumptions,
+        dependencies: requirement.dependencies,
+        conflicts: requirement.conflicts,
+        stakeholders: requirement.stakeholders,
+        verificationStatus: requirement.verificationStatus,
+        verificationDate: requirement.verificationDate,
+        verificationNotes: requirement.verificationNotes ?? undefined,
+        description: requirement.description,
+        parentId: requirement.parentId,
+        priority: requirement.priority,
+        status: requirement.status,
+        stage: requirement.stage,
+        owner: requirement.owner,
+        verificationMethod: requirement.verificationMethod,
+        acceptanceCriteria: requirement.acceptanceCriteria,
+        source: requirement.source,
+        relatedDocuments: requirement.relatedDocuments || [],
+        tags: requirement.tags || [],
+        componentId: requirement.componentId || undefined,
+        thresholdValue: requirement.thresholdValue ?? undefined,
+        objectiveValue: requirement.objectiveValue ?? undefined,
+        customAttributes: requirement.customAttributes ?? undefined,
+      })
+      setThresholdValue(requirement.thresholdValue || '')
+      setObjectiveValue(requirement.objectiveValue || '')
+      setIsDerivedRequirement(requirement.customAttributes?.isDerived === true)
+      setDerivationRationale(requirement.customAttributes?.derivationRationale || '')
+    } else {
+      setFormDataBase({})
+      setThresholdValue('')
+      setObjectiveValue('')
+      setIsDerivedRequirement(false)
+      setDerivationRationale('')
+    }
+    setErrors({})
+    setTagInput('')
+    setQuickLinksPbs([])
+    setQuickLinksFunctions([])
+    setQuickLinksInterfaces([])
+    setQuickLinksHazards([])
+    setQuickLinksRisks([])
+    setQuickLinksLabels({})
+    setQuickLinksVerification([])
+    setQuickLinksDocuments([])
+    setQuickLinksChangeRequests([])
+    setQuickLinksIssues([])
+    setQuickLinksTasks([])
+    setQuickLinksCertification([])
+    setQuickLinksCompliance([])
+    setLinkRationale('')
+    setTraceLinks([])
+    setQuickLinksRequirements([])
+    setSelectedRelationshipType('derives_from')
+    setRelationshipRationale('')
+  }
 
   const queryClient = useQueryClient()
   const { statuses } = useStatusDefinitionsStore()
@@ -539,7 +610,7 @@ export default function EditRequirementModal({
 
   useEffect(() => {
     if (requirement) {
-      setFormData({
+      setFormDataBase({
         requirementId: requirement.requirementId,
         lifecycleId: requirement.lifecycleId ?? undefined,
         statusId: requirement.statusId,
@@ -599,6 +670,7 @@ export default function EditRequirementModal({
         queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
         queryClient.invalidateQueries({ queryKey: ['requirement-links-out', projectId] })
         queryClient.invalidateQueries({ queryKey: ['requirement-links-in', projectId] })
+        resetDirty()
         onClose()
       } else {
         console.error('Update failed:', response.error)
@@ -931,6 +1003,7 @@ export default function EditRequirementModal({
               queryClient.invalidateQueries({ queryKey: ['links', projectId] })
               queryClient.invalidateQueries({ queryKey: ['traceability', projectId] })
               queryClient.invalidateQueries({ queryKey: ['document-trace-links'] })
+              resetDirty()
               onClose()
             })
             return
@@ -990,14 +1063,17 @@ export default function EditRequirementModal({
   })
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-black dark:bg-opacity-70 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-black dark:bg-opacity-70 flex items-center justify-center z-50" onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}>
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto m-4" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Edit Requirement</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
-            <X size={20} className="text-gray-500" />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button onClick={guardClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+              <X size={20} className="text-gray-500" />
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -2343,7 +2419,7 @@ export default function EditRequirementModal({
         <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-gray-800/50">
           <button
             type="button"
-            onClick={onClose}
+            onClick={guardClose}
             className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
             disabled={updateRequirementMutation.isPending}
           >
@@ -2359,6 +2435,7 @@ export default function EditRequirementModal({
           </button>
         </div>
       </div>
+      {warningDialog}
     </div>
   )
 }

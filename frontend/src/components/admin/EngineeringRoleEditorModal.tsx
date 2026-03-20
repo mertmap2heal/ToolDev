@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { X, Search } from 'lucide-react'
 import type { EngineeringRole, AdminUser } from '../../types/admin.types'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 interface EngineeringRoleEditorModalProps {
     role: EngineeringRole | null // null = create mode
@@ -21,6 +22,8 @@ export default function EngineeringRoleEditorModal({
     onClose,
     onSave,
 }: EngineeringRoleEditorModalProps) {
+    const onDiscardRef = useRef<() => void>()
+    const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, true, () => onDiscardRef.current?.())
     const [name, setName] = useState(role?.name ?? '')
     const [description, setDescription] = useState(role?.description ?? '')
     const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(
@@ -30,9 +33,17 @@ export default function EngineeringRoleEditorModal({
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
 
+    onDiscardRef.current = () => {
+        setName('')
+        setDescription('')
+        setSelectedUserIds(new Set())
+        setUserSearch('')
+        setError('')
+    }
+
     useEffect(() => {
         const handleEsc = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose()
+            if (e.key === 'Escape') guardClose()
         }
         document.addEventListener('keydown', handleEsc)
         return () => document.removeEventListener('keydown', handleEsc)
@@ -71,6 +82,7 @@ export default function EngineeringRoleEditorModal({
                 description: description.trim(),
                 selectedUserIds: Array.from(selectedUserIds),
             })
+            resetDirty()
             onClose()
         } catch (err: any) {
             setError(err.message || 'Failed to save role')
@@ -81,20 +93,23 @@ export default function EngineeringRoleEditorModal({
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={guardClose} />
             <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                         {role ? 'Edit Engineering Role' : 'Create Engineering Role'}
                     </h2>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    >
-                        <X size={18} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {draftBanner}
+                        <button
+                            type="button"
+                            onClick={guardClose}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                            <X size={18} />
+                        </button>
+                    </div>
                 </div>
 
                 <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
@@ -113,7 +128,7 @@ export default function EngineeringRoleEditorModal({
                             <input
                                 type="text"
                                 value={name}
-                                onChange={(e) => setName(e.target.value)}
+                                onChange={(e) => { setName(e.target.value); markDirty() }}
                                 className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 placeholder="e.g. Flight Test Engineer"
                                 autoFocus
@@ -188,7 +203,7 @@ export default function EngineeringRoleEditorModal({
                     <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
                         <button
                             type="button"
-                            onClick={onClose}
+                            onClick={guardClose}
                             className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
                         >
                             Cancel
@@ -203,6 +218,7 @@ export default function EngineeringRoleEditorModal({
                     </div>
                 </form>
             </div>
+            {warningDialog}
         </div>
     )
 }

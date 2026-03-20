@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { X, Search, Check, Upload, File, Trash2 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { issueService } from '../../services/issue.service'
@@ -41,7 +42,9 @@ export default function CreateIssueModal({
   initialSourceTitle,
   initialSourceDescription,
 }: CreateIssueModalProps) {
-  const [formData, setFormData] = useState<CreateIssueDto>({
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
+  const [formDataBase, setFormDataBase] = useState<CreateIssueDto>({
     title: initialSourceTitle || '',
     description: initialSourceDescription || '',
     priority: 'medium',
@@ -50,12 +53,30 @@ export default function CreateIssueModal({
     relatedFunctionIds: initialSourceType === 'function' && initialSourceId ? [initialSourceId] : [],
     relatedParameterIds: initialSourceType === 'parameter' && initialSourceId ? [initialSourceId] : [],
   })
+  const setFormData = (v: CreateIssueDto | ((prev: CreateIssueDto) => CreateIssueDto)) => { setFormDataBase(v as any); markDirty() }
+  const formData = formDataBase
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [sourceSearchQuery, setSourceSearchQuery] = useState('')
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [uploadingFiles, setUploadingFiles] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showSourceDropdown, setShowSourceDropdown] = useState(false)
+
+  onDiscardRef.current = () => {
+    setFormDataBase({
+      title: initialSourceTitle || '',
+      description: initialSourceDescription || '',
+      priority: 'medium',
+      owner: '',
+      assigneeId: undefined,
+      relatedFunctionIds: initialSourceType === 'function' && initialSourceId ? [initialSourceId] : [],
+      relatedParameterIds: initialSourceType === 'parameter' && initialSourceId ? [initialSourceId] : [],
+    })
+    setErrors({})
+    setSelectedFiles([])
+    setSourceSearchQuery('')
+  }
+
   const queryClient = useQueryClient()
   const { user } = useAuthStore()
 
@@ -179,8 +200,9 @@ export default function CreateIssueModal({
           queryClient.invalidateQueries({ queryKey: ['requirement', projectId, initialSourceId] })
         }
 
+        resetDirty()
         onClose()
-        setFormData({
+        setFormDataBase({
           title: '',
           description: '',
           priority: 'medium',
@@ -331,7 +353,7 @@ export default function CreateIssueModal({
   // Reset form when modal closes or initial source changes
   useEffect(() => {
     if (isOpen) {
-      setFormData({
+      setFormDataBase({
         title: initialSourceTitle || '',
         description: initialSourceDescription || '',
         priority: 'medium',
@@ -367,19 +389,22 @@ export default function CreateIssueModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}>
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
             Create New Issue
           </h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <X size={20} className="text-gray-600 dark:text-gray-400" />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button
+              onClick={guardClose}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <X size={20} className="text-gray-600 dark:text-gray-400" />
+            </button>
+          </div>
         </div>
 
         {/* Form */}
@@ -692,7 +717,7 @@ export default function CreateIssueModal({
           <div className="flex items-center justify-end gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
             <button
               type="button"
-              onClick={onClose}
+              onClick={guardClose}
               className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
               disabled={createIssueMutation.isPending}
             >
@@ -720,6 +745,7 @@ export default function CreateIssueModal({
           </div>
         </form>
       </div>
+      {warningDialog}
     </div>
   )
 }

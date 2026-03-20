@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import type { ExportProfile, DocumentType } from '../types'
 import { EXPORT_FORMATS, WATERMARK_OPTIONS, DOC_TYPES } from '../mockData'
+import { useUnsavedChanges } from '../../../hooks/useUnsavedChanges'
 
 interface CreateExportProfileModalProps {
   isOpen: boolean
@@ -18,6 +19,8 @@ export default function CreateExportProfileModal({
   nextId,
   initial,
 }: CreateExportProfileModalProps) {
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
   const [name, setName] = useState(initial?.name ?? '')
   const [format, setFormat] = useState<ExportProfile['format']>(initial?.format ?? 'PDF')
   const [headerFooter, setHeaderFooter] = useState(initial?.headerFooter ?? true)
@@ -26,9 +29,19 @@ export default function CreateExportProfileModal({
   const [watermark, setWatermark] = useState<ExportProfile['watermark']>(initial?.watermark ?? 'None')
   const [defaultDocTypes, setDefaultDocTypes] = useState<DocumentType[]>(initial?.defaultDocTypes ?? [])
 
+  onDiscardRef.current = () => {
+    setName('')
+    setFormat('PDF')
+    setHeaderFooter(true)
+    setNumbering(true)
+    setIncludeManifest(true)
+    setWatermark('None')
+    setDefaultDocTypes([])
+  }
+
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') guardClose()
     }
     if (isOpen) {
       document.addEventListener('keydown', handleEsc)
@@ -57,6 +70,7 @@ export default function CreateExportProfileModal({
     setDefaultDocTypes((prev) =>
       prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
     )
+    markDirty()
   }
 
   const handleSave = () => {
@@ -70,6 +84,7 @@ export default function CreateExportProfileModal({
       watermark,
       defaultDocTypes,
     })
+    resetDirty()
     onClose()
   }
 
@@ -78,7 +93,7 @@ export default function CreateExportProfileModal({
   return (
     <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-      onClick={onClose}
+      onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}
       role="dialog"
       aria-modal="true"
     >
@@ -91,7 +106,7 @@ export default function CreateExportProfileModal({
             {initial ? 'Edit profile' : 'Create export profile'}
           </h2>
           <button
-            onClick={onClose}
+            onClick={guardClose}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             aria-label="Close"
           >
@@ -104,7 +119,7 @@ export default function CreateExportProfileModal({
             <input
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => { setName(e.target.value); markDirty() }}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               placeholder="Profile name"
             />
@@ -113,7 +128,7 @@ export default function CreateExportProfileModal({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Format</label>
             <select
               value={format}
-              onChange={(e) => setFormat(e.target.value as ExportProfile['format'])}
+              onChange={(e) => { setFormat(e.target.value as ExportProfile['format']); markDirty() }}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
               {EXPORT_FORMATS.map((f) => (
@@ -127,7 +142,7 @@ export default function CreateExportProfileModal({
             <input
               type="checkbox"
               checked={headerFooter}
-              onChange={(e) => setHeaderFooter(e.target.checked)}
+              onChange={(e) => { setHeaderFooter(e.target.checked); markDirty() }}
               className="rounded border-gray-300 dark:border-gray-600 text-blue-600"
             />
             <span className="text-sm text-gray-700 dark:text-gray-300">Header/footer</span>
@@ -136,7 +151,7 @@ export default function CreateExportProfileModal({
             <input
               type="checkbox"
               checked={numbering}
-              onChange={(e) => setNumbering(e.target.checked)}
+              onChange={(e) => { setNumbering(e.target.checked); markDirty() }}
               className="rounded border-gray-300 dark:border-gray-600 text-blue-600"
             />
             <span className="text-sm text-gray-700 dark:text-gray-300">Numbering</span>
@@ -145,7 +160,7 @@ export default function CreateExportProfileModal({
             <input
               type="checkbox"
               checked={includeManifest}
-              onChange={(e) => setIncludeManifest(e.target.checked)}
+              onChange={(e) => { setIncludeManifest(e.target.checked); markDirty() }}
               className="rounded border-gray-300 dark:border-gray-600 text-blue-600"
             />
             <span className="text-sm text-gray-700 dark:text-gray-300">Include manifest</span>
@@ -154,7 +169,7 @@ export default function CreateExportProfileModal({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Watermark</label>
             <select
               value={watermark}
-              onChange={(e) => setWatermark(e.target.value as ExportProfile['watermark'])}
+              onChange={(e) => { setWatermark(e.target.value as ExportProfile['watermark']); markDirty() }}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
               {WATERMARK_OPTIONS.map((w) => (
@@ -185,7 +200,7 @@ export default function CreateExportProfileModal({
         </div>
         <div className="flex justify-end gap-2 p-6 border-t border-gray-200 dark:border-gray-700">
           <button
-            onClick={onClose}
+            onClick={guardClose}
             className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
           >
             Cancel
@@ -198,6 +213,7 @@ export default function CreateExportProfileModal({
           </button>
         </div>
       </div>
+      {warningDialog}
     </div>
   )
 }

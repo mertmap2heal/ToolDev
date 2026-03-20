@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import RichTextEditor from '../common/RichTextEditor'
 import { definitionEntryService } from '../../services/definitionEntry.service'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import type {
   DefinitionEntry,
   CreateDefinitionEntryDto,
@@ -42,6 +43,8 @@ export default function CreateDefinitionModal({
   initialData = null,
   overlayClassName,
 }: CreateDefinitionModalProps) {
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
   const queryClient = useQueryClient()
   const [type, setType] = useState<DefinitionEntryType>(initialData?.type ?? initialType)
   const [term, setTerm] = useState(initialData?.term ?? (initialTerm ? toCapitalCase(initialTerm) : ''))
@@ -49,6 +52,15 @@ export default function CreateDefinitionModal({
   const [notes, setNotes] = useState(initialData?.notes ?? '')
   const [source, setSource] = useState(initialData?.source ?? '')
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  onDiscardRef.current = () => {
+    setType(initialData?.type ?? initialType)
+    setTerm(initialData?.term ?? (initialTerm ? toCapitalCase(initialTerm) : ''))
+    setDefinition(initialData?.definition ?? '')
+    setNotes(initialData?.notes ?? '')
+    setSource(initialData?.source ?? '')
+    setErrors({})
+  }
 
   useEffect(() => {
     if (!isOpen) return
@@ -66,6 +78,7 @@ export default function CreateDefinitionModal({
     onSuccess: (res) => {
       if (res.success) {
         queryClient.invalidateQueries({ queryKey: ['definitions', projectId] })
+        resetDirty()
         onClose()
       } else {
         setErrors({ submit: res.error ?? 'Failed to create' })
@@ -86,6 +99,7 @@ export default function CreateDefinitionModal({
     onSuccess: (res) => {
       if (res.success) {
         queryClient.invalidateQueries({ queryKey: ['definitions', projectId] })
+        resetDirty()
         onClose()
       } else {
         setErrors({ submit: res.error ?? 'Failed to update' })
@@ -144,21 +158,24 @@ export default function CreateDefinitionModal({
   const modalContent = (
     <div
       className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 ${overlayClassName ?? ''}`.trim()}
+      onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}
     >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
             {initialData ? 'Edit Glossary / Abbreviation' : 'Add to Glossary / Abbreviations'}
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <X size={20} className="text-gray-600 dark:text-gray-400" />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button
+              type="button"
+              onClick={guardClose}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <X size={20} className="text-gray-600 dark:text-gray-400" />
+            </button>
+          </div>
         </div>
-
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
@@ -195,7 +212,7 @@ export default function CreateDefinitionModal({
             <input
               type="text"
               value={term}
-              onChange={(e) => setTerm(e.target.value)}
+              onChange={(e) => { setTerm(e.target.value); markDirty() }}
               onBlur={handleTermBlur}
               className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                 errors.term ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
@@ -255,7 +272,7 @@ export default function CreateDefinitionModal({
           <div className="flex items-center justify-end gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
             <button
               type="button"
-              onClick={onClose}
+              onClick={guardClose}
               className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
               disabled={isPending}
             >
@@ -271,6 +288,7 @@ export default function CreateDefinitionModal({
           </div>
         </form>
       </div>
+      {warningDialog}
     </div>
   )
 

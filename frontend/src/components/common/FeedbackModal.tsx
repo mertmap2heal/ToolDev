@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react'
 import { X, Upload, Send, Loader2, CheckCircle, AlertCircle, File as FileIcon, Trash2 } from 'lucide-react'
 import { feedbackService } from '../../services/feedback.service'
 import clsx from 'clsx'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 interface FeedbackModalProps {
     isOpen: boolean
@@ -9,6 +10,8 @@ interface FeedbackModalProps {
 }
 
 export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
+    const onDiscardRef = useRef<() => void>()
+    const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
     const [message, setMessage] = useState('')
     const [file, setFile] = useState<File | null>(null)
     const [loading, setLoading] = useState(false)
@@ -16,11 +19,16 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
     const [errorMessage, setErrorMessage] = useState('')
     const fileInputRef = useRef<HTMLInputElement>(null)
 
+    onDiscardRef.current = () => {
+        setMessage('')
+        setFile(null)
+    }
+
     if (!isOpen) return null
 
     const handleClose = () => {
         if (loading) return
-        onClose()
+        guardClose()
         // Reset state after transition
         setTimeout(() => {
             setMessage('')
@@ -70,6 +78,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                 fileName,
             })
 
+            resetDirty()
             setStatus('success')
             setTimeout(() => {
                 handleClose()
@@ -93,7 +102,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
             {/* Backdrop */}
             <div
                 className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm transition-opacity"
-                onClick={handleClose}
+                onClick={(e) => { if (e.target === e.currentTarget) handleClose() }}
                 aria-hidden="true"
             />
 
@@ -105,13 +114,16 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                     <h2 id="feedback-modal-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                         Send Feedback
                     </h2>
-                    <button
-                        onClick={handleClose}
-                        className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
-                    >
-                        <span className="sr-only">Close</span>
-                        <X size={20} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {draftBanner}
+                        <button
+                            onClick={handleClose}
+                            className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                            <span className="sr-only">Close</span>
+                            <X size={20} />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Content */}
@@ -139,7 +151,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                                     className="w-full rounded-lg border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700/50 dark:text-white sm:text-sm p-3 resize-none transition-shadow"
                                     placeholder="Tell us what you like, what's not working, or what features you'd like to see..."
                                     value={message}
-                                    onChange={(e) => setMessage(e.target.value)}
+                                    onChange={(e) => { setMessage(e.target.value); markDirty() }}
                                 />
                             </div>
 
@@ -254,6 +266,7 @@ export default function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                     )}
                 </div>
             </div>
+            {warningDialog}
         </div>
     )
 }

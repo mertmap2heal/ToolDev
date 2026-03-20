@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { ParameterFormFields, runValueValidation } from './ParameterFormFields'
 import { ParameterTypesPanel } from './ParameterTypesPanel'
 import { ProjectUnitsPanel } from './ProjectUnitsPanel'
@@ -22,6 +23,8 @@ export default function EditParameterModal({
   projectId,
   parameter,
 }: EditParameterModalProps) {
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
   const [showTypesPanel, setShowTypesPanel] = useState(false)
   const [showUnitsPanel, setShowUnitsPanel] = useState(false)
   const [valueError, setValueError] = useState<string | null>(null)
@@ -33,7 +36,7 @@ export default function EditParameterModal({
     staleTime: 30_000,
     enabled: isOpen,
   })
-  const [formData, setFormData] = useState<UpdateParameterDto & { name?: string }>({
+  const [formData, setFormDataBase] = useState<UpdateParameterDto & { name?: string }>({
     description: '',
     dataType: '',
     defaultValue: '',
@@ -49,7 +52,52 @@ export default function EditParameterModal({
     formula: '',
     sourceParameterId: null,
   })
+  const setFormData = (v: (UpdateParameterDto & { name?: string }) | ((prev: UpdateParameterDto & { name?: string }) => UpdateParameterDto & { name?: string })) => { setFormDataBase(v as any); markDirty() }
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  onDiscardRef.current = () => {
+    if (parameter) {
+      setFormDataBase({
+        name: parameter.name,
+        description: parameter.description || '',
+        dataType: parameter.dataType || '',
+        defaultValue: parameter.defaultValue || '',
+        unit: parameter.unit || '',
+        tolerance: parameter.tolerance || '',
+        minValue: parameter.minValue || '',
+        maxValue: parameter.maxValue || '',
+        enumValues: parameter.enumValues || '',
+        dimensions: parameter.dimensions || '',
+        status: (parameter.status as UpdateParameterDto['status']) || 'draft',
+        ownerType: parameter.ownerType ?? undefined,
+        tags: parameter.tags,
+        formula: parameter.formula || '',
+        sourceParameterId: parameter.sourceParameterId ?? null,
+      })
+      setPlatforms((parameter.platforms as string[] | null | undefined) ?? null)
+    } else {
+      setFormDataBase({
+        description: '',
+        dataType: '',
+        defaultValue: '',
+        unit: '',
+        tolerance: '',
+        minValue: '',
+        maxValue: '',
+        enumValues: '',
+        dimensions: '',
+        status: 'draft',
+        ownerType: undefined,
+        tags: undefined,
+        formula: '',
+        sourceParameterId: null,
+      })
+      setPlatforms(null)
+    }
+    setErrors({})
+    setValueError(null)
+  }
+
   const queryClient = useQueryClient()
 
   const { data: allParameters = [] } = useQuery({
@@ -64,7 +112,7 @@ export default function EditParameterModal({
 
   useEffect(() => {
     if (parameter) {
-      setFormData({
+      setFormDataBase({
         name: parameter.name,
         description: parameter.description || '',
         dataType: parameter.dataType || '',
@@ -94,6 +142,7 @@ export default function EditParameterModal({
     onSuccess: (response) => {
       if (response.success) {
         queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
+        resetDirty()
         onClose()
         setErrors({})
       } else {
@@ -167,19 +216,22 @@ export default function EditParameterModal({
   if (!isOpen || !parameter) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}>
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
             Edit Parameter: @{parameter.name}@
           </h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <X size={20} className="text-gray-600 dark:text-gray-400" />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button
+              onClick={guardClose}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <X size={20} className="text-gray-600 dark:text-gray-400" />
+            </button>
+          </div>
         </div>
 
         {/* Form */}
@@ -333,7 +385,7 @@ export default function EditParameterModal({
           <div className="flex items-center justify-end gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
             <button
               type="button"
-              onClick={onClose}
+              onClick={guardClose}
               className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
               disabled={updateParameterMutation.isPending}
             >
@@ -379,6 +431,7 @@ export default function EditParameterModal({
           </div>
         </div>
       )}
+      {warningDialog}
     </div>
   )
 }

@@ -3681,7 +3681,7 @@ export default function RequirementsPage() {
           </div>
 
           {/* Modals - Render outside scrollable container */}
-          {isCreateModalOpen && projectId && (
+          {projectId && (
             <CreateRequirementModal
               isOpen={isCreateModalOpen}
               onClose={() => {

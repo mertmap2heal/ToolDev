@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { X } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { ParameterFormFields, runValueValidation } from './ParameterFormFields'
 import { ParameterTypesPanel } from './ParameterTypesPanel'
 import { ProjectUnitsPanel } from './ProjectUnitsPanel'
@@ -21,6 +22,8 @@ interface CreateParameterModalProps {
 }
 
 export default function CreateParameterModal({ isOpen, onClose, projectId, onCreated, overlayClassName }: CreateParameterModalProps) {
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
   const [showTypesPanel, setShowTypesPanel] = useState(false)
   const [showUnitsPanel, setShowUnitsPanel] = useState(false)
   const [valueError, setValueError] = useState<string | null>(null)
@@ -32,7 +35,7 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
     enabled: isOpen,
   })
   const [platforms, setPlatforms] = useState<string[] | null>(null)
-  const [formData, setFormData] = useState<CreateParameterDto>({
+  const [formData, setFormDataBase] = useState<CreateParameterDto>({
     name: '',
     description: '',
     dataType: '',
@@ -48,7 +51,31 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
     tags: undefined,
     formula: undefined,
   })
+  const setFormData = (v: CreateParameterDto | ((prev: CreateParameterDto) => CreateParameterDto)) => { setFormDataBase(v as any); markDirty() }
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  onDiscardRef.current = () => {
+    setFormDataBase({
+      name: '',
+      description: '',
+      dataType: '',
+      defaultValue: '',
+      unit: '',
+      tolerance: '',
+      minValue: '',
+      maxValue: '',
+      enumValues: '',
+      dimensions: '',
+      status: 'draft',
+      ownerType: undefined,
+      tags: undefined,
+      formula: undefined,
+    })
+    setPlatforms(null)
+    setErrors({})
+    setValueError(null)
+  }
+
   const queryClient = useQueryClient()
 
   const createParameterMutation = useMutation({
@@ -57,6 +84,7 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
       if (response.success && response.data) {
         queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
         onCreated?.(response.data)
+        resetDirty()
         onClose()
         setFormData({
           name: '',
@@ -156,19 +184,22 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
   if (!isOpen) return null
 
   return (
-    <div className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 ${overlayClassName ?? ''}`.trim()}>
+    <div className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 ${overlayClassName ?? ''}`.trim()} onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}>
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
             Create New Parameter
           </h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <X size={20} className="text-gray-600 dark:text-gray-400" />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button
+              onClick={guardClose}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <X size={20} className="text-gray-600 dark:text-gray-400" />
+            </button>
+          </div>
         </div>
 
         {/* Form */}
@@ -300,7 +331,7 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
           <div className="flex items-center justify-end gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
             <button
               type="button"
-              onClick={onClose}
+              onClick={guardClose}
               className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
               disabled={createParameterMutation.isPending}
             >
@@ -346,6 +377,7 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
           </div>
         </div>
       )}
+      {warningDialog}
     </div>
   )
 }

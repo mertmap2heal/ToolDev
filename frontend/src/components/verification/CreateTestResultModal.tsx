@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { X, Upload, File, Search, Check } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 interface CreateTestResultModalProps {
   isOpen: boolean
@@ -18,7 +19,9 @@ const RESULT_STATUSES = [
 ] as const
 
 export default function CreateTestResultModal({ isOpen, onClose, projectId }: CreateTestResultModalProps) {
-  const [formData, setFormData] = useState({
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
+  const [formData, setFormDataBase] = useState({
     title: '',
     description: '',
     fileName: '',
@@ -33,6 +36,7 @@ export default function CreateTestResultModal({ isOpen, onClose, projectId }: Cr
     linkedTestCaseIds: [] as string[],
     linkedTestPlanId: '',
   })
+  const setFormData = (v: any) => { setFormDataBase(v as any); markDirty() }
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   
@@ -43,6 +47,30 @@ export default function CreateTestResultModal({ isOpen, onClose, projectId }: Cr
   const [showTestPlanDropdown, setShowTestPlanDropdown] = useState(false)
   const testCaseDropdownRef = useRef<HTMLDivElement>(null)
   const testPlanDropdownRef = useRef<HTMLDivElement>(null)
+
+  onDiscardRef.current = () => {
+    setFormDataBase({
+      title: '',
+      description: '',
+      fileName: '',
+      fileData: '',
+      mimeType: '',
+      resultStatus: 'NOT_RUN',
+      executedAt: '',
+      executedByName: '',
+      testEnvironment: '',
+      linkedSetupId: '',
+      notes: '',
+      linkedTestCaseIds: [],
+      linkedTestPlanId: '',
+    })
+    setErrors({})
+    setSelectedFile(null)
+    setTestCaseSearchQuery('')
+    setTestPlanSearchQuery('')
+    setShowTestCaseDropdown(false)
+    setShowTestPlanDropdown(false)
+  }
 
   const queryClient = useQueryClient()
 
@@ -80,6 +108,7 @@ export default function CreateTestResultModal({ isOpen, onClose, projectId }: Cr
       if (response.success) {
         queryClient.invalidateQueries({ queryKey: ['test-results', projectId] })
         queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
+        resetDirty()
         onClose()
         resetForm()
       } else {
@@ -103,7 +132,7 @@ export default function CreateTestResultModal({ isOpen, onClose, projectId }: Cr
   })
 
   const resetForm = () => {
-    setFormData({
+    setFormDataBase({
       title: '',
       description: '',
       fileName: '',
@@ -272,19 +301,22 @@ export default function CreateTestResultModal({ isOpen, onClose, projectId }: Cr
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}>
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
             Create New Test Result
           </h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <X size={20} className="text-gray-600 dark:text-gray-400" />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button
+              onClick={guardClose}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <X size={20} className="text-gray-600 dark:text-gray-400" />
+            </button>
+          </div>
         </div>
 
         {/* Form */}
@@ -678,7 +710,7 @@ export default function CreateTestResultModal({ isOpen, onClose, projectId }: Cr
           <div className="flex items-center justify-end gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
             <button
               type="button"
-              onClick={onClose}
+              onClick={guardClose}
               className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
               disabled={createTestResultMutation.isPending}
             >
@@ -694,6 +726,7 @@ export default function CreateTestResultModal({ isOpen, onClose, projectId }: Cr
           </div>
         </form>
       </div>
+      {warningDialog}
     </div>
   )
 }

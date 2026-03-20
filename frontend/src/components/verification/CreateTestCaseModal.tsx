@@ -7,6 +7,7 @@ import { functionService } from '../../services/function.service'
 import CustomSectionEditor from './CustomSectionEditor'
 import StructuredStepEditor, { parseStepsToPairs, pairsToStepsAndExpected, type StepPair } from './StructuredStepEditor'
 import clsx from 'clsx'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 interface CreateTestCaseModalProps {
   isOpen: boolean
@@ -21,9 +22,11 @@ interface Criterion {
 }
 
 export default function CreateTestCaseModal({ isOpen, onClose, projectId }: CreateTestCaseModalProps) {
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
   const [activeTab, setActiveTab] = useState<'general' | 'steps' | 'verifies' | 'attachments' | 'custom'>('general')
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormDataBase] = useState({
     key: '',
     title: '',
     objective: '',
@@ -32,6 +35,8 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
     linkedMethodId: '',
     ownerUserId: '',
   })
+  type FormDataType = { key: string; title: string; objective: string; preconditions: string; linkedMocCode: string; linkedMethodId: string; ownerUserId: string }
+  const setFormData = (v: FormDataType | ((prev: FormDataType) => FormDataType)) => { setFormDataBase(v as any); markDirty() }
 
   const [stepPairs, setStepPairs] = useState<StepPair[]>(() => parseStepsToPairs([], []))
   const [criteria, setCriteria] = useState<Criterion[]>([])
@@ -42,6 +47,17 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
 
   const [errors, setErrors] = useState<Record<string, string>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  onDiscardRef.current = () => {
+    setFormDataBase({ key: '', title: '', objective: '', preconditions: '', linkedMocCode: '', linkedMethodId: '', ownerUserId: '' })
+    setStepPairs(parseStepsToPairs([], []))
+    setCriteria([])
+    setAttachments([])
+    setCustomSections([])
+    setSelectedLinks([])
+    setLinkSearchTerm('')
+    setErrors({})
+  }
 
   const queryClient = useQueryClient()
 
@@ -156,6 +172,7 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
       queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
+      resetDirty()
       onClose()
       resetForm()
     },
@@ -254,14 +271,17 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}>
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Create Test Case</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
-            <X size={20} className="text-gray-500" />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button onClick={guardClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+              <X size={20} className="text-gray-500" />
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -605,7 +625,7 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
         <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-gray-800/50">
           <button
             type="button"
-            onClick={onClose}
+            onClick={guardClose}
             className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
           >
             Cancel
@@ -620,6 +640,7 @@ export default function CreateTestCaseModal({ isOpen, onClose, projectId }: Crea
           </button>
         </div>
       </div>
+      {warningDialog}
     </div>
   )
 }

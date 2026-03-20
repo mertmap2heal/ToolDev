@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import RichTextEditor from '../common/RichTextEditor'
 import { X, Plus, Trash2, ChevronDown, ChevronRight, Layers, FileText, Link as LinkIcon, Tag, Activity, FileCheck, Shield, Target, GitBranch, CheckCircle2, AlertTriangle, ClipboardCheck, BarChart3, Info, ArrowRight, Sliders } from 'lucide-react'
 import clsx from 'clsx'
@@ -179,8 +180,10 @@ export default function CreateRequirementModal({
   initialComponentId,
   initialFunctionAllocations,
 }: CreateRequirementModalProps) {
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
   const [activeTab, setActiveTab] = useState<'general' | 'analysis' | 'traceability' | 'properties'>('general')
-  const [formData, setFormData] = useState<CreateRequirementDto>({
+  const [formData, setFormDataBase] = useState<CreateRequirementDto>({
     title: '',
     description: '',
     priority: 'medium',
@@ -199,6 +202,7 @@ export default function CreateRequirementModal({
     rationale: undefined,
     linkedMocCode: '',
   })
+  const setFormData = (v: CreateRequirementDto | ((prev: CreateRequirementDto) => CreateRequirementDto)) => { setFormDataBase(v as any); markDirty() }
   const [tagInput, setTagInput] = useState('')
   const [descriptionEditorRef, setDescriptionEditorRef] = useState<Editor | null>(null)
   const [parameterPickerOpen, setParameterPickerOpen] = useState(false)
@@ -261,6 +265,54 @@ export default function CreateRequirementModal({
   const [availableLifecycles, setAvailableLifecycles] = useState<LifecycleSummary[]>([])
   const [applicableLifecycle, setApplicableLifecycle] = useState<{ lifecycleId: string; defaultStatusId: string; statusName: string } | null>(null)
   const [lifecycleStatuses, setLifecycleStatuses] = useState<{ id: string; name: string }[]>([])
+
+  onDiscardRef.current = () => {
+    setFormDataBase({
+      title: '',
+      description: '',
+      priority: 'medium',
+      status: 'draft',
+      stage: '',
+      owner: '',
+      verificationMethod: '',
+      acceptanceCriteria: '',
+      source: '',
+      relatedDocuments: [],
+      tags: [],
+      requirementType: undefined,
+      requirementLevel: undefined,
+      risk: undefined,
+      complexity: undefined,
+      rationale: undefined,
+      linkedMocCode: '',
+    })
+    setTagInput('')
+    setErrors({})
+    setQuickLinksPbs([])
+    setQuickLinksFunctions([])
+    setQuickLinksInterfaces([])
+    setQuickLinksHazards([])
+    setQuickLinksRisks([])
+    setQuickLinksLabels({})
+    setIsDerivedRequirement(false)
+    setDerivationRationale('')
+    setQuickLinksVerification([])
+    setQuickLinksDocuments([])
+    setQuickLinksChangeRequests([])
+    setQuickLinksIssues([])
+    setQuickLinksTasks([])
+    setQuickLinksCertification([])
+    setQuickLinksCompliance([])
+    setLinkRationale('')
+    setTraceLinks([])
+    setQuickLinksRequirements([])
+    setSelectedRelationshipType('derives_from')
+    setRelationshipRationale('')
+    setThresholdValue('')
+    setObjectiveValue('')
+    setCustomAttributeKey('')
+    setCustomAttributeValue('')
+  }
 
   // Fetch lifecycles logic
   useEffect(() => {
@@ -532,15 +584,15 @@ export default function CreateRequirementModal({
 
   useEffect(() => {
     if (parentRequirement) {
-      setFormData((prev) => ({ ...prev, parentId: parentRequirement.id }))
+      setFormDataBase((prev) => ({ ...prev, parentId: parentRequirement.id }))
     } else {
-      setFormData((prev) => ({ ...prev, parentId: undefined }))
+      setFormDataBase((prev) => ({ ...prev, parentId: undefined }))
     }
   }, [parentRequirement])
 
   useEffect(() => {
     if (isOpen && initialComponentId) {
-      setFormData((prev) => ({ ...prev, componentId: initialComponentId }))
+      setFormDataBase((prev) => ({ ...prev, componentId: initialComponentId }))
     }
   }, [isOpen, initialComponentId])
 
@@ -561,16 +613,16 @@ export default function CreateRequirementModal({
   // Auto-fill owner with current user when modal opens
   useEffect(() => {
     if (isOpen && user?.name) {
-      setFormData((prev) => ({ ...prev, owner: user.name }))
+      setFormDataBase((prev) => ({ ...prev, owner: user.name }))
     }
   }, [isOpen, user?.name])
 
   // Update status when lifecycle or status definitions change
   useEffect(() => {
     if (LIFECYCLE_V1 && applicableLifecycle) {
-      setFormData((prev) => ({ ...prev, status: applicableLifecycle.statusName }))
+      setFormDataBase((prev) => ({ ...prev, status: applicableLifecycle.statusName }))
     } else {
-      setFormData((prev) => ({ ...prev, status: initialStatus }))
+      setFormDataBase((prev) => ({ ...prev, status: initialStatus }))
     }
   }, [LIFECYCLE_V1, applicableLifecycle, initialStatus])
 
@@ -594,6 +646,7 @@ export default function CreateRequirementModal({
       if (response.success) {
         queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
         invalidateLinkCaches(queryClient, projectId)
+        resetDirty()
         onClose()
         resetForm()
       } else {
@@ -1024,7 +1077,7 @@ export default function CreateRequirementModal({
   return (
     <div
       className="fixed inset-0 bg-black bg-opacity-50 dark:bg-black dark:bg-opacity-70 flex items-center justify-center z-50"
-      onClick={onClose}
+      onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}
     >
       <div
         className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto m-4"
@@ -1033,9 +1086,12 @@ export default function CreateRequirementModal({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Create Requirement</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
-            <X size={20} className="text-gray-500" />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button onClick={guardClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+              <X size={20} className="text-gray-500" />
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -2441,7 +2497,7 @@ export default function CreateRequirementModal({
         <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-gray-800/50">
           <button
             type="button"
-            onClick={onClose}
+            onClick={guardClose}
             className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
           >
             Cancel
@@ -2456,6 +2512,7 @@ export default function CreateRequirementModal({
           </button>
         </div>
       </div>
+      {warningDialog}
     </div>
   )
 }

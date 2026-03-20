@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X, ChevronRight, Wand2, ClipboardList, TestTube2 } from 'lucide-react'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import { functionService } from '../../services/function.service'
 import { verificationService } from '../../services/verification.service'
 import type { CreateSystemFunctionDto, SystemFunction, FunctionCriticality } from 'shared/types/engineering.types'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 interface CreateFunctionModalProps {
   isOpen: boolean
@@ -15,7 +16,9 @@ interface CreateFunctionModalProps {
 }
 
 export default function CreateFunctionModal({ isOpen, onClose, projectId, parentId, parentFunction, allFunctions = [] }: CreateFunctionModalProps) {
-  const [formData, setFormData] = useState<CreateSystemFunctionDto>({
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
+  const [formDataBase, setFormDataBase] = useState<CreateSystemFunctionDto>({
     functionId: '',
     name: '',
     description: '',
@@ -27,8 +30,27 @@ export default function CreateFunctionModal({ isOpen, onClose, projectId, parent
     pbsComponentId: null,
     allocatedTo: null,
   })
+  const setFormData = (v: CreateSystemFunctionDto | ((prev: CreateSystemFunctionDto) => CreateSystemFunctionDto)) => { setFormDataBase(v as any); markDirty() }
+  const formData = formDataBase
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [useAutoId, setUseAutoId] = useState(true)
+
+  onDiscardRef.current = () => {
+    setFormDataBase({
+      functionId: '',
+      name: '',
+      description: '',
+      status: 'draft',
+      owner: '',
+      verificationMethod: '',
+      parentId: parentId || null,
+      criticality: 'medium',
+      pbsComponentId: null,
+      allocatedTo: null,
+    })
+    setErrors({})
+    setUseAutoId(true)
+  }
 
   const queryClient = useQueryClient()
 
@@ -56,8 +78,9 @@ export default function CreateFunctionModal({ isOpen, onClose, projectId, parent
     onSuccess: (response) => {
       if (response.success) {
         queryClient.invalidateQueries({ queryKey: ['functions', projectId] })
+        resetDirty()
         onClose()
-        setFormData({
+        setFormDataBase({
           functionId: '',
           name: '',
           description: '',
@@ -160,7 +183,7 @@ export default function CreateFunctionModal({ isOpen, onClose, projectId, parent
   const parentBreadcrumb = getParentBreadcrumb()
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}>
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-gray-200 dark:border-gray-700">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
@@ -180,14 +203,16 @@ export default function CreateFunctionModal({ isOpen, onClose, projectId, parent
               </div>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <X size={20} className="text-gray-600 dark:text-gray-400" />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button
+              onClick={guardClose}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <X size={20} className="text-gray-600 dark:text-gray-400" />
+            </button>
+          </div>
         </div>
-
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           {/* Row 1: Function ID + Status */}
@@ -403,7 +428,7 @@ export default function CreateFunctionModal({ isOpen, onClose, projectId, parent
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
             <button
               type="button"
-              onClick={onClose}
+              onClick={guardClose}
               className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors text-sm"
               disabled={createFunctionMutation.isPending}
             >
@@ -419,6 +444,7 @@ export default function CreateFunctionModal({ isOpen, onClose, projectId, parent
           </div>
         </form>
       </div>
+      {warningDialog}
     </div>
   )
 }

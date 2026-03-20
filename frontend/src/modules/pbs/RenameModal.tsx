@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import clsx from 'clsx'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 interface RenameModalProps {
   isOpen: boolean
@@ -15,8 +16,14 @@ export default function RenameModal({
   onSave,
   onCancel,
 }: RenameModalProps) {
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onCancel, isOpen, () => onDiscardRef.current?.())
   const [name, setName] = useState(currentName)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  onDiscardRef.current = () => {
+    setName(currentName)
+  }
 
   // Reset and focus when modal opens
   useEffect(() => {
@@ -36,7 +43,7 @@ export default function RenameModal({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onCancel()
+        guardClose()
       } else if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
         handleSave()
@@ -50,9 +57,10 @@ export default function RenameModal({
   const handleSave = () => {
     const trimmed = name.trim()
     if (trimmed && trimmed !== currentName) {
+      resetDirty()
       onSave(trimmed)
     } else {
-      onCancel()
+      guardClose()
     }
   }
 
@@ -66,7 +74,7 @@ export default function RenameModal({
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onCancel}
+        onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}
         aria-hidden
       />
 
@@ -77,13 +85,16 @@ export default function RenameModal({
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             Rename Component
           </h3>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button
+              type="button"
+              onClick={guardClose}
+              className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Body */}
@@ -95,7 +106,7 @@ export default function RenameModal({
             ref={inputRef}
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => { setName(e.target.value); markDirty() }}
             placeholder="Enter component name"
             className={clsx(
               'w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white',
@@ -114,7 +125,7 @@ export default function RenameModal({
         <div className="flex items-center justify-end gap-3 px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
           <button
             type="button"
-            onClick={onCancel}
+            onClick={guardClose}
             className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
           >
             Cancel
@@ -134,6 +145,7 @@ export default function RenameModal({
           </button>
         </div>
       </div>
+      {warningDialog}
     </div>
   )
 }

@@ -116,13 +116,13 @@ export function TypeCombobox({ projectId, value, onChange, className }: Props) {
     const handler = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false)
-        // If user typed something not matching, keep it as freetext
-        onChange(search)
+        // Only propagate if the search text actually differs from the committed value
+        if (search !== value) onChange(search)
       }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [search, onChange])
+  }, [search, value, onChange])
 
   // Sync search when value prop changes externally
   useEffect(() => { setSearch(value) }, [value])

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { X, Search, Check, Upload, File, Trash2 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { changeRequestService } from '../../services/changeRequest.service'
@@ -40,7 +41,9 @@ export default function CreateChangeRequestModal({
   sourceTitle: initialSourceTitle,
   sourceDescription: initialSourceDescription,
 }: CreateChangeRequestModalProps) {
-  const [formData, setFormData] = useState<CreateChangeRequestDto>({
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
+  const [formDataBase, setFormDataBase] = useState<CreateChangeRequestDto>({
     title: initialSourceTitle || '',
     description: initialSourceDescription || '',
     sourceType: initialSourceType || 'function',
@@ -52,6 +55,8 @@ export default function CreateChangeRequestModal({
     justification: '',
     impactedRequirementIds: [],
   })
+  const setFormData = (v: CreateChangeRequestDto | ((prev: CreateChangeRequestDto) => CreateChangeRequestDto)) => { setFormDataBase(v as any); markDirty() }
+  const formData = formDataBase
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [sourceSearchQuery, setSourceSearchQuery] = useState('')
   const [showSourceDropdown, setShowSourceDropdown] = useState(false)
@@ -68,6 +73,31 @@ export default function CreateChangeRequestModal({
   const [uploadingFiles, setUploadingFiles] = useState(false)
   const [impactedSearchQuery, setImpactedSearchQuery] = useState('')
   const [showImpactedDropdown, setShowImpactedDropdown] = useState(false)
+
+  onDiscardRef.current = () => {
+    setFormDataBase({
+      title: initialSourceTitle || '',
+      description: initialSourceDescription || '',
+      sourceType: initialSourceType || 'function',
+      sourceId: initialSourceId || '',
+      priority: 'medium',
+      requestedBy: '',
+      risk: undefined,
+      effort: undefined,
+      justification: '',
+      impactedRequirementIds: [],
+    })
+    setErrors({})
+    setSelectedSource(
+      initialSourceType && initialSourceId && initialSourceName
+        ? { id: initialSourceId, type: initialSourceType, name: initialSourceName }
+        : null
+    )
+    setSelectedFiles([])
+    setSourceSearchQuery('')
+    setImpactedSearchQuery('')
+  }
+
   const sourceDropdownRef = useRef<HTMLDivElement>(null)
   const impactedDropdownRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -280,6 +310,7 @@ export default function CreateChangeRequestModal({
         queryClient.invalidateQueries({ queryKey: ['requirement', projectId, sourceId] })
       }
 
+      resetDirty()
       onClose()
     },
     onError: (error: any) => {
@@ -363,18 +394,20 @@ export default function CreateChangeRequestModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}>
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Create Change Request</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button
+              onClick={guardClose}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
-
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Change Request Details Section */}
           <div className="space-y-4">
@@ -813,7 +846,7 @@ export default function CreateChangeRequestModal({
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
             <button
               type="button"
-              onClick={onClose}
+              onClick={guardClose}
               className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
               disabled={createChangeRequestMutation.isPending}
             >
@@ -841,6 +874,7 @@ export default function CreateChangeRequestModal({
           </div>
         </form>
       </div>
+      {warningDialog}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { X, ArrowRight, ArrowLeft } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
@@ -6,6 +6,7 @@ import ComponentFormSection, { Component } from './ComponentFormSection'
 import InterfaceFormSection, { Interface } from './InterfaceFormSection'
 import TestSetupEditor from './TestSetupEditor'
 import CustomDropdown from './CustomDropdown'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 interface CreateTestSetupModalProps {
   isOpen: boolean
@@ -14,17 +15,30 @@ interface CreateTestSetupModalProps {
 }
 
 export default function CreateTestSetupModal({ isOpen, onClose, projectId }: CreateTestSetupModalProps) {
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
   const [step, setStep] = useState<'form' | 'editor'>('form')
-  const [formData, setFormData] = useState({
+  const [formData, setFormDataBase] = useState({
     name: '',
     description: '',
     environmentType: '',
     version: '1.0',
   })
+  type SetupFormData = { name: string; description: string; environmentType: string; version: string }
+  const setFormData = (v: SetupFormData | ((prev: SetupFormData) => SetupFormData)) => { setFormDataBase(v as any); markDirty() }
   const [components, setComponents] = useState<Component[]>([])
   const [interfaces, setInterfaces] = useState<Interface[]>([])
   const [diagramData, setDiagramData] = useState<any>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  onDiscardRef.current = () => {
+    setStep('form')
+    setFormDataBase({ name: '', description: '', environmentType: '', version: '1.0' })
+    setComponents([])
+    setInterfaces([])
+    setDiagramData(null)
+    setErrors({})
+  }
 
   const queryClient = useQueryClient()
 
@@ -34,6 +48,7 @@ export default function CreateTestSetupModal({ isOpen, onClose, projectId }: Cre
       if (response.success) {
         queryClient.invalidateQueries({ queryKey: ['test-setups', projectId] })
         queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
+        resetDirty()
         onClose()
         resetForm()
       } else {
@@ -58,7 +73,7 @@ export default function CreateTestSetupModal({ isOpen, onClose, projectId }: Cre
 
   const resetForm = () => {
     setStep('form')
-    setFormData({
+    setFormDataBase({
       name: '',
       description: '',
       environmentType: '',
@@ -140,17 +155,20 @@ export default function CreateTestSetupModal({ isOpen, onClose, projectId }: Cre
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}>
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[95vw] h-[95vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Create New Test Setup</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <X size={20} className="text-gray-600 dark:text-gray-400" />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button
+              onClick={guardClose}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <X size={20} className="text-gray-600 dark:text-gray-400" />
+            </button>
+          </div>
         </div>
 
         {/* Form */}
@@ -245,7 +263,7 @@ export default function CreateTestSetupModal({ isOpen, onClose, projectId }: Cre
         <div className="flex items-center justify-end gap-4 p-6 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
           <button
             type="button"
-            onClick={onClose}
+            onClick={guardClose}
             className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
             disabled={createSetupMutation.isPending}
           >
@@ -262,6 +280,7 @@ export default function CreateTestSetupModal({ isOpen, onClose, projectId }: Cre
           </button>
         </div>
       </div>
+      {warningDialog}
     </div>
   )
 }

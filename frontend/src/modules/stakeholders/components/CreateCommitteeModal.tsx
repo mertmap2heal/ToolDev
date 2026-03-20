@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import type { Committee, CommitteeType, DefaultReviewerFor } from '../types'
 import { useStakeholdersStore } from '../store'
+import { useUnsavedChanges } from '../../../hooks/useUnsavedChanges'
 
 const COMMITTEE_TYPES: CommitteeType[] = ['CCB', 'ReviewBoard', 'AuthorityInterface', 'SupplierPanel', 'ProgramGovernance']
 const DEFAULT_REVIEWER_OPTIONS: DefaultReviewerFor[] = [
@@ -19,6 +20,8 @@ interface CreateCommitteeModalProps {
 }
 
 export default function CreateCommitteeModal({ isOpen, onClose, onSaved }: CreateCommitteeModalProps) {
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
   const { state, dispatch, nextGroupId } = useStakeholdersStore()
   const [name, setName] = useState('')
   const [type, setType] = useState<CommitteeType>('CCB')
@@ -28,9 +31,19 @@ export default function CreateCommitteeModal({ isOpen, onClose, onSaved }: Creat
   const [meetingCadence, setMeetingCadence] = useState('')
   const [notes, setNotes] = useState('')
 
+  onDiscardRef.current = () => {
+    setName('')
+    setType('CCB')
+    setChair('')
+    setMemberIds([])
+    setDefaultReviewersFor([])
+    setMeetingCadence('')
+    setNotes('')
+  }
+
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') guardClose()
     }
     if (isOpen) {
       document.addEventListener('keydown', handleEsc)
@@ -42,12 +55,14 @@ export default function CreateCommitteeModal({ isOpen, onClose, onSaved }: Creat
 
   const toggleMember = (id: string) => {
     setMemberIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+    markDirty()
   }
 
   const toggleDefaultReviewer = (opt: DefaultReviewerFor) => {
     setDefaultReviewersFor((prev) =>
       prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]
     )
+    markDirty()
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -65,6 +80,7 @@ export default function CreateCommitteeModal({ isOpen, onClose, onSaved }: Creat
     }
     dispatch({ type: 'CREATE_GROUP', payload: committee })
     onSaved()
+    resetDirty()
     onClose()
     setName('')
     setType('CCB')
@@ -78,7 +94,7 @@ export default function CreateCommitteeModal({ isOpen, onClose, onSaved }: Creat
   return (
     <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-      onClick={onClose}
+      onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}
       role="dialog"
       aria-modal="true"
     >
@@ -88,9 +104,12 @@ export default function CreateCommitteeModal({ isOpen, onClose, onSaved }: Creat
       >
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Create Committee / Board</h2>
-          <button type="button" onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
-            <X size={20} className="text-gray-600 dark:text-gray-400" />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button type="button" onClick={guardClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+              <X size={20} className="text-gray-600 dark:text-gray-400" />
+            </button>
+          </div>
         </div>
         <form id="create-committee-form" onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
         <div className="p-6 overflow-y-auto flex-1 space-y-4">
@@ -100,7 +119,7 @@ export default function CreateCommitteeModal({ isOpen, onClose, onSaved }: Creat
               type="text"
               required
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => { setName(e.target.value); markDirty() }}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
             />
           </div>
@@ -108,7 +127,7 @@ export default function CreateCommitteeModal({ isOpen, onClose, onSaved }: Creat
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Type</label>
             <select
               value={type}
-              onChange={(e) => setType(e.target.value as CommitteeType)}
+              onChange={(e) => { setType(e.target.value as CommitteeType); markDirty() }}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
             >
               {COMMITTEE_TYPES.map((t) => (
@@ -168,7 +187,7 @@ export default function CreateCommitteeModal({ isOpen, onClose, onSaved }: Creat
             <input
               type="text"
               value={meetingCadence}
-              onChange={(e) => setMeetingCadence(e.target.value)}
+              onChange={(e) => { setMeetingCadence(e.target.value); markDirty() }}
               placeholder="e.g. Weekly Tue 10:00"
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
             />
@@ -186,7 +205,7 @@ export default function CreateCommitteeModal({ isOpen, onClose, onSaved }: Creat
         <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
           <button
             type="button"
-            onClick={onClose}
+            onClick={guardClose}
             className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
           >
             Cancel
@@ -201,6 +220,7 @@ export default function CreateCommitteeModal({ isOpen, onClose, onSaved }: Creat
         </div>
         </form>
       </div>
+      {warningDialog}
     </div>
   )
 }

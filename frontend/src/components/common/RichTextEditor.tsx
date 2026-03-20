@@ -116,17 +116,17 @@ export default function RichTextEditor({
     },
   })
 
-  // Update content when prop changes
+  // Update content when prop changes (emitUpdate=false prevents triggering onChange)
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content)
+      editor.commands.setContent(content, { emitUpdate: false })
     }
   }, [content, editor])
 
-  // Update editable state
+  // Update editable state (emitUpdate=false: editability is not a content change)
   useEffect(() => {
     if (editor) {
-      editor.setEditable(editable)
+      editor.setEditable(editable, false)
     }
   }, [editable, editor])
 

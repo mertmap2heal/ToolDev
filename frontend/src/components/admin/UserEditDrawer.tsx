@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import * as adminService from '../../services/admin.service'
 import { authService, setStoredAdminProfile } from '../../services/auth.service'
 import { projectService } from '../../services/project.service'
@@ -16,6 +17,8 @@ interface UserEditDrawerProps {
 }
 
 export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers }: UserEditDrawerProps) {
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, true, () => onDiscardRef.current?.())
   const queryClient = useQueryClient()
   const [status, setStatus] = useState<AdminUser['status']>(user.status)
   const [inviteEmail, setInviteEmail] = useState<string>(user.inviteEmail ?? '')
@@ -55,6 +58,15 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
   })
   const [selectedEngRoles, setSelectedEngRoles] = useState<Set<string>>(new Set())
 
+  onDiscardRef.current = () => {
+    setStatus(user.status)
+    setInviteEmail(user.inviteEmail ?? '')
+    setProjects([...user.projects])
+    setRoles([...user.roles])
+    setAuthorities([...user.authorities])
+    setPermissions(user.permissions ?? {})
+  }
+
   // Initialize engineering roles from fetched data
   useEffect(() => {
     if (engRoles.length > 0) {
@@ -69,16 +81,19 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
     setProjects((prev) =>
       prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
     )
+    markDirty()
   }
   const toggleRole = (id: string) => {
     setRoles((prev) =>
       prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]
     )
+    markDirty()
   }
   const toggleAuthority = (id: string) => {
     setAuthorities((prev) =>
       prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]
     )
+    markDirty()
   }
   const toggleEngRole = (id: string) => {
     setSelectedEngRoles((prev) => {
@@ -87,6 +102,7 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
       else next.add(id)
       return next
     })
+    markDirty()
   }
 
   const handleSaveEmail = async () => {
@@ -184,6 +200,7 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
         }
       }
       queryClient.invalidateQueries({ queryKey: ['admin', 'engineeringRoles'] })
+      resetDirty()
       onSaved()
     } finally {
       setSaving(false)
@@ -194,7 +211,7 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
     <div className="fixed inset-0 z-50 flex justify-end">
       <div
         className="absolute inset-0 bg-black/30"
-        onClick={onClose}
+        onClick={guardClose}
         aria-hidden
       />
       <div className="relative w-full max-w-2xl min-w-[28rem] h-full bg-white dark:bg-gray-800 shadow-2xl border-l border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden">
@@ -202,13 +219,16 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             Edit User
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button
+              type="button"
+              onClick={guardClose}
+              className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
           <section>
@@ -225,7 +245,7 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
                 <input
                   type="email"
                   value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
+                  onChange={(e) => { setInviteEmail(e.target.value); markDirty() }}
                   placeholder="user@example.com"
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
                 />
@@ -255,7 +275,7 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
                 <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Status</label>
                 <select
                   value={status}
-                  onChange={(e) => setStatus(e.target.value as AdminUser['status'])}
+                  onChange={(e) => { setStatus(e.target.value as AdminUser['status']); markDirty() }}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="active" className="bg-white dark:bg-gray-700 text-gray-900 dark:text-white">Active</option>
@@ -358,7 +378,7 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
           <button
             type="button"
-            onClick={onClose}
+            onClick={guardClose}
             className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
           >
             Cancel
@@ -373,6 +393,7 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
           </button>
         </div>
       </div>
+      {warningDialog}
     </div>
   )
 }

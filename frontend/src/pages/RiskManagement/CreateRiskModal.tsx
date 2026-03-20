@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import type { Risk, RiskType, AffectedArea } from './types'
 import { RISK_TYPES, AFFECTED_AREAS } from './constants'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 const inputBase =
   'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
@@ -21,6 +22,8 @@ export default function CreateRiskModal({
   nextId,
   existingOwners = [],
 }: CreateRiskModalProps) {
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
   const [title, setTitle] = useState('')
   const [type, setType] = useState<RiskType>('Technical')
   const [owner, setOwner] = useState('')
@@ -29,6 +32,17 @@ export default function CreateRiskModal({
   const [likelihood, setLikelihood] = useState<number>(3)
   const [impact, setImpact] = useState<number>(3)
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  onDiscardRef.current = () => {
+    setTitle('')
+    setType('Technical')
+    setOwner('')
+    setOwnerIsOther(false)
+    setAffectedArea('Subsystem')
+    setLikelihood(3)
+    setImpact(3)
+    setErrors({})
+  }
 
   useEffect(() => {
     if (isOpen) {
@@ -45,7 +59,7 @@ export default function CreateRiskModal({
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') guardClose()
     }
     if (isOpen) {
       document.addEventListener('keydown', handleEsc)
@@ -78,6 +92,7 @@ export default function CreateRiskModal({
       linkedCounts: {},
     }
     onCreate(newRisk)
+    resetDirty()
     onClose()
   }
 
@@ -86,7 +101,7 @@ export default function CreateRiskModal({
   return (
     <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-      onClick={onClose}
+      onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-risk-modal-title"
@@ -99,13 +114,16 @@ export default function CreateRiskModal({
           <h2 id="create-risk-modal-title" className="text-xl font-bold text-gray-900 dark:text-white">
             Create Risk
           </h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-            aria-label="Close"
-          >
-            <X size={20} className="text-gray-600 dark:text-gray-400" />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button
+              onClick={guardClose}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              aria-label="Close"
+            >
+              <X size={20} className="text-gray-600 dark:text-gray-400" />
+            </button>
+          </div>
         </div>
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4">
           <div>
@@ -113,7 +131,7 @@ export default function CreateRiskModal({
             <input
               type="text"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => { setTitle(e.target.value); markDirty() }}
               className={`${inputBase} ${errors.title ? 'border-red-500 dark:border-red-500' : ''}`}
               placeholder="Risk title"
             />
@@ -123,7 +141,7 @@ export default function CreateRiskModal({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Type</label>
             <select
               value={type}
-              onChange={(e) => setType(e.target.value as RiskType)}
+              onChange={(e) => { setType(e.target.value as RiskType); markDirty() }}
               className={inputBase}
             >
               {RISK_TYPES.map((t) => (
@@ -137,7 +155,7 @@ export default function CreateRiskModal({
               <div className="flex gap-2">
                 <select
                   value={owner}
-                  onChange={(e) => setOwner(e.target.value)}
+                  onChange={(e) => { setOwner(e.target.value); markDirty() }}
                   className={`${inputBase} flex-1 ${errors.owner ? 'border-red-500 dark:border-red-500' : ''}`}
                 >
                   <option value="">Select owner</option>
@@ -158,7 +176,7 @@ export default function CreateRiskModal({
                 <input
                   type="text"
                   value={owner}
-                  onChange={(e) => setOwner(e.target.value)}
+                  onChange={(e) => { setOwner(e.target.value); markDirty() }}
                   placeholder="Enter owner name"
                   className={`${inputBase} flex-1 ${errors.owner ? 'border-red-500 dark:border-red-500' : ''}`}
                 />
@@ -215,7 +233,7 @@ export default function CreateRiskModal({
         <div className="flex justify-end gap-2 p-6 border-t border-gray-200 dark:border-gray-700">
           <button
             type="button"
-            onClick={onClose}
+            onClick={guardClose}
             className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
           >
             Cancel
@@ -229,6 +247,7 @@ export default function CreateRiskModal({
           </button>
         </div>
       </div>
+      {warningDialog}
     </div>
   )
 }

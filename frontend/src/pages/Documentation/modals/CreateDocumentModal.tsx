@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import type { Document, DocumentType, Template } from '../types'
 import { DOC_TYPES } from '../mockData'
+import { useUnsavedChanges } from '../../../hooks/useUnsavedChanges'
 
 interface CreateDocumentModalProps {
   isOpen: boolean
@@ -18,14 +19,23 @@ export default function CreateDocumentModal({
   nextId,
   templates,
 }: CreateDocumentModalProps) {
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
   const [title, setTitle] = useState('')
   const [type, setType] = useState<DocumentType>('SRS')
   const [owner, setOwner] = useState('')
   const [templateId, setTemplateId] = useState<string>('')
 
+  onDiscardRef.current = () => {
+    setTitle('')
+    setType('SRS')
+    setOwner('')
+    setTemplateId('')
+  }
+
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') guardClose()
     }
     if (isOpen) {
       document.addEventListener('keydown', handleEsc)
@@ -66,6 +76,7 @@ export default function CreateDocumentModal({
         setType('SRS')
         setOwner('')
         setTemplateId('')
+        resetDirty()
         onClose()
       }
     } finally {
@@ -78,7 +89,7 @@ export default function CreateDocumentModal({
   return (
     <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-      onClick={onClose}
+      onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}
       role="dialog"
       aria-modal="true"
     >
@@ -89,7 +100,7 @@ export default function CreateDocumentModal({
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Create Document</h2>
           <button
-            onClick={onClose}
+            onClick={guardClose}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             aria-label="Close"
           >
@@ -102,7 +113,7 @@ export default function CreateDocumentModal({
             <input
               type="text"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => { setTitle(e.target.value); markDirty() }}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               placeholder="Document title"
             />
@@ -111,7 +122,7 @@ export default function CreateDocumentModal({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Type</label>
             <select
               value={type}
-              onChange={(e) => setType(e.target.value as DocumentType)}
+              onChange={(e) => { setType(e.target.value as DocumentType); markDirty() }}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
               {DOC_TYPES.map((opt) => (
@@ -126,7 +137,7 @@ export default function CreateDocumentModal({
             <input
               type="text"
               value={owner}
-              onChange={(e) => setOwner(e.target.value)}
+              onChange={(e) => { setOwner(e.target.value); markDirty() }}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               placeholder="Owner name"
             />
@@ -135,7 +146,7 @@ export default function CreateDocumentModal({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Template (optional)</label>
             <select
               value={templateId}
-              onChange={(e) => setTemplateId(e.target.value)}
+              onChange={(e) => { setTemplateId(e.target.value); markDirty() }}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
               <option value="">None</option>
@@ -149,7 +160,7 @@ export default function CreateDocumentModal({
         </div>
         <div className="flex justify-end gap-2 p-6 border-t border-gray-200 dark:border-gray-700">
           <button
-            onClick={onClose}
+            onClick={guardClose}
             className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
           >
             Cancel
@@ -163,6 +174,7 @@ export default function CreateDocumentModal({
           </button>
         </div>
       </div>
+      {warningDialog}
     </div>
   )
 }

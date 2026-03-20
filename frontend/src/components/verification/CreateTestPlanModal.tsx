@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { X, Search, CheckSquare, Square } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ApiResponse } from 'shared/types/api.types'
@@ -6,6 +6,7 @@ import { verificationService } from '../../services/verification.service'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import clsx from 'clsx'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 interface CreateTestPlanModalProps {
   isOpen: boolean
@@ -14,14 +15,18 @@ interface CreateTestPlanModalProps {
 }
 
 export default function CreateTestPlanModal({ isOpen, onClose, projectId }: CreateTestPlanModalProps) {
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
   const [activeTab, setActiveTab] = useState<'general' | 'cases' | 'verifies'>('general')
-  const [formData, setFormData] = useState({
+  const [formData, setFormDataBase] = useState({
     name: '',
     description: '',
     scope: '',
     entryCriteria: '',
     exitCriteria: '',
   })
+  type PlanFormData = { name: string; description: string; scope: string; entryCriteria: string; exitCriteria: string }
+  const setFormData = (v: PlanFormData | ((prev: PlanFormData) => PlanFormData)) => { setFormDataBase(v as any); markDirty() }
   const [selectedTestingEnvironments, setSelectedTestingEnvironments] = useState<Set<string>>(new Set())
   const [selectedTestingTools, setSelectedTestingTools] = useState<Set<string>>(new Set())
   const [selectedSetupIds, setSelectedSetupIds] = useState<Set<string>>(new Set())
@@ -30,6 +35,16 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
   const [selectedTestCaseIds, setSelectedTestCaseIds] = useState<Set<string>>(new Set())
   const [selectedLinks, setSelectedLinks] = useState<{ type: 'requirement' | 'function'; id: string }[]>([])
   const [searchTerm, setSearchTerm] = useState('')
+
+  onDiscardRef.current = () => {
+    setFormDataBase({ name: '', description: '', scope: '', entryCriteria: '', exitCriteria: '' })
+    setSelectedTestingEnvironments(new Set())
+    setSelectedTestingTools(new Set())
+    setSelectedSetupIds(new Set())
+    setSelectedTestCaseIds(new Set())
+    setSelectedLinks([])
+    setSearchTerm('')
+  }
 
   const queryClient = useQueryClient()
 
@@ -133,6 +148,7 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
       queryClient.invalidateQueries({ queryKey: ['test-plans', projectId] })
       queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
       queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
+      resetDirty()
       onClose()
       // Reset form
       setFormData({
@@ -197,14 +213,17 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}>
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Create Test Plan</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
-            <X size={20} className="text-gray-500" />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button onClick={guardClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+              <X size={20} className="text-gray-500" />
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -515,7 +534,7 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
         <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-gray-800/50">
           <button
             type="button"
-            onClick={onClose}
+            onClick={guardClose}
             className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
           >
             Cancel
@@ -530,6 +549,7 @@ export default function CreateTestPlanModal({ isOpen, onClose, projectId }: Crea
           </button>
         </div>
       </div>
+      {warningDialog}
     </div>
   )
 }

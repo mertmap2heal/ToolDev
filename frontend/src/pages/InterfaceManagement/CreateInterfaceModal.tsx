@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X, ArrowLeftRight, ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import type { Interface, InterfaceType, InterfaceStatus, TechnicalCharacteristics } from './mockInterfaces'
 import { INTERFACE_TYPES, INTERFACE_STATUSES } from './constants'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 interface CreateInterfaceModalProps {
   isOpen: boolean
@@ -28,6 +29,8 @@ export default function CreateInterfaceModal({
   existingOwners = [],
   existingNames = [],
 }: CreateInterfaceModalProps) {
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
   const isEdit = !!initialInterface && !!onUpdate
 
   const [name, setName] = useState('')
@@ -43,6 +46,22 @@ export default function CreateInterfaceModal({
   const [techChars, setTechChars] = useState<Partial<TechnicalCharacteristics>>({})
   const [customSections, setCustomSections] = useState<Array<{ id: string; key: string; value: string }>>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  onDiscardRef.current = () => {
+    setName('')
+    setType('Data')
+    setSourceElement('')
+    setTargetElement('')
+    setOwner('')
+    setOwnerIsOther(false)
+    setDescription('')
+    setStatus('Draft')
+    setConstraintsText('')
+    setTechChars({})
+    setCustomSections([])
+    setAdvancedOpen(false)
+    setErrors({})
+  }
 
   const namesToCheck = isEdit && initialInterface
     ? existingNames.filter((n) => n.toLowerCase() !== initialInterface.name.toLowerCase())
@@ -90,7 +109,7 @@ export default function CreateInterfaceModal({
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') guardClose()
     }
     if (isOpen) {
       document.addEventListener('keydown', handleEsc)
@@ -183,12 +202,13 @@ export default function CreateInterfaceModal({
       }
       onCreate(newInterface)
     }
+    resetDirty()
     onClose()
   }
 
   const handleCancel = () => {
     setErrors({})
-    onClose()
+    guardClose()
   }
 
   const renderTechFields = () => {
@@ -328,7 +348,7 @@ export default function CreateInterfaceModal({
   return (
     <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-      onClick={handleCancel}
+      onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-interface-modal-title"
@@ -348,12 +368,15 @@ export default function CreateInterfaceModal({
                 : `Creating interface ${nextId}`}
             </p>
           </div>
-          <button
-            onClick={handleCancel}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <X size={20} className="text-gray-600 dark:text-gray-400" />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button
+              onClick={handleCancel}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <X size={20} className="text-gray-600 dark:text-gray-400" />
+            </button>
+          </div>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* 1–3: Identification section, reordered */}
@@ -370,6 +393,7 @@ export default function CreateInterfaceModal({
                   onChange={(e) => {
                     setName(e.target.value)
                     clearError('name')
+                    markDirty()
                   }}
                   placeholder="e.g. FCS to Actuator CAN Bus"
                   className={`${inputBase} ${errors.name ? inputError : 'border-gray-300 dark:border-gray-600'}`}
@@ -384,7 +408,7 @@ export default function CreateInterfaceModal({
                 </label>
                 <select
                   value={type}
-                  onChange={(e) => setType(e.target.value as InterfaceType)}
+                  onChange={(e) => { setType(e.target.value as InterfaceType); markDirty() }}
                   className={`${inputBase} border-gray-300 dark:border-gray-600`}
                 >
                   {INTERFACE_TYPES.map((t) => (
@@ -427,6 +451,7 @@ export default function CreateInterfaceModal({
                   onChange={(e) => {
                     setSourceElement(e.target.value)
                     clearError('sourceTarget')
+                    markDirty()
                   }}
                   placeholder="e.g. FCS Controller"
                   className={`${inputBase} ${errors.sourceTarget ? inputError : 'border-gray-300 dark:border-gray-600'}`}
@@ -450,6 +475,7 @@ export default function CreateInterfaceModal({
                   onChange={(e) => {
                     setTargetElement(e.target.value)
                     clearError('sourceTarget')
+                    markDirty()
                   }}
                   placeholder="e.g. Actuator Unit"
                   className={`${inputBase} ${errors.sourceTarget ? inputError : 'border-gray-300 dark:border-gray-600'}`}
@@ -511,7 +537,7 @@ export default function CreateInterfaceModal({
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Description</h3>
             <textarea
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => { setDescription(e.target.value); markDirty() }}
               rows={3}
               placeholder="Optional description"
               className={`${inputBase} border-gray-300 dark:border-gray-600`}
@@ -633,6 +659,7 @@ export default function CreateInterfaceModal({
           </div>
         </form>
       </div>
+      {warningDialog}
     </div>
   )
 }

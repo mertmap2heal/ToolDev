@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import type { AdminProject, AdminUser } from '../../types/admin.types'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 interface ProjectEditorModalProps {
   project: AdminProject | null
@@ -15,10 +16,18 @@ export default function ProjectEditorModal({
   onClose,
   onSave,
 }: ProjectEditorModalProps) {
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, true, () => onDiscardRef.current?.())
   const [name, setName] = useState(project?.name ?? '')
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>(project?.members ?? [])
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  onDiscardRef.current = () => {
+    setName('')
+    setSelectedMemberIds([])
+    setSaveError(null)
+  }
 
   useEffect(() => {
     setName(project?.name ?? '')
@@ -39,6 +48,7 @@ export default function ProjectEditorModal({
     try {
       await onSave(name.trim(), selectedMemberIds)
       setSaveError(null)
+      resetDirty()
       onClose()
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Failed to save')
@@ -49,23 +59,26 @@ export default function ProjectEditorModal({
 
   const handleClose = () => {
     setSaveError(null)
-    onClose()
+    guardClose()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}>
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-xl w-full max-w-lg">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             {project ? 'Edit Project' : 'Create Project'}
           </h2>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button
+              type="button"
+              onClick={handleClose}
+              className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
         <div className="px-6 py-4 space-y-4">
           <div>
@@ -75,7 +88,7 @@ export default function ProjectEditorModal({
             <input
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => { setName(e.target.value); markDirty() }}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
               placeholder="Project name"
             />
@@ -139,6 +152,7 @@ export default function ProjectEditorModal({
           </button>
         </div>
       </div>
+      {warningDialog}
     </div>
   )
 }

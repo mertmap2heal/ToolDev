@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   X,
@@ -60,11 +61,20 @@ export default function CreateDiagramModal({
   sourceElement,
   onDiagramCreated,
 }: CreateDiagramModalProps) {
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [createTraceLink, setCreateTraceLink] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  onDiscardRef.current = () => {
+    setName('')
+    setDescription('')
+    setCreateTraceLink(true)
+    setError(null)
+  }
 
   const typeInfo = DIAGRAM_TYPE_INFO[diagramType]
 
@@ -102,6 +112,7 @@ export default function CreateDiagramModal({
       setName('')
       setDescription('')
       setError(null)
+      resetDirty()
       onClose()
     },
     onError: (err: Error) => {
@@ -134,7 +145,7 @@ export default function CreateDiagramModal({
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50"
-        onClick={onClose}
+        onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}
       />
       
       {/* Modal */}
@@ -161,12 +172,15 @@ export default function CreateDiagramModal({
                 </p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            >
-              <X size={20} />
-            </button>
+            <div className="flex items-center gap-2">
+              {draftBanner}
+              <button
+                onClick={guardClose}
+                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -197,7 +211,7 @@ export default function CreateDiagramModal({
             <input
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => { setName(e.target.value); markDirty() }}
               placeholder={generateDefaultName()}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             />
@@ -249,7 +263,7 @@ export default function CreateDiagramModal({
           <div className="flex items-center justify-end gap-3 pt-4">
             <button
               type="button"
-              onClick={onClose}
+              onClick={guardClose}
               className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
               Cancel
@@ -270,6 +284,7 @@ export default function CreateDiagramModal({
           </div>
         </form>
       </div>
+      {warningDialog}
     </div>
   )
 }

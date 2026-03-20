@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { X } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import * as adminService from '../../services/admin.service'
 import { emptyPermissionMap } from '../../types/admin.types'
 import type { PermissionMap } from '../../types/admin.types'
 import PermissionMatrix from './PermissionMatrix'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 interface UserCreateModalProps {
   onClose: () => void
@@ -12,6 +13,8 @@ interface UserCreateModalProps {
 }
 
 export default function UserCreateModal({ onClose, onCreated }: UserCreateModalProps) {
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, true, () => onDiscardRef.current?.())
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [selectedProjects, setSelectedProjects] = useState<string[]>([])
@@ -19,6 +22,15 @@ export default function UserCreateModal({ onClose, onCreated }: UserCreateModalP
   const [selectedAuthorities, setSelectedAuthorities] = useState<string[]>([])
   const [permissions, setPermissions] = useState<PermissionMap>(() => emptyPermissionMap())
   const [submitting, setSubmitting] = useState(false)
+
+  onDiscardRef.current = () => {
+    setEmail('')
+    setName('')
+    setSelectedProjects([])
+    setSelectedRoles([])
+    setSelectedAuthorities([])
+    setPermissions(emptyPermissionMap())
+  }
 
   const { data: projects = [] } = useQuery({
     queryKey: ['admin', 'projects'],
@@ -64,6 +76,7 @@ export default function UserCreateModal({ onClose, onCreated }: UserCreateModalP
         authorities: selectedAuthorities,
         permissions,
       })
+      resetDirty()
       onCreated(result.user.username, result.generatedPassword)
     } finally {
       setSubmitting(false)
@@ -71,19 +84,22 @@ export default function UserCreateModal({ onClose, onCreated }: UserCreateModalP
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}>
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             Create User
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button
+              type="button"
+              onClick={guardClose}
+              className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
           <div>
@@ -93,7 +109,7 @@ export default function UserCreateModal({ onClose, onCreated }: UserCreateModalP
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => { setEmail(e.target.value); markDirty() }}
               placeholder="user@example.com"
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
@@ -183,7 +199,7 @@ export default function UserCreateModal({ onClose, onCreated }: UserCreateModalP
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
           <button
             type="button"
-            onClick={onClose}
+            onClick={guardClose}
             className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
           >
             Cancel
@@ -198,6 +214,7 @@ export default function UserCreateModal({ onClose, onCreated }: UserCreateModalP
           </button>
         </div>
       </div>
+      {warningDialog}
     </div>
   )
 }

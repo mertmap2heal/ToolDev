@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { X, AlertCircle } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { issueService } from '../../services/issue.service'
 import type { SystemFunction } from 'shared/types/engineering.types'
 import type { CreateIssueDto } from 'shared/types/engineering.types'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 interface RaiseIssueModalProps {
   isOpen: boolean
@@ -18,14 +19,30 @@ export default function RaiseIssueModal({
   projectId,
   selectedFunctions,
 }: RaiseIssueModalProps) {
-  const [formData, setFormData] = useState<CreateIssueDto>({
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
+  const [formDataBase, setFormDataBase] = useState<CreateIssueDto>({
     title: '',
     description: '',
     priority: 'medium',
     owner: '',
     relatedFunctionIds: [],
   })
+  const setFormData = (v: CreateIssueDto | ((prev: CreateIssueDto) => CreateIssueDto)) => { setFormDataBase(v as any); markDirty() }
+  const formData = formDataBase
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  onDiscardRef.current = () => {
+    setFormDataBase({
+      title: '',
+      description: '',
+      priority: 'medium',
+      owner: '',
+      relatedFunctionIds: [],
+    })
+    setErrors({})
+  }
+
   const queryClient = useQueryClient()
 
   const createIssueMutation = useMutation({
@@ -33,8 +50,9 @@ export default function RaiseIssueModal({
     onSuccess: (response) => {
       if (response.success) {
         queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
+        resetDirty()
         onClose()
-        setFormData({
+        setFormDataBase({
           title: '',
           description: '',
           priority: 'medium',
@@ -100,7 +118,7 @@ export default function RaiseIssueModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}>
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
@@ -112,12 +130,15 @@ export default function RaiseIssueModal({
               Raise Issue
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <X size={20} className="text-gray-600 dark:text-gray-400" />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button
+              onClick={guardClose}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <X size={20} className="text-gray-600 dark:text-gray-400" />
+            </button>
+          </div>
         </div>
 
         {/* Form */}
@@ -226,7 +247,7 @@ export default function RaiseIssueModal({
           <div className="flex items-center justify-end gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
             <button
               type="button"
-              onClick={onClose}
+              onClick={guardClose}
               className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
               disabled={createIssueMutation.isPending}
             >
@@ -242,6 +263,7 @@ export default function RaiseIssueModal({
           </div>
         </form>
       </div>
+      {warningDialog}
     </div>
   )
 }

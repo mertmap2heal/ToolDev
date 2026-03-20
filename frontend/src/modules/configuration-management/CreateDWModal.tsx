@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import type { DeviationWaiver, DWType, RiskLevel } from './types'
 import { DW_TYPES } from './constants'
 import { useNextIds, useCMStore } from './store'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 interface CreateDWModalProps {
   isOpen: boolean
@@ -11,6 +12,8 @@ interface CreateDWModalProps {
 }
 
 export default function CreateDWModal({ isOpen, onClose, onCreate }: CreateDWModalProps) {
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
   const { state } = useCMStore()
   const { nextDWId } = useNextIds()
   const [type, setType] = useState<DWType>('Deviation')
@@ -21,9 +24,19 @@ export default function CreateDWModal({ isOpen, onClose, onCreate }: CreateDWMod
   const [decisionNotes, setDecisionNotes] = useState('')
   const [linkedCiIds, setLinkedCiIds] = useState<Set<string>>(new Set())
 
+  onDiscardRef.current = () => {
+    setType('Deviation')
+    setTitle('')
+    setRiskLevel('Low')
+    setValidUntil('')
+    setAuthorityInvolved(false)
+    setDecisionNotes('')
+    setLinkedCiIds(new Set())
+  }
+
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') guardClose()
     }
     if (isOpen) {
       document.addEventListener('keydown', handleEsc)
@@ -40,6 +53,7 @@ export default function CreateDWModal({ isOpen, onClose, onCreate }: CreateDWMod
       else next.add(ciId)
       return next
     })
+    markDirty()
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -61,13 +75,14 @@ export default function CreateDWModal({ isOpen, onClose, onCreate }: CreateDWMod
     setValidUntil('')
     setDecisionNotes('')
     setLinkedCiIds(new Set())
+    resetDirty()
     onClose()
   }
 
   return (
     <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-      onClick={onClose}
+      onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}
       role="dialog"
       aria-modal="true"
     >
@@ -79,13 +94,16 @@ export default function CreateDWModal({ isOpen, onClose, onCreate }: CreateDWMod
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">
             Create Deviation / Waiver
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            {draftBanner}
+            <button
+              type="button"
+              onClick={guardClose}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto flex-1 space-y-4">
           <div>
@@ -94,7 +112,7 @@ export default function CreateDWModal({ isOpen, onClose, onCreate }: CreateDWMod
             </label>
             <select
               value={type}
-              onChange={(e) => setType(e.target.value as DWType)}
+              onChange={(e) => { setType(e.target.value as DWType); markDirty() }}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
               {DW_TYPES.map((t) => (
@@ -111,7 +129,7 @@ export default function CreateDWModal({ isOpen, onClose, onCreate }: CreateDWMod
             <input
               type="text"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => { setTitle(e.target.value); markDirty() }}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               required
             />
@@ -137,7 +155,7 @@ export default function CreateDWModal({ isOpen, onClose, onCreate }: CreateDWMod
             <input
               type="date"
               value={validUntil}
-              onChange={(e) => setValidUntil(e.target.value)}
+              onChange={(e) => { setValidUntil(e.target.value); markDirty() }}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             />
           </div>
@@ -146,7 +164,7 @@ export default function CreateDWModal({ isOpen, onClose, onCreate }: CreateDWMod
               type="checkbox"
               id="authority-involved"
               checked={authorityInvolved}
-              onChange={(e) => setAuthorityInvolved(e.target.checked)}
+              onChange={(e) => { setAuthorityInvolved(e.target.checked); markDirty() }}
               className="rounded border-gray-300 dark:border-gray-600 text-blue-600"
             />
             <label htmlFor="authority-involved" className="text-sm text-gray-700 dark:text-gray-300">
@@ -181,7 +199,7 @@ export default function CreateDWModal({ isOpen, onClose, onCreate }: CreateDWMod
             </label>
             <textarea
               value={decisionNotes}
-              onChange={(e) => setDecisionNotes(e.target.value)}
+              onChange={(e) => { setDecisionNotes(e.target.value); markDirty() }}
               rows={2}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             />
@@ -189,7 +207,7 @@ export default function CreateDWModal({ isOpen, onClose, onCreate }: CreateDWMod
           <div className="flex justify-end gap-2 pt-4">
             <button
               type="button"
-              onClick={onClose}
+              onClick={guardClose}
               className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               Cancel
@@ -203,6 +221,7 @@ export default function CreateDWModal({ isOpen, onClose, onCreate }: CreateDWMod
           </div>
         </form>
       </div>
+      {warningDialog}
     </div>
   )
 }
