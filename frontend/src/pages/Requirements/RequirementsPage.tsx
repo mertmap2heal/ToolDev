@@ -16,6 +16,7 @@ import BaselineManager from '../../components/requirements/BaselineManager'
 import ExportBuilder from '../../components/requirements/ExportBuilder'
 import ImportWizard from '../../components/requirements/ImportWizard'
 import RequirementDiagramsModal from '../../components/requirements/RequirementDiagramsModal'
+import ResizableTh from '../../components/requirements/ResizableTh'
 import RequirementQualityPanel from '../../components/requirements/RequirementQualityPanel'
 import RequirementsPBSTree, { type LinkedElementClickPayload } from '../../components/requirements/RequirementsPBSTree'
 import LinkedElementPreviewPopover from '../../components/requirements/LinkedElementPreviewPopover'
@@ -255,32 +256,35 @@ export default function RequirementsPage() {
     key: ColumnKey
     label: string
     defaultVisible: boolean
+    sortable?: boolean
+    sortKey?: string
+    defaultWidth?: number
   }
 
   const REQUIREMENT_COLUMNS: ColumnConfig[] = [
-    { key: 'requirementId', label: 'ID', defaultVisible: true },
-    { key: 'title', label: 'Title', defaultVisible: true },
-    { key: 'description', label: 'Description', defaultVisible: true },
-    { key: 'priority', label: 'Priority', defaultVisible: true },
-    { key: 'status', label: 'Status', defaultVisible: true },
-    { key: 'owner', label: 'Owner', defaultVisible: true },
-    { key: 'category', label: 'Category', defaultVisible: false },
-    { key: 'source', label: 'Source', defaultVisible: false },
-    { key: 'requirementType', label: 'Type', defaultVisible: false },
-    { key: 'requirementLevel', label: 'Level', defaultVisible: false },
-    { key: 'risk', label: 'Risk', defaultVisible: false },
-    { key: 'complexity', label: 'Complexity', defaultVisible: false },
-    { key: 'verificationMethod', label: 'Verification Method', defaultVisible: false },
-    { key: 'verificationStatus', label: 'Verification Status', defaultVisible: false },
-    { key: 'verificationDate', label: 'Verification Date', defaultVisible: false },
-    { key: 'linkedMocCode', label: 'MoC', defaultVisible: false },
-    { key: 'acceptanceCriteria', label: 'Acceptance Criteria', defaultVisible: false },
-    { key: 'stage', label: 'Stage', defaultVisible: false },
-    { key: 'rationale', label: 'Rationale', defaultVisible: false },
-    { key: 'component', label: 'Component', defaultVisible: false },
-    { key: 'reviewStatus', label: 'Review Status', defaultVisible: false },
-    { key: 'createdAt', label: 'Created', defaultVisible: false },
-    { key: 'updatedAt', label: 'Updated', defaultVisible: false },
+    { key: 'requirementId', label: 'ID', defaultVisible: true, sortable: true, defaultWidth: 100 },
+    { key: 'title', label: 'Title', defaultVisible: true, sortable: true, defaultWidth: 250 },
+    { key: 'description', label: 'Description', defaultVisible: true, sortable: false, defaultWidth: 350 },
+    { key: 'priority', label: 'Priority', defaultVisible: true, sortable: true, defaultWidth: 100 },
+    { key: 'status', label: 'Status', defaultVisible: true, sortable: true, defaultWidth: 120 },
+    { key: 'owner', label: 'Owner', defaultVisible: true, sortable: true, defaultWidth: 150 },
+    { key: 'category', label: 'Category', defaultVisible: false, sortable: true, defaultWidth: 150 },
+    { key: 'source', label: 'Source', defaultVisible: false, sortable: true, defaultWidth: 150 },
+    { key: 'requirementType', label: 'Type', defaultVisible: false, sortable: true, defaultWidth: 150 },
+    { key: 'requirementLevel', label: 'Level', defaultVisible: false, sortable: true, defaultWidth: 120 },
+    { key: 'risk', label: 'Risk', defaultVisible: false, sortable: true, defaultWidth: 100 },
+    { key: 'complexity', label: 'Complexity', defaultVisible: false, sortable: true, defaultWidth: 120 },
+    { key: 'verificationMethod', label: 'Verification Method', defaultVisible: false, sortable: false, defaultWidth: 180 },
+    { key: 'verificationStatus', label: 'Verification Status', defaultVisible: false, sortable: false, defaultWidth: 150 },
+    { key: 'verificationDate', label: 'Verification Date', defaultVisible: false, sortable: true, defaultWidth: 150 },
+    { key: 'linkedMocCode', label: 'MoC', defaultVisible: false, sortable: false, defaultWidth: 120 },
+    { key: 'acceptanceCriteria', label: 'Acceptance Criteria', defaultVisible: false, sortable: false, defaultWidth: 250 },
+    { key: 'stage', label: 'Stage', defaultVisible: false, sortable: true, defaultWidth: 120 },
+    { key: 'rationale', label: 'Rationale', defaultVisible: false, sortable: false, defaultWidth: 250 },
+    { key: 'component', label: 'Component', defaultVisible: false, sortable: true, sortKey: 'componentId', defaultWidth: 150 },
+    { key: 'reviewStatus', label: 'Review Status', defaultVisible: false, sortable: false, defaultWidth: 150 },
+    { key: 'createdAt', label: 'Created', defaultVisible: false, sortable: true, defaultWidth: 150 },
+    { key: 'updatedAt', label: 'Updated', defaultVisible: false, sortable: true, defaultWidth: 150 },
   ]
 
   // Helper to get default visible columns
@@ -315,6 +319,30 @@ export default function RequirementsPage() {
   const [requirementColumns, setRequirementColumns] = useState<Set<ColumnKey>>(() =>
     loadColumnPreferences()
   )
+
+  // Column widths state
+  const loadColumnWidths = (): Record<string, number> => {
+    try {
+      const stored = localStorage.getItem('requirements-column-widths')
+      if (stored) return JSON.parse(stored)
+    } catch (e) {
+      console.error('Failed to load column widths:', e)
+    }
+    const defaults: Record<string, number> = {}
+    REQUIREMENT_COLUMNS.forEach(c => {
+      defaults[c.key] = c.defaultWidth || 150
+    })
+    return defaults
+  }
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => loadColumnWidths())
+
+  const handleColumnResize = useCallback((columnKey: string, newWidth: number) => {
+    setColumnWidths(prev => {
+      const next = { ...prev, [columnKey]: newWidth }
+      try { localStorage.setItem('requirements-column-widths', JSON.stringify(next)) } catch (e) { /* ignore */ }
+      return next
+    })
+  }, [])
 
   // Column selector dropdown state
   const [columnSelectorOpen, setColumnSelectorOpen] = useState<boolean>(false)
@@ -3327,10 +3355,10 @@ export default function RequirementsPage() {
               </div>
             ) : (
             <div className="overflow-x-auto h-full">
-              <table className="w-full border-collapse">
+              <table className="w-full border-collapse table-fixed">
                 <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(0,0,0,0.1)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-12">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style={{ width: 48, minWidth: 48, maxWidth: 48 }}>
                       <input
                         type="checkbox"
                         checked={selectedRequirements.size > 0 && selectedRequirements.size === filteredRequirements.length}
@@ -3346,170 +3374,29 @@ export default function RequirementsPage() {
                         className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
                       />
                     </th>
-                    {requirementColumns.has('requirementId') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('requirementId')}>
-                        <span className="inline-flex items-center gap-1">
-                          ID
-                          {sortBy === 'requirementId' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                        </span>
-                      </th>
-                    )}
-                    {requirementColumns.has('title') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('title')}>
-                        <span className="inline-flex items-center gap-1">
-                          Title
-                          {sortBy === 'title' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                        </span>
-                      </th>
-                    )}
-                    {requirementColumns.has('description') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Description
-                      </th>
-                    )}
-                    {requirementColumns.has('priority') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('priority')}>
-                        <span className="inline-flex items-center gap-1">
-                          Priority
-                          {sortBy === 'priority' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                        </span>
-                      </th>
-                    )}
-                    {requirementColumns.has('status') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('status')}>
-                        <span className="inline-flex items-center gap-1">
-                          Status
-                          {sortBy === 'status' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                        </span>
-                      </th>
-                    )}
-                    {requirementColumns.has('owner') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('owner')}>
-                        <span className="inline-flex items-center gap-1">
-                          Owner
-                          {sortBy === 'owner' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                        </span>
-                      </th>
-                    )}
-                    {requirementColumns.has('category') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('category')}>
-                        <span className="inline-flex items-center gap-1">
-                          Category
-                          {sortBy === 'category' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                        </span>
-                      </th>
-                    )}
-                    {requirementColumns.has('source') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('source')}>
-                        <span className="inline-flex items-center gap-1">
-                          Source
-                          {sortBy === 'source' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                        </span>
-                      </th>
-                    )}
-                    {requirementColumns.has('requirementType') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('requirementType')}>
-                        <span className="inline-flex items-center gap-1">
-                          Type
-                          {sortBy === 'requirementType' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                        </span>
-                      </th>
-                    )}
-                    {requirementColumns.has('requirementLevel') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('requirementLevel')}>
-                        <span className="inline-flex items-center gap-1">
-                          Level
-                          {sortBy === 'requirementLevel' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                        </span>
-                      </th>
-                    )}
-                    {requirementColumns.has('risk') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('risk')}>
-                        <span className="inline-flex items-center gap-1">
-                          Risk
-                          {sortBy === 'risk' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                        </span>
-                      </th>
-                    )}
-                    {requirementColumns.has('complexity') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('complexity')}>
-                        <span className="inline-flex items-center gap-1">
-                          Complexity
-                          {sortBy === 'complexity' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                        </span>
-                      </th>
-                    )}
-                    {requirementColumns.has('verificationMethod') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Verification Method
-                      </th>
-                    )}
-                    {requirementColumns.has('verificationStatus') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Verification Status
-                      </th>
-                    )}
-                    {requirementColumns.has('verificationDate') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('verificationDate')}>
-                        <span className="inline-flex items-center gap-1">
-                          Verification Date
-                          {sortBy === 'verificationDate' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                        </span>
-                      </th>
-                    )}
-                    {requirementColumns.has('linkedMocCode') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        MoC
-                      </th>
-                    )}
-                    {requirementColumns.has('acceptanceCriteria') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Acceptance Criteria
-                      </th>
-                    )}
-                    {requirementColumns.has('stage') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('stage')}>
-                        <span className="inline-flex items-center gap-1">
-                          Stage
-                          {sortBy === 'stage' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                        </span>
-                      </th>
-                    )}
-                    {requirementColumns.has('rationale') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Rationale
-                      </th>
-                    )}
-                    {requirementColumns.has('component') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('componentId')}>
-                        <span className="inline-flex items-center gap-1">
-                          Component
-                          {sortBy === 'componentId' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                        </span>
-                      </th>
-                    )}
-                    {requirementColumns.has('reviewStatus') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Review Status
-                      </th>
-                    )}
-                    {requirementColumns.has('createdAt') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('createdAt')}>
-                        <span className="inline-flex items-center gap-1">
-                          Created
-                          {sortBy === 'createdAt' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                        </span>
-                      </th>
-                    )}
-                    {requirementColumns.has('updatedAt') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={() => handleSort('updatedAt')}>
-                        <span className="inline-flex items-center gap-1">
-                          Updated
-                          {sortBy === 'updatedAt' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                        </span>
-                      </th>
-                    )}
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-24">
+                    {REQUIREMENT_COLUMNS.filter(col => requirementColumns.has(col.key)).map(col => {
+                      const sortAttribute = col.sortKey || col.key;
+                      return (
+                        <ResizableTh
+                          key={col.key}
+                          width={columnWidths[col.key] || col.defaultWidth || 150}
+                          onResize={(w) => handleColumnResize(col.key, w)}
+                          className={clsx(
+                            "px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider",
+                            col.sortable && "cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none"
+                          )}
+                          onClick={col.sortable ? () => handleSort(sortAttribute) : undefined}
+                        >
+                          <span className={clsx(col.sortable && "inline-flex items-center gap-1")}>
+                            {col.label}
+                            {col.sortable && sortBy === sortAttribute && (
+                              sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                            )}
+                          </span>
+                        </ResizableTh>
+                      )
+                    })}
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style={{ width: 96, minWidth: 96, maxWidth: 96 }}>
                       Actions
                     </th>
                   </tr>
