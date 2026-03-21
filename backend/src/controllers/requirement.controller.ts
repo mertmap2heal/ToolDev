@@ -5,6 +5,7 @@ import { createVersionSnapshot } from './version.controller'
 import { traceabilityService } from '../services/traceability.service'
 import { linkageAuditService } from '../services/linkageAudit.service'
 import { requirementValidationService } from '../services/requirementValidation.service'
+import { transitionChecklistService } from '../services/transitionChecklist.service'
 import { requirementSubscriptionService } from '../services/requirementSubscription.service'
 import { buildRequirementChangeSummary, notifyRequirementSubscribers } from '../services/requirementNotification.service'
 import { extractParameterIds } from '../utils/parameterPlaceholder'
@@ -1293,6 +1294,56 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
           })
         }
       }
+      // Transition checklist enforcement
+      const resolvedLifecycleId = lifecycleId ?? requirement.lifecycleId
+      if (resolvedLifecycleId && requirement.statusId) {
+        const requiredChecklists = await transitionChecklistService.getChecklistsForTransition(
+          projectId,
+          resolvedLifecycleId,
+          requirement.statusId,
+          statusId,
+          'Requirement'
+        )
+
+        if (requiredChecklists.length > 0) {
+          const checklistCompletions = req.body.checklistCompletions as
+            | { assignmentId: string; responses: { checklistItemId: string; value: Record<string, unknown>; passed: boolean }[]; overrideById?: string }[]
+            | undefined
+
+          if (!checklistCompletions || checklistCompletions.length === 0) {
+            return res.status(400).json({
+              success: false,
+              error: 'Transition checklists must be completed before changing status',
+              checklistsRequired: true,
+              checklists: requiredChecklists,
+            })
+          }
+
+          for (const completion of checklistCompletions) {
+            const allPassed = completion.responses.every((r) => r.passed)
+            const isOverride = !!completion.overrideById
+            if (!allPassed && !isOverride) {
+              return res.status(400).json({
+                success: false,
+                error: 'Not all checklist items have passed. Complete all required items or use admin override.',
+                checklistsRequired: true,
+                checklists: requiredChecklists,
+              })
+            }
+
+            await transitionChecklistService.submitCompletion({
+              checklistAssignmentId: completion.assignmentId,
+              entityType: 'Requirement',
+              entityId: requirement.id,
+              projectId,
+              completedById: req.userId || '',
+              overriddenById: completion.overrideById,
+              responses: completion.responses,
+            })
+          }
+        }
+      }
+
       updateData.statusChangedAt = new Date()
       updateData.statusChangedBy = req.userId ?? null
     }

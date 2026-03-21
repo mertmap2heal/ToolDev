@@ -203,6 +203,9 @@ model Project {
   certMilestones        CertMilestone[]
   certChecklists        CertChecklist[]
   certSignOffs          CertSignOff[]
+  transitionChecklists  TransitionChecklist[]
+  checklistAssignments  ChecklistAssignment[]
+  checklistCompletions  ChecklistCompletion[]
   definitionEntries     DefinitionEntry[]
   parameterTypes        ParameterType[]
   projectUnits          ProjectUnit[]
@@ -3280,4 +3283,118 @@ model CertSignOff {
   @@index([projectId])
   @@index([checklistId])
   @@index([milestoneId])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TRANSITION CHECKLISTS — Mandatory validation checklists for lifecycle transitions
+// ═══════════════════════════════════════════════════════════════════════════
+
+model TransitionChecklist {
+  id          String    @id @default(uuid())
+  projectId   String
+  name        String
+  description String?
+  version     Int       @default(1)
+  isActive    Boolean   @default(true)
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project     Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items       TransitionChecklistItem[]
+  assignments ChecklistAssignment[]
+  versions    ChecklistVersion[]
+
+  @@index([projectId])
+  @@index([projectId, isActive])
+}
+
+model TransitionChecklistItem {
+  id               String   @id @default(uuid())
+  checklistId      String
+  sortOrder        Int      @default(0)
+  label            String
+  description      String?
+  itemType         String   @default("BOOLEAN") // BOOLEAN | FIELD_VALIDATION | RULE_BASED | CONFIRMATION
+  validationConfig Json?    // { field, operator, value } for FIELD_VALIDATION; { rule } for RULE_BASED
+  isRequired       Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  checklist TransitionChecklist           @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  responses TransitionChecklistItemResponse[]
+
+  @@index([checklistId])
+  @@index([checklistId, sortOrder])
+}
+
+model ChecklistAssignment {
+  id           String   @id @default(uuid())
+  checklistId  String
+  projectId    String
+  lifecycleId  String
+  fromStatusId String
+  toStatusId   String
+  itemType     String   @default("Requirement")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  checklist   TransitionChecklist  @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  project     Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  completions ChecklistCompletion[]
+
+  @@unique([projectId, lifecycleId, fromStatusId, toStatusId, checklistId])
+  @@index([projectId, lifecycleId, fromStatusId, toStatusId, itemType])
+  @@index([checklistId])
+}
+
+model ChecklistCompletion {
+  id                    String    @id @default(uuid())
+  checklistAssignmentId String
+  entityType            String    @default("Requirement")
+  entityId              String
+  completedById         String?
+  completedAt           DateTime  @default(now())
+  overriddenById        String?
+  overriddenAt          DateTime?
+  passed                Boolean   @default(false)
+  projectId             String
+
+  assignment ChecklistAssignment              @relation(fields: [checklistAssignmentId], references: [id], onDelete: Cascade)
+  project    Project                          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  responses  TransitionChecklistItemResponse[]
+
+  @@index([checklistAssignmentId])
+  @@index([entityType, entityId])
+  @@index([projectId])
+  @@index([completedById])
+}
+
+model TransitionChecklistItemResponse {
+  id              String   @id @default(uuid())
+  completionId    String
+  checklistItemId String
+  value           Json?    // { checked: true } for BOOLEAN; { valid: true, message: "..." } for validations
+  passed          Boolean  @default(false)
+  respondedAt     DateTime @default(now())
+
+  completion    ChecklistCompletion       @relation(fields: [completionId], references: [id], onDelete: Cascade)
+  checklistItem TransitionChecklistItem   @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
+
+  @@index([completionId])
+  @@index([checklistItemId])
+}
+
+model ChecklistVersion {
+  id            String   @id @default(uuid())
+  checklistId   String
+  versionNumber Int
+  snapshotJson  Json
+  createdBy     String?
+  createdAt     DateTime @default(now())
+
+  checklist TransitionChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+
+  @@unique([checklistId, versionNumber])
+  @@index([checklistId])
 }

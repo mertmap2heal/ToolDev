@@ -25,6 +25,7 @@ import {
   Settings,
   ChevronRight,
   PlayCircle,
+  ClipboardCheck,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import clsx from 'clsx'
@@ -38,8 +39,9 @@ import { issueService } from '../../services/issue.service'
 import { parameterService } from '../../services/parameter.service'
 import { changeRequestService } from '../../services/changeRequest.service'
 import * as stakeholderRolesService from '../../services/stakeholderRoles.service'
+import ChecklistManagementContent from '../../components/lifecycle/ChecklistManagementContent'
 
-type TabId = 'library' | 'builder' | 'status' | 'transitions' | 'control' | 'baselines' | 'audit'
+type TabId = 'library' | 'builder' | 'status' | 'transitions' | 'checklists' | 'control' | 'baselines' | 'audit'
 
 interface Tab {
   id: TabId
@@ -72,6 +74,12 @@ const tabs: Tab[] = [
     label: 'Transition Rules',
     icon: ArrowRight,
     description: 'Configure allowed state transitions and validation rules'
+  },
+  {
+    id: 'checklists',
+    label: 'Transition Checklists',
+    icon: ClipboardCheck,
+    description: 'Create and manage validation checklists for status transitions'
   },
   {
     id: 'control',
@@ -184,6 +192,7 @@ export default function LifecycleManagementPage() {
         {activeTab === 'builder' && <LifecycleBuilderContent />}
         {activeTab === 'status' && <StatusDefinitionsContent searchQuery={searchQuery} />}
         {activeTab === 'transitions' && <TransitionRulesContent />}
+        {activeTab === 'checklists' && <ChecklistManagementContent searchQuery={searchQuery} />}
         {activeTab === 'control' && <ItemLifecycleControlContent />}
         {activeTab === 'baselines' && <BaselinesVersionsContent />}
         {activeTab === 'audit' && <AuditHistoryContent />}
