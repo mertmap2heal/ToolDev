@@ -25,6 +25,7 @@ export interface UpdateTaskDto extends Partial<CreateTaskDto> {}
 
 export interface ListTasksFilters {
   projectId?: string
+  assignedToUserId?: string
   search?: string
   status?: string
   priority?: string

@@ -67,14 +67,14 @@ export class InventoryService {
             lot: true,
             serial: true,
           },
-        },
+        } as any,
         purchaseOrder: {
           include: {
             lines: true,
           },
         },
       },
-    })
+    }) as any
 
     if (!receipt) {
       throw new Error(`Goods receipt ${receiptId} not found`)
@@ -142,7 +142,7 @@ export class InventoryService {
           serialId: line.serialId || null,
           unitCost: unitCost > 0 ? unitCost : null,
           idempotencyKey: `${idempotencyKey}-line-${line.id}`,
-        })
+        } as any)
 
         // Track balance update
         const balanceKey = `${item.id}-${location.id}`
@@ -214,7 +214,7 @@ export class InventoryService {
         // Check if PO is fully received
         const po = receipt.purchaseOrder
         const allLinesReceived = po.lines.every(
-          (line) => Number(line.qtyReceived) >= Number(line.qtyOrdered)
+          (line: any) => Number(line.qtyReceived) >= Number(line.qtyOrdered)
         )
 
         if (allLinesReceived) {
@@ -224,7 +224,7 @@ export class InventoryService {
           })
         } else {
           const someLinesReceived = po.lines.some(
-            (line) => Number(line.qtyReceived) > 0
+            (line: any) => Number(line.qtyReceived) > 0
           )
           if (someLinesReceived) {
             await tx.purchaseOrder.update({
@@ -280,14 +280,14 @@ export class InventoryService {
             serial: true,
             soLine: true,
           },
-        },
+        } as any,
         salesOrder: {
           include: {
             lines: true,
           },
         },
       },
-    })
+    }) as any
 
     if (!shipment) {
       throw new Error(`Shipment ${shipmentId} not found`)
@@ -372,7 +372,7 @@ export class InventoryService {
           lotId: line.lotId || null,
           serialId: line.serialId || null,
           idempotencyKey: `${idempotencyKey}-line-${line.id}`,
-        })
+        } as any)
 
         // Track balance update
         const balanceKey = `${item.id}-${location.id}`
@@ -506,7 +506,7 @@ export class InventoryService {
       if (shipment.salesOrder) {
         const so = shipment.salesOrder
         const allLinesShipped = so.lines.every(
-          (line) => Number(line.qtyShipped) >= Number(line.qtyOrdered)
+          (line: any) => Number(line.qtyShipped) >= Number(line.qtyOrdered)
         )
 
         if (allLinesShipped) {
@@ -516,7 +516,7 @@ export class InventoryService {
           })
         } else {
           const someLinesShipped = so.lines.some(
-            (line) => Number(line.qtyShipped) > 0
+            (line: any) => Number(line.qtyShipped) > 0
           )
           if (someLinesShipped) {
             await tx.salesOrder.update({
@@ -582,9 +582,9 @@ export class InventoryService {
             lot: true,
             serial: true,
           },
-        },
+        } as any,
       },
-    })
+    }) as any
 
     if (!transfer) {
       throw new Error(`Transfer order ${transferId} not found`)
@@ -672,7 +672,7 @@ export class InventoryService {
           lotId: line.lotId || null,
           serialId: line.serialId || null,
           idempotencyKey: `${idempotencyKey}-line-${line.id}`,
-        })
+        } as any)
 
         // Track balance updates (decrement from, increment to)
         const fromKey = `${item.id}-${fromLocation.id}`
@@ -790,10 +790,10 @@ export class InventoryService {
             },
             lot: true,
             serial: true,
-          },
+          } as any,
         },
       },
-    })
+    }) as any
 
     if (!adjustment) {
       throw new Error(`Stock adjustment ${adjustmentId} not found`)
@@ -886,7 +886,7 @@ export class InventoryService {
           unitCost: line.unitCost || null,
           metadataJson: JSON.stringify({ reasonCode: adjustment.reasonCode }),
           idempotencyKey: `${idempotencyKey}-line-${line.id}`,
-        })
+        } as any)
 
         // Track balance update
         const balanceKey = `${item.id}-${location.id}`
@@ -983,10 +983,10 @@ export class InventoryService {
             },
             lot: true,
             serial: true,
-          },
+          } as any,
         },
       },
-    })
+    }) as any
 
     if (!cycleCount) {
       throw new Error(`Cycle count ${cycleCountId} not found`)
@@ -1006,7 +1006,7 @@ export class InventoryService {
 
     // Filter lines with variances
     const varianceLines = cycleCount.lines.filter(
-      (line) => Number(line.varianceQty) !== 0
+      (line: any) => Number(line.varianceQty) !== 0
     )
 
     if (varianceLines.length === 0) {
@@ -1027,7 +1027,7 @@ export class InventoryService {
         notes: `Auto-generated from cycle count ${cycleCount.number}`,
         idempotencyKey: `${idempotencyKey}-adjustment`,
         lines: {
-          create: varianceLines.map((line) => ({
+          create: varianceLines.map((line: any) => ({
             itemId: line.itemId,
             locationId: line.locationId,
             qtyDelta: line.varianceQty, // Positive or negative

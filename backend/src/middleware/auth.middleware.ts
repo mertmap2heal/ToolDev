@@ -6,6 +6,7 @@ const prisma = new PrismaClient()
 
 export interface AuthRequest extends Request {
   userId?: string
+  user?: { id: string; userId?: string; name?: string; email?: string }
 }
 
 export const authenticateToken = (
@@ -34,6 +35,7 @@ export const authenticateToken = (
 
     if (decoded && typeof decoded === 'object' && 'userId' in decoded) {
       req.userId = decoded.userId as string
+      req.user = { id: decoded.userId as string, userId: decoded.userId as string }
     }
     next()
   })

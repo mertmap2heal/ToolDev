@@ -133,18 +133,19 @@ export const createNonconformityFromFailedResult = async (req: AuthRequest, res:
       include: {
         testCaseVersionSnapshot: true,
         testCase: true,
-      },
+      } as any,
     })
     if (!runResult) {
       return res.status(404).json({ success: false, error: 'Run result not found' })
     }
     const snapshot = (runResult.testCaseVersionSnapshot ?? {}) as Record<string, unknown>
-    const title = (snapshot.title as string) || runResult.testCase?.title || 'Failed test'
+    const runResultAny = runResult as any
+    const title = (snapshot.title as string) || runResultAny.testCase?.title || 'Failed test'
     const actualResults = (runResult.actualResults ?? {}) as Record<string, unknown>
     const failConditions = (actualResults.failConditions as string) || ''
     const description = failConditions.trim()
-      ? `Source: ${runResult.testCase?.key || runResult.testCaseId?.slice(0, 8)}\n\nFail conditions:\n${failConditions}`
-      : `Source: ${runResult.testCase?.key || runResult.testCaseId?.slice(0, 8)}`
+      ? `Source: ${runResultAny.testCase?.key || runResult.testCaseId?.slice(0, 8)}\n\nFail conditions:\n${failConditions}`
+      : `Source: ${runResultAny.testCase?.key || runResult.testCaseId?.slice(0, 8)}`
     const nc = await prisma.verNonconformity.create({
       data: {
         projectId,

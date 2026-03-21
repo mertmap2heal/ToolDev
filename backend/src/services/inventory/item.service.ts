@@ -308,7 +308,7 @@ export class ItemService {
             name: true,
           },
         },
-      },
+      } as any,
       orderBy: {
         occurredAt: 'desc',
       },

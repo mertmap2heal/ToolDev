@@ -28,7 +28,7 @@ export class TaskTemplateService {
         priority: data.priority,
         estimateMinutes: data.estimateMinutes,
         tags: data.tags || [],
-        checklistItems: data.checklistItems ? JSON.stringify(data.checklistItems) : null,
+        checklistItems: data.checklistItems ? JSON.stringify(data.checklistItems) : undefined,
         projectId: data.projectId,
         isGlobal: data.isGlobal || false,
       },

@@ -101,7 +101,7 @@ async function ghFetch(
 // ---------------------------------------------------------------------------
 export async function validateGitHubToken(config: GitHubConfig): Promise<{ valid: boolean; username?: string; error?: string }> {
   try {
-    const d = await githubFetch(`${apiBase(config)}/user`, config.token, 'GET') as Record<string, unknown>
+    const d = await ghFetch(`${apiBase(config)}/user`, config.token, 'GET') as Record<string, unknown>
     return { valid: true, username: d.login as string }
   } catch (err) {
     return { valid: false, error: (err as Error).message }
@@ -113,7 +113,7 @@ export async function validateGitHubToken(config: GitHubConfig): Promise<{ valid
 // ---------------------------------------------------------------------------
 export async function protectGitHubBranch(config: GitHubConfig, owner: string, repo: string, branch: string): Promise<void> {
   try {
-    await githubFetch(
+    await ghFetch(
       `${apiBase(config)}/repos/${owner}/${repo}/branches/${encodeURIComponent(branch)}/protection`,
       config.token,
       'PUT',

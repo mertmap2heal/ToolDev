@@ -252,7 +252,7 @@ async function main() {
   const reqRecords: { id: string; requirementId: string }[] = []
   const existingReqs = await prisma.requirement.findMany({ where: { projectId: pid, deletedAt: null }, select: { id: true, requirementId: true }, orderBy: { requirementId: 'asc' } })
   if (existingReqs.length >= reqCount) {
-    reqRecords.push(...existingReqs.slice(0, reqCount))
+    reqRecords.push(...existingReqs.slice(0, reqCount).map(r => ({ id: r.id, requirementId: r.requirementId! })))
     // Backfill richer field values on existing requirements
     const gen = generateRequirements(reqCount)
     for (let i = 0; i < reqRecords.length; i++) {

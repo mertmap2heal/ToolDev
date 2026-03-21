@@ -213,7 +213,7 @@ export const importTasks = async (req: AuthRequest, res: Response) => {
       success: true,
       data: {
         imported: results.length,
-        errors: errors.length,
+        errorCount: errors.length,
         results,
         errors: errors.slice(0, 10), // Limit error details
       },

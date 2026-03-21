@@ -168,11 +168,11 @@ export const requirementReviewService = {
       const hasRejection = review.reviewers.some((r) => r.status === 'rejected')
 
       // Update review status based on responses
-      let newReviewStatus: ReviewStatus = review.reviewStatus
+      let newReviewStatus: ReviewStatus = review.reviewStatus as ReviewStatus
       if (hasRejection) {
-        newReviewStatus = 'rejected'
+        newReviewStatus = 'rejected' as ReviewStatus
       } else if (allResponded && (approvers.length === 0 || allApproversApproved)) {
-        newReviewStatus = 'approved'
+        newReviewStatus = 'approved' as ReviewStatus
       }
 
       if (newReviewStatus !== review.reviewStatus) {

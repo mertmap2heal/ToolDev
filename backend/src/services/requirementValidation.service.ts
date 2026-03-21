@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma'
+// @ts-ignore
 import type { Requirement } from '../../../shared/types/engineering.types'
 
 

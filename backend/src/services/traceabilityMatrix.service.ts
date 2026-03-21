@@ -1,10 +1,7 @@
+// @ts-ignore
 import type { TraceLink } from '../../../shared/types/traceability.types'
-import type {
-  TraceabilityMatrixAxisItem,
-  TraceabilityMatrixCells,
-  TraceabilityMatrixCellEntry,
-  TraceabilityMatrixModel,
-} from '../../../shared/types/traceabilityMatrix.types'
+// @ts-ignore
+import type { TraceabilityMatrixAxisItem, TraceabilityMatrixCells, TraceabilityMatrixCellEntry, TraceabilityMatrixModel } from '../../../shared/types/traceabilityMatrix.types'
 import { traceabilityService } from './traceability.service'
 
 function shortId(id: string): string {

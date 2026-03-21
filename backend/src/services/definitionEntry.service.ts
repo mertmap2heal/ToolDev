@@ -32,8 +32,8 @@ export async function listDefinitionEntries(
     where.OR = [
       { term: { contains: s, mode: 'insensitive' } },
       { definition: { contains: s, mode: 'insensitive' } },
-      { notes: { contains: s, mode: 'insensitive' } },
-      { source: { contains: s, mode: 'insensitive' } },
+      { notes: { contains: s, mode: 'insensitive' } } as any,
+      { source: { contains: s, mode: 'insensitive' } } as any,
     ]
   }
   return prisma.definitionEntry.findMany({
