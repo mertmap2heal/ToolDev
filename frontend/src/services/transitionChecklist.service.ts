@@ -107,6 +107,12 @@ export interface ChecklistCompletionSubmission {
   overrideById?: string
 }
 
+/** Payload when finishing the transition checklist dialog (completions + comments to flush after API returns response IDs) */
+export interface TransitionChecklistDialogCompletePayload {
+  completions: ChecklistCompletionSubmission[]
+  pendingCommentsByItemId: Record<string, string[]>
+}
+
 export const transitionChecklistService = {
   async list(projectId: string) {
     return apiClient.get<TransitionChecklist[]>(`/transition-checklists/${projectId}`)

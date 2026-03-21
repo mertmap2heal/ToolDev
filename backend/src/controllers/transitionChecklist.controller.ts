@@ -150,6 +150,13 @@ export async function submitCompletion(req: AuthRequest, res: Response) {
     })
     res.status(201).json({ success: true, data })
   } catch (e) {
+    const msg = (e as Error).message || ''
+    if (msg.startsWith('[ChecklistValidation]')) {
+      return res.status(400).json({
+        success: false,
+        error: msg.replace('[ChecklistValidation]', '').trim(),
+      })
+    }
     res.status(500).json({ success: false, error: (e as Error).message })
   }
 }

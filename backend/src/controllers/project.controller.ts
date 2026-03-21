@@ -263,7 +263,7 @@ export const getProject = async (req: AuthRequest, res: Response) => {
 export const updateProject = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
-    const { name, description, domain, companyName, progress, status, deadline } = req.body
+    const { name, description, domain, companyName, progress, status, deadline, strictLifecycleGates } = req.body
 
     // Admin view: Allow updating any project
     const project = await prisma.project.findUnique({
@@ -287,6 +287,7 @@ export const updateProject = async (req: AuthRequest, res: Response) => {
         progress,
         status,
         deadline: deadline ? new Date(deadline) : undefined,
+        ...(strictLifecycleGates !== undefined ? { strictLifecycleGates: Boolean(strictLifecycleGates) } : {}),
       },
       include: {
         teamMembers: {

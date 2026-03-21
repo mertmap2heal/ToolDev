@@ -1239,6 +1239,13 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       console.warn('Failed to create version snapshot:', versionError)
     }
 
+    let transitionChecklistSubmissionResults:
+      | Array<{
+          assignmentId: string
+          responses: Array<{ checklistItemId: string; responseId: string }>
+        }>
+      | undefined
+
     // Build update data object, conditionally including requirementId only when it should be updated
     const updateData: any = {
       title,
@@ -1294,6 +1301,30 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
           })
         }
       }
+
+      // Role-based transition rules (client sends allowed role IDs from lifecycle; empty = unrestricted)
+      const allowedEngineeringRoleIdsRaw = req.body.allowedEngineeringRoleIds as unknown
+      const allowedEngineeringRoleIds = Array.isArray(allowedEngineeringRoleIdsRaw)
+        ? (allowedEngineeringRoleIdsRaw as string[]).filter((id) => typeof id === 'string' && id.length > 0)
+        : []
+      if (strictMode && allowedEngineeringRoleIds.length > 0) {
+        if (!req.userId) {
+          return res.status(401).json({ success: false, error: 'Unauthorized' })
+        }
+        const userEngRoles = await prisma.projectUserEngineeringRole.findMany({
+          where: { projectId, userId: req.userId },
+          select: { roleId: true },
+        })
+        const userRoleIdSet = new Set(userEngRoles.map((r) => r.roleId))
+        const hasAllowedRole = allowedEngineeringRoleIds.some((id) => userRoleIdSet.has(id))
+        if (!hasAllowedRole) {
+          return res.status(403).json({
+            success: false,
+            error: 'You do not have an engineering role required for this transition',
+          })
+        }
+      }
+
       // Transition checklist enforcement
       const resolvedLifecycleId = lifecycleId ?? requirement.lifecycleId
       if (resolvedLifecycleId && requirement.statusId) {
@@ -1319,7 +1350,28 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
             })
           }
 
+          const requiredAssignmentIds = new Set(requiredChecklists.map((rc) => rc.assignmentId))
+          const submittedAssignmentIds = new Set(checklistCompletions.map((c) => c.assignmentId))
+          const missingAssignments = requiredChecklists.filter((rc) => !submittedAssignmentIds.has(rc.assignmentId))
+          if (missingAssignments.length > 0) {
+            return res.status(400).json({
+              success: false,
+              error: `Missing completions for ${missingAssignments.length} required checklist(s)`,
+              checklistsRequired: true,
+              checklists: requiredChecklists,
+            })
+          }
+
           for (const completion of checklistCompletions) {
+            if (!requiredAssignmentIds.has(completion.assignmentId)) {
+              return res.status(400).json({
+                success: false,
+                error: 'Unknown or invalid checklist assignment in submission',
+                checklistsRequired: true,
+                checklists: requiredChecklists,
+              })
+            }
+
             const allPassed = completion.responses.every((r) => r.passed)
             const isOverride = !!completion.overrideById
             if (!allPassed && !isOverride) {
@@ -1331,15 +1383,36 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
               })
             }
 
-            await transitionChecklistService.submitCompletion({
-              checklistAssignmentId: completion.assignmentId,
-              entityType: 'Requirement',
-              entityId: requirement.id,
-              projectId,
-              completedById: req.userId || '',
-              overriddenById: completion.overrideById,
-              responses: completion.responses,
-            })
+            try {
+              const completed = await transitionChecklistService.submitCompletion({
+                checklistAssignmentId: completion.assignmentId,
+                entityType: 'Requirement',
+                entityId: requirement.id,
+                projectId,
+                completedById: req.userId || '',
+                overriddenById: completion.overrideById,
+                responses: completion.responses,
+              })
+              if (!transitionChecklistSubmissionResults) transitionChecklistSubmissionResults = []
+              transitionChecklistSubmissionResults.push({
+                assignmentId: completion.assignmentId,
+                responses: (completed?.responses ?? []).map((r) => ({
+                  checklistItemId: r.checklistItemId,
+                  responseId: r.id,
+                })),
+              })
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : String(err)
+              if (msg.startsWith('[ChecklistValidation]')) {
+                return res.status(400).json({
+                  success: false,
+                  error: msg.replace('[ChecklistValidation]', '').trim(),
+                  checklistsRequired: true,
+                  checklists: requiredChecklists,
+                })
+              }
+              throw err
+            }
           }
         }
       }
@@ -1496,6 +1569,9 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
     res.json({
       success: true,
       data: updatedRequirement,
+      ...(transitionChecklistSubmissionResults?.length
+        ? { transitionChecklistSubmissionResults }
+        : {}),
     })
   } catch (error: any) {
     console.error('Update requirement error:', error)

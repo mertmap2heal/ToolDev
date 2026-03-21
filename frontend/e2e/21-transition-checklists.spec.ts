@@ -5,6 +5,19 @@ import { test, expect } from './helpers/fixtures'
 
 const MODAL = '.fixed.inset-0'
 
+function decodeJwtUserId(token: string): string | null {
+  try {
+    const part = token.split('.')[1]
+    if (!part) return null
+    const padded = part + '='.repeat((4 - (part.length % 4)) % 4)
+    const b64 = padded.replace(/-/g, '+').replace(/_/g, '/')
+    const json = JSON.parse(atob(b64)) as { userId?: string }
+    return json.userId ?? null
+  } catch {
+    return null
+  }
+}
+
 test.describe('Transition Checklists', () => {
   test('lifecycle settings page loads with checklists tab', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/lifecycle-status`)
@@ -490,5 +503,240 @@ test.describe('Transition Checklists', () => {
       `http://localhost:5000/api/v1/transition-checklists/${projectId}/checklist/${checklist.id}`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
+  })
+
+  test('submit completion rejects mismatched override user id', async ({ page, projectId }) => {
+    const token = await page.evaluate(() => localStorage.getItem('token'))
+    expect(token).toBeTruthy()
+
+    const createResp = await page.request.post(
+      `http://localhost:5000/api/v1/transition-checklists/${projectId}`,
+      {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: {
+          name: 'E2E Override Mismatch Checklist',
+          items: [{ label: 'Manual', itemType: 'BOOLEAN', isRequired: true }],
+        },
+      }
+    )
+    expect(createResp.ok()).toBeTruthy()
+    const createBody = await createResp.json()
+    const checklist = createBody.data
+    const itemId = checklist.items[0].id
+
+    const assignResp = await page.request.post(
+      `http://localhost:5000/api/v1/transition-checklists/${projectId}/assignments`,
+      {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: {
+          checklistId: checklist.id,
+          lifecycleId: 'e2e-override-mismatch',
+          fromStatusId: 'e2e-ov-from',
+          toStatusId: 'e2e-ov-to',
+          itemType: 'Requirement',
+        },
+      }
+    )
+    expect(assignResp.ok()).toBeTruthy()
+    const assignBody = await assignResp.json()
+
+    const completeResp = await page.request.post(
+      `http://localhost:5000/api/v1/transition-checklists/${projectId}/complete`,
+      {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: {
+          checklistAssignmentId: assignBody.data.id,
+          entityType: 'Requirement',
+          entityId: 'e2e-entity-override-mismatch',
+          responses: [{ checklistItemId: itemId, value: { checked: true }, passed: false }],
+          overriddenById: '00000000-0000-4000-8000-000000000099',
+        },
+      }
+    )
+    expect(completeResp.status()).toBe(400)
+    const completeBody = await completeResp.json()
+    expect(completeBody.success).toBeFalsy()
+    expect(String(completeBody.error || '').toLowerCase()).toMatch(/invalid|override/)
+
+    await page.request.delete(
+      `http://localhost:5000/api/v1/transition-checklists/${projectId}/checklist/${checklist.id}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+  })
+
+  test('requirement status update rejects when required checklists are incomplete', async ({ page, projectId }) => {
+    const token = await page.evaluate(() => localStorage.getItem('token'))
+    expect(token).toBeTruthy()
+
+    const lc = 'e2e-lc-missing-assignments'
+    const fromS = 'e2e-miss-from'
+    const toS = 'e2e-miss-to'
+
+    const mkChecklist = async (name: string) => {
+      const r = await page.request.post(`http://localhost:5000/api/v1/transition-checklists/${projectId}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: {
+          name,
+          items: [{ label: 'Item', itemType: 'BOOLEAN', isRequired: true }],
+        },
+      })
+      expect(r.ok()).toBeTruthy()
+      return (await r.json()).data
+    }
+
+    const c1 = await mkChecklist('E2E Missing A')
+    const c2 = await mkChecklist('E2E Missing B')
+    const item1 = c1.items[0].id
+    const item2 = c2.items[0].id
+
+    const a1 = await page.request.post(`http://localhost:5000/api/v1/transition-checklists/${projectId}/assignments`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: { checklistId: c1.id, lifecycleId: lc, fromStatusId: fromS, toStatusId: toS, itemType: 'Requirement' },
+    })
+    const a2 = await page.request.post(`http://localhost:5000/api/v1/transition-checklists/${projectId}/assignments`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: { checklistId: c2.id, lifecycleId: lc, fromStatusId: fromS, toStatusId: toS, itemType: 'Requirement' },
+    })
+    expect(a1.ok()).toBeTruthy()
+    expect(a2.ok()).toBeTruthy()
+    const assign1Id = (await a1.json()).data.id
+    const assign2Id = (await a2.json()).data.id
+
+    const createReqResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: {
+        title: 'E2E missing checklist assignments',
+        description: 'Test requirement for incomplete checklist enforcement.',
+        lifecycleId: lc,
+        statusId: fromS,
+        status: 'From',
+      },
+    })
+    expect(createReqResp.ok()).toBeTruthy()
+    const reqRow = (await createReqResp.json()).data
+
+    const putResp = await page.request.put(
+      `http://localhost:5000/api/v1/requirements/${projectId}/${reqRow.id}`,
+      {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: {
+          statusId: toS,
+          status: 'To',
+          checklistCompletions: [
+            {
+              assignmentId: assign1Id,
+              responses: [{ checklistItemId: item1, value: { checked: true }, passed: true }],
+            },
+          ],
+        },
+      }
+    )
+    expect(putResp.status()).toBe(400)
+    const putBody = await putResp.json()
+    expect(putBody.success).toBeFalsy()
+    expect(String(putBody.error || '')).toMatch(/Missing completions/i)
+
+    await page.request.delete(`http://localhost:5000/api/v1/requirements/${projectId}/${reqRow.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    await page.request.delete(`http://localhost:5000/api/v1/transition-checklists/${projectId}/checklist/${c1.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    await page.request.delete(`http://localhost:5000/api/v1/transition-checklists/${projectId}/checklist/${c2.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  })
+
+  test('requirement status update rejects role-restricted transition when strict gates enabled', async ({ page, projectId }) => {
+    const token = await page.evaluate(() => localStorage.getItem('token'))
+    expect(token).toBeTruthy()
+    const userId = decodeJwtUserId(token!)
+    expect(userId).toBeTruthy()
+
+    const lc = 'e2e-lc-role-gate'
+    const fromS = 'e2e-role-from'
+    const toS = 'e2e-role-to'
+
+    const rolesResp = await page.request.get(`http://localhost:5000/api/v1/projects/${projectId}/engineering-roles`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    expect(rolesResp.ok()).toBeTruthy()
+    const rolesBody = await rolesResp.json()
+    const roles: Array<{ id: string }> = rolesBody.data || []
+    if (roles.length === 0) {
+      test.skip()
+      return
+    }
+    const forbiddenRoleId = roles[0].id
+
+    const meRolesResp = await page.request.get(
+      `http://localhost:5000/api/v1/projects/${projectId}/me/engineering-roles`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    expect(meRolesResp.ok()).toBeTruthy()
+    const meRoles = ((await meRolesResp.json()).data?.roles ?? []) as Array<{ id: string }>
+    const hasForbidden = meRoles.some((r) => r.id === forbiddenRoleId)
+    if (hasForbidden) {
+      const unassign = await page.request.post(
+        `http://localhost:5000/api/v1/projects/${projectId}/engineering-roles/${forbiddenRoleId}/unassign`,
+        {
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          data: { userIds: [userId] },
+        }
+      )
+      expect(unassign.ok()).toBeTruthy()
+    }
+
+    const projPut = await page.request.put(`http://localhost:5000/api/v1/projects/${projectId}`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: { strictLifecycleGates: true },
+    })
+    expect(projPut.ok()).toBeTruthy()
+
+    try {
+      const createReqResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: {
+          title: 'E2E role gate requirement',
+          description: 'Test requirement for engineering role gate.',
+          lifecycleId: lc,
+          statusId: fromS,
+          status: 'From',
+        },
+      })
+      expect(createReqResp.ok()).toBeTruthy()
+      const reqRow = (await createReqResp.json()).data
+
+      const putResp = await page.request.put(
+        `http://localhost:5000/api/v1/requirements/${projectId}/${reqRow.id}`,
+        {
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          data: {
+            statusId: toS,
+            status: 'To',
+            allowedEngineeringRoleIds: [forbiddenRoleId],
+          },
+        }
+      )
+      expect(putResp.status()).toBe(403)
+      const putBody = await putResp.json()
+      expect(putBody.success).toBeFalsy()
+
+      await page.request.delete(`http://localhost:5000/api/v1/requirements/${projectId}/${reqRow.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    } finally {
+      await page.request.put(`http://localhost:5000/api/v1/projects/${projectId}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: { strictLifecycleGates: false },
+      })
+      await page.request.post(
+        `http://localhost:5000/api/v1/projects/${projectId}/engineering-roles/${forbiddenRoleId}/assign`,
+        {
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          data: { userIds: [userId!] },
+        }
+      ).catch(() => {})
+    }
   })
 })

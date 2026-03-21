@@ -4,13 +4,13 @@ import { requirementService } from '../../services/requirement.service'
 import { lifecycleService } from '../../services/lifecycle.service'
 import { useLifecycleStore } from '../../store/lifecycleStore'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
-import type { Requirement } from 'shared/types/engineering.types'
+import type { Requirement, UpdateRequirementDto } from 'shared/types/engineering.types'
 import type { AllowedTransition } from '../../services/lifecycle.service'
 import { lifecyclePermissionService } from '../../services/lifecyclePermission.service'
 import {
   transitionChecklistService,
   type TransitionChecklistWithAssignment,
-  type ChecklistCompletionSubmission,
+  type TransitionChecklistDialogCompletePayload,
 } from '../../services/transitionChecklist.service'
 import TransitionChecklistDialog from '../lifecycle/TransitionChecklistDialog'
 
@@ -59,8 +59,11 @@ export default function ChangeStatusPopover({
     toStatusId: string
     toStatusName: string
     fromStatusName: string
+    allowedEngineeringRoleIds: string[]
   } | null>(null)
   const [checkingChecklists, setCheckingChecklists] = useState<string | null>(null)
+
+  const pendingTransitionCommentsRef = useRef<Record<string, string[]>>({})
 
   useEffect(() => {
     const lifecycleId =
@@ -104,26 +107,61 @@ export default function ChangeStatusPopover({
   }, [anchorEl, onClose, checklistDialogData])
 
   const updateMutation = useMutation({
-    mutationFn: (updates: {
-      statusId: string
-      status: string
-      lifecycleId?: string
-      checklistCompletions?: ChecklistCompletionSubmission[]
-    }) => requirementService.updateRequirement(projectId, requirement.id, updates),
-    onSuccess: () => {
+    mutationFn: async (updates: UpdateRequirementDto & { status: string }) => {
+      const result = await requirementService.updateRequirement(projectId, requirement.id, updates)
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update status')
+      }
+      return result
+    },
+    onSuccess: async (result) => {
+      const pending = pendingTransitionCommentsRef.current
+      pendingTransitionCommentsRef.current = {}
+      try {
+        const blocks = result.transitionChecklistSubmissionResults
+        if (blocks?.length && pending && Object.keys(pending).length > 0) {
+          const itemToResponse = new Map<string, string>()
+          for (const b of blocks) {
+            for (const r of b.responses) {
+              itemToResponse.set(r.checklistItemId, r.responseId)
+            }
+          }
+          for (const [itemId, texts] of Object.entries(pending)) {
+            const rid = itemToResponse.get(itemId)
+            if (!rid) continue
+            for (const text of texts) {
+              const resp = await transitionChecklistService.addItemComment(projectId, rid, text)
+              if (!resp.success) {
+                console.warn('Failed to post transition checklist comment', resp.error)
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to flush transition checklist comments', e)
+      }
+
+      setChecklistDialogData(null)
       queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
       queryClient.invalidateQueries({ queryKey: ['requirement', projectId, requirement.id] })
       onSuccess?.()
       onClose()
     },
-    onError: (err: any) => {
-      alert(err?.error || 'Failed to update status')
+    onError: (err: unknown) => {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'object' && err !== null && 'error' in err
+            ? String((err as { error?: string }).error)
+            : 'Failed to update status'
+      alert(msg)
     },
   })
 
   const handleTransitionClick = async (t: AllowedTransition) => {
     const currentStatusId = requirement.statusId ?? statuses.find((s) => s.name === requirement.status)?.id
     const lifecycleId = resolvedLifecycleId
+    const allowedEngineeringRoleIds = t.allowedEngineeringRoleIds ?? []
 
     if (lifecycleId && currentStatusId) {
       setCheckingChecklists(t.toStatusId)
@@ -143,6 +181,7 @@ export default function ChangeStatusPopover({
             toStatusId: t.toStatusId,
             toStatusName: t.toStatusName,
             fromStatusName: fromName,
+            allowedEngineeringRoleIds,
           })
           setCheckingChecklists(null)
           return
@@ -153,9 +192,10 @@ export default function ChangeStatusPopover({
       setCheckingChecklists(null)
     }
 
-    const updates: { statusId: string; status: string; lifecycleId?: string } = {
+    const updates: UpdateRequirementDto & { status: string } = {
       statusId: t.toStatusId,
       status: t.toStatusName,
+      allowedEngineeringRoleIds,
     }
     if (resolvedLifecycleId && !requirement.lifecycleId) {
       updates.lifecycleId = resolvedLifecycleId
@@ -163,23 +203,19 @@ export default function ChangeStatusPopover({
     updateMutation.mutate(updates)
   }
 
-  const handleChecklistComplete = (completions: ChecklistCompletionSubmission[]) => {
+  const handleChecklistComplete = (payload: TransitionChecklistDialogCompletePayload) => {
     if (!checklistDialogData) return
-    const updates: {
-      statusId: string
-      status: string
-      lifecycleId?: string
-      checklistCompletions: ChecklistCompletionSubmission[]
-    } = {
+    pendingTransitionCommentsRef.current = payload.pendingCommentsByItemId
+    const updates: UpdateRequirementDto & { status: string } = {
       statusId: checklistDialogData.toStatusId,
       status: checklistDialogData.toStatusName,
-      checklistCompletions: completions,
+      checklistCompletions: payload.completions,
+      allowedEngineeringRoleIds: checklistDialogData.allowedEngineeringRoleIds ?? [],
     }
     if (resolvedLifecycleId && !requirement.lifecycleId) {
       updates.lifecycleId = resolvedLifecycleId
     }
     updateMutation.mutate(updates)
-    setChecklistDialogData(null)
   }
 
   if (!anchorEl) return null
@@ -228,6 +264,7 @@ export default function ChangeStatusPopover({
           toStatusName={checklistDialogData.toStatusName}
           onComplete={handleChecklistComplete}
           onClose={() => setChecklistDialogData(null)}
+          isSubmitting={updateMutation.isPending}
         />
       )}
     </>

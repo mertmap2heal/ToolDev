@@ -644,11 +644,22 @@ export interface CreateRequirementDto {
         rationale?: string;
     }[];
 }
+export interface ChecklistCompletionSubmissionDto {
+    assignmentId: string;
+    responses: Array<{
+        checklistItemId: string;
+        value: Record<string, unknown>;
+        passed: boolean;
+    }>;
+    overrideById?: string;
+}
 export interface UpdateRequirementDto {
     requirementId?: string;
     title?: string;
     lifecycleId?: string;
     statusId?: string;
+    allowedEngineeringRoleIds?: string[];
+    checklistCompletions?: ChecklistCompletionSubmissionDto[];
     description?: string;
     parentId?: string | null;
     componentId?: string | null;

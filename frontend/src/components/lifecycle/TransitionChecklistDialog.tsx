@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   X,
   CheckCircle,
@@ -10,7 +10,6 @@ import {
   AlertCircle,
   MessageSquare,
   Send,
-  Trash2,
   ExternalLink,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -21,6 +20,7 @@ import type {
   ChecklistCompletionSubmission,
   ChecklistItemComment,
   ChecklistItemIssueLink,
+  TransitionChecklistDialogCompletePayload,
 } from '../../services/transitionChecklist.service'
 import { transitionChecklistService } from '../../services/transitionChecklist.service'
 import { useAuthStore } from '../../store/authStore'
@@ -32,8 +32,10 @@ interface TransitionChecklistDialogProps {
   checklists: TransitionChecklistWithAssignment[]
   fromStatusName: string
   toStatusName: string
-  onComplete: (completions: ChecklistCompletionSubmission[]) => void
+  onComplete: (payload: TransitionChecklistDialogCompletePayload) => void
   onClose: () => void
+  /** When parent is saving the requirement (status + completions), disable actions and show spinner */
+  isSubmitting?: boolean
 }
 
 interface ItemState {
@@ -61,24 +63,28 @@ export default function TransitionChecklistDialog({
   toStatusName,
   onComplete,
   onClose,
+  isSubmitting = false,
 }: TransitionChecklistDialogProps) {
   const { user } = useAuthStore()
   const { statuses } = useStatusDefinitionsStore()
   const isAdmin = user?.isAdmin || user?.isSuperiorAdmin || user?.role === 'SUPERIOR_ADMIN'
 
-  const allItems = checklists.flatMap((c) =>
-    c.checklist.items.map((item) => ({ ...item, assignmentId: c.assignmentId, checklistName: c.checklist.name }))
+  const allItems = useMemo(
+    () =>
+      checklists.flatMap((c) =>
+        c.checklist.items.map((item) => ({ ...item, assignmentId: c.assignmentId, checklistName: c.checklist.name }))
+      ),
+    [checklists]
   )
 
   const [itemStates, setItemStates] = useState<Record<string, ItemState>>({})
-  const [submitting, setSubmitting] = useState(false)
+  const [pendingCommentsByItemId, setPendingCommentsByItemId] = useState<Record<string, string[]>>({})
 
   const [issueForm, setIssueForm] = useState<IssueFormData | null>(null)
   const [creatingIssue, setCreatingIssue] = useState(false)
 
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({})
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({})
-  const [sendingComment, setSendingComment] = useState<string | null>(null)
 
   useEffect(() => {
     allItems.forEach((item) => {
@@ -91,7 +97,7 @@ export default function TransitionChecklistDialog({
         }
       }).catch(() => {})
     })
-  }, [projectId, requirement.id])
+  }, [projectId, requirement.id, allItems])
 
   const runAutoValidations = useCallback(async () => {
     const autoItems = allItems.filter(
@@ -152,7 +158,7 @@ export default function TransitionChecklistDialog({
         }))
       }
     }
-  }, [projectId, requirement.id])
+  }, [projectId, requirement.id, allItems])
 
   useEffect(() => {
     runAutoValidations()
@@ -226,13 +232,19 @@ export default function TransitionChecklistDialog({
   }
 
   const handleComplete = () => {
-    setSubmitting(true)
-    onComplete(buildCompletions(false))
+    if (isSubmitting) return
+    onComplete({
+      completions: buildCompletions(false),
+      pendingCommentsByItemId,
+    })
   }
 
   const handleOverride = () => {
-    setSubmitting(true)
-    onComplete(buildCompletions(true))
+    if (isSubmitting) return
+    onComplete({
+      completions: buildCompletions(true),
+      pendingCommentsByItemId,
+    })
   }
 
   const handleCreateIssue = async () => {
@@ -266,47 +278,15 @@ export default function TransitionChecklistDialog({
     }
   }
 
-  const handleSendComment = async (itemId: string) => {
+  /** Comments are queued locally until the transition completes; parent posts them using real response IDs. */
+  const handleSendComment = (itemId: string) => {
     const content = commentInputs[itemId]?.trim()
-    if (!content) return
-    setSendingComment(itemId)
-
-    const state = getState(itemId)
-    try {
-      const fakeResponseId = `temp-${itemId}`
-      const resp = await transitionChecklistService.addItemComment(projectId, fakeResponseId, content)
-      if (resp.success && resp.data) {
-        setItemStates((prev) => {
-          const cur = prev[itemId] ?? defaultState()
-          return {
-            ...prev,
-            [itemId]: { ...cur, comments: [...cur.comments, resp.data!] },
-          }
-        })
-        setCommentInputs((prev) => ({ ...prev, [itemId]: '' }))
-      }
-    } catch {
-      const localComment: ChecklistItemComment = {
-        id: `local-${Date.now()}`,
-        responseId: '',
-        projectId,
-        content,
-        authorId: user?.id ?? '',
-        authorName: user?.name ?? 'You',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }
-      setItemStates((prev) => {
-        const cur = prev[itemId] ?? defaultState()
-        return {
-          ...prev,
-          [itemId]: { ...cur, comments: [...cur.comments, localComment] },
-        }
-      })
-      setCommentInputs((prev) => ({ ...prev, [itemId]: '' }))
-    } finally {
-      setSendingComment(null)
-    }
+    if (!content || isSubmitting) return
+    setPendingCommentsByItemId((prev) => ({
+      ...prev,
+      [itemId]: [...(prev[itemId] ?? []), content],
+    }))
+    setCommentInputs((prev) => ({ ...prev, [itemId]: '' }))
   }
 
   const getItemIcon = (item: TransitionChecklistItem, state: ItemState) => {
@@ -433,7 +413,8 @@ export default function TransitionChecklistDialog({
                       const isAuto = item.itemType === 'FIELD_VALIDATION' || item.itemType === 'RULE_BASED'
                       const isPassed = isAuto ? state.autoResult?.valid : state.checked
                       const isFailed = isAuto && state.autoResult && !state.autoResult.valid
-                      const hasComments = state.comments.length > 0
+                      const pendingForItem = pendingCommentsByItemId[item.id] ?? []
+                      const hasComments = state.comments.length > 0 || pendingForItem.length > 0
                       const issueCount = state.issues.length
                       const showComments = expandedComments[item.id]
 
@@ -543,7 +524,11 @@ export default function TransitionChecklistDialog({
                               )}
                             >
                               <MessageSquare size={12} />
-                              {hasComments ? `${state.comments.length} comment${state.comments.length > 1 ? 's' : ''}` : 'Comment'}
+                              {hasComments
+                                ? `${state.comments.length + pendingForItem.length} comment${
+                                    state.comments.length + pendingForItem.length > 1 ? 's' : ''
+                                  }`
+                                : 'Comment'}
                             </button>
 
                             {/* Inline issue badges */}
@@ -562,6 +547,29 @@ export default function TransitionChecklistDialog({
                           {/* Comments section */}
                           {showComments && (
                             <div className="px-3 pb-3 border-t border-gray-100 dark:border-gray-700 pt-2">
+                              {pendingForItem.length > 0 && (
+                                <div className="space-y-1.5 mb-2">
+                                  {pendingForItem.map((text, idx) => (
+                                    <div
+                                      key={`pending-${item.id}-${idx}`}
+                                      className="flex items-start gap-2 text-xs border border-dashed border-amber-200 dark:border-amber-800 rounded-md p-1.5 bg-amber-50/50 dark:bg-amber-900/10"
+                                    >
+                                      <div className="w-5 h-5 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-[10px] font-medium text-amber-800 dark:text-amber-300 flex-shrink-0 mt-0.5">
+                                        {(user?.name ?? 'Y').charAt(0).toUpperCase()}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <span className="font-medium text-gray-900 dark:text-white">{user?.name ?? 'You'}</span>
+                                          <span className="text-[10px] px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">
+                                            Pending — saved when you complete the transition
+                                          </span>
+                                        </div>
+                                        <p className="text-gray-700 dark:text-gray-300 mt-0.5">{text}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                               {state.comments.length > 0 && (
                                 <div className="space-y-1.5 mb-2">
                                   {state.comments.map((comment) => (
@@ -600,10 +608,10 @@ export default function TransitionChecklistDialog({
                                     e.stopPropagation()
                                     handleSendComment(item.id)
                                   }}
-                                  disabled={!commentInputs[item.id]?.trim() || sendingComment === item.id}
+                                  disabled={!commentInputs[item.id]?.trim() || isSubmitting}
                                   className="p-1 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded disabled:opacity-40"
                                 >
-                                  {sendingComment === item.id ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                                  <Send size={14} />
                                 </button>
                               </div>
                             </div>
@@ -626,7 +634,7 @@ export default function TransitionChecklistDialog({
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              disabled={submitting}
+              disabled={isSubmitting}
               className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg disabled:opacity-50"
             >
               Cancel
@@ -634,19 +642,19 @@ export default function TransitionChecklistDialog({
             {isAdmin && !allRequiredPassed && (
               <button
                 onClick={handleOverride}
-                disabled={submitting}
+                disabled={isSubmitting}
                 className="px-4 py-2 text-sm bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg flex items-center gap-1.5 disabled:opacity-50"
               >
-                {submitting ? <Loader2 size={14} className="animate-spin" /> : <Shield size={14} />}
+                {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Shield size={14} />}
                 Override & Proceed
               </button>
             )}
             <button
               onClick={handleComplete}
-              disabled={!allRequiredPassed || submitting}
+              disabled={!allRequiredPassed || isSubmitting}
               className="px-4 py-2 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center gap-1.5 disabled:opacity-50"
             >
-              {submitting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+              {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
               Complete Transition
             </button>
           </div>

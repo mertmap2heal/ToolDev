@@ -55,6 +55,17 @@ export interface SubmitCompletionInput {
   }[]
 }
 
+function userCanOverrideChecklist(user: { role: string | null; email: string | null } | null): boolean {
+  if (!user) return false
+  if (user.role === 'SUPERIOR_ADMIN' || user.role === 'COMPANY_ADMIN') return true
+  const list = process.env.ADMIN_EMAILS
+  if (list && user.email) {
+    const emails = list.split(',').map((e) => e.trim().toLowerCase())
+    if (emails.includes(user.email.toLowerCase())) return true
+  }
+  return false
+}
+
 export interface CreateChecklistItemIssueInput {
   checklistItemId: string
   responseId?: string
@@ -234,6 +245,47 @@ export const transitionChecklistService = {
   },
 
   async submitCompletion(input: SubmitCompletionInput) {
+    const assignment = await prisma.checklistAssignment.findUnique({
+      where: { id: input.checklistAssignmentId },
+      include: {
+        checklist: { include: { items: { orderBy: { sortOrder: 'asc' } } } },
+      },
+    })
+    if (!assignment || assignment.projectId !== input.projectId) {
+      throw new Error('[ChecklistValidation] Invalid checklist assignment for this project')
+    }
+
+    const validItemIds = new Set(assignment.checklist.items.map((i) => i.id))
+    const requiredItems = assignment.checklist.items.filter((i) => i.isRequired)
+    const seenItemIds = new Set<string>()
+    for (const r of input.responses) {
+      if (!validItemIds.has(r.checklistItemId)) {
+        throw new Error(`[ChecklistValidation] Unknown checklist item: ${r.checklistItemId}`)
+      }
+      if (seenItemIds.has(r.checklistItemId)) {
+        throw new Error(`[ChecklistValidation] Duplicate response for checklist item: ${r.checklistItemId}`)
+      }
+      seenItemIds.add(r.checklistItemId)
+    }
+    for (const reqItem of requiredItems) {
+      if (!seenItemIds.has(reqItem.id)) {
+        throw new Error(`[ChecklistValidation] Missing response for required checklist item: ${reqItem.label}`)
+      }
+    }
+
+    if (input.overriddenById) {
+      if (input.overriddenById !== input.completedById) {
+        throw new Error('[ChecklistValidation] Invalid checklist override')
+      }
+      const overrideUser = await prisma.user.findUnique({
+        where: { id: input.completedById },
+        select: { role: true, email: true },
+      })
+      if (!userCanOverrideChecklist(overrideUser)) {
+        throw new Error('[ChecklistValidation] Only administrators can override checklist requirements')
+      }
+    }
+
     const allPassed = input.responses.every((r) => r.passed)
     const isOverride = !!input.overriddenById
 
@@ -342,7 +394,12 @@ export const transitionChecklistService = {
       }
       case 'MATCHES_REGEX': {
         const pattern = validationConfig.value as string
-        const regex = new RegExp(pattern)
+        let regex: RegExp
+        try {
+          regex = new RegExp(pattern)
+        } catch {
+          return { valid: false, message: 'Invalid regex pattern' }
+        }
         const str = String(fieldValue ?? '')
         return {
           valid: regex.test(str),
