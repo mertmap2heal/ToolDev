@@ -74,7 +74,7 @@ export const useLifecycleStore = create<LifecycleStore>()(
           for (const lc of p.state.lifecycles) {
             const rules = lc.transitionRules
             if (!Array.isArray(rules)) continue
-            lc.transitionRules = rules.map((r: Record<string, unknown>) => {
+            lc.transitionRules = rules.map((r: any) => {
               const ids = (r.allowedEngineeringRoleIds as string[] | undefined) ?? []
               const legacy = r.allowedUserGroups as string[] | undefined
               const out: TransitionRule = {

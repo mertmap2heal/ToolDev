@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { ArrowUp, ArrowDown } from 'lucide-react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
-import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, AlertTriangle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft, BarChart3, LayoutList, Sliders, Link2, Eye } from 'lucide-react'
+import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, AlertTriangle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft, BarChart3, LayoutList, Sliders, Link2, Eye, Table, ClipboardCheck, Network } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
@@ -2770,14 +2770,14 @@ export default function RequirementsPage() {
                       onClick={() => { setIsTraceMatrixOpen(true); setTraceabilityDropdownOpen(false) }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
-                      <Grid3X3 size={16} className="text-gray-500 dark:text-gray-400" />
+                      <Table size={16} className="text-gray-500 dark:text-gray-400" />
                       Traceability Matrix
                     </button>
                     <button
                       onClick={() => { setIsFunctionVerificationMatrixOpen(true); setTraceabilityDropdownOpen(false) }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
-                      <BarChart3 size={16} className="text-gray-500 dark:text-gray-400" />
+                      <ClipboardCheck size={16} className="text-gray-500 dark:text-gray-400" />
                       Function Verification
                     </button>
                     <button
@@ -2854,7 +2854,7 @@ export default function RequirementsPage() {
                       ? 'bg-gray-100 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-gray-900 dark:text-white'
                       : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
                   )}
-                  title="View & Settings"
+                  title="View"
                 >
                   <Eye size={16} />
                   <span className="text-sm font-medium">View</span>
@@ -2866,7 +2866,7 @@ export default function RequirementsPage() {
                       onClick={() => { setIsDiagramOpen(true); setViewDropdownOpen(false) }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
-                      <GitBranch size={16} className="text-gray-500 dark:text-gray-400" />
+                      <Network size={16} className="text-gray-500 dark:text-gray-400" />
                       Diagram
                     </button>
                     <button
@@ -2890,15 +2890,6 @@ export default function RequirementsPage() {
                         </select>
                       </div>
                     )}
-                    <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
-                    <Link
-                      to={`/projects/${projectId}/requirements/settings`}
-                      onClick={() => setViewDropdownOpen(false)}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      <Settings size={16} className="text-gray-500 dark:text-gray-400" />
-                      Settings
-                    </Link>
                   </div>
                 )}
               </div>
@@ -2945,6 +2936,13 @@ export default function RequirementsPage() {
                   </div>
                 )}
               </div>
+              <Link
+                to={`/projects/${projectId}/requirements/settings`}
+                className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-1 transition-colors"
+                title="Requirements Settings"
+              >
+                <Settings size={16} />
+              </Link>
               {projectId && <SafetyLinkPanel variant="linked" count={linkedSafetyCount} />}
             </div>
           </div>
