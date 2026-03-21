@@ -60,9 +60,7 @@ jobs:
         run: cd backend && npm ci
 
       - name: Generate Prisma client and push schema
-        run: |
-          cd backend && npx prisma generate
-          cd backend && npx prisma db push --skip-generate
+        run: cd backend && npx prisma generate && npx prisma db push --skip-generate
         env:
           DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
 
@@ -122,9 +120,7 @@ jobs:
           ENVEOF
 
       - name: Generate Prisma client and push schema
-        run: |
-          cd backend && npx prisma generate
-          cd backend && npx prisma db push --skip-generate
+        run: cd backend && npx prisma generate && npx prisma db push --skip-generate
         env:
           DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
 
