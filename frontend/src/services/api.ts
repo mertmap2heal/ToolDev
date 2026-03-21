@@ -17,6 +17,13 @@ class ApiClient {
 
     this.client.interceptors.request.use(
       (config) => {
+        // ngrok free tier may return an HTML interstitial unless this header is present (breaks JSON APIs → blank UI).
+        if (
+          typeof window !== 'undefined' &&
+          /(\.ngrok-free\.(app|dev)|\.ngrok\.(io|app))$/i.test(window.location.hostname)
+        ) {
+          config.headers['ngrok-skip-browser-warning'] = '1'
+        }
         const token = localStorage.getItem('token') ?? sessionStorage.getItem('token')
         if (token) {
           config.headers.Authorization = `Bearer ${token}`

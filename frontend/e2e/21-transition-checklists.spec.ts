@@ -247,20 +247,35 @@ test.describe('Transition Checklists', () => {
     await page.goto(`/projects/${projectId}/lifecycle-status`)
     await page.waitForLoadState('domcontentloaded')
 
-    const settingsTab = page.getByText('Lifecycle Settings')
+    const settingsTab = page.getByTestId('lifecycle-status-tab-lifecycle-settings')
     if (await settingsTab.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await settingsTab.click()
+    } else {
+      const legacy = page.getByText('Lifecycle Settings')
+      if (await legacy.isVisible({ timeout: 3_000 }).catch(() => false)) await legacy.click()
     }
 
-    await page.getByText('Transition Checklists').click()
-    await page.waitForTimeout(1000)
+    await page.getByTestId('lifecycle-management-tab-checklists').click()
+    await page.waitForTimeout(500)
 
-    const createBtn = page.getByRole('button', { name: /create checklist/i }).first()
-    await createBtn.click()
+    const createHeader = page.getByTestId('transition-checklists-create')
+    const createEmpty = page.getByTestId('transition-checklists-create-empty')
+    if (await createHeader.isVisible().catch(() => false)) {
+      await createHeader.click()
+    } else {
+      await createEmpty.click()
+    }
 
-    await expect(page.locator(MODAL)).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByTestId('checklist-builder-modal')).toBeVisible({ timeout: 5_000 })
     await expect(page.getByRole('heading', { name: 'Create Checklist' })).toBeVisible()
     await expect(page.getByPlaceholder(/Draft to In Review/i)).toBeVisible()
+    await expect(page.getByTestId('checklist-create-lifecycle')).toBeVisible()
+    await expect(page.getByTestId('checklist-create-from-status')).toBeVisible()
+    await expect(page.getByTestId('checklist-create-to-status')).toBeVisible()
+    await expect(page.getByTestId('checklist-create-item-type')).toBeVisible()
+    await expect(page.getByTestId('checklist-builder-save')).toBeDisabled()
+    await page.getByTestId('checklist-builder-modal').getByPlaceholder(/Draft to In Review/i).fill('E2E UI Checklist')
+    await expect(page.getByTestId('checklist-builder-save')).toBeDisabled()
   })
 
   test('create issue from checklist item via API', async ({ page, projectId }) => {

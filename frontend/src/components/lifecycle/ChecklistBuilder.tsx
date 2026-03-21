@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
   X,
   Plus,
@@ -16,6 +16,11 @@ import type { ChecklistItemInput } from '../../services/transitionChecklist.serv
 import type { TransitionChecklist } from '../../services/transitionChecklist.service'
 import { useLifecycleStore } from '../../store/lifecycleStore'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
+import {
+  APPLICABLE_ENTITY_ITEM_TYPES,
+  lifecycleStatusesInOrder,
+  toStatusOptionsForTransition,
+} from './checklistTransitionSelects'
 
 const ITEM_TYPES = [
   { value: 'BOOLEAN', label: 'Checkbox', description: 'Manual confirmation checkbox', icon: CheckCircle },
@@ -36,16 +41,45 @@ const VALIDATION_OPERATORS = [
   { value: 'IS_UNIQUE', label: 'Is unique' },
 ]
 
+export interface ChecklistInitialAssignment {
+  lifecycleId: string
+  fromStatusId: string
+  toStatusId: string
+  itemType: string
+}
+
 interface ChecklistBuilderProps {
   projectId: string
   checklist?: TransitionChecklist | null
-  onSave: (data: { name: string; description: string; items: ChecklistItemInput[] }) => void
+  serverError?: string | null
+  isSubmitting?: boolean
+  onSave: (data: {
+    name: string
+    description: string
+    items: ChecklistItemInput[]
+    initialAssignment?: ChecklistInitialAssignment
+  }) => void
   onClose: () => void
 }
 
-export default function ChecklistBuilder({ projectId, checklist, onSave, onClose }: ChecklistBuilderProps) {
+export default function ChecklistBuilder({
+  projectId: _projectId,
+  checklist,
+  serverError,
+  isSubmitting = false,
+  onSave,
+  onClose,
+}: ChecklistBuilderProps) {
+  const isCreate = !checklist
+  const { lifecycles } = useLifecycleStore()
+  const { statuses } = useStatusDefinitionsStore()
+
   const [name, setName] = useState(checklist?.name ?? '')
   const [description, setDescription] = useState(checklist?.description ?? '')
+  const [createLifecycleId, setCreateLifecycleId] = useState('')
+  const [createFromStatusId, setCreateFromStatusId] = useState('')
+  const [createToStatusId, setCreateToStatusId] = useState('')
+  const [createApplicableItemType, setCreateApplicableItemType] = useState<string>('Requirement')
   const [items, setItems] = useState<ChecklistItemInput[]>(
     checklist?.items?.map((i) => ({
       id: i.id,
@@ -59,6 +93,37 @@ export default function ChecklistBuilder({ projectId, checklist, onSave, onClose
   )
   const [expandedItem, setExpandedItem] = useState<number | null>(null)
   const [dragIdx, setDragIdx] = useState<number | null>(null)
+
+  const selectedCreateLifecycle = useMemo(
+    () => lifecycles.find((l) => l.id === createLifecycleId),
+    [lifecycles, createLifecycleId]
+  )
+  const createLifecycleStatusesOrdered = useMemo(
+    () => lifecycleStatusesInOrder(selectedCreateLifecycle, statuses),
+    [selectedCreateLifecycle, statuses]
+  )
+  const createToStatusOptions = useMemo(
+    () =>
+      toStatusOptionsForTransition(
+        selectedCreateLifecycle,
+        createFromStatusId,
+        createLifecycleStatusesOrdered
+      ),
+    [selectedCreateLifecycle, createFromStatusId, createLifecycleStatusesOrdered]
+  )
+
+  useEffect(() => {
+    if (!isCreate) return
+    if (createToStatusId && !createToStatusOptions.some((s) => s.id === createToStatusId)) {
+      setCreateToStatusId('')
+    }
+  }, [isCreate, createToStatusId, createToStatusOptions])
+
+  const assignmentComplete =
+    !!createLifecycleId &&
+    !!createFromStatusId &&
+    !!createToStatusId &&
+    createFromStatusId !== createToStatusId
 
   const addItem = () => {
     setItems([
@@ -95,6 +160,21 @@ export default function ChecklistBuilder({ projectId, checklist, onSave, onClose
 
   const handleSave = () => {
     if (!name.trim()) return
+    if (isCreate) {
+      if (!assignmentComplete) return
+      onSave({
+        name: name.trim(),
+        description: description.trim(),
+        items: items.map((item, i) => ({ ...item, sortOrder: i })),
+        initialAssignment: {
+          lifecycleId: createLifecycleId,
+          fromStatusId: createFromStatusId,
+          toStatusId: createToStatusId,
+          itemType: createApplicableItemType,
+        },
+      })
+      return
+    }
     onSave({
       name: name.trim(),
       description: description.trim(),
@@ -102,9 +182,16 @@ export default function ChecklistBuilder({ projectId, checklist, onSave, onClose
     })
   }
 
+  const saveDisabled =
+    isSubmitting ||
+    !name.trim() ||
+    (isCreate && !assignmentComplete) ||
+    (isCreate && lifecycles.length === 0)
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
       <div
+        data-testid="checklist-builder-modal"
         className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl mx-4 max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
@@ -120,6 +207,22 @@ export default function ChecklistBuilder({ projectId, checklist, onSave, onClose
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {(serverError || (isCreate && lifecycles.length === 0)) && (
+            <div
+              data-testid="checklist-builder-error"
+              role="alert"
+              className={clsx(
+                'rounded-lg border px-3 py-2 text-sm',
+                serverError
+                  ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-200'
+                  : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-200'
+              )}
+            >
+              {serverError ??
+                'Add at least one lifecycle in Lifecycle Library (Lifecycle Settings) before creating a transition checklist.'}
+            </div>
+          )}
+
           {/* Basic Info */}
           <div className="space-y-4">
             <div>
@@ -143,6 +246,94 @@ export default function ChecklistBuilder({ projectId, checklist, onSave, onClose
               />
             </div>
           </div>
+
+          {isCreate && (
+            <div className="space-y-4 border-t border-gray-200 dark:border-gray-700 pt-6">
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
+                When this checklist applies
+              </h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                The checklist runs only for the selected item type when it uses this lifecycle and moves from the first
+                status to the second. Different lifecycles can use different checklists for the same named transition.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Lifecycle</label>
+                <select
+                  data-testid="checklist-create-lifecycle"
+                  value={createLifecycleId}
+                  onChange={(e) => {
+                    setCreateLifecycleId(e.target.value)
+                    setCreateFromStatusId('')
+                    setCreateToStatusId('')
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="">Select lifecycle...</option>
+                  {lifecycles.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">From status</label>
+                  <select
+                    data-testid="checklist-create-from-status"
+                    value={createFromStatusId}
+                    onChange={(e) => {
+                      setCreateFromStatusId(e.target.value)
+                      setCreateToStatusId('')
+                    }}
+                    disabled={!createLifecycleId}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+                  >
+                    <option value="">Select status...</option>
+                    {createLifecycleStatusesOrdered.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">To status</label>
+                  <select
+                    data-testid="checklist-create-to-status"
+                    value={createToStatusId}
+                    onChange={(e) => setCreateToStatusId(e.target.value)}
+                    disabled={!createLifecycleId}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+                  >
+                    <option value="">Select status...</option>
+                    {createToStatusOptions.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Applicable item type
+                </label>
+                <select
+                  data-testid="checklist-create-item-type"
+                  value={createApplicableItemType}
+                  onChange={(e) => setCreateApplicableItemType(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  {APPLICABLE_ENTITY_ITEM_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
 
           {/* Checklist Items */}
           <div>
@@ -376,8 +567,9 @@ export default function ChecklistBuilder({ projectId, checklist, onSave, onClose
             Cancel
           </button>
           <button
+            data-testid="checklist-builder-save"
             onClick={handleSave}
-            disabled={!name.trim()}
+            disabled={saveDisabled}
             className="px-4 py-2 text-sm bg-gray-700 hover:bg-gray-800 dark:bg-gray-600 dark:hover:bg-gray-500 text-white rounded-lg disabled:opacity-50"
           >
             {checklist ? 'Save Changes' : 'Create Checklist'}

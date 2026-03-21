@@ -21,6 +21,11 @@ import {
 import { useLifecycleStore } from '../../store/lifecycleStore'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import ChecklistBuilder from './ChecklistBuilder'
+import {
+  APPLICABLE_ENTITY_ITEM_TYPES,
+  lifecycleStatusesInOrder,
+  toStatusOptionsForTransition,
+} from './checklistTransitionSelects'
 
 interface ChecklistManagementContentProps {
   searchQuery?: string
@@ -42,6 +47,7 @@ export default function ChecklistManagementContent({ searchQuery = '' }: Checkli
   const [assignFromStatusId, setAssignFromStatusId] = useState('')
   const [assignToStatusId, setAssignToStatusId] = useState('')
   const [assignItemType, setAssignItemType] = useState('Requirement')
+  const [builderError, setBuilderError] = useState<string | null>(null)
 
   const { data: checklistsResp, isLoading } = useQuery({
     queryKey: ['transition-checklists', projectId],
@@ -58,12 +64,53 @@ export default function ChecklistManagementContent({ searchQuery = '' }: Checkli
       )
     : checklists
 
-  const createMutation = useMutation({
-    mutationFn: (data: { name: string; description: string; items: ChecklistItemInput[] }) =>
-      transitionChecklistService.create(projectId!, data),
+  const createWithAssignmentMutation = useMutation({
+    mutationFn: async (data: {
+      name: string
+      description: string
+      items: ChecklistItemInput[]
+      initialAssignment: {
+        lifecycleId: string
+        fromStatusId: string
+        toStatusId: string
+        itemType: string
+      }
+    }) => {
+      const createRes = await transitionChecklistService.create(projectId!, {
+        name: data.name,
+        description: data.description,
+        items: data.items,
+      })
+      if (!createRes.success || !createRes.data) {
+        throw new Error(createRes.error || 'Failed to create checklist')
+      }
+      const assignRes = await transitionChecklistService.createAssignment(projectId!, {
+        checklistId: createRes.data.id,
+        lifecycleId: data.initialAssignment.lifecycleId,
+        fromStatusId: data.initialAssignment.fromStatusId,
+        toStatusId: data.initialAssignment.toStatusId,
+        itemType: data.initialAssignment.itemType,
+      })
+      if (!assignRes.success) {
+        const err = assignRes.error || 'Failed to assign checklist to transition'
+        const e = new Error(err) as Error & { statusCode?: number }
+        e.statusCode = assignRes.statusCode
+        throw e
+      }
+      return createRes.data
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transition-checklists', projectId] })
       setShowBuilder(false)
+      setEditingChecklist(null)
+      setBuilderError(null)
+    },
+    onError: (err: Error & { statusCode?: number }) => {
+      const msg =
+        err.statusCode === 409
+          ? 'This checklist is already assigned to this transition for that lifecycle.'
+          : err.message
+      setBuilderError(msg)
     },
   })
 
@@ -74,6 +121,7 @@ export default function ChecklistManagementContent({ searchQuery = '' }: Checkli
       queryClient.invalidateQueries({ queryKey: ['transition-checklists', projectId] })
       setEditingChecklist(null)
       setShowBuilder(false)
+      setBuilderError(null)
     },
   })
 
@@ -124,20 +172,47 @@ export default function ChecklistManagementContent({ searchQuery = '' }: Checkli
     },
   })
 
-  const handleSave = (data: { name: string; description: string; items: ChecklistItemInput[] }) => {
-    if (editingChecklist) {
-      updateMutation.mutate({ id: editingChecklist.id, data })
-    } else {
-      createMutation.mutate(data)
+  const handleSave = (data: {
+    name: string
+    description: string
+    items: ChecklistItemInput[]
+    initialAssignment?: {
+      lifecycleId: string
+      fromStatusId: string
+      toStatusId: string
+      itemType: string
     }
+  }) => {
+    setBuilderError(null)
+    if (editingChecklist) {
+      updateMutation.mutate({
+        id: editingChecklist.id,
+        data: { name: data.name, description: data.description, items: data.items },
+      })
+      return
+    }
+    if (!data.initialAssignment) {
+      setBuilderError('Lifecycle, from/to status, and applicable item type are required.')
+      return
+    }
+    createWithAssignmentMutation.mutate({
+      name: data.name,
+      description: data.description,
+      items: data.items,
+      initialAssignment: data.initialAssignment,
+    })
   }
 
   const getStatusName = (id: string) => statuses.find((s) => s.id === id)?.name ?? id
   const getLifecycleName = (id: string) => lifecycles.find((l) => l.id === id)?.name ?? id
 
   const selectedLifecycle = lifecycles.find((l) => l.id === assignLifecycleId)
-  const lifecycleStatusIds = selectedLifecycle?.steps?.map((s) => s.statusId) ?? []
-  const lifecycleStatuses = statuses.filter((s) => lifecycleStatusIds.includes(s.id))
+  const assignLifecycleStatusesOrdered = lifecycleStatusesInOrder(selectedLifecycle, statuses)
+  const assignToStatusOptions = toStatusOptionsForTransition(
+    selectedLifecycle,
+    assignFromStatusId,
+    assignLifecycleStatusesOrdered
+  )
 
   const typeLabel = (t: string) => {
     switch (t) {
@@ -159,8 +234,10 @@ export default function ChecklistManagementContent({ searchQuery = '' }: Checkli
           </p>
         </div>
         <button
+          data-testid="transition-checklists-create"
           onClick={() => {
             setEditingChecklist(null)
+            setBuilderError(null)
             setShowBuilder(true)
           }}
           className="px-4 py-2 bg-gray-700 hover:bg-gray-800 dark:bg-gray-600 dark:hover:bg-gray-500 text-white rounded-lg flex items-center gap-2"
@@ -180,8 +257,10 @@ export default function ChecklistManagementContent({ searchQuery = '' }: Checkli
             Create your first transition checklist to enforce validation during status changes.
           </p>
           <button
+            data-testid="transition-checklists-create-empty"
             onClick={() => {
               setEditingChecklist(null)
+              setBuilderError(null)
               setShowBuilder(true)
             }}
             className="px-4 py-2 bg-gray-700 hover:bg-gray-800 dark:bg-gray-600 dark:hover:bg-gray-500 text-white rounded-lg"
@@ -306,6 +385,7 @@ export default function ChecklistManagementContent({ searchQuery = '' }: Checkli
                     <div className="flex items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
                       <button
                         onClick={() => {
+                          setBuilderError(null)
                           setEditingChecklist(checklist)
                           setShowBuilder(true)
                         }}
@@ -342,10 +422,13 @@ export default function ChecklistManagementContent({ searchQuery = '' }: Checkli
         <ChecklistBuilder
           projectId={projectId!}
           checklist={editingChecklist}
+          serverError={builderError}
+          isSubmitting={createWithAssignmentMutation.isPending || updateMutation.isPending}
           onSave={handleSave}
           onClose={() => {
             setShowBuilder(false)
             setEditingChecklist(null)
+            setBuilderError(null)
           }}
         />
       )}
@@ -386,12 +469,15 @@ export default function ChecklistManagementContent({ searchQuery = '' }: Checkli
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">From Status</label>
                   <select
                     value={assignFromStatusId}
-                    onChange={(e) => setAssignFromStatusId(e.target.value)}
+                    onChange={(e) => {
+                      setAssignFromStatusId(e.target.value)
+                      setAssignToStatusId('')
+                    }}
                     disabled={!assignLifecycleId}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
                   >
                     <option value="">Select status...</option>
-                    {lifecycleStatuses.map((s) => (
+                    {assignLifecycleStatusesOrdered.map((s) => (
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
                   </select>
@@ -405,7 +491,7 @@ export default function ChecklistManagementContent({ searchQuery = '' }: Checkli
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
                   >
                     <option value="">Select status...</option>
-                    {lifecycleStatuses.map((s) => (
+                    {assignToStatusOptions.map((s) => (
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
                   </select>
@@ -418,7 +504,7 @@ export default function ChecklistManagementContent({ searchQuery = '' }: Checkli
                   onChange={(e) => setAssignItemType(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 >
-                  {['Requirement', 'Function', 'Test', 'Issue', 'Parameter', 'Change Request', 'Task'].map((t) => (
+                  {APPLICABLE_ENTITY_ITEM_TYPES.map((t) => (
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>

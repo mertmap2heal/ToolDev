@@ -53,6 +53,8 @@ export default function LifecycleStatusPage() {
               return (
                 <button
                   key={tab.id}
+                  type="button"
+                  data-testid={`lifecycle-status-tab-${tab.id}`}
                   onClick={() => setActiveTab(tab.id)}
                   title={tab.description}
                   className={clsx(

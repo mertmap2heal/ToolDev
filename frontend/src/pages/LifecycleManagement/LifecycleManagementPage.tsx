@@ -129,6 +129,8 @@ export default function LifecycleManagementPage() {
             return (
               <button
                 key={tab.id}
+                type="button"
+                data-testid={`lifecycle-management-tab-${tab.id}`}
                 onClick={() => setActiveTab(tab.id)}
                 className={clsx(
                   'flex items-center gap-2 px-4 py-3 rounded-lg transition-all whitespace-nowrap',
