@@ -49,6 +49,7 @@
     "zustand": "^4.4.7"
   },
   "devDependencies": {
+    "@floating-ui/dom": "^1.7.6",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/typography": "^0.5.19",
     "@types/react": "^18.2.43",
