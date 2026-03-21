@@ -1,0 +1,54 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - img "Engineering Tool Logo" [ref=e6]
+    - heading "Engineering Tool" [level=1] [ref=e7]
+    - paragraph [ref=e8]: Engineering Management Platform
+    - list [ref=e9]:
+      - listitem [ref=e10]:
+        - generic [ref=e12]: Requirements & Traceability
+      - listitem [ref=e13]:
+        - generic [ref=e15]: Risk & Change Control
+      - listitem [ref=e16]:
+        - generic [ref=e18]: Verification & Validation
+  - generic [ref=e21]:
+    - img "Engineering Tool Logo" [ref=e24]
+    - heading "Sign in" [level=2] [ref=e25]
+    - paragraph [ref=e26]: Use your credentials to access the platform.
+    - generic [ref=e27]:
+      - group [ref=e28]:
+        - generic [ref=e29]:
+          - generic [ref=e30]: Email or username
+          - textbox "Email or username" [ref=e31]:
+            - /placeholder: Enter your email or username
+            - text: christian.mandle
+        - generic [ref=e32]:
+          - generic [ref=e33]: Password
+          - generic [ref=e34]:
+            - textbox "Password" [ref=e35]:
+              - /placeholder: Enter your password
+              - text: mandle1998
+            - button "Show password" [ref=e36] [cursor=pointer]:
+              - img [ref=e37]
+          - generic [ref=e40]:
+            - generic [ref=e41] [cursor=pointer]:
+              - checkbox "Remember me" [checked] [ref=e42]
+              - generic [ref=e43]: Remember me
+            - button "Forgot password?" [ref=e44] [cursor=pointer]
+      - alert [ref=e45]:
+        - img [ref=e46]
+        - generic [ref=e48]: An error occurred
+        - button "Dismiss error" [ref=e49] [cursor=pointer]:
+          - img [ref=e50]
+      - button "Sign in" [ref=e53] [cursor=pointer]
+      - generic [ref=e54]:
+        - img [ref=e55]
+        - generic [ref=e58]: Secured with enterprise-grade encryption
+      - generic [ref=e59]:
+        - link "Privacy Policy" [ref=e60] [cursor=pointer]:
+          - /url: "#"
+        - link "Terms of Use" [ref=e61] [cursor=pointer]:
+          - /url: "#"
+```

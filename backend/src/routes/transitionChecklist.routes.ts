@@ -1,10 +1,12 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
+import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import * as ctrl from '../controllers/transitionChecklist.controller'
 
 const router = Router()
 
 router.use(authenticateToken)
+router.param('projectId', projectIdParam)
 
 router.get('/:projectId', ctrl.listChecklists)
 router.get('/:projectId/checklist/:checklistId', ctrl.getChecklist)
