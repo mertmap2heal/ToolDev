@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 
 
@@ -79,7 +80,7 @@ export async function createBus(
       name: data.name.trim(),
       description: data.description?.trim() ?? null,
       protocol: data.protocol,
-      config: data.config ?? undefined,
+      config: data.config as unknown as Prisma.InputJsonValue | undefined,
     },
     include: { _count: { select: { messages: true } } },
   })
@@ -102,7 +103,7 @@ export async function updateBus(
       ...(data.name !== undefined ? { name: data.name.trim() } : {}),
       ...(data.description !== undefined ? { description: data.description?.trim() || null } : {}),
       ...(data.protocol !== undefined ? { protocol: data.protocol } : {}),
-      ...(data.config !== undefined ? { config: data.config ?? undefined } : {}),
+      ...(data.config !== undefined ? { config: data.config as unknown as Prisma.InputJsonValue | undefined } : {}),
     },
     include: { _count: { select: { messages: true } } },
   })
@@ -149,7 +150,7 @@ export async function createMessage(
       messageId: data.messageId?.trim() || null,
       direction: data.direction || null,
       description: data.description?.trim() || null,
-      metadata: data.metadata ?? undefined,
+      metadata: data.metadata as unknown as Prisma.InputJsonValue | undefined,
     },
     include: { _count: { select: { fields: true } } },
   })
@@ -174,7 +175,7 @@ export async function updateMessage(
       ...(data.messageId !== undefined ? { messageId: data.messageId?.trim() || null } : {}),
       ...(data.direction !== undefined ? { direction: data.direction || null } : {}),
       ...(data.description !== undefined ? { description: data.description?.trim() || null } : {}),
-      ...(data.metadata !== undefined ? { metadata: data.metadata ?? undefined } : {}),
+      ...(data.metadata !== undefined ? { metadata: data.metadata as unknown as Prisma.InputJsonValue | undefined } : {}),
     },
     include: { _count: { select: { fields: true } } },
   })
@@ -226,7 +227,7 @@ export async function createField(
       description: data.description?.trim() || null,
       dataType: data.dataType?.trim() || null,
       order: data.order ?? 0,
-      config: data.config ?? undefined,
+      config: data.config as unknown as Prisma.InputJsonValue | undefined,
     },
     include: {
       parameter: { select: { id: true, name: true, dataType: true, unit: true, defaultValue: true } },
@@ -254,8 +255,8 @@ export async function updateField(
       ...(data.description !== undefined ? { description: data.description?.trim() || null } : {}),
       ...(data.dataType !== undefined ? { dataType: data.dataType?.trim() || null } : {}),
       ...(data.order !== undefined ? { order: data.order } : {}),
-      ...(data.config !== undefined ? { config: data.config ?? undefined } : {}),
-    },
+      ...(data.config !== undefined ? { config: data.config as unknown as Prisma.InputJsonValue | undefined } : {}),
+    } as Prisma.CommFieldUncheckedUpdateInput,
     include: {
       parameter: { select: { id: true, name: true, dataType: true, unit: true, defaultValue: true } },
     },

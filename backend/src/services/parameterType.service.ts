@@ -9,6 +9,7 @@
  * to each export format's native type system.
  */
 
+import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 
 
@@ -230,7 +231,7 @@ export async function createParameterType(
       description: data.description?.trim() ?? null,
       color: data.color ?? null,
       translations: data.translations ?? undefined,
-      valueFormat: data.valueFormat ?? undefined,
+      valueFormat: data.valueFormat as unknown as Prisma.InputJsonValue | undefined,
     },
   })
   return {
@@ -257,7 +258,7 @@ export async function updateParameterType(
       ...(data.description !== undefined ? { description: data.description.trim() || null } : {}),
       ...(data.color !== undefined ? { color: data.color || null } : {}),
       ...(data.translations !== undefined ? { translations: data.translations } : {}),
-      ...(data.valueFormat !== undefined ? { valueFormat: data.valueFormat ?? undefined } : {}),
+      ...(data.valueFormat !== undefined ? { valueFormat: (data.valueFormat ?? undefined) as unknown as Prisma.InputJsonValue | undefined } : {}),
     },
   })
   if (t.projectId !== projectId) throw new Error('Not found')

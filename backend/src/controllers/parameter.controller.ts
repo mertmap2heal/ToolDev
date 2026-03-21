@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
@@ -435,7 +436,7 @@ export const createParameter = async (req: AuthRequest, res: Response) => {
         formula: (formula as string)?.trim() ?? null,
         enumValues: (enumValues as string)?.trim() || null,
         dimensions: (dimensions as string)?.trim() || null,
-        platforms: Array.isArray(platforms) ? platforms : null,
+        platforms: Array.isArray(platforms) ? (platforms as Prisma.InputJsonValue) : Prisma.DbNull,
         sourceFunctionId: (sourceFunctionId as string) || null,
       },
       include: {
