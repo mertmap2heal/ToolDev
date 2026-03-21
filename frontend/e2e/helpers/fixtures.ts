@@ -1,5 +1,5 @@
 import { test as base, expect } from '@playwright/test'
-import { AUTH_FILE, getFirstProjectId } from './auth'
+import { AUTH_FILE, getOrCreateProjectId } from './auth'
 import fs from 'fs'
 
 type Fixtures = {
@@ -22,8 +22,7 @@ export const test = base.extend<Fixtures>({
   },
 
   projectId: async ({ page }, use) => {
-    const id = await getFirstProjectId(page)
-    if (!id) throw new Error('No project found — seed demo data first (npm run seed:demo)')
+    const id = await getOrCreateProjectId(page)
     await use(id)
   },
 })

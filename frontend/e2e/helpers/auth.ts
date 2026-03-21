@@ -76,3 +76,38 @@ export async function getFirstProjectId(page: Page): Promise<string | null> {
   const projects: Array<{ id: string }> = body?.data ?? body
   return projects?.[0]?.id ?? null
 }
+
+/**
+ * Get the first available projectId, or create a minimal project if none exists.
+ * This ensures e2e tests work against a fresh database with no seeded projects
+ * visible to the test user.
+ */
+export async function getOrCreateProjectId(page: Page): Promise<string> {
+  await page.goto('/')
+  await page.waitForLoadState('domcontentloaded')
+  const token = await page.evaluate(() => localStorage.getItem('token'))
+  if (!token) throw new Error('No auth token in localStorage — login must succeed before projectId fixture')
+
+  // Try to find an existing project first
+  const listResp = await page.request.get('http://localhost:5000/api/v1/projects', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (listResp.ok()) {
+    const body = await listResp.json()
+    const projects: Array<{ id: string }> = body?.data ?? body
+    if (projects?.[0]?.id) return projects[0].id
+  }
+
+  // No project visible to this user — create one
+  const createResp = await page.request.post('http://localhost:5000/api/v1/projects', {
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    data: { name: 'E2E Test Project', domain: 'E2E Testing', description: 'Auto-created by Playwright setup' },
+  })
+  if (!createResp.ok()) {
+    throw new Error(`Failed to create e2e project: ${createResp.status()} ${await createResp.text()}`)
+  }
+  const created = await createResp.json()
+  const id: string = created?.data?.id ?? created?.id
+  if (!id) throw new Error('Project creation response missing id')
+  return id
+}

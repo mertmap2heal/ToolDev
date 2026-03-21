@@ -17,7 +17,7 @@ test.describe('Dashboard', () => {
     await page.waitForLoadState('domcontentloaded')
     // Wait for page to render
     await expect(page.locator('h1, h2, h3').first()).toBeVisible({ timeout: 10_000 })
-    const createBtn = page.getByRole('button', { name: /create project/i })
+    const createBtn = page.getByRole('button', { name: /create project/i }).first()
     if (await createBtn.isVisible()) {
       await createBtn.click()
       // Modal uses fixed overlay, not role="dialog"
