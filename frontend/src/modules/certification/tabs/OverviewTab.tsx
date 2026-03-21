@@ -40,14 +40,6 @@ export default function OverviewTab() {
   ]
   const hasContext = context.selectedBaseline !== null || context.selectedRelease !== null
 
-  if (!hasContext) {
-    return (
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-12 text-center">
-        <p className="text-sm text-gray-500 dark:text-gray-400">{CONTEXT_EMPTY_MESSAGE}</p>
-      </div>
-    )
-  }
-
   const readinessPercent = useMemo(() => {
     if (objectives.length === 0) return 0
     const complete = objectives.filter((o) => o.status === 'Complete').length
@@ -93,6 +85,14 @@ export default function OverviewTab() {
     () => [...activityLog].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 15),
     [activityLog]
   )
+
+  if (!hasContext) {
+    return (
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-12 text-center">
+        <p className="text-sm text-gray-500 dark:text-gray-400">{CONTEXT_EMPTY_MESSAGE}</p>
+      </div>
+    )
+  }
 
   const cards = [
     { label: 'Overall readiness', value: `${readinessPercent}%`, icon: Percent },

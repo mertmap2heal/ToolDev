@@ -43,11 +43,11 @@ export default function InterfaceFormSection({
   const moveInterface = (index: number, direction: 'up' | 'down') => {
     const newInterfaces = [...interfaces]
     if (direction === 'up' && index > 0) {
-      ;[newInterfaces[index - 1], newInterfaces[index]] = [newInterfaces[index], newInterfaces[index - 1]]
+      [newInterfaces[index - 1], newInterfaces[index]] = [newInterfaces[index], newInterfaces[index - 1]]
       newInterfaces[index - 1].order = index - 1
       newInterfaces[index].order = index
     } else if (direction === 'down' && index < newInterfaces.length - 1) {
-      ;[newInterfaces[index], newInterfaces[index + 1]] = [newInterfaces[index + 1], newInterfaces[index]]
+      [newInterfaces[index], newInterfaces[index + 1]] = [newInterfaces[index + 1], newInterfaces[index]]
       newInterfaces[index].order = index
       newInterfaces[index + 1].order = index + 1
     }

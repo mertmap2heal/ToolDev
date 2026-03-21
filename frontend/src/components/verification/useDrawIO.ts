@@ -190,16 +190,16 @@ export function useDrawIO(options: UseDrawIOOptions = {}): UseDrawIOReturn {
       console.log('[DrawIO] Received event:', msg.event)
 
       switch (msg.event) {
-        case 'init':
+        case 'init': {
           // draw.io is ready, load the diagram
           console.log('[DrawIO] Init event received, editor is ready')
           setIsReady(true)
           setError(null)
-          
+
           // Load the diagram
           const xmlToLoad = pendingLoadRef.current || currentXml
           pendingLoadRef.current = null
-          
+
           const iframe = iframeRef.current
           if (iframe?.contentWindow) {
             const loadMessage = {
@@ -211,6 +211,7 @@ export function useDrawIO(options: UseDrawIOOptions = {}): UseDrawIOReturn {
             iframe.contentWindow.postMessage(JSON.stringify(loadMessage), DRAWIO_ORIGIN)
           }
           break
+        }
 
         case 'load':
           console.log('[DrawIO] Load complete')

@@ -940,7 +940,7 @@ export default function ExportBuilder({
     if (key === 'tags') {
       return (req.tags || []).join(', ')
     }
-    let value = req[key as keyof Requirement]
+    const value = req[key as keyof Requirement]
     if (value === null || value === undefined) return ''
     if (typeof value === 'object') return JSON.stringify(value)
     let str = String(value)

@@ -104,7 +104,7 @@ export default function StandardExporter({
     const reqifId = `reqif-${projectId}-${Date.now()}`
 
     // Build ReqIF XML
-    let xml = `<?xml version="1.0" encoding="UTF-8"?>
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <REQ-IF xmlns="http://www.omg.org/spec/ReqIF/20110401/reqif.xsd"
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:schemaLocation="http://www.omg.org/spec/ReqIF/20110401/reqif.xsd">
@@ -210,7 +210,7 @@ ${options.includeRequirements ? buildReqIFHierarchy(requirements, options.flatte
     const timestamp = new Date().toISOString()
 
     // Build UML XMI
-    let xml = `<?xml version="1.0" encoding="UTF-8"?>
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <xmi:XMI xmlns:xmi="http://www.omg.org/spec/XMI/20131001"
          xmlns:uml="http://www.omg.org/spec/UML/20131001"
          xmlns:SysML="http://www.omg.org/spec/SysML/20150709/SysML"
@@ -260,7 +260,7 @@ ${traceLinks.map((link) => `      <packagedElement xmi:type="uml:Dependency" xmi
     const timestamp = new Date().toISOString()
 
     // Build SysML XMI with stereotypes
-    let xml = `<?xml version="1.0" encoding="UTF-8"?>
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <xmi:XMI xmlns:xmi="http://www.omg.org/spec/XMI/20131001"
          xmlns:uml="http://www.omg.org/spec/UML/20131001"
          xmlns:SysML="http://www.omg.org/spec/SysML/20150709/SysML"

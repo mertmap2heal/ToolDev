@@ -149,7 +149,7 @@ export default function GlobalSearch({ open, onClose }: Props) {
   // Group results by category for display
   const grouped: Record<string, SearchResult[]> = {}
   results.forEach((r) => {
-    ;(grouped[r.category] ??= []).push(r)
+    (grouped[r.category] ??= []).push(r)
   })
   const categoryOrder = Object.keys(grouped)
 

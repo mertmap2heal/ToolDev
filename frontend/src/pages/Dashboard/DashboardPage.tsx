@@ -256,7 +256,7 @@ export default function DashboardPage() {
     }
   }
 
-  let displayedProjects = (projectsData || projects || [])
+  const displayedProjects = (projectsData || projects || [])
     .filter(p => filterValue === 'all' || p.status === filterValue)
     .filter(p => !dateRange || (() => {
       const u = new Date(p.updatedAt)

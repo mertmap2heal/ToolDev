@@ -59,12 +59,18 @@ function TypeForm({
   const [showTranslations, setShowTranslations] = useState(
     Object.values(initial.translations).some(v => v.trim())
   )
+  const [showFormat, setShowFormat] = useState(
+    !!(initial.valueFormat?.template || initial.valueFormat?.example || initial.valueFormat?.hint || initial.valueFormat?.pattern || initial.valueFormat?.dimensions)
+  )
 
   const set = (field: keyof TypeFormState, value: string) =>
     setForm(f => ({ ...f, [field]: value }))
 
   const setTranslation = (key: string, value: string) =>
     setForm(f => ({ ...f, translations: { ...f.translations, [key]: value } }))
+
+  const setFmt = (field: keyof ParameterValueFormat, value: string) =>
+    setForm(f => ({ ...f, valueFormat: { ...f.valueFormat, [field]: value || undefined } }))
 
   return (
     <div className="space-y-3">
@@ -148,14 +154,7 @@ function TypeForm({
       )}
 
       {/* Value format definition */}
-      {(() => {
-        const [showFormat, setShowFormat] = useState(
-          !!(form.valueFormat?.template || form.valueFormat?.example || form.valueFormat?.hint || form.valueFormat?.pattern || form.valueFormat?.dimensions)
-        )
-        const setFmt = (field: keyof ParameterValueFormat, value: string) =>
-          setForm(f => ({ ...f, valueFormat: { ...f.valueFormat, [field]: value || undefined } }))
-        return (
-          <>
+      <>
             <button
               type="button"
               onClick={() => setShowFormat(s => !s)}
@@ -238,9 +237,7 @@ function TypeForm({
                 </div>
               </div>
             )}
-          </>
-        )
-      })()}
+      </>
 
       <div className="flex gap-2 pt-1">
         <button

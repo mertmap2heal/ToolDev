@@ -58,11 +58,11 @@ export default function ComponentFormSection({
   const moveComponent = (index: number, direction: 'up' | 'down') => {
     const newComponents = [...components]
     if (direction === 'up' && index > 0) {
-      ;[newComponents[index - 1], newComponents[index]] = [newComponents[index], newComponents[index - 1]]
+      [newComponents[index - 1], newComponents[index]] = [newComponents[index], newComponents[index - 1]]
       newComponents[index - 1].order = index - 1
       newComponents[index].order = index
     } else if (direction === 'down' && index < newComponents.length - 1) {
-      ;[newComponents[index], newComponents[index + 1]] = [newComponents[index + 1], newComponents[index]]
+      [newComponents[index], newComponents[index + 1]] = [newComponents[index + 1], newComponents[index]]
       newComponents[index].order = index
       newComponents[index + 1].order = index + 1
     }

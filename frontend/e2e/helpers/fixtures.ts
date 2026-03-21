@@ -1,5 +1,5 @@
 import { test as base, expect } from '@playwright/test'
-import { AUTH_FILE, loginViaUI, getFirstProjectId } from './auth'
+import { AUTH_FILE, getFirstProjectId } from './auth'
 import fs from 'fs'
 
 type Fixtures = {
@@ -13,11 +13,11 @@ type Fixtures = {
  */
 export const test = base.extend<Fixtures>({
   // Override storageState to use saved session if available
-  storageState: async ({}, use) => {
+  storageState: async (_fixtures, use) => {
     if (fs.existsSync(AUTH_FILE)) {
       await use(AUTH_FILE)
     } else {
-      await use(undefined as any)
+      await use(undefined as unknown)
     }
   },
 

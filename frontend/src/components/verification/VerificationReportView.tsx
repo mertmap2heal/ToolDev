@@ -141,15 +141,6 @@ export default function VerificationReportView({
   entityId,
   onSaved,
 }: VerificationReportViewProps) {
-  if (!reportData) {
-    return (
-      <div className={`p-4 text-gray-500 dark:text-gray-400 ${className}`}>
-        No report data available.
-      </div>
-    )
-  }
-
-  const meta = reportData.metadata || {}
   const canEdit = editable && !!projectId && !!onSaved
 
   const saveCaseField = useCallback(
@@ -168,6 +159,16 @@ export default function VerificationReportView({
     },
     [projectId, onSaved]
   )
+
+  if (!reportData) {
+    return (
+      <div className={`p-4 text-gray-500 dark:text-gray-400 ${className}`}>
+        No report data available.
+      </div>
+    )
+  }
+
+  const meta = reportData.metadata || {}
 
   if (reportType === 'test-case') {
     const tc = reportData.testCase || {}

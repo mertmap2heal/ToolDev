@@ -120,6 +120,7 @@ interface SectionLabelProps {
 }
 
 function SectionLabel({ label, sectionKey, collapsed, open, onToggle }: SectionLabelProps) {
+  const [hovered, setHovered] = useState(false)
   if (collapsed) {
     return (
       <div style={{
@@ -130,7 +131,6 @@ function SectionLabel({ label, sectionKey, collapsed, open, onToggle }: SectionL
       }} />
     )
   }
-  const [hovered, setHovered] = useState(false)
   return (
     <button
       onClick={() => onToggle(sectionKey)}

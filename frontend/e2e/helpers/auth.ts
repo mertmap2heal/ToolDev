@@ -9,7 +9,7 @@ const CREDS_FILE = path.join(__dirname, '../.auth/creds.json')
 
 function loadCreds() {
   if (fs.existsSync(CREDS_FILE)) {
-    try { return JSON.parse(fs.readFileSync(CREDS_FILE, 'utf8')) } catch {}
+    try { return JSON.parse(fs.readFileSync(CREDS_FILE, 'utf8')) } catch (_e) {}
   }
   return null
 }
