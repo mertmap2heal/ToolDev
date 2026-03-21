@@ -495,8 +495,10 @@ export class SalesService {
     })
 
     if (so) {
-      const allShipped = so.lines.every((line) => line.qtyShipped >= line.qtyOrdered)
-      const someShipped = so.lines.some((line) => line.qtyShipped > 0)
+      const allShipped = so.lines.every(
+        (line) => Number(line.qtyShipped) >= Number(line.qtyOrdered)
+      )
+      const someShipped = so.lines.some((line) => Number(line.qtyShipped) > 0)
 
       let newStatus = so.status
       if (allShipped) {

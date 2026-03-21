@@ -46,20 +46,20 @@ export class ValuationService {
   }): Promise<number> {
     const { itemId, locationId, lotId, serialId, qty } = params
 
-    // Get available layers (FIFO order - oldest first)
-    const layers = await prisma.inventoryCostLayer.findMany({
+    // Get layers for FIFO; Prisma cannot express consumedQty < qty in where — filter in memory
+    const rawLayers = await prisma.inventoryCostLayer.findMany({
       where: {
         itemId,
         locationId,
-        lotId: lotId || undefined,
-        consumedQty: {
-          lt: prisma.inventoryCostLayer.fields.qty,
-        },
+        ...(lotId != null && lotId !== '' ? { lotId } : {}),
       },
       orderBy: {
         receivedAt: 'asc',
       },
     })
+    const layers = rawLayers.filter(
+      (layer) => Number(layer.consumedQty) < Number(layer.qty)
+    )
 
     let remainingQty = qty
     let totalCost = 0
@@ -179,19 +179,19 @@ export class ValuationService {
     for (const balance of balances) {
       if (Number(balance.qtyOnHand) <= 0) continue
 
-      // Get cost layers for this item/location
-      const layers = await prisma.inventoryCostLayer.findMany({
+      // Get cost layers for this item/location (filter available qty in memory)
+      const rawLayers = await prisma.inventoryCostLayer.findMany({
         where: {
           itemId: balance.itemId,
           locationId: balance.locationId,
-          consumedQty: {
-            lt: prisma.inventoryCostLayer.fields.qty,
-          },
         },
         orderBy: {
           receivedAt: 'asc',
         },
       })
+      const layers = rawLayers.filter(
+        (layer) => Number(layer.consumedQty) < Number(layer.qty)
+      )
 
       // Calculate average cost from available layers
       let totalCost = 0
@@ -243,6 +243,7 @@ export class ValuationService {
     unitCost: number
     receivedAt: Date
     lotCode?: string | null
+    lotId?: string | null
   }>> {
     const { itemId, locationId, lotId } = params
 
@@ -250,14 +251,7 @@ export class ValuationService {
       where: {
         itemId,
         locationId,
-        lotId: lotId || undefined,
-      },
-      include: {
-        lot: {
-          select: {
-            lotCode: true,
-          },
-        },
+        ...(lotId != null && lotId !== '' ? { lotId } : {}),
       },
       orderBy: {
         receivedAt: 'asc',
@@ -271,7 +265,8 @@ export class ValuationService {
       availableQty: Number(layer.qty) - Number(layer.consumedQty),
       unitCost: Number(layer.unitCost),
       receivedAt: layer.receivedAt,
-      lotCode: layer.lot?.lotCode || null,
+      lotId: layer.lotId ?? null,
+      lotCode: null,
     }))
   }
 }

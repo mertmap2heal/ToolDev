@@ -1268,8 +1268,7 @@ model Item {
   transferLines    TransferLine[]
   adjustmentLines  AdjustmentLine[]
   cycleCountLines  CycleCountLine[]
-  // costLayers field removed: no InventoryCostLayer model defined
-
+  costLayers       InventoryCostLayer[]
 
   @@index([sku])
   @@index([projectId])
@@ -1370,7 +1369,7 @@ model Location {
   cycleCountLines CycleCountLine[]
   serialNumbers   SerialNumber[]
   reservations    Reservation[]
-  // costLayers field removed: no InventoryCostLayer model defined
+  costLayers      InventoryCostLayer[]
   poLines         PurchaseOrderLine[]
 
   @@unique([warehouseId, code])
@@ -1479,6 +1478,27 @@ model InventoryBalance {
   @@unique([itemId, locationId])
   @@index([itemId])
   @@index([locationId])
+}
+
+/// FIFO cost layers for inventory valuation (optional lot reference as opaque id until Lot model exists)
+model InventoryCostLayer {
+  id           String   @id @default(uuid())
+  itemId       String
+  locationId   String
+  lotId        String?
+  qty          Decimal
+  consumedQty  Decimal  @default(0)
+  unitCost     Decimal
+  receivedAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  item     Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+  @@index([locationId])
+  @@index([itemId, locationId, receivedAt])
 }
 
 model InventoryLedger {
