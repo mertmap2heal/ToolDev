@@ -26,3 +26,5 @@ Insert overview text here. The agent will only see this should they choose to ap
 9. When making the UI changes always conform to the existing design system.
 
 10. End-to-end testing is required: You MUST NOT declare any task complete without thorough end-to-end testing. "It should work" is NOT acceptable.
+
+11. Always create, maintain unit tests using the frontend folder ./frontend/e2e/ -> all new pages and features have to be checked thoroughly
