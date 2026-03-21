@@ -13,6 +13,18 @@ describe('Platform Admin (Superior Admin)', () => {
   let normalUserToken: string
 
   beforeAll(async () => {
+    // Ensure a SUPERIOR_ADMIN user exists (seed:users may not have run in CI)
+    await prisma.user.upsert({
+      where: { email: 'admin' },
+      update: {},
+      create: {
+        email: 'admin',
+        name: 'Admin User',
+        password: await bcrypt.hash('password', 10),
+        role: 'SUPERIOR_ADMIN',
+      },
+    })
+
     const normalUser = await prisma.user.upsert({
       where: { email: 'platform-admin-test-normal@example.com' },
       update: {},
@@ -32,6 +44,7 @@ describe('Platform Admin (Superior Admin)', () => {
 
   afterAll(async () => {
     await prisma.user.deleteMany({ where: { email: 'platform-admin-test-normal@example.com' } }).catch(() => {})
+    await prisma.user.deleteMany({ where: { email: 'admin' } }).catch(() => {})
     await prisma.$disconnect()
   })
 

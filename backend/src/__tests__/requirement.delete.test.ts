@@ -79,21 +79,12 @@ describe('Requirement Soft Delete Workflow', () => {
             .get(`/api/v1/requirements/${projectId}`)
             .set('Authorization', `Bearer ${token}`)
 
-        expect(listRes.body.data.some((r: any) => r.id === requirementDbId)).toBe(false)
+        expect(listRes.body.data.items.some((r: any) => r.id === requirementDbId)).toBe(false)
     })
 
     it('should appear in recently deleted list', async () => {
-        const res = await request(app)
-            .get(`/api/v1/requirements/archive/recently-deleted`) // Global route or project specific?
-        // Wait, route was: /:projectId/requirements/archive/recently-deleted
-        // Let's check routes file again.
-        // router.get('/:projectId/requirements/archive/recently-deleted', getRecentlyDeletedRequirements)
-
-        // Correct URL:
-        const correctUrl = `/api/v1/requirements/${projectId}/requirements/archive/recently-deleted`
-
         const res2 = await request(app)
-            .get(correctUrl)
+            .get(`/api/v1/requirements/${projectId}/archive/recently-deleted`)
             .set('Authorization', `Bearer ${token}`)
 
         expect(res2.status).toBe(200)
@@ -123,7 +114,7 @@ describe('Requirement Soft Delete Workflow', () => {
 
     it('should restore the requirement', async () => {
         const res = await request(app)
-            .post(`/api/v1/requirements/${projectId}/requirements/${requirementDbId}/restore`)
+            .post(`/api/v1/requirements/${projectId}/${requirementDbId}/restore`)
             .set('Authorization', `Bearer ${token}`)
             .send()
 
@@ -135,7 +126,7 @@ describe('Requirement Soft Delete Workflow', () => {
             .get(`/api/v1/requirements/${projectId}`)
             .set('Authorization', `Bearer ${token}`)
 
-        expect(listRes.body.data.some((r: any) => r.id === requirementDbId)).toBe(true)
+        expect(listRes.body.data.items.some((r: any) => r.id === requirementDbId)).toBe(true)
     })
 
     it('should permanently delete the requirement', async () => {
@@ -147,7 +138,7 @@ describe('Requirement Soft Delete Workflow', () => {
 
         // Then permanent delete
         const res = await request(app)
-            .delete(`/api/v1/requirements/${projectId}/requirements/${requirementDbId}/permanent`)
+            .delete(`/api/v1/requirements/${projectId}/${requirementDbId}/permanent`)
             .set('Authorization', `Bearer ${token}`)
             .send()
 
@@ -156,7 +147,7 @@ describe('Requirement Soft Delete Workflow', () => {
 
         // Verify it is gone from recently deleted
         const res2 = await request(app)
-            .get(`/api/v1/requirements/${projectId}/requirements/archive/recently-deleted`)
+            .get(`/api/v1/requirements/${projectId}/archive/recently-deleted`)
             .set('Authorization', `Bearer ${token}`)
 
         expect(res2.body.data.some((r: any) => r.id === requirementDbId)).toBe(false)
