@@ -214,7 +214,7 @@ export class PurchaseService {
             },
             lot: true,
             serial: true,
-          },
+          } as any,
         },
       },
     })
@@ -292,7 +292,7 @@ export class PurchaseService {
             lot: true,
             serial: true,
             poLine: true,
-          },
+          } as any,
         },
       },
     })

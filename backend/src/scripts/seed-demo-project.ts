@@ -155,7 +155,7 @@ async function main() {
       await prisma.projectMember.create({
         data: { projectId: project.id, userId: firstUser.id, role: 'owner' },
       })
-      console.log(`Created project: ${project.name} (${project.id}), slug: ${slug}`)
+      console.log(`Created project: ${DEMO_NAME} (${project.id}), slug: ${slug}`)
     }
     projectId = project.id
   }
@@ -266,7 +266,7 @@ async function main() {
     orderBy: { requirementId: 'asc' },
   })
   if (existingReqs.length >= reqCount) {
-    requirementRecords.push(...existingReqs.slice(0, reqCount))
+    requirementRecords.push(...existingReqs.slice(0, reqCount).map(r => ({ id: r.id, requirementId: r.requirementId! })))
     console.log(`Using existing requirements (${requirementRecords.length}).`)
   } else {
     const gen = generateRequirements(reqCount)

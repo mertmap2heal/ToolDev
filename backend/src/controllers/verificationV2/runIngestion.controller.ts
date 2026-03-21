@@ -197,7 +197,7 @@ export const getRunResultsForTestCase = async (req: AuthRequest, res: Response):
                         actualDurationSeconds: true,
                         createdAt: true,
                         testPlan: { select: { id: true, key: true, name: true } },
-                    },
+                    } as any,
                 },
             },
             orderBy: { createdAt: 'desc' },

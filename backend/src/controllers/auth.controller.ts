@@ -713,5 +713,5 @@ function generateToken(userId: string): string {
     throw new Error('JWT_SECRET is not defined')
   }
 
-  return jwt.sign({ userId }, secret, { expiresIn })
+  return jwt.sign({ userId }, secret, { expiresIn: expiresIn as any })
 }

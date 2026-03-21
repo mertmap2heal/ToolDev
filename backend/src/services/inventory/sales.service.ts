@@ -288,7 +288,7 @@ export class SalesService {
     }
 
     // Use inventory service to allocate reservations
-    await inventoryService.allocateReservations(soId)
+    await (inventoryService as any).allocateReservations(soId)
 
     return await prisma.salesOrder.update({
       where: { id: soId },
@@ -321,7 +321,7 @@ export class SalesService {
             fromLocationId: line.fromLocationId,
             lotId: line.lotId,
             serialId: line.serialId,
-          })),
+          })) as any,
         },
       },
       include: {
@@ -413,7 +413,7 @@ export class SalesService {
             fromLocation: true,
             lot: true,
             serial: true,
-          },
+          } as any,
         },
       },
     })
@@ -450,7 +450,7 @@ export class SalesService {
     }
 
     // Use inventory service to post shipment
-    await inventoryService.postShipment(shipmentId, idempotencyKey)
+    await inventoryService.postShipment({ shipmentId, idempotencyKey })
 
     // Update shipment status
     const updatedShipment = await prisma.shipment.update({

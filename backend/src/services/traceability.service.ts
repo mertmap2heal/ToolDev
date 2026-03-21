@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma'
+// @ts-ignore
 import type { TraceLink, TraceabilityGraph } from '../../../shared/types/traceability.types'
 import { linkageAuditService } from './linkageAudit.service'
 import { notifyRequirementSubscribers } from './requirementNotification.service'

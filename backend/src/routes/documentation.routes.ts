@@ -19,7 +19,7 @@ router.post('/generate', async (req, res) => {
     res.json({ success: true, data: { content, format: format || 'markdown' } })
   } catch (error) {
     console.error('Generate documentation error:', error)
-    res.status(500).json({ success: false, error: error.message || 'Internal server error' })
+    res.status(500).json({ success: false, error: (error as Error).message || 'Internal server error' })
   }
 })
 
@@ -30,7 +30,7 @@ router.get('/projects/:projectId/documents', async (req, res) => {
     const docs = await documentationService.listDocuments(projectId);
     res.json({ success: true, data: docs });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
 
@@ -42,7 +42,7 @@ router.get('/projects/:projectId/documents/:id', async (req, res) => {
     if (!doc) return res.status(404).json({ success: false, error: 'Document not found' });
     res.json({ success: true, data: doc });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
 
@@ -54,7 +54,7 @@ router.post('/projects/:projectId/documents', async (req, res) => {
     const doc = await documentationService.createDocument(projectId, docData);
     res.status(201).json({ success: true, data: doc });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
 
@@ -67,7 +67,7 @@ router.put('/projects/:projectId/documents/:id', async (req, res) => {
     if (!doc) return res.status(404).json({ success: false, error: 'Document not found' });
     res.json({ success: true, data: doc });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
 
@@ -78,7 +78,7 @@ router.delete('/projects/:projectId/documents/:id', async (req, res) => {
     await documentationService.deleteDocument(projectId, id);
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
 

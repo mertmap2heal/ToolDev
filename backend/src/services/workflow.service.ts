@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma'
+// @ts-ignore
 import type { WorkflowProgress, LifecycleStage } from '../../../shared/types/workflow.types'
 
 

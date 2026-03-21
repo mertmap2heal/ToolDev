@@ -28,7 +28,7 @@ async function main() {
             return acc
         }, {} as any)
 
-        for (const [projectId, reqs] of Object.entries(byProject)) {
+        for (const [projectId, reqs] of Object.entries(byProject) as [string, any[]][]) {
             console.log(`\nProject: ${projectId}`)
             reqs.forEach((r: any) => {
                 const loc = r.component ? `[Component: ${r.component.name}]` : '[No Component]'

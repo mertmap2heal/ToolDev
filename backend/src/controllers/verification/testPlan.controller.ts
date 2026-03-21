@@ -99,8 +99,8 @@ export const createTestPlan = async (req: AuthRequest, res: Response) => {
         entryCriteria,
         exitCriteria,
         ownerUserId: req.userId,
-        testingEnvironmentIds: Array.isArray(testingEnvironmentIds) ? testingEnvironmentIds : null,
-        testingToolIds: Array.isArray(testingToolIds) ? testingToolIds : null,
+        testingEnvironmentIds: (Array.isArray(testingEnvironmentIds) ? testingEnvironmentIds : null) as any,
+        testingToolIds: (Array.isArray(testingToolIds) ? testingToolIds : null) as any,
         status: TestPlanStatus.DRAFT,
       },
     })

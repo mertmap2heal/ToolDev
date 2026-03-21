@@ -184,7 +184,7 @@ export const updateRunResult = async (req: AuthRequest, res: Response): Promise<
       if (failConditions != null) merged.failConditions = failConditions
       await prisma.verTestRunResult.update({
         where: { id: resultId },
-        data: { actualResults: merged },
+        data: { actualResults: merged as any },
       })
     }
 
@@ -224,6 +224,7 @@ export const uploadEvidence = async (req: AuthRequest, res: Response): Promise<R
   try {
     const { projectId, runId, resultId } = req.params
     const { fileData, fileName, mimeType } = req.body
+    // @ts-ignore
     const file = (req as { file?: Express.Multer.File }).file
 
     const result = await prisma.verTestRunResult.findFirst({

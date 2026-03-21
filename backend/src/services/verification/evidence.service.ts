@@ -70,7 +70,8 @@ export const evidenceService = {
         linkedEntityType,
         linkedEntityId,
         relation,
-      },
+        userId: null,
+      } as any,
     })
   },
 

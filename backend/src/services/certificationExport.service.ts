@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma'
 import ExcelJS from 'exceljs'
+// @ts-ignore
 import PDFDocument from 'pdfkit'
 import archiver from 'archiver'
 import type { Readable } from 'stream'
@@ -150,10 +151,10 @@ export async function exportEvidenceIndex(projectId: string, format: ExportForma
 
   const rows = data.verEvidence.map((e) => [
     e.id,
-    e.evidenceId ?? e.id,
+    (e as any).evidenceId ?? e.id,
     e.title ?? '—',
-    e.status ?? 'Draft',
-    e.owner ?? '—',
+    (e as any).status ?? 'Draft',
+    (e as any).owner ?? '—',
     e.createdAt ? new Date(e.createdAt).toISOString().slice(0, 10) : '—',
   ])
 

@@ -7,10 +7,15 @@ describe('Verification Workflow Integration', () => {
   let projectId: string
   let testPlanId: string
   let testCaseId: string
+  let testUserId: string
 
   beforeAll(async () => {
+    const user = await prisma.user.create({
+      data: { email: 'ver-integration-test@example.com', name: 'Ver Test User', password: 'hashedpassword' },
+    })
+    testUserId = user.id
     const project = await prisma.project.create({
-      data: { name: 'Integration Test', domain: 'test', slug: 'integration-test', userId: 'test-user' },
+      data: { name: 'Integration Test', domain: 'test', slug: 'integration-test', userId: testUserId },
     })
     projectId = project.id
     await prisma.verMoc.upsert({
@@ -25,6 +30,7 @@ describe('Verification Workflow Integration', () => {
     await prisma.verTestCase.deleteMany({ where: { projectId } })
     await prisma.verTestPlan.deleteMany({ where: { projectId } })
     await prisma.project.delete({ where: { id: projectId } })
+    await prisma.user.delete({ where: { id: testUserId } })
     await prisma.$disconnect()
   })
 
