@@ -24,7 +24,7 @@ export interface ApplicableLifecycle {
 export interface AllowedTransition {
   toStatusId: string
   toStatusName: string
-  allowedUserGroups: string[]
+  allowedEngineeringRoleIds: string[]
 }
 
 export interface TransitionsResponse {
@@ -186,10 +186,11 @@ export const lifecycleService = {
     const rules = lifecycle.transitionRules.filter((r) => r.fromStatusId === fromStatusId)
     const transitions: AllowedTransition[] = rules.map((rule) => {
       const toStatus = statuses.find((s) => s.id === rule.toStatusId)
+      const ids = rule.allowedEngineeringRoleIds ?? []
       return {
         toStatusId: rule.toStatusId,
         toStatusName: toStatus?.name ?? rule.toStatusId,
-        allowedUserGroups: rule.allowedUserGroups ?? [],
+        allowedEngineeringRoleIds: [...ids],
       }
     })
 

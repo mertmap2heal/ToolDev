@@ -17,13 +17,14 @@ import {
   X,
   UserPlus,
   Mail,
+  UserCog,
 } from 'lucide-react'
 import clsx from 'clsx'
 
 import { StakeholdersStoreProvider, useStakeholdersStore } from '../../modules/stakeholders/store'
 import { canEditStakeholders, canEditGovernance } from '../../modules/stakeholders/permissions'
 import { useQuery } from '@tanstack/react-query'
-import * as adminService from '../../services/admin.service'
+import * as stakeholderRolesService from '../../services/stakeholderRoles.service'
 import StakeholderTable from '../../modules/stakeholders/components/StakeholderTable'
 import AddToCommitteeModal from '../../modules/stakeholders/components/AddToCommitteeModal'
 import type { StakeholderUser } from '../../types/admin.types'
@@ -35,11 +36,13 @@ import RequestsBoard from '../../modules/stakeholders/components/RequestsBoard'
 import CommunicationTimeline from '../../modules/stakeholders/components/CommunicationTimeline'
 import AuditTrailTable from '../../modules/stakeholders/components/AuditTrailTable'
 import SettingsRolesTab from '../../modules/stakeholders/components/SettingsRolesTab'
+import EngineeringRolesManagementTab from '../../modules/stakeholders/components/EngineeringRolesManagementTab'
 import CreateCommitteeModal from '../../modules/stakeholders/components/CreateCommitteeModal'
 import type { Committee } from '../../modules/stakeholders/types'
 
 const TABS = [
   { id: 'directory', label: 'Directory', icon: Users },
+  { id: 'roles', label: 'Roles & assignments', icon: UserCog },
   { id: 'raci', label: 'RACI / Responsibilities', icon: LayoutGrid },
   { id: 'committees', label: 'Committees & Boards', icon: Building2 },
   { id: 'approval-rules', label: 'Approval Authority Rules', icon: Shield },
@@ -67,21 +70,25 @@ function toggleFilterValue(setter: React.Dispatch<React.SetStateAction<Set<strin
 }
 
 function DirectoryFilterPanel({
+  projectId,
   roleFilter, setRoleFilter,
   statusFilter, setStatusFilter,
   companyFilter, setCompanyFilter,
 }: {
+  projectId: string
   roleFilter: Set<string>; setRoleFilter: React.Dispatch<React.SetStateAction<Set<string>>>
   statusFilter: Set<string>; setStatusFilter: React.Dispatch<React.SetStateAction<Set<string>>>
   companyFilter: Set<string>; setCompanyFilter: React.Dispatch<React.SetStateAction<Set<string>>>
 }) {
   const { data: allEngRoles = [] } = useQuery({
-    queryKey: ['admin', 'engineeringRoles'],
-    queryFn: () => adminService.getEngineeringRoles(),
+    queryKey: ['project', projectId, 'engineeringRoles'],
+    queryFn: () => stakeholderRolesService.getProjectEngineeringRoles(projectId),
+    enabled: !!projectId,
   })
   const { data: users = [] } = useQuery({
-    queryKey: ['admin', 'usersWithRoles'],
-    queryFn: () => adminService.getUsersWithRoles(),
+    queryKey: ['project', projectId, 'usersWithRoles'],
+    queryFn: () => stakeholderRolesService.getProjectUsersWithRoles(projectId),
+    enabled: !!projectId,
   })
   const allRoleNames = allEngRoles.map((r) => r.name).sort()
   const allCompanies = [...new Set(users.map((u) => u.company).filter(Boolean) as string[])].sort()
@@ -189,6 +196,11 @@ function StakeholdersContent() {
   const openCreate = (kind: string) => {
     setCreateOpen(false)
     switch (kind) {
+      case 'roles':
+        setActiveTab('roles')
+        setSearchParams({ tab: 'roles' }, { replace: true })
+        showToast('Assign discipline roles in Roles & assignments.')
+        break
       case 'committee':
         setActiveTab('committees')
         setSearchParams({ tab: 'committees' }, { replace: true })
@@ -283,6 +295,14 @@ function StakeholdersContent() {
               <div className="absolute right-0 mt-1 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 z-20">
                 <button
                   type="button"
+                  onClick={() => openCreate('roles')}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                >
+                  <UserCog size={14} />
+                  Roles &amp; assignments
+                </button>
+                <button
+                  type="button"
                   onClick={() => openCreate('committee')}
                   className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                 >
@@ -342,7 +362,17 @@ function StakeholdersContent() {
           </div>
         </div>
 
-        {filtersOpen && activeTab === 'directory' && <DirectoryFilterPanel roleFilter={roleFilter} setRoleFilter={setRoleFilter} statusFilter={statusFilter} setStatusFilter={setStatusFilter} companyFilter={companyFilter} setCompanyFilter={setCompanyFilter} />}
+        {filtersOpen && activeTab === 'directory' && projectId && (
+          <DirectoryFilterPanel
+            projectId={projectId}
+            roleFilter={roleFilter}
+            setRoleFilter={setRoleFilter}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            companyFilter={companyFilter}
+            setCompanyFilter={setCompanyFilter}
+          />
+        )}
 
         <div className="flex-shrink-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-x-auto">
           <div className="flex border-b border-gray-200 dark:border-gray-700 min-w-max">
@@ -371,9 +401,10 @@ function StakeholdersContent() {
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto pt-4">
-        {activeTab === 'directory' && (
+        {activeTab === 'directory' && projectId && (
           <>
             <StakeholderTable
+              projectId={projectId}
               globalSearch={globalSearch}
               onSelectStakeholder={(s) => {
                 setSelectedStakeholder(s)
@@ -426,11 +457,16 @@ function StakeholdersContent() {
                           ))}
                         </div>
                       ) : (
-                        <p className="text-sm text-gray-500 dark:text-gray-400">No engineering roles assigned. Assign roles via the Admin Panel.</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          No discipline roles assigned for this project. Use <strong>Roles &amp; assignments</strong> to assign.
+                        </p>
                       )}
                     </section>
                     <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
-                      <p className="text-xs text-gray-500 dark:text-gray-400">User data is managed centrally via the <strong>Admin Panel</strong>. To edit user details, roles, or status, navigate to Admin → Users.</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Project-scoped discipline roles are managed in <strong>Stakeholders → Roles &amp; assignments</strong>.
+                        User accounts are managed in <strong>Admin → Users</strong>.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -484,6 +520,9 @@ function StakeholdersContent() {
         {activeTab === 'requests' && <RequestsBoard onShowToast={showToast} canEdit={canEdit} />}
         {activeTab === 'communication' && <CommunicationTimeline onShowToast={showToast} canEdit={canEdit} />}
         {activeTab === 'audit' && <AuditTrailTable onShowToast={showToast} />}
+        {activeTab === 'roles' && projectId && (
+          <EngineeringRolesManagementTab projectId={projectId} canEdit={canEdit} onShowToast={showToast} />
+        )}
         {activeTab === 'settings' && <SettingsRolesTab />}
       </div>
 

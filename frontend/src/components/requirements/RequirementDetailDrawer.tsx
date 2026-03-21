@@ -15,6 +15,7 @@ import { componentService } from '../../services/component.service'
 import { LINKAGE_V1, LIFECYCLE_V1 } from '../../config/featureFlags'
 import { invalidateLinkCaches } from '../../utils/invalidateLinkCaches'
 import { lifecycleService } from '../../services/lifecycle.service'
+import { lifecyclePermissionService } from '../../services/lifecyclePermission.service'
 import { verificationService } from '../../services/verification.service'
 
 import { buildDeepLink } from '../../linkage/buildDeepLink'
@@ -99,13 +100,17 @@ function LifecycleApprovalsTab({
   useEffect(() => {
     const lid = requirement.lifecycleId ?? lifecycle?.id
     if (lid && currentStatusId) {
-      lifecycleService.getAllowedTransitions(lid, currentStatusId).then((r) => {
+      lifecycleService.getAllowedTransitions(lid, currentStatusId).then(async (r) => {
         if (r.success && r.data?.transitions) {
-          setTransitions(r.data.transitions.map((t) => ({ toStatusId: t.toStatusId, toStatusName: t.toStatusName })))
+          const filtered = await lifecyclePermissionService.filterAllowedTransitions(
+            projectId,
+            r.data.transitions
+          )
+          setTransitions(filtered.map((t) => ({ toStatusId: t.toStatusId, toStatusName: t.toStatusName })))
         }
       })
     }
-  }, [requirement, lifecycle?.id, currentStatusId])
+  }, [requirement, lifecycle?.id, currentStatusId, projectId])
 
   const { data: auditEvents = [] } = useQuery({
     queryKey: ['audit', projectId, requirement.id],

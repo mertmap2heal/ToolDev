@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { useParams, Link } from 'react-router-dom'
 import {
   Library,
   Wrench,
@@ -24,22 +25,21 @@ import {
   Settings,
   ChevronRight,
   PlayCircle,
-  Users,
-  UserPlus
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import clsx from 'clsx'
 import { useQuery } from '@tanstack/react-query'
 import { useStatusDefinitionsStore, type StatusDefinition } from '../../store/statusDefinitionsStore'
-import { useLifecycleStore, type Lifecycle } from '../../store/lifecycleStore'
+import { useLifecycleStore, type Lifecycle, type TransitionRule } from '../../store/lifecycleStore'
 import { projectService } from '../../services/project.service'
 import { functionService } from '../../services/function.service'
 import { requirementService } from '../../services/requirement.service'
 import { issueService } from '../../services/issue.service'
 import { parameterService } from '../../services/parameter.service'
 import { changeRequestService } from '../../services/changeRequest.service'
+import * as stakeholderRolesService from '../../services/stakeholderRoles.service'
 
-type TabId = 'library' | 'builder' | 'status' | 'user-groups' | 'transitions' | 'control' | 'baselines' | 'audit'
+type TabId = 'library' | 'builder' | 'status' | 'transitions' | 'control' | 'baselines' | 'audit'
 
 interface Tab {
   id: TabId
@@ -68,12 +68,6 @@ const tabs: Tab[] = [
     description: 'Define and manage lifecycle status values and properties'
   },
   {
-    id: 'user-groups',
-    label: 'User Groups',
-    icon: Users,
-    description: 'Manage user groups and assign users to roles in the aircraft development process'
-  },
-  {
     id: 'transitions',
     label: 'Transition Rules',
     icon: ArrowRight,
@@ -100,6 +94,7 @@ const tabs: Tab[] = [
 ]
 
 export default function LifecycleManagementPage() {
+  const { projectId } = useParams<{ projectId: string }>()
   const [activeTab, setActiveTab] = useState<TabId>('library')
   const [searchQuery, setSearchQuery] = useState('')
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
@@ -185,10 +180,9 @@ export default function LifecycleManagementPage() {
 
       {/* Tab Content */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-        {activeTab === 'library' && <LifecycleLibraryContent searchQuery={searchQuery} />}
+        {activeTab === 'library' && <LifecycleLibraryContent searchQuery={searchQuery} projectId={projectId} />}
         {activeTab === 'builder' && <LifecycleBuilderContent />}
         {activeTab === 'status' && <StatusDefinitionsContent searchQuery={searchQuery} />}
-        {activeTab === 'user-groups' && <UserGroupsContent />}
         {activeTab === 'transitions' && <TransitionRulesContent />}
         {activeTab === 'control' && <ItemLifecycleControlContent />}
         {activeTab === 'baselines' && <BaselinesVersionsContent />}
@@ -262,8 +256,34 @@ function LifecycleItemCount({ lifecycle }: { lifecycle: any }) {
   return <span>{itemCount ?? lifecycle.itemCount ?? 0} Items</span>
 }
 
+function parseTransitionRulesFromLifecycle(editing: { transitionRules?: unknown } | undefined): TransitionRule[] {
+  const raw = editing?.transitionRules
+  if (!Array.isArray(raw)) return []
+  return raw.map((r: Record<string, unknown>) => {
+    const ids = (r.allowedEngineeringRoleIds as string[] | undefined) ?? []
+    const legacy =
+      (r.legacyAllowedUserGroupNames as string[] | undefined) ??
+      (r.allowedUserGroups as string[] | undefined)
+    const base: TransitionRule = {
+      fromStatusId: String(r.fromStatusId ?? ''),
+      toStatusId: String(r.toStatusId ?? ''),
+      allowedEngineeringRoleIds: [...ids],
+    }
+    if (legacy?.length) base.legacyAllowedUserGroupNames = [...legacy]
+    return base
+  })
+}
+
+function sanitizeRulesForSave(rules: TransitionRule[]) {
+  return rules.map(({ fromStatusId, toStatusId, allowedEngineeringRoleIds }) => ({
+    fromStatusId,
+    toStatusId,
+    allowedEngineeringRoleIds: [...allowedEngineeringRoleIds],
+  }))
+}
+
 // Lifecycle Library Content
-function LifecycleLibraryContent({ searchQuery = '' }: { searchQuery?: string }) {
+function LifecycleLibraryContent({ searchQuery = '', projectId }: { searchQuery?: string; projectId?: string }) {
   const { lifecycles, setLifecycles, updateLifecycle, addLifecycle } = useLifecycleStore()
   const [activeSubsection, setActiveSubsection] = useState<string>('standard')
   const [selectedLifecycle, setSelectedLifecycle] = useState<string | null>(null)
@@ -665,6 +685,7 @@ function LifecycleLibraryContent({ searchQuery = '' }: { searchQuery?: string })
       {/* Create Lifecycle Modal */}
       {isCreateLifecycleModalOpen && (
         <CreateLifecycleModal
+          projectId={projectId}
           initialLibrary={(activeSubsection === 'standard' ? 'standard' : 
                           activeSubsection === 'organization' ? 'organization' : 
                           activeSubsection === 'project' ? 'project' : 
@@ -702,6 +723,7 @@ function LifecycleLibraryContent({ searchQuery = '' }: { searchQuery?: string })
       {/* Edit Lifecycle Modal */}
       {showEditModal && editingLifecycle && (
         <CreateLifecycleModal
+          projectId={projectId}
           editingLifecycle={editingLifecycle}
           onClose={() => {
             setShowEditModal(false)
@@ -730,7 +752,7 @@ function LifecycleLibraryContent({ searchQuery = '' }: { searchQuery?: string })
 }
 
 // Create Lifecycle Modal
-function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrary, hideLibrarySelection, activeSubsection }: { onClose: () => void; onSave: (data: any) => void; editingLifecycle?: any; initialLibrary?: 'standard' | 'organization' | 'project'; hideLibrarySelection?: boolean; activeSubsection?: string }) {
+function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrary, hideLibrarySelection, activeSubsection, projectId }: { onClose: () => void; onSave: (data: any) => void; editingLifecycle?: any; initialLibrary?: 'standard' | 'organization' | 'project'; hideLibrarySelection?: boolean; activeSubsection?: string; projectId?: string }) {
   const { statuses } = useStatusDefinitionsStore()
   const { lifecycles } = useLifecycleStore()
   const [selectedLibrary, setSelectedLibrary] = useState<'standard' | 'organization' | 'project'>(
@@ -788,7 +810,9 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
     version: editingLifecycle?.version || '1.0',
     applicableItemTypes: editingLifecycle?.applicableItemTypes || [] as string[],
     steps: editingLifecycle?.steps || [] as Array<{ id: string; statusId: string; order: number }>,
-    transitionRules: editingLifecycle?.transitionRules || [] as Array<{ fromStatusId: string; toStatusId: string; allowedUserGroups: string[] }>
+    transitionRules: editingLifecycle
+      ? parseTransitionRulesFromLifecycle(editingLifecycle)
+      : ([] as TransitionRule[]),
   })
   
   // Update auto-name when library selection changes (only for new lifecycles, not editing)
@@ -798,7 +822,6 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
       setFormData(prev => ({ ...prev, name: autoName }))
     }
   }, [selectedLibrary, activeSubsection, editingLifecycle])
-  const [availableRoles, setAvailableRoles] = useState<string[]>([])
   const [currentStep, setCurrentStep] = useState(0)
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null)
   const [previewConnection, setPreviewConnection] = useState<{ from: string; to: { x: number; y: number } } | null>(null)
@@ -806,28 +829,40 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
 
   const availableItemTypes = ['Function', 'Test', 'Issue', 'Parameter', 'Requirement', 'Change Request', 'Task', 'Stakeholder', 'Documentation']
 
-  // Load available roles from UserGroupsContent (we'll need to pass this or use a store)
+  const { data: engineeringRolesCatalog = [] } = useQuery({
+    queryKey: ['project', projectId ?? '', 'engineeringRoles'],
+    queryFn: () => stakeholderRolesService.getProjectEngineeringRoles(projectId!),
+    enabled: !!projectId,
+  })
+
   useEffect(() => {
-    // For now, use common roles - in production, this should come from a store or API
-    setAvailableRoles([
-      'Systems Engineer',
-      'Requirements Engineer',
-      'Design Engineer',
-      'Integration Engineer',
-      'Test Engineer',
-      'Verification Engineer',
-      'Validation Engineer',
-      'Configuration Manager',
-      'Quality Assurance',
-      'Project Manager',
-      'Safety Engineer',
-      'Software Engineer',
-      'Hardware Engineer',
-      'Systems Architect',
-      'Test Manager',
-      'Compliance Engineer'
-    ])
-  }, [])
+    if (!engineeringRolesCatalog.length) return
+    setFormData((prev) => {
+      const needMerge = prev.transitionRules.some(
+        (r) => (r.legacyAllowedUserGroupNames?.length ?? 0) > 0
+      )
+      if (!needMerge) return prev
+      const byName = new Map(engineeringRolesCatalog.map((er) => [er.name, er.id]))
+      return {
+        ...prev,
+        transitionRules: prev.transitionRules.map((rule) => {
+          const ids = new Set(rule.allowedEngineeringRoleIds)
+          const legacy = rule.legacyAllowedUserGroupNames
+          if (legacy?.length) {
+            for (const name of legacy) {
+              const id = byName.get(name)
+              if (id) ids.add(id)
+            }
+          }
+          return {
+            ...rule,
+            allowedEngineeringRoleIds: Array.from(ids),
+            legacyAllowedUserGroupNames: undefined,
+          }
+        }),
+      }
+    })
+  }, [engineeringRolesCatalog])
 
   // Validation functions for each step
   // IMPORTANT: All validation rules apply universally to standard, organization, and project lifecycle libraries,
@@ -883,35 +918,25 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
       return false
     }
     
-    // Check that each transition rule has at least one user group selected
-    // This requirement applies to standard, organization, and project lifecycles
-    const rulesWithoutUserGroups = formData.transitionRules.filter(
-      rule => rule.allowedUserGroups.length === 0
+    // Check that each transition rule has at least one allowed discipline role
+    const rulesWithoutRoles = formData.transitionRules.filter(
+      (rule) => rule.allowedEngineeringRoleIds.length === 0
     )
-    if (rulesWithoutUserGroups.length > 0) {
-      alert('Please select at least one user group for each transition rule')
+    if (rulesWithoutRoles.length > 0) {
+      alert('Please select at least one role (from Stakeholders) for each transition rule')
       return false
     }
     
     return true
   }
 
-  // Helper function to check if user groups are selected for each transition rule
-  // Applies to ALL lifecycle types (standard, organization, project)
-  const hasAllUserGroupsSelected = (): boolean => {
+  const hasAllRolesSelected = (): boolean => {
     if (formData.transitionRules.length === 0) return false
-    
-    // Get all rules that have both from and to statuses selected
-    const completeRules = formData.transitionRules.filter(
-      rule => rule.fromStatusId && rule.toStatusId
-    )
-    
-    // If there are no complete rules, button should be disabled
+
+    const completeRules = formData.transitionRules.filter((rule) => rule.fromStatusId && rule.toStatusId)
     if (completeRules.length === 0) return false
-    
-    // Check that EVERY complete rule has at least one user group selected
-    // This requirement applies universally to standard, organization, and project lifecycles
-    return completeRules.every(rule => rule.allowedUserGroups.length > 0)
+
+    return completeRules.every((rule) => rule.allowedEngineeringRoleIds.length > 0)
   }
 
   // Applies to ALL lifecycle types (standard, organization, project) - no exceptions
@@ -953,7 +978,8 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
     
     onSave({
       ...formData,
-      type: selectedLibrary
+      type: selectedLibrary,
+      transitionRules: sanitizeRulesForSave(formData.transitionRules),
     })
   }
 
@@ -1002,7 +1028,7 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
       
       // Auto-create transition rules for adjacent steps with updated steps
       const sortedSteps = [...updatedSteps].sort((a, b) => a.order - b.order)
-      const newSequentialRules: Array<{ fromStatusId: string; toStatusId: string; allowedUserGroups: string[] }> = []
+      const newSequentialRules: TransitionRule[] = []
       
       // Create only forward sequential transitions (from step i to step i+1)
       for (let i = 0; i < sortedSteps.length - 1; i++) {
@@ -1016,7 +1042,7 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
             newSequentialRules.push({
               fromStatusId: fromStep.statusId,
               toStatusId: toStep.statusId,
-              allowedUserGroups: []
+              allowedEngineeringRoleIds: [],
             })
           }
         }
@@ -1043,7 +1069,7 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
       const allRules = [...newSequentialRules, ...existingNonSequentialRules]
       
       // Remove duplicates
-      const uniqueRules = new Map<string, { fromStatusId: string; toStatusId: string; allowedUserGroups: string[] }>()
+      const uniqueRules = new Map<string, TransitionRule>()
       allRules.forEach(rule => {
         const key = `${rule.fromStatusId}-${rule.toStatusId}`
         if (!uniqueRules.has(key)) {
@@ -1051,7 +1077,7 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
         } else {
           // If duplicate exists, prefer the one with user groups (existing rule)
           const existing = uniqueRules.get(key)!
-          if (existing.allowedUserGroups.length > 0) {
+          if (existing.allowedEngineeringRoleIds.length > 0) {
             uniqueRules.set(key, existing)
           } else {
             uniqueRules.set(key, rule)
@@ -1102,7 +1128,7 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
     // Only create sequential forward transitions between adjacent steps
     // Do NOT create backward transitions - those must be created manually by the user
     const sortedSteps = [...formData.steps].sort((a, b) => a.order - b.order)
-    const newSequentialRules: Array<{ fromStatusId: string; toStatusId: string; allowedUserGroups: string[] }> = []
+    const newSequentialRules: TransitionRule[] = []
     
     // Create only forward sequential transitions (from step i to step i+1)
     for (let i = 0; i < sortedSteps.length - 1; i++) {
@@ -1116,7 +1142,7 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
           newSequentialRules.push({
             fromStatusId: fromStep.statusId,
             toStatusId: toStep.statusId,
-            allowedUserGroups: []
+            allowedEngineeringRoleIds: [],
           })
         }
       }
@@ -1143,7 +1169,7 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
     const allRules = [...newSequentialRules, ...existingNonSequentialRules]
     
     // Remove duplicates
-    const uniqueRules = new Map<string, { fromStatusId: string; toStatusId: string; allowedUserGroups: string[] }>()
+    const uniqueRules = new Map<string, TransitionRule>()
     allRules.forEach(rule => {
       const key = `${rule.fromStatusId}-${rule.toStatusId}`
       if (!uniqueRules.has(key)) {
@@ -1151,7 +1177,7 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
       } else {
         // If duplicate exists, prefer the one with user groups (existing rule)
         const existing = uniqueRules.get(key)!
-        if (existing.allowedUserGroups.length > 0) {
+        if (existing.allowedEngineeringRoleIds.length > 0) {
           uniqueRules.set(key, existing)
         } else {
           uniqueRules.set(key, rule)
@@ -1163,10 +1189,10 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
   }
 
   const handleAddCustomTransition = () => {
-    const newRule = {
+    const newRule: TransitionRule = {
       fromStatusId: '',
       toStatusId: '',
-      allowedUserGroups: []
+      allowedEngineeringRoleIds: [],
     }
     setFormData(prev => ({
       ...prev,
@@ -1210,10 +1236,10 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
     }))
   }
 
-  const handleTransitionRuleChange = (fromStatusId: string, toStatusId: string, userGroup: string, allowed: boolean) => {
-    setFormData(prev => {
+  const handleTransitionRuleChange = (fromStatusId: string, toStatusId: string, roleId: string, allowed: boolean) => {
+    setFormData((prev) => {
       const ruleIndex = prev.transitionRules.findIndex(
-        r => r.fromStatusId === fromStatusId && r.toStatusId === toStatusId
+        (r) => r.fromStatusId === fromStatusId && r.toStatusId === toStatusId
       )
       if (ruleIndex === -1) return prev
 
@@ -1221,12 +1247,14 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
       if (allowed) {
         updatedRules[ruleIndex] = {
           ...updatedRules[ruleIndex],
-          allowedUserGroups: [...updatedRules[ruleIndex].allowedUserGroups, userGroup]
+          allowedEngineeringRoleIds: [
+            ...new Set([...updatedRules[ruleIndex].allowedEngineeringRoleIds, roleId]),
+          ],
         }
       } else {
         updatedRules[ruleIndex] = {
           ...updatedRules[ruleIndex],
-          allowedUserGroups: updatedRules[ruleIndex].allowedUserGroups.filter(g => g !== userGroup)
+          allowedEngineeringRoleIds: updatedRules[ruleIndex].allowedEngineeringRoleIds.filter((id) => id !== roleId),
         }
       }
       return { ...prev, transitionRules: updatedRules }
@@ -1481,7 +1509,7 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
                             {
                               fromStatusId: sourceStep.statusId,
                               toStatusId: statusId,
-                              allowedUserGroups: []
+                              allowedEngineeringRoleIds: [],
                             }
                           ]
                         }))
@@ -2280,25 +2308,56 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
                         </div>
                         {rule.fromStatusId && rule.toStatusId && (
                           <div>
+                            {!projectId && (
+                              <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">
+                                Open Lifecycle Settings from a project to load discipline roles. Assign users in{' '}
+                                <Link
+                                  to={projectId ? `/projects/${projectId}/stakeholder?tab=roles` : '/'}
+                                  className="underline font-medium text-amber-800 dark:text-amber-200"
+                                >
+                                  Stakeholders → Roles &amp; assignments
+                                </Link>
+                                .
+                              </p>
+                            )}
+                            {projectId && engineeringRolesCatalog.length === 0 && (
+                              <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">
+                                No engineering roles returned for this project. Check Stakeholders → Roles &amp; assignments
+                                or your sign-in.
+                              </p>
+                            )}
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                              Allowed User Groups
+                              Allowed roles (from Stakeholders)
                             </label>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                              {availableRoles.map((role) => (
+                              {engineeringRolesCatalog.map((role) => (
                                 <label
-                                  key={role}
+                                  key={role.id}
                                   className="flex items-center p-2 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
                                 >
                                   <input
                                     type="checkbox"
-                                    checked={rule.allowedUserGroups.includes(role)}
-                                    onChange={(e) => handleTransitionRuleChange(rule.fromStatusId, rule.toStatusId, role, e.target.checked)}
+                                    checked={rule.allowedEngineeringRoleIds.includes(role.id)}
+                                    onChange={(e) =>
+                                      handleTransitionRuleChange(
+                                        rule.fromStatusId,
+                                        rule.toStatusId,
+                                        role.id,
+                                        e.target.checked
+                                      )
+                                    }
                                     className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                                   />
-                                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{role}</span>
+                                  <span className="ml-2 text-sm text-gray-900 dark:text-white">{role.name}</span>
                                 </label>
                               ))}
                             </div>
+                            {rule.legacyAllowedUserGroupNames && rule.legacyAllowedUserGroupNames.length > 0 && (
+                              <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                                Legacy role names on file: {rule.legacyAllowedUserGroupNames.join(', ')} — will map to ids
+                                when the catalog loads.
+                              </p>
+                            )}
                           </div>
                         )}
                       </div>
@@ -2318,10 +2377,10 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
                 <button
                   type="button"
                   onClick={() => handleNextStep(3)}
-                  disabled={!hasAllUserGroupsSelected()}
+                  disabled={!hasAllRolesSelected()}
                   className={clsx(
                     "px-6 py-2.5 rounded-lg font-semibold shadow-lg transition-all duration-200",
-                    hasAllUserGroupsSelected()
+                    hasAllRolesSelected()
                       ? "bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40"
                       : "bg-slate-300 dark:bg-slate-600 text-slate-500 dark:text-slate-400 cursor-not-allowed opacity-50"
                   )}
@@ -2372,10 +2431,10 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
                 </button>
                 <button
                   type="submit"
-                  disabled={!hasAllUserGroupsSelected() || formData.applicableItemTypes.length === 0}
+                  disabled={!hasAllRolesSelected() || formData.applicableItemTypes.length === 0}
                   className={clsx(
                     "px-6 py-2.5 rounded-lg font-semibold shadow-lg transition-all duration-200",
-                    hasAllUserGroupsSelected() && formData.applicableItemTypes.length > 0
+                    hasAllRolesSelected() && formData.applicableItemTypes.length > 0
                       ? "bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40"
                       : "bg-slate-300 dark:bg-slate-600 text-slate-500 dark:text-slate-400 cursor-not-allowed opacity-50"
                   )}
@@ -2405,7 +2464,15 @@ function CreateLifecycleModal({ onClose, onSave, editingLifecycle, initialLibrar
 // View Lifecycle Modal
 function ViewLifecycleModal({ lifecycleId, lifecycle, onClose }: { lifecycleId: string; lifecycle: any; onClose: () => void }) {
   const { statuses } = useStatusDefinitionsStore()
+  const { projectId } = useParams<{ projectId: string }>()
   const [activeTab, setActiveTab] = useState<'overview' | 'items'>('overview')
+
+  const { data: viewEngRoles = [] } = useQuery({
+    queryKey: ['project', projectId ?? '', 'engineeringRoles'],
+    queryFn: () => stakeholderRolesService.getProjectEngineeringRoles(projectId!),
+    enabled: !!projectId,
+  })
+  const roleIdToName = useMemo(() => new Map(viewEngRoles.map((r) => [r.id, r.name])), [viewEngRoles])
 
   // Fetch all projects
   const { data: projects = [] } = useQuery({
@@ -2524,22 +2591,22 @@ function ViewLifecycleModal({ lifecycleId, lifecycle, onClose }: { lifecycleId: 
     enabled: projects.length > 0 && lifecycle.applicableItemTypes && lifecycle.applicableItemTypes.length > 0,
   })
 
-  // Helper function to get next user groups for a status
-  const getNextUserGroups = (currentStatusId: string): string[] => {
+  const getNextAllowedRoleLabels = (currentStatusId: string): string[] => {
     if (!lifecycle.transitionRules || !currentStatusId) return []
-    
-    const transitions = lifecycle.transitionRules.filter(
-      (rule: any) => rule.fromStatusId === currentStatusId
-    )
-    
-    const userGroups = new Set<string>()
+
+    const transitions = lifecycle.transitionRules.filter((rule: any) => rule.fromStatusId === currentStatusId)
+    const labels = new Set<string>()
     transitions.forEach((transition: any) => {
-      if (transition.allowedUserGroups && transition.allowedUserGroups.length > 0) {
-        transition.allowedUserGroups.forEach((group: string) => userGroups.add(group))
+      const ids = transition.allowedEngineeringRoleIds as string[] | undefined
+      if (ids?.length) {
+        for (const id of ids) labels.add(roleIdToName.get(id) ?? id)
       }
+      const legacy = transition.legacyAllowedUserGroupNames as string[] | undefined
+      if (legacy?.length) legacy.forEach((n: string) => labels.add(n))
+      const old = transition.allowedUserGroups as string[] | undefined
+      if (old?.length) old.forEach((n: string) => labels.add(n))
     })
-    
-    return Array.from(userGroups)
+    return Array.from(labels)
   }
 
   // Helper function to get status name from ID
@@ -2646,13 +2713,13 @@ function ViewLifecycleModal({ lifecycleId, lifecycle, onClose }: { lifecycleId: 
                         <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Type</th>
                         <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Project</th>
                         <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Current Status</th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Next User Groups</th>
+                        <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Next allowed roles</th>
                         <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Last Change</th>
                       </tr>
                     </thead>
                     <tbody>
                       {allItems.map((item) => {
-                        const nextUserGroups = getNextUserGroups(item.status)
+                        const nextUserGroups = getNextAllowedRoleLabels(item.status)
                         const statusName = getStatusName(item.status)
                         const lastChange = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'N/A'
                         
@@ -3833,319 +3900,6 @@ function BaselinesVersionsContent() {
             Create Baseline
           </button>
         </div>
-      </div>
-    </div>
-  )
-}
-
-// User Groups Content
-function UserGroupsContent() {
-  const commonRoles = [
-    'Systems Engineer',
-    'Requirements Engineer',
-    'Design Engineer',
-    'Integration Engineer',
-    'Test Engineer',
-    'Verification Engineer',
-    'Validation Engineer',
-    'Configuration Manager',
-    'Quality Assurance',
-    'Project Manager',
-    'Safety Engineer',
-    'Software Engineer',
-    'Hardware Engineer',
-    'Systems Architect',
-    'Test Manager',
-    'Compliance Engineer'
-  ]
-
-  const [roles, setRoles] = useState<string[]>(commonRoles)
-  const [editingRole, setEditingRole] = useState<{ index: number; name: string } | null>(null)
-  const [newRoleName, setNewRoleName] = useState('')
-  const [isAddingRole, setIsAddingRole] = useState(false)
-  const [userAssignments, setUserAssignments] = useState<Record<string, string[]>>({})
-  const [availableUsers, setAvailableUsers] = useState<string[]>(['John Doe', 'Jane Smith', 'Bob Johnson', 'Alice Williams', 'Charlie Brown'])
-  const [selectedRoleForAssignment, setSelectedRoleForAssignment] = useState<string>('')
-  const [selectedUserForAssignment, setSelectedUserForAssignment] = useState<string>('')
-
-  const handleAddRole = () => {
-    if (newRoleName.trim() && !roles.includes(newRoleName.trim())) {
-      setRoles([...roles, newRoleName.trim()])
-      setNewRoleName('')
-      setIsAddingRole(false)
-    }
-  }
-
-  const handleEditRole = (index: number) => {
-    setEditingRole({ index, name: roles[index] })
-  }
-
-  const handleSaveEdit = () => {
-    if (editingRole && editingRole.name.trim()) {
-      const updatedRoles = [...roles]
-      const oldRoleName = roles[editingRole.index]
-      updatedRoles[editingRole.index] = editingRole.name.trim()
-      setRoles(updatedRoles)
-      
-      // Update user assignments if role name changed
-      if (oldRoleName !== editingRole.name.trim() && userAssignments[oldRoleName]) {
-        const updatedAssignments = { ...userAssignments }
-        updatedAssignments[editingRole.name.trim()] = updatedAssignments[oldRoleName]
-        delete updatedAssignments[oldRoleName]
-        setUserAssignments(updatedAssignments)
-      }
-      
-      setEditingRole(null)
-    }
-  }
-
-  const handleDeleteRole = (roleName: string) => {
-    if (window.confirm(`Are you sure you want to delete the role "${roleName}"? This will also remove all user assignments for this role.`)) {
-      setRoles(roles.filter(r => r !== roleName))
-      const updatedAssignments = { ...userAssignments }
-      delete updatedAssignments[roleName]
-      setUserAssignments(updatedAssignments)
-    }
-  }
-
-  const handleAssignUser = () => {
-    if (selectedRoleForAssignment && selectedUserForAssignment) {
-      setUserAssignments(prev => ({
-        ...prev,
-        [selectedRoleForAssignment]: [...(prev[selectedRoleForAssignment] || []), selectedUserForAssignment]
-      }))
-      setSelectedRoleForAssignment('')
-      setSelectedUserForAssignment('')
-    }
-  }
-
-  const handleRemoveUserFromRole = (roleName: string, userName: string) => {
-    setUserAssignments(prev => ({
-      ...prev,
-      [roleName]: (prev[roleName] || []).filter(u => u !== userName)
-    }))
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="mb-4">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">User Groups</h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Manage user groups and assign users to roles in the aircraft development process
-          </p>
-        </div>
-      </div>
-
-      {/* Roles Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Roles</h3>
-          {!isAddingRole ? (
-            <button
-              onClick={() => setIsAddingRole(true)}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
-            >
-              <Plus size={16} />
-              <span>Add Role</span>
-            </button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={newRoleName}
-                onChange={(e) => setNewRoleName(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleAddRole()}
-                placeholder="Enter role name"
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                autoFocus
-              />
-              <button
-                onClick={handleAddRole}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-              >
-                Save
-              </button>
-              <button
-                onClick={() => {
-                  setIsAddingRole(false)
-                  setNewRoleName('')
-                }}
-                className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-        </div>
-
-        {roles.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {roles.map((role, index) => (
-              <div
-                key={role}
-                className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  {editingRole?.index === index ? (
-                    <div className="flex items-center gap-2 flex-1">
-                      <input
-                        type="text"
-                        value={editingRole.name}
-                        onChange={(e) => setEditingRole({ ...editingRole, name: e.target.value })}
-                        onKeyPress={(e) => e.key === 'Enter' && handleSaveEdit()}
-                        className="flex-1 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        autoFocus
-                      />
-                      <button
-                        onClick={handleSaveEdit}
-                        className="p-1 text-green-600 hover:text-green-700"
-                        title="Save"
-                      >
-                        <CheckCircle size={16} />
-                      </button>
-                      <button
-                        onClick={() => setEditingRole(null)}
-                        className="p-1 text-gray-400 hover:text-gray-600"
-                        title="Cancel"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <h4 className="font-medium text-gray-900 dark:text-white">{role}</h4>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleEditRole(index)}
-                          className="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                          title="Edit role"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteRole(role)}
-                          className="p-1 text-red-600 hover:text-red-700 dark:text-red-400"
-                          title="Delete role"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  {(userAssignments[role] || []).length} user{(userAssignments[role] || []).length !== 1 ? 's' : ''} assigned
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-12 text-center">
-            <Users size={48} className="mx-auto text-gray-400 dark:text-gray-500 mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              No Roles Defined
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400">
-              Add roles to get started with user group management.
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* User Assignment Section */}
-      <div className="mt-8 space-y-4">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Assign Users to Roles</h3>
-        
-        <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Select Role
-              </label>
-              <select
-                value={selectedRoleForAssignment}
-                onChange={(e) => setSelectedRoleForAssignment(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value="">Select a role</option>
-                {roles.map((role) => (
-                  <option key={role} value={role}>
-                    {role}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Select User
-              </label>
-              <select
-                value={selectedUserForAssignment}
-                onChange={(e) => setSelectedUserForAssignment(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value="">Select a user</option>
-                {availableUsers
-                  .filter(user => !selectedRoleForAssignment || !(userAssignments[selectedRoleForAssignment] || []).includes(user))
-                  .map((user) => (
-                    <option key={user} value={user}>
-                      {user}
-                    </option>
-                  ))}
-              </select>
-            </div>
-          </div>
-          <button
-            onClick={handleAssignUser}
-            disabled={!selectedRoleForAssignment || !selectedUserForAssignment}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            <UserPlus size={16} />
-            <span>Assign User</span>
-          </button>
-        </div>
-
-        {/* User Assignments Display */}
-        {roles.length > 0 && (
-          <div className="space-y-4">
-            {roles.map((role) => {
-              const assignedUsers = userAssignments[role] || []
-              if (assignedUsers.length === 0) return null
-              
-              return (
-                <div
-                  key={role}
-                  className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-semibold text-gray-900 dark:text-white">{role}</h4>
-                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                      {assignedUsers.length} user{assignedUsers.length !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {assignedUsers.map((user) => (
-                      <div
-                        key={user}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-400 rounded-lg text-sm"
-                      >
-                        <span>{user}</span>
-                        <button
-                          onClick={() => handleRemoveUserFromRole(role, user)}
-                          className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-                          title="Remove user"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
       </div>
     </div>
   )

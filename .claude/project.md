@@ -54,3 +54,11 @@ INVITE_FROM_NAME="Engineering Tool"
 - `/uploads` directory served statically by Express (file attachments)
 - Socket.IO for real-time CPU/memory metrics and dataflow events
 - Daily scheduled job (`cleanup.service.ts`) permanently purges soft-deleted requirements
+
+## Roles terminology (avoid mixing concepts)
+
+| Concept | What it is | Where it lives |
+|--------|----------------|----------------|
+| **Discipline / engineering roles** | Project-scoped assignments to the engineering role catalog (e.g. Requirements Engineer). Single source for lifecycle transition “allowed roles”. | Backend: `ProjectUserEngineeringRole`, `EngineeringRole`. UI: **Stakeholders → Roles & assignments**, Directory. APIs: `GET/POST /projects/:id/engineering-roles`, `.../users-with-roles`, `.../me/engineering-roles`. |
+| **Admin permission roles** | RBAC templates (`AdminRole`) for module actions (requirements, verification, admin, …). | Admin panel, `/admin/roles`. |
+| **Stakeholders “simulation” role** | Client-only role in **Stakeholders → Settings & Roles** to demo module permissions — not stored as engineering roles. | `SettingsRolesTab`, `stakeholders/store`. |

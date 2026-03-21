@@ -27,6 +27,8 @@ model User {
   ownedProjects    Project[] @relation("ownedProjects")
   notifications    Notification[]
   engineeringRoles UserEngineeringRole[]
+  projectUserEngineeringRoles     ProjectUserEngineeringRole[] @relation("ProjectUserEngRoleMember")
+  assignedProjectUserEngineeringRoles ProjectUserEngineeringRole[] @relation("ProjectUserEngRoleAssigner")
   requirementSubscriptions RequirementSubscription[]
   issueSubscriptions IssueSubscription[]
   issueComments    IssueComment[]
@@ -59,6 +61,27 @@ model EngineeringRole {
   updatedAt   DateTime @updatedAt
 
   users UserEngineeringRole[]
+  projectAssignments ProjectUserEngineeringRole[]
+}
+
+// Project-scoped engineering role assignments (single source of truth per project for discipline roles).
+model ProjectUserEngineeringRole {
+  id               String   @id @default(uuid())
+  projectId        String
+  userId           String
+  roleId           String
+  assignedByUserId String?
+  createdAt        DateTime @default(now())
+
+  project    Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user       User            @relation("ProjectUserEngRoleMember", fields: [userId], references: [id], onDelete: Cascade)
+  role       EngineeringRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  assignedBy User?           @relation("ProjectUserEngRoleAssigner", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, userId, roleId])
+  @@index([projectId])
+  @@index([userId])
+  @@index([roleId])
 }
 
 // Junction table: many-to-many User <-> EngineeringRole.
@@ -184,6 +207,7 @@ model Project {
   parameterTypes        ParameterType[]
   projectUnits          ProjectUnit[]
   commBuses             CommBus[]
+  projectUserEngineeringRoles ProjectUserEngineeringRole[]
 }
 
 // Requirements export templates (ExportBuilder) - enterprise export wizard presets.

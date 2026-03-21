@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import { useQuery } from '@tanstack/react-query'
-import * as adminService from '../../../services/admin.service'
+import * as stakeholderRolesService from '../../../services/stakeholderRoles.service'
 import type { StakeholderUser } from '../../../types/admin.types'
 import TableSkeleton from './TableSkeleton'
 
@@ -14,6 +14,7 @@ const PAGE_SIZE = 10
 type SortKey = 'name' | 'email' | 'company' | 'status'
 
 interface StakeholderTableProps {
+  projectId: string
   globalSearch?: string
   onSelectStakeholder: (s: StakeholderUser | null) => void
   onShowToast: (msg: string) => void
@@ -25,6 +26,7 @@ interface StakeholderTableProps {
 }
 
 export default function StakeholderTable({
+  projectId,
   globalSearch = '',
   onSelectStakeholder,
   onShowToast,
@@ -35,8 +37,9 @@ export default function StakeholderTable({
   companyFilter = new Set(),
 }: StakeholderTableProps) {
   const { data: users = [], isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['admin', 'usersWithRoles'],
-    queryFn: () => adminService.getUsersWithRoles(),
+    queryKey: ['project', projectId, 'usersWithRoles'],
+    queryFn: () => stakeholderRolesService.getProjectUsersWithRoles(projectId),
+    enabled: !!projectId,
     refetchOnWindowFocus: true,
   })
 
@@ -214,7 +217,7 @@ export default function StakeholderTable({
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                     {users.length === 0
-                      ? 'No users found. Add users via the Admin Panel.'
+                      ? 'No project members found. Invite members to the project or add users via the Admin Panel.'
                       : 'No stakeholders match the current filters.'}
                   </td>
                 </tr>

@@ -12,7 +12,7 @@ interface LifecycleStep {
 interface TransitionRule {
     fromStatusId: string
     toStatusId: string
-    allowedUserGroups: string[]
+    allowedEngineeringRoleIds: string[]
 }
 
 interface StatusDefinition {

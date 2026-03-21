@@ -6,6 +6,7 @@ import { useLifecycleStore } from '../../store/lifecycleStore'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import type { Requirement } from 'shared/types/engineering.types'
 import type { AllowedTransition } from '../../services/lifecycle.service'
+import { lifecyclePermissionService } from '../../services/lifecyclePermission.service'
 
 interface ChangeStatusPopoverProps {
   requirement: Requirement
@@ -56,9 +57,13 @@ export default function ChangeStatusPopover({
     if (lifecycleId && currentStatusId) {
       lifecycleService
         .getAllowedTransitions(lifecycleId, currentStatusId)
-        .then((result) => {
+        .then(async (result) => {
           if (result.success && result.data?.transitions) {
-            setTransitions(result.data.transitions)
+            const filtered = await lifecyclePermissionService.filterAllowedTransitions(
+              projectId,
+              result.data.transitions
+            )
+            setTransitions(filtered)
           } else {
             setTransitions([])
           }
@@ -67,7 +72,7 @@ export default function ChangeStatusPopover({
     } else {
       setLoading(false)
     }
-  }, [requirement, lifecycles, statuses])
+  }, [requirement, lifecycles, statuses, projectId])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

@@ -1,42 +1,64 @@
 import { apiClient } from './api'
+import type { AllowedTransition } from './lifecycle.service'
+
+export interface MyProjectEngineeringRolesPayload {
+  roles: { id: string; name: string }[]
+  strictLifecycleGates: boolean
+}
 
 /**
- * Lifecycle permission service adapter.
- * Fetches user roles from User Groups for transition rule enforcement.
- * When backend absent, returns mock roles (fail-open for dev).
+ * Lifecycle permission adapter: project-scoped engineering roles for the current user.
+ * When strict lifecycle gates are on for the project, permission checks fail closed if the API errors.
  */
 export const lifecyclePermissionService = {
-  /**
-   * Get roles for a user. Used to filter transitions by allowedUserGroups.
-   */
-  async getUserRoles(userId?: string): Promise<{ success: boolean; roles: string[] }> {
+  async getMyEngineeringRolesForProject(
+    projectId: string
+  ): Promise<{ ok: boolean; roleIds: string[]; roleNames: string[]; strict: boolean }> {
     try {
-      if (!userId) return { success: true, roles: [] }
-      const response = await apiClient.get<{ roles: string[] }>(
-        `/lifecycle/user-roles?userId=${encodeURIComponent(userId)}`
+      const res = await apiClient.get<MyProjectEngineeringRolesPayload>(
+        `/projects/${encodeURIComponent(projectId)}/me/engineering-roles`
       )
-      if (response.success && response.data?.roles) {
-        return { success: true, roles: response.data.roles }
+      if (res.success && res.data?.roles) {
+        return {
+          ok: true,
+          roleIds: res.data.roles.map((r) => r.id),
+          roleNames: res.data.roles.map((r) => r.name),
+          strict: Boolean(res.data.strictLifecycleGates),
+        }
       }
     } catch {
-      // Backend not available - fail open
+      // network / 403
     }
-    return {
-      success: true,
-      roles: ['Requirements Engineer'], // Mock default for dev when backend absent
-    }
+    return { ok: false, roleIds: [], roleNames: [], strict: false }
   },
 
   /**
-   * Check if user has any of the allowed user group roles.
+   * True if the current user may use a transition that lists allowed role ids.
+   * Empty allowedRoleIds means unrestricted.
    */
-  async canTransition(
-    userId: string | undefined,
-    allowedUserGroups: string[]
-  ): Promise<boolean> {
-    if (!allowedUserGroups.length) return true
-    const { roles } = await this.getUserRoles(userId)
-    if (roles.length === 0) return true // Fail open when no roles
-    return allowedUserGroups.some((g) => roles.includes(g))
+  async canUseTransition(projectId: string | undefined, allowedEngineeringRoleIds: string[]): Promise<boolean> {
+    if (!allowedEngineeringRoleIds.length) return true
+    if (!projectId) return true
+
+    const { ok, roleIds, strict } = await this.getMyEngineeringRolesForProject(projectId)
+    if (!strict && !ok) return true
+    if (strict && !ok) return false
+    return allowedEngineeringRoleIds.some((id) => roleIds.includes(id))
+  },
+
+  /** Filter server/store transitions for the current user (strict gates respected). */
+  async filterAllowedTransitions(
+    projectId: string | undefined,
+    transitions: AllowedTransition[]
+  ): Promise<AllowedTransition[]> {
+    if (!projectId) return transitions
+    const { ok, roleIds, strict } = await this.getMyEngineeringRolesForProject(projectId)
+    if (!strict && !ok) return transitions
+    if (strict && !ok) return []
+    return transitions.filter(
+      (t) =>
+        !t.allowedEngineeringRoleIds.length ||
+        t.allowedEngineeringRoleIds.some((id) => roleIds.includes(id))
+    )
   },
 }

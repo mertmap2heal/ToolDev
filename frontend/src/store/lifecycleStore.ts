@@ -10,7 +10,10 @@ export interface LifecycleStep {
 export interface TransitionRule {
   fromStatusId: string
   toStatusId: string
-  allowedUserGroups: string[]
+  /** Discipline / engineering role ids (project-scoped catalog). */
+  allowedEngineeringRoleIds: string[]
+  /** Migrated from pre–id transition rules until merged with catalog in UI. */
+  legacyAllowedUserGroupNames?: string[]
 }
 
 export interface Lifecycle {
@@ -64,6 +67,28 @@ export const useLifecycleStore = create<LifecycleStore>()(
     }),
     {
       name: 'lifecycle-storage',
+      version: 2,
+      migrate: (persisted: unknown, fromVersion: number) => {
+        const p = persisted as { state?: { lifecycles?: Array<{ transitionRules?: unknown[] }> } }
+        if (fromVersion < 2 && p?.state?.lifecycles) {
+          for (const lc of p.state.lifecycles) {
+            const rules = lc.transitionRules
+            if (!Array.isArray(rules)) continue
+            lc.transitionRules = rules.map((r: Record<string, unknown>) => {
+              const ids = (r.allowedEngineeringRoleIds as string[] | undefined) ?? []
+              const legacy = r.allowedUserGroups as string[] | undefined
+              const out: TransitionRule = {
+                fromStatusId: String(r.fromStatusId ?? ''),
+                toStatusId: String(r.toStatusId ?? ''),
+                allowedEngineeringRoleIds: [...ids],
+              }
+              if (legacy?.length) out.legacyAllowedUserGroupNames = [...legacy]
+              return out
+            })
+          }
+        }
+        return persisted as typeof persisted
+      },
     }
   )
 )

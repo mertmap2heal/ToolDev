@@ -18,6 +18,13 @@ import {
 } from '../controllers/project.controller'
 import { authenticateToken } from '../middleware/auth.middleware'
 import { resolveProjectParam } from '../middleware/resolveProjectParam.middleware'
+import {
+  listProjectEngineeringRoles,
+  listProjectUsersWithRoles,
+  getMyProjectEngineeringRoles,
+  assignProjectEngineeringRole,
+  unassignProjectEngineeringRole,
+} from '../controllers/projectStakeholderRoles.controller'
 
 const router = Router()
 
@@ -29,6 +36,39 @@ router.get('/export', exportProjects)
 // Project CRUD
 router.post('/', createProject)
 router.get('/', getProjects)
+
+// Stakeholder / engineering roles (project-scoped) — auth required
+router.get(
+  '/:id/engineering-roles',
+  authenticateToken,
+  resolveProjectParam,
+  listProjectEngineeringRoles
+)
+router.get(
+  '/:id/users-with-roles',
+  authenticateToken,
+  resolveProjectParam,
+  listProjectUsersWithRoles
+)
+router.get(
+  '/:id/me/engineering-roles',
+  authenticateToken,
+  resolveProjectParam,
+  getMyProjectEngineeringRoles
+)
+router.post(
+  '/:id/engineering-roles/:roleId/assign',
+  authenticateToken,
+  resolveProjectParam,
+  assignProjectEngineeringRole
+)
+router.post(
+  '/:id/engineering-roles/:roleId/unassign',
+  authenticateToken,
+  resolveProjectParam,
+  unassignProjectEngineeringRole
+)
+
 router.get('/:id', resolveProjectParam, getProject)
 router.put('/:id', resolveProjectParam, updateProject)
 router.delete('/:id', resolveProjectParam, deleteProject)
