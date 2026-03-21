@@ -13,7 +13,7 @@ type Fixtures = {
  */
 export const test = base.extend<Fixtures>({
   // Override storageState to use saved session if available
-  storageState: async (_fixtures, use) => {
+  storageState: async ({}, use) => {
     if (fs.existsSync(AUTH_FILE)) {
       await use(AUTH_FILE)
     } else {
