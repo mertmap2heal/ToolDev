@@ -180,3 +180,87 @@ export async function evaluateChecklist(req: AuthRequest, res: Response) {
     res.status(500).json({ success: false, error: (e as Error).message })
   }
 }
+
+export async function createChecklistItemIssue(req: AuthRequest, res: Response) {
+  try {
+    const { projectId, checklistItemId } = req.params
+    const { entityType, entityId, title, description, priority, responseId } = req.body
+    if (!title?.trim() || !description?.trim()) {
+      return res.status(400).json({ success: false, error: 'Title and description are required' })
+    }
+    if (!entityId) {
+      return res.status(400).json({ success: false, error: 'entityId is required' })
+    }
+    const data = await transitionChecklistService.createChecklistItemIssue({
+      checklistItemId,
+      responseId,
+      entityType: entityType || 'Requirement',
+      entityId,
+      projectId,
+      createdBy: req.userId,
+      title: title.trim(),
+      description: description.trim(),
+      priority,
+    })
+    res.status(201).json({ success: true, data })
+  } catch (e) {
+    res.status(500).json({ success: false, error: (e as Error).message })
+  }
+}
+
+export async function getChecklistItemIssues(req: AuthRequest, res: Response) {
+  try {
+    const { checklistItemId } = req.params
+    const entityId = req.query.entityId as string | undefined
+    const data = await transitionChecklistService.getChecklistItemIssues(checklistItemId, entityId)
+    res.json({ success: true, data })
+  } catch (e) {
+    res.status(500).json({ success: false, error: (e as Error).message })
+  }
+}
+
+export async function addChecklistItemComment(req: AuthRequest, res: Response) {
+  try {
+    const { projectId, responseId } = req.params
+    const { content } = req.body
+    if (!content?.trim()) {
+      return res.status(400).json({ success: false, error: 'Content is required' })
+    }
+    const userName = req.userId
+      ? (await import('../lib/prisma').then(m => m.prisma.user.findUnique({ where: { id: req.userId }, select: { name: true } })))?.name ?? 'Unknown'
+      : 'Unknown'
+    const data = await transitionChecklistService.addChecklistItemComment(
+      responseId,
+      projectId,
+      content.trim(),
+      req.userId || '',
+      userName
+    )
+    res.status(201).json({ success: true, data })
+  } catch (e) {
+    res.status(500).json({ success: false, error: (e as Error).message })
+  }
+}
+
+export async function getChecklistItemComments(req: AuthRequest, res: Response) {
+  try {
+    const { responseId } = req.params
+    const data = await transitionChecklistService.getChecklistItemComments(responseId)
+    res.json({ success: true, data })
+  } catch (e) {
+    res.status(500).json({ success: false, error: (e as Error).message })
+  }
+}
+
+export async function deleteChecklistItemComment(req: AuthRequest, res: Response) {
+  try {
+    const { commentId } = req.params
+    const isAdmin = !!(req as any).isAdmin || !!(req as any).isSuperiorAdmin
+    await transitionChecklistService.deleteChecklistItemComment(commentId, req.userId || '', isAdmin)
+    res.json({ success: true, message: 'Comment deleted' })
+  } catch (e: any) {
+    if (e.message === 'Comment not found') return res.status(404).json({ success: false, error: e.message })
+    if (e.message === 'Not authorized to delete this comment') return res.status(403).json({ success: false, error: e.message })
+    res.status(500).json({ success: false, error: (e as Error).message })
+  }
+}

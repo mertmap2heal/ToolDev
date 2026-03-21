@@ -51,7 +51,20 @@ export interface SubmitCompletionInput {
     checklistItemId: string
     value: Record<string, unknown>
     passed: boolean
+    respondedById?: string
   }[]
+}
+
+export interface CreateChecklistItemIssueInput {
+  checklistItemId: string
+  responseId?: string
+  entityType: string
+  entityId: string
+  projectId: string
+  createdBy?: string
+  title: string
+  description: string
+  priority?: string
 }
 
 const checklistInclude = {
@@ -244,6 +257,7 @@ export const transitionChecklistService = {
           checklistItemId: r.checklistItemId,
           value: r.value as Prisma.InputJsonValue,
           passed: r.passed,
+          respondedById: r.respondedById ?? input.completedById,
         },
       })
     }
@@ -259,7 +273,12 @@ export const transitionChecklistService = {
       where: { projectId, entityId },
       include: {
         responses: {
-          include: { checklistItem: true },
+          include: {
+            checklistItem: true,
+            respondedBy: { select: { id: true, name: true } },
+            comments: { orderBy: { createdAt: 'asc' } },
+            issues: { include: { issue: { select: { id: true, issueKey: true, title: true, status: true } } } },
+          },
         },
         assignment: {
           include: { checklist: true },
@@ -379,5 +398,112 @@ export const transitionChecklistService = {
     }
 
     return results
+  },
+
+  async createChecklistItemIssue(input: CreateChecklistItemIssueInput) {
+    const latestIssue = await prisma.issue.findFirst({
+      where: { issueKey: { not: null } },
+      orderBy: { issueKey: 'desc' },
+      select: { issueKey: true },
+    })
+
+    let issueNumber = 1
+    if (latestIssue?.issueKey) {
+      const match = latestIssue.issueKey.match(/ISS-(\d+)/)
+      if (match) issueNumber = parseInt(match[1]) + 1
+    }
+    const issueKey = `ISS-${issueNumber.toString().padStart(4, '0')}`
+
+    const issue = await prisma.issue.create({
+      data: {
+        projectId: input.projectId,
+        issueKey,
+        title: input.title,
+        description: input.description,
+        priority: input.priority || 'medium',
+        createdBy: input.createdBy,
+        updatedBy: input.createdBy,
+      },
+    })
+
+    if (input.createdBy) {
+      await prisma.issueSubscription.create({
+        data: { issueId: issue.id, userId: input.createdBy },
+      }).catch(() => {})
+    }
+
+    if (input.entityType === 'Requirement') {
+      const requirement = await prisma.requirement.findUnique({
+        where: { id: input.entityId },
+        select: { requirementId: true, title: true },
+      })
+
+      await prisma.issueLink.create({
+        data: {
+          issueId: issue.id,
+          linkedType: 'requirement',
+          linkedId: input.entityId,
+          linkType: 'related',
+          linkedRequirementKey: requirement?.requirementId || null,
+          linkedRequirementTitle: requirement?.title || null,
+        },
+      })
+    }
+
+    const link = await prisma.checklistItemIssue.create({
+      data: {
+        checklistItemId: input.checklistItemId,
+        responseId: input.responseId,
+        issueId: issue.id,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        projectId: input.projectId,
+        createdBy: input.createdBy,
+      },
+      include: {
+        issue: { select: { id: true, issueKey: true, title: true, status: true } },
+      },
+    })
+
+    return { issue, link }
+  },
+
+  async getChecklistItemIssues(checklistItemId: string, entityId?: string) {
+    const where: Record<string, unknown> = { checklistItemId }
+    if (entityId) where.entityId = entityId
+
+    return prisma.checklistItemIssue.findMany({
+      where,
+      include: {
+        issue: { select: { id: true, issueKey: true, title: true, status: true, priority: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+  },
+
+  async addChecklistItemComment(
+    responseId: string,
+    projectId: string,
+    content: string,
+    authorId: string,
+    authorName: string
+  ) {
+    return prisma.checklistItemComment.create({
+      data: { responseId, projectId, content, authorId, authorName },
+    })
+  },
+
+  async getChecklistItemComments(responseId: string) {
+    return prisma.checklistItemComment.findMany({
+      where: { responseId },
+      orderBy: { createdAt: 'asc' },
+    })
+  },
+
+  async deleteChecklistItemComment(commentId: string, requesterId: string, isAdmin: boolean) {
+    const comment = await prisma.checklistItemComment.findUnique({ where: { id: commentId } })
+    if (!comment) throw new Error('Comment not found')
+    if (comment.authorId !== requesterId && !isAdmin) throw new Error('Not authorized to delete this comment')
+    return prisma.checklistItemComment.delete({ where: { id: commentId } })
   },
 }

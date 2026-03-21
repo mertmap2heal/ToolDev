@@ -22,4 +22,11 @@ router.get('/:projectId/completions/:entityId', ctrl.getCompletionHistory)
 
 router.post('/:projectId/evaluate', ctrl.evaluateChecklist)
 
+router.post('/:projectId/checklist-items/:checklistItemId/issues', ctrl.createChecklistItemIssue)
+router.get('/:projectId/checklist-items/:checklistItemId/issues', ctrl.getChecklistItemIssues)
+
+router.post('/:projectId/responses/:responseId/comments', ctrl.addChecklistItemComment)
+router.get('/:projectId/responses/:responseId/comments', ctrl.getChecklistItemComments)
+router.delete('/:projectId/comments/:commentId', ctrl.deleteChecklistItemComment)
+
 export default router

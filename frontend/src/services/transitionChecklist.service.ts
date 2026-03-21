@@ -36,11 +36,40 @@ export interface ChecklistAssignment {
   checklist?: TransitionChecklist
 }
 
+export interface ChecklistItemComment {
+  id: string
+  responseId: string
+  projectId: string
+  content: string
+  authorId: string
+  authorName: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ChecklistItemIssueLink {
+  id: string
+  responseId?: string
+  checklistItemId: string
+  issueId: string
+  entityType: string
+  entityId: string
+  projectId: string
+  createdBy?: string
+  createdAt: string
+  issue?: { id: string; issueKey: string; title: string; status: string; priority?: string }
+}
+
 export interface ChecklistCompletionResponse {
   checklistItemId: string
   value: Record<string, unknown>
   passed: boolean
+  respondedAt?: string
+  respondedById?: string
+  respondedBy?: { id: string; name: string }
   checklistItem?: TransitionChecklistItem
+  comments?: ChecklistItemComment[]
+  issues?: ChecklistItemIssueLink[]
 }
 
 export interface ChecklistCompletion {
@@ -155,6 +184,43 @@ export const transitionChecklistService = {
     return apiClient.post<{ checklistItemId: string; passed: boolean; value: Record<string, unknown> }[]>(
       `/transition-checklists/${projectId}/evaluate`,
       data
+    )
+  },
+
+  async createItemIssue(
+    projectId: string,
+    checklistItemId: string,
+    data: { entityType?: string; entityId: string; title: string; description: string; priority?: string; responseId?: string }
+  ) {
+    return apiClient.post<{ issue: Record<string, unknown>; link: ChecklistItemIssueLink }>(
+      `/transition-checklists/${projectId}/checklist-items/${checklistItemId}/issues`,
+      data
+    )
+  },
+
+  async getItemIssues(projectId: string, checklistItemId: string, entityId?: string) {
+    const params = entityId ? `?entityId=${entityId}` : ''
+    return apiClient.get<ChecklistItemIssueLink[]>(
+      `/transition-checklists/${projectId}/checklist-items/${checklistItemId}/issues${params}`
+    )
+  },
+
+  async addItemComment(projectId: string, responseId: string, content: string) {
+    return apiClient.post<ChecklistItemComment>(
+      `/transition-checklists/${projectId}/responses/${responseId}/comments`,
+      { content }
+    )
+  },
+
+  async getItemComments(projectId: string, responseId: string) {
+    return apiClient.get<ChecklistItemComment[]>(
+      `/transition-checklists/${projectId}/responses/${responseId}/comments`
+    )
+  },
+
+  async deleteItemComment(projectId: string, commentId: string) {
+    return apiClient.delete(
+      `/transition-checklists/${projectId}/comments/${commentId}`
     )
   },
 }

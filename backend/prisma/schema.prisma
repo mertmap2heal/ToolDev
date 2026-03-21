@@ -36,6 +36,8 @@ model User {
   assignedIssues   Issue[]           @relation("IssueAssignee")
   createdIssues    Issue[]           @relation("IssueCreator")
   parameterVersions ParameterVersion[]
+  checklistItemResponses TransitionChecklistItemResponse[] @relation("ChecklistItemResponder")
+  checklistItemComments  ChecklistItemComment[]
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -206,6 +208,8 @@ model Project {
   transitionChecklists  TransitionChecklist[]
   checklistAssignments  ChecklistAssignment[]
   checklistCompletions  ChecklistCompletion[]
+  checklistItemComments ChecklistItemComment[]
+  checklistItemIssues   ChecklistItemIssue[]
   definitionEntries     DefinitionEntry[]
   parameterTypes        ParameterType[]
   projectUnits          ProjectUnit[]
@@ -627,8 +631,9 @@ model Issue {
   comments      IssueComment[]
   systemNotes   IssueSystemNote[]
   subscriptions IssueSubscription[]
-  links         IssueLink[]         @relation("IssueToLink")
-  attachments   IssueAttachment[]
+  links              IssueLink[]         @relation("IssueToLink")
+  attachments        IssueAttachment[]
+  checklistItemIssues ChecklistItemIssue[]
 
   @@index([projectId])
   @@index([issueKey])
@@ -3323,6 +3328,7 @@ model TransitionChecklistItem {
 
   checklist TransitionChecklist           @relation(fields: [checklistId], references: [id], onDelete: Cascade)
   responses TransitionChecklistItemResponse[]
+  issues    ChecklistItemIssue[]
 
   @@index([checklistId])
   @@index([checklistId, sortOrder])
@@ -3377,12 +3383,17 @@ model TransitionChecklistItemResponse {
   value           Json?    // { checked: true } for BOOLEAN; { valid: true, message: "..." } for validations
   passed          Boolean  @default(false)
   respondedAt     DateTime @default(now())
+  respondedById   String?
 
   completion    ChecklistCompletion       @relation(fields: [completionId], references: [id], onDelete: Cascade)
   checklistItem TransitionChecklistItem   @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
+  respondedBy   User?                     @relation("ChecklistItemResponder", fields: [respondedById], references: [id], onDelete: SetNull)
+  comments      ChecklistItemComment[]
+  issues        ChecklistItemIssue[]
 
   @@index([completionId])
   @@index([checklistItemId])
+  @@index([respondedById])
 }
 
 model ChecklistVersion {
@@ -3397,4 +3408,46 @@ model ChecklistVersion {
 
   @@unique([checklistId, versionNumber])
   @@index([checklistId])
+}
+
+model ChecklistItemComment {
+  id         String   @id @default(uuid())
+  responseId String
+  projectId  String
+  content    String
+  authorId   String
+  authorName String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  response TransitionChecklistItemResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  project  Project                         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author   User                            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([responseId])
+  @@index([projectId])
+  @@index([authorId])
+}
+
+model ChecklistItemIssue {
+  id              String   @id @default(uuid())
+  responseId      String?
+  checklistItemId String
+  issueId         String
+  entityType      String   @default("Requirement")
+  entityId        String
+  projectId       String
+  createdBy       String?
+  createdAt       DateTime @default(now())
+
+  response      TransitionChecklistItemResponse? @relation(fields: [responseId], references: [id], onDelete: SetNull)
+  checklistItem TransitionChecklistItem          @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
+  issue         Issue                            @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  project       Project                          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([checklistItemId, issueId, entityId])
+  @@index([issueId])
+  @@index([checklistItemId])
+  @@index([entityId])
+  @@index([projectId])
 }
