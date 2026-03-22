@@ -46,6 +46,7 @@ import ChangeStatusPopover, { getStatusColorClasses } from '../../components/req
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import { useParameterDisplayStore } from '../../store/parameterDisplayStore'
 import RequirementParameterText from '../../components/requirements/RequirementParameterText'
+import RequirementRichTextField from '../../components/requirements/RequirementRichTextField'
 import type { Requirement, UpdateRequirementDto } from 'shared/types/engineering.types'
 import type { Link as LinkType, EntityType } from 'shared/types/linkage.types'
 import clsx from 'clsx'
@@ -2053,35 +2054,35 @@ export default function RequirementsPage() {
                             key={item.id}
                             type="button"
                             onClick={() => setLinkedElementPreview(previewPayload)}
-                            className="w-full text-left text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors"
+                            className="w-full text-left text-sm leading-normal text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 px-3 py-2.5 rounded border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors"
                           >
                             {item.targetType === 'issue' && item.issue ? (
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-mono text-xs font-medium text-gray-600 dark:text-gray-400">
+                              <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
+                                <span className="font-mono text-sm font-medium text-gray-600 dark:text-gray-400 shrink-0">
                                   {item.issue.issueKey || `#${item.issue.id.slice(0, 8)}`}
                                 </span>
-                                <span className="text-gray-600 dark:text-gray-400"> – </span>
-                                <span className="font-medium text-blue-600 dark:text-blue-400">
+                                <span className="text-gray-600 dark:text-gray-400 shrink-0">–</span>
+                                <span className="font-medium text-blue-600 dark:text-blue-400 min-w-0 break-words">
                                   {item.issue.title}
                                 </span>
                                 {item.issue.createdByUser && (
-                                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  <span className="text-sm text-gray-500 dark:text-gray-400">
                                     by {item.issue.createdByUser.name}
                                   </span>
                                 )}
-                                <span className="text-xs text-gray-400 dark:text-gray-500">({item.linkType})</span>
+                                <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0">({item.linkType})</span>
                               </div>
                             ) : (
-                              <>
-                                <span className="font-mono text-xs font-medium text-gray-700 dark:text-gray-300">
+                              <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
+                                <span className="font-mono text-sm font-medium text-gray-600 dark:text-gray-400 shrink-0 tabular-nums">
                                   {item.displayId ?? item.targetId.slice(0, 8)}
                                 </span>
-                                <span className="text-gray-600 dark:text-gray-400"> – </span>
-                                <span className="text-gray-900 dark:text-white">
+                                <span className="text-gray-600 dark:text-gray-400 shrink-0">–</span>
+                                <span className="text-gray-900 dark:text-white min-w-0 break-words">
                                   {item.title ?? item.label ?? `${item.targetType} (${item.targetId.slice(0, 8)})`}
                                 </span>
-                                <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">({item.linkType})</span>
-                              </>
+                                <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0">({item.linkType})</span>
+                              </div>
                             )}
                           </button>
                         )
@@ -2211,17 +2212,26 @@ export default function RequirementsPage() {
               <td colSpan={getTotalColumnCount()} className="px-4 py-3 bg-gray-50 dark:bg-gray-900/50">
                 <div className="pl-8">
                   <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description</p>
-                  <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                    {req.description}
-                  </p>
+                  {req.description ? (
+                    projectId && (req.description || '').includes('{{param:') ? (
+                      <div className="text-sm text-gray-700 dark:text-gray-300">
+                        <RequirementParameterText projectId={projectId} text={req.description} stripHtml />
+                      </div>
+                    ) : (
+                      <RequirementRichTextField value={req.description} className="text-sm text-gray-700 dark:text-gray-300" />
+                    )
+                  ) : (
+                    <p className="text-sm text-gray-400">—</p>
+                  )}
                   {req.acceptanceCriteria && (
                     <>
                       <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 mt-3">
                         Acceptance Criteria
                       </p>
-                      <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                        {req.acceptanceCriteria}
-                      </p>
+                      <RequirementRichTextField
+                        value={req.acceptanceCriteria}
+                        className="text-sm text-gray-700 dark:text-gray-300"
+                      />
                     </>
                   )}
                 </div>

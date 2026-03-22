@@ -34,6 +34,7 @@ import { resolveParameterPlaceholders, editorSpansToPlaceholders } from '../../u
 import { parameterService } from '../../services/parameter.service'
 import { definitionEntryService } from '../../services/definitionEntry.service'
 import { injectGlossaryTerms } from '../../utils/glossaryTerms'
+import RequirementRichTextField from './RequirementRichTextField'
 
 interface RequirementDetailDrawerProps {
   isOpen: boolean
@@ -1039,9 +1040,10 @@ export default function RequirementDetailDrawer({
                 {displayRequirement.acceptanceCriteria && (
                   <div>
                     <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Acceptance Criteria</h3>
-                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
-                      {displayRequirement.acceptanceCriteria}
-                    </p>
+                    <RequirementRichTextField
+                      value={displayRequirement.acceptanceCriteria}
+                      className="text-sm text-gray-700 dark:text-gray-300"
+                    />
                   </div>
                 )}
 
@@ -1158,9 +1160,10 @@ export default function RequirementDetailDrawer({
                 {displayRequirement.acceptanceCriteria && (
                   <div>
                     <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Acceptance Criteria</h3>
-                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
-                      {displayRequirement.acceptanceCriteria}
-                    </p>
+                    <RequirementRichTextField
+                      value={displayRequirement.acceptanceCriteria}
+                      className="text-sm text-gray-700 dark:text-gray-300"
+                    />
                   </div>
                 )}
 
