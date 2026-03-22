@@ -15,7 +15,11 @@ import { componentService } from '../../services/component.service'
 import { LINKAGE_V1, LIFECYCLE_V1 } from '../../config/featureFlags'
 import { invalidateLinkCaches } from '../../utils/invalidateLinkCaches'
 import type { AllowedTransition } from '../../services/lifecycle.service'
-import { transitionChecklistService } from '../../services/transitionChecklist.service'
+import {
+  transitionChecklistService,
+  type ChecklistCompletion,
+  type ChecklistCompletionResponse,
+} from '../../services/transitionChecklist.service'
 import TransitionChecklistDialog from '../lifecycle/TransitionChecklistDialog'
 import { useRequirementLifecycleTransition } from './useRequirementLifecycleTransition'
 import { verificationService } from '../../services/verification.service'
@@ -50,6 +54,219 @@ interface RequirementDetailDrawerProps {
   onDelete: (requirement: Requirement) => void
   /** Open add-trace-link flow for the current requirement (hidden when undefined or baseline view). */
   onAddLink?: () => void
+}
+
+type StatusAuditEvent = {
+  id: string
+  action: string
+  oldValue?: unknown
+  newValue?: unknown
+  performedByUserId?: string | null
+  performedAt: string
+  performedBy?: { id: string; name: string | null; email: string | null } | null
+}
+
+function formatChecklistResponseSummary(r: ChecklistCompletionResponse): string {
+  if (r.passed) return 'Passed'
+  const v = r.value as Record<string, unknown> | undefined
+  if (v && typeof v === 'object') {
+    if (typeof v.message === 'string' && v.message.trim()) return `Not passed (${v.message})`
+    if (v.checked === false) return 'Not passed (unchecked)'
+  }
+  return 'Not passed'
+}
+
+function actorDisplay(
+  user: { id: string; name: string | null; email: string | null } | null | undefined,
+  fallbackId?: string | null
+): string {
+  if (user?.name?.trim()) return user.name.trim()
+  if (user?.email?.trim()) return user.email.trim()
+  if (fallbackId) return `User ${fallbackId.slice(0, 8)}…`
+  return 'Unknown user'
+}
+
+/** Status changes + transition checklist completions (who / what was checked). */
+function LifecycleTransitionLog({
+  projectId,
+  requirementId,
+  statusHistory,
+}: {
+  projectId: string
+  requirementId: string
+  statusHistory: StatusAuditEvent[]
+}) {
+  const [expandedCompletionIds, setExpandedCompletionIds] = useState<Record<string, boolean>>({})
+
+  const { data: completions = [], isLoading: completionsLoading } = useQuery({
+    queryKey: ['transition-checklist-completions', projectId, requirementId],
+    queryFn: async () => {
+      const r = await transitionChecklistService.getCompletionHistory(projectId, requirementId)
+      return r.success && r.data ? r.data : []
+    },
+    enabled: !!projectId && !!requirementId,
+  })
+
+  const merged = useMemo(() => {
+    const statusEntries = statusHistory.map((e) => ({
+      kind: 'status' as const,
+      id: e.id,
+      at: e.performedAt,
+      event: e,
+    }))
+    const checklistEntries = completions.map((c: ChecklistCompletion) => ({
+      kind: 'checklist' as const,
+      id: c.id,
+      at: c.completedAt,
+      completion: c,
+    }))
+    return [...statusEntries, ...checklistEntries].sort(
+      (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()
+    )
+  }, [statusHistory, completions])
+
+  const toggleCompletion = (id: string) => {
+    setExpandedCompletionIds((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  if (merged.length === 0) {
+    return (
+      <div>
+        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+          <History size={16} className="text-gray-400" />
+          Transition log
+        </h3>
+        {completionsLoading ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">Loading checklist history…</p>
+        ) : (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            No status changes or transition checklist completions are recorded for this requirement yet.
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+        <History size={16} className="text-gray-400" />
+        Transition log
+      </h3>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+        Chronological record of lifecycle status changes and completed transition checklists (who acted and each
+        checklist item outcome).
+      </p>
+      {completionsLoading && (
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Refreshing checklist history…</p>
+      )}
+      <div className="space-y-3">
+        {merged.map((entry) => {
+          if (entry.kind === 'status') {
+            const e = entry.event
+            const oldS = (e.oldValue as { status?: string } | undefined)?.status ?? '—'
+            const newS = (e.newValue as { status?: string } | undefined)?.status ?? '—'
+            const who = actorDisplay(e.performedBy, e.performedByUserId)
+            return (
+              <div
+                key={`status-${entry.id}`}
+                className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-900/40 px-3 py-2.5"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    Status change
+                  </span>
+                  <time className="text-xs text-gray-500 dark:text-gray-500">
+                    {format(new Date(entry.at), 'MMM d, yyyy · HH:mm')}
+                  </time>
+                </div>
+                <p className="text-sm text-gray-900 dark:text-white mt-1">
+                  <span className="text-gray-600 dark:text-gray-400">{oldS}</span>
+                  <span className="mx-1.5 text-gray-400">→</span>
+                  <span className="font-medium">{newS}</span>
+                </p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">By {who}</p>
+              </div>
+            )
+          }
+
+          const c = entry.completion
+          const checklistName = c.assignment?.checklist?.name ?? 'Transition checklist'
+          const expanded = !!expandedCompletionIds[c.id]
+          const whoCompleted = actorDisplay(c.completedBy, c.completedById)
+          const whoOverrode = c.overriddenById ? actorDisplay(c.overriddenBy, c.overriddenById) : null
+
+          return (
+            <div
+              key={`chk-${c.id}`}
+              className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-900/40 px-3 py-2.5"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Checklist completed
+                </span>
+                <time className="text-xs text-gray-500 dark:text-gray-500">
+                  {format(new Date(entry.at), 'MMM d, yyyy · HH:mm')}
+                </time>
+              </div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white mt-1">{checklistName}</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                Submitted by {whoCompleted}
+                {c.overriddenById && whoOverrode && (
+                  <span className="text-amber-700 dark:text-amber-400">
+                    {' '}
+                    · Overridden by {whoOverrode}
+                    {c.overriddenAt && ` at ${format(new Date(c.overriddenAt), 'MMM d, HH:mm')}`}
+                  </span>
+                )}
+              </p>
+              <p className="text-xs mt-1">
+                <span
+                  className={clsx(
+                    'font-medium',
+                    c.passed ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'
+                  )}
+                >
+                  {c.passed ? 'All required items passed' : 'Some items did not pass'}
+                </span>
+              </p>
+              {c.responses?.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => toggleCompletion(c.id)}
+                  className="mt-2 flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  <ChevronDown size={14} className={clsx('transition-transform', expanded && 'rotate-180')} />
+                  {expanded ? 'Hide item details' : `Show ${c.responses.length} checklist item(s)`}
+                </button>
+              )}
+              {expanded && c.responses?.length > 0 && (
+                <ul className="mt-2 space-y-1.5 border-t border-gray-200 dark:border-gray-700 pt-2">
+                  {c.responses.map((r: ChecklistCompletionResponse) => {
+                    const label = r.checklistItem?.label ?? 'Item'
+                    const responder = r.respondedBy?.name?.trim()
+                      ? r.respondedBy.name
+                      : r.respondedById
+                        ? `User ${r.respondedById.slice(0, 8)}…`
+                        : null
+                    return (
+                      <li key={r.checklistItemId} className="text-xs text-gray-700 dark:text-gray-300 pl-2 border-l-2 border-blue-200 dark:border-blue-800">
+                        <span className="font-medium text-gray-900 dark:text-white">{label}</span>
+                        <span className="text-gray-500 dark:text-gray-500"> — {formatChecklistResponseSummary(r)}</span>
+                        {responder && (
+                          <span className="text-gray-500 dark:text-gray-500"> ({responder})</span>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 /** Optional hints only; server enforces real gates and checklists. */
@@ -176,7 +393,7 @@ function LifecycleApprovalsTab({
     enabled: !!projectId && !!requirement.id,
   })
 
-  const statusHistory = auditEvents.filter((e: any) => e.action === 'REQUIREMENT_STATUS_CHANGED')
+  const statusHistory = auditEvents.filter((e: any) => e.action === 'REQUIREMENT_STATUS_CHANGED') as StatusAuditEvent[]
 
   return (
     <div className="space-y-6">
@@ -273,21 +490,7 @@ function LifecycleApprovalsTab({
           </p>
         )}
 
-      {statusHistory.length > 0 && (
-        <div>
-          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Status History</h3>
-          <div className="space-y-2">
-            {statusHistory.slice(0, 10).map((evt: any) => (
-              <div key={evt.id} className="flex gap-2 text-sm border-l-2 border-gray-200 dark:border-gray-600 pl-3 py-1">
-                <span className="text-gray-500">{format(new Date(evt.performedAt), 'MMM d, HH:mm')}</span>
-                <span>
-                  {evt.oldValue?.status ?? '?'} → {evt.newValue?.status ?? '?'}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <LifecycleTransitionLog projectId={projectId} requirementId={requirement.id} statusHistory={statusHistory} />
 
       {!blockedByRoles && allowedTransitions.length > 0 && (
         <div>

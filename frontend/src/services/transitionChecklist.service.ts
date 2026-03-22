@@ -72,6 +72,12 @@ export interface ChecklistCompletionResponse {
   issues?: ChecklistItemIssueLink[]
 }
 
+export interface ChecklistActor {
+  id: string
+  name: string | null
+  email: string | null
+}
+
 export interface ChecklistCompletion {
   id: string
   checklistAssignmentId: string
@@ -84,6 +90,9 @@ export interface ChecklistCompletion {
   passed: boolean
   responses: ChecklistCompletionResponse[]
   assignment?: ChecklistAssignment & { checklist: TransitionChecklist }
+  /** Enriched by GET completions API */
+  completedBy?: ChecklistActor | null
+  overriddenBy?: ChecklistActor | null
 }
 
 export interface TransitionChecklistWithAssignment {

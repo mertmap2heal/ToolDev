@@ -790,7 +790,20 @@ export const getAuditEvents = async (req: AuthRequest, res: Response) => {
       orderBy: { performedAt: 'desc' },
       take: 100,
     })
-    res.json({ success: true, data: events })
+    const actorIds = [...new Set(events.map((e) => e.performedByUserId).filter((id): id is string => !!id))]
+    const actors =
+      actorIds.length > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: actorIds } },
+            select: { id: true, name: true, email: true },
+          })
+        : []
+    const actorById = new Map(actors.map((u) => [u.id, u]))
+    const data = events.map((e) => ({
+      ...e,
+      performedBy: e.performedByUserId ? actorById.get(e.performedByUserId) ?? null : null,
+    }))
+    res.json({ success: true, data })
   } catch (error) {
     console.error('Get audit events error:', error)
     res.status(500).json({

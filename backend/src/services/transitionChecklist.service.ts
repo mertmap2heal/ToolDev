@@ -321,7 +321,7 @@ export const transitionChecklistService = {
   },
 
   async getCompletionHistory(projectId: string, entityId: string) {
-    return prisma.checklistCompletion.findMany({
+    const rows = await prisma.checklistCompletion.findMany({
       where: { projectId, entityId },
       include: {
         responses: {
@@ -338,6 +338,24 @@ export const transitionChecklistService = {
       },
       orderBy: { completedAt: 'desc' },
     })
+    const userIds = new Set<string>()
+    for (const r of rows) {
+      if (r.completedById) userIds.add(r.completedById)
+      if (r.overriddenById) userIds.add(r.overriddenById)
+    }
+    const users =
+      userIds.size > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: [...userIds] } },
+            select: { id: true, name: true, email: true },
+          })
+        : []
+    const userById = new Map(users.map((u) => [u.id, u]))
+    return rows.map((r) => ({
+      ...r,
+      completedBy: r.completedById ? userById.get(r.completedById) ?? null : null,
+      overriddenBy: r.overriddenById ? userById.get(r.overriddenById) ?? null : null,
+    }))
   },
 
   async snapshotVersion(checklistId: string, currentVersion: number, createdBy?: string | null) {

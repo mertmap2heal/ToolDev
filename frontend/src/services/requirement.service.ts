@@ -149,7 +149,19 @@ export const requirementService = {
     projectId: string,
     entityType: string,
     entityId: string
-  ): Promise<ApiResponse<Array<{ id: string; action: string; oldValue?: unknown; newValue?: unknown; performedByUserId?: string; performedAt: string }>>> {
+  ): Promise<
+    ApiResponse<
+      Array<{
+        id: string
+        action: string
+        oldValue?: unknown
+        newValue?: unknown
+        performedByUserId?: string | null
+        performedAt: string
+        performedBy?: { id: string; name: string | null; email: string | null } | null
+      }>
+    >
+  > {
     return apiClient.get(
       `/requirements/${projectId}/audit?entityType=${encodeURIComponent(entityType)}&entityId=${encodeURIComponent(entityId)}`
     )

@@ -165,6 +165,8 @@ export function useRequirementLifecycleTransition({
       setChecklistDialogData(null)
       queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
       queryClient.invalidateQueries({ queryKey: ['requirement', projectId, requirement.id] })
+      queryClient.invalidateQueries({ queryKey: ['audit', projectId, requirement.id] })
+      queryClient.invalidateQueries({ queryKey: ['transition-checklist-completions', projectId, requirement.id] })
       await onSuccess?.(result)
     },
     onError: (err: unknown) => {
