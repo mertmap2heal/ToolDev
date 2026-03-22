@@ -8,6 +8,57 @@ import { format } from 'date-fns'
 import clsx from 'clsx'
 import { htmlToPlainText } from '../../utils/htmlToPlainText'
 
+/** Compare picker: saved snapshot number or live requirement state */
+type ComparePick = number | 'current'
+
+function requirementToPseudoVersion(req: Requirement): RequirementVersion {
+  return {
+    id: '__current__',
+    requirementId: req.id,
+    projectId: req.projectId,
+    version: 0,
+    title: req.title,
+    description: req.description ?? '',
+    priority: String(req.priority),
+    status: req.status,
+    stage: req.stage ?? '',
+    owner: req.owner ?? undefined,
+    category: req.category ?? undefined,
+    source: req.source ?? undefined,
+    verificationMethod: req.verificationMethod ?? undefined,
+    acceptanceCriteria: req.acceptanceCriteria ?? undefined,
+    tags: req.tags ?? [],
+    createdAt: req.updatedAt,
+  }
+}
+
+function computeComparison(versionA: RequirementVersion, versionB: RequirementVersion): VersionComparison {
+  const diff = {
+    title: versionA.title !== versionB.title,
+    description: versionA.description !== versionB.description,
+    priority: versionA.priority !== versionB.priority,
+    status: versionA.status !== versionB.status,
+    stage: (versionA.stage ?? '') !== (versionB.stage ?? ''),
+    owner: (versionA.owner ?? '') !== (versionB.owner ?? ''),
+    category: (versionA.category ?? '') !== (versionB.category ?? ''),
+    source: (versionA.source ?? '') !== (versionB.source ?? ''),
+    verificationMethod: (versionA.verificationMethod ?? '') !== (versionB.verificationMethod ?? ''),
+    acceptanceCriteria: (versionA.acceptanceCriteria ?? '') !== (versionB.acceptanceCriteria ?? ''),
+    tags: JSON.stringify(versionA.tags ?? []) !== JSON.stringify(versionB.tags ?? []),
+  }
+  return {
+    versionA,
+    versionB,
+    diff,
+    changedFields: Object.entries(diff).filter(([, c]) => c).map(([f]) => f),
+  }
+}
+
+function compareVersionLabel(v: RequirementVersion): string {
+  if (v.version === 0 || v.id === '__current__') return 'Current (live)'
+  return `Version ${v.version}`
+}
+
 interface RequirementVersionHistoryProps {
   projectId: string
   requirement: Requirement
@@ -25,7 +76,7 @@ export default function RequirementVersionHistory({
   onClose,
 }: RequirementVersionHistoryProps) {
   const navigate = useNavigate()
-  const [selectedVersions, setSelectedVersions] = useState<number[]>([])
+  const [compareSelection, setCompareSelection] = useState<ComparePick[]>([])
   const [expandedVersion, setExpandedVersion] = useState<number | null>(null)
   const [isComparing, setIsComparing] = useState(false)
   const [filter, setFilter] = useState<string>('all');
@@ -44,28 +95,45 @@ export default function RequirementVersionHistory({
   const versions = historyData?.versions || []
   const auditEvents = historyData?.auditEvents || []
 
-  // Fetch comparison data when comparing
+  // Fetch comparison: two snapshots via API, or snapshot vs current (live) computed on client
   const { data: comparison, isLoading: loadingComparison } = useQuery({
-    queryKey: ['version-comparison', projectId, requirement.id, selectedVersions],
+    queryKey: ['version-comparison', projectId, requirement.id, compareSelection, requirement.updatedAt],
     queryFn: async () => {
-      if (selectedVersions.length !== 2) return null
-      const [v1, v2] = selectedVersions.sort((a, b) => a - b)
-      const response = await versionService.compareVersions(projectId, requirement.id, v1, v2)
-      return response.success && response.data ? response.data : null
+      if (compareSelection.length !== 2) return null
+      const picks = [...compareSelection]
+      const nums = picks.filter((x): x is number => x !== 'current')
+      const hasCurrent = picks.includes('current')
+
+      if (!hasCurrent && nums.length === 2) {
+        const [v1, v2] = [...nums].sort((a, b) => a - b)
+        const response = await versionService.compareVersions(projectId, requirement.id, v1, v2)
+        return response.success && response.data ? response.data : null
+      }
+
+      if (hasCurrent && nums.length === 1) {
+        const vn = nums[0]
+        const snapRes = await versionService.getRequirementVersion(projectId, requirement.id, vn)
+        if (!snapRes.success || !snapRes.data) return null
+        const snap = snapRes.data
+        const cur = requirementToPseudoVersion(requirement)
+        // Older snapshot → left (before), live current → right (after)
+        return computeComparison(snap, cur)
+      }
+
+      return null
     },
-    enabled: isComparing && selectedVersions.length === 2,
+    enabled: isComparing && compareSelection.length === 2,
   })
 
-  // Toggle version selection for comparison
-  const toggleVersionSelection = (version: number) => {
-    setSelectedVersions((prev) => {
-      if (prev.includes(version)) {
-        return prev.filter((v) => v !== version)
+  const toggleCompareSelection = (pick: ComparePick) => {
+    setCompareSelection((prev) => {
+      if (prev.includes(pick)) {
+        return prev.filter((v) => v !== pick)
       }
       if (prev.length >= 2) {
-        return [prev[1], version]
+        return [prev[1], pick]
       }
-      return [...prev, version]
+      return [...prev, pick]
     })
   }
 
@@ -168,9 +236,9 @@ export default function RequirementVersionHistory({
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 pb-2 border-b border-gray-200 dark:border-gray-700">
-          <span>Version {versionA.version}</span>
+          <span>{compareVersionLabel(versionA)}</span>
           <ArrowLeftRight size={16} />
-          <span>Version {versionB.version}</span>
+          <span>{compareVersionLabel(versionB)}</span>
         </div>
 
         {changedFields.length === 0 ? (
@@ -193,13 +261,13 @@ export default function RequirementVersionHistory({
                   </p>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-red-50 dark:bg-red-900/20 rounded p-2">
-                      <p className="text-xs text-red-500 dark:text-red-400 mb-1">Before (v{versionA.version})</p>
+                      <p className="text-xs text-red-500 dark:text-red-400 mb-1">Before ({compareVersionLabel(versionA)})</p>
                       <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap break-words">
                         {valueA}
                       </p>
                     </div>
                     <div className="bg-green-50 dark:bg-green-900/20 rounded p-2">
-                      <p className="text-xs text-green-500 dark:text-green-400 mb-1">After (v{versionB.version})</p>
+                      <p className="text-xs text-green-500 dark:text-green-400 mb-1">After ({compareVersionLabel(versionB)})</p>
                       <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap break-words">
                         {valueB}
                       </p>
@@ -296,7 +364,10 @@ export default function RequirementVersionHistory({
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setIsComparing(false)}
+              onClick={() => {
+                setIsComparing(false)
+                setCompareSelection([])
+              }}
               className={clsx(
                 'px-3 py-1.5 text-sm rounded-lg transition-colors',
                 !isComparing
@@ -339,31 +410,77 @@ export default function RequirementVersionHistory({
           ) : isComparing ? (
             // Compare Mode
             <div className="space-y-4">
-              {selectedVersions.length < 2 && (
+              <div className="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 px-3 py-2 text-xs text-gray-600 dark:text-gray-400">
+                <span className="font-medium text-gray-800 dark:text-gray-200">Snapshots vs timeline: </span>
+                Field compare uses <strong>saved snapshots</strong> ({versions.length}) and optionally{' '}
+                <strong>current (live)</strong>. Extra timeline rows are often <strong>audit events</strong> (links,
+                status, comments) and do not create a new snapshot. Pick two tiles below — include{' '}
+                <strong>Current (live)</strong> to diff a snapshot against what you see now.
+              </div>
+              {compareSelection.length < 2 && (
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 text-sm text-blue-700 dark:text-blue-300">
-                  Select two versions below to compare
+                  Select two entries below (two snapshots, or one snapshot and Current (live))
                 </div>
               )}
 
-              {/* Version Selection */}
-              <div className="grid grid-cols-2 gap-4 mb-4">
+              {versions.length === 0 && (
+                <p className="text-sm text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">
+                  There are no saved snapshots yet. Compare becomes available after the requirement is updated at least
+                  once (a snapshot is stored before each save).
+                </p>
+              )}
+
+              {/* Snapshot + Current selection */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                {versions.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => toggleCompareSelection('current')}
+                    className={clsx(
+                      'flex items-center gap-3 p-3 rounded-lg border transition-colors text-left',
+                      compareSelection.includes('current')
+                        ? 'border-green-500 bg-green-50 dark:bg-green-900/30'
+                        : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                    )}
+                  >
+                    <div
+                      className={clsx(
+                        'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold',
+                        compareSelection.includes('current')
+                          ? 'bg-green-500 text-white'
+                          : 'bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100'
+                      )}
+                    >
+                      ●
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">Current (live)</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {format(new Date(requirement.updatedAt), 'PPp')}
+                      </p>
+                    </div>
+                  </button>
+                )}
                 {versions.map((version) => (
                   <button
                     key={version.id}
-                    onClick={() => toggleVersionSelection(version.version)}
+                    type="button"
+                    onClick={() => toggleCompareSelection(version.version)}
                     className={clsx(
                       'flex items-center gap-3 p-3 rounded-lg border transition-colors text-left',
-                      selectedVersions.includes(version.version)
+                      compareSelection.includes(version.version)
                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
                         : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                     )}
                   >
-                    <div className={clsx(
-                      'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold',
-                      selectedVersions.includes(version.version)
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
-                    )}>
+                    <div
+                      className={clsx(
+                        'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold',
+                        compareSelection.includes(version.version)
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
+                      )}
+                    >
                       {version.version}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -387,7 +504,7 @@ export default function RequirementVersionHistory({
               </div>
 
               {/* Diff View */}
-              {selectedVersions.length === 2 && (
+              {compareSelection.length === 2 && (
                 loadingComparison ? (
                   <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                     Loading comparison...
