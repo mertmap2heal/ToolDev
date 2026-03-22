@@ -25,6 +25,7 @@ import VerificationTreePanel, { type VerNodeType, type RequirementTestCaseLinkLi
 import RequirementDocumentCard from '../../components/requirements/RequirementDocumentCard'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import CreateIssueModal from '../../components/issues/CreateIssueModal'
+import CreateRequirementLinkDialog from '../../components/requirements/CreateRequirementLinkDialog'
 import ReviewStatusBadge from '../../components/requirements/ReviewStatusBadge'
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import LockWarningModal from '../../components/requirements/LockWarningModal'
@@ -203,6 +204,7 @@ export default function RequirementsPage() {
   const [changeStatusAnchor, setChangeStatusAnchor] = useState<{ requirement: Requirement; el: HTMLElement } | null>(null)
   const [lockWarning, setLockWarning] = useState<{ isOpen: boolean; message: string }>({ isOpen: false, message: '' })
   const [linkedElementPreview, setLinkedElementPreview] = useState<LinkedElementClickPayload | null>(null)
+  const [addLinkSourceRequirement, setAddLinkSourceRequirement] = useState<Requirement | null>(null)
 
   // Toolbar dropdown states
   const [traceabilityDropdownOpen, setTraceabilityDropdownOpen] = useState(false)
@@ -212,7 +214,8 @@ export default function RequirementsPage() {
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false)
   const traceabilityDropdownRef = useRef<HTMLDivElement>(null)
   const dataDropdownRef = useRef<HTMLDivElement>(null)
-  const viewDropdownRef = useRef<HTMLDivElement>(null)
+  /** View menu + column selector share one container for outside-click detection. */
+  const viewColumnDropdownRef = useRef<HTMLDivElement>(null)
   const analysisDropdownRef = useRef<HTMLDivElement>(null)
   const sortDropdownRef = useRef<HTMLDivElement>(null)
 
@@ -444,22 +447,19 @@ export default function RequirementsPage() {
 
   // Column selector dropdown state
   const [columnSelectorOpen, setColumnSelectorOpen] = useState<boolean>(false)
-  const columnSelectorRef = useRef<HTMLDivElement>(null)
 
   // Close column selector and toolbar dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (columnSelectorRef.current && !columnSelectorRef.current.contains(event.target as Node)) {
+      if (viewColumnDropdownRef.current && !viewColumnDropdownRef.current.contains(event.target as Node)) {
         setColumnSelectorOpen(false)
+        setViewDropdownOpen(false)
       }
       if (traceabilityDropdownRef.current && !traceabilityDropdownRef.current.contains(event.target as Node)) {
         setTraceabilityDropdownOpen(false)
       }
       if (dataDropdownRef.current && !dataDropdownRef.current.contains(event.target as Node)) {
         setDataDropdownOpen(false)
-      }
-      if (viewDropdownRef.current && !viewDropdownRef.current.contains(event.target as Node)) {
-        setViewDropdownOpen(false)
       }
       if (analysisDropdownRef.current && !analysisDropdownRef.current.contains(event.target as Node)) {
         setAnalysisDropdownOpen(false)
@@ -611,6 +611,14 @@ export default function RequirementsPage() {
   const totalPages = isBaselineView ? Math.max(1, Math.ceil(baselineFilteredAndSorted.length / pageSize)) : (paginatedData?.totalPages ?? 1)
   const allRequirements = isBaselineView ? baselineFilteredAndSorted : allRequirementsLive
   const isLoading = isBaselineView ? (!!baselineId && baseline === undefined) : isLoadingLive
+
+  const openAddLinkByRequirementId = useCallback(
+    (id: string) => {
+      const r = allRequirements.find((x) => x.id === id)
+      if (r) setAddLinkSourceRequirement(r)
+    },
+    [allRequirements]
+  )
 
   useEffect(() => {
     if (!focusRequirementId) return
@@ -1702,12 +1710,15 @@ export default function RequirementsPage() {
             <td className="px-4 py-3">
               <div className="flex items-center gap-2" style={{ paddingLeft: `${level * 24}px` }}>
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation()
                     toggleRow(req.id)
                   }}
                   className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
                   title={isExpanded ? 'Collapse' : 'Expand linked items, change requests, description'}
+                  aria-label={isExpanded ? 'Collapse' : 'Expand linked items, change requests, description'}
+                  aria-expanded={isExpanded}
                 >
                   {isExpanded ? (
                     <ChevronDown size={16} className="text-gray-600 dark:text-gray-400" />
@@ -2092,14 +2103,32 @@ export default function RequirementsPage() {
         {isExpanded && rowData && (
           <>
             {/* Linked Items (LINKAGE_V1) or Linked Functions (legacy) */}
-            {LINKAGE_V1 && rowData.linkedItems && rowData.linkedItems.length > 0 && (
+            {LINKAGE_V1 && rowData.linkedItems && (
               <tr>
                 <td colSpan={getTotalColumnCount()} className="px-4 py-2 bg-blue-50/50 dark:bg-blue-900/10">
                   <div className="pl-8">
-                    <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-2 flex items-center gap-2">
-                      <Settings size={14} />
-                      Linked Items ({rowData.linkedItems.length})
-                    </p>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <p className="text-xs font-medium text-blue-600 dark:text-blue-400 flex items-center gap-2">
+                        <Settings size={14} />
+                        Linked Items ({rowData.linkedItems.length})
+                      </p>
+                      {!isBaselineView && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setAddLinkSourceRequirement(req)
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700"
+                        >
+                          <Plus size={12} />
+                          Add link
+                        </button>
+                      )}
+                    </div>
+                    {rowData.linkedItems.length === 0 ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 py-2">No linked items yet. Use Add link to connect this requirement.</p>
+                    ) : (
                     <div className="space-y-1">
                       {rowData.linkedItems.map((item) => {
                         const st = item.linkSourceType ?? 'requirement'
@@ -2113,6 +2142,7 @@ export default function RequirementsPage() {
                           targetType: tt,
                           targetId: tid,
                           isOutgoing: outgoing,
+                          contextRequirementId: req.id,
                           link: {
                             sourceType: st,
                             sourceId: sid,
@@ -2167,6 +2197,7 @@ export default function RequirementsPage() {
                         )
                       })}
                     </div>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -2516,6 +2547,7 @@ export default function RequirementsPage() {
                       })
                       setIsExportOpen(true)
                     }}
+                    onAddLink={isBaselineView ? undefined : (r) => setAddLinkSourceRequirement(r)}
                   />
                 )}
                 {leftPanelTab === 'functions' && (
@@ -2540,6 +2572,7 @@ export default function RequirementsPage() {
                       setIsCreateModalOpen(true)
                     }}
                     onEditRequirement={(req) => setEditingRequirement(req)}
+                    onAddLink={isBaselineView ? undefined : (r) => setAddLinkSourceRequirement(r)}
                     onRemoveAllocation={(reqId, functionId) => {
                       if (isBaselineView || !functionId) return
                       removeAllocationMutation.mutate({ reqId, functionId })
@@ -2942,7 +2975,7 @@ export default function RequirementsPage() {
               </div>
 
               {/* View dropdown */}
-              <div className="relative" ref={(el) => { if (el) { viewDropdownRef.current = el; columnSelectorRef.current = el; } }}>
+              <div className="relative" ref={viewColumnDropdownRef}>
                 <button
                   onClick={() => {
                     setViewDropdownOpen(!viewDropdownOpen)
@@ -3172,222 +3205,120 @@ export default function RequirementsPage() {
               )}
             </div>
 
-            {activeFilterCount > 0 && (
-              <button
-                onClick={clearAllFilters}
-                className="px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
-              >
-                Clear all ({activeFilterCount})
-              </button>
+            {isFiltersExpanded && (
+              <>
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className={clsx(
+                    'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+                    categoryFilter !== 'all'
+                      ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                      : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                  )}
+                >
+                  <option value="all">Category: All</option>
+                  <option value="unassigned">Unassigned</option>
+                  {uniqueCategories.map((category) => (
+                    <option key={category} value={category}>{category}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={ownerFilter}
+                  onChange={(e) => setOwnerFilter(e.target.value)}
+                  className={clsx(
+                    'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+                    ownerFilter !== 'all'
+                      ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                      : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                  )}
+                >
+                  <option value="all">Owner: All</option>
+                  <option value="unassigned">Unassigned</option>
+                  {uniqueOwners.map((owner) => (
+                    <option key={owner} value={owner}>{owner}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={sourceFilter}
+                  onChange={(e) => setSourceFilter(e.target.value)}
+                  className={clsx(
+                    'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+                    sourceFilter !== 'all'
+                      ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                      : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                  )}
+                >
+                  <option value="all">Source: All</option>
+                  <option value="unassigned">Unassigned</option>
+                  {uniqueSources.map((source) => (
+                    <option key={source} value={source}>{source}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={verificationStatusFilter}
+                  onChange={(e) => setVerificationStatusFilter(e.target.value)}
+                  className={clsx(
+                    'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+                    verificationStatusFilter !== 'all'
+                      ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                      : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                  )}
+                >
+                  <option value="all">Verification: All</option>
+                  <option value="not_verified">Not Verified</option>
+                  <option value="verified">Verified</option>
+                  <option value="failed">Failed</option>
+                </select>
+
+                <select
+                  value={reviewStatusFilter}
+                  onChange={(e) => setReviewStatusFilter(e.target.value)}
+                  className={clsx(
+                    'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+                    reviewStatusFilter !== 'all'
+                      ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                      : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                  )}
+                >
+                  <option value="all">Review: All</option>
+                  <option value="draft">Draft</option>
+                  <option value="under_review">Under Review</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </>
             )}
 
             <button
               onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
-              className="px-2.5 py-1.5 text-xs font-medium rounded-full border border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-1"
+              className={clsx(
+                "px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors flex items-center gap-1",
+                isFiltersExpanded 
+                  ? "bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300"
+                  : "border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+              )}
             >
               <Filter size={12} />
-              More Filters
-              {activeFilterCount > 3 && (
+              {isFiltersExpanded ? "Fewer Filters" : "More Filters"}
+              {!isFiltersExpanded && activeFilterCount > 3 && (
                 <span className="px-1 py-0.5 text-[10px] font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                  {activeFilterCount - (statusFilter !== 'all' ? 1 : 0) - (priorityFilter !== 'all' ? 1 : 0) - (requirementTypeFilter !== 'all' ? 1 : 0)}
+                  +{activeFilterCount - (statusFilter !== 'all' ? 1 : 0) - (priorityFilter !== 'all' ? 1 : 0) - (requirementTypeFilter !== 'all' ? 1 : 0)}
                 </span>
               )}
             </button>
-          </div>
 
-          {/* Filters */}
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-            <button
-              onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
-              className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <Filter size={16} className="text-gray-600 dark:text-gray-400" />
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Filters</span>
-                {activeFilterCount > 0 && (
-                  <span className="px-1.5 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {activeFilterCount > 0 && (
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => { e.stopPropagation(); clearAllFilters() }}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); clearAllFilters() } }}
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium cursor-pointer"
-                  >
-                    Clear all
-                  </span>
-                )}
-                {isFiltersExpanded ? (
-                  <ChevronUp size={16} className="text-gray-600 dark:text-gray-400" />
-                ) : (
-                  <ChevronDown size={16} className="text-gray-600 dark:text-gray-400" />
-                )}
-              </div>
-            </button>
-            {isFiltersExpanded && (
-              <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                  {/* Status Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                      Status
-                    </label>
-                    <select
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    >
-                      <option value="all">All Statuses</option>
-                      {uniqueStatuses.map((status) => (
-                        <option key={status} value={status}>
-                          {status}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Priority Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                      Priority
-                    </label>
-                    <select
-                      value={priorityFilter}
-                      onChange={(e) => setPriorityFilter(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    >
-                      <option value="all">All Priorities</option>
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                      <option value="critical">Critical</option>
-                    </select>
-                  </div>
-
-                  {/* Category Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                      Category
-                    </label>
-                    <select
-                      value={categoryFilter}
-                      onChange={(e) => setCategoryFilter(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    >
-                      <option value="all">All Categories</option>
-                      <option value="unassigned">Unassigned</option>
-                      {uniqueCategories.map((category) => (
-                        <option key={category} value={category}>
-                          {category}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Owner Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                      Owner
-                    </label>
-                    <select
-                      value={ownerFilter}
-                      onChange={(e) => setOwnerFilter(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    >
-                      <option value="all">All Owners</option>
-                      <option value="unassigned">Unassigned</option>
-                      {uniqueOwners.map((owner) => (
-                        <option key={owner} value={owner}>
-                          {owner}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Source Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                      Source
-                    </label>
-                    <select
-                      value={sourceFilter}
-                      onChange={(e) => setSourceFilter(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    >
-                      <option value="all">All Sources</option>
-                      <option value="unassigned">Unassigned</option>
-                      {uniqueSources.map((source) => (
-                        <option key={source} value={source}>
-                          {source}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Requirement Type Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                      Requirement Type
-                    </label>
-                    <select
-                      value={requirementTypeFilter}
-                      onChange={(e) => setRequirementTypeFilter(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    >
-                      <option value="all">All Types</option>
-                      <option value="unassigned">Unassigned</option>
-                      <option value="functional">Functional</option>
-                      <option value="performance">Performance</option>
-                      <option value="interface">Interface</option>
-                      <option value="design_constraint">Design Constraint</option>
-                      <option value="safety">Safety</option>
-                      <option value="security">Security</option>
-                      <option value="usability">Usability</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-
-                  {/* Verification Status Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                      Verification Status
-                    </label>
-                    <select
-                      value={verificationStatusFilter}
-                      onChange={(e) => setVerificationStatusFilter(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    >
-                      <option value="all">All</option>
-                      <option value="not_verified">Not Verified</option>
-                      <option value="verified">Verified</option>
-                      <option value="failed">Failed</option>
-                    </select>
-                  </div>
-
-                  {/* Review Status Filter */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                      Review Status
-                    </label>
-                    <select
-                      value={reviewStatusFilter}
-                      onChange={(e) => setReviewStatusFilter(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    >
-                      <option value="all">All</option>
-                      <option value="draft">Draft</option>
-                      <option value="under_review">Under Review</option>
-                      <option value="approved">Approved</option>
-                      <option value="rejected">Rejected</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
+            {activeFilterCount > 0 && (
+              <button
+                onClick={clearAllFilters}
+                className="px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
+                title="Clear all active filters"
+              >
+                Clear all ({activeFilterCount})
+              </button>
             )}
           </div>
 
@@ -3917,6 +3848,14 @@ export default function RequirementsPage() {
             initialSourceTitle={undefined}
             initialSourceDescription={undefined}
           />
+
+          <CreateRequirementLinkDialog
+            isOpen={!!addLinkSourceRequirement && !!projectId}
+            onClose={() => setAddLinkSourceRequirement(null)}
+            projectId={projectId || ''}
+            sourceRequirement={addLinkSourceRequirement}
+            readOnly={isBaselineView}
+          />
         </div>
 
         {/* Drawer - Side by side with main content */}
@@ -3934,6 +3873,13 @@ export default function RequirementsPage() {
             setDetailRequirement(null)
             setDeleteConfirmation(req)
           }}
+          onAddLink={
+            isBaselineView
+              ? undefined
+              : () => {
+                  if (detailRequirement) setAddLinkSourceRequirement(detailRequirement)
+                }
+          }
         />
 
         {/* Linked element preview (from table expanded row or left panel) – fixed at bottom so it works when panel is closed */}
@@ -3944,6 +3890,8 @@ export default function RequirementsPage() {
               projectId={projectId ?? undefined}
               onViewDetails={handleViewLinkedElementDetails}
               onClose={() => setLinkedElementPreview(null)}
+              readOnly={isBaselineView}
+              onAddLink={isBaselineView ? undefined : openAddLinkByRequirementId}
             />
           </div>
         )}

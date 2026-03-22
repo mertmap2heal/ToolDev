@@ -113,6 +113,53 @@ test.describe('Requirements', () => {
     await expect(page.getByRole('heading', { name: /traceability matrix/i })).toBeVisible({ timeout: 15_000 })
   })
 
+  test('add link dialog opens from expanded row', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/requirements`)
+    await page.waitForLoadState('domcontentloaded')
+    const token = await page.evaluate(() => localStorage.getItem('token'))
+    if (!token) throw new Error('No auth token — login must succeed before this test')
+
+    const listResp = await page.request.get(
+      `http://localhost:5000/api/v1/requirements/${projectId}?page=1&pageSize=1`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    expect(listResp.ok()).toBeTruthy()
+    const listBody = await listResp.json()
+    const total: number = listBody?.data?.total ?? 0
+    if (total === 0) {
+      const createResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: {
+          title: 'E2E add-link seed',
+          description: 'Created by Playwright so the requirements table has at least one row.',
+        },
+      })
+      expect(createResp.ok(), await createResp.text()).toBeTruthy()
+    }
+
+    // Expand lives in the ID column; hidden columns / document view break the flow
+    await page.evaluate(() => {
+      try {
+        localStorage.removeItem('requirements-columns')
+        localStorage.setItem('requirements-list-view', 'table')
+      } catch {
+        /* ignore */
+      }
+    })
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
+
+    const expandBtn = page.getByRole('button', { name: /expand linked items/i }).first()
+    await expect(expandBtn).toBeVisible({ timeout: 15_000 })
+    await expandBtn.click()
+    const linkedRow = page.locator('tr').filter({ hasText: /Linked Items\s*\(/ })
+    await expect(linkedRow).toBeVisible({ timeout: 5_000 })
+    await linkedRow.getByRole('button', { name: /add link/i }).click()
+
+    await expect(page.getByRole('heading', { name: /^add link$/i })).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByText('From requirement', { exact: true })).toBeVisible()
+  })
+
   // --- Child requirement tests ---
   // Child requirements have a non-null parentId. The main paginated list endpoint
   // (/requirements/:projectId) filters parentId: null, hiding children in the table.

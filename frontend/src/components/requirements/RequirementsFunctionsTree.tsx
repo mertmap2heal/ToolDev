@@ -38,6 +38,7 @@ export interface LinkedElementClickPayload {
   sourceId: string
   isOutgoing: boolean
   link: LinkLike
+  contextRequirementId?: string
 }
 
 type TreeNode = FunctionTreeNode
@@ -54,6 +55,7 @@ interface FlatTreeItem {
   requirementId?: string
   requirement?: Requirement
   link?: LinkLike
+  contextRequirementId?: string
 }
 
 interface RequirementsFunctionsTreeProps {
@@ -75,6 +77,7 @@ interface RequirementsFunctionsTreeProps {
   onCreateIssue?: (req: Requirement) => void
   onOpenTraceabilityMatrix?: (focusReqId?: string) => void
   onExportForFunction?: (functionId: string, functionName?: string) => void
+  onAddLink?: (req: Requirement) => void
 }
 
 function buildFlatTree(
@@ -178,6 +181,7 @@ function buildFlatTree(
                 parentFunctionId: fn.id,
                 hasChildren: false,
                 link: { ...link, _displayTargetType: targetType } as LinkLike,
+                contextRequirementId: req.id,
               })
             }
           } else {
@@ -247,6 +251,7 @@ function buildFlatTree(
                 parentFunctionId: null,
                 hasChildren: false,
                 link: { ...link, _displayTargetType: targetType } as LinkLike,
+                contextRequirementId: req.id,
               })
             }
           } else {
@@ -292,6 +297,7 @@ export default function RequirementsFunctionsTree({
   onCreateIssue,
   onOpenTraceabilityMatrix,
   onExportForFunction,
+  onAddLink,
 }: RequirementsFunctionsTreeProps) {
   const navigate = useNavigate()
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['unassigned']))
@@ -606,6 +612,7 @@ export default function RequirementsFunctionsTree({
               const reqLinks = linksByReqId.get(req.id) ?? []
               const hasLinkedElements = reqLinks.length > 0
               const isReqExpanded = expandedReqs.has(req.id)
+              const isLocked = !!req.isLocked
               return (
                 <div
                   key={item.id}
@@ -631,6 +638,20 @@ export default function RequirementsFunctionsTree({
                   >
                     {isReqExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                   </button>
+                  {onAddLink && !isLocked && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onAddLink(req)
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      className="flex-shrink-0 opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-opacity"
+                      title="Add link"
+                    >
+                      <Link2 size={14} />
+                    </button>
+                  )}
                   <div
                     role={onRequirementClick ? 'button' : undefined}
                     tabIndex={onRequirementClick ? 0 : undefined}
@@ -711,6 +732,7 @@ export default function RequirementsFunctionsTree({
                 sourceId: link.sourceId,
                 isOutgoing: !!isOutgoing,
                 link,
+                contextRequirementId: item.contextRequirementId,
               }
               const handleLinkClick = () => onLinkedElementClick?.(payload)
               return (
@@ -925,6 +947,11 @@ export default function RequirementsFunctionsTree({
                 {onOpenTraceabilityMatrix && (
                   <button onClick={() => { onOpenTraceabilityMatrix(t.req.id); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
                     <BarChart3 size={14} /> View in traceability matrix
+                  </button>
+                )}
+                {onAddLink && !t.req.isLocked && (
+                  <button onClick={() => { onAddLink(t.req); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
+                    <Link2 size={14} /> Add link
                   </button>
                 )}
               </>

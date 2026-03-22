@@ -46,6 +46,8 @@ interface RequirementDetailDrawerProps {
   onClose: () => void
   onEdit: (requirement: Requirement) => void
   onDelete: (requirement: Requirement) => void
+  /** Open add-trace-link flow for the current requirement (hidden when undefined or baseline view). */
+  onAddLink?: () => void
 }
 
 /** Gates checklist for lifecycle - simple client-side checks */
@@ -205,6 +207,7 @@ export default function RequirementDetailDrawer({
   onClose,
   onEdit,
   onDelete,
+  onAddLink,
 }: RequirementDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'hierarchy' | 'links' | 'comments' | 'reviews' | 'lifecycle-status'>('overview')
   const [linksViewMode, setLinksViewMode] = useState<'list' | 'visual'>('list')
@@ -1571,8 +1574,19 @@ export default function RequirementDetailDrawer({
 
             {activeTab === 'links' && (
               <div className="space-y-6">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Linked Items</h3>
+                  <div className="flex items-center gap-2">
+                    {onAddLink && !baselineId && canEdit && (
+                      <button
+                        type="button"
+                        onClick={onAddLink}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                      >
+                        <Link2 size={14} />
+                        Add link
+                      </button>
+                    )}
                   <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
                     <button
                       onClick={() => setLinksViewMode('list')}
@@ -1598,6 +1612,7 @@ export default function RequirementDetailDrawer({
                     >
                       <LayoutGrid size={16} />
                     </button>
+                  </div>
                   </div>
                 </div>
 

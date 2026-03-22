@@ -34,6 +34,8 @@ export interface LinkedElementClickPayload {
   sourceId: string
   isOutgoing: boolean
   link: LinkLike
+  /** Owning requirement when the click comes from a requirement’s linked list (PBS / table / functions tree). */
+  contextRequirementId?: string
 }
 
 interface RequirementsPBSTreeProps {
@@ -53,6 +55,7 @@ interface RequirementsPBSTreeProps {
   onCreateIssue?: (req: Requirement) => void
   onOpenTraceabilityMatrix?: (focusReqId?: string) => void
   onExportForComponent?: (componentId: string, componentName?: string) => void
+  onAddLink?: (req: Requirement) => void
 }
 
 interface FlatTreeItem {
@@ -68,6 +71,7 @@ interface FlatTreeItem {
   componentDisplayLabel?: string // normalized "OPBS-001.002-Navigation Module"
   requirement?: Requirement
   link?: LinkLike
+  contextRequirementId?: string
 }
 
 /** ID part only for PBS component (OPBS-001.002 or OPBS-xxxxxxxx) */
@@ -208,6 +212,7 @@ function buildFlatTree(
                       parentComponentId: node.id,
                       hasChildren: false,
                       link: { ...link, _displayTargetType: targetType },
+                      contextRequirementId: req.id,
                     })
                   }
                 } else {
@@ -275,6 +280,7 @@ function buildFlatTree(
                       parentComponentId: null,
                       hasChildren: false,
                       link: { ...link, _displayTargetType: targetType },
+                      contextRequirementId: req.id,
                     })
                   }
                 } else {
@@ -318,6 +324,7 @@ export default function RequirementsPBSTree({
   onCreateIssue,
   onOpenTraceabilityMatrix,
   onExportForComponent,
+  onAddLink,
 }: RequirementsPBSTreeProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -687,6 +694,20 @@ export default function RequirementsPBSTree({
                           >
                             {isReqExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                           </button>
+                          {onAddLink && !isLocked && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onAddLink(req)
+                              }}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              className="flex-shrink-0 opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-opacity"
+                              title="Add link"
+                            >
+                              <Link2 size={14} />
+                            </button>
+                          )}
                           <div
                             role={onRequirementClick ? 'button' : undefined}
                             tabIndex={onRequirementClick ? 0 : undefined}
@@ -740,6 +761,7 @@ export default function RequirementsPBSTree({
                         sourceId: link.sourceId,
                         isOutgoing: !!isOutgoing,
                         link,
+                        contextRequirementId: item.contextRequirementId,
                       }
                       const Icon = displayType === 'function' ? Settings
                         : displayType === 'parameter' ? Sliders
@@ -942,6 +964,11 @@ export default function RequirementsPBSTree({
                       {onOpenTraceabilityMatrix && (
                         <button onClick={() => { onOpenTraceabilityMatrix(t.req.id); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
                           <BarChart3 size={14} /> View in traceability matrix
+                        </button>
+                      )}
+                      {onAddLink && !t.req.isLocked && (
+                        <button onClick={() => { onAddLink(t.req); setContextMenu(null) }} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-left">
+                          <Link2 size={14} /> Add link
                         </button>
                       )}
                     </>

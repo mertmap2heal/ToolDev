@@ -1,6 +1,7 @@
 import { useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { X, ExternalLink, FileText, Settings, AlertCircle, GitPullRequest, Layers, ClipboardList, Link2, Loader2, Sliders } from 'lucide-react'
+import clsx from 'clsx'
 import type { LinkedElementClickPayload } from './RequirementsPBSTree'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
@@ -13,6 +14,9 @@ interface LinkedElementPreviewPopoverProps {
   projectId: string | undefined
   onViewDetails: () => void
   onClose: () => void
+  /** When set, show "Add link" to create a new trace link from this requirement. */
+  onAddLink?: (requirementId: string) => void
+  readOnly?: boolean
 }
 
 function getTypeIcon(type: string) {
@@ -47,6 +51,22 @@ function formatLinkType(linkType: string): string {
   return linkType?.replace(/_/g, ' ') ?? ''
 }
 
+const normT = (t: string | undefined) => (t ?? '').toLowerCase().replace(/-/g, '_')
+function isRequirementLikeType(t: string | undefined): boolean {
+  const n = normT(t)
+  return n === 'requirement' || n === 'hazard' || n === 'risk'
+}
+
+/** Requirement to anchor "Add link" when previewing an edge from a requirement context. */
+function resolveAddLinkRequirementId(payload: LinkedElementClickPayload): string | undefined {
+  if (payload.contextRequirementId) return payload.contextRequirementId
+  const s = isRequirementLikeType(payload.sourceType)
+  const t = isRequirementLikeType(payload.targetType)
+  if (s && !t) return payload.sourceId
+  if (t && !s) return payload.targetId
+  return undefined
+}
+
 /** Strip HTML tags from content so plain text is shown (e.g. "<p>test</p>" → "test") */
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
@@ -57,6 +77,8 @@ export default function LinkedElementPreviewPopover({
   projectId,
   onViewDetails,
   onClose,
+  onAddLink,
+  readOnly = false,
 }: LinkedElementPreviewPopoverProps) {
   const popoverRef = useRef<HTMLDivElement>(null)
 
@@ -153,6 +175,7 @@ export default function LinkedElementPreviewPopover({
 
   const Icon = getTypeIcon(entityType)
   const typeLabel = formatTypeLabel(entityType)
+  const addLinkReqId = !readOnly && onAddLink ? resolveAddLinkRequirementId(payload) : undefined
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -233,14 +256,29 @@ export default function LinkedElementPreviewPopover({
           <X size={18} />
         </button>
       </div>
-      <button
-        type="button"
-        onClick={onViewDetails}
-        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800 transition-colors"
-      >
-        <ExternalLink size={14} />
-        View full details
-      </button>
+      <div className="flex flex-col sm:flex-row gap-2">
+        {addLinkReqId && (
+          <button
+            type="button"
+            onClick={() => onAddLink?.(addLinkReqId)}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 transition-colors"
+          >
+            <Link2 size={14} />
+            Add link
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onViewDetails}
+          className={clsx(
+            'flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800 transition-colors',
+            addLinkReqId ? 'flex-1' : 'w-full'
+          )}
+        >
+          <ExternalLink size={14} />
+          View full details
+        </button>
+      </div>
     </div>
   )
 }

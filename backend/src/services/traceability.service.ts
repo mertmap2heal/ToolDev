@@ -42,6 +42,350 @@ const MEANINGFUL_FIELDS = [
   'linkedMocCode',
 ]
 
+const normLinkEntityType = (t: string | undefined) => (t ?? '').toLowerCase().replace(/-/g, '_')
+
+function isReqLikeEntityType(t: string | undefined): boolean {
+  const n = normLinkEntityType(t)
+  return n === 'requirement' || n === 'hazard' || n === 'risk'
+}
+
+/** Stable undirected key for issue ↔ requirement-like (hazard/risk) pairs — dedupes TraceLink vs IssueLink mirror rows. */
+function issueRequirementUndirectedKey(
+  sourceType: string,
+  sourceId: string,
+  targetType: string,
+  targetId: string
+): string | null {
+  const st = normLinkEntityType(sourceType)
+  const tt = normLinkEntityType(targetType)
+  if (st === 'issue' && isReqLikeEntityType(targetType)) {
+    const [a, b] = [sourceId, targetId].sort()
+    return `issue-reqlike:${a}:${b}`
+  }
+  if (tt === 'issue' && isReqLikeEntityType(sourceType)) {
+    const [a, b] = [targetId, sourceId].sort()
+    return `issue-reqlike:${a}:${b}`
+  }
+  return null
+}
+
+/** Stable undirected key for change_request ↔ requirement-like pairs — dedupes TraceLink vs RequirementChangeRequestLink. */
+function changeRequestRequirementUndirectedKey(
+  sourceType: string,
+  sourceId: string,
+  targetType: string,
+  targetId: string
+): string | null {
+  const st = normLinkEntityType(sourceType)
+  const tt = normLinkEntityType(targetType)
+  if (st === 'change_request' && isReqLikeEntityType(targetType)) {
+    const [a, b] = [sourceId, targetId].sort()
+    return `cr-reqlike:${a}:${b}`
+  }
+  if (tt === 'change_request' && isReqLikeEntityType(sourceType)) {
+    const [a, b] = [targetId, sourceId].sort()
+    return `cr-reqlike:${a}:${b}`
+  }
+  return null
+}
+
+const REQ_LIKE_TYPES = ['requirement', 'hazard', 'risk'] as const
+
+function isTestCaseEntityType(t: string | undefined): boolean {
+  const n = normLinkEntityType(t)
+  return n === 'test_case' || n === 'testcase'
+}
+
+function issueReqLikeEndpoints(
+  sourceType: string,
+  sourceId: string,
+  targetType: string,
+  targetId: string
+): { issueId: string; reqLikeId: string } | null {
+  const st = normLinkEntityType(sourceType)
+  const tt = normLinkEntityType(targetType)
+  if (st === 'issue' && isReqLikeEntityType(targetType)) return { issueId: sourceId, reqLikeId: targetId }
+  if (tt === 'issue' && isReqLikeEntityType(sourceType)) return { issueId: targetId, reqLikeId: sourceId }
+  return null
+}
+
+function crReqLikeEndpoints(
+  sourceType: string,
+  sourceId: string,
+  targetType: string,
+  targetId: string
+): { crId: string; reqLikeId: string } | null {
+  const st = normLinkEntityType(sourceType)
+  const tt = normLinkEntityType(targetType)
+  if (st === 'change_request' && isReqLikeEntityType(targetType)) return { crId: sourceId, reqLikeId: targetId }
+  if (tt === 'change_request' && isReqLikeEntityType(sourceType)) return { crId: targetId, reqLikeId: sourceId }
+  return null
+}
+
+function functionReqLikeEndpoints(
+  sourceType: string,
+  sourceId: string,
+  targetType: string,
+  targetId: string
+): { functionId: string; reqLikeId: string } | null {
+  const st = normLinkEntityType(sourceType)
+  const tt = normLinkEntityType(targetType)
+  if (st === 'function' && isReqLikeEntityType(targetType)) return { functionId: sourceId, reqLikeId: targetId }
+  if (tt === 'function' && isReqLikeEntityType(sourceType)) return { functionId: targetId, reqLikeId: sourceId }
+  return null
+}
+
+function pbsReqLikeEndpoints(
+  sourceType: string,
+  sourceId: string,
+  targetType: string,
+  targetId: string
+): { pbsId: string; reqLikeId: string } | null {
+  const st = normLinkEntityType(sourceType)
+  const tt = normLinkEntityType(targetType)
+  if (st === 'pbs_component' && isReqLikeEntityType(targetType)) return { pbsId: sourceId, reqLikeId: targetId }
+  if (tt === 'pbs_component' && isReqLikeEntityType(sourceType)) return { pbsId: targetId, reqLikeId: sourceId }
+  return null
+}
+
+function testCaseReqLikeEndpoints(
+  sourceType: string,
+  sourceId: string,
+  targetType: string,
+  targetId: string
+): { testCaseId: string; reqLikeId: string } | null {
+  const st = normLinkEntityType(sourceType)
+  const tt = normLinkEntityType(targetType)
+  if (isTestCaseEntityType(sourceType) && isReqLikeEntityType(targetType)) return { testCaseId: sourceId, reqLikeId: targetId }
+  if (isTestCaseEntityType(targetType) && isReqLikeEntityType(sourceType)) return { testCaseId: targetId, reqLikeId: sourceId }
+  return null
+}
+
+function parameterReqLikeEndpoints(
+  sourceType: string,
+  sourceId: string,
+  targetType: string,
+  targetId: string
+): { parameterId: string; reqLikeId: string } | null {
+  const st = normLinkEntityType(sourceType)
+  const tt = normLinkEntityType(targetType)
+  if (st === 'parameter' && isReqLikeEntityType(targetType)) return { parameterId: sourceId, reqLikeId: targetId }
+  if (tt === 'parameter' && isReqLikeEntityType(sourceType)) return { parameterId: targetId, reqLikeId: sourceId }
+  return null
+}
+
+/**
+ * If an equivalent edge already exists, return that row (exact same directed tuple, or undirected pair for types
+ * where the UI treats the relationship as a single link — issue/CR/function/PBS/test_case/parameter ↔ requirement-like).
+ */
+async function findExistingTraceLinkEdge(
+  projectId: string,
+  sourceType: string,
+  sourceId: string,
+  targetType: string,
+  targetId: string
+) {
+  const exact = await prisma.traceLink.findFirst({
+    where: { projectId, sourceType, sourceId, targetType, targetId },
+  })
+  if (exact) return exact
+
+  // Do not treat A↔B as duplicate when both ends are requirement-like (directed semantics differ, e.g. derives vs refined_by).
+  const bothReqLike = isReqLikeEntityType(sourceType) && isReqLikeEntityType(targetType)
+  if (!bothReqLike) {
+    const rev = await prisma.traceLink.findFirst({
+      where: {
+        projectId,
+        sourceType: targetType,
+        sourceId: targetId,
+        targetType: sourceType,
+        targetId: sourceId,
+      },
+    })
+    if (rev) return rev
+  }
+
+  const ir = issueReqLikeEndpoints(sourceType, sourceId, targetType, targetId)
+  if (ir) {
+    const hit = await prisma.traceLink.findFirst({
+      where: {
+        projectId,
+        OR: [
+          {
+            sourceType: 'issue',
+            sourceId: ir.issueId,
+            targetId: ir.reqLikeId,
+            targetType: { in: [...REQ_LIKE_TYPES] },
+          },
+          {
+            targetType: 'issue',
+            targetId: ir.issueId,
+            sourceId: ir.reqLikeId,
+            sourceType: { in: [...REQ_LIKE_TYPES] },
+          },
+        ],
+      },
+    })
+    if (hit) return hit
+  }
+
+  const cr = crReqLikeEndpoints(sourceType, sourceId, targetType, targetId)
+  if (cr) {
+    const hit = await prisma.traceLink.findFirst({
+      where: {
+        projectId,
+        OR: [
+          {
+            sourceType: 'change_request',
+            sourceId: cr.crId,
+            targetId: cr.reqLikeId,
+            targetType: { in: [...REQ_LIKE_TYPES] },
+          },
+          {
+            targetType: 'change_request',
+            targetId: cr.crId,
+            sourceId: cr.reqLikeId,
+            sourceType: { in: [...REQ_LIKE_TYPES] },
+          },
+        ],
+      },
+    })
+    if (hit) return hit
+  }
+
+  const fr = functionReqLikeEndpoints(sourceType, sourceId, targetType, targetId)
+  if (fr) {
+    const hit = await prisma.traceLink.findFirst({
+      where: {
+        projectId,
+        OR: [
+          {
+            sourceType: 'function',
+            sourceId: fr.functionId,
+            targetId: fr.reqLikeId,
+            targetType: { in: [...REQ_LIKE_TYPES] },
+          },
+          {
+            targetType: 'function',
+            targetId: fr.functionId,
+            sourceId: fr.reqLikeId,
+            sourceType: { in: [...REQ_LIKE_TYPES] },
+          },
+        ],
+      },
+    })
+    if (hit) return hit
+  }
+
+  const pr = pbsReqLikeEndpoints(sourceType, sourceId, targetType, targetId)
+  if (pr) {
+    const hit = await prisma.traceLink.findFirst({
+      where: {
+        projectId,
+        OR: [
+          {
+            sourceType: 'pbs_component',
+            sourceId: pr.pbsId,
+            targetId: pr.reqLikeId,
+            targetType: { in: [...REQ_LIKE_TYPES] },
+          },
+          {
+            targetType: 'pbs_component',
+            targetId: pr.pbsId,
+            sourceId: pr.reqLikeId,
+            sourceType: { in: [...REQ_LIKE_TYPES] },
+          },
+        ],
+      },
+    })
+    if (hit) return hit
+  }
+
+  const tc = testCaseReqLikeEndpoints(sourceType, sourceId, targetType, targetId)
+  if (tc) {
+    const hit = await prisma.traceLink.findFirst({
+      where: {
+        projectId,
+        OR: [
+          {
+            sourceType: 'test_case',
+            sourceId: tc.testCaseId,
+            targetId: tc.reqLikeId,
+            targetType: { in: [...REQ_LIKE_TYPES] },
+          },
+          {
+            targetType: 'test_case',
+            targetId: tc.testCaseId,
+            sourceId: tc.reqLikeId,
+            sourceType: { in: [...REQ_LIKE_TYPES] },
+          },
+        ],
+      },
+    })
+    if (hit) return hit
+  }
+
+  const par = parameterReqLikeEndpoints(sourceType, sourceId, targetType, targetId)
+  if (par) {
+    const hit = await prisma.traceLink.findFirst({
+      where: {
+        projectId,
+        OR: [
+          {
+            sourceType: 'parameter',
+            sourceId: par.parameterId,
+            targetId: par.reqLikeId,
+            targetType: { in: [...REQ_LIKE_TYPES] },
+          },
+          {
+            targetType: 'parameter',
+            targetId: par.parameterId,
+            sourceId: par.reqLikeId,
+            sourceType: { in: [...REQ_LIKE_TYPES] },
+          },
+        ],
+      },
+    })
+    if (hit) return hit
+  }
+
+  return null
+}
+
+function traceLinkRowToDto(link: {
+  id: string
+  projectId: string
+  sourceType: string
+  sourceId: string
+  targetType: string
+  targetId: string
+  linkType: string
+  direction: string | null
+  rationale: string | null
+  confidence: number | null
+  isAuto: boolean
+  isSuspect: boolean
+  lastChecked: Date | null
+  createdAt: Date
+}): TraceLink {
+  return {
+    id: link.id,
+    projectId: link.projectId,
+    sourceType: link.sourceType as any,
+    sourceId: link.sourceId,
+    targetType: link.targetType as any,
+    targetId: link.targetId,
+    linkType: link.linkType as any,
+    direction: link.direction || undefined,
+    rationale: link.rationale || undefined,
+    confidence: link.confidence ?? undefined,
+    isAuto: link.isAuto,
+    isSuspect: link.isSuspect || false,
+    lastChecked: link.lastChecked?.toISOString(),
+    createdAt: link.createdAt.toISOString(),
+  }
+}
+
 export const traceabilityService = {
   async getTraceLinks(
     projectId: string,
@@ -144,6 +488,27 @@ export const traceabilityService = {
       console.error('getTraceLinks: IssueLink inverse fetch failed:', err)
     }
 
+    // Omit IssueLink-derived edges when TraceLink already connects the same issue ↔ requirement-like pair
+    // (e.g. createIssue writes IssueLink "related" + TraceLink "tracked_by" — avoids duplicate rows in RM UI).
+    const traceIssueReqPairKeys = new Set<string>()
+    const traceCrReqPairKeys = new Set<string>()
+    for (const l of links) {
+      const ik = issueRequirementUndirectedKey(l.sourceType, l.sourceId, l.targetType, l.targetId)
+      if (ik) traceIssueReqPairKeys.add(ik)
+      const ck = changeRequestRequirementUndirectedKey(l.sourceType, l.sourceId, l.targetType, l.targetId)
+      if (ck) traceCrReqPairKeys.add(ck)
+    }
+
+    issueLinksDirect = issueLinksDirect.filter((l) => {
+      const k = issueRequirementUndirectedKey(l.sourceType, l.sourceId, l.targetType, l.targetId)
+      if (!k) return true
+      return !traceIssueReqPairKeys.has(k)
+    })
+    issueLinksInverse = issueLinksInverse.filter((l) => {
+      const k = issueRequirementUndirectedKey(l.sourceType, l.sourceId, l.targetType, l.targetId)
+      if (!k) return true
+      return !traceIssueReqPairKeys.has(k)
+    })
 
     // 3. Where Change Request is linked (Requirement <-> CR)
     let crLinks: any[] = []
@@ -234,26 +599,30 @@ export const traceabilityService = {
       console.error('getTraceLinks: RequirementChangeRequestLink fetch failed:', err)
     }
 
-    // Dedup CR links if we fetched both directions for a broad query (rare but possible)
-    // We can use a Map by ID to dedup if needed, but for now simple concatenation. 
-    // Ideally we filter based on what the user asked for. 
-    // If user asked `traceability.getTraceLinks(projectId)`, they get everything.
-    // Use a Set to avoid duplicates if ID is shared (RequirementChangeRequestLink has its own ID).
-    // Note: We mapped them to different 'source/target' structures, effectively creating two 'virtual' links per physical link 
-    // if we are not careful. However, usually the frontend asks for links related to a SPECIFIC source.
-    // If sourceId is 'REQ-123', we hit Case A. Case B skipped (sourceType=CR mismatch).
-    // If sourceId is 'CR-123', we hit Case B. Case A skipped.
-    // If no sourceId, we might get duplicates.
-
-    // Filter duplicates for broad queries:
-    const uniqueCrLinks = new Map();
-    crLinks.forEach(l => {
-      // Key by physical link ID AND direction representation
-      const key = `${l.id}-${l.sourceType}`
-      uniqueCrLinks.set(key, l)
+    // Drop RequirementChangeRequestLink mirrors when TraceLink already has the same CR ↔ requirement-like pair
+    crLinks = crLinks.filter((l) => {
+      const k = changeRequestRequirementUndirectedKey(l.sourceType, l.sourceId, l.targetType, l.targetId)
+      if (!k) return true
+      return !traceCrReqPairKeys.has(k)
     })
 
-    const allLinks = [...links, ...issueLinksDirect, ...issueLinksInverse, ...Array.from(uniqueCrLinks.values())]
+    // One virtual edge per physical RequirementChangeRequestLink: prefer requirement → change_request (RM list view)
+    const uniqueCrByPhysicalId = new Map<string, (typeof crLinks)[0]>()
+    for (const l of crLinks) {
+      const prev = uniqueCrByPhysicalId.get(l.id)
+      if (!prev) {
+        uniqueCrByPhysicalId.set(l.id, l)
+        continue
+      }
+      const prevForward =
+        normLinkEntityType(prev.sourceType) === 'requirement' && normLinkEntityType(prev.targetType) === 'change_request'
+      const curForward =
+        normLinkEntityType(l.sourceType) === 'requirement' && normLinkEntityType(l.targetType) === 'change_request'
+      if (curForward && !prevForward) uniqueCrByPhysicalId.set(l.id, l)
+    }
+    const uniqueCrLinksValues = Array.from(uniqueCrByPhysicalId.values())
+
+    const allLinks = [...links, ...issueLinksDirect, ...issueLinksInverse, ...uniqueCrLinksValues]
 
     // 3b. Fetch change_request and issue entities; filter out phantom links (TraceLink pointing to non-existent CR/issue)
     const crIds = new Set<string>()
@@ -599,6 +968,17 @@ export const traceabilityService = {
       if (!issue) {
         throw new Error(`Issue not found or does not belong to this project: ${targetId}`)
       }
+    }
+
+    const existingEdge = await findExistingTraceLinkEdge(
+      projectId,
+      sourceType,
+      sourceId,
+      targetType,
+      targetId
+    )
+    if (existingEdge) {
+      return traceLinkRowToDto(existingEdge)
     }
 
     const link = await prisma.traceLink.create({
