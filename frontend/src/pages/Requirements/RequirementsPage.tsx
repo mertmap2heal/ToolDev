@@ -1710,9 +1710,9 @@ export default function RequirementsPage() {
                   />
                 </div>
               ) : (
-                <div className="text-sm text-gray-600 dark:text-gray-400 max-w-xs">
+                <div className="text-sm text-gray-600 dark:text-gray-400 min-w-0 w-full">
                   <p
-                    className="line-clamp-2 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                    className="break-words whitespace-pre-wrap cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
                     title="Double-click to edit"
                     onDoubleClick={(e) => {
                       e.stopPropagation()
@@ -1723,7 +1723,7 @@ export default function RequirementsPage() {
                       projectId && (req.description || '').includes('{{param:') ? (
                         <RequirementParameterText projectId={projectId} text={req.description} stripHtml />
                       ) : (
-                        <span dangerouslySetInnerHTML={{ __html: req.description.replace(/<[^>]*>/g, '').substring(0, 150) + (req.description.length > 150 ? '...' : '') }} />
+                        <span>{req.description.replace(/<[^>]*>/g, '')}</span>
                       )
                     ) : (
                       <span className="text-gray-400">—</span>
