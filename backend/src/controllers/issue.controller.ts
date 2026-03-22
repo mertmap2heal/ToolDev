@@ -1,7 +1,9 @@
 import { Response } from 'express'
+import { Prisma } from '@prisma/client'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
 import { linkageAuditService } from '../services/linkageAudit.service'
+import { traceabilityService } from '../services/traceability.service'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -36,6 +38,34 @@ const createSystemNote = async (
   })
 }
 
+/** Highest numeric suffix among keys matching ISS-<digits> (issueKey is globally @unique). */
+async function getMaxIssueSequenceNumber(): Promise<number> {
+  const rows = await prisma.$queryRaw<Array<{ max: number | null }>>`
+    SELECT MAX(
+      CAST(SUBSTRING("issueKey" FROM 'ISS-([0-9]+)') AS INTEGER)
+    ) AS max
+    FROM "Issue"
+    WHERE "issueKey" IS NOT NULL
+      AND "issueKey" ~ '^ISS-[0-9]+$'
+  `
+  const raw = rows[0]?.max
+  if (raw == null) return 0
+  const n = typeof raw === 'bigint' ? Number(raw) : Number(raw)
+  return Number.isFinite(n) ? n : 0
+}
+
+function formatIssueKey(sequence: number): string {
+  return `ISS-${sequence.toString().padStart(4, '0')}`
+}
+
+function isIssueKeyUniqueViolation(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+    return false
+  }
+  const target = error.meta?.target
+  return Array.isArray(target) && (target as string[]).includes('issueKey')
+}
+
 export const createIssue = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
@@ -62,42 +92,47 @@ export const createIssue = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    // Generate unique issue key (ISS-0001)
-    const latestIssue = await prisma.issue.findFirst({
-      where: { issueKey: { not: null } },
-      orderBy: { issueKey: 'desc' },
-      select: { issueKey: true },
-    })
-
-    let issueNumber = 1
-    if (latestIssue?.issueKey) {
-      const match = latestIssue.issueKey.match(/ISS-(\d+)/)
-      if (match) {
-        issueNumber = parseInt(match[1]) + 1
+    // Generate unique issue key (ISS-0001). Use numeric MAX (not string sort: ISS-10000 < ISS-9999 lexically)
+    // and retry on P2002 for concurrent creates.
+    const maxAttempts = 12
+    let issue: Awaited<ReturnType<typeof prisma.issue.create>> | null = null
+    let lastKeyError: unknown
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const nextSeq = (await getMaxIssueSequenceNumber()) + 1
+      const issueKey = formatIssueKey(nextSeq)
+      try {
+        issue = await prisma.issue.create({
+          data: {
+            projectId,
+            issueKey,
+            title,
+            description,
+            priority: priority || 'medium',
+            issueType: issueType || null,
+            owner: owner || '',
+            assigneeId,
+            createdBy: req.userId,
+            updatedBy: req.userId,
+            relatedFunctionIds: relatedFunctionIds || [],
+            relatedParameterIds: relatedParameterIds || [],
+            labelIds: labelIds || [],
+            startDate: startDate ? new Date(startDate) : null,
+            dueDate: dueDate ? new Date(dueDate) : null,
+            estimatedTime,
+          },
+        })
+        break
+      } catch (e) {
+        if (isIssueKeyUniqueViolation(e)) {
+          lastKeyError = e
+          continue
+        }
+        throw e
       }
     }
-    const issueKey = `ISS-${issueNumber.toString().padStart(4, '0')}`
-
-    const issue = await prisma.issue.create({
-      data: {
-        projectId,
-        issueKey,
-        title,
-        description,
-        priority: priority || 'medium',
-        issueType: issueType || null,
-        owner: owner || '',
-        assigneeId,
-        createdBy: req.userId,
-        updatedBy: req.userId,
-        relatedFunctionIds: relatedFunctionIds || [],
-        relatedParameterIds: relatedParameterIds || [],
-        labelIds: labelIds || [],
-        startDate: startDate ? new Date(startDate) : null,
-        dueDate: dueDate ? new Date(dueDate) : null,
-        estimatedTime,
-      },
-    })
+    if (!issue) {
+      throw lastKeyError ?? new Error('Could not allocate a unique issue key')
+    }
 
     // Subscribe creator automatically
     if (req.userId) {
@@ -109,23 +144,38 @@ export const createIssue = async (req: AuthRequest, res: Response) => {
       }).catch(() => { }) // Ignore if already subscribed
     }
 
-    // Auto-link to requirement if created from one
+    // Auto-link to requirement if created from one (IssueLink for Issues module + TraceLink for requirements UI / LINKAGE_V1)
     if (sourceRequirementId) {
-      const requirement = await prisma.requirement.findUnique({
-        where: { id: sourceRequirementId },
+      const requirement = await prisma.requirement.findFirst({
+        where: { id: sourceRequirementId, projectId },
         select: { requirementId: true, title: true },
       })
 
-      await prisma.issueLink.create({
-        data: {
-          issueId: issue.id,
-          linkedType: 'requirement',
-          linkedId: sourceRequirementId,
-          linkType: 'related',
-          linkedRequirementKey: requirement?.requirementId || null,
-          linkedRequirementTitle: requirement?.title || null,
-        },
-      })
+      if (requirement) {
+        await prisma.issueLink.create({
+          data: {
+            issueId: issue.id,
+            linkedType: 'requirement',
+            linkedId: sourceRequirementId,
+            linkType: 'related',
+            linkedRequirementKey: requirement.requirementId || null,
+            linkedRequirementTitle: requirement.title || null,
+          },
+        })
+
+        // Mirror in TraceLink so requirement linked-items, matrix, and PBS trees see the edge
+        await traceabilityService.createTraceLink(
+          projectId,
+          'requirement',
+          sourceRequirementId,
+          'issue',
+          issue.id,
+          'tracked_by',
+          undefined,
+          'Auto-linked when issue was created from requirement',
+          req.userId || undefined
+        )
+      }
 
       const userName = req.userId ? (await prisma.user.findUnique({ where: { id: req.userId }, select: { name: true } }))?.name : undefined
       await createSystemNote(

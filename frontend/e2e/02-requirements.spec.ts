@@ -105,6 +105,14 @@ test.describe('Requirements', () => {
     await expect(page).toHaveURL(/requirements\/dashboard/)
   })
 
+  test('traceability matrix opens from requirements page', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/requirements`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: /traceability/i }).click()
+    await page.getByRole('button', { name: /traceability matrix/i }).click()
+    await expect(page.getByRole('heading', { name: /traceability matrix/i })).toBeVisible({ timeout: 15_000 })
+  })
+
   // --- Child requirement tests ---
   // Child requirements have a non-null parentId. The main paginated list endpoint
   // (/requirements/:projectId) filters parentId: null, hiding children in the table.

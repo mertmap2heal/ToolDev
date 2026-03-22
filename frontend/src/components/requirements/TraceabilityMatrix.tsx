@@ -29,6 +29,7 @@ import { formatCellEntries } from 'shared/types/traceabilityMatrix.types'
 import clsx from 'clsx'
 import { DEFAULT_AUTHORITY_STYLE } from '../../utils/requirementExportTemplates'
 import { invalidateLinkCaches } from '../../utils/invalidateLinkCaches'
+import { hasAllocatedToComponent } from '../../linkage/buildRequirementLinkedItems'
 import { addCoverPage, addHeaderFooterToAllPages, addTraceabilityMatrixSection } from '../../utils/exportPdfLayout'
 import { buildTraceabilityMatrixDocx } from '../../utils/exportDocx'
 
@@ -139,9 +140,9 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
     enabled: !!projectId && !!targetOpt && LINKAGE_V1,
   })
 
-  // Fetch trace links (use link.service when LINKAGE_V1)
+  // Fetch trace links (use link.service when LINKAGE_V1); align query key with Requirements page cache.
   const { data: traceLinks = [], isLoading: loadingLinks } = useQuery({
-    queryKey: ['trace-links', projectId],
+    queryKey: LINKAGE_V1 ? ['links', projectId] : ['trace-links', projectId],
     queryFn: async () => {
       const response = LINKAGE_V1
         ? await linkService.getLinks(projectId)
@@ -159,6 +160,12 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
 
   type CellInfo = { linked: boolean; suspect: boolean; linkId?: string; linkType?: string; arrow?: '→' | '←' | '↔' }
 
+  const normType = (s: string | undefined) => (s ?? '').toLowerCase().replace(/-/g, '_')
+  const isRequirementLike = (t: string | undefined) => {
+    const n = normType(t)
+    return n === 'requirement' || n === 'hazard' || n === 'risk'
+  }
+
   // Build a map of source -> target links based on matrix type
   const linkMap = useMemo(() => {
     const map = new Map<string, Map<string, CellInfo>>()
@@ -175,8 +182,8 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
       })
       traceLinks.forEach((link: any) => {
         if (
-          link.sourceType === 'requirement' &&
-          link.targetType === linkageTargetType
+          isRequirementLike(link.sourceType) &&
+          normType(link.targetType) === normType(linkageTargetType)
         ) {
           const reqMap = map.get(link.sourceId)
           if (reqMap && reqMap.has(link.targetId)) {
@@ -191,8 +198,8 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
         }
         // Also check reverse direction
         if (
-          link.sourceType === linkageTargetType &&
-          link.targetType === 'requirement'
+          normType(link.sourceType) === normType(linkageTargetType) &&
+          isRequirementLike(link.targetType)
         ) {
           const reqMap = map.get(link.targetId)
           if (reqMap && reqMap.has(link.sourceId)) {
@@ -209,6 +216,23 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
           }
         }
       })
+      // Synthetic PBS allocation from requirement.componentId (parity with PBS tree / table linked items)
+      if (normType(linkageTargetType) === 'pbs_component') {
+        requirements.forEach((req) => {
+          const cid = req.componentId
+          if (!cid) return
+          const reqMap = map.get(req.id)
+          if (!reqMap || !reqMap.has(cid)) return
+          if (reqMap.get(cid)?.linked) return
+          if (hasAllocatedToComponent(traceLinks as any[], req.id, cid)) return
+          reqMap.set(cid, {
+            linked: true,
+            suspect: false,
+            linkType: 'allocated_to',
+            arrow: '→',
+          })
+        })
+      }
     } else if (matrixType === 'requirements-functions') {
       requirements.forEach((req) => {
         map.set(req.id, new Map())

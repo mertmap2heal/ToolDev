@@ -19,12 +19,14 @@ import { lifecyclePermissionService } from '../../services/lifecyclePermission.s
 import { verificationService } from '../../services/verification.service'
 
 import { buildDeepLink } from '../../linkage/buildDeepLink'
+import { hasAllocatedToComponent } from '../../linkage/buildRequirementLinkedItems'
 import ImpactAnalysis from './ImpactAnalysis'
 import RequirementVersionHistory from './RequirementVersionHistory'
 import RequirementReviewPanel from './RequirementReviewPanel'
 import ReviewStatusBadge from './ReviewStatusBadge'
 import { VisualLinksGraph } from './VisualLinksGraph'
 import type { Requirement, RequirementComment } from 'shared/types/engineering.types'
+import type { Link as LinkRecord } from 'shared/types/linkage.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
 import { LockButton } from './LockButton'
@@ -547,6 +549,30 @@ export default function RequirementDetailDrawer({
 
   const displayRequirement = fullRequirement || requirement
 
+  /** Trace links for list/visual + break-link UI; includes synthetic PBS when only requirement.componentId is set. */
+  const allLinksForUi = useMemo(() => {
+    if (!LINKAGE_V1 || !displayRequirement?.componentId) return allLinks
+    const cid = displayRequirement.componentId
+    const raw = [...(links as LinkRecord[]), ...(incomingLinks as LinkRecord[])]
+    if (hasAllocatedToComponent(raw, displayRequirement.id, cid)) return allLinks
+    const comp = flatComponents.find((c) => c.id === cid)
+    const synthId = `synthetic-pbs-${displayRequirement.id}-${cid}`
+    const synthetic: LinkRecord = {
+      id: synthId,
+      projectId,
+      sourceType: 'requirement',
+      sourceId: displayRequirement.id,
+      targetType: 'pbs_component',
+      targetId: cid,
+      linkType: 'allocated_to',
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      targetTitle: comp?.name ?? undefined,
+      targetDisplayId: comp?.name ? undefined : cid.slice(0, 8),
+    }
+    return [...allLinks, synthetic]
+  }, [LINKAGE_V1, displayRequirement, allLinks, links, incomingLinks, flatComponents, projectId])
+
   const parameterDisplayMode = useParameterDisplayStore((s) => s.mode)
   const { data: parameters = [] } = useQuery({
     queryKey: ['parameters', projectId],
@@ -685,7 +711,7 @@ export default function RequirementDetailDrawer({
   }, [requirements, functions, issues, changeRequests, flatComponents, testPlans, testCases, parameters])
 
   const enrichedLinks = useMemo(() => {
-    return allLinks.map((link) => {
+    return allLinksForUi.map((link) => {
       const targetItem: any = resolveTargetItem(link.targetType, link.targetId)
 
       const displayId = (link as any).targetDisplayId ?? (targetItem ? (
@@ -713,7 +739,7 @@ export default function RequirementDetailDrawer({
         targetTitle: title
       }
     })
-  }, [allLinks, resolveTargetItem])
+  }, [allLinksForUi, resolveTargetItem])
 
   const isLocked = displayRequirement?.isLocked
   const isLockedByCurrentUser = displayRequirement?.lockedByUserId === currentUserId
@@ -721,21 +747,26 @@ export default function RequirementDetailDrawer({
   const canEdit = !isLocked
 
   const linkedFunctions = functions.filter((f) => f.sourceReqId === (displayRequirement?.id || ''))
-  const linkedIssues = issues.filter((issue) => {
-    if (!displayRequirement) return false
-    return issue.title.toLowerCase().includes(displayRequirement.id.toLowerCase()) ||
-      issue.description.toLowerCase().includes(displayRequirement.id.toLowerCase())
-  })
-  const linkedChangeRequests = changeRequests.filter((cr) => {
-    if (!displayRequirement) return false
-
-    // Check actual requirement links first
-    const hasDirectLink = cr.requirementLinks?.some(link => link.requirement.id === displayRequirement.id)
-    if (hasDirectLink) return true
-
-    return cr.title.toLowerCase().includes(displayRequirement.id.toLowerCase()) ||
-      cr.description.toLowerCase().includes(displayRequirement.id.toLowerCase())
-  })
+  const linkedIssues = LINKAGE_V1
+    ? []
+    : issues.filter((issue) => {
+        if (!displayRequirement) return false
+        return (
+          issue.title.toLowerCase().includes(displayRequirement.id.toLowerCase()) ||
+          issue.description.toLowerCase().includes(displayRequirement.id.toLowerCase())
+        )
+      })
+  const linkedChangeRequests = LINKAGE_V1
+    ? []
+    : changeRequests.filter((cr) => {
+        if (!displayRequirement) return false
+        const hasDirectLink = cr.requirementLinks?.some((link) => link.requirement.id === displayRequirement.id)
+        if (hasDirectLink) return true
+        return (
+          cr.title.toLowerCase().includes(displayRequirement.id.toLowerCase()) ||
+          cr.description.toLowerCase().includes(displayRequirement.id.toLowerCase())
+        )
+      })
 
   const toggleSection = (section: string) => {
     setExpandedSections((prev) => {
@@ -1580,9 +1611,9 @@ export default function RequirementDetailDrawer({
                   <>
                     {LINKAGE_V1 ? (
                       <>
-                        {allLinks.length > 0 && (
+                        {allLinksForUi.length > 0 && (
                           (() => {
-                            const byType = allLinks.reduce<Record<string, typeof allLinks>>((acc, link) => {
+                            const byType = allLinksForUi.reduce<Record<string, typeof allLinksForUi>>((acc, link) => {
                               const t = link.linkType || 'trace'
                               if (!acc[t]) acc[t] = []
                               acc[t].push(link)
@@ -1772,15 +1803,17 @@ export default function RequirementDetailDrawer({
                                             >
                                               <ExternalLink size={16} />
                                             </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => handleBreakLink(link.id, link.targetType, link.targetId, displayId)}
-                                              disabled={breakLinkOrDeleteMutation.isPending}
-                                              className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all disabled:opacity-50"
-                                              title="Break link"
-                                            >
-                                              <Unlink size={16} />
-                                            </button>
+                                            {link.id && !String(link.id).startsWith('synthetic-pbs') && (
+                                              <button
+                                                type="button"
+                                                onClick={() => handleBreakLink(link.id!, link.targetType, link.targetId, displayId)}
+                                                disabled={breakLinkOrDeleteMutation.isPending}
+                                                className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all disabled:opacity-50"
+                                                title="Break link"
+                                              >
+                                                <Unlink size={16} />
+                                              </button>
+                                            )}
                                           </div>
                                         </div>
                                       )
@@ -1899,7 +1932,7 @@ export default function RequirementDetailDrawer({
                           </div>
                         )}
 
-                        {links.length === 0 && linkedTestPlans.length === 0 && linkedTestCases.length === 0 && (
+                        {allLinksForUi.length === 0 && linkedTestPlans.length === 0 && linkedTestCases.length === 0 && (
                           <p className="text-sm text-gray-500 dark:text-gray-400">No linked items</p>
                         )}
 
@@ -1974,7 +2007,7 @@ export default function RequirementDetailDrawer({
               <LifecycleApprovalsTab
                 requirement={displayRequirement!}
                 projectId={projectId}
-                links={links}
+                links={allLinksForUi}
                 onStatusChanged={() => queryClient.invalidateQueries({ queryKey: ['requirement', projectId, requirement?.id] })}
               />
             )}

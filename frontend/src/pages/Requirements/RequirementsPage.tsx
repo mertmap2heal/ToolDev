@@ -42,6 +42,10 @@ import { LINKAGE_V1, LIFECYCLE_V1 } from '../../config/featureFlags'
 import { getVerificationTabForNodeType, buildVerificationUrl } from '../../config/verificationTabs'
 import { REQUIREMENTS_LEFT_PANEL_TABS, type RequirementsLeftPanelTabId } from '../../config/pbsTabs'
 import { buildDeepLink } from '../../linkage/buildDeepLink'
+import {
+  buildRequirementLinkedItems,
+  countRequirementLinkedItems,
+} from '../../linkage/buildRequirementLinkedItems'
 import ChangeStatusPopover, { getStatusColorClasses } from '../../components/requirements/ChangeStatusPopover'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import { useParameterDisplayStore } from '../../store/parameterDisplayStore'
@@ -59,7 +63,22 @@ interface ExpandedRow {
   linkedFunctions: Array<{ id: string; functionId?: string; name: string }>
   linkedIssues: Array<{ id: string; title: string; issueKey?: string }>
   linkedChangeRequests: Array<{ id: string; title: string; crId?: string }>
-  linkedItems?: Array<{ id: string; targetType: string; targetId: string; label?: string; title?: string; description?: string; displayId?: string; linkType?: string; issue?: { id: string; title: string; issueKey?: string; createdByUser?: { id: string; name: string; email: string } } }>
+  linkedItems?: Array<{
+    id: string
+    targetType: string
+    targetId: string
+    label?: string
+    title?: string
+    description?: string
+    displayId?: string
+    linkType?: string
+    isOutgoing?: boolean
+    linkSourceType?: string
+    linkSourceId?: string
+    linkTargetType?: string
+    linkTargetId?: string
+    issue?: { id: string; title: string; issueKey?: string; createdByUser?: { id: string; name: string; email: string } }
+  }>
 }
 
 function humanizeLinkType(linkType: string | undefined): string {
@@ -162,7 +181,6 @@ export default function RequirementsPage() {
   const [editingRequirement, setEditingRequirement] = useState<Requirement | null>(null)
   const [deleteConfirmation, setDeleteConfirmation] = useState<Requirement | null>(null)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
-  const [requirementData, setRequirementData] = useState<Map<string, ExpandedRow>>(new Map())
   const [parentRequirement, setParentRequirement] = useState<Requirement | null>(null)
   const [initialComponentId, setInitialComponentId] = useState<string | undefined>(undefined)
   const [initialFunctionAllocations, setInitialFunctionAllocations] = useState<string[] | undefined>(undefined)
@@ -190,9 +208,13 @@ export default function RequirementsPage() {
   const [traceabilityDropdownOpen, setTraceabilityDropdownOpen] = useState(false)
   const [dataDropdownOpen, setDataDropdownOpen] = useState(false)
   const [viewDropdownOpen, setViewDropdownOpen] = useState(false)
+  const [analysisDropdownOpen, setAnalysisDropdownOpen] = useState(false)
+  const [sortDropdownOpen, setSortDropdownOpen] = useState(false)
   const traceabilityDropdownRef = useRef<HTMLDivElement>(null)
   const dataDropdownRef = useRef<HTMLDivElement>(null)
   const viewDropdownRef = useRef<HTMLDivElement>(null)
+  const analysisDropdownRef = useRef<HTMLDivElement>(null)
+  const sortDropdownRef = useRef<HTMLDivElement>(null)
 
   // Inline editing state
   const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null)
@@ -438,6 +460,12 @@ export default function RequirementsPage() {
       }
       if (viewDropdownRef.current && !viewDropdownRef.current.contains(event.target as Node)) {
         setViewDropdownOpen(false)
+      }
+      if (analysisDropdownRef.current && !analysisDropdownRef.current.contains(event.target as Node)) {
+        setAnalysisDropdownOpen(false)
+      }
+      if (sortDropdownRef.current && !sortDropdownRef.current.contains(event.target as Node)) {
+        setSortDropdownOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -1305,142 +1333,109 @@ export default function RequirementsPage() {
     return (effectiveLinks as LinkType[]).filter((l) => l.sourceId === reqId || l.targetId === reqId)
   }, [LINKAGE_V1, effectiveLinks])
 
-  // Get linked elements for a requirement
-  const getLinkedElements = (requirementId: string): ExpandedRow => {
-    // Find functions linked to this requirement
-    const linkedFunctions = functions
-      .filter((func) => func.sourceReqId === requirementId)
-      .map((func) => ({
-        id: func.id,
-        functionId: func.functionId,
-        name: func.name,
-      }))
+  // Linked rows for expanded table + delete modal: bidirectional TraceLink + synthetic PBS (LINKAGE_V1).
+  const getLinkedElements = useCallback(
+    (requirementId: string, requirement?: Requirement | null): ExpandedRow => {
+      const linkedFunctions = functions
+        .filter((func) => func.sourceReqId === requirementId)
+        .map((func) => ({
+          id: func.id,
+          functionId: func.functionId,
+          name: func.name,
+        }))
 
-    // Find issues linked to this requirement (via traceability or direct link)
-    const linkedIssues = issues
-      .filter((issue) => {
-        // This would need to be enhanced with actual traceability links
-        return issue.title.toLowerCase().includes(requirementId.toLowerCase()) ||
-          issue.description.toLowerCase().includes(requirementId.toLowerCase())
-      })
-      .map((issue) => ({
-        id: issue.id,
-        title: issue.title,
-        issueKey: issue.issueKey,
-      }))
+      const linkedIssues = LINKAGE_V1
+        ? []
+        : issues
+            .filter(
+              (issue) =>
+                issue.title.toLowerCase().includes(requirementId.toLowerCase()) ||
+                issue.description.toLowerCase().includes(requirementId.toLowerCase())
+            )
+            .map((issue) => ({
+              id: issue.id,
+              title: issue.title,
+              issueKey: issue.issueKey,
+            }))
 
-    // Find change requests linked to this requirement
-    const linkedChangeRequests = changeRequests
-      .filter((cr) => {
-        // Check actual requirement links first
-        const hasDirectLink = cr.requirementLinks?.some(link => link.requirement.id === requirementId)
-        if (hasDirectLink) return true
+      const linkedChangeRequests = LINKAGE_V1
+        ? []
+        : changeRequests
+            .filter((cr) => {
+              const hasDirectLink = cr.requirementLinks?.some((link) => link.requirement.id === requirementId)
+              if (hasDirectLink) return true
+              return (
+                cr.title.toLowerCase().includes(requirementId.toLowerCase()) ||
+                cr.description.toLowerCase().includes(requirementId.toLowerCase())
+              )
+            })
+            .map((cr) => ({
+              id: cr.id,
+              title: cr.title,
+              crId: cr.crId,
+            }))
 
-        // This would need to be enhanced with actual traceability links
-        return cr.title.toLowerCase().includes(requirementId.toLowerCase()) ||
-          cr.description.toLowerCase().includes(requirementId.toLowerCase())
-      })
-      .map((cr) => ({
-        id: cr.id,
-        title: cr.title,
-        crId: cr.crId,
-      }))
+      const reqList = allRequirements.length > 0 ? allRequirements : requirements
+      const children = reqList.filter((req) => req.parentId === requirementId)
 
-    // Get children
-    const children = requirements.filter((req) => req.parentId === requirementId)
+      const reqRow =
+        requirement ??
+        reqList.find((r) => r.id === requirementId) ??
+        requirements.find((r) => r.id === requirementId) ??
+        null
 
-    // Get linked items (LINKAGE_V1)
-    const linkedItems = LINKAGE_V1
-      ? (effectiveLinks as any[])
-        .filter((l: any) => l.sourceType === 'requirement' && l.sourceId === requirementId)
-        .map((l: any) => {
-          const item: any = {
-            id: l.id,
-            targetType: l.targetType,
-            targetId: l.targetId,
-            label: l.targetLabel ?? `${l.targetType}:${l.targetId}`,
-            linkType: l.linkType,
-            title: l.targetTitle,
-            description: l.targetDescription,
-            displayId: l.targetDisplayId,
-          }
-          // If targetType is 'issue', find and attach the full issue details
-          // Enrich with details if available in loaded lists
-          if (l.targetType === 'issue') {
-            const issue = issues.find((i: any) => i.id === l.targetId)
-            if (issue) {
-              item.title = issue.title
-              item.description = issue.description
-              item.displayId = issue.issueKey || issue.id.substring(0, 8)
-              item.issue = {
-                id: issue.id,
-                title: issue.title,
-                issueKey: issue.issueKey,
-                createdByUser: issue.createdByUser,
-              }
-            }
-          } else if (l.targetType === 'change_request') {
-            const cr = changeRequests.find((c: any) => c.id === l.targetId)
-            if (cr) {
-              item.title = cr.title
-              item.description = cr.description
-              item.displayId = cr.crId || cr.id.substring(0, 8)
-            }
-          } else if (l.targetType === 'requirement') {
-            const req = requirements.find((r: any) => r.id === l.targetId)
-            if (req) {
-              item.title = req.title
-              item.description = req.description
-              item.displayId = req.requirementId || req.id.substring(0, 8)
-            }
-          } else if (l.targetType === 'function') {
-            const func = functions.find((f: any) => f.id === l.targetId)
-            if (func) {
-              item.title = func.name
-              item.description = func.description
-              item.displayId = func.functionId || func.id.substring(0, 8)
-            }
-          } else if (l.targetType === 'pbs_component') {
-            const comp = flatComponents.find((c: any) => c.id === l.targetId)
-            if (comp) {
-              item.title = comp.name
-              item.description = comp.description ?? undefined
-              item.displayId = comp.pbsCode || comp.id.slice(0, 8)
-            } else {
-              item.displayId = item.displayId || l.targetDisplayId || `PBS:${l.targetId.slice(0, 8)}`
-            }
-          }
-          return item
-        })
-      : []
+      const linkedItems = LINKAGE_V1
+        ? buildRequirementLinkedItems(requirementId, reqRow ?? undefined, effectiveLinks as LinkType[], {
+            issues: issues as any[],
+            changeRequests: changeRequests as any[],
+            functions: functions as any[],
+            requirements: reqList,
+            flatComponents,
+          }).map((row) => ({
+            id: row.id,
+            targetType: row.targetType,
+            targetId: row.targetId,
+            label: row.label,
+            linkType: row.linkType,
+            title: row.title,
+            description: row.description,
+            displayId: row.displayId,
+            isOutgoing: row.isOutgoing,
+            linkSourceType: row.linkSourceType,
+            linkSourceId: row.linkSourceId,
+            linkTargetType: row.linkTargetType,
+            linkTargetId: row.linkTargetId,
+            issue: row.issue,
+          }))
+        : []
 
-    return {
-      requirementId,
-      children,
-      linkedFunctions,
-      linkedIssues,
-      linkedChangeRequests,
-      linkedItems,
-    }
-  }
+      return {
+        requirementId,
+        children,
+        linkedFunctions,
+        linkedIssues,
+        linkedChangeRequests,
+        linkedItems,
+      }
+    },
+    [
+      LINKAGE_V1,
+      effectiveLinks,
+      issues,
+      changeRequests,
+      functions,
+      allRequirements,
+      requirements,
+      flatComponents,
+    ]
+  )
 
   const toggleRow = (requirementId: string) => {
     setExpandedRows((prev) => {
-      const newSet = new Set(prev)
-      if (newSet.has(requirementId)) {
-        newSet.delete(requirementId)
-      } else {
-        newSet.add(requirementId)
-        // Load linked elements when expanding
-        if (!requirementData.has(requirementId)) {
-          setRequirementData((prev) => {
-            const newMap = new Map(prev)
-            newMap.set(requirementId, getLinkedElements(requirementId))
-            return newMap
-          })
-        }
-      }
-      return newSet
+      const next = new Set(prev)
+      if (next.has(requirementId)) next.delete(requirementId)
+      else next.add(requirementId)
+      return next
     })
   }
 
@@ -1665,7 +1660,7 @@ export default function RequirementsPage() {
   const renderRequirementRow = (req: Requirement, level: number = 0) => {
     const isExpanded = expandedRows.has(req.id)
     const hasChildren = req.children && req.children.length > 0
-    const rowData = requirementData.get(req.id)
+    const rowData = isExpanded ? getLinkedElements(req.id, req) : null
 
 
     return (
@@ -2107,20 +2102,27 @@ export default function RequirementsPage() {
                     </p>
                     <div className="space-y-1">
                       {rowData.linkedItems.map((item) => {
+                        const st = item.linkSourceType ?? 'requirement'
+                        const sid = item.linkSourceId ?? req.id
+                        const tt = item.linkTargetType ?? item.targetType
+                        const tid = item.linkTargetId ?? item.targetId
+                        const outgoing = item.isOutgoing !== false
                         const previewPayload: LinkedElementClickPayload = {
-                          sourceType: 'requirement',
-                          sourceId: req.id,
-                          targetType: item.targetType,
-                          targetId: item.targetId,
-                          isOutgoing: true,
+                          sourceType: st,
+                          sourceId: sid,
+                          targetType: tt,
+                          targetId: tid,
+                          isOutgoing: outgoing,
                           link: {
-                            sourceType: 'requirement',
-                            sourceId: req.id,
-                            targetType: item.targetType,
-                            targetId: item.targetId,
-                            targetDisplayId: item.displayId,
-                            targetTitle: item.title,
-                            targetLabel: item.title || item.displayId,
+                            sourceType: st,
+                            sourceId: sid,
+                            targetType: tt,
+                            targetId: tid,
+                            targetDisplayId: outgoing ? item.displayId : undefined,
+                            targetTitle: outgoing ? item.title : undefined,
+                            targetLabel: outgoing ? (item.title || item.displayId) : undefined,
+                            sourceDisplayId: !outgoing ? item.displayId : undefined,
+                            sourceTitle: !outgoing ? item.title : undefined,
                             linkType: item.linkType,
                           },
                         }
@@ -2194,8 +2196,8 @@ export default function RequirementsPage() {
                 </td>
               </tr>
             )}
-            {/* Linked Issues */}
-            {rowData.linkedIssues.length > 0 && (
+            {/* Linked Issues (legacy heuristic when !LINKAGE_V1) */}
+            {!LINKAGE_V1 && rowData.linkedIssues.length > 0 && (
               <tr>
                 <td colSpan={getTotalColumnCount()} className="px-4 py-2 bg-yellow-50/50 dark:bg-yellow-900/10">
                   <div className="pl-8">
@@ -2239,8 +2241,8 @@ export default function RequirementsPage() {
                 </td>
               </tr>
             )}
-            {/* Linked Change Requests */}
-            {rowData.linkedChangeRequests.length > 0 && (
+            {/* Linked Change Requests (legacy heuristic when !LINKAGE_V1) */}
+            {!LINKAGE_V1 && rowData.linkedChangeRequests.length > 0 && (
               <tr>
                 <td colSpan={getTotalColumnCount()} className="px-4 py-2 bg-purple-50/50 dark:bg-purple-900/10">
                   <div className="pl-8">
@@ -2356,14 +2358,6 @@ export default function RequirementsPage() {
       return
     }
 
-
-    // Always refresh linked elements for the modal to ensure fresh data
-    const linkedElements = getLinkedElements(req.id)
-    setRequirementData((prev) => {
-      const newMap = new Map(prev)
-      newMap.set(req.id, linkedElements)
-      return newMap
-    })
 
     // Always show modal to allow entering a reason
     setDeleteConfirmation(req)
@@ -2833,70 +2827,49 @@ export default function RequirementsPage() {
                   <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
                 </>
               )}
-              {/* View toggles */}
-              <button
-                onClick={() => setGroupByType(!groupByType)}
-                className={clsx(
-                  'p-2 rounded-lg border transition-colors',
-                  groupByType
-                    ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-600'
-                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                )}
-                title="Group requirements by type"
-              >
-                <Grid3X3 size={16} />
-              </button>
-              <button
-                onClick={() => persistListViewStyle(listViewStyle === 'document' ? 'table' : 'document')}
-                className={clsx(
-                  'p-2 rounded-lg border transition-colors',
-                  listViewStyle === 'document'
-                    ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:border-blue-500 dark:hover:bg-blue-600'
-                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                )}
-                title="Document View"
-              >
-                <LayoutList size={16} />
-              </button>
               <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
-              {/* Traceability dropdown */}
-              <div className="relative" ref={traceabilityDropdownRef}>
+
+              {/* Analysis dropdown */}
+              <div className="relative" ref={analysisDropdownRef}>
                 <button
                   onClick={() => {
-                    setTraceabilityDropdownOpen(!traceabilityDropdownOpen)
+                    setAnalysisDropdownOpen(!analysisDropdownOpen)
+                    setTraceabilityDropdownOpen(false)
                     setDataDropdownOpen(false)
                     setViewDropdownOpen(false)
+                    setColumnSelectorOpen(false)
+                    setSortDropdownOpen(false)
                   }}
                   className={clsx(
                     'px-2.5 py-2 border rounded-lg flex items-center gap-1.5 transition-colors text-sm',
-                    traceabilityDropdownOpen
+                    analysisDropdownOpen
                       ? 'bg-gray-100 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-gray-900 dark:text-white'
                       : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
                   )}
-                  title="Traceability Tools"
+                  title="Analysis Tools"
                 >
-                  <Link2 size={16} />
-                  <span className="text-sm font-medium">Traceability</span>
-                  <ChevronDown size={12} className={clsx('transition-transform', traceabilityDropdownOpen && 'rotate-180')} />
+                  <BarChart3 size={16} />
+                  <span className="text-sm font-medium">Analysis</span>
+                  <ChevronDown size={12} className={clsx('transition-transform', analysisDropdownOpen && 'rotate-180')} />
                 </button>
-                {traceabilityDropdownOpen && (
+                {analysisDropdownOpen && (
                   <div className="absolute left-0 top-full mt-1 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 py-1">
                     <button
-                      onClick={() => { setIsTraceMatrixOpen(true); setTraceabilityDropdownOpen(false) }}
+                      onClick={() => { setIsQualityPanelOpen(true); setAnalysisDropdownOpen(false) }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
-                      <Table size={16} className="text-gray-500 dark:text-gray-400" />
-                      Traceability Matrix
+                      <BarChart3 size={16} className="text-gray-500 dark:text-gray-400" />
+                      Quality Analysis
                     </button>
                     <button
-                      onClick={() => { setIsFunctionVerificationMatrixOpen(true); setTraceabilityDropdownOpen(false) }}
+                      onClick={() => { setIsFunctionVerificationMatrixOpen(true); setAnalysisDropdownOpen(false) }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
                       <ClipboardCheck size={16} className="text-gray-500 dark:text-gray-400" />
                       Function Verification
                     </button>
                     <button
-                      onClick={() => { setIsSuspectReviewOpen(true); setTraceabilityDropdownOpen(false) }}
+                      onClick={() => { setIsSuspectReviewOpen(true); setAnalysisDropdownOpen(false) }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
                       <AlertTriangle size={16} className="text-gray-500 dark:text-gray-400" />
@@ -2906,13 +2879,26 @@ export default function RequirementsPage() {
                 )}
               </div>
 
+              {/* Traceability Matrix Button */}
+              <button
+                onClick={() => setIsTraceMatrixOpen(true)}
+                className="px-2.5 py-2 border rounded-lg flex items-center gap-1.5 transition-colors bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 text-sm font-medium"
+                title="Traceability Matrix"
+              >
+                <Table size={16} />
+                <span>Traceability</span>
+              </button>
+
               {/* Data dropdown */}
               <div className="relative" ref={dataDropdownRef}>
                 <button
                   onClick={() => {
                     setDataDropdownOpen(!dataDropdownOpen)
                     setTraceabilityDropdownOpen(false)
+                    setAnalysisDropdownOpen(false)
                     setViewDropdownOpen(false)
+                    setColumnSelectorOpen(false)
+                    setSortDropdownOpen(false)
                   }}
                   className={clsx(
                     'px-2.5 py-2 border rounded-lg flex items-center gap-1.5 transition-colors text-sm',
@@ -2956,27 +2942,44 @@ export default function RequirementsPage() {
               </div>
 
               {/* View dropdown */}
-              <div className="relative" ref={viewDropdownRef}>
+              <div className="relative" ref={(el) => { if (el) { viewDropdownRef.current = el; columnSelectorRef.current = el; } }}>
                 <button
                   onClick={() => {
                     setViewDropdownOpen(!viewDropdownOpen)
                     setTraceabilityDropdownOpen(false)
                     setDataDropdownOpen(false)
+                    setAnalysisDropdownOpen(false)
+                    setColumnSelectorOpen(false)
+                    setSortDropdownOpen(false)
                   }}
                   className={clsx(
                     'px-2.5 py-2 border rounded-lg flex items-center gap-1.5 transition-colors text-sm',
-                    viewDropdownOpen
+                    viewDropdownOpen || columnSelectorOpen
                       ? 'bg-gray-100 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-gray-900 dark:text-white'
                       : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
                   )}
-                  title="View"
+                  title="View Options"
                 >
                   <Eye size={16} />
                   <span className="text-sm font-medium">View</span>
-                  <ChevronDown size={12} className={clsx('transition-transform', viewDropdownOpen && 'rotate-180')} />
+                  <ChevronDown size={12} className={clsx('transition-transform', (viewDropdownOpen || columnSelectorOpen) && 'rotate-180')} />
                 </button>
                 {viewDropdownOpen && (
-                  <div className="absolute left-0 top-full mt-1 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 py-1">
+                  <div className="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 py-1">
+                    <button
+                      onClick={() => { setGroupByType(!groupByType); setViewDropdownOpen(false) }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <Grid3X3 size={16} className={clsx(groupByType ? "text-blue-500" : "text-gray-500 dark:text-gray-400")} />
+                      {groupByType ? 'Ungroup Requirements' : 'Group by Type'}
+                    </button>
+                    <button
+                      onClick={() => { persistListViewStyle(listViewStyle === 'document' ? 'table' : 'document'); setViewDropdownOpen(false) }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <LayoutList size={16} className={clsx(listViewStyle === 'document' ? "text-blue-500" : "text-gray-500 dark:text-gray-400")} />
+                      {listViewStyle === 'document' ? 'Table View' : 'Document View'}
+                    </button>
                     <button
                       onClick={() => { setIsDiagramOpen(true); setViewDropdownOpen(false) }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
@@ -2985,11 +2988,11 @@ export default function RequirementsPage() {
                       Diagram
                     </button>
                     <button
-                      onClick={() => { setIsQualityPanelOpen(true); setViewDropdownOpen(false) }}
+                      onClick={() => { setColumnSelectorOpen(true); setViewDropdownOpen(false) }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
-                      <BarChart3 size={16} className="text-gray-500 dark:text-gray-400" />
-                      Quality Analysis
+                      <Columns size={16} className="text-gray-500 dark:text-gray-400" />
+                      Select Columns
                     </button>
                     <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
                     {projectId && (
@@ -3007,18 +3010,6 @@ export default function RequirementsPage() {
                     )}
                   </div>
                 )}
-              </div>
-
-              {/* Columns selector */}
-              <div className="relative" ref={columnSelectorRef}>
-                <button
-                  onClick={() => setColumnSelectorOpen(!columnSelectorOpen)}
-                  className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-1 transition-colors"
-                  title="Customize Columns"
-                >
-                  <Columns size={16} />
-                  <ChevronDown size={12} className={clsx('transition-transform', columnSelectorOpen && 'rotate-180')} />
-                </button>
                 {columnSelectorOpen && (
                   <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
                     <div className="flex items-center justify-between mb-3">
@@ -3137,6 +3128,49 @@ export default function RequirementsPage() {
               <option value="usability">Usability</option>
               <option value="other">Other</option>
             </select>
+
+            {/* Sort Dropdown */}
+            <div className="relative" ref={sortDropdownRef}>
+              <button
+                onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
+                className={clsx(
+                  'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors flex items-center gap-1',
+                  sortDropdownOpen
+                    ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                    : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                )}
+                title="Sort By"
+              >
+                <span>Sort: {REQUIREMENT_COLUMNS.find(c => (c.sortKey || c.key) === sortBy)?.label || 'Created'}</span>
+                {sortOrder === 'desc' ? <ArrowDown size={12} /> : <ArrowUp size={12} />}
+              </button>
+              {sortDropdownOpen && (
+                <div className="absolute left-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 py-1 z-[60]">
+                  <div className="max-h-64 overflow-y-auto">
+                    {REQUIREMENT_COLUMNS.filter(c => c.sortable).map(col => {
+                      const isSorted = sortBy === (col.sortKey || col.key)
+                      return (
+                        <button
+                          key={col.key}
+                          onClick={() => { handleSort(col.sortKey || col.key); setSortDropdownOpen(false); }}
+                          className={clsx(
+                            "w-full flex items-center justify-between px-3 py-1.5 text-xs transition-colors",
+                            isSorted 
+                              ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20"
+                              : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                          )}
+                        >
+                          <span>{col.label}</span>
+                          {isSorted && (
+                            sortOrder === 'desc' ? <ArrowDown size={12} /> : <ArrowUp size={12} />
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {activeFilterCount > 0 && (
               <button
@@ -3691,15 +3725,29 @@ export default function RequirementsPage() {
             <DeleteRequirementModal
               isOpen={!!deleteConfirmation}
               requirement={deleteConfirmation}
-              children={requirementData.get(deleteConfirmation.id)?.children || []}
+              children={getLinkedElements(deleteConfirmation.id, deleteConfirmation).children}
               linkedFunctionsCount={LINKAGE_V1 ? undefined : functions.filter((f) => f.sourceReqId === deleteConfirmation.id).length}
+              linkedItemsCount={
+                LINKAGE_V1
+                  ? countRequirementLinkedItems(
+                      deleteConfirmation.id,
+                      deleteConfirmation,
+                      effectiveLinks as LinkType[],
+                      {
+                        issues: issues as any[],
+                        changeRequests: changeRequests as any[],
+                        functions: functions as any[],
+                        requirements: allRequirements.length > 0 ? allRequirements : requirements,
+                        flatComponents,
+                      }
+                    )
+                  : undefined
+              }
+              linkedIssues={getLinkedElements(deleteConfirmation.id, deleteConfirmation).linkedIssues}
+              linkedChangeRequests={getLinkedElements(deleteConfirmation.id, deleteConfirmation).linkedChangeRequests}
+              linkedFunctions={getLinkedElements(deleteConfirmation.id, deleteConfirmation).linkedFunctions}
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              linkedItemsCount={LINKAGE_V1 ? effectiveLinks.filter((l: any) => l.sourceType === 'requirement' && l.sourceId === deleteConfirmation.id).length : undefined}
-              linkedIssues={requirementData.get(deleteConfirmation.id)?.linkedIssues || []}
-              linkedChangeRequests={requirementData.get(deleteConfirmation.id)?.linkedChangeRequests || []}
-              linkedFunctions={requirementData.get(deleteConfirmation.id)?.linkedFunctions || []}
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              linkedItems={requirementData.get(deleteConfirmation.id)?.linkedItems as any[] || []}
+              linkedItems={(getLinkedElements(deleteConfirmation.id, deleteConfirmation).linkedItems as any[]) || []}
               onConfirm={handleConfirmDelete}
               onCancel={() => setDeleteConfirmation(null)}
               isDeleting={deleteRequirementMutation.isPending}

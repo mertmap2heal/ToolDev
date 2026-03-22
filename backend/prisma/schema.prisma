@@ -582,6 +582,11 @@ model TraceLink {
   isSuspect   Boolean   @default(false)
   lastChecked DateTime?
   createdAt   DateTime  @default(now())
+  // Denormalized display snapshots (migration 20260322160000_trace_link_display_cache)
+  cachedSourceDisplayId String? @db.VarChar(255)
+  cachedSourceTitle     String? @db.VarChar(1024)
+  cachedTargetDisplayId String? @db.VarChar(255)
+  cachedTargetTitle     String? @db.VarChar(1024)
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
