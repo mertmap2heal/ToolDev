@@ -95,13 +95,10 @@ export default function TransitionChecklistDialog({
     allItems.forEach((item) => {
       transitionChecklistService.getItemIssues(projectId, item.id, requirement.id).then((resp) => {
         if (resp.success && resp.data) {
-          setItemStates((prev) => {
-            const cur = prev[item.id] ?? defaultState()
-            return {
-              ...prev,
-              [item.id]: { ...cur, issues: resp.data ?? [] },
-            }
-          })
+          setItemStates((prev) => ({
+            ...prev,
+            [item.id]: normalizeItemState({ ...prev[item.id], issues: resp.data ?? [] }),
+          }))
         }
       }).catch(() => {})
     })
@@ -176,16 +173,18 @@ export default function TransitionChecklistDialog({
     return { checked: false, comments: [], issues: [] }
   }
 
-  const getState = (itemId: string): ItemState => {
-    const raw = itemStates[itemId]
-    if (!raw) return defaultState()
+  function normalizeItemState(partial: Partial<ItemState> | undefined): ItemState {
+    const b = defaultState()
+    if (!partial) return b
     return {
-      ...defaultState(),
-      ...raw,
-      comments: raw.comments ?? [],
-      issues: raw.issues ?? [],
+      ...b,
+      ...partial,
+      comments: Array.isArray(partial.comments) ? partial.comments : b.comments,
+      issues: Array.isArray(partial.issues) ? partial.issues : b.issues,
     }
   }
+
+  const getState = (itemId: string): ItemState => normalizeItemState(itemStates[itemId])
 
   const toggleItem = (itemId: string, item: TransitionChecklistItem) => {
     if (item.itemType === 'FIELD_VALIDATION' || item.itemType === 'RULE_BASED') return
@@ -277,7 +276,7 @@ export default function TransitionChecklistDialog({
       })
       if (resp.success && resp.data) {
         setItemStates((prev) => {
-          const cur = prev[issueForm.itemId] ?? defaultState()
+          const cur = normalizeItemState(prev[issueForm.itemId])
           return {
             ...prev,
             [issueForm.itemId]: {
@@ -427,12 +426,14 @@ export default function TransitionChecklistDialog({
                   <div className="space-y-2">
                     {(c.checklist?.items ?? []).map((item) => {
                       const state = getState(item.id)
+                      const itemComments = Array.isArray(state.comments) ? state.comments : []
+                      const itemIssues = Array.isArray(state.issues) ? state.issues : []
                       const isAuto = item.itemType === 'FIELD_VALIDATION' || item.itemType === 'RULE_BASED'
                       const isPassed = isAuto ? state.autoResult?.valid : state.checked
                       const isFailed = isAuto && state.autoResult && !state.autoResult.valid
                       const pendingForItem = pendingCommentsByItemId[item.id] ?? []
-                      const hasComments = state.comments.length > 0 || pendingForItem.length > 0
-                      const issueCount = state.issues.length
+                      const hasComments = itemComments.length > 0 || pendingForItem.length > 0
+                      const issueCount = itemIssues.length
                       const showComments = expandedComments[item.id]
 
                       return (
@@ -542,14 +543,14 @@ export default function TransitionChecklistDialog({
                             >
                               <MessageSquare size={12} />
                               {hasComments
-                                ? `${state.comments.length + pendingForItem.length} comment${
-                                    state.comments.length + pendingForItem.length > 1 ? 's' : ''
+                                ? `${itemComments.length + pendingForItem.length} comment${
+                                    itemComments.length + pendingForItem.length > 1 ? 's' : ''
                                   }`
                                 : 'Comment'}
                             </button>
 
                             {/* Inline issue badges */}
-                            {state.issues.map((iss) => (
+                            {itemIssues.map((iss) => (
                               <span
                                 key={iss.id}
                                 className="text-[10px] px-1.5 py-0.5 bg-orange-50 dark:bg-orange-900/10 text-orange-700 dark:text-orange-400 rounded flex items-center gap-0.5"
@@ -587,9 +588,9 @@ export default function TransitionChecklistDialog({
                                   ))}
                                 </div>
                               )}
-                              {state.comments.length > 0 && (
+                              {itemComments.length > 0 && (
                                 <div className="space-y-1.5 mb-2">
-                                  {state.comments.map((comment) => (
+                                  {itemComments.map((comment) => (
                                     <div key={comment.id} className="flex items-start gap-2 text-xs">
                                       <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-[10px] font-medium text-blue-700 dark:text-blue-400 flex-shrink-0 mt-0.5">
                                         {comment.authorName.charAt(0).toUpperCase()}
