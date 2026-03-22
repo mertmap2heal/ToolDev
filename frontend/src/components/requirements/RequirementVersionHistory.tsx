@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { X, History, ChevronDown, ChevronRight, ArrowLeftRight, Clock, User, FileText, Tag, Trash2, RotateCcw, Plus, AlertCircle, GitPullRequest, ExternalLink, Check, FileStack, Unlink, Archive } from 'lucide-react'
+import { X, History, ChevronDown, ChevronRight, ArrowLeftRight, User, FileText, Tag, Trash2, RotateCcw, Plus, AlertCircle, GitPullRequest, ExternalLink, Check, FileStack, Unlink, Archive, Link2, Lock, Unlock, MessageSquare, Layers } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { versionService, VersionComparison, AuditEvent } from '../../services/version.service'
 import type { Requirement, RequirementVersion } from 'shared/types/engineering.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
+import { htmlToPlainText } from '../../utils/htmlToPlainText'
 
 interface RequirementVersionHistoryProps {
   projectId: string
@@ -114,9 +115,36 @@ export default function RequirementVersionHistory({
         return { icon: FileStack, label: 'linked test plan', color: 'text-teal-500', bg: 'bg-teal-50 dark:bg-teal-900/20', border: 'border-teal-200 dark:border-teal-800' }
       case 'TEST_PLAN_UNLINKED':
         return { icon: Unlink, label: 'unlinked test plan', color: 'text-gray-500', bg: 'bg-gray-50 dark:bg-gray-900/20', border: 'border-gray-200 dark:border-gray-800' }
+      case 'REQUIREMENT_STATUS_CHANGED':
+        return { icon: Tag, label: 'status changed', color: 'text-violet-500', bg: 'bg-violet-50 dark:bg-violet-900/20', border: 'border-violet-200 dark:border-violet-800' }
+      case 'REQUIREMENT_TRACE_LINK_ADDED':
+        return { icon: Link2, label: 'trace link added', color: 'text-cyan-500', bg: 'bg-cyan-50 dark:bg-cyan-900/20', border: 'border-cyan-200 dark:border-cyan-800' }
+      case 'REQUIREMENT_TRACE_LINK_REMOVED':
+        return { icon: Unlink, label: 'trace link removed', color: 'text-cyan-600', bg: 'bg-cyan-50/80 dark:bg-cyan-900/15', border: 'border-cyan-200 dark:border-cyan-800' }
+      case 'REQUIREMENT_LOCKED':
+        return { icon: Lock, label: 'locked requirement', color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20', border: 'border-amber-200 dark:border-amber-800' }
+      case 'REQUIREMENT_UNLOCKED':
+        return { icon: Unlock, label: 'unlocked requirement', color: 'text-amber-500', bg: 'bg-amber-50/80 dark:bg-amber-900/15', border: 'border-amber-200 dark:border-amber-800' }
+      case 'REQUIREMENT_COMMENT_ADDED':
+        return { icon: MessageSquare, label: 'comment added', color: 'text-sky-500', bg: 'bg-sky-50 dark:bg-sky-900/20', border: 'border-sky-200 dark:border-sky-800' }
+      case 'REQUIREMENT_COMMENT_DELETED':
+        return { icon: MessageSquare, label: 'comment deleted', color: 'text-sky-600', bg: 'bg-sky-50/80 dark:bg-sky-900/15', border: 'border-sky-200 dark:border-sky-800' }
+      case 'REQUIREMENT_COMPONENT_CHANGED':
+        return { icon: Layers, label: 'PBS component assignment changed', color: 'text-lime-600', bg: 'bg-lime-50 dark:bg-lime-900/20', border: 'border-lime-200 dark:border-lime-800' }
+      case 'ISSUE_UNLINKED':
+        return { icon: Unlink, label: 'unlinked issue', color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-900/20', border: 'border-indigo-200 dark:border-indigo-800' }
       default:
         return { icon: FileText, label: action.toLowerCase().replace(/_/g, ' '), color: 'text-gray-500', bg: 'bg-gray-50 dark:bg-gray-900/20', border: 'border-gray-200 dark:border-gray-800' }
     }
+  }
+
+  const richTextFields: (keyof RequirementVersion)[] = ['description', 'acceptanceCriteria', 'verificationMethod']
+
+  const formatFieldForDiff = (field: keyof RequirementVersion, version: RequirementVersion): string => {
+    if (field === 'tags') return (version.tags || []).join(', ') || '—'
+    const raw = version[field] as string | null | undefined
+    if (richTextFields.includes(field)) return htmlToPlainText(raw ?? '') || '—'
+    return raw || '—'
   }
 
   // Render diff view for two versions
@@ -155,12 +183,8 @@ export default function RequirementVersionHistory({
               const isChanged = changedFields.includes(field)
               if (!isChanged) return null
 
-              const valueA = field === 'tags'
-                ? (versionA.tags || []).join(', ') || '—'
-                : (versionA[field] as string) || '—'
-              const valueB = field === 'tags'
-                ? (versionB.tags || []).join(', ') || '—'
-                : (versionB[field] as string) || '—'
+              const valueA = formatFieldForDiff(field, versionA)
+              const valueB = formatFieldForDiff(field, versionB)
 
               return (
                 <div key={field} className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3">
@@ -229,6 +253,11 @@ export default function RequirementVersionHistory({
               <option value="edit">Edits</option>
               <option value="delete">Deletes</option>
               <option value="restore">Restores</option>
+              <option value="status">Status changes</option>
+              <option value="trace">Trace links</option>
+              <option value="comments">Comments</option>
+              <option value="lock">Lock / unlock</option>
+              <option value="component">PBS component</option>
             </select>
             <button
               onClick={async () => {
@@ -409,10 +438,42 @@ export default function RequirementVersionHistory({
                       if (filter === 'version') return item.type === 'version';
                       if (filter === 'baselined') return item.type === 'version' && !!(item.data as RequirementVersion).baselineId;
                       if (filter === 'audit') return item.type === 'audit';
-                      if (filter === 'linked') return item.type === 'audit' && ['ISSUE_LINKED','CHANGE_REQUEST_LINKED','TEST_CASE_LINKED','TEST_PLAN_LINKED'].includes(item.data.action);
+                      if (filter === 'linked')
+                        return (
+                          item.type === 'audit' &&
+                          [
+                            'ISSUE_LINKED',
+                            'ISSUE_UNLINKED',
+                            'CHANGE_REQUEST_LINKED',
+                            'TEST_CASE_LINKED',
+                            'TEST_CASE_UNLINKED',
+                            'TEST_PLAN_LINKED',
+                            'TEST_PLAN_UNLINKED',
+                            'REQUIREMENT_TRACE_LINK_ADDED',
+                            'REQUIREMENT_TRACE_LINK_REMOVED',
+                          ].includes(item.data.action)
+                        )
                       if (filter === 'edit') return item.type === 'version';
                       if (filter === 'delete') return item.type === 'audit' && ['REQUIREMENT_DELETED_SOFT','REQUIREMENT_PERMANENTLY_DELETED'].includes(item.data.action);
                       if (filter === 'restore') return item.type === 'audit' && item.data.action === 'REQUIREMENT_RESTORED';
+                      if (filter === 'status') return item.type === 'audit' && item.data.action === 'REQUIREMENT_STATUS_CHANGED';
+                      if (filter === 'trace')
+                        return (
+                          item.type === 'audit' &&
+                          ['REQUIREMENT_TRACE_LINK_ADDED', 'REQUIREMENT_TRACE_LINK_REMOVED'].includes(item.data.action)
+                        );
+                      if (filter === 'comments')
+                        return (
+                          item.type === 'audit' &&
+                          ['REQUIREMENT_COMMENT_ADDED', 'REQUIREMENT_COMMENT_DELETED'].includes(item.data.action)
+                        );
+                      if (filter === 'lock')
+                        return (
+                          item.type === 'audit' &&
+                          ['REQUIREMENT_LOCKED', 'REQUIREMENT_UNLOCKED'].includes(item.data.action)
+                        );
+                      if (filter === 'component')
+                        return item.type === 'audit' && item.data.action === 'REQUIREMENT_COMPONENT_CHANGED';
                       return true;
                     });
                   }
@@ -512,8 +573,10 @@ export default function RequirementVersionHistory({
                                   <div className="mt-2">
                                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Description:</p>
                                     <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                                      {version.description.substring(0, 200)}
-                                      {version.description.length > 200 && '...'}
+                                      {(() => {
+                                        const plain = htmlToPlainText(version.description)
+                                        return plain.length > 200 ? `${plain.slice(0, 200)}…` : plain
+                                      })()}
                                     </p>
                                   </div>
                                 )}
@@ -571,6 +634,43 @@ export default function RequirementVersionHistory({
                                       </span>
                                     </span>
                                   )}
+                                  {event.action === 'ISSUE_UNLINKED' && event.oldValue && (
+                                    <span className="inline-flex items-center gap-1 text-gray-500 dark:text-gray-400 line-through">
+                                      {event.oldValue.issueKey}
+                                      <span className="opacity-75">{event.oldValue.title}</span>
+                                    </span>
+                                  )}
+                                  {event.action === 'REQUIREMENT_STATUS_CHANGED' && (event.oldValue || event.newValue) && (
+                                    <span className="text-sm text-gray-600 dark:text-gray-300">
+                                      {(event.oldValue as { status?: string })?.status ?? '—'} →{' '}
+                                      {(event.newValue as { status?: string })?.status ?? '—'}
+                                    </span>
+                                  )}
+                                  {(event.action === 'REQUIREMENT_TRACE_LINK_ADDED' ||
+                                    event.action === 'REQUIREMENT_TRACE_LINK_REMOVED') &&
+                                    (event.newValue || event.oldValue) && (
+                                      <span className="text-xs text-gray-600 dark:text-gray-400 font-mono break-all max-w-full">
+                                        {(() => {
+                                          const v = (event.newValue || event.oldValue) as Record<string, string>
+                                          return [v.linkType, `${v.sourceType}:${v.sourceId?.slice(0, 8)}…`, '→', `${v.targetType}:${v.targetId?.slice(0, 8)}…`]
+                                            .filter(Boolean)
+                                            .join(' ')
+                                        })()}
+                                      </span>
+                                    )}
+                                  {event.action === 'REQUIREMENT_COMPONENT_CHANGED' && (
+                                    <span className="text-sm text-gray-600 dark:text-gray-300">
+                                      {(event.oldValue as { componentName?: string | null })?.componentName ?? '—'} →{' '}
+                                      {(event.newValue as { componentName?: string | null })?.componentName ?? '—'}
+                                    </span>
+                                  )}
+                                  {(event.action === 'REQUIREMENT_COMMENT_ADDED' ||
+                                    event.action === 'REQUIREMENT_COMMENT_DELETED') &&
+                                    (event.newValue?.preview || event.oldValue?.preview) && (
+                                      <span className="text-xs text-gray-500 dark:text-gray-400 italic block mt-1 max-w-md">
+                                        “{event.newValue?.preview || event.oldValue?.preview}”
+                                      </span>
+                                    )}
                                 </div>
                                 {event.newValue?.reason && (
                                   <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">

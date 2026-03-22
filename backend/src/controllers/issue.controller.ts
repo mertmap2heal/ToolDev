@@ -771,10 +771,11 @@ export const deleteIssueLink = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ success: false, error: 'Link not found' })
     }
 
+    const issue = await prisma.issue.findUnique({ where: { id: link.issueId } })
+
     await prisma.issueLink.delete({ where: { id: linkId } })
 
     // Create system note
-    const issue = await prisma.issue.findUnique({ where: { id: link.issueId } })
     if (issue) {
       await createSystemNote(
         link.issueId,
@@ -785,6 +786,25 @@ export const deleteIssueLink = async (req: AuthRequest, res: Response) => {
         req.user?.userId,
         req.user?.name
       )
+    }
+
+    if (
+      issue &&
+      link.linkedType &&
+      String(link.linkedType).toLowerCase().replace(/-/g, '_') === 'requirement'
+    ) {
+      await linkageAuditService.log({
+        projectId: issue.projectId,
+        entityType: 'REQUIREMENT',
+        entityId: link.linkedId,
+        action: 'ISSUE_UNLINKED',
+        oldValue: {
+          issueId: link.issueId,
+          issueKey: issue.issueKey,
+          title: issue.title,
+        },
+        performedByUserId: req.user?.userId,
+      })
     }
 
     res.json({ success: true, message: 'Link deleted' })

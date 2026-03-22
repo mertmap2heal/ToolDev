@@ -36,26 +36,13 @@ export const getRequirementVersions = async (req: AuthRequest, res: Response) =>
       orderBy: { version: 'desc' },
     })
 
-    // Fetch audit events for this requirement (delete, restore, etc.)
+    // All requirement-scoped audits except REQUIREMENT_UPDATED (field edits are in RequirementVersion snapshots)
     const auditEvents = await prisma.verAuditEvent.findMany({
       where: {
         projectId,
         entityType: 'REQUIREMENT',
         entityId: requirement.id,
-        action: {
-          in: [
-            'REQUIREMENT_DELETED_SOFT',
-            'REQUIREMENT_RESTORED',
-            'REQUIREMENT_PERMANENTLY_DELETED',
-            'REQUIREMENT_CREATED',
-            'ISSUE_LINKED',
-            'CHANGE_REQUEST_LINKED',
-            'TEST_CASE_LINKED',
-            'TEST_CASE_UNLINKED',
-            'TEST_PLAN_LINKED',
-            'TEST_PLAN_UNLINKED'
-          ]
-        }
+        action: { not: 'REQUIREMENT_UPDATED' },
       },
       orderBy: { performedAt: 'desc' },
     })

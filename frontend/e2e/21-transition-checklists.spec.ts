@@ -798,5 +798,10 @@ test.describe('Transition Checklists', () => {
         )
         .first()
     ).toBeVisible({ timeout: 15_000 })
+
+    const remindHeading = page.getByText('Remind gate holders')
+    if (await remindHeading.isVisible({ timeout: 4_000 }).catch(() => false)) {
+      await expect(page.getByRole('button', { name: /Send reminder/i }).first()).toBeVisible({ timeout: 5_000 })
+    }
   })
 })

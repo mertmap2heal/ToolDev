@@ -11,6 +11,7 @@ import { buildRequirementChangeSummary, notifyRequirementSubscribers } from '../
 import { extractParameterIds } from '../utils/parameterPlaceholder'
 import { parseReqIF } from '../services/reqifParser'
 import { collectComponentIdAndDescendants } from '../utils/componentHelpers'
+import { htmlToPlainText, truncatePlainText } from '../utils/htmlToPlainText'
 import fs from 'fs'
 import path from 'path'
 
@@ -1040,6 +1041,15 @@ export const lockRequirement = async (req: AuthRequest, res: Response) => {
       },
     })
 
+    await linkageAuditService.log({
+      projectId,
+      entityType: 'REQUIREMENT',
+      entityId: requirement.id,
+      action: 'REQUIREMENT_LOCKED',
+      newValue: { lockedByUserId: userId },
+      performedByUserId: userId,
+    })
+
     res.json({ success: true, data: lockedRequirement })
   } catch (error) {
     console.error('Lock requirement error:', error)
@@ -1082,6 +1092,15 @@ export const unlockRequirement = async (req: AuthRequest, res: Response) => {
         lockedByUserId: null,
         lockedAt: null,
       },
+    })
+
+    await linkageAuditService.log({
+      projectId,
+      entityType: 'REQUIREMENT',
+      entityId: requirement.id,
+      action: 'REQUIREMENT_UNLOCKED',
+      newValue: { unlockedByUserId: userId },
+      performedByUserId: userId,
     })
 
     res.json({ success: true, data: unlockedRequirement })
@@ -2052,6 +2071,18 @@ export const createRequirementComment = async (req: AuthRequest, res: Response) 
       },
     })
 
+    await linkageAuditService.log({
+      projectId,
+      entityType: 'REQUIREMENT',
+      entityId: requirement.id,
+      action: 'REQUIREMENT_COMMENT_ADDED',
+      newValue: {
+        commentId: comment.id,
+        preview: truncatePlainText(htmlToPlainText(comment.content), 200),
+      },
+      performedByUserId: req.userId,
+    })
+
     res.status(201).json({
       success: true,
       data: comment,
@@ -2082,6 +2113,18 @@ export const deleteRequirementComment = async (req: AuthRequest, res: Response) 
         error: 'Comment not found',
       })
     }
+
+    await linkageAuditService.log({
+      projectId,
+      entityType: 'REQUIREMENT',
+      entityId: comment.requirementId,
+      action: 'REQUIREMENT_COMMENT_DELETED',
+      oldValue: {
+        commentId: comment.id,
+        preview: truncatePlainText(htmlToPlainText(comment.content), 200),
+      },
+      performedByUserId: req.userId,
+    })
 
     await prisma.requirementComment.delete({
       where: { id: commentId },
@@ -2714,7 +2757,10 @@ export const updateRequirementComponent = async (req: AuthRequest, res: Response
     const requirement = await prisma.requirement.findFirst({
       where: {
         projectId,
-        id: requirementId,
+        OR: [{ id: requirementId }, { requirementId: requirementId }],
+      },
+      include: {
+        component: { select: { id: true, name: true } },
       },
     })
 
@@ -2751,8 +2797,20 @@ export const updateRequirementComponent = async (req: AuthRequest, res: Response
       }
     }
 
+    try {
+      await createVersionSnapshot(
+        requirement.id,
+        projectId,
+        req.userId,
+        undefined,
+        'PBS component assignment'
+      )
+    } catch (versionError) {
+      console.warn('Failed to create version snapshot (component):', versionError)
+    }
+
     const updated = await prisma.requirement.update({
-      where: { id: requirementId },
+      where: { id: requirement.id },
       data: {
         componentId: componentId || null,
       },
@@ -2771,7 +2829,7 @@ export const updateRequirementComponent = async (req: AuthRequest, res: Response
       where: {
         projectId,
         sourceType: 'requirement',
-        sourceId: requirementId,
+        sourceId: requirement.id,
         targetType: 'pbs_component',
         linkType: 'allocated_to',
       },
@@ -2783,7 +2841,7 @@ export const updateRequirementComponent = async (req: AuthRequest, res: Response
       await traceabilityService.createTraceLink(
         projectId,
         'requirement',
-        requirementId,
+        requirement.id,
         'pbs_component',
         componentId,
         'allocated_to',
@@ -2792,6 +2850,22 @@ export const updateRequirementComponent = async (req: AuthRequest, res: Response
         req.userId
       )
     }
+
+    await linkageAuditService.log({
+      projectId,
+      entityType: 'REQUIREMENT',
+      entityId: requirement.id,
+      action: 'REQUIREMENT_COMPONENT_CHANGED',
+      oldValue: {
+        componentId: requirement.componentId,
+        componentName: requirement.component?.name ?? null,
+      },
+      newValue: {
+        componentId: updated.componentId,
+        componentName: updated.component?.name ?? null,
+      },
+      performedByUserId: req.userId,
+    })
 
     const changes = buildRequirementChangeSummary(requirement, updated as any)
     await notifyRequirementSubscribers({
@@ -3028,5 +3102,134 @@ export const importReqif = async (req: AuthRequest, res: Response) => {
       success: false,
       error: error?.message || 'Internal server error',
     })
+  }
+}
+
+function clampReminderStr(value: unknown, max: number): string {
+  if (typeof value !== 'string') return ''
+  return value.slice(0, max)
+}
+
+/** POST …/lifecycle-transition-reminder — notify project members who hold required engineering roles for a gated transition. */
+export const sendLifecycleTransitionReminder = async (req: AuthRequest, res: Response) => {
+  try {
+    const actorId = req.userId
+    if (!actorId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+    const { projectId, requirementId } = req.params
+    const body = req.body as {
+      toStatusId?: string
+      allowedEngineeringRoleIds?: string[]
+      fromStatusName?: string
+      toStatusName?: string
+      note?: string
+    }
+    const toStatusId = typeof body.toStatusId === 'string' ? body.toStatusId.trim() : ''
+    const roleIds = Array.isArray(body.allowedEngineeringRoleIds)
+      ? [
+          ...new Set(
+            body.allowedEngineeringRoleIds.filter(
+              (id): id is string => typeof id === 'string' && id.length > 0
+            )
+          ),
+        ]
+      : []
+    if (!toStatusId || roleIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'toStatusId and a non-empty allowedEngineeringRoleIds array are required',
+      })
+    }
+
+    const requirement = await prisma.requirement.findFirst({
+      where: {
+        projectId,
+        deletedAt: null,
+        OR: [{ id: requirementId }, { requirementId: requirementId }],
+      },
+      select: {
+        id: true,
+        title: true,
+        requirementId: true,
+        projectId: true,
+      },
+    })
+    if (!requirement) {
+      return res.status(404).json({ success: false, error: 'Requirement not found' })
+    }
+
+    const roles = await prisma.engineeringRole.findMany({
+      where: { id: { in: roleIds } },
+      select: { id: true, name: true },
+    })
+    const validRoleIds = roles.map((r) => r.id)
+    if (validRoleIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No valid engineering roles for this reminder',
+      })
+    }
+
+    const assignments = await prisma.projectUserEngineeringRole.findMany({
+      where: { projectId, roleId: { in: validRoleIds } },
+      select: { userId: true },
+    })
+    const recipientIds = [...new Set(assignments.map((a) => a.userId))].filter((id) => id !== actorId)
+
+    const [actor, project] = await Promise.all([
+      prisma.user.findUnique({ where: { id: actorId }, select: { name: true, email: true } }),
+      prisma.project.findUnique({ where: { id: projectId }, select: { slug: true } }),
+    ])
+    const actorLabel = actor?.name?.trim() || actor?.email?.trim() || 'A teammate'
+    const fromName = clampReminderStr(body.fromStatusName, 120) || 'current status'
+    const toName = clampReminderStr(body.toStatusName, 120) || 'next status'
+    const roleLabel =
+      roles.length === 1
+        ? roles[0].name
+        : `${roles.length} roles: ${roles.map((r) => r.name).join(', ')}`
+    const reqRef = requirement.requirementId || requirement.id.slice(0, 8)
+    const titleShort = (requirement.title || 'Requirement').slice(0, 120)
+    const titleTail = (requirement.title || '').length > 120 ? '…' : ''
+    const note = clampReminderStr(body.note, 400)
+    const openPath = project?.slug
+      ? `/projects/${encodeURIComponent(project.slug)}/requirements?requirementId=${encodeURIComponent(requirement.id)}`
+      : ''
+
+    let message = `${actorLabel} asked you to help advance requirement ${reqRef} (${titleShort}${titleTail}) from "${fromName}" toward "${toName}". This transition is gated for: ${roleLabel}.`
+    if (openPath) {
+      message += ` Open: ${openPath}`
+    }
+    if (note) {
+      message += ` Note: ${note}`
+    }
+
+    const title = 'Lifecycle transition reminder'
+
+    if (recipientIds.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          notifiedCount: 0,
+          message: 'No project members with those roles to notify (excluding yourself).',
+        },
+      })
+    }
+
+    await prisma.notification.createMany({
+      data: recipientIds.map((uid) => ({
+        userId: uid,
+        type: 'lifecycle_transition_reminder',
+        title,
+        message,
+        projectId,
+        read: false,
+      })),
+    })
+
+    res.json({ success: true, data: { notifiedCount: recipientIds.length } })
+  } catch (error) {
+    console.error('sendLifecycleTransitionReminder:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
   }
 }

@@ -204,5 +204,23 @@ export const requirementService = {
 
   updateRequirementComponent: (projectId: string, requirementId: string, componentId: string | null): Promise<ApiResponse<{ success: boolean; data: any }>> =>
     apiClient.patch<{ success: boolean; data: any }>(`/requirements/${projectId}/${requirementId}/component`, { componentId }),
+
+  /** Notify project members who have the listed engineering roles (for a gated lifecycle transition). */
+  async sendLifecycleTransitionReminder(
+    projectId: string,
+    requirementId: string,
+    payload: {
+      toStatusId: string
+      allowedEngineeringRoleIds: string[]
+      fromStatusName?: string
+      toStatusName?: string
+      note?: string
+    }
+  ): Promise<ApiResponse<{ notifiedCount: number; message?: string }>> {
+    return apiClient.post<{ notifiedCount: number; message?: string }>(
+      `/requirements/${projectId}/${requirementId}/lifecycle-transition-reminder`,
+      payload
+    )
+  },
 }
 

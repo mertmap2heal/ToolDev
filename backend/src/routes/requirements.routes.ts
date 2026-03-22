@@ -30,6 +30,7 @@ import {
   updateRequirementComponent,
   lockRequirement,
   unlockRequirement,
+  sendLifecycleTransitionReminder,
 } from '../controllers/requirement.controller'
 
 const router = Router()
@@ -52,6 +53,10 @@ router.post('/:projectId/import/reqif', importReqif)
 router.get('/:projectId', getRequirements)
 router.get('/:projectId/all', getAllRequirements)
 router.get('/:projectId/audit', getAuditEvents)
+router.post(
+  '/:projectId/:requirementId/lifecycle-transition-reminder',
+  sendLifecycleTransitionReminder
+)
 router.get('/:projectId/:requirementId', getRequirement)
 router.get('/:projectId/:requirementId/children', getRequirementChildren)
 router.get('/:projectId/:requirementId/subscription', getRequirementSubscription)

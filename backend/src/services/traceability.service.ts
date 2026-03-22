@@ -49,6 +49,47 @@ function isReqLikeEntityType(t: string | undefined): boolean {
   return n === 'requirement' || n === 'hazard' || n === 'risk'
 }
 
+function isRequirementEntityType(t: string | undefined): boolean {
+  return normLinkEntityType(t) === 'requirement'
+}
+
+/** Requirement-scoped audit rows for version history (entityId = requirement id). */
+async function auditRequirementTraceLinkForProject(
+  projectId: string,
+  mode: 'add' | 'remove',
+  payload: { sourceType: string; sourceId: string; targetType: string; targetId: string; linkType: string },
+  performedByUserId?: string
+): Promise<void> {
+  const action =
+    mode === 'add'
+      ? ('REQUIREMENT_TRACE_LINK_ADDED' as const)
+      : ('REQUIREMENT_TRACE_LINK_REMOVED' as const)
+  const value = {
+    linkType: payload.linkType,
+    sourceType: payload.sourceType,
+    sourceId: payload.sourceId,
+    targetType: payload.targetType,
+    targetId: payload.targetId,
+  }
+  const logOne = async (requirementId: string) => {
+    await linkageAuditService.log({
+      projectId,
+      entityType: 'REQUIREMENT',
+      entityId: requirementId,
+      action,
+      newValue: mode === 'add' ? value : undefined,
+      oldValue: mode === 'remove' ? value : undefined,
+      performedByUserId,
+    })
+  }
+  if (isRequirementEntityType(payload.sourceType)) {
+    await logOne(payload.sourceId)
+  }
+  if (isRequirementEntityType(payload.targetType) && payload.targetId !== payload.sourceId) {
+    await logOne(payload.targetId)
+  }
+}
+
 /** Stable undirected key for issue ↔ requirement-like (hazard/risk) pairs — dedupes TraceLink vs IssueLink mirror rows. */
 function issueRequirementUndirectedKey(
   sourceType: string,
@@ -1006,6 +1047,13 @@ export const traceabilityService = {
       performedByUserId,
     })
 
+    await auditRequirementTraceLinkForProject(
+      projectId,
+      'add',
+      { sourceType, sourceId, targetType, targetId, linkType },
+      performedByUserId
+    )
+
     await notifyRequirementLinkChange({
       projectId,
       sourceType,
@@ -1136,6 +1184,18 @@ export const traceabilityService = {
   ): Promise<void> {
     const traceLink = await prisma.traceLink.findUnique({ where: { id: linkId } })
     if (traceLink) {
+      await auditRequirementTraceLinkForProject(
+        projectId,
+        'remove',
+        {
+          sourceType: traceLink.sourceType,
+          sourceId: traceLink.sourceId,
+          targetType: traceLink.targetType,
+          targetId: traceLink.targetId,
+          linkType: traceLink.linkType,
+        },
+        performedByUserId
+      )
       await prisma.traceLink.delete({ where: { id: linkId } })
       await linkageAuditService.log({
         projectId,
@@ -1184,6 +1244,20 @@ export const traceabilityService = {
         },
         performedByUserId,
       })
+      if (isRequirementEntityType(issueLink.linkedType)) {
+        await linkageAuditService.log({
+          projectId,
+          entityType: 'REQUIREMENT',
+          entityId: issueLink.linkedId,
+          action: 'ISSUE_UNLINKED',
+          oldValue: {
+            issueId: issueLink.issueId,
+            issueKey: issueLink.issue?.issueKey,
+            title: issueLink.issue?.title,
+          },
+          performedByUserId,
+        })
+      }
       await notifyRequirementLinkChange({
         projectId,
         sourceType: 'issue',
@@ -1202,6 +1276,18 @@ export const traceabilityService = {
       include: { requirement: true, changeRequest: true },
     })
     if (crLink && crLink.requirement?.projectId === projectId) {
+      await auditRequirementTraceLinkForProject(
+        projectId,
+        'remove',
+        {
+          sourceType: 'requirement',
+          sourceId: crLink.requirementId,
+          targetType: 'change_request',
+          targetId: crLink.changeRequestId,
+          linkType: crLink.relationshipType,
+        },
+        performedByUserId
+      )
       await prisma.requirementChangeRequestLink.delete({ where: { id: linkId } })
       await linkageAuditService.log({
         projectId,

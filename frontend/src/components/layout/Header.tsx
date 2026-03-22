@@ -235,9 +235,28 @@ export default function Header({ onMobileMenuOpen }: { onMobileMenuOpen: () => v
                       <p className="font-medium text-sm" style={{ color: 'var(--theme-text)' }}>
                         {n.title}
                       </p>
-                      <p className="text-sm mt-0.5" style={{ color: 'var(--theme-text-muted)' }}>
+                      <p className="text-sm mt-0.5 whitespace-pre-wrap break-words" style={{ color: 'var(--theme-text-muted)' }}>
                         {n.message}
                       </p>
+                      {n.type === 'lifecycle_transition_reminder' &&
+                        (() => {
+                          const m = n.message.match(/Open:\s+(\/projects\/[^\s]+)/)
+                          const path = m?.[1] ?? null
+                          if (!path) return null
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigate(path)
+                                setBellOpen(false)
+                              }}
+                              className="mt-2 text-xs font-medium underline"
+                              style={{ color: 'var(--theme-accent)' }}
+                            >
+                              Open requirement
+                            </button>
+                          )
+                        })()}
                       {n.type === 'project_invitation' && n.projectId && (
                         <div className="flex gap-2 mt-2">
                           <button

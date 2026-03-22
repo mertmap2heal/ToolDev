@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { X, Edit2, Trash2, MessageSquare, Paperclip, Tag, ChevronRight, ChevronDown, Link2, FileText, Settings, AlertCircle, Zap, History, ExternalLink, Check, Bell, BellRing, GitPullRequest, Shield, Target, ClipboardCheck, Layers, BookOpen, LayoutGrid, List, Unlink, Sliders } from 'lucide-react'
+import { X, Edit2, Trash2, MessageSquare, Paperclip, Tag, ChevronRight, ChevronDown, Link2, FileText, Settings, AlertCircle, Zap, History, ExternalLink, Check, Bell, BellRing, GitPullRequest, Shield, Target, ClipboardCheck, Layers, BookOpen, LayoutGrid, List, Unlink, Sliders, Send } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient, useQueries } from '@tanstack/react-query'
 import { useNavigate, Link } from 'react-router-dom'
 import { requirementService, type RequirementSubscriptionSnapshot } from '../../services/requirement.service'
@@ -315,11 +315,13 @@ function LifecycleApprovalsTab({
   projectId,
   links,
   onStatusChanged,
+  onShowToast,
 }: {
   requirement: Requirement
   projectId: string
   links: any[]
   onStatusChanged: () => void
+  onShowToast?: (message: string) => void
 }) {
   const { lifecycles } = useLifecycleStore()
   const { statuses } = useStatusDefinitionsStore()
@@ -394,6 +396,40 @@ function LifecycleApprovalsTab({
   })
 
   const statusHistory = auditEvents.filter((e: any) => e.action === 'REQUIREMENT_STATUS_CHANGED') as StatusAuditEvent[]
+
+  const transitionsWithRoles = useMemo(
+    () => allTransitions.filter((t) => (t.allowedEngineeringRoleIds?.length ?? 0) > 0),
+    [allTransitions]
+  )
+
+  const fromStatusNameForReminder =
+    (currentStatusId && statuses.find((s) => s.id === currentStatusId)?.name) || requirement.status || 'Current'
+
+  const reminderMutation = useMutation({
+    mutationFn: async (t: AllowedTransition) => {
+      const r = await requirementService.sendLifecycleTransitionReminder(projectId, requirement.id, {
+        toStatusId: t.toStatusId,
+        allowedEngineeringRoleIds: t.allowedEngineeringRoleIds ?? [],
+        fromStatusName: fromStatusNameForReminder,
+        toStatusName: t.toStatusName,
+      })
+      if (!r.success) {
+        throw new Error(r.error || 'Failed to send reminder')
+      }
+      return r.data
+    },
+    onSuccess: (data) => {
+      const n = data?.notifiedCount ?? 0
+      if (n === 0) {
+        onShowToast?.(data?.message || 'No one with those roles to notify (excluding you).')
+      } else {
+        onShowToast?.(`Reminder sent to ${n} teammate${n === 1 ? '' : 's'}. They will see it under the bell.`)
+      }
+    },
+    onError: (e: Error) => {
+      onShowToast?.(e.message || 'Could not send reminder')
+    },
+  })
 
   return (
     <div className="space-y-6">
@@ -488,6 +524,48 @@ function LifecycleApprovalsTab({
             No transitions are defined from the current status in this lifecycle. Add transition rules in Lifecycle
             Management.
           </p>
+        )}
+
+      {!transitionsLoading &&
+        !transitionsFetchError &&
+        resolvedLifecycleId &&
+        currentStatusId &&
+        transitionsWithRoles.length > 0 && (
+          <div className="rounded-lg border border-blue-200 dark:border-blue-900/50 bg-blue-50/80 dark:bg-blue-950/25 px-3 py-3 space-y-2">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
+              <Send size={16} className="text-blue-600 dark:text-blue-400 shrink-0" />
+              Remind gate holders
+            </h3>
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Send an in-app notification to project members who have the engineering role(s) required for each gated
+              transition. Recipients see it under the notifications bell at the top.
+            </p>
+            <ul className="space-y-2 pt-1">
+              {transitionsWithRoles.map((t) => {
+                const pending =
+                  reminderMutation.isPending && reminderMutation.variables?.toStatusId === t.toStatusId
+                return (
+                  <li
+                    key={t.toStatusId}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-white/70 dark:bg-gray-900/40 px-2 py-2 border border-blue-100/80 dark:border-blue-900/30"
+                  >
+                    <span className="text-sm text-gray-800 dark:text-gray-200">
+                      → <span className="font-medium">{t.toStatusName}</span>
+                    </span>
+                    <button
+                      type="button"
+                      disabled={reminderMutation.isPending}
+                      onClick={() => reminderMutation.mutate(t)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-700 dark:hover:bg-blue-600"
+                    >
+                      <Send size={12} />
+                      {pending ? 'Sending…' : 'Send reminder'}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
         )}
 
       <LifecycleTransitionLog projectId={projectId} requirementId={requirement.id} statusHistory={statusHistory} />
@@ -2411,6 +2489,7 @@ export default function RequirementDetailDrawer({
                 projectId={projectId}
                 links={allLinksForUi}
                 onStatusChanged={() => queryClient.invalidateQueries({ queryKey: ['requirement', projectId, requirement?.id] })}
+                onShowToast={setToastMessage}
               />
             )}
 
