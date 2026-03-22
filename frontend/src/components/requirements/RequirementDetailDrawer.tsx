@@ -1017,6 +1017,28 @@ export default function RequirementDetailDrawer({
 
   const displayRequirement = fullRequirement || requirement
 
+  /** Same lifecycle resolution as Lifecycle & Approvals / useRequirementLifecycleTransition */
+  const drawerResolvedLifecycleId = useMemo(() => {
+    if (!displayRequirement) return null
+    return (
+      displayRequirement.lifecycleId ??
+      lifecycles.find((lc) => lc.applicableItemTypes?.includes('Requirement'))?.id ??
+      null
+    )
+  }, [displayRequirement, lifecycles])
+
+  /** Governed lifecycle step label for header (statusId → definition name, else requirement.status) */
+  const drawerLifecycleStatusLabel = useMemo(() => {
+    if (!displayRequirement) return null
+    const sid =
+      displayRequirement.statusId ?? statuses.find((s) => s.name === displayRequirement.status)?.id
+    if (sid) {
+      const name = statuses.find((s) => s.id === sid)?.name
+      if (name) return name
+    }
+    return displayRequirement.status?.trim() || null
+  }, [displayRequirement, statuses])
+
   /** Trace links for list/visual + break-link UI; includes synthetic PBS when only requirement.componentId is set. */
   const allLinksForUi = useMemo(() => {
     if (!LINKAGE_V1 || !displayRequirement?.componentId) return allLinks
@@ -1353,7 +1375,15 @@ export default function RequirementDetailDrawer({
                 <span className={clsx('px-2 py-1 rounded-full text-xs font-medium', getPriorityColor(displayRequirement.priority))}>
                   {displayRequirement.priority}
                 </span>
-                {displayRequirement.reviewStatus && (
+                {drawerResolvedLifecycleId && drawerLifecycleStatusLabel && (
+                  <span
+                    data-testid="requirement-drawer-lifecycle-status"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800 dark:bg-slate-700/60 dark:text-slate-200"
+                  >
+                    {drawerLifecycleStatusLabel}
+                  </span>
+                )}
+                {!drawerResolvedLifecycleId && displayRequirement.reviewStatus && (
                   <ReviewStatusBadge status={displayRequirement.reviewStatus} size="sm" />
                 )}
               </div>

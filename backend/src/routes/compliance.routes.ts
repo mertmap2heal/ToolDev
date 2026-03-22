@@ -8,6 +8,11 @@ const router = Router()
 router.use(authenticateToken)
 router.param('projectId', projectIdParam)
 
+router.get('/:projectId/regulation-folders', ctrl.getRegulationFolders)
+router.post('/:projectId/regulation-folders', ctrl.createRegulationFolder)
+router.patch('/:projectId/regulation-folders/:id', ctrl.updateRegulationFolder)
+router.delete('/:projectId/regulation-folders/:id', ctrl.deleteRegulationFolder)
+
 router.get('/:projectId/rules', ctrl.getRules)
 router.post('/:projectId/rules', ctrl.createRule)
 router.get('/:projectId/rules/:id', ctrl.getRule)

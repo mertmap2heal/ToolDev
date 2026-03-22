@@ -185,9 +185,10 @@ model Project {
   verTestCaseSectionImages  VerTestCaseSectionImage[]
   verCustomOptions       VerCustomOption[]
   verTemplates          VerTemplate[]
-  complianceRules       ComplianceRule[]
-  complianceCheckRuns   ComplianceCheckRun[]
-  complianceFindings    ComplianceFinding[]
+  complianceRules            ComplianceRule[]
+  complianceRegulationFolders ComplianceRegulationFolder[]
+  complianceCheckRuns        ComplianceCheckRun[]
+  complianceFindings         ComplianceFinding[]
   components            Component[]
   certContext           CertContext?
   certBaselines         CertBaseline[]
@@ -2930,10 +2931,31 @@ model VerTestCaseSectionImage {
   @@index([projectId])
 }
 
-// Compliance Check – standards/rules and check runs
+// Compliance Check – nested regulation folders and rules
+model ComplianceRegulationFolder {
+  id          String   @id @default(uuid())
+  projectId   String
+  parentId    String?
+  name        String
+  description String?
+  purpose     String? // e.g. software airworthiness, DO-254 hardware
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project  Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent   ComplianceRegulationFolder?  @relation("ComplianceFolderHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children ComplianceRegulationFolder[] @relation("ComplianceFolderHierarchy")
+  rules    ComplianceRule[]
+
+  @@index([projectId])
+  @@index([projectId, parentId])
+}
+
 model ComplianceRule {
   id          String   @id @default(uuid())
   projectId   String
+  folderId    String?
   name        String
   standard    String   // e.g. DO-178C, ISO 29148
   description String?
@@ -2942,10 +2964,12 @@ model ComplianceRule {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  project  Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project  Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  folder   ComplianceRegulationFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
   findings ComplianceFinding[]
 
   @@index([projectId])
+  @@index([folderId])
 }
 
 model ComplianceCheckRun {

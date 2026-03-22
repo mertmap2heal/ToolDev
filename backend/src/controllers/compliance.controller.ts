@@ -2,7 +2,155 @@ import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
 import * as complianceService from '../services/compliance.service'
+import * as regulationFolders from '../services/complianceRegulationFolders.service'
 
+export async function getRegulationFolders(req: AuthRequest, res: Response) {
+  try {
+    const { projectId } = req.params
+    const folders = await prisma.complianceRegulationFolder.findMany({
+      where: { projectId },
+      orderBy: [{ parentId: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+    })
+    res.json({ success: true, data: folders })
+  } catch (e) {
+    console.error('Compliance getRegulationFolders error:', e)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+}
+
+export async function createRegulationFolder(req: AuthRequest, res: Response) {
+  try {
+    const { projectId } = req.params
+    const { name, description, purpose, parentId, sortOrder } = req.body ?? {}
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ success: false, error: 'name is required' })
+    }
+    let parentIdNorm: string | null = null
+    if (parentId != null && parentId !== '') {
+      if (typeof parentId !== 'string') {
+        return res.status(400).json({ success: false, error: 'parentId must be a string' })
+      }
+      await regulationFolders.assertFolderInProject(projectId, parentId)
+      parentIdNorm = parentId
+    }
+    const folder = await prisma.complianceRegulationFolder.create({
+      data: {
+        projectId,
+        parentId: parentIdNorm,
+        name: name.trim(),
+        description: typeof description === 'string' ? description.trim() || null : null,
+        purpose: typeof purpose === 'string' ? purpose.trim() || null : null,
+        sortOrder: typeof sortOrder === 'number' && Number.isFinite(sortOrder) ? sortOrder : 0,
+      },
+    })
+    res.status(201).json({ success: true, data: folder })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    if (msg.includes('not found') || msg.includes('does not belong')) {
+      return res.status(400).json({ success: false, error: msg })
+    }
+    console.error('Compliance createRegulationFolder error:', e)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+}
+
+export async function updateRegulationFolder(req: AuthRequest, res: Response) {
+  try {
+    const { projectId, id } = req.params
+    const existing = await prisma.complianceRegulationFolder.findFirst({
+      where: { id, projectId },
+    })
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Folder not found' })
+    }
+    const { name, description, purpose, parentId, sortOrder } = req.body ?? {}
+    const data: {
+      name?: string
+      description?: string | null
+      purpose?: string | null
+      parentId?: string | null
+      sortOrder?: number
+    } = {}
+
+    if (name !== undefined) {
+      if (typeof name !== 'string' || !name.trim()) {
+        return res.status(400).json({ success: false, error: 'name cannot be empty' })
+      }
+      data.name = name.trim()
+    }
+    if (description !== undefined) {
+      data.description = typeof description === 'string' ? description.trim() || null : null
+    }
+    if (purpose !== undefined) {
+      data.purpose = typeof purpose === 'string' ? purpose.trim() || null : null
+    }
+    if (sortOrder !== undefined) {
+      if (typeof sortOrder !== 'number' || !Number.isFinite(sortOrder)) {
+        return res.status(400).json({ success: false, error: 'sortOrder must be a number' })
+      }
+      data.sortOrder = sortOrder
+    }
+    if (parentId !== undefined) {
+      if (parentId === id) {
+        return res.status(400).json({ success: false, error: 'Folder cannot be its own parent' })
+      }
+      if (parentId === null || parentId === '') {
+        data.parentId = null
+      } else {
+        if (typeof parentId !== 'string') {
+          return res.status(400).json({ success: false, error: 'parentId must be a string or null' })
+        }
+        await regulationFolders.assertFolderInProject(projectId, parentId)
+        const cycle = await regulationFolders.isAncestorOf(projectId, id, parentId)
+        if (cycle) {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid parent: would create a cycle in the folder hierarchy',
+          })
+        }
+        data.parentId = parentId
+      }
+    }
+
+    if (Object.keys(data).length === 0) {
+      return res.json({ success: true, data: existing })
+    }
+
+    const folder = await prisma.complianceRegulationFolder.update({
+      where: { id },
+      data,
+    })
+    res.json({ success: true, data: folder })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    if (msg.includes('not found') || msg.includes('does not belong')) {
+      return res.status(400).json({ success: false, error: msg })
+    }
+    console.error('Compliance updateRegulationFolder error:', e)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+}
+
+export async function deleteRegulationFolder(req: AuthRequest, res: Response) {
+  try {
+    const { projectId, id } = req.params
+    const existing = await prisma.complianceRegulationFolder.findFirst({
+      where: { id, projectId },
+    })
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Folder not found' })
+    }
+    await regulationFolders.deleteRegulationFolder(projectId, id)
+    res.json({ success: true, message: 'Folder deleted' })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    if (msg === 'Folder not found') {
+      return res.status(404).json({ success: false, error: msg })
+    }
+    console.error('Compliance deleteRegulationFolder error:', e)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+}
 
 export async function getRules(req: AuthRequest, res: Response) {
   try {
@@ -21,16 +169,24 @@ export async function getRules(req: AuthRequest, res: Response) {
 export async function createRule(req: AuthRequest, res: Response) {
   try {
     const { projectId } = req.params
-    const { name, standard, description, checkType } = req.body
+    const { name, standard, description, checkType, folderId: folderIdRaw } = req.body
     if (!name || !standard || !checkType) {
       return res.status(400).json({
         success: false,
         error: 'name, standard, and checkType are required',
       })
     }
+    let folderId: string | null = null
+    try {
+      folderId = await regulationFolders.resolveRuleFolderId(projectId, folderIdRaw)
+    } catch (fe) {
+      const m = fe instanceof Error ? fe.message : String(fe)
+      return res.status(400).json({ success: false, error: m })
+    }
     const rule = await prisma.complianceRule.create({
       data: {
         projectId,
+        folderId,
         name,
         standard,
         description: description ?? null,
@@ -64,12 +220,21 @@ export async function getRule(req: AuthRequest, res: Response) {
 export async function updateRule(req: AuthRequest, res: Response) {
   try {
     const { projectId, id } = req.params
-    const { name, standard, description, checkType, isActive } = req.body
+    const { name, standard, description, checkType, isActive, folderId: folderIdRaw } = req.body
     const existing = await prisma.complianceRule.findFirst({
       where: { id, projectId },
     })
     if (!existing) {
       return res.status(404).json({ success: false, error: 'Rule not found' })
+    }
+    let folderId: string | null | undefined
+    if (folderIdRaw !== undefined) {
+      try {
+        folderId = await regulationFolders.resolveRuleFolderId(projectId, folderIdRaw)
+      } catch (fe) {
+        const m = fe instanceof Error ? fe.message : String(fe)
+        return res.status(400).json({ success: false, error: m })
+      }
     }
     const rule = await prisma.complianceRule.update({
       where: { id },
@@ -79,6 +244,7 @@ export async function updateRule(req: AuthRequest, res: Response) {
         ...(description !== undefined && { description }),
         ...(checkType != null && { checkType }),
         ...(typeof isActive === 'boolean' && { isActive }),
+        ...(folderId !== undefined && { folderId }),
       },
     })
     res.json({ success: true, data: rule })

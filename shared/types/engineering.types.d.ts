@@ -473,6 +473,45 @@ export interface UpdateIssueCommentDto {
 }
 export type ParameterStatus = 'draft' | 'approved' | 'obsolete';
 export type ParameterOwnerType = 'component' | 'function' | 'system' | 'team';
+export interface ParameterTypeTranslations {
+    c_header?: string;
+    matlab?: string;
+    python?: string;
+    ada?: string;
+    simulink?: string;
+    ros?: string;
+    dds?: string;
+    autosar?: string;
+    xtce?: string;
+}
+export interface ParameterValueFormat {
+    template?: string;
+    example?: string;
+    hint?: string;
+    pattern?: string;
+    dimensions?: string;
+    structure?: 'scalar' | 'array' | 'matrix';
+}
+export interface ParameterType {
+    id: string;
+    projectId: string | null;
+    name: string;
+    description?: string | null;
+    color?: string | null;
+    translations?: ParameterTypeTranslations | null;
+    valueFormat?: ParameterValueFormat | null;
+    builtIn: boolean;
+    createdAt?: string | null;
+}
+export interface ProjectUnit {
+    id: string;
+    projectId: string;
+    name: string;
+    symbol: string;
+    description?: string | null;
+    category?: string | null;
+    createdAt: string;
+}
 export interface Parameter {
     id: string;
     projectId: string;
@@ -492,6 +531,9 @@ export interface Parameter {
     folderId?: string;
     sourceParameterId?: string;
     formula?: string;
+    enumValues?: string;
+    dimensions?: string;
+    platforms?: string[] | null;
     sourceFunctionId?: string;
     sourceFunction?: {
         id: string;
@@ -516,6 +558,9 @@ export interface CreateParameterDto {
     ownerType?: ParameterOwnerType;
     tags?: string[];
     formula?: string;
+    enumValues?: string;
+    dimensions?: string;
+    platforms?: string[] | null;
     sourceFunctionId?: string;
 }
 export interface UpdateParameterDto {
@@ -532,7 +577,58 @@ export interface UpdateParameterDto {
     ownerType?: ParameterOwnerType;
     tags?: string[];
     formula?: string;
+    enumValues?: string;
+    dimensions?: string;
+    platforms?: string[] | null;
     sourceParameterId?: string | null;
+}
+export type CommProtocol = 'can' | 'ros' | 'dds' | 'xtce' | 'mavlink' | 'autosar' | 'mqtt' | 'custom';
+export type CommDirection = 'publish' | 'subscribe' | 'send' | 'receive' | 'bidirectional';
+export interface CommBus {
+    id: string;
+    projectId: string;
+    name: string;
+    description?: string | null;
+    protocol: CommProtocol | string;
+    config?: Record<string, unknown> | null;
+    createdAt: string;
+    updatedAt: string;
+    _count?: {
+        messages: number;
+    };
+}
+export interface CommMessage {
+    id: string;
+    busId: string;
+    name: string;
+    messageId?: string | null;
+    direction?: CommDirection | string | null;
+    description?: string | null;
+    metadata?: Record<string, unknown> | null;
+    createdAt: string;
+    updatedAt: string;
+    _count?: {
+        fields: number;
+    };
+}
+export interface CommField {
+    id: string;
+    messageId: string;
+    parameterId?: string | null;
+    fieldName: string;
+    description?: string | null;
+    dataType?: string | null;
+    order: number;
+    config?: Record<string, unknown> | null;
+    createdAt: string;
+    updatedAt: string;
+    parameter?: {
+        id: string;
+        name: string;
+        dataType?: string | null;
+        unit?: string | null;
+        defaultValue?: string | null;
+    } | null;
 }
 /** Resolved parameter value for placeholder substitution (e.g. in requirements). */
 export interface ParameterResolvedValue {
@@ -658,7 +754,9 @@ export interface UpdateRequirementDto {
     title?: string;
     lifecycleId?: string;
     statusId?: string;
+    /** When changing status: transition role gate (enforced when project.strictLifecycleGates is true); empty = unrestricted */
     allowedEngineeringRoleIds?: string[];
+    /** When changing status with transition checklists: completed checklist payloads */
     checklistCompletions?: ChecklistCompletionSubmissionDto[];
     description?: string;
     parentId?: string | null;

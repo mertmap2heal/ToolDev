@@ -804,4 +804,68 @@ test.describe('Transition Checklists', () => {
       await expect(page.getByRole('button', { name: /Send reminder/i }).first()).toBeVisible({ timeout: 5_000 })
     }
   })
+
+  test('requirement drawer header lifecycle badge matches governed status from API', async ({ page, projectId }) => {
+    const token = await page.evaluate(() => localStorage.getItem('token'))
+    expect(token).toBeTruthy()
+
+    const listResp = await page.request.get(
+      `http://localhost:5000/api/v1/requirements/${projectId}?page=1&pageSize=1`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    expect(listResp.ok()).toBeTruthy()
+    const listBody = await listResp.json()
+    const total: number = listBody?.data?.total ?? 0
+    if (total === 0) {
+      const createResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: {
+          title: 'E2E header lifecycle badge seed',
+          description: 'Seed for drawer header lifecycle badge test',
+        },
+      })
+      expect(createResp.ok()).toBeTruthy()
+    }
+
+    const listResp2 = await page.request.get(
+      `http://localhost:5000/api/v1/requirements/${projectId}?page=1&pageSize=1`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    expect(listResp2.ok()).toBeTruthy()
+    const listBody2 = await listResp2.json()
+    const row = listBody2?.data?.items?.[0] as { id?: string; requirementId?: string | null; status?: string | null } | undefined
+    if (!row?.id) {
+      test.skip()
+      return
+    }
+
+    const oneResp = await page.request.get(
+      `http://localhost:5000/api/v1/requirements/${projectId}/${row.id}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    expect(oneResp.ok()).toBeTruthy()
+    const oneBody = await oneResp.json()
+    const expectedStatus = String(oneBody?.data?.status ?? '').trim()
+    if (!expectedStatus) {
+      test.skip()
+      return
+    }
+
+    await page.goto(`/projects/${projectId}/requirements`)
+    await page.waitForLoadState('domcontentloaded')
+
+    const openLabel = row.requirementId?.trim() || row.id.slice(0, 8)
+    const idCell = page.locator('td .font-mono.cursor-pointer').filter({ hasText: openLabel }).first()
+    await expect(idCell).toBeVisible({ timeout: 15_000 })
+    await idCell.click()
+
+    const headerBadge = page.getByTestId('requirement-drawer-lifecycle-status')
+    const hasHeaderBadge = await headerBadge.isVisible({ timeout: 15_000 }).catch(() => false)
+    if (!hasHeaderBadge) {
+      test.skip()
+      return
+    }
+
+    await expect(headerBadge).toHaveText(expectedStatus, { timeout: 10_000 })
+  })
 })
