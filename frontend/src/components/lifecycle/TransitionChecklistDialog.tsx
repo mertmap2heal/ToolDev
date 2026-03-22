@@ -71,9 +71,14 @@ export default function TransitionChecklistDialog({
 
   const allItems = useMemo(
     () =>
-      checklists.flatMap((c) =>
-        c.checklist.items.map((item) => ({ ...item, assignmentId: c.assignmentId, checklistName: c.checklist.name }))
-      ),
+      checklists.flatMap((c) => {
+        const items = c.checklist?.items ?? []
+        return items.map((item) => ({
+          ...item,
+          assignmentId: c.assignmentId,
+          checklistName: c.checklist?.name ?? 'Checklist',
+        }))
+      }),
     [checklists]
   )
 
@@ -90,10 +95,13 @@ export default function TransitionChecklistDialog({
     allItems.forEach((item) => {
       transitionChecklistService.getItemIssues(projectId, item.id, requirement.id).then((resp) => {
         if (resp.success && resp.data) {
-          setItemStates((prev) => ({
-            ...prev,
-            [item.id]: { ...prev[item.id], issues: resp.data ?? [] },
-          }))
+          setItemStates((prev) => {
+            const cur = prev[item.id] ?? defaultState()
+            return {
+              ...prev,
+              [item.id]: { ...cur, issues: resp.data ?? [] },
+            }
+          })
         }
       }).catch(() => {})
     })
@@ -168,7 +176,16 @@ export default function TransitionChecklistDialog({
     return { checked: false, comments: [], issues: [] }
   }
 
-  const getState = (itemId: string): ItemState => itemStates[itemId] ?? defaultState()
+  const getState = (itemId: string): ItemState => {
+    const raw = itemStates[itemId]
+    if (!raw) return defaultState()
+    return {
+      ...defaultState(),
+      ...raw,
+      comments: raw.comments ?? [],
+      issues: raw.issues ?? [],
+    }
+  }
 
   const toggleItem = (itemId: string, item: TransitionChecklistItem) => {
     if (item.itemType === 'FIELD_VALIDATION' || item.itemType === 'RULE_BASED') return
@@ -408,7 +425,7 @@ export default function TransitionChecklistDialog({
                     </h5>
                   )}
                   <div className="space-y-2">
-                    {c.checklist.items.map((item) => {
+                    {(c.checklist?.items ?? []).map((item) => {
                       const state = getState(item.id)
                       const isAuto = item.itemType === 'FIELD_VALIDATION' || item.itemType === 'RULE_BASED'
                       const isPassed = isAuto ? state.autoResult?.valid : state.checked

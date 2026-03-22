@@ -162,8 +162,10 @@ export const lifecycleService = {
       const params = new URLSearchParams({ lifecycleId, fromStatusId })
       if (userId) params.set('userId', userId)
       const response = await apiClient.get<TransitionsResponse>(`/lifecycle/transitions?${params}`)
-      if (response.success && response.data) {
-        return { success: true, data: response.data }
+      // Backend stub often returns success with an empty list; use Zustand (Lifecycle Management rules) in that case.
+      const apiTransitions = response.success && response.data?.transitions ? response.data.transitions : []
+      if (apiTransitions.length > 0) {
+        return { success: true, data: { transitions: apiTransitions } }
       }
     } catch {
       // Backend not available - use Zustand fallback
