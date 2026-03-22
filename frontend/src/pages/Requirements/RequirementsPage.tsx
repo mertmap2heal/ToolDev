@@ -62,6 +62,81 @@ interface ExpandedRow {
   linkedItems?: Array<{ id: string; targetType: string; targetId: string; label?: string; title?: string; description?: string; displayId?: string; linkType?: string; issue?: { id: string; title: string; issueKey?: string; createdByUser?: { id: string; name: string; email: string } } }>
 }
 
+function humanizeLinkType(linkType: string | undefined): string {
+  if (!linkType) return ''
+  return linkType.replace(/_/g, ' ')
+}
+
+/** Normalize id token for matching titles like "Deleted test case (b531f48f)". */
+function linkedItemIdToken(targetId: string, displayId?: string): string {
+  return (displayId ?? targetId.slice(0, 8)).replace(/-/g, '').toLowerCase()
+}
+
+/** Drop trailing " (xxxxxxxx)" when it duplicates the row id (avoids "id — Title (id)"). */
+function stripRedundantIdFromTitle(title: string, targetId: string, displayId?: string): string {
+  const t = title.trim()
+  if (!t) return t
+  const short = linkedItemIdToken(targetId, displayId).slice(0, 8)
+  if (!/^[a-f0-9]{8}$/i.test(short)) return t
+  const re = new RegExp(`\\s*\\(${short}\\)\\s*$`, 'i')
+  const next = t.replace(re, '').trim()
+  return next || t
+}
+
+function formatNonIssueLinkedLabel(item: {
+  title?: string
+  label?: string
+  targetType: string
+  targetId: string
+  displayId?: string
+}): string {
+  const typeFallback = item.targetType
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+  const fallback = `${typeFallback} (${item.targetId.slice(0, 8)})`
+  const raw = (item.title ?? item.label ?? fallback).trim()
+  return stripRedundantIdFromTitle(raw, item.targetId, item.displayId)
+}
+
+function LinkedItemTypeIcon({ targetType }: { targetType: string }) {
+  const t = (targetType || '').toLowerCase().replace(/-/g, '_')
+  const className = 'shrink-0 text-blue-500 dark:text-blue-400'
+  if (t === 'test_case' || t === 'testcase') {
+    return <ClipboardCheck size={16} className={className} aria-hidden />
+  }
+  if (t === 'requirement') {
+    return <FileText size={16} className={className} aria-hidden />
+  }
+  if (t === 'function') {
+    return <LayoutList size={16} className={className} aria-hidden />
+  }
+  if (t === 'pbs_component') {
+    return <Grid3X3 size={16} className={className} aria-hidden />
+  }
+  if (t === 'change_request') {
+    return <GitBranch size={16} className={className} aria-hidden />
+  }
+  if (t === 'issue') {
+    return <AlertCircle size={16} className={className} aria-hidden />
+  }
+  if (t === 'parameter') {
+    return <Sliders size={16} className={className} aria-hidden />
+  }
+  return <Link2 size={16} className={className} aria-hidden />
+}
+
+function LinkTypeBadge({ linkType }: { linkType?: string }) {
+  if (!linkType) return null
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium capitalize bg-blue-100 text-blue-900 dark:bg-blue-900/45 dark:text-blue-100 border border-blue-200/90 dark:border-blue-700/60 shrink-0"
+      title="Link type"
+    >
+      {humanizeLinkType(linkType)}
+    </span>
+  )
+}
+
 /**
  * Interface for tracking inline editing state
  */
@@ -2058,6 +2133,7 @@ export default function RequirementsPage() {
                           >
                             {item.targetType === 'issue' && item.issue ? (
                               <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
+                                <LinkedItemTypeIcon targetType="issue" />
                                 <span className="font-mono text-sm font-medium text-gray-600 dark:text-gray-400 shrink-0">
                                   {item.issue.issueKey || `#${item.issue.id.slice(0, 8)}`}
                                 </span>
@@ -2066,22 +2142,23 @@ export default function RequirementsPage() {
                                   {item.issue.title}
                                 </span>
                                 {item.issue.createdByUser && (
-                                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                                  <span className="text-sm text-gray-600 dark:text-gray-400">
                                     by {item.issue.createdByUser.name}
                                   </span>
                                 )}
-                                <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0">({item.linkType})</span>
+                                <LinkTypeBadge linkType={item.linkType} />
                               </div>
                             ) : (
                               <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
+                                <LinkedItemTypeIcon targetType={item.targetType} />
                                 <span className="font-mono text-sm font-medium text-gray-600 dark:text-gray-400 shrink-0 tabular-nums">
                                   {item.displayId ?? item.targetId.slice(0, 8)}
                                 </span>
                                 <span className="text-gray-600 dark:text-gray-400 shrink-0">–</span>
-                                <span className="text-gray-900 dark:text-white min-w-0 break-words">
-                                  {item.title ?? item.label ?? `${item.targetType} (${item.targetId.slice(0, 8)})`}
+                                <span className="font-medium text-blue-600 dark:text-blue-400 min-w-0 break-words">
+                                  {formatNonIssueLinkedLabel(item)}
                                 </span>
-                                <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0">({item.linkType})</span>
+                                <LinkTypeBadge linkType={item.linkType} />
                               </div>
                             )}
                           </button>
