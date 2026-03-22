@@ -754,4 +754,49 @@ test.describe('Transition Checklists', () => {
       ).catch(() => {})
     }
   })
+
+  test('requirement drawer Lifecycle tab shows transition governance copy', async ({ page, projectId }) => {
+    const token = await page.evaluate(() => localStorage.getItem('token'))
+    expect(token).toBeTruthy()
+
+    const listResp = await page.request.get(
+      `http://localhost:5000/api/v1/requirements/${projectId}?page=1&pageSize=1`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    expect(listResp.ok()).toBeTruthy()
+    const listBody = await listResp.json()
+    const total: number = listBody?.data?.total ?? 0
+    if (total === 0) {
+      const createResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        data: {
+          title: 'E2E lifecycle drawer seed',
+          description: 'Seed for drawer lifecycle tab test',
+        },
+      })
+      expect(createResp.ok()).toBeTruthy()
+    }
+
+    await page.goto(`/projects/${projectId}/requirements`)
+    await page.waitForLoadState('domcontentloaded')
+
+    const idCell = page.locator('td .font-mono.cursor-pointer').first()
+    await expect(idCell).toBeVisible({ timeout: 15_000 })
+    await idCell.click()
+
+    const lifecycleTab = page.getByRole('button', { name: /Lifecycle & Approvals/i })
+    if (!(await lifecycleTab.isVisible({ timeout: 5_000 }).catch(() => false))) {
+      test.skip()
+      return
+    }
+    await lifecycleTab.click()
+
+    await expect(
+      page
+        .getByText(
+          /Move to next status|Transition checklists|No lifecycle is assigned|Loading transitions|Suggested readiness|No transitions are defined/i
+        )
+        .first()
+    ).toBeVisible({ timeout: 15_000 })
+  })
 })

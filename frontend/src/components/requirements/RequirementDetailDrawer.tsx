@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { X, Edit2, Trash2, MessageSquare, Paperclip, Tag, ChevronRight, ChevronDown, Link2, FileText, Settings, AlertCircle, Zap, History, ExternalLink, Check, Bell, BellRing, GitPullRequest, Shield, Target, ClipboardCheck, Layers, BookOpen, LayoutGrid, List, Unlink, Sliders } from 'lucide-react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient, useQueries } from '@tanstack/react-query'
+import { useNavigate, Link } from 'react-router-dom'
 import { requirementService, type RequirementSubscriptionSnapshot } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
 import { issueService } from '../../services/issue.service'
@@ -14,8 +14,10 @@ import { traceabilityService } from '../../services/traceability.service'
 import { componentService } from '../../services/component.service'
 import { LINKAGE_V1, LIFECYCLE_V1 } from '../../config/featureFlags'
 import { invalidateLinkCaches } from '../../utils/invalidateLinkCaches'
-import { lifecycleService } from '../../services/lifecycle.service'
-import { lifecyclePermissionService } from '../../services/lifecyclePermission.service'
+import type { AllowedTransition } from '../../services/lifecycle.service'
+import { transitionChecklistService } from '../../services/transitionChecklist.service'
+import TransitionChecklistDialog from '../lifecycle/TransitionChecklistDialog'
+import { useRequirementLifecycleTransition } from './useRequirementLifecycleTransition'
 import { verificationService } from '../../services/verification.service'
 
 import { buildDeepLink } from '../../linkage/buildDeepLink'
@@ -50,33 +52,43 @@ interface RequirementDetailDrawerProps {
   onAddLink?: () => void
 }
 
-/** Gates checklist for lifecycle - simple client-side checks */
-function LifecycleGatesChecklist({ requirement, links }: { requirement: Requirement; links: any[] }) {
+/** Optional hints only; server enforces real gates and checklists. */
+function SuggestedReadinessCollapsible({ requirement, links }: { requirement: Requirement; links: any[] }) {
+  const [open, setOpen] = useState(false)
   const hasOwner = !!requirement.owner?.trim()
   const hasAcceptanceCriteria = !!requirement.acceptanceCriteria?.trim()
   const hasVerificationMethod = !!requirement.verificationMethod?.trim()
   const hasAllocation = links.some((l: any) => l.linkType === 'allocated_to' && l.targetType === 'pbs_component')
   return (
-    <div className="space-y-2">
-      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Gates</h4>
-      <ul className="space-y-1 text-sm">
-        <li className={clsx('flex items-center gap-2', hasOwner ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400')}>
-          {hasOwner ? <Check size={14} /> : <AlertCircle size={14} />}
-          Owner assigned
-        </li>
-        <li className={clsx('flex items-center gap-2', hasAcceptanceCriteria ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400')}>
-          {hasAcceptanceCriteria ? <Check size={14} /> : <AlertCircle size={14} />}
-          Acceptance criteria
-        </li>
-        <li className={clsx('flex items-center gap-2', hasVerificationMethod ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400')}>
-          {hasVerificationMethod ? <Check size={14} /> : <AlertCircle size={14} />}
-          Verification method
-        </li>
-        <li className={clsx('flex items-center gap-2', hasAllocation ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400')}>
-          {hasAllocation ? <Check size={14} /> : <AlertCircle size={14} />}
-          Allocated to PBS
-        </li>
-      </ul>
+    <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/80 hover:bg-gray-100 dark:hover:bg-gray-800"
+      >
+        <span>Suggested readiness (informational)</span>
+        <ChevronDown size={16} className={clsx('shrink-0 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <ul className="space-y-1 px-3 py-2 text-sm border-t border-gray-100 dark:border-gray-700">
+          <li className={clsx('flex items-center gap-2', hasOwner ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400')}>
+            {hasOwner ? <Check size={14} /> : <AlertCircle size={14} />}
+            Owner assigned
+          </li>
+          <li className={clsx('flex items-center gap-2', hasAcceptanceCriteria ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400')}>
+            {hasAcceptanceCriteria ? <Check size={14} /> : <AlertCircle size={14} />}
+            Acceptance criteria
+          </li>
+          <li className={clsx('flex items-center gap-2', hasVerificationMethod ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400')}>
+            {hasVerificationMethod ? <Check size={14} /> : <AlertCircle size={14} />}
+            Verification method
+          </li>
+          <li className={clsx('flex items-center gap-2', hasAllocation ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400')}>
+            {hasAllocation ? <Check size={14} /> : <AlertCircle size={14} />}
+            Allocated to PBS
+          </li>
+        </ul>
+      )}
     </div>
   )
 }
@@ -94,28 +106,66 @@ function LifecycleApprovalsTab({
 }) {
   const { lifecycles } = useLifecycleStore()
   const { statuses } = useStatusDefinitionsStore()
-  const queryClient = useQueryClient()
   const lifecycle = requirement.lifecycleId
     ? lifecycles.find((lc) => lc.id === requirement.lifecycleId)
     : lifecycles.find((lc) => lc.applicableItemTypes?.includes('Requirement'))
 
-  const currentStatusId = requirement.statusId ?? statuses.find((s) => s.name === requirement.status)?.id
-  const [transitions, setTransitions] = useState<Array<{ toStatusId: string; toStatusName: string }>>([])
+  const {
+    resolvedLifecycleId,
+    currentStatusId,
+    allowedTransitions,
+    allTransitions,
+    transitionsLoading,
+    transitionsFetchError,
+    myRoleNames,
+    blockedByRoles,
+    checklistDialogData,
+    setChecklistDialogData,
+    checkingChecklists,
+    handleTransitionClick,
+    handleChecklistComplete,
+    updateMutation,
+    updateError,
+    clearUpdateError,
+  } = useRequirementLifecycleTransition({
+    requirement,
+    projectId,
+    onSuccess: async () => {
+      onStatusChanged()
+    },
+  })
 
-  useEffect(() => {
-    const lid = requirement.lifecycleId ?? lifecycle?.id
-    if (lid && currentStatusId) {
-      lifecycleService.getAllowedTransitions(lid, currentStatusId).then(async (r) => {
-        if (r.success && r.data?.transitions) {
-          const filtered = await lifecyclePermissionService.filterAllowedTransitions(
-            projectId,
-            r.data.transitions
-          )
-          setTransitions(filtered.map((t) => ({ toStatusId: t.toStatusId, toStatusName: t.toStatusName })))
+  const transitionChecklistRows = useQueries({
+    queries: allowedTransitions.map((t: AllowedTransition) => ({
+      queryKey: [
+        'lifecycle-tab-transition-checklists',
+        projectId,
+        resolvedLifecycleId,
+        currentStatusId,
+        t.toStatusId,
+      ],
+      queryFn: async () => {
+        const r = await transitionChecklistService.getForTransition(
+          projectId,
+          resolvedLifecycleId!,
+          currentStatusId!,
+          t.toStatusId,
+          'Requirement'
+        )
+        return {
+          transition: t,
+          rows: r.success && r.data ? r.data : [],
         }
-      })
-    }
-  }, [requirement, lifecycle?.id, currentStatusId, projectId])
+      },
+      enabled:
+        !!projectId && !!resolvedLifecycleId && !!currentStatusId && allowedTransitions.length > 0,
+    })),
+  })
+
+  const handleRailStepClick = (statusId: string) => {
+    const t = allowedTransitions.find((x) => x.toStatusId === statusId)
+    if (t) void handleTransitionClick(t)
+  }
 
   const { data: auditEvents = [] } = useQuery({
     queryKey: ['audit', projectId, requirement.id],
@@ -128,23 +178,27 @@ function LifecycleApprovalsTab({
 
   const statusHistory = auditEvents.filter((e: any) => e.action === 'REQUIREMENT_STATUS_CHANGED')
 
-  const updateMutation = useMutation({
-    mutationFn: (updates: { statusId: string; status: string }) =>
-      requirementService.updateRequirement(projectId, requirement.id, updates),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
-      queryClient.invalidateQueries({ queryKey: ['requirement', projectId, requirement.id] })
-      onStatusChanged()
-    },
-  })
-
   return (
     <div className="space-y-6">
+      {updateError && (
+        <div
+          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200 flex justify-between gap-2"
+          role="alert"
+        >
+          <span>{updateError}</span>
+          <button type="button" className="shrink-0 underline text-red-700 dark:text-red-300" onClick={clearUpdateError}>
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {lifecycle && (
         <div>
           <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Lifecycle</h3>
           <div className="flex items-center justify-between mb-4">
-            <p className="text-base text-gray-900 dark:text-white">{lifecycle.name} v{lifecycle.version}</p>
+            <p className="text-base text-gray-900 dark:text-white">
+              {lifecycle.name} v{lifecycle.version}
+            </p>
           </div>
           {lifecycle.steps && (
             <RequirementLifecycleVisual
@@ -152,6 +206,9 @@ function LifecycleApprovalsTab({
               statuses={statuses}
               currentStatusId={currentStatusId}
               className="mb-6"
+              hideLabel
+              clickableTargetStatusIds={allowedTransitions.map((x) => x.toStatusId)}
+              onTargetStepClick={handleRailStepClick}
             />
           )}
         </div>
@@ -162,6 +219,60 @@ function LifecycleApprovalsTab({
           <p className="text-base text-gray-900 dark:text-white">{requirement.status || '—'}</p>
         </div>
       )}
+
+      {transitionsLoading && (
+        <p className="text-sm text-gray-500 dark:text-gray-400">Loading transitions…</p>
+      )}
+      {!transitionsLoading && transitionsFetchError && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+          {transitionsFetchError}
+        </div>
+      )}
+      {!transitionsLoading && !transitionsFetchError && !resolvedLifecycleId && (
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          No lifecycle is assigned to this requirement. Assign a lifecycle model to enable governed transitions.
+        </p>
+      )}
+      {!transitionsLoading && !transitionsFetchError && resolvedLifecycleId && !currentStatusId && (
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          Current status could not be matched to your status definitions (check status name and ID alignment).
+        </p>
+      )}
+      {!transitionsLoading && !transitionsFetchError && resolvedLifecycleId && currentStatusId && blockedByRoles && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100 space-y-2">
+          <p className="font-medium">No transitions available with your engineering roles</p>
+          <p>
+            This lifecycle defines moves from your current status, but strict lifecycle gates require a matching project
+            engineering role for each transition.
+          </p>
+          {myRoleNames.length > 0 ? (
+            <p className="text-xs text-amber-900/90 dark:text-amber-200/90">Your roles: {myRoleNames.join(', ')}</p>
+          ) : (
+            <p className="text-xs text-amber-900/90 dark:text-amber-200/90">
+              No engineering roles were returned for your account on this project.
+            </p>
+          )}
+          <Link
+            to={`/projects/${encodeURIComponent(projectId)}/stakeholder?tab=roles`}
+            className="inline-block text-xs font-medium text-blue-700 underline dark:text-blue-300"
+          >
+            Open Stakeholders — Roles & assignments
+          </Link>
+        </div>
+      )}
+      {!transitionsLoading &&
+        !transitionsFetchError &&
+        resolvedLifecycleId &&
+        currentStatusId &&
+        !blockedByRoles &&
+        allowedTransitions.length === 0 &&
+        allTransitions.length === 0 && (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            No transitions are defined from the current status in this lifecycle. Add transition rules in Lifecycle
+            Management.
+          </p>
+        )}
+
       {statusHistory.length > 0 && (
         <div>
           <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Status History</h3>
@@ -177,24 +288,97 @@ function LifecycleApprovalsTab({
           </div>
         </div>
       )}
-      {transitions.length > 0 && (
+
+      {!blockedByRoles && allowedTransitions.length > 0 && (
         <div>
-          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Allowed Transitions</h3>
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Move to next status</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+            Use the buttons below or click a highlighted step in the lifecycle bar. If a transition checklist is
+            required, you will be prompted before the status changes.
+          </p>
           <div className="flex flex-wrap gap-2">
-            {transitions.map((t) => (
+            {allowedTransitions.map((t: AllowedTransition) => (
               <button
                 key={t.toStatusId}
-                onClick={() => updateMutation.mutate({ statusId: t.toStatusId, status: t.toStatusName })}
-                disabled={updateMutation.isPending}
+                type="button"
+                onClick={() => void handleTransitionClick(t)}
+                disabled={updateMutation.isPending || checkingChecklists === t.toStatusId}
                 className="px-3 py-2 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 text-sm font-medium disabled:opacity-50"
               >
-                → {t.toStatusName}
+                {checkingChecklists === t.toStatusId ? 'Checking…' : `→ ${t.toStatusName}`}
               </button>
             ))}
           </div>
         </div>
       )}
-      <LifecycleGatesChecklist requirement={requirement} links={links} />
+
+      {!blockedByRoles && allowedTransitions.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Transition checklists</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+            Checklists assigned in Lifecycle Settings for each move. Completing them is required when you change status
+            (same rules as the Requirements list status control).
+          </p>
+          <div className="space-y-3">
+            {transitionChecklistRows.map((q, idx) => {
+              const t = allowedTransitions[idx]
+              if (!t) return null
+              const loading = q.isLoading
+              const rows = q.data?.rows ?? []
+              return (
+                <div
+                  key={t.toStatusId}
+                  className="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 space-y-2"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">To {t.toStatusName}</span>
+                    <button
+                      type="button"
+                      disabled={updateMutation.isPending || checkingChecklists === t.toStatusId || loading}
+                      onClick={() => void handleTransitionClick(t)}
+                      className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400 disabled:opacity-50"
+                    >
+                      {loading ? 'Loading…' : rows.length > 0 ? 'Complete checklist' : 'Move without checklist'}
+                    </button>
+                  </div>
+                  {loading && <p className="text-xs text-gray-500">Loading checklist assignments…</p>}
+                  {!loading && rows.length === 0 && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">No checklist assigned for this transition.</p>
+                  )}
+                  {!loading &&
+                    rows.map((row) => (
+                      <div
+                        key={row.assignmentId}
+                        className="text-xs text-gray-600 dark:text-gray-300 pl-2 border-l-2 border-blue-200 dark:border-blue-800"
+                      >
+                        <span className="font-medium text-gray-800 dark:text-gray-200">{row.checklist.name}</span>
+                        <span className="text-gray-500 dark:text-gray-500">
+                          {' '}
+                          · {row.checklist.items?.length ?? 0} item(s)
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      <SuggestedReadinessCollapsible requirement={requirement} links={links} />
+
+      {checklistDialogData && (
+        <TransitionChecklistDialog
+          requirement={requirement}
+          projectId={projectId}
+          checklists={checklistDialogData.checklists}
+          fromStatusName={checklistDialogData.fromStatusName}
+          toStatusName={checklistDialogData.toStatusName}
+          onComplete={handleChecklistComplete}
+          onClose={() => setChecklistDialogData(null)}
+          isSubmitting={updateMutation.isPending}
+        />
+      )}
     </div>
   )
 }

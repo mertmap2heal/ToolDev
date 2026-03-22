@@ -1,18 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { requirementService } from '../../services/requirement.service'
-import { lifecycleService } from '../../services/lifecycle.service'
-import { useLifecycleStore } from '../../store/lifecycleStore'
-import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
-import type { Requirement, UpdateRequirementDto } from 'shared/types/engineering.types'
+import type { Requirement } from 'shared/types/engineering.types'
 import type { AllowedTransition } from '../../services/lifecycle.service'
-import { lifecyclePermissionService } from '../../services/lifecyclePermission.service'
-import {
-  transitionChecklistService,
-  type TransitionChecklistWithAssignment,
-  type TransitionChecklistDialogCompletePayload,
-} from '../../services/transitionChecklist.service'
 import TransitionChecklistDialog from '../lifecycle/TransitionChecklistDialog'
+import { useRequirementLifecycleTransition } from './useRequirementLifecycleTransition'
 
 interface ChangeStatusPopoverProps {
   requirement: Requirement
@@ -46,50 +36,40 @@ export default function ChangeStatusPopover({
   onClose,
   onSuccess,
 }: ChangeStatusPopoverProps) {
-  const [transitions, setTransitions] = useState<AllowedTransition[]>([])
-  const [loading, setLoading] = useState(true)
-  const [resolvedLifecycleId, setResolvedLifecycleId] = useState<string | null>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
-  const queryClient = useQueryClient()
-  const { lifecycles } = useLifecycleStore()
-  const { statuses } = useStatusDefinitionsStore()
+  const [dismissError, setDismissError] = useState(false)
 
-  const [checklistDialogData, setChecklistDialogData] = useState<{
-    checklists: TransitionChecklistWithAssignment[]
-    toStatusId: string
-    toStatusName: string
-    fromStatusName: string
-    allowedEngineeringRoleIds: string[]
-  } | null>(null)
-  const [checkingChecklists, setCheckingChecklists] = useState<string | null>(null)
-
-  const pendingTransitionCommentsRef = useRef<Record<string, string[]>>({})
+  const {
+    resolvedLifecycleId,
+    currentStatusId,
+    allowedTransitions,
+    allTransitions,
+    transitionsLoading,
+    transitionsFetchError,
+    myRoleNames,
+    strictGates,
+    blockedByRoles,
+    checklistDialogData,
+    setChecklistDialogData,
+    checkingChecklists,
+    handleTransitionClick,
+    handleChecklistComplete,
+    updateMutation,
+    updateError,
+    clearUpdateError,
+  } = useRequirementLifecycleTransition({
+    requirement,
+    projectId,
+    onSuccess: async () => {
+      onSuccess?.()
+      onClose()
+    },
+  })
 
   useEffect(() => {
-    const lifecycleId =
-      requirement.lifecycleId ?? lifecycles.find((lc) => lc.applicableItemTypes?.includes('Requirement'))?.id
-    setResolvedLifecycleId(lifecycleId ?? null)
-    const currentStatusId =
-      requirement.statusId ?? statuses.find((s) => s.name === requirement.status)?.id
-    if (lifecycleId && currentStatusId) {
-      lifecycleService
-        .getAllowedTransitions(lifecycleId, currentStatusId)
-        .then(async (result) => {
-          if (result.success && result.data?.transitions) {
-            const filtered = await lifecyclePermissionService.filterAllowedTransitions(
-              projectId,
-              result.data.transitions
-            )
-            setTransitions(filtered)
-          } else {
-            setTransitions([])
-          }
-        })
-        .finally(() => setLoading(false))
-    } else {
-      setLoading(false)
-    }
-  }, [requirement, lifecycles, statuses, projectId])
+    setDismissError(false)
+    clearUpdateError()
+  }, [requirement.id, anchorEl, clearUpdateError])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -106,127 +86,16 @@ export default function ChangeStatusPopover({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [anchorEl, onClose, checklistDialogData])
 
-  const updateMutation = useMutation({
-    mutationFn: async (updates: UpdateRequirementDto & { status: string }) => {
-      const result = await requirementService.updateRequirement(projectId, requirement.id, updates)
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to update status')
-      }
-      return result
-    },
-    onSuccess: async (result) => {
-      const pending = pendingTransitionCommentsRef.current
-      pendingTransitionCommentsRef.current = {}
-      try {
-        const blocks = result.transitionChecklistSubmissionResults
-        if (blocks?.length && pending && Object.keys(pending).length > 0) {
-          const itemToResponse = new Map<string, string>()
-          for (const b of blocks) {
-            for (const r of b.responses) {
-              itemToResponse.set(r.checklistItemId, r.responseId)
-            }
-          }
-          for (const [itemId, texts] of Object.entries(pending)) {
-            const rid = itemToResponse.get(itemId)
-            if (!rid) continue
-            for (const text of texts) {
-              const resp = await transitionChecklistService.addItemComment(projectId, rid, text)
-              if (!resp.success) {
-                console.warn('Failed to post transition checklist comment', resp.error)
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('Failed to flush transition checklist comments', e)
-      }
-
-      setChecklistDialogData(null)
-      queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
-      queryClient.invalidateQueries({ queryKey: ['requirement', projectId, requirement.id] })
-      onSuccess?.()
-      onClose()
-    },
-    onError: (err: unknown) => {
-      const msg =
-        err instanceof Error
-          ? err.message
-          : typeof err === 'object' && err !== null && 'error' in err
-            ? String((err as { error?: string }).error)
-            : 'Failed to update status'
-      alert(msg)
-    },
-  })
-
-  const handleTransitionClick = async (t: AllowedTransition) => {
-    const currentStatusId = requirement.statusId ?? statuses.find((s) => s.name === requirement.status)?.id
-    const lifecycleId = resolvedLifecycleId
-    const allowedEngineeringRoleIds = t.allowedEngineeringRoleIds ?? []
-
-    if (lifecycleId && currentStatusId) {
-      setCheckingChecklists(t.toStatusId)
-      try {
-        const resp = await transitionChecklistService.getForTransition(
-          projectId,
-          lifecycleId,
-          currentStatusId,
-          t.toStatusId,
-          'Requirement'
-        )
-
-        if (resp.success && resp.data && resp.data.length > 0) {
-          const fromName = statuses.find((s) => s.id === currentStatusId)?.name ?? requirement.status
-          setChecklistDialogData({
-            checklists: resp.data,
-            toStatusId: t.toStatusId,
-            toStatusName: t.toStatusName,
-            fromStatusName: fromName,
-            allowedEngineeringRoleIds,
-          })
-          setCheckingChecklists(null)
-          return
-        }
-      } catch {
-        // If checklist check fails, proceed without checklist
-      }
-      setCheckingChecklists(null)
-    }
-
-    const updates: UpdateRequirementDto & { status: string } = {
-      statusId: t.toStatusId,
-      status: t.toStatusName,
-      allowedEngineeringRoleIds,
-    }
-    if (resolvedLifecycleId && !requirement.lifecycleId) {
-      updates.lifecycleId = resolvedLifecycleId
-    }
-    updateMutation.mutate(updates)
-  }
-
-  const handleChecklistComplete = (payload: TransitionChecklistDialogCompletePayload) => {
-    if (!checklistDialogData) return
-    pendingTransitionCommentsRef.current = payload.pendingCommentsByItemId
-    const updates: UpdateRequirementDto & { status: string } = {
-      statusId: checklistDialogData.toStatusId,
-      status: checklistDialogData.toStatusName,
-      checklistCompletions: payload.completions,
-      allowedEngineeringRoleIds: checklistDialogData.allowedEngineeringRoleIds ?? [],
-    }
-    if (resolvedLifecycleId && !requirement.lifecycleId) {
-      updates.lifecycleId = resolvedLifecycleId
-    }
-    updateMutation.mutate(updates)
-  }
-
   if (!anchorEl) return null
 
   const rect = anchorEl.getBoundingClientRect()
+  const showError = updateError && !dismissError
 
   return (
     <>
       <div
         ref={popoverRef}
-        className="fixed z-50 min-w-[180px] rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg py-2"
+        className="fixed z-50 min-w-[220px] max-w-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg py-2"
         style={{
           left: rect.left,
           top: rect.bottom + 4,
@@ -235,13 +104,46 @@ export default function ChangeStatusPopover({
         <div className="px-3 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
           Change Status
         </div>
-        {loading ? (
+        {showError && (
+          <div className="mx-2 mt-2 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200">
+            <div className="flex justify-between gap-2">
+              <span>{updateError}</span>
+              <button
+                type="button"
+                className="shrink-0 text-red-600 underline dark:text-red-300"
+                onClick={() => setDismissError(true)}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+        {transitionsLoading ? (
           <div className="px-3 py-4 text-sm text-gray-500">Loading...</div>
-        ) : transitions.length === 0 ? (
-          <div className="px-3 py-4 text-sm text-gray-500">No transitions available</div>
+        ) : transitionsFetchError ? (
+          <div className="px-3 py-4 text-sm text-amber-600 dark:text-amber-400">{transitionsFetchError}</div>
+        ) : !resolvedLifecycleId || !currentStatusId ? (
+          <div className="px-3 py-4 text-sm text-gray-500">
+            Assign a lifecycle and ensure the requirement status matches your status definitions.
+          </div>
+        ) : blockedByRoles ? (
+          <div className="px-3 py-4 text-sm text-gray-600 dark:text-gray-400">
+            <p className="font-medium text-gray-800 dark:text-gray-200">No transitions for your roles</p>
+            <p className="mt-1 text-xs">
+              This lifecycle allows moves from the current status, but none match your project engineering roles
+              {strictGates ? ' (strict lifecycle gates are on)' : ''}.
+            </p>
+            {myRoleNames.length > 0 && (
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">Your roles: {myRoleNames.join(', ')}</p>
+            )}
+          </div>
+        ) : allowedTransitions.length === 0 && allTransitions.length === 0 ? (
+          <div className="px-3 py-4 text-sm text-gray-500">
+            No transitions are defined from the current status in this lifecycle.
+          </div>
         ) : (
           <div className="py-1">
-            {transitions.map((t) => (
+            {allowedTransitions.map((t: AllowedTransition) => (
               <button
                 key={t.toStatusId}
                 onClick={() => handleTransitionClick(t)}
