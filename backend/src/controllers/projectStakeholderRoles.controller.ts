@@ -224,7 +224,6 @@ export const listProjectUsersWithRoles = async (req: AuthRequest, res: Response)
     const users = await prisma.user.findMany({
       where: {
         id: { in: [...allowedIds] },
-        NOT: { role: 'SUPERIOR_ADMIN' },
       },
       select: {
         id: true,
