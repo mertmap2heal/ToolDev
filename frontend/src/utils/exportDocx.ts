@@ -645,3 +645,272 @@ export async function buildRequirementsDocx(options: {
 
   return Packer.toBlob(doc)
 }
+
+/** Flat row for glossary / abbreviations archive export (Word). */
+export interface GlossaryAbbreviationDocxRow {
+  term: string
+  definition: string
+  notes: string
+  source: string
+  updated: string
+}
+
+export interface BuildGlossaryAbbreviationsDocxOptions {
+  documentTitle: string
+  /** Main cover line (defaults to documentTitle if omitted). */
+  coverTitle?: string
+  coverSubtitle?: string
+  /** Header/footer reference line (avoids generic requirement-export wording). */
+  runningHeader?: string
+  scopeLabel?: string
+  sortLabel?: string
+  projectId: string
+  projectName?: string
+  glossaryRows?: GlossaryAbbreviationDocxRow[]
+  abbreviationRows?: GlossaryAbbreviationDocxRow[]
+  includeDefinitions: boolean
+  documentStyle?: ExportDocumentStyle | null
+}
+
+/**
+ * Word export for Archive glossary & abbreviations (authority styling aligned with requirement export).
+ */
+export async function buildGlossaryAbbreviationsDocx(options: BuildGlossaryAbbreviationsDocxOptions): Promise<Blob> {
+  const {
+    Document,
+    Paragraph,
+    TextRun,
+    Table,
+    TableRow,
+    TableCell,
+    WidthType,
+    Packer,
+    Header,
+    Footer,
+    AlignmentType,
+    BorderStyle,
+    PageBreak,
+  } = await import('docx')
+
+  const style = options.documentStyle ?? DEFAULT_AUTHORITY_STYLE
+  const sizeBody = ((style.fontSizeBody ?? 11) * 2)
+  const sizeH1 = ((style.fontSizeHeading1 ?? 14) * 2)
+  const sizeH2 = ((style.fontSizeHeading2 ?? 12) * 2)
+  const marginTwip = style.marginMm != null ? Math.round((style.marginMm / 25.4) * 1440) : 1440
+  const fontFamily = style.fontFamily || 'Times New Roman'
+  const borderColorHex = style.tableBorderColor?.replace('#', '') ?? 'E5E7EB'
+  const headerBg = style.tableHeaderBg?.replace('#', '') ?? '374151'
+  const headerFg = style.tableHeaderFg?.replace('#', '') ?? 'FFFFFF'
+  const headerTitle = options.runningHeader ?? options.documentTitle
+
+  const singleBorder = { style: BorderStyle.SINGLE, size: 6, color: borderColorHex }
+  const tableBorders = {
+    top: singleBorder,
+    bottom: singleBorder,
+    left: singleBorder,
+    right: singleBorder,
+    insideHorizontal: singleBorder,
+    insideVertical: singleBorder,
+  }
+
+  const createParagraph = (text: string, bold = false, size = sizeBody) =>
+    new Paragraph({
+      spacing: { after: 80 },
+      children: [new TextRun({ text: text.slice(0, 32000), bold, size, font: fontFamily })],
+    })
+
+  const createMetaLine = (label: string, value: string) =>
+    new Paragraph({
+      spacing: { after: 60 },
+      children: [
+        new TextRun({ text: `${label}: `, bold: true, size: sizeBody, font: fontFamily }),
+        new TextRun({ text: value.slice(0, 32000), size: sizeBody, font: fontFamily }),
+      ],
+    })
+
+  const columnLabels = options.includeDefinitions
+    ? (['Term', 'Definition', 'Notes', 'Source', 'Updated'] as const)
+    : (['Term', 'Notes', 'Source', 'Updated'] as const)
+
+  const buildTable = (rows: GlossaryAbbreviationDocxRow[]) => {
+    const headerCells = columnLabels.map(
+      (label) =>
+        new TableCell({
+          children: [createParagraph(label, true, sizeBody)],
+          shading: { fill: headerBg, color: headerFg },
+        })
+    )
+    const headerRow = new TableRow({ tableHeader: true, children: headerCells })
+    const dataRows = rows.map((r) => {
+      const cells: string[] = options.includeDefinitions
+        ? [r.term, r.definition, r.notes, r.source, r.updated]
+        : [r.term, r.notes, r.source, r.updated]
+      return new TableRow({
+        children: cells.map((cell, colIndex) =>
+          new TableCell({
+            margins: colIndex === 0 ? { top: 80, bottom: 80, left: 120, right: 80 } : { top: 80, bottom: 80, left: 80, right: 80 },
+            children: [createParagraph(cell, colIndex === 0, sizeBody)],
+          })
+        ),
+      })
+    })
+    return new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [headerRow, ...dataRows],
+      borders: tableBorders,
+    })
+  }
+
+  type DocxChild = InstanceType<typeof Paragraph> | InstanceType<typeof Table>
+  const coverMain = options.coverTitle ?? options.documentTitle
+  const glossary = options.glossaryRows ?? []
+  const abbrev = options.abbreviationRows ?? []
+
+  const children: DocxChild[] = [
+    new Paragraph({
+      spacing: { after: 240 },
+      alignment: AlignmentType.CENTER,
+      children: [new TextRun({ text: coverMain, bold: true, size: sizeH1 + 6, font: fontFamily })],
+    }),
+  ]
+
+  if (options.coverSubtitle) {
+    children.push(
+      new Paragraph({
+        spacing: { after: 360 },
+        alignment: AlignmentType.CENTER,
+        children: [
+          new TextRun({
+            text: options.coverSubtitle.slice(0, 32000),
+            size: sizeBody,
+            font: fontFamily,
+            italics: true,
+          }),
+        ],
+      })
+    )
+  } else {
+    children.push(new Paragraph({ spacing: { after: 360 }, children: [] }))
+  }
+
+  children.push(
+    new Paragraph({
+      spacing: { before: 120, after: 160 },
+      children: [new TextRun({ text: 'Summary', bold: true, size: sizeH2, font: fontFamily })],
+    })
+  )
+
+  if (options.scopeLabel) {
+    children.push(createMetaLine('Export scope', options.scopeLabel))
+  }
+  children.push(
+    createMetaLine('Glossary entries in this file', String(glossary.length)),
+    createMetaLine('Abbreviation entries in this file', String(abbrev.length)),
+    createMetaLine(
+      'Definitions column',
+      options.includeDefinitions ? 'Included (HTML removed)' : 'Omitted'
+    )
+  )
+  if (options.sortLabel) {
+    children.push(createMetaLine('Sort order', options.sortLabel))
+  }
+  children.push(
+    createMetaLine('Project ID', options.projectId),
+    ...(options.projectName ? [createMetaLine('Project name', options.projectName)] : []),
+    new Paragraph({
+      spacing: { after: 200 },
+      children: [
+        new TextRun({
+          text: `Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm')}`,
+          size: sizeBody - 2,
+          font: fontFamily,
+        }),
+      ],
+    }),
+    new Paragraph({ children: [new PageBreak()] })
+  )
+
+  if (glossary.length > 0) {
+    children.push(
+      new Paragraph({
+        spacing: { before: 120, after: 200 },
+        children: [new TextRun({ text: '1. Glossary', bold: true, size: sizeH1, font: fontFamily })],
+      }),
+      buildTable(glossary)
+    )
+  }
+
+  if (abbrev.length > 0) {
+    if (glossary.length > 0) {
+      children.push(new Paragraph({ children: [new PageBreak()] }))
+    }
+    const sectionNum = glossary.length > 0 ? 2 : 1
+    children.push(
+      new Paragraph({
+        spacing: { before: 120, after: 200 },
+        children: [new TextRun({ text: `${sectionNum}. Abbreviations`, bold: true, size: sizeH1, font: fontFamily })],
+      }),
+      buildTable(abbrev)
+    )
+  }
+
+  const subFooter = (raw: string | undefined) =>
+    (raw ?? '')
+      .replace(/\{date\}/g, format(new Date(), 'yyyy-MM-dd'))
+      .replace(/\{title\}/g, headerTitle)
+      .replace(/\{pageOfN\}/g, '')
+      .replace(/\{page\}/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+  const footerLeft = subFooter(style.footerLeft)
+  const footerCenter = subFooter(style.footerCenter)
+  const footerRight = subFooter(style.footerRight)
+  const footerLine =
+    [footerLeft, footerCenter, footerRight].filter((s) => s.length > 0).join('   ') ||
+    `Glossary & abbreviations · ${format(new Date(), 'yyyy-MM-dd')}`
+
+  const footerParagraph = new Paragraph({
+    alignment: AlignmentType.CENTER,
+    border: { top: { style: BorderStyle.SINGLE, size: 4, color: borderColorHex } },
+    spacing: { before: 120 },
+    children: [
+      new TextRun({
+        text: footerLine.slice(0, 500),
+        size: sizeBody - 2,
+        font: fontFamily,
+      }),
+    ],
+  })
+
+  const headerText =
+    (style.headerLeft?.includes('{title}')
+      ? style.headerLeft.replace(/\{title\}/g, headerTitle)
+      : style.headerLeft) ?? headerTitle
+
+  const doc = new Document({
+    sections: [
+      {
+        properties: {
+          page: {
+            margin: { top: marginTwip, bottom: marginTwip, left: marginTwip, right: marginTwip },
+          },
+        },
+        headers: {
+          default: new Header({
+            children: [
+              new Paragraph({
+                spacing: { after: 80 },
+                border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: borderColorHex } },
+                children: [new TextRun({ text: headerText.slice(0, 500), size: sizeBody - 2, font: fontFamily })],
+              }),
+            ],
+          }),
+        },
+        footers: { default: new Footer({ children: [footerParagraph] }) },
+        children,
+      },
+    ],
+  })
+
+  return Packer.toBlob(doc)
+}

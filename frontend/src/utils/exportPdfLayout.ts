@@ -61,6 +61,8 @@ export function getAuthorityTableStyles(style?: ExportDocumentStyle | null): {
 
 export interface CoverPageOptions {
   documentTitle: string
+  /** Optional subtitle below the main title (e.g. document type line). */
+  subtitle?: string
   projectName?: string
   showDate?: boolean
   showVersion?: boolean
@@ -92,6 +94,15 @@ export function addCoverPage(
   doc.setFont(font, 'bold')
   doc.text(opts.documentTitle, centerX, y, { align: 'center' })
   y += 10
+  if (opts.subtitle) {
+    doc.setFontSize(fontSizeBody)
+    doc.setFont(font, 'normal')
+    const sub = opts.subtitle
+    const maxW = pageW - 2 * margin
+    const lines = doc.splitTextToSize(sub, maxW)
+    doc.text(lines, centerX, y, { align: 'center' })
+    y += Math.max(6, lines.length * (fontSizeBody * 0.45))
+  }
   const lineColor = s.tableBorderColor ? parseHex(s.tableBorderColor) : DEFAULT_BORDER
   doc.setDrawColor(lineColor[0], lineColor[1], lineColor[2])
   doc.setLineWidth(0.3)

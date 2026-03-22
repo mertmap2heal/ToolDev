@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, Plus, Pencil, Trash2, Link2 } from 'lucide-react'
+import { Search, Plus, Pencil, Trash2, Link2, Download } from 'lucide-react'
 import clsx from 'clsx'
 
 import ConfirmDialog from '../common/ConfirmDialog'
 import CreateDefinitionModal from '../definitions/CreateDefinitionModal'
+import GlossaryAbbreviationsExportModal from './GlossaryAbbreviationsExportModal'
 import { definitionEntryService } from '../../services/definitionEntry.service'
 import type { DefinitionEntry } from 'shared/types/engineering.types'
 
@@ -28,6 +29,7 @@ export default function GlossaryAbbreviationsSection({ projectId }: GlossaryAbbr
   const [editingEntry, setEditingEntry] = useState<DefinitionEntry | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<DefinitionEntry | null>(null)
   const [usageForId, setUsageForId] = useState<string | null>(null)
+  const [exportModalOpen, setExportModalOpen] = useState(false)
 
   const { data: entries = [], isLoading } = useQuery({
     queryKey: ['definitions', projectId],
@@ -124,7 +126,15 @@ export default function GlossaryAbbreviationsSection({ projectId }: GlossaryAbbr
             <Plus size={16} />
             Create
           </button>
-          <span className="text-xs text-gray-400 dark:text-gray-500">Bulk import/export (coming soon)</span>
+          <button
+            type="button"
+            onClick={() => setExportModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-800 dark:text-gray-200 text-sm font-medium rounded-lg transition-colors"
+          >
+            <Download size={16} />
+            Export
+          </button>
+          <span className="text-xs text-gray-400 dark:text-gray-500">Bulk import (coming soon)</span>
         </div>
       </div>
 
@@ -267,6 +277,14 @@ export default function GlossaryAbbreviationsSection({ projectId }: GlossaryAbbr
         confirmText="Delete"
         cancelText="Cancel"
         variant="danger"
+      />
+
+      <GlossaryAbbreviationsExportModal
+        isOpen={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        projectId={projectId}
+        entries={entries as DefinitionEntry[]}
+        activeSubTab={subTab}
       />
     </div>
   )
