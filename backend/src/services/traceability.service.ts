@@ -775,6 +775,30 @@ export const traceabilityService = {
     const testCaseMap = new Map(testCaseDetails.map(t => [t.id, t]))
     const paramMap = new Map(paramDetails.map(p => [p.id, p]))
 
+    // `createdBy` is persisted as a string. Historically we stored the userId (UUID) there;
+    // for UI we resolve it to the user's display name when possible.
+    const createdByIds = Array.from(
+      new Set(
+        allLinksFiltered
+          .map((l: any) => l.createdBy)
+          .filter((v: any) => typeof v === 'string' && v.includes('-'))
+      )
+    ) as string[]
+    let createdByNameById: Record<string, string> = {}
+    if (createdByIds.length > 0) {
+      try {
+        const users = await prisma.user.findMany({
+          where: { id: { in: createdByIds } },
+          select: { id: true, name: true },
+        })
+        createdByNameById = Object.fromEntries(
+          users.map((u) => [u.id, u.name || u.id])
+        )
+      } catch (err) {
+        console.error('getTraceLinks: createdBy user resolution failed:', err)
+      }
+    }
+
     const safeDate = (d: any) => (d ? new Date(d).getTime() : 0)
     const isReqType = (t: string) => t === 'requirement' || t === 'hazard' || t === 'risk'
     return allLinksFiltered.sort((a: any, b: any) => safeDate(b.createdAt) - safeDate(a.createdAt)).map((link) => {
@@ -814,7 +838,7 @@ export const traceabilityService = {
         direction: link.direction || undefined,
         rationale: link.rationale || undefined,
         confidence: link.confidence || undefined,
-        createdBy: link.createdBy || undefined,
+        createdBy: link.createdBy ? (createdByNameById[link.createdBy] ?? link.createdBy) : undefined,
         isAuto: link.isAuto,
         isSuspect: link.isSuspect || false,
         lastChecked: link.lastChecked != null ? new Date(link.lastChecked).toISOString() : undefined,
@@ -908,6 +932,26 @@ export const traceabilityService = {
       orderBy: { createdAt: 'desc' },
     })
 
+    const createdByIds = Array.from(
+      new Set(
+        links
+          .map((l) => l.createdBy)
+          .filter((v): v is string => typeof v === 'string' && v.includes('-'))
+      )
+    )
+    let createdByNameById: Record<string, string> = {}
+    if (createdByIds.length > 0) {
+      try {
+        const users = await prisma.user.findMany({
+          where: { id: { in: createdByIds } },
+          select: { id: true, name: true },
+        })
+        createdByNameById = Object.fromEntries(users.map((u) => [u.id, u.name || u.id]))
+      } catch (err) {
+        console.error('getSuspectLinks: createdBy user resolution failed:', err)
+      }
+    }
+
     return links.map((link) => ({
       id: link.id,
       projectId: link.projectId,
@@ -919,7 +963,7 @@ export const traceabilityService = {
       direction: link.direction || undefined,
       rationale: link.rationale || undefined,
       confidence: link.confidence || undefined,
-      createdBy: link.createdBy || undefined,
+      createdBy: link.createdBy ? (createdByNameById[link.createdBy] ?? link.createdBy) : undefined,
       isAuto: link.isAuto,
       isSuspect: true,
       lastChecked: link.lastChecked?.toISOString(),
@@ -1030,6 +1074,13 @@ export const traceabilityService = {
       return traceLinkRowToDto(existingEdge)
     }
 
+    const createdByValue = performedByUserId
+      ? (await prisma.user.findUnique({
+          where: { id: performedByUserId },
+          select: { name: true },
+        }))?.name || performedByUserId
+      : null
+
     const link = await prisma.traceLink.create({
       data: {
         projectId,
@@ -1040,7 +1091,7 @@ export const traceabilityService = {
         linkType,
         direction: direction || null,
         rationale: rationale || null,
-        createdBy: performedByUserId || null,
+        createdBy: createdByValue,
         isAuto: false,
         isSuspect: false,
         lastChecked: new Date(),
