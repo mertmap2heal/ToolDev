@@ -11,6 +11,7 @@ export interface TraceLink {
     direction?: string;
     rationale?: string;
     confidence?: number;
+    createdBy?: string;
     isAuto: boolean;
     isSuspect?: boolean;
     lastChecked?: string;
