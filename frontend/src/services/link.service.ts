@@ -17,6 +17,7 @@ function traceLinkToLink(tl: TraceLink & { targetLabel?: string; sourceLabel?: s
     linkType: tl.linkType,
     status: tl.isSuspect ? 'suspect' : 'active',
     rationale: tl.rationale,
+    createdBy: tl.createdBy,
     createdAt: tl.createdAt,
     isSuspect: tl.isSuspect,
     targetTitle: tl.targetTitle,
