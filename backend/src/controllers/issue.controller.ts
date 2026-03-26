@@ -160,6 +160,7 @@ export const createIssue = async (req: AuthRequest, res: Response) => {
             linkType: 'related',
             linkedRequirementKey: requirement.requirementId || null,
             linkedRequirementTitle: requirement.title || null,
+            createdBy: req.userId || null,
           },
         })
 

@@ -74,11 +74,11 @@ router.put('/:id', resolveProjectParam, updateProject)
 router.delete('/:id', resolveProjectParam, deleteProject)
 
 // Team management
-router.get('/:id/members', resolveProjectParam, getProjectMembers)
-router.post('/:id/members', resolveProjectParam, addProjectMember)
-router.delete('/:id/members/:userId', resolveProjectParam, removeProjectMember)
-router.post('/:id/invitations/accept', resolveProjectParam, acceptProjectInvitation)
-router.post('/:id/invitations/decline', resolveProjectParam, declineProjectInvitation)
+router.get('/:id/members', authenticateToken, resolveProjectParam, getProjectMembers)
+router.post('/:id/members', authenticateToken, resolveProjectParam, addProjectMember)
+router.delete('/:id/members/:userId', authenticateToken, resolveProjectParam, removeProjectMember)
+router.post('/:id/invitations/accept', authenticateToken, resolveProjectParam, acceptProjectInvitation)
+router.post('/:id/invitations/decline', authenticateToken, resolveProjectParam, declineProjectInvitation)
 
 // Audit logs and analytics
 router.get('/:id/audit-logs', resolveProjectParam, getProjectAuditLogs)

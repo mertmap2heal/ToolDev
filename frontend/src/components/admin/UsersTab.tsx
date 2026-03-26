@@ -3,6 +3,7 @@ import { Search, UserPlus } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as adminService from '../../services/admin.service'
 import { authService } from '../../services/auth.service'
+import { projectService } from '../../services/project.service'
 import type { AdminUser } from '../../types/admin.types'
 import UserTable from './UserTable'
 import UserCreateModal from './UserCreateModal'
@@ -102,6 +103,50 @@ export default function UsersTab() {
     queryClient.invalidateQueries({ queryKey: ['admin', 'authUsers'] })
   }
 
+  const handleRemoveFromProject = async (user: AdminUser) => {
+    if (user.projects.length === 0) {
+      setToastMessage('User is not assigned to any project.')
+      return
+    }
+
+    let selectedProjectId = user.projects[0]
+    if (user.projects.length > 1) {
+      const projectOptions = user.projects
+        .map((projectId, index) => `${index + 1}. ${projectNames[projectId] || projectId}`)
+        .join('\n')
+      const choice = window.prompt(
+        `Select project number to remove ${user.name || user.username} from:\n\n${projectOptions}`
+      )
+      if (!choice) return
+      const selectedIndex = Number.parseInt(choice, 10)
+      if (
+        Number.isNaN(selectedIndex) ||
+        selectedIndex < 1 ||
+        selectedIndex > user.projects.length
+      ) {
+        setToastMessage('Invalid project selection.')
+        return
+      }
+      selectedProjectId = user.projects[selectedIndex - 1]
+    }
+
+    const projectName = projectNames[selectedProjectId] || selectedProjectId
+    const confirmed = window.confirm(
+      `Remove ${user.name || user.username} from project "${projectName}"?`
+    )
+    if (!confirmed) return
+
+    const res = await projectService.removeProjectMember(selectedProjectId, user.id)
+    if (!res.success) {
+      setToastMessage(res.error ?? 'Failed to remove user from project.')
+      return
+    }
+
+    setToastMessage(`Removed ${user.name || user.username} from "${projectName}".`)
+    queryClient.invalidateQueries({ queryKey: ['admin', 'projects'] })
+    queryClient.invalidateQueries({ queryKey: ['admin', 'authUsers'] })
+  }
+
   useEffect(() => {
     if (!toastMessage) return
     const t = setTimeout(() => setToastMessage(null), 4000)
@@ -195,6 +240,7 @@ export default function UsersTab() {
           onEdit={setEditUser}
           onResetPassword={handleResetPassword}
           onSendInvite={handleSendInvite}
+          onRemoveFromProject={handleRemoveFromProject}
         />
       )}
 

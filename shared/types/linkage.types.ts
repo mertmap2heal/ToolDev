@@ -102,6 +102,7 @@ export interface Link {
   linkType: LinkType
   status: 'active' | 'suspect'
   rationale?: string
+  createdBy?: string
   createdAt: string
   isSuspect?: boolean
   targetTitle?: string

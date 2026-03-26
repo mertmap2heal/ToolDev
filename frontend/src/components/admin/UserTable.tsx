@@ -7,6 +7,7 @@ interface UserTableProps {
   onEdit: (user: AdminUser) => void
   onResetPassword: (user: AdminUser) => void
   onSendInvite: (user: AdminUser) => void
+  onRemoveFromProject: (user: AdminUser) => void
 }
 
 function formatDate(iso: string | undefined): string {
@@ -28,6 +29,7 @@ export default function UserTable({
   onEdit,
   onResetPassword,
   onSendInvite,
+  onRemoveFromProject,
 }: UserTableProps) {
   if (users.length === 0) {
     return (
@@ -113,6 +115,14 @@ export default function UserTable({
                     className="text-gray-600 dark:text-gray-400 hover:underline text-sm"
                   >
                     Send invite
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onRemoveFromProject(user)}
+                    disabled={user.projects.length === 0}
+                    className="text-red-600 dark:text-red-400 hover:underline text-sm disabled:opacity-50 disabled:no-underline"
+                  >
+                    Remove from project
                   </button>
                 </div>
               </td>

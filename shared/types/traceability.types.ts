@@ -50,6 +50,7 @@ export interface TraceLink {
   direction?: string // source → target relationship direction (for clarity)
   rationale?: string // why this relationship exists
   confidence?: number
+  createdBy?: string
   isAuto: boolean
   isSuspect?: boolean
   lastChecked?: string

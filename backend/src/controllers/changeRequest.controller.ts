@@ -90,7 +90,8 @@ export const createChangeRequest = async (req: AuthRequest, res: Response) => {
         requirementLinks: requirementIdsToLink.size > 0 ? {
           create: Array.from(requirementIdsToLink).map((reqId) => ({
             requirementId: reqId,
-            relationshipType: reqId === sourceId ? 'originates_from' : 'relates_to'
+            relationshipType: reqId === sourceId ? 'originates_from' : 'relates_to',
+            createdBy: req.userId || null,
           }))
         } : undefined,
       },

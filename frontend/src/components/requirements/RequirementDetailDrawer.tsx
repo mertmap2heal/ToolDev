@@ -2248,6 +2248,8 @@ export default function RequirementDetailDrawer({
                                         ? (targetItem.parameterId || (link.targetType === 'parameter' ? link.targetId : link.sourceId)?.slice(0, 8))
                                         : null
                                       const title = (link as any).targetTitle ?? (targetItem ? (targetItem.title || (paramIdForTitle ? `${paramIdForTitle} - ${targetItem.name}` : targetItem.name)) : `${link.targetType?.replace(/_/g, ' ')} (${link.targetId.slice(0, 8)})`);
+                                      const createdByLabel = (link as any).createdBy
+                                      const createdAtLabel = link.createdAt ? format(new Date(link.createdAt), 'MMM d, yyyy · HH:mm') : null
 
                                       const getIcon = () => {
                                         switch (link.targetType) {
@@ -2298,6 +2300,13 @@ export default function RequirementDetailDrawer({
                                             <div className="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                                               {title}
                                             </div>
+                                            {(createdByLabel || createdAtLabel) && (
+                                              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+                                                {createdByLabel ? `Created by ${createdByLabel}` : ''}
+                                                {createdByLabel && createdAtLabel ? ' · ' : ''}
+                                                {createdAtLabel ? `on ${createdAtLabel}` : ''}
+                                              </p>
+                                            )}
                                             {link.rationale && (
                                               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 italic truncate">
                                                 "{link.rationale}"

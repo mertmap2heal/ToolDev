@@ -23,6 +23,7 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
   const [status, setStatus] = useState<AdminUser['status']>(user.status)
   const [inviteEmail, setInviteEmail] = useState<string>(user.inviteEmail ?? '')
   const [projects, setProjects] = useState<string[]>(user.projects)
+  const [baselineProjects, setBaselineProjects] = useState<string[]>(user.projects)
   const [roles, setRoles] = useState<string[]>(user.roles)
   const [authorities, setAuthorities] = useState<string[]>(user.authorities)
   const [permissions, setPermissions] = useState(user.permissions ?? {})
@@ -30,11 +31,13 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
   const [savingEmail, setSavingEmail] = useState(false)
   const [inviteSending, setInviteSending] = useState(false)
   const [inviteMessage, setInviteMessage] = useState<string | null>(null)
+  const [removingProjectId, setRemovingProjectId] = useState<string | null>(null)
 
   useEffect(() => {
     setStatus(user.status)
     setInviteEmail(user.inviteEmail ?? '')
     setProjects([...user.projects])
+    setBaselineProjects([...user.projects])
     setRoles([...user.roles])
     setAuthorities([...user.authorities])
     setPermissions(user.permissions ?? {})
@@ -62,6 +65,7 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
     setStatus(user.status)
     setInviteEmail(user.inviteEmail ?? '')
     setProjects([...user.projects])
+    setBaselineProjects([...user.projects])
     setRoles([...user.roles])
     setAuthorities([...user.authorities])
     setPermissions(user.permissions ?? {})
@@ -156,7 +160,7 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
       const inviteRes = await authService.updateUserInviteEmail(user.id, inviteEmailValue)
       if (!inviteRes.success) throw new Error(inviteRes.error || 'Failed to update email')
 
-      const previousProjectIds = new Set(user.projects)
+      const previousProjectIds = new Set(baselineProjects)
       const nextProjectIds = new Set(projects)
       for (const projectId of nextProjectIds) {
         if (!previousProjectIds.has(projectId)) {
@@ -204,6 +208,29 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
       onSaved()
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleRemoveProjectNow = async (projectId: string) => {
+    const projectName = projectsList.find((p) => p.id === projectId)?.name || projectId
+    const confirmed = window.confirm(`Remove this user from project "${projectName}"?`)
+    if (!confirmed) return
+
+    setRemovingProjectId(projectId)
+    try {
+      const res = await projectService.removeProjectMember(projectId, user.id)
+      if (!res.success) {
+        setInviteMessage(res.error ?? 'Failed to remove from project.')
+        return
+      }
+
+      setProjects((prev) => prev.filter((id) => id !== projectId))
+      setBaselineProjects((prev) => prev.filter((id) => id !== projectId))
+      setInviteMessage(`Removed from "${projectName}".`)
+      queryClient.invalidateQueries({ queryKey: ['admin', 'projects'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'authUsers'] })
+    } finally {
+      setRemovingProjectId(null)
     }
   }
 
@@ -290,18 +317,30 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
             </h3>
             <div className="flex flex-wrap gap-2">
               {projectsList.map((p) => (
-                <label
+                <div
                   key={p.id}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-900 dark:text-white"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white"
                 >
-                  <input
-                    type="checkbox"
-                    checked={projects.includes(p.id)}
-                    onChange={() => toggleProject(p.id)}
-                    className="rounded text-blue-600"
-                  />
-                  <span className="text-sm text-gray-900 dark:text-gray-100">{p.name}</span>
-                </label>
+                  <label className="inline-flex items-center gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded">
+                    <input
+                      type="checkbox"
+                      checked={projects.includes(p.id)}
+                      onChange={() => toggleProject(p.id)}
+                      className="rounded text-blue-600"
+                    />
+                    <span className="text-sm text-gray-900 dark:text-gray-100">{p.name}</span>
+                  </label>
+                  {projects.includes(p.id) && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveProjectNow(p.id)}
+                      disabled={removingProjectId === p.id}
+                      className="text-xs text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
+                    >
+                      {removingProjectId === p.id ? 'Removing...' : 'Remove'}
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           </section>

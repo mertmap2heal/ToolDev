@@ -404,6 +404,7 @@ function traceLinkRowToDto(link: {
   direction: string | null
   rationale: string | null
   confidence: number | null
+  createdBy: string | null
   isAuto: boolean
   isSuspect: boolean
   lastChecked: Date | null
@@ -420,6 +421,7 @@ function traceLinkRowToDto(link: {
     direction: link.direction || undefined,
     rationale: link.rationale || undefined,
     confidence: link.confidence ?? undefined,
+    createdBy: link.createdBy || undefined,
     isAuto: link.isAuto,
     isSuspect: link.isSuspect || false,
     lastChecked: link.lastChecked?.toISOString(),
@@ -486,6 +488,7 @@ export const traceabilityService = {
         direction: undefined,
         rationale: undefined,
         confidence: undefined,
+        createdBy: l.createdBy ?? undefined,
         lastChecked: undefined
       }))
       }
@@ -519,6 +522,7 @@ export const traceabilityService = {
         direction: undefined,
         rationale: undefined,
         confidence: undefined,
+        createdBy: l.createdBy ?? undefined,
         lastChecked: undefined,
         targetTitle: l.issue!.title,
         targetDescription: l.issue!.description,
@@ -588,6 +592,7 @@ export const traceabilityService = {
           direction: undefined,
           rationale: l.note,
           confidence: undefined,
+          createdBy: l.createdBy ?? undefined,
           lastChecked: undefined,
           targetTitle: l.changeRequest!.title,
           targetDescription: l.changeRequest!.description,
@@ -629,6 +634,7 @@ export const traceabilityService = {
           direction: undefined,
           rationale: l.note,
           confidence: undefined,
+          createdBy: l.createdBy ?? undefined,
           lastChecked: undefined,
           targetTitle: l.requirement!.title,
           targetDescription: l.requirement!.description,
@@ -808,6 +814,7 @@ export const traceabilityService = {
         direction: link.direction || undefined,
         rationale: link.rationale || undefined,
         confidence: link.confidence || undefined,
+        createdBy: link.createdBy || undefined,
         isAuto: link.isAuto,
         isSuspect: link.isSuspect || false,
         lastChecked: link.lastChecked != null ? new Date(link.lastChecked).toISOString() : undefined,
@@ -912,6 +919,7 @@ export const traceabilityService = {
       direction: link.direction || undefined,
       rationale: link.rationale || undefined,
       confidence: link.confidence || undefined,
+      createdBy: link.createdBy || undefined,
       isAuto: link.isAuto,
       isSuspect: true,
       lastChecked: link.lastChecked?.toISOString(),
@@ -1032,6 +1040,7 @@ export const traceabilityService = {
         linkType,
         direction: direction || null,
         rationale: rationale || null,
+        createdBy: performedByUserId || null,
         isAuto: false,
         isSuspect: false,
         lastChecked: new Date(),
@@ -1076,6 +1085,7 @@ export const traceabilityService = {
       direction: link.direction || undefined,
       rationale: link.rationale || undefined,
       confidence: link.confidence || undefined,
+      createdBy: link.createdBy || undefined,
       isAuto: link.isAuto,
       isSuspect: link.isSuspect || false,
       lastChecked: link.lastChecked?.toISOString(),
@@ -1121,6 +1131,7 @@ export const traceabilityService = {
       direction: link.direction || undefined,
       rationale: link.rationale || undefined,
       confidence: link.confidence || undefined,
+      createdBy: link.createdBy || undefined,
       isAuto: link.isAuto,
       isSuspect: link.isSuspect || false,
       lastChecked: link.lastChecked?.toISOString(),
