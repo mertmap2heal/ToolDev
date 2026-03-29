@@ -291,6 +291,105 @@ export default function ParametersPage() {
     enabled: !!projectId,
   })
 
+  // Folder queries and mutations
+  const { data: foldersData } = useQuery({
+    queryKey: ['parameter-folders', projectId],
+    queryFn: async () => {
+      if (!projectId) throw new Error('Project ID required')
+      const response = await parameterService.getFolders(projectId)
+      if (response.success && response.data) return response.data
+      throw new Error(response.error || 'Failed to load folders')
+    },
+    enabled: !!projectId,
+  })
+  const folders: ParameterFolder[] = foldersData ?? []
+
+  const createFolderMutation = useMutation({
+    mutationFn: (name: string) => {
+      if (!projectId) throw new Error('Project ID required')
+      return parameterService.createFolder(projectId, { name, color: createFolderColor })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
+      setCreateFolderName('')
+      setCreateFolderColor(FOLDER_COLORS[0])
+      setIsCreatingFolder(false)
+    },
+  })
+
+  const updateFolderMutation = useMutation({
+    mutationFn: ({ folderId, data }: { folderId: string; data: { name?: string; color?: string | null } }) => {
+      if (!projectId) throw new Error('Project ID required')
+      return parameterService.updateFolder(projectId, folderId, data)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
+      setRenamingFolder(null)
+    },
+  })
+
+  const deleteFolderMutation = useMutation({
+    mutationFn: (folderId: string) => {
+      if (!projectId) throw new Error('Project ID required')
+      return parameterService.deleteFolder(projectId, folderId)
+    },
+    onSuccess: (_data, folderId) => {
+      queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
+      if (selectedFolderId === folderId) setSelectedFolderId(null)
+    },
+  })
+
+  const moveToFolderMutation = useMutation({
+    mutationFn: ({ parameterId, folderId }: { parameterId: string; folderId: string | null }) => {
+      if (!projectId) throw new Error('Project ID required')
+      return parameterService.moveParameterToFolder(projectId, parameterId, folderId)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
+    },
+  })
+
+  // Close folder context menu on outside click
+  useEffect(() => {
+    if (!folderMenuOpen) return
+    const handler = (e: MouseEvent) => {
+      if (folderMenuRef.current && !folderMenuRef.current.contains(e.target as Node)) {
+        setFolderMenuOpen(null)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [folderMenuOpen])
+
+  // DnD handlers
+  const handleDragStart = (event: DragStartEvent) => {
+    const id = String(event.active.id)
+    if (id.startsWith('param-')) setActiveDragParamId(id.replace('param-', ''))
+  }
+
+  const handleDragOver = (event: { over: { id: string } | null }) => {
+    if (!event.over) { setOverFolderId(null); return }
+    const overId = String(event.over.id)
+    setOverFolderId(overId.startsWith('folder-') ? overId.replace('folder-', '') : null)
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDragParamId(null)
+    setOverFolderId(null)
+    const { active, over } = event
+    if (!over) return
+    const paramId = String(active.id).replace('param-', '')
+    const overId = String(over.id)
+    if (overId.startsWith('folder-')) {
+      const targetFolderId = overId.replace('folder-', '')
+      moveToFolderMutation.mutate({ parameterId: paramId, folderId: targetFolderId })
+    } else if (overId === 'folder-ungrouped') {
+      moveToFolderMutation.mutate({ parameterId: paramId, folderId: null })
+    }
+  }
+
   const deleteParameterMutation = useMutation({
     mutationFn: (parameterId: string) => {
       if (!projectId) throw new Error('Project ID required')
@@ -359,7 +458,15 @@ export default function ParametersPage() {
     p => new Date(p.updatedAt) > new Date(storedGitConfig.lastSyncedAt)
   )
 
-  const filteredParameters = parameters.filter((param) => {
+  // Apply folder filter first, then search/column filters
+  const folderFilteredParameters =
+    selectedFolderId === null
+      ? parameters
+      : selectedFolderId === '__none__'
+        ? parameters.filter(p => !p.folderId)
+        : parameters.filter(p => p.folderId === selectedFolderId)
+
+  const filteredParameters = folderFilteredParameters.filter((param) => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
       const matchesSearch =
@@ -1156,6 +1263,7 @@ export default function ParametersPage() {
             projectId={projectId}
             parameter={detailParameter}
             onEdit={setEditingParameter}
+            allParameters={parameters}
           />
           <EditParameterModal
             isOpen={!!editingParameter}
