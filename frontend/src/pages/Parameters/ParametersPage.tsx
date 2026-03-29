@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   DndContext,
   DragEndEvent,
+  DragOverEvent,
   DragOverlay,
   DragStartEvent,
   PointerSensor,
@@ -54,6 +55,8 @@ function DraggableRow({
     <tr
       ref={setNodeRef}
       style={{ opacity: isDragging ? 0.4 : 1, cursor: 'grab', borderBottom: '1px solid var(--theme-border)' }}
+      onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
+      onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
       {...attributes}
       {...listeners}
     >
@@ -369,10 +372,12 @@ export default function ParametersPage() {
     if (id.startsWith('param-')) setActiveDragParamId(id.replace('param-', ''))
   }
 
-  const handleDragOver = (event: { over: { id: string } | null }) => {
+  const handleDragOver = (event: DragOverEvent) => {
     if (!event.over) { setOverFolderId(null); return }
     const overId = String(event.over.id)
-    setOverFolderId(overId.startsWith('folder-') ? overId.replace('folder-', '') : null)
+    if (!overId.startsWith('folder-')) { setOverFolderId(null); return }
+    // overId is "folder-<actualId>" or "folder-ungrouped"
+    setOverFolderId(overId.replace('folder-', ''))
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -382,11 +387,12 @@ export default function ParametersPage() {
     if (!over) return
     const paramId = String(active.id).replace('param-', '')
     const overId = String(over.id)
-    if (overId.startsWith('folder-')) {
+    if (overId === 'folder-ungrouped') {
+      // Drop on ungrouped zone — remove from any folder
+      moveToFolderMutation.mutate({ parameterId: paramId, folderId: null })
+    } else if (overId.startsWith('folder-')) {
       const targetFolderId = overId.replace('folder-', '')
       moveToFolderMutation.mutate({ parameterId: paramId, folderId: targetFolderId })
-    } else if (overId === 'folder-ungrouped') {
-      moveToFolderMutation.mutate({ parameterId: paramId, folderId: null })
     }
   }
 
@@ -890,6 +896,268 @@ export default function ParametersPage() {
       </div>
 
 
+      {/* ── Folders + content layout ── */}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+
+        {/* ── Folder sidebar ── */}
+        {isFolderSidebarOpen ? (
+          <div style={{
+            width: 200, flexShrink: 0,
+            borderRadius: 8, border: '1px solid var(--theme-border)',
+            backgroundColor: 'var(--theme-surface)',
+            overflow: 'hidden',
+          }}>
+            {/* Sidebar header */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '8px 10px', borderBottom: '1px solid var(--theme-border)',
+              backgroundColor: 'var(--theme-bg)',
+            }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--theme-text-muted)' }}>Folders</span>
+              <button
+                onClick={() => setIsFolderSidebarOpen(false)}
+                title="Collapse sidebar"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-text-muted)', padding: 2, display: 'flex', alignItems: 'center' }}
+              >
+                <ChevronDown size={12} style={{ transform: 'rotate(90deg)' }} />
+              </button>
+            </div>
+            <div style={{ padding: '4px 4px' }}>
+              {/* All Parameters */}
+              <button
+                onClick={() => setSelectedFolderId(null)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '6px 8px', borderRadius: 5, fontSize: 12, fontWeight: 500,
+                  border: 'none', cursor: 'pointer', textAlign: 'left',
+                  backgroundColor: selectedFolderId === null ? 'var(--theme-sidebar-item-active)' : 'transparent',
+                  color: selectedFolderId === null ? 'var(--theme-accent)' : 'var(--theme-text)',
+                }}
+              >
+                <Layers size={13} style={{ flexShrink: 0, color: selectedFolderId === null ? 'var(--theme-accent)' : 'var(--theme-text-muted)' }} />
+                <span style={{ flex: 1 }}>All Parameters</span>
+                <span style={{ fontSize: 10, color: 'var(--theme-text-muted)' }}>{parameters.length}</span>
+              </button>
+              {/* Ungrouped — droppable zone */}
+              <DroppableFolder folderId="ungrouped" isOver={overFolderId === 'ungrouped'}>
+                <button
+                  onClick={() => setSelectedFolderId('__none__')}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '6px 8px', borderRadius: 5, fontSize: 12, fontWeight: 500,
+                    border: 'none', cursor: 'pointer', textAlign: 'left',
+                    backgroundColor: selectedFolderId === '__none__' ? 'var(--theme-sidebar-item-active)' : 'transparent',
+                    color: selectedFolderId === '__none__' ? 'var(--theme-accent)' : 'var(--theme-text-muted)',
+                  }}
+                >
+                  <Folder size={13} style={{ flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>Ungrouped</span>
+                  <span style={{ fontSize: 10 }}>{parameters.filter(p => !p.folderId).length}</span>
+                </button>
+              </DroppableFolder>
+              {/* Named folders */}
+              {folders.map(folder => {
+                const isSelected = selectedFolderId === folder.id
+                const isMenuOpen = folderMenuOpen === folder.id
+                const isRenaming = renamingFolder?.id === folder.id
+                return (
+                  <DroppableFolder key={folder.id} folderId={folder.id} isOver={overFolderId === folder.id}>
+                    <div
+                      style={{
+                        display: 'flex', alignItems: 'center',
+                        borderRadius: 5,
+                        backgroundColor: isSelected ? 'var(--theme-sidebar-item-active)' : 'transparent',
+                      }}
+                      onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'var(--theme-sidebar-item-hover)' }}
+                      onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'transparent' }}
+                    >
+                      {isRenaming ? (
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4, padding: '4px 6px' }}>
+                          {/* Color picker */}
+                          <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', width: 90 }}>
+                            {FOLDER_COLORS.map(c => (
+                              <button key={c} onClick={() => setRenamingColor(c)}
+                                style={{ width: 12, height: 12, borderRadius: '50%', border: renamingColor === c ? '2px solid var(--theme-text)' : '1px solid transparent', backgroundColor: c, cursor: 'pointer', padding: 0 }} />
+                            ))}
+                          </div>
+                          <input
+                            autoFocus
+                            value={renamingFolder?.name ?? ''}
+                            onChange={e => setRenamingFolder({ id: folder.id, name: e.target.value })}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' && renamingFolder) {
+                                updateFolderMutation.mutate({ folderId: folder.id, data: { name: renamingFolder.name, color: renamingColor } })
+                              }
+                              if (e.key === 'Escape') setRenamingFolder(null)
+                            }}
+                            style={{
+                              flex: 1, fontSize: 11, padding: '2px 5px',
+                              border: '1px solid var(--theme-border)', borderRadius: 4,
+                              backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)',
+                            }}
+                          />
+                          <button onClick={() => setRenamingFolder(null)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-text-muted)', padding: 1 }}>
+                            <X size={11} />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => setSelectedFolderId(folder.id)}
+                            style={{
+                              flex: 1, display: 'flex', alignItems: 'center', gap: 6,
+                              padding: '6px 8px', fontSize: 12, fontWeight: 500,
+                              border: 'none', cursor: 'pointer', textAlign: 'left', background: 'none',
+                              color: isSelected ? 'var(--theme-accent)' : 'var(--theme-text)',
+                            }}
+                          >
+                            <FolderOpen size={13} style={{ flexShrink: 0, color: folder.color ?? '#6366f1' }} />
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {folder.name}
+                            </span>
+                            <span style={{ fontSize: 10, color: 'var(--theme-text-muted)' }}>
+                              {folder._count?.parameters ?? 0}
+                            </span>
+                          </button>
+                          {/* Context menu trigger */}
+                          <div style={{ position: 'relative' }} ref={folderMenuOpen === folder.id ? folderMenuRef : undefined}>
+                            <button
+                              onClick={e => { e.stopPropagation(); setFolderMenuOpen(isMenuOpen ? null : folder.id); setRenamingColor(folder.color ?? FOLDER_COLORS[0]) }}
+                              style={{
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                padding: '4px 5px', color: 'var(--theme-text-muted)',
+                                opacity: isMenuOpen ? 1 : 0,
+                                borderRadius: 4,
+                              }}
+                              className="folder-menu-btn"
+                              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1' }}
+                              onMouseLeave={e => { if (!isMenuOpen) (e.currentTarget as HTMLButtonElement).style.opacity = '0' }}
+                            >
+                              <MoreHorizontal size={12} />
+                            </button>
+                            {isMenuOpen && (
+                              <div style={{
+                                position: 'absolute', right: 0, top: '100%', zIndex: 300,
+                                width: 140, borderRadius: 6,
+                                border: '1px solid var(--theme-border)',
+                                backgroundColor: 'var(--theme-surface)',
+                                boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                                overflow: 'hidden',
+                              }}>
+                                <button
+                                  onClick={() => { setRenamingFolder({ id: folder.id, name: folder.name }); setFolderMenuOpen(null) }}
+                                  style={{
+                                    width: '100%', display: 'flex', alignItems: 'center', gap: 7,
+                                    padding: '7px 10px', fontSize: 12, border: 'none', cursor: 'pointer',
+                                    backgroundColor: 'transparent', color: 'var(--theme-text)', textAlign: 'left',
+                                  }}
+                                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
+                                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                >
+                                  <Edit2 size={11} /> Rename
+                                </button>
+                                <button
+                                  onClick={() => { deleteFolderMutation.mutate(folder.id); setFolderMenuOpen(null) }}
+                                  style={{
+                                    width: '100%', display: 'flex', alignItems: 'center', gap: 7,
+                                    padding: '7px 10px', fontSize: 12, border: 'none', cursor: 'pointer',
+                                    backgroundColor: 'transparent', color: '#ef4444', textAlign: 'left',
+                                  }}
+                                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.06)')}
+                                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                >
+                                  <Trash2 size={11} /> Delete
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </DroppableFolder>
+                )
+              })}
+              {/* New folder */}
+              {isCreatingFolder ? (
+                <div style={{ padding: '6px 6px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                    {FOLDER_COLORS.map(c => (
+                      <button key={c} onClick={() => setCreateFolderColor(c)}
+                        style={{ width: 14, height: 14, borderRadius: '50%', border: createFolderColor === c ? '2px solid var(--theme-text)' : '1px solid transparent', backgroundColor: c, cursor: 'pointer', padding: 0 }} />
+                    ))}
+                  </div>
+                  <input
+                    autoFocus
+                    value={createFolderName}
+                    onChange={e => setCreateFolderName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && createFolderName.trim()) createFolderMutation.mutate(createFolderName.trim())
+                      if (e.key === 'Escape') { setIsCreatingFolder(false); setCreateFolderName('') }
+                    }}
+                    placeholder="Folder name"
+                    style={{
+                      width: '100%', fontSize: 11, padding: '4px 7px',
+                      border: '1px solid var(--theme-border)', borderRadius: 4,
+                      backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button
+                      onClick={() => { if (createFolderName.trim()) createFolderMutation.mutate(createFolderName.trim()) }}
+                      disabled={!createFolderName.trim()}
+                      style={{ flex: 1, padding: '3px 0', fontSize: 11, fontWeight: 600, borderRadius: 4, border: 'none', backgroundColor: 'var(--theme-accent)', color: '#fff', cursor: createFolderName.trim() ? 'pointer' : 'not-allowed', opacity: createFolderName.trim() ? 1 : 0.5 }}
+                    >
+                      Create
+                    </button>
+                    <button
+                      onClick={() => { setIsCreatingFolder(false); setCreateFolderName('') }}
+                      style={{ padding: '3px 7px', fontSize: 11, borderRadius: 4, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', color: 'var(--theme-text)', cursor: 'pointer' }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setIsCreatingFolder(true)}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 5,
+                    padding: '5px 8px', borderRadius: 5, fontSize: 11, fontWeight: 500,
+                    border: 'none', cursor: 'pointer', textAlign: 'left',
+                    backgroundColor: 'transparent', color: 'var(--theme-text-muted)',
+                    marginTop: 2,
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
+                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  <Plus size={11} />
+                  New folder
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* Collapsed sidebar toggle */
+          <button
+            onClick={() => setIsFolderSidebarOpen(true)}
+            title="Expand folder sidebar"
+            style={{
+              flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 24, minHeight: 40, borderRadius: 6,
+              border: '1px solid var(--theme-border)',
+              backgroundColor: 'var(--theme-surface)',
+              cursor: 'pointer', color: 'var(--theme-text-muted)',
+            }}
+          >
+            <Folder size={13} />
+          </button>
+        )}
+
+        {/* ── Right: tip / graph / bulk bar / table ── */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+
       {/* ── Info / tip ── */}
       {parameters.length === 0 && !isLoading && (
         <div style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', fontSize: 12, color: 'var(--theme-text-muted)' }}>
@@ -974,7 +1242,13 @@ export default function ParametersPage() {
       )}
 
       {/* ── Table ── */}
-      {paramViewMode === 'list' && <div style={{ borderRadius: 8, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', overflow: 'hidden' }}>
+      {paramViewMode === 'list' && <DndContext
+        sensors={dndSensors}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+      <div style={{ borderRadius: 8, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
@@ -1008,10 +1282,7 @@ export default function ParametersPage() {
                   {parameters.length === 0 ? 'No parameters yet. Create one or import a file.' : 'No parameters match your filters.'}
                 </td></tr>
               ) : filteredParameters.map((param) => (
-                <tr key={param.id} style={{ borderBottom: '1px solid var(--theme-border)' }}
-                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
-                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                >
+                <DraggableRow key={param.id} parameterId={param.id}>
                   <td style={{ padding: '8px 12px', width: 32 }} onClick={e => e.stopPropagation()}>
                     <input
                       type="checkbox"
@@ -1113,12 +1384,28 @@ export default function ParametersPage() {
                       </button>
                     </div>
                   </td>
-                </tr>
+                </DraggableRow>
               ))}
             </tbody>
           </table>
         </div>
-      </div>}
+      </div>
+      <DragOverlay>
+        {activeDragParamId ? (
+          <div style={{
+            padding: '6px 12px', borderRadius: 6,
+            backgroundColor: 'var(--theme-accent)', color: '#fff',
+            fontSize: 12, fontWeight: 600, opacity: 0.9,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          }}>
+            {parameters.find(p => p.id === activeDragParamId)?.name ?? 'Parameter'}
+          </div>
+        ) : null}
+      </DragOverlay>
+      </DndContext>}
+
+        </div>{/* end right column */}
+      </div>{/* end folders + content layout */}
 
       {/* ── Import Modal ── */}
       {isImportOpen && (
