@@ -30,6 +30,7 @@ import CreateParameterModal from '../../components/parameters/CreateParameterMod
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import PublishToGitModal, { type GitPublishStoredConfig } from '../../components/parameters/PublishToGitModal'
 import ParameterDependencyGraph from '../../components/parameters/ParameterDependencyGraph'
+import ImportParameterModal from '../../components/parameters/ImportParameterModal'
 import CommunicationsTab from './CommunicationsTab'
 import type { Parameter, ParameterFolder } from 'shared/types/engineering.types'
 import clsx from 'clsx'
@@ -218,6 +219,9 @@ export default function ParametersPage() {
   const [importFilename, setImportFilename] = useState('')
   const [importResult, setImportResult] = useState<{ imported: number; updated: number; errors: string[]; warnings: string[] } | null>(null)
   const [isImporting, setIsImporting] = useState(false)
+
+  // CSV import modal state
+  const [isCsvImportOpen, setIsCsvImportOpen] = useState(false)
 
   // Git publish state
   const gitPublishKey = projectId ? `git-publish-config-${projectId}` : null
@@ -683,7 +687,23 @@ export default function ParametersPage() {
             {storedGitConfig && <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: isStale ? '#f59e0b' : '#22c55e', marginLeft: 2 }} />}
           </button>
 
-          {/* Import */}
+          {/* Import CSV (dedicated modal with preview) */}
+          <button
+            onClick={() => setIsCsvImportOpen(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
+              border: '1px solid var(--theme-border)',
+              backgroundColor: 'var(--theme-surface)',
+              color: 'var(--theme-text-muted)',
+              cursor: 'pointer',
+            }}
+          >
+            <Upload size={13} />
+            Import CSV
+          </button>
+
+          {/* Import (all formats) */}
           <button
             onClick={() => { resetImport(); setIsImportOpen(true) }}
             style={{
@@ -1579,6 +1599,14 @@ export default function ParametersPage() {
             />
           )}
         </>
+      )}
+
+      {projectId && (
+        <ImportParameterModal
+          isOpen={isCsvImportOpen}
+          onClose={() => setIsCsvImportOpen(false)}
+          projectId={projectId}
+        />
       )}
 
       {projectId && (
