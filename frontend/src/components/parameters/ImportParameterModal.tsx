@@ -55,7 +55,7 @@ function generateTemplate(): string {
     'float',
     '120.0',
     'km/h',
-    '±2.5',
+    '+/-2.5',
     '0',
     '200',
     'performance,safety',
