@@ -1,7 +1,8 @@
-import { X, Edit2, FileText, History, Link2 } from 'lucide-react'
+import { X, Edit2, FileText, History, Link2, FunctionSquare } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
+import { evaluateFormula } from './evaluateFormula'
 import type { Parameter } from 'shared/types/engineering.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
@@ -12,6 +13,8 @@ interface ParameterDetailDrawerProps {
   projectId: string
   parameter: Parameter | null
   onEdit: (parameter: Parameter) => void
+  /** Full parameter list for resolving {{param:ID}} formula references */
+  allParameters?: Parameter[]
 }
 
 function snapshotSummary(snapshot: Record<string, unknown>): string {
@@ -32,6 +35,7 @@ export default function ParameterDetailDrawer({
   projectId,
   parameter,
   onEdit,
+  allParameters = [],
 }: ParameterDetailDrawerProps) {
   const { data: impact, isLoading: impactLoading } = useQuery({
     queryKey: ['parameter-impact', projectId, parameter?.id],
@@ -175,6 +179,73 @@ export default function ParameterDetailDrawer({
               )}
             </div>
           </section>
+
+          {/* Formula */}
+          {parameter.formula && (() => {
+            const paramValues = allParameters.reduce<Record<string, number>>((acc, p) => {
+              const v = parseFloat(p.defaultValue ?? '')
+              if (!isNaN(v)) acc[p.id] = v
+              return acc
+            }, {})
+            const { result, error, usedParamIds } = evaluateFormula(parameter.formula, paramValues)
+            const referencedParams = usedParamIds
+              .map(id => allParameters.find(p => p.id === id))
+              .filter((p): p is Parameter => p !== undefined)
+
+            // Build human-readable formula (replace {{param:ID}} with parameter names)
+            let humanFormula = parameter.formula
+            for (const p of referencedParams) {
+              humanFormula = humanFormula.replace(
+                new RegExp(`\\{\\{param:${p.id}\\}\\}`, 'gi'),
+                `[${p.name}]`
+              )
+            }
+
+            return (
+              <section>
+                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                  <FunctionSquare size={16} />
+                  Formula
+                </h3>
+                <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 space-y-3 text-sm">
+                  <div>
+                    <span className="text-gray-500 dark:text-gray-400 text-xs">Expression</span>
+                    <p className="font-mono text-gray-900 dark:text-white break-all mt-0.5">{humanFormula}</p>
+                  </div>
+
+                  {error ? (
+                    <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 text-xs">
+                      <span className="font-medium">Cannot evaluate:</span>
+                      <span>{error}</span>
+                    </div>
+                  ) : result !== null ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500 dark:text-gray-400 text-xs">Result</span>
+                      <span className="font-mono font-semibold text-green-700 dark:text-green-400">= {result}</span>
+                    </div>
+                  ) : null}
+
+                  {referencedParams.length > 0 && (
+                    <div>
+                      <span className="text-gray-500 dark:text-gray-400 text-xs block mb-1.5">Referenced parameters</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {referencedParams.map(p => (
+                          <span
+                            key={p.id}
+                            className="px-2 py-0.5 rounded text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-mono"
+                            title={p.defaultValue ? `default: ${p.defaultValue}` : 'no default value'}
+                          >
+                            {p.name}
+                            {p.defaultValue ? ` = ${p.defaultValue}` : ''}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )
+          })()}
 
           {/* Linked requirements */}
           <section>

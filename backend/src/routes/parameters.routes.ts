@@ -24,6 +24,7 @@ import {
   resolveParameter,
   resolveAllParameters,
   bulkUpdateParameters,
+  bulkDeleteParameters,
   getParameterImpact,
   getParameterVersions,
   exportParametersHandler,
@@ -33,6 +34,13 @@ import {
   gitPublishStatusHandler,
   gitValidateTokenHandler,
 } from '../controllers/parameter.controller'
+import {
+  getFolders,
+  createFolder,
+  updateFolder,
+  deleteFolder,
+  moveParameterToFolder,
+} from '../controllers/parameterFolder.controller'
 
 const router = Router()
 
@@ -53,6 +61,12 @@ router.patch('/:projectId/units/:id', updateProjectUnitHandler)
 router.delete('/:projectId/units/:id', deleteProjectUnitHandler)
 router.get('/:projectId/units/:symbol/usage', getProjectUnitUsage)
 
+// Parameter folders
+router.get('/:projectId/folders', getFolders)
+router.post('/:projectId/folders', createFolder)
+router.patch('/:projectId/folders/:folderId', updateFolder)
+router.delete('/:projectId/folders/:folderId', deleteFolder)
+
 router.get('/:projectId/resolve', resolveAllParameters)
 router.get('/:projectId/resolve/:id', resolveParameter)
 router.get('/:projectId/impact/:id', getParameterImpact)
@@ -68,6 +82,8 @@ router.get('/:projectId/:id', getParameter)
 router.post('/:projectId', createParameter)
 router.put('/:projectId/:id', updateParameter)
 router.patch('/:projectId/bulk', bulkUpdateParameters)
+router.delete('/:projectId/bulk', bulkDeleteParameters)
+router.patch('/:projectId/:id/folder', moveParameterToFolder)
 router.delete('/:projectId/:id', deleteParameter)
 
 export default router

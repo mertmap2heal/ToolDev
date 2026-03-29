@@ -34,6 +34,16 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
     staleTime: 30_000,
     enabled: isOpen,
   })
+
+  const { data: allParameters = [] } = useQuery({
+    queryKey: ['parameters', projectId],
+    queryFn: async () => {
+      const res = await parameterService.getParameters(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    staleTime: 30_000,
+    enabled: isOpen,
+  })
   const [platforms, setPlatforms] = useState<string[] | null>(null)
   const [formData, setFormDataBase] = useState<CreateParameterDto>({
     name: '',
@@ -259,6 +269,8 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
             onManageTypes={() => setShowTypesPanel(true)}
             onManageUnits={() => setShowUnitsPanel(true)}
             valueError={valueError}
+            formula={formData.formula || ''}
+            allParameters={allParameters}
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -308,8 +320,11 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
               value={formData.formula || ''}
               onChange={(e) => handleChange('formula', e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              placeholder="e.g., PARAM_A + PARAM_B"
+              placeholder="e.g., {{param:id1}} * 2 + {{param:id2}}"
             />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Reference other parameters using <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{'{{param:ID}}'}</code> syntax.
+            </p>
           </div>
 
           <div>

@@ -1,8 +1,11 @@
 import { apiClient } from './api'
 import type {
   Parameter,
+  ParameterFolder,
   CreateParameterDto,
   UpdateParameterDto,
+  CreateParameterFolderDto,
+  UpdateParameterFolderDto,
   ParameterResolvedValue,
 } from 'shared/types/engineering.types'
 import type { ApiResponse } from 'shared/types/api.types'
@@ -73,6 +76,13 @@ export const parameterService = {
     updates: Record<string, unknown>
   ): Promise<ApiResponse<Parameter[]>> {
     return apiClient.patch<Parameter[]>(`/parameters/${projectId}/bulk`, { ids, updates })
+  },
+
+  async bulkDelete(
+    projectId: string,
+    ids: string[]
+  ): Promise<ApiResponse<void>> {
+    return apiClient.delete<void>(`/parameters/${projectId}/bulk`, { ids })
   },
 
   async getVersions(
@@ -220,5 +230,39 @@ export const parameterService = {
     }
   ): Promise<ApiResponse<{ valid: boolean; username: string }>> {
     return apiClient.post(`/parameters/${projectId}/git/validate-token`, payload)
+  },
+
+  // ---------------------------------------------------------------------------
+  // Parameter Folders
+  // ---------------------------------------------------------------------------
+  async getFolders(projectId: string): Promise<ApiResponse<ParameterFolder[]>> {
+    return apiClient.get<ParameterFolder[]>(`/parameters/${projectId}/folders`)
+  },
+
+  async createFolder(
+    projectId: string,
+    data: CreateParameterFolderDto
+  ): Promise<ApiResponse<ParameterFolder>> {
+    return apiClient.post<ParameterFolder>(`/parameters/${projectId}/folders`, data)
+  },
+
+  async updateFolder(
+    projectId: string,
+    folderId: string,
+    data: UpdateParameterFolderDto
+  ): Promise<ApiResponse<ParameterFolder>> {
+    return apiClient.patch<ParameterFolder>(`/parameters/${projectId}/folders/${folderId}`, data)
+  },
+
+  async deleteFolder(projectId: string, folderId: string): Promise<ApiResponse<void>> {
+    return apiClient.delete<void>(`/parameters/${projectId}/folders/${folderId}`)
+  },
+
+  async moveParameterToFolder(
+    projectId: string,
+    parameterId: string,
+    folderId: string | null
+  ): Promise<ApiResponse<Parameter>> {
+    return apiClient.patch<Parameter>(`/parameters/${projectId}/${parameterId}/folder`, { folderId })
   },
 }

@@ -3,9 +3,21 @@ import { useParams, Link } from 'react-router-dom'
 import {
   Search, X, Trash2, Edit2, Plus, Filter, ChevronDown, ChevronUp,
   FileText, Upload, Download, GitBranch, RefreshCw, CheckCircle,
-  AlertTriangle, Settings, Radio,
+  AlertTriangle, Settings, Radio, List, Share2,
+  Folder, FolderOpen, MoreHorizontal, Layers,
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+} from '@dnd-kit/core'
 
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import { parameterService, type ParameterWithUsage } from '../../services/parameter.service'
@@ -16,10 +28,67 @@ import SourceDetailsModal from '../../components/parameters/SourceDetailsModal'
 import CreateParameterModal from '../../components/parameters/CreateParameterModal'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import PublishToGitModal, { type GitPublishStoredConfig } from '../../components/parameters/PublishToGitModal'
+import ParameterDependencyGraph from '../../components/parameters/ParameterDependencyGraph'
 import CommunicationsTab from './CommunicationsTab'
-import type { Parameter } from 'shared/types/engineering.types'
+import type { Parameter, ParameterFolder } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
+
+// ---------------------------------------------------------------------------
+// Preset folder colors
+// ---------------------------------------------------------------------------
+const FOLDER_COLORS = ['#6366f1', '#0ea5e9', '#22c55e', '#f59e0b', '#ef4444', '#ec4899']
+
+// ---------------------------------------------------------------------------
+// DraggableRow — wraps a parameter row so it can be dragged onto a folder
+// ---------------------------------------------------------------------------
+function DraggableRow({
+  parameterId,
+  children,
+}: {
+  parameterId: string
+  children: React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `param-${parameterId}` })
+  return (
+    <tr
+      ref={setNodeRef}
+      style={{ opacity: isDragging ? 0.4 : 1, cursor: 'grab', borderBottom: '1px solid var(--theme-border)' }}
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </tr>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// DroppableFolder — folder row in sidebar that accepts dragged parameters
+// ---------------------------------------------------------------------------
+function DroppableFolder({
+  folderId,
+  isOver,
+  children,
+}: {
+  folderId: string
+  isOver: boolean
+  children: React.ReactNode
+}) {
+  const { setNodeRef } = useDroppable({ id: `folder-${folderId}` })
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        outline: isOver ? '2px solid var(--theme-accent)' : 'none',
+        outlineOffset: -2,
+        borderRadius: 6,
+        transition: 'outline 0.1s',
+      }}
+    >
+      {children}
+    </div>
+  )
+}
 
 // ---------------------------------------------------------------------------
 // Export format groups
@@ -108,7 +177,31 @@ export default function ParametersPage() {
   const [unitFilter, setUnitFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [paramViewMode, setParamViewMode] = useState<'list' | 'graph'>('list')
   const queryClient = useQueryClient()
+
+  // Folder sidebar state
+  // null = All Parameters; '__none__' = Ungrouped; <id> = specific folder
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
+  const [isFolderSidebarOpen, setIsFolderSidebarOpen] = useState(true)
+  const [createFolderName, setCreateFolderName] = useState('')
+  const [createFolderColor, setCreateFolderColor] = useState(FOLDER_COLORS[0])
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false)
+  const [folderMenuOpen, setFolderMenuOpen] = useState<string | null>(null)
+  const [renamingFolder, setRenamingFolder] = useState<{ id: string; name: string } | null>(null)
+  const [renamingColor, setRenamingColor] = useState<string>('#6366f1')
+  const [overFolderId, setOverFolderId] = useState<string | null>(null)
+  const [activeDragParamId, setActiveDragParamId] = useState<string | null>(null)
+  const folderMenuRef = useRef<HTMLDivElement>(null)
+
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  )
+
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   // Export state
   const [isExportOpen, setIsExportOpen] = useState(false)
@@ -213,6 +306,50 @@ export default function ParametersPage() {
       setDeleteConfirmation(null)
     },
   })
+
+  // Bulk update mutation (status changes)
+  const bulkUpdateMutation = useMutation({
+    mutationFn: ({ ids, updates }: { ids: string[]; updates: Record<string, unknown> }) => {
+      if (!projectId) throw new Error('Project ID required')
+      return parameterService.bulkUpdate(projectId, ids, updates)
+    },
+    onSuccess: (_data, { ids, updates }) => {
+      queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
+      setSelectedIds(new Set())
+      const statusLabel = updates.status as string
+      setToastMessage(`${ids.length} parameter${ids.length > 1 ? 's' : ''} set to ${statusLabel}`)
+    },
+    onError: (error: any) => {
+      console.error('Bulk update error:', error)
+      alert(error?.error || 'Bulk update failed')
+    },
+  })
+
+  // Bulk delete mutation
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) => {
+      if (!projectId) throw new Error('Project ID required')
+      return parameterService.bulkDelete(projectId, ids)
+    },
+    onSuccess: (_data, ids) => {
+      queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
+      setSelectedIds(new Set())
+      setBulkDeleteConfirm(false)
+      setToastMessage(`${ids.length} parameter${ids.length > 1 ? 's' : ''} deleted`)
+    },
+    onError: (error: any) => {
+      console.error('Bulk delete error:', error)
+      alert(error?.error || 'Bulk delete failed')
+      setBulkDeleteConfirm(false)
+    },
+  })
+
+  // Auto-dismiss toast after 3 s
+  useEffect(() => {
+    if (!toastMessage) return
+    const t = setTimeout(() => setToastMessage(null), 3000)
+    return () => clearTimeout(t)
+  }, [toastMessage])
 
   // Staleness: consider only tag-filtered parameters (if configured)
   const relevantForStaleness = storedGitConfig?.selectedTags?.length
@@ -513,6 +650,39 @@ export default function ParametersPage() {
             )}
           </div>
 
+          {/* View toggle: List / Graph */}
+          <div style={{ display: 'flex', border: '1px solid var(--theme-border)', borderRadius: 6, overflow: 'hidden' }}>
+            <button
+              onClick={() => setParamViewMode('list')}
+              title="List view"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '5px 10px', fontSize: 12, fontWeight: 500,
+                border: 'none', cursor: 'pointer',
+                backgroundColor: paramViewMode === 'list' ? 'var(--theme-accent)' : 'var(--theme-surface)',
+                color: paramViewMode === 'list' ? '#fff' : 'var(--theme-text-muted)',
+                borderRight: '1px solid var(--theme-border)',
+              }}
+            >
+              <List size={13} />
+              List
+            </button>
+            <button
+              onClick={() => setParamViewMode('graph')}
+              title="Dependency graph view"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '5px 10px', fontSize: 12, fontWeight: 500,
+                border: 'none', cursor: 'pointer',
+                backgroundColor: paramViewMode === 'graph' ? 'var(--theme-accent)' : 'var(--theme-surface)',
+                color: paramViewMode === 'graph' ? '#fff' : 'var(--theme-text-muted)',
+              }}
+            >
+              <Share2 size={13} />
+              Graph
+            </button>
+          </div>
+
           {/* Create */}
           <button
             onClick={() => setIsCreateModalOpen(true)}
@@ -621,12 +791,101 @@ export default function ParametersPage() {
         </div>
       )}
 
+      {/* ── Dependency Graph view ── */}
+      {paramViewMode === 'graph' && (
+        <div style={{ borderRadius: 8, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', overflow: 'hidden' }}>
+          <ParameterDependencyGraph parameters={filteredParameters} />
+        </div>
+      )}
+
+      {/* ── Bulk action toolbar ── */}
+      {selectedIds.size > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+          padding: '8px 12px', borderRadius: 8,
+          border: '1px solid var(--theme-accent)',
+          backgroundColor: 'var(--theme-accent-subtle)',
+        }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--theme-text)', marginRight: 4 }}>
+            {selectedIds.size} selected
+          </span>
+          <button
+            onClick={() => bulkUpdateMutation.mutate({ ids: Array.from(selectedIds), updates: { status: 'approved' } })}
+            disabled={bulkUpdateMutation.isPending}
+            style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: '1px solid rgba(34,197,94,0.4)', backgroundColor: 'rgba(34,197,94,0.12)', color: '#15803d' }}
+          >
+            Approve
+          </button>
+          <button
+            onClick={() => bulkUpdateMutation.mutate({ ids: Array.from(selectedIds), updates: { status: 'draft' } })}
+            disabled={bulkUpdateMutation.isPending}
+            style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: '1px solid rgba(245,158,11,0.4)', backgroundColor: 'rgba(245,158,11,0.12)', color: '#b45309' }}
+          >
+            Set Draft
+          </button>
+          <button
+            onClick={() => bulkUpdateMutation.mutate({ ids: Array.from(selectedIds), updates: { status: 'obsolete' } })}
+            disabled={bulkUpdateMutation.isPending}
+            style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', color: 'var(--theme-text-muted)' }}
+          >
+            Obsolete
+          </button>
+          {!bulkDeleteConfirm ? (
+            <button
+              onClick={() => setBulkDeleteConfirm(true)}
+              style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: '1px solid rgba(239,68,68,0.4)', backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444' }}
+            >
+              Delete
+            </button>
+          ) : (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, color: '#ef4444', fontWeight: 500 }}>Are you sure?</span>
+              <button
+                onClick={() => bulkDeleteMutation.mutate(Array.from(selectedIds))}
+                disabled={bulkDeleteMutation.isPending}
+                style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', backgroundColor: '#ef4444', color: '#fff' }}
+              >
+                Confirm
+              </button>
+              <button
+                onClick={() => setBulkDeleteConfirm(false)}
+                style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', color: 'var(--theme-text)' }}
+              >
+                Cancel
+              </button>
+            </span>
+          )}
+          <span style={{ flex: 1 }} />
+          <button
+            onClick={() => { setSelectedIds(new Set()); setBulkDeleteConfirm(false) }}
+            title="Clear selection"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-text-muted)', padding: 2, display: 'flex', alignItems: 'center' }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* ── Table ── */}
-      <div style={{ borderRadius: 8, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', overflow: 'hidden' }}>
+      {paramViewMode === 'list' && <div style={{ borderRadius: 8, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ backgroundColor: 'var(--theme-bg)', borderBottom: '1px solid var(--theme-border)' }}>
+                <th style={{ padding: '8px 12px', width: 32 }}>
+                  <input
+                    type="checkbox"
+                    checked={filteredParameters.length > 0 && filteredParameters.every(p => selectedIds.has(p.id))}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        setSelectedIds(new Set(filteredParameters.map(p => p.id)))
+                      } else {
+                        setSelectedIds(new Set())
+                      }
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  />
+                </th>
                 {['Parameter', 'Description', 'Type', 'Value', 'Unit', 'Source', 'Status', 'Used in', 'Created', ''].map(h => (
                   <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--theme-text-muted)', whiteSpace: 'nowrap' }}>
                     {h}
@@ -636,9 +895,9 @@ export default function ParametersPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={10} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>Loading parameters…</td></tr>
+                <tr><td colSpan={11} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>Loading parameters…</td></tr>
               ) : filteredParameters.length === 0 ? (
-                <tr><td colSpan={10} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>
+                <tr><td colSpan={11} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>
                   {parameters.length === 0 ? 'No parameters yet. Create one or import a file.' : 'No parameters match your filters.'}
                 </td></tr>
               ) : filteredParameters.map((param) => (
@@ -646,6 +905,21 @@ export default function ParametersPage() {
                   onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
                   onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
+                  <td style={{ padding: '8px 12px', width: 32 }} onClick={e => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(param.id)}
+                      onChange={() => {
+                        setSelectedIds(prev => {
+                          const next = new Set(prev)
+                          if (next.has(param.id)) next.delete(param.id)
+                          else next.add(param.id)
+                          return next
+                        })
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </td>
                   <td style={{ padding: '8px 12px' }}>
                     <button type="button" onClick={() => setDetailParameter(param)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-accent)', fontWeight: 600, fontSize: 12, padding: 0 }}>
@@ -658,7 +932,28 @@ export default function ParametersPage() {
                     </span>
                   </td>
                   <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)' }}>{param.dataType || '—'}</td>
-                  <td style={{ padding: '8px 12px', fontFamily: 'monospace', color: 'var(--theme-text)' }}>{param.defaultValue || '—'}</td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'monospace', color: 'var(--theme-text)' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span>{param.defaultValue || '—'}</span>
+                      {param.formula && (
+                        <span
+                          title={param.formula}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            padding: '1px 5px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                            fontFamily: 'serif', fontStyle: 'italic',
+                            backgroundColor: 'rgba(245,158,11,0.12)',
+                            color: '#b45309',
+                            border: '1px solid rgba(245,158,11,0.3)',
+                            cursor: 'default',
+                            flexShrink: 0,
+                          }}
+                        >
+                          f
+                        </span>
+                      )}
+                    </span>
+                  </td>
                   <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)' }}>{param.unit || '—'}</td>
                   <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)' }}>
                     {param.sourceFunction ? (
@@ -716,7 +1011,7 @@ export default function ParametersPage() {
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
 
       {/* ── Import Modal ── */}
       {isImportOpen && (
@@ -902,6 +1197,21 @@ export default function ParametersPage() {
       )}
 
       </> /* end parameters tab */}
+
+      {/* ── Toast notification ── */}
+      {toastMessage && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 2000,
+          padding: '10px 18px', borderRadius: 8,
+          backgroundColor: 'var(--theme-text)', color: 'var(--theme-bg)',
+          fontSize: 13, fontWeight: 500,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+          pointerEvents: 'none',
+        }}>
+          {toastMessage}
+        </div>
+      )}
     </div>
   )
 }

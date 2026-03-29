@@ -682,6 +682,23 @@ export const bulkUpdateParameters = async (req: AuthRequest, res: Response) => {
   }
 }
 
+export const bulkDeleteParameters = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+    const { ids } = req.body as { ids: string[] }
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, error: 'ids (array) is required' })
+    }
+
+    await prisma.parameter.deleteMany({ where: { id: { in: ids }, projectId } })
+    res.json({ success: true, message: `${ids.length} parameters deleted` })
+  } catch (error) {
+    console.error('Bulk delete parameters error:', error)
+    res.status(500).json({ success: false, error: (error as Error).message })
+  }
+}
+
 export const deleteParameter = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
