@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback } from 'react'
-import { X, Upload, Download, CheckCircle, AlertTriangle, FileText, ChevronRight } from 'lucide-react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState, useRef, useCallback, useMemo } from 'react'
+import { X, Upload, Download, CheckCircle, AlertTriangle, FileText, ChevronRight, FunctionSquare } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
 
 // ---------------------------------------------------------------------------
@@ -141,6 +141,15 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Fetch existing parameters to detect overwrites (only needed on step 2)
+  const { data: existingParams } = useQuery({
+    queryKey: ['parameters', projectId],
+    queryFn: () => parameterService.getParameters(projectId),
+    select: (res) => (res.success && res.data ? res.data : []),
+    enabled: isOpen,
+    staleTime: 30_000,
+  })
+
   const [step, setStep] = useState<Step>(1)
   const [csvContent, setCsvContent] = useState('')
   const [filename, setFilename] = useState('')
@@ -276,6 +285,35 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
   const unknownColumns = Object.entries(columnMappings)
     .filter(([, v]) => v === null)
     .map(([k]) => k)
+
+  // Build a case-insensitive name lookup for existing parameters
+  const existingByName = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const p of existingParams ?? []) {
+      map.set(p.name.toLowerCase(), p.name)
+    }
+    return map
+  }, [existingParams])
+
+  // Determine which preview rows would overwrite an existing parameter
+  const nameColIndex = previewHeaders.findIndex(h => columnMappings[h] === 'name')
+  const formulaColIndex = previewHeaders.findIndex(h => columnMappings[h] === 'formula')
+
+  // For all rows (not just preview), count how many would be updates
+  const { allRows } = useMemo(() => {
+    const { rows } = parseCsv(csvContent)
+    return { allRows: rows }
+  }, [csvContent])
+
+  const overwriteCount = useMemo(() => {
+    if (nameColIndex < 0 || !existingByName.size) return 0
+    return allRows.filter(row => {
+      const name = (row[nameColIndex] ?? '').toLowerCase()
+      return name && existingByName.has(name)
+    }).length
+  }, [allRows, nameColIndex, existingByName])
+
+  const newCount = allRows.length - overwriteCount
 
   if (!isOpen) return null
 
@@ -475,6 +513,26 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                 </div>
               </div>
 
+              {/* Overwrite summary */}
+              {!hasMissingName && nameColIndex >= 0 && (overwriteCount > 0 || newCount > 0) && (
+                <div className={`flex items-start gap-2 p-3 rounded-lg border ${
+                  overwriteCount > 0
+                    ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
+                    : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                }`}>
+                  {overwriteCount > 0
+                    ? <AlertTriangle size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                    : <CheckCircle size={14} className="text-green-500 mt-0.5 flex-shrink-0" />
+                  }
+                  <p className={`text-sm ${overwriteCount > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-green-700 dark:text-green-300'}`}>
+                    <strong>{newCount}</strong> new parameter{newCount !== 1 ? 's' : ''} will be created
+                    {overwriteCount > 0 && (
+                      <> · <strong>{overwriteCount}</strong> will <span className="underline">overwrite</span> existing parameters</>
+                    )}
+                  </p>
+                </div>
+              )}
+
               {/* Missing name warning */}
               {hasMissingName && (
                 <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -539,6 +597,9 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                     <table className="min-w-full text-xs">
                       <thead className="bg-gray-50 dark:bg-gray-700/50">
                         <tr>
+                          <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                            Status
+                          </th>
                           {previewHeaders.map(h => (
                             <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">
                               {h}
@@ -547,15 +608,57 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                        {previewRows.map((row, ri) => (
-                          <tr key={ri} className="bg-white dark:bg-gray-800">
-                            {previewHeaders.map((_, ci) => (
-                              <td key={ci} className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap max-w-[160px] truncate">
-                                {row[ci] ?? ''}
+                        {previewRows.map((row, ri) => {
+                          const rowName = nameColIndex >= 0 ? (row[nameColIndex] ?? '').toLowerCase() : ''
+                          const isUpdate = rowName && existingByName.has(rowName)
+                          const hasFormula = formulaColIndex >= 0 && !!(row[formulaColIndex] ?? '').trim()
+                          return (
+                            <tr key={ri} className={isUpdate ? 'bg-amber-50 dark:bg-amber-900/10' : 'bg-white dark:bg-gray-800'}>
+                              <td className="px-3 py-1.5 whitespace-nowrap">
+                                {isUpdate ? (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                                    <AlertTriangle size={10} />
+                                    Update
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
+                                    <CheckCircle size={10} />
+                                    New
+                                  </span>
+                                )}
                               </td>
-                            ))}
-                          </tr>
-                        ))}
+                              {previewHeaders.map((h, ci) => {
+                                const canonical = columnMappings[h]
+                                const cellValue = row[ci] ?? ''
+                                // Value column: show formula indicator if this row has a formula
+                                if (canonical === 'value' && hasFormula) {
+                                  return (
+                                    <td key={ci} className="px-3 py-1.5 text-gray-400 dark:text-gray-500 whitespace-nowrap max-w-[160px] truncate italic flex items-center gap-1">
+                                      <FunctionSquare size={11} className="text-purple-500 flex-shrink-0" />
+                                      <span className="text-purple-600 dark:text-purple-400">formula-driven</span>
+                                    </td>
+                                  )
+                                }
+                                // Formula column: show formula expression with icon
+                                if (canonical === 'formula' && cellValue) {
+                                  return (
+                                    <td key={ci} className="px-3 py-1.5 whitespace-nowrap max-w-[160px]">
+                                      <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 font-mono truncate">
+                                        <FunctionSquare size={11} className="flex-shrink-0" />
+                                        {cellValue}
+                                      </span>
+                                    </td>
+                                  )
+                                }
+                                return (
+                                  <td key={ci} className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap max-w-[160px] truncate">
+                                    {cellValue}
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
