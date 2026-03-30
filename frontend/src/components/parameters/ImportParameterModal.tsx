@@ -141,11 +141,14 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Fetch existing parameters to detect overwrites (only needed on step 2)
-  const { data: existingParams } = useQuery({
+  // Fetch existing parameters to detect overwrites — same queryFn shape as
+  // EditParameterModal so the shared React Query cache stays consistent
+  const { data: existingParams = [] } = useQuery({
     queryKey: ['parameters', projectId],
-    queryFn: () => parameterService.getParameters(projectId),
-    select: (res) => (res.success && res.data ? res.data : []),
+    queryFn: async () => {
+      const res = await parameterService.getParameters(projectId)
+      return res.success && res.data ? res.data : []
+    },
     enabled: isOpen,
     staleTime: 30_000,
   })
