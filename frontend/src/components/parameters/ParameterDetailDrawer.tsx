@@ -354,8 +354,8 @@ export default function ParameterDetailDrawer({
                           ? <ChevronDown size={14} className="text-gray-400 flex-shrink-0" />
                           : <ChevronRight size={14} className="text-gray-400 flex-shrink-0" />
                         }
-                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-10 flex-shrink-0">
-                          v{v.version}
+                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-14 flex-shrink-0">
+                          v{v.version}.{String((v as unknown as Record<string, unknown>).minorVersion ?? 0)}
                         </span>
                         <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
                           {format(new Date(v.createdAt), 'MMM d, yyyy HH:mm')}

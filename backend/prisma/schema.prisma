@@ -798,12 +798,13 @@ model Parameter {
 }
 
 model ParameterVersion {
-  id          String   @id @default(uuid())
-  parameterId String
-  version     Int      // incrementing version number
-  snapshot    Json     // full auditable fields: name, description, dataType, defaultValue, unit, tolerance, minValue, maxValue, status, ownerType, formula, version, etc.
-  createdAt   DateTime @default(now())
-  createdById String?
+  id           String   @id @default(uuid())
+  parameterId  String
+  version      Int      // major version — increments when parameter is approved
+  minorVersion Int      @default(0) // minor version — increments on every non-approval change; resets to 0 on approval
+  snapshot     Json     // full auditable fields: name, description, dataType, defaultValue, unit, tolerance, minValue, maxValue, status, ownerType, formula, version, etc.
+  createdAt    DateTime @default(now())
+  createdById  String?
 
   parameter Parameter @relation(fields: [parameterId], references: [id], onDelete: Cascade)
   createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)

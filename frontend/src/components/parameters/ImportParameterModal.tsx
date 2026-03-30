@@ -23,25 +23,60 @@ const CSV_COLUMNS = [
 // Map of alternative header names -> canonical field names
 const COLUMN_ALIASES: Record<string, string> = {
   name: 'name',
+  param_name: 'name',
+  parameter_name: 'name',
   description: 'description',
+  desc: 'description',
+  descr: 'description',
   data_type: 'data_type',
   datatype: 'data_type',
   type: 'data_type',
+  dtype: 'data_type',
   value: 'value',
   defaultvalue: 'value',
   default_value: 'value',
+  val: 'value',
   unit: 'unit',
   units: 'unit',
+  uom: 'unit',
   tolerance: 'tolerance',
+  tol: 'tolerance',
+  accuracy: 'tolerance',
   min: 'min',
   minvalue: 'min',
   min_value: 'min',
+  minimum: 'min',
+  lower_bound: 'min',
   max: 'max',
   maxvalue: 'max',
   max_value: 'max',
+  maximum: 'max',
+  upper_bound: 'max',
   tags: 'tags',
+  tag: 'tags',
+  labels: 'tags',
+  categories: 'tags',
   formula: 'formula',
+  expression: 'formula',
+  equation: 'formula',
   status: 'status',
+  state: 'status',
+  approval: 'status',
+}
+
+// Human-readable labels for canonical fields (used in mapping dropdowns)
+const CANONICAL_LABELS: Record<string, string> = {
+  name: 'Name *',
+  description: 'Description',
+  data_type: 'Data type',
+  value: 'Value',
+  unit: 'Unit',
+  tolerance: 'Tolerance',
+  min: 'Min value',
+  max: 'Max value',
+  tags: 'Tags',
+  formula: 'Formula',
+  status: 'Status',
 }
 
 // ---------------------------------------------------------------------------
@@ -58,7 +93,7 @@ function generateTemplate(): string {
     '+/-2.5',
     '0',
     '200',
-    'performance,safety',
+    'performance;safety',
     '',
     'approved',
   ].join(',')
@@ -311,15 +346,13 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
   // Derived
   // -------------------------------------------------------------------------
   const hasMissingName = previewHeaders.length > 0 && !previewHeaders.includes('name')
-  const unknownColumns = Object.entries(columnMappings)
-    .filter(([, v]) => v === null)
-    .map(([k]) => k)
+  const unmappedCount = Object.values(columnMappings).filter(v => !v).length
 
-  // Build a case-insensitive name lookup for existing parameters
+  // Build a case-insensitive name lookup for existing parameters (stores full object for comparison)
   const existingByName = useMemo(() => {
-    const map = new Map<string, string>()
+    const map = new Map<string, (typeof existingParams)[0]>()
     for (const p of existingParams ?? []) {
-      map.set(p.name.toLowerCase(), p.name)
+      map.set(p.name.toLowerCase(), p)
     }
     return map
   }, [existingParams])
@@ -334,15 +367,45 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
     return { allRows: rows }
   }, [csvContent])
 
-  const overwriteCount = useMemo(() => {
-    if (nameColIndex < 0 || !existingByName.size) return 0
-    return allRows.filter(row => {
-      const name = (row[nameColIndex] ?? '').toLowerCase()
-      return name && existingByName.has(name)
-    }).length
-  }, [allRows, nameColIndex, existingByName])
+  // Map canonical field name -> column index (for value comparison)
+  const canonicalToColIndex = useMemo(() => {
+    const m: Record<string, number> = {}
+    previewHeaders.forEach((h, i) => {
+      const canon = columnMappings[h]
+      if (canon) m[canon] = i
+    })
+    return m
+  }, [previewHeaders, columnMappings])
 
-  const newCount = allRows.length - overwriteCount
+  // Compare a CSV row against an existing parameter to detect real changes
+  const rowHasChanges = useCallback((row: string[], existing: (typeof existingParams)[0]): boolean => {
+    const get = (canon: string) => (row[canonicalToColIndex[canon] ?? -1] ?? '').trim()
+    if (get('description') && get('description') !== (existing.description ?? '')) return true
+    if (get('data_type') && get('data_type') !== (existing.dataType ?? '')) return true
+    if (get('value') && get('value') !== (existing.defaultValue ?? '')) return true
+    if (get('unit') && get('unit') !== (existing.unit ?? '')) return true
+    if (get('tolerance') && get('tolerance') !== (existing.tolerance ?? '')) return true
+    if (get('min') && get('min') !== (existing.minValue ?? '')) return true
+    if (get('max') && get('max') !== (existing.maxValue ?? '')) return true
+    if (get('formula') && get('formula') !== (existing.formula ?? '')) return true
+    if (get('status') && get('status') !== (existing.status ?? '')) return true
+    return false
+  }, [canonicalToColIndex, existingParams])
+
+  const { overwriteCount, noChangeCount } = useMemo(() => {
+    if (nameColIndex < 0) return { overwriteCount: 0, noChangeCount: 0 }
+    let updates = 0, noChange = 0
+    for (const row of allRows) {
+      const name = (row[nameColIndex] ?? '').toLowerCase()
+      const existing = existingByName.get(name)
+      if (!existing) continue
+      if (rowHasChanges(row, existing)) updates++
+      else noChange++
+    }
+    return { overwriteCount: updates, noChangeCount: noChange }
+  }, [allRows, nameColIndex, existingByName, canonicalToColIndex])
+
+  const newCount = allRows.length - overwriteCount - noChangeCount
 
   if (!isOpen) return null
 
@@ -543,7 +606,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
               </div>
 
               {/* Overwrite summary */}
-              {!hasMissingName && nameColIndex >= 0 && (overwriteCount > 0 || newCount > 0) && (
+              {!hasMissingName && nameColIndex >= 0 && (
                 <div className={`flex items-start gap-2 p-3 rounded-lg border ${
                   overwriteCount > 0
                     ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
@@ -554,10 +617,9 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                     : <CheckCircle size={14} className="text-green-500 mt-0.5 flex-shrink-0" />
                   }
                   <p className={`text-sm ${overwriteCount > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-green-700 dark:text-green-300'}`}>
-                    <strong>{newCount}</strong> new parameter{newCount !== 1 ? 's' : ''} will be created
-                    {overwriteCount > 0 && (
-                      <> · <strong>{overwriteCount}</strong> will <span className="underline">overwrite</span> existing parameters</>
-                    )}
+                    {newCount > 0 && <><strong>{newCount}</strong> new · </>}
+                    {overwriteCount > 0 && <><strong>{overwriteCount}</strong> will update (values changed) · </>}
+                    {noChangeCount > 0 && <><strong>{noChangeCount}</strong> unchanged (will be skipped)</>}
                   </p>
                 </div>
               )}
@@ -572,24 +634,24 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                 </div>
               )}
 
-              {/* Unknown columns warning */}
-              {unknownColumns.length > 0 && (
+              {/* Unmapped columns hint */}
+              {unmappedCount > 0 && (
                 <div className="flex items-start gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
                   <AlertTriangle size={14} className="text-yellow-600 mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                    <strong>Unrecognised columns</strong> will be ignored:{' '}
-                    {unknownColumns.map(c => (
-                      <code key={c} className="font-mono bg-yellow-100 dark:bg-yellow-900/40 px-1 rounded text-xs mx-0.5">{c}</code>
-                    ))}
+                    <strong>{unmappedCount} column{unmappedCount !== 1 ? 's' : ''}</strong> are set to "ignore". Use the dropdowns below to remap them if needed.
                   </p>
                 </div>
               )}
 
-              {/* Column mapping table */}
+              {/* Column mapping table — editable */}
               <div>
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Detected column mappings
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  Column mappings
                 </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  Unrecognised columns are marked "ignore". Use the dropdown to remap them to the correct field.
+                </p>
                 <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                   <table className="w-full text-xs">
                     <thead className="bg-gray-50 dark:bg-gray-700/50">
@@ -600,14 +662,24 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                       {previewHeaders.map(h => (
-                        <tr key={h} className="bg-white dark:bg-gray-800">
+                        <tr key={h} className={columnMappings[h] ? 'bg-white dark:bg-gray-800' : 'bg-yellow-50 dark:bg-yellow-900/10'}>
                           <td className="px-3 py-1.5 font-mono text-gray-800 dark:text-gray-200">{h}</td>
                           <td className="px-3 py-1.5">
-                            {columnMappings[h] ? (
-                              <span className="font-mono text-green-700 dark:text-green-400">{columnMappings[h]}</span>
-                            ) : (
-                              <span className="text-gray-400 dark:text-gray-500 italic">ignored</span>
-                            )}
+                            <select
+                              value={columnMappings[h] ?? ''}
+                              onChange={(e) => setColumnMappings(prev => ({
+                                ...prev,
+                                [h]: e.target.value || null,
+                              }))}
+                              className="w-full text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            >
+                              <option value="">— ignore —</option>
+                              {CSV_COLUMNS.map(canon => (
+                                <option key={canon} value={canon}>
+                                  {CANONICAL_LABELS[canon] ?? canon}
+                                </option>
+                              ))}
+                            </select>
                           </td>
                         </tr>
                       ))}
@@ -642,11 +714,14 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                           const isSkipped = !!override.skip
                           const effectiveName = override.rename ?? (nameColIndex >= 0 ? (row[nameColIndex] ?? '') : '')
                           const rowName = effectiveName.toLowerCase()
-                          const isUpdate = !isSkipped && rowName && existingByName.has(rowName)
+                          const existingParam = existingByName.get(rowName)
+                          const isExisting = !isSkipped && !!existingParam
+                          const isUpdate = isExisting && rowHasChanges(row, existingParam!)
+                          const isNoChange = isExisting && !isUpdate
                           const hasFormula = formulaColIndex >= 0 && !!(row[formulaColIndex] ?? '').trim()
 
                           return (
-                            <tr key={ri} className={isSkipped ? 'opacity-40 bg-gray-50 dark:bg-gray-900/20' : isUpdate ? 'bg-amber-50 dark:bg-amber-900/10' : 'bg-white dark:bg-gray-800'}>
+                            <tr key={ri} className={isSkipped ? 'opacity-40 bg-gray-50 dark:bg-gray-900/20' : isUpdate ? 'bg-amber-50 dark:bg-amber-900/10' : isNoChange ? 'bg-gray-50 dark:bg-gray-900/20 opacity-60' : 'bg-white dark:bg-gray-800'}>
                               {/* Status + actions column */}
                               <td className="px-3 py-1.5 whitespace-nowrap">
                                 <div className="flex items-center gap-1.5">
@@ -663,6 +738,10 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                                   />
                                   {isSkipped ? (
                                     <span className="text-xs text-gray-400 italic">skip</span>
+                                  ) : isNoChange ? (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                                      — same
+                                    </span>
                                   ) : isUpdate ? (
                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
                                       <AlertTriangle size={10} />
@@ -681,8 +760,8 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                                 const canonical = columnMappings[h]
                                 const cellValue = row[ci] ?? ''
 
-                                // Name column: allow inline rename for overwrite rows
-                                if (canonical === 'name' && isUpdate && !isSkipped) {
+                                // Name column: allow inline rename for rows that will actually change values
+                                if (canonical === 'name' && isUpdate && !isSkipped && !isNoChange) {
                                   return (
                                     <td key={ci} className="px-2 py-1 whitespace-nowrap max-w-[180px]">
                                       {editingRename === ri ? (
