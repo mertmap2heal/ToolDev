@@ -16,6 +16,7 @@ export interface ParsedParam {
   maxValue?: string
   tags?: string[]
   formula?: string
+  status?: string
 }
 
 export interface ImportResult {
@@ -63,6 +64,7 @@ export function parseCSV(content: string): ImportResult {
   const maxIdx    = idx(['max', 'maxvalue', 'max_value'])
   const tagsIdx   = idx(['tags'])
   const formulaIdx= idx(['formula'])
+  const statusIdx = idx(['status'])
 
   if (nameIdx === -1) {
     return { parsed: [], warnings: ['CSV missing required "name" column'] }
@@ -106,6 +108,10 @@ export function parseCSV(content: string): ImportResult {
     if (formulaIdx !== -1 && fields[formulaIdx]) p.formula   = fields[formulaIdx].trim()
     if (tagsIdx !== -1 && fields[tagsIdx]) {
       p.tags = fields[tagsIdx].split(';').map(t => t.trim()).filter(Boolean)
+    }
+    if (statusIdx !== -1 && fields[statusIdx]) {
+      const s = fields[statusIdx].trim().toLowerCase()
+      if (['draft', 'approved', 'obsolete', 'review'].includes(s)) p.status = s
     }
 
     parsed.push(p)

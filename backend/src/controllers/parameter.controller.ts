@@ -819,30 +819,76 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
         })
 
         if (existing) {
-          // Update only fields that differ
-          const updatePayload: Record<string, unknown> = {
-            description:  p.description  ?? existing.description,
-            dataType:     p.dataType     ?? existing.dataType,
-            defaultValue: p.defaultValue ?? existing.defaultValue,
-            unit:         p.unit         ?? existing.unit,
-            tolerance:    p.tolerance    ?? existing.tolerance,
-            minValue:     p.minValue     ?? existing.minValue,
-            maxValue:     p.maxValue     ?? existing.maxValue,
-            formula:      p.formula      ?? existing.formula,
+          // Compute new field values
+          const newDesc     = p.description  ?? existing.description
+          const newType     = p.dataType     ?? existing.dataType
+          const newValue    = p.defaultValue ?? existing.defaultValue
+          const newUnit     = p.unit         ?? existing.unit
+          const newTol      = p.tolerance    ?? existing.tolerance
+          const newMin      = p.minValue     ?? existing.minValue
+          const newMax      = p.maxValue     ?? existing.maxValue
+          const newFormula  = p.formula      ?? existing.formula
+          const newStatus   = p.status       ?? existing.status
+          const newTags     = p.tags         ?? (existing.tags as string[] | null)
+
+          // Skip if nothing changed
+          const unchanged =
+            newDesc    === existing.description &&
+            newType    === existing.dataType &&
+            newValue   === existing.defaultValue &&
+            newUnit    === existing.unit &&
+            newTol     === existing.tolerance &&
+            newMin     === existing.minValue &&
+            newMax     === existing.maxValue &&
+            newFormula === existing.formula &&
+            newStatus  === existing.status &&
+            JSON.stringify(newTags) === JSON.stringify(existing.tags)
+
+          if (unchanged) {
+            skipped++
+            continue
           }
-          if (p.tags) updatePayload.tags = p.tags
-          await prisma.parameter.update({
+
+          const updatedParameter = await prisma.parameter.update({
             where: { id: existing.id },
-            data: updatePayload,
+            data: {
+              description:  newDesc,
+              dataType:     newType,
+              defaultValue: newValue,
+              unit:         newUnit,
+              tolerance:    newTol,
+              minValue:     newMin,
+              maxValue:     newMax,
+              formula:      newFormula,
+              status:       newStatus,
+              ...(newTags != null && { tags: newTags }),
+            },
           })
+
+          // Create version record
+          const snapshot = buildParameterVersionSnapshot(updatedParameter)
+          const lastVersion = await prisma.parameterVersion.findFirst({
+            where: { parameterId: existing.id },
+            orderBy: { version: 'desc' },
+          })
+          const nextVersion = lastVersion ? lastVersion.version + 1 : 1
+          await prisma.parameterVersion.create({
+            data: {
+              parameterId: existing.id,
+              version: nextVersion,
+              snapshot,
+              createdById: req.user!.userId,
+            },
+          })
+
           skipped++ // counted as "updated"
         } else {
           const newParameterId = await generateParameterId(projectId)
-          await prisma.parameter.create({
+          const created = await prisma.parameter.create({
             data: {
               projectId,
               parameterId: newParameterId,
-              name: p.name,
+              name:         p.name,
               description:  p.description,
               dataType:     p.dataType,
               defaultValue: p.defaultValue,
@@ -852,9 +898,21 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
               maxValue:     p.maxValue,
               formula:      p.formula,
               tags:         p.tags ?? [],
-              status:       'draft',
+              status:       p.status ?? 'draft',
             },
           })
+
+          // Create initial version record
+          const snapshot = buildParameterVersionSnapshot(created)
+          await prisma.parameterVersion.create({
+            data: {
+              parameterId: created.id,
+              version: 1,
+              snapshot,
+              createdById: req.user!.userId,
+            },
+          })
+
           imported++
         }
       } catch (err) {

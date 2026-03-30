@@ -165,6 +165,9 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
   const [previewRows, setPreviewRows] = useState<string[][]>([])
   const [columnMappings, setColumnMappings] = useState<Record<string, string | null>>({})
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  // Per-row overrides: rowIndex -> { skip?: boolean, rename?: string }
+  const [rowOverrides, setRowOverrides] = useState<Record<number, { skip?: boolean; rename?: string }>>({})
+  const [editingRename, setEditingRename] = useState<number | null>(null)
 
   const importMutation = useMutation({
     mutationFn: (content: string) =>
@@ -203,6 +206,8 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
     setPreviewRows([])
     setColumnMappings({})
     setImportResult(null)
+    setRowOverrides({})
+    setEditingRename(null)
     onClose()
   }
 
@@ -260,7 +265,26 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
   }
 
   const handleImport = () => {
-    importMutation.mutate(csvContent)
+    // Apply per-row overrides: skip rows, apply renames
+    const hasOverrides = Object.keys(rowOverrides).length > 0
+    if (!hasOverrides) {
+      importMutation.mutate(csvContent)
+      return
+    }
+
+    // Rebuild CSV with overrides applied
+    const headerLine = previewHeaders.join(',')
+    const filteredLines: string[] = []
+    allRows.forEach((row, ri) => {
+      const override = rowOverrides[ri]
+      if (override?.skip) return
+      let cells = [...row]
+      if (override?.rename && nameColIndex >= 0) {
+        cells = cells.map((c, i) => i === nameColIndex ? override.rename! : c)
+      }
+      filteredLines.push(cells.join(','))
+    })
+    importMutation.mutate([headerLine, ...filteredLines].join('\n'))
   }
 
   const handleDone = () => {
@@ -279,6 +303,8 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
     setPreviewRows([])
     setColumnMappings({})
     setImportResult(null)
+    setRowOverrides({})
+    setEditingRename(null)
   }
 
   // -------------------------------------------------------------------------
@@ -612,41 +638,102 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                         {previewRows.map((row, ri) => {
-                          const rowName = nameColIndex >= 0 ? (row[nameColIndex] ?? '').toLowerCase() : ''
-                          const isUpdate = rowName && existingByName.has(rowName)
+                          const override = rowOverrides[ri] ?? {}
+                          const isSkipped = !!override.skip
+                          const effectiveName = override.rename ?? (nameColIndex >= 0 ? (row[nameColIndex] ?? '') : '')
+                          const rowName = effectiveName.toLowerCase()
+                          const isUpdate = !isSkipped && rowName && existingByName.has(rowName)
                           const hasFormula = formulaColIndex >= 0 && !!(row[formulaColIndex] ?? '').trim()
+
                           return (
-                            <tr key={ri} className={isUpdate ? 'bg-amber-50 dark:bg-amber-900/10' : 'bg-white dark:bg-gray-800'}>
+                            <tr key={ri} className={isSkipped ? 'opacity-40 bg-gray-50 dark:bg-gray-900/20' : isUpdate ? 'bg-amber-50 dark:bg-amber-900/10' : 'bg-white dark:bg-gray-800'}>
+                              {/* Status + actions column */}
                               <td className="px-3 py-1.5 whitespace-nowrap">
-                                {isUpdate ? (
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
-                                    <AlertTriangle size={10} />
-                                    Update
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
-                                    <CheckCircle size={10} />
-                                    New
-                                  </span>
-                                )}
+                                <div className="flex items-center gap-1.5">
+                                  {/* Skip checkbox */}
+                                  <input
+                                    type="checkbox"
+                                    checked={!isSkipped}
+                                    onChange={() => setRowOverrides(prev => ({
+                                      ...prev,
+                                      [ri]: { ...prev[ri], skip: !isSkipped }
+                                    }))}
+                                    className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 cursor-pointer"
+                                    title={isSkipped ? 'Include this row' : 'Skip this row'}
+                                  />
+                                  {isSkipped ? (
+                                    <span className="text-xs text-gray-400 italic">skip</span>
+                                  ) : isUpdate ? (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                                      <AlertTriangle size={10} />
+                                      Update
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
+                                      <CheckCircle size={10} />
+                                      New
+                                    </span>
+                                  )}
+                                </div>
                               </td>
+
                               {previewHeaders.map((h, ci) => {
                                 const canonical = columnMappings[h]
                                 const cellValue = row[ci] ?? ''
-                                // Value column: show formula indicator if this row has a formula
-                                if (canonical === 'value' && hasFormula) {
+
+                                // Name column: allow inline rename for overwrite rows
+                                if (canonical === 'name' && isUpdate && !isSkipped) {
                                   return (
-                                    <td key={ci} className="px-3 py-1.5 text-gray-400 dark:text-gray-500 whitespace-nowrap max-w-[160px] truncate italic flex items-center gap-1">
-                                      <FunctionSquare size={11} className="text-purple-500 flex-shrink-0" />
-                                      <span className="text-purple-600 dark:text-purple-400">formula-driven</span>
+                                    <td key={ci} className="px-2 py-1 whitespace-nowrap max-w-[180px]">
+                                      {editingRename === ri ? (
+                                        <input
+                                          autoFocus
+                                          className="w-full text-xs border border-blue-400 rounded px-1.5 py-0.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none"
+                                          defaultValue={override.rename ?? cellValue}
+                                          onBlur={(e) => {
+                                            const v = e.target.value.trim()
+                                            setRowOverrides(prev => ({
+                                              ...prev,
+                                              [ri]: { ...prev[ri], rename: v || undefined }
+                                            }))
+                                            setEditingRename(null)
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') e.currentTarget.blur()
+                                            if (e.key === 'Escape') { setEditingRename(null) }
+                                          }}
+                                        />
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditingRename(ri)}
+                                          className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300 hover:underline group w-full truncate text-left"
+                                          title="Click to rename (avoids overwriting existing)"
+                                        >
+                                          <span className="truncate">{override.rename ?? cellValue}</span>
+                                          <span className="opacity-0 group-hover:opacity-100 text-gray-400 ml-auto flex-shrink-0">✎</span>
+                                        </button>
+                                      )}
                                     </td>
                                   )
                                 }
-                                // Formula column: show formula expression with icon
+
+                                // Value column: show formula indicator only when formula exists AND value is empty
+                                if (canonical === 'value' && hasFormula && !cellValue) {
+                                  return (
+                                    <td key={ci} className="px-3 py-1.5 whitespace-nowrap max-w-[160px]">
+                                      <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 italic text-xs">
+                                        <FunctionSquare size={11} className="flex-shrink-0" />
+                                        formula-driven
+                                      </span>
+                                    </td>
+                                  )
+                                }
+                                // Formula column: show with icon
                                 if (canonical === 'formula' && cellValue) {
                                   return (
                                     <td key={ci} className="px-3 py-1.5 whitespace-nowrap max-w-[160px]">
-                                      <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 font-mono truncate">
+                                      <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 font-mono text-xs truncate">
                                         <FunctionSquare size={11} className="flex-shrink-0" />
                                         {cellValue}
                                       </span>
@@ -654,7 +741,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                                   )
                                 }
                                 return (
-                                  <td key={ci} className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap max-w-[160px] truncate">
+                                  <td key={ci} className="px-3 py-1.5 text-gray-700 dark:text-gray-300 whitespace-nowrap max-w-[160px] truncate text-xs">
                                     {cellValue}
                                   </td>
                                 )
