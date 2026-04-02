@@ -145,9 +145,23 @@ function buildTree(
   requirements?: Array<{ id: string; title?: string; requirementId?: string }>
 ): VerTreeNode[] {
   const q = searchQuery.trim().toLowerCase()
-  const caseMap = new Map(testCases.map((c) => [c.id, c]))
+  // Build test-case lookup maps from BOTH:
+  //  - the `testCases` prop
+  //  - and the test cases nested under each plan's `planCases[].testCase`
+  // This prevents cases where `testCases` prop is empty while plans still contain test-case objects,
+  // which would otherwise break linking resolution (traceLinks.targetId -> visible test-case node).
+  const planTestCases = plans
+    .flatMap((p) => (p.planCases ?? []).map((pc: any) => pc?.testCase).filter(Boolean)) as Array<{
+    id: string
+    key?: string
+    title?: string
+    status?: string
+  }>
+  const allTestCasesForMap = [...testCases, ...planTestCases]
+
+  const caseMap = new Map(allTestCasesForMap.map((c) => [c.id, c]))
   const caseKeyToId = new Map<string, string>()
-  for (const c of testCases) {
+  for (const c of allTestCasesForMap) {
     const key = (c as { key?: string }).key
     if (key) caseKeyToId.set(key, c.id)
   }
@@ -164,7 +178,7 @@ function buildTree(
           const byKeyLower = caseKeyToId.get(targetId.toLowerCase())
           if (byKeyLower) return byKeyLower
           const str = String(targetId)
-          for (const tc of testCases) {
+          for (const tc of allTestCasesForMap) {
             const id = (tc as { id: string }).id
             const key = (tc as { key?: string }).key
             if (id === targetId || id === str || key === targetId || key === str) return id
@@ -230,7 +244,10 @@ function buildTree(
           const label = (c as any).title ?? (c as any).name ?? c.id
           const key = (c as any).key
           if (q && !label?.toLowerCase().includes(q) && !key?.toLowerCase().includes(q)) return null
-          const reqLinks = reqLinksByCaseIdStable.get(caseId) ?? []
+          // Use the original `cid` (from plan.planCases) as the first lookup key.
+          // In practice, `caseId` can be a different resolved identifier, which can cause linked requirements
+          // to render under the plan-level requirements group but not under the test-case node.
+          const reqLinks = reqLinksByCaseIdStable.get(cid) ?? reqLinksByCaseIdStable.get(caseId) ?? []
           const requirementChildren: VerTreeNode[] = reqLinks.map((link) => ({
             type: 'requirement' as const,
             id: `req-${link.sourceId}-${caseId}`,

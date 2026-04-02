@@ -775,8 +775,45 @@ export default function RequirementsPage() {
   const verificationPlansList = useMemo(() => Array.isArray(verificationPlans) ? verificationPlans : [], [verificationPlans])
   const verificationCasesList = useMemo(() => Array.isArray(verificationCases) ? verificationCases : [], [verificationCases])
   const verificationSetupsList = useMemo(() => Array.isArray(verificationSetups) ? verificationSetups : [], [verificationSetups])
-  const requirementTestCaseLinks = useMemo((): RequirementTestCaseLinkLike[] => {
-    const links = Array.isArray(effectiveLinks) ? effectiveLinks : []
+  // Verification sidebar linked requirements should be driven by live trace edges.
+  // Baseline snapshots may omit requirement<->test_case links, which would otherwise hide them.
+  const requirementTestCaseLinksFromTrace = useMemo((): RequirementTestCaseLinkLike[] => {
+    const links = Array.isArray(traceLinks) ? (traceLinks as any[]) : []
+    const norm = (s: string) => (s ?? '').toLowerCase().replace(/-/g, '_')
+    const result: RequirementTestCaseLinkLike[] = []
+    const seen = new Set<string>()
+    for (const l of links) {
+      const st = norm((l as any).sourceType)
+      const tt = norm((l as any).targetType)
+      const isForward = st === 'requirement' && (tt === 'test_case' || tt === 'testcase')
+      const isReverse = (st === 'test_case' || st === 'testcase') && tt === 'requirement'
+      if (!isForward && !isReverse) continue
+      const lid = (l as any).id ?? `${(l as any).sourceId}-${(l as any).targetId}`
+      if (seen.has(lid)) continue
+      seen.add(lid)
+      if (isForward) {
+        result.push({
+          id: (l as any).id,
+          sourceId: (l as any).sourceId,
+          targetId: (l as any).targetId,
+          sourceTitle: (l as any).sourceTitle ?? (l as any).sourceLabel ?? (l as any).sourceDisplayId,
+          sourceDisplayId: (l as any).sourceDisplayId,
+        })
+      } else {
+        result.push({
+          id: (l as any).id,
+          sourceId: (l as any).targetId,
+          targetId: (l as any).sourceId,
+          sourceTitle: (l as any).targetTitle ?? (l as any).targetLabel ?? (l as any).targetDisplayId,
+          sourceDisplayId: (l as any).targetDisplayId,
+        })
+      }
+    }
+    return result
+  }, [traceLinks])
+
+  const requirementTestCaseLinksFromEffective = useMemo((): RequirementTestCaseLinkLike[] => {
+    const links = Array.isArray(effectiveLinks) ? (effectiveLinks as any[]) : []
     const norm = (s: string) => (s ?? '').toLowerCase().replace(/-/g, '_')
     const result: RequirementTestCaseLinkLike[] = []
     const seen = new Set<string>()
@@ -809,6 +846,10 @@ export default function RequirementsPage() {
     }
     return result
   }, [effectiveLinks])
+
+  const requirementTestCaseLinks = useMemo(() => {
+    return requirementTestCaseLinksFromTrace.length > 0 ? requirementTestCaseLinksFromTrace : requirementTestCaseLinksFromEffective
+  }, [requirementTestCaseLinksFromEffective, requirementTestCaseLinksFromTrace])
   const requirementsForVerificationTree = useMemo(
     () =>
       (allRequirements || []).map((r: Requirement) => ({
@@ -820,7 +861,29 @@ export default function RequirementsPage() {
     [allRequirements]
   )
 
-  const linksByReqIdForVerification = useMemo(() => {
+  const linksByReqIdForVerificationFromTrace = useMemo(() => {
+    const map = new Map<string, VerLinkLike[]>()
+    const arr = (Array.isArray(traceLinks) ? traceLinks : []) as VerLinkLike[]
+    for (const l of arr) {
+      const link: VerLinkLike = {
+        ...l,
+        _displayTargetType: l.targetType ?? l.sourceType,
+      }
+      if (l.sourceId) {
+        const list = map.get(l.sourceId) ?? []
+        list.push(link)
+        map.set(l.sourceId, list)
+      }
+      if (l.targetId && l.targetId !== l.sourceId) {
+        const list = map.get(l.targetId) ?? []
+        list.push(link)
+        map.set(l.targetId, list)
+      }
+    }
+    return map
+  }, [traceLinks])
+
+  const linksByReqIdForVerificationFromEffective = useMemo(() => {
     const map = new Map<string, VerLinkLike[]>()
     const arr = (effectiveLinks || []) as VerLinkLike[]
     for (const l of arr) {
@@ -841,6 +904,10 @@ export default function RequirementsPage() {
     }
     return map
   }, [effectiveLinks])
+
+  const linksByReqIdForVerification = useMemo(() => {
+    return linksByReqIdForVerificationFromTrace.size > 0 ? linksByReqIdForVerificationFromTrace : linksByReqIdForVerificationFromEffective
+  }, [linksByReqIdForVerificationFromEffective, linksByReqIdForVerificationFromTrace])
 
   const getLinksForRequirementVerificationTree = useCallback(
     (reqId: string) => linksByReqIdForVerification.get(reqId) ?? [],
@@ -2656,9 +2723,13 @@ export default function RequirementsPage() {
                     onRemoveSetupFromPlan={removeSetupFromPlanVerification}
                     requirementTestCaseLinks={requirementTestCaseLinks}
                     requirements={requirementsForVerificationTree}
-                    onAddRequirementToTestCase={(caseId) => navigate(`/projects/${projectId}/requirements?tree=verification&linkToCase=${caseId}`)}
-                    onRemoveRequirementFromTestCase={(reqId, caseId) => removeRequirementFromTestCaseMutation.mutate({ reqId, caseId })}
-                    onDropRequirementsOnTestCase={handleDropRequirementsOnTestCase}
+                    onAddRequirementToTestCase={
+                      isBaselineView ? undefined : (caseId) => navigate(`/projects/${projectId}/requirements?tree=verification&linkToCase=${caseId}`)
+                    }
+                    onRemoveRequirementFromTestCase={
+                      isBaselineView ? undefined : (reqId, caseId) => removeRequirementFromTestCaseMutation.mutate({ reqId, caseId })
+                    }
+                    onDropRequirementsOnTestCase={isBaselineView ? undefined : handleDropRequirementsOnTestCase}
                     onRequirementClick={(reqId) => {
                       const req = allRequirements?.find((r) => r.id === reqId)
                       if (req) setDetailRequirement(req)
@@ -2915,8 +2986,9 @@ export default function RequirementsPage() {
               {/* Traceability Matrix Button */}
               <button
                 onClick={() => setIsTraceMatrixOpen(true)}
-                className="px-2.5 py-2 border rounded-lg flex items-center gap-1.5 transition-colors bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 text-sm font-medium"
-                title="Traceability Matrix"
+                disabled={isBaselineView}
+                className="px-2.5 py-2 border rounded-lg flex items-center gap-1.5 transition-colors bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-gray-700"
+                title={isBaselineView ? 'Traceability matrix is unavailable in baseline view' : 'Traceability Matrix'}
               >
                 <Table size={16} />
                 <span>Traceability</span>

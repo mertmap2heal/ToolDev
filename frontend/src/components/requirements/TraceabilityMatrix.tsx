@@ -43,9 +43,10 @@ type CellStatus = 'linked' | 'suspect' | 'none'
 type MatrixType = 'requirements-functions' | 'requirements-requirements'
 
 /**
- * TraceabilityMatrix component displays an interactive matrix showing the coverage
- * between requirements and target entities. LINKAGE_V1: PBS, Interfaces, etc. (no Functions).
- * Legacy: Requirements vs Functions, Requirements vs Requirements.
+ * TraceabilityMatrix displays requirements as rows versus a selectable target dimension:
+ * With LINKAGE_V1, columns follow {@link LINKAGE_TARGET_OPTIONS} (PBS, functions, requirements,
+ * parameters, interfaces, verification, safety, documents, CRs, issues).
+ * Without LINKAGE_V1: Requirements vs Functions or Requirements vs Requirements.
  */
 export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityMatrixProps) {
   const [matrixType, setMatrixType] = useState<MatrixType>('requirements-functions')
@@ -111,6 +112,9 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
   }, [LINKAGE_V1, linkageTargets, linkageTargetType])
 
   type CellInfo = { linked: boolean; suspect: boolean; linkId?: string; linkType?: string; arrow?: '→' | '←' | '↔' }
+
+  /** Cells derived from requirement.componentId or legacy function.sourceReqId — no row in the link API to delete. */
+  const isImplicitCell = (info: CellInfo | undefined) => !!(info?.linked && !info?.linkId)
 
   const normType = (s: string | undefined) => (s ?? '').toLowerCase().replace(/-/g, '_')
   const isRequirementLike = (t: string | undefined) => {
@@ -421,8 +425,11 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
 
   // Handle cell click - create or delete link
   const handleCellClick = (sourceId: string, targetId: string) => {
+    const info = linkMap.get(sourceId)?.get(targetId)
+    if (isImplicitCell(info)) return
+
     const status = getCellStatus(sourceId, targetId)
-    const linkId = linkMap.get(sourceId)?.get(targetId)?.linkId
+    const linkId = info?.linkId
 
     if (status === 'none') {
       // Show dialog to create link
@@ -833,6 +840,7 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
 
                         const status = getCellStatus(req.id, target.id)
                         const cellInfo = getCellInfo(req.id, target.id)
+                        const implicit = isImplicitCell(cellInfo)
                         const sourceLabel = req.requirementId || req.title
                         const targetLabel = LINKAGE_V1
                           ? (target.label || target.id)
@@ -847,22 +855,31 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
                           ? ` [${cellInfo.arrow || '→'} ${cellInfo.linkType}]`
                           : ''
 
+                        const implicitTitle =
+                          normType(linkageTargetType) === 'pbs_component' || (!LINKAGE_V1 && matrixType === 'requirements-functions')
+                            ? `${sourceLabel} → ${targetLabel}${tooltipExtra}\nShown from allocation (no separate trace link). Edit the requirement or add an explicit link.`
+                            : `${sourceLabel} → ${targetLabel}${tooltipExtra}\nShown from allocation (no separate trace link).`
+
                         return (
                           <td
                             key={target.id}
                             className={clsx(
-                              'px-1 py-1 text-center border border-gray-200 dark:border-gray-700 cursor-pointer transition-colors',
+                              'px-1 py-1 text-center border border-gray-200 dark:border-gray-700 transition-colors',
+                              !implicit && 'cursor-pointer',
+                              implicit && 'cursor-default',
                               status === 'linked' && 'bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50',
                               status === 'suspect' && 'bg-yellow-100 dark:bg-yellow-900/30 hover:bg-yellow-200 dark:hover:bg-yellow-900/50',
                               status === 'none' && 'bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'
                             )}
                             onClick={() => handleCellClick(req.id, target.id)}
                             title={
-                              status === 'linked'
-                                ? `${sourceLabel} ${cellInfo?.arrow || '→'} ${targetLabel}${tooltipExtra}\nClick to delete`
-                                : status === 'suspect'
-                                  ? `${sourceLabel} ${cellInfo?.arrow || '→'} ${targetLabel}${tooltipExtra} (Suspect)\nClick to delete`
-                                  : `${sourceLabel} → ${targetLabel}: Not linked\nClick to create link`
+                              implicit
+                                ? implicitTitle
+                                : status === 'linked'
+                                  ? `${sourceLabel} ${cellInfo?.arrow || '→'} ${targetLabel}${tooltipExtra}\nClick to delete`
+                                  : status === 'suspect'
+                                    ? `${sourceLabel} ${cellInfo?.arrow || '→'} ${targetLabel}${tooltipExtra} (Suspect)\nClick to delete`
+                                    : `${sourceLabel} → ${targetLabel}: Not linked\nClick to create link`
                             }
                           >
                             {status === 'linked' && (
