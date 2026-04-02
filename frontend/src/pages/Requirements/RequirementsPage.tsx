@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { ArrowUp, ArrowDown } from 'lucide-react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
-import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, AlertTriangle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft, BarChart3, LayoutList, Sliders, Link2, Eye, Table, ClipboardCheck, Network } from 'lucide-react'
+import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, AlertTriangle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft, BarChart3, LayoutList, Sliders, Link2, Eye, Table, ClipboardCheck, Network, Folder } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
@@ -2992,6 +2992,16 @@ export default function RequirementsPage() {
               >
                 <Table size={16} />
                 <span>Traceability</span>
+              </button>
+
+              {/* Saved Traceability Views */}
+              <button
+                onClick={() => navigate(`/projects/${projectId}/requirements/traceability-views`)}
+                className="px-2.5 py-2 border rounded-lg flex items-center gap-1.5 transition-colors bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 text-sm font-medium"
+                title="Saved Traceability Views"
+              >
+                <Folder size={16} />
+                <span className="hidden sm:inline">Views</span>
               </button>
 
               {/* Data dropdown */}

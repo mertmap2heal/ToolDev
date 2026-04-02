@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X, Check, AlertTriangle, Link as LinkIcon, Download, Plus, Loader } from 'lucide-react'
 import * as XLSX from 'xlsx'
@@ -24,6 +24,7 @@ import { invalidateLinkCaches } from '../../utils/invalidateLinkCaches'
 import { hasAllocatedToComponent } from '../../linkage/buildRequirementLinkedItems'
 import { addCoverPage, addHeaderFooterToAllPages, addTraceabilityMatrixSection } from '../../utils/exportPdfLayout'
 import { buildTraceabilityMatrixDocx } from '../../utils/exportDocx'
+import { traceabilityViewsService, type TraceabilityMatrixSavedDefinition } from '../../services/traceabilityViews.service'
 
 // Dynamic import for jspdf-autotable to prevent build issues (mirrors ExportBuilder)
 let autoTableModule: any = null
@@ -37,6 +38,8 @@ async function loadAutoTable() {
 interface TraceabilityMatrixProps {
   projectId: string
   onClose: () => void
+  /** Optional saved view definition to apply (project-shared). */
+  savedViewId?: string
 }
 
 type CellStatus = 'linked' | 'suspect' | 'none'
@@ -48,7 +51,7 @@ type MatrixType = 'requirements-functions' | 'requirements-requirements'
  * parameters, interfaces, verification, safety, documents, CRs, issues).
  * Without LINKAGE_V1: Requirements vs Functions or Requirements vs Requirements.
  */
-export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityMatrixProps) {
+export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: TraceabilityMatrixProps) {
   const [matrixType, setMatrixType] = useState<MatrixType>('requirements-functions')
   const [linkageTargetType, setLinkageTargetType] = useState<LinkageTargetType>('pbs_component')
   const [selectedReq, setSelectedReq] = useState<string | null>(null)
@@ -62,8 +65,41 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
   const [linkDirection, setLinkDirection] = useState<string>('')
   const [linkRationale, setLinkRationale] = useState<string>('')
   const [exportFormat, setExportFormat] = useState<'csv' | 'excel' | 'pdf' | 'word'>('csv')
+  const [targetSearchQuery, setTargetSearchQuery] = useState('')
+  const [rowMode, setRowMode] = useState<'filters' | 'pinned' | 'mixed'>('mixed')
+  const [colMode, setColMode] = useState<'filters' | 'pinned' | 'mixed'>('mixed')
+  const [pinnedRequirementIds, setPinnedRequirementIds] = useState<string[]>([])
+  const [pinnedTargetIds, setPinnedTargetIds] = useState<string[]>([])
 
   const queryClient = useQueryClient()
+
+  const { data: savedView } = useQuery({
+    queryKey: ['traceability-view', projectId, savedViewId],
+    queryFn: async () => {
+      if (!savedViewId) return null
+      const r = await traceabilityViewsService.getView(projectId, savedViewId)
+      return r.success && r.data ? r.data : null
+    },
+    enabled: !!projectId && !!savedViewId,
+  })
+
+  useEffect(() => {
+    if (!savedView?.definitionJson) return
+    try {
+      const def = JSON.parse(savedView.definitionJson) as Partial<TraceabilityMatrixSavedDefinition>
+      if (def.viewKind !== 'traceability_matrix') return
+      if (def.linkageTargetType) setLinkageTargetType(def.linkageTargetType as LinkageTargetType)
+      if (def.filterLinked) setFilterLinked(def.filterLinked)
+      if (typeof def.showSuspectOnly === 'boolean') setShowSuspectOnly(def.showSuspectOnly)
+      if (def.targetSearchQuery !== undefined) setTargetSearchQuery(String(def.targetSearchQuery ?? ''))
+      if (def.rowMode) setRowMode(def.rowMode)
+      if (def.colMode) setColMode(def.colMode)
+      if (Array.isArray(def.pinnedRequirementIds)) setPinnedRequirementIds(def.pinnedRequirementIds.filter(Boolean))
+      if (Array.isArray(def.pinnedTargetIds)) setPinnedTargetIds(def.pinnedTargetIds.filter(Boolean))
+    } catch {
+      // ignore invalid saved definitions
+    }
+  }, [savedView?.definitionJson])
 
   // Fetch requirements
   const { data: requirements = [], isLoading: loadingReqs } = useQuery({
@@ -88,8 +124,8 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
   // Fetch linkage targets (LINKAGE_V1 only)
   const targetOpt = LINKAGE_TARGET_OPTIONS.find((o) => o.value === linkageTargetType)
   const { data: linkageTargets = [], isLoading: loadingLinkageTargets } = useQuery({
-    queryKey: ['linkage-targets', projectId, linkageTargetType],
-    queryFn: () => (targetOpt ? targetOpt.adapter.search('', projectId) : Promise.resolve([])),
+    queryKey: ['linkage-targets', projectId, linkageTargetType, targetSearchQuery],
+    queryFn: () => (targetOpt ? targetOpt.adapter.search(targetSearchQuery || '', projectId) : Promise.resolve([])),
     enabled: !!projectId && !!targetOpt && LINKAGE_V1,
   })
 
@@ -316,7 +352,11 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
 
   // Filter requirements based on filter settings
   const filteredRequirements = useMemo(() => {
-    return requirements.filter((req) => {
+    const base =
+      rowMode === 'pinned'
+        ? requirements.filter((r) => new Set(pinnedRequirementIds).has(r.id))
+        : requirements
+    return base.filter((req) => {
       const targetMap = linkMap.get(req.id)
       if (!targetMap) return true
 
@@ -329,14 +369,29 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
 
       return true
     })
-  }, [requirements, linkMap, filterLinked, showSuspectOnly])
+  }, [requirements, linkMap, filterLinked, showSuspectOnly, rowMode, pinnedRequirementIds])
 
   // Get target items based on matrix type or linkage target
   const targetItems = useMemo(() => {
-    if (LINKAGE_V1) return filteredTargets
+    if (LINKAGE_V1) {
+      if (colMode === 'pinned') {
+        const set = new Set(pinnedTargetIds)
+        return filteredTargets.filter((t) => set.has((t as any).id))
+      }
+      if (colMode === 'mixed' && pinnedTargetIds.length) {
+        const set = new Set(pinnedTargetIds)
+        const pinned = filteredTargets.filter((t) => set.has((t as any).id))
+        const dyn = filteredTargets
+        const byId = new Map<string, any>()
+        for (const t of dyn) byId.set((t as any).id, t)
+        for (const t of pinned) byId.set((t as any).id, t)
+        return Array.from(byId.values())
+      }
+      return filteredTargets
+    }
     if (matrixType === 'requirements-functions') return functions
     return requirements
-  }, [LINKAGE_V1, matrixType, functions, requirements, filteredTargets])
+  }, [LINKAGE_V1, matrixType, functions, requirements, filteredTargets, colMode, pinnedTargetIds])
 
   // Get cell status
   const getCellStatus = (sourceId: string, targetId: string): CellStatus => {
@@ -475,17 +530,19 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
   const exportToCsv = () => {
     const sourceLabel = 'ID'
     const sourceTitleLabel = 'Requirement Title'
+    const sourceDescLabel = 'Requirement Description'
     const targetHeaders = LINKAGE_V1
       ? targetItems.map((t: any) => t.label || t.id)
       : matrixType === 'requirements-functions'
         ? targetItems.map((f: any) => f.functionId || f.name)
         : targetItems.map((r: any) => r.requirementId || r.id.substring(0, 8))
 
-    const headers = [sourceLabel, sourceTitleLabel, ...targetHeaders]
+    const headers = [sourceLabel, sourceTitleLabel, sourceDescLabel, ...targetHeaders]
     const rows = filteredRequirements.map((req) => {
       const row = [
         req.requirementId || req.id.substring(0, 8),
         req.title,
+        (req.description ?? '').replace(/\s+/g, ' ').trim(),
         ...targetItems.map((target: any) => {
           const info = getCellInfo(req.id, target.id)
           if (!info?.linked) return ''
@@ -498,7 +555,20 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
       return row
     })
 
-    const csvContent = [headers, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const metaRows = [
+      [],
+      ['# Row metadata'],
+      ['rowId', 'displayId', 'title', 'description'],
+      ...filteredRequirements.map((r) => [r.id, r.requirementId || r.id.substring(0, 8), r.title, (r.description ?? '').replace(/\s+/g, ' ').trim()]),
+      [],
+      ['# Column metadata'],
+      ['colId', 'label'],
+      ...targetItems.map((t: any) => [t.id, LINKAGE_V1 ? (t.label || t.id) : matrixType === 'requirements-functions' ? (t.name || t.functionId || t.id.substring(0, 8)) : (t.title || t.requirementId || t.id.substring(0, 8))]),
+    ]
+
+    const csvContent = [headers, ...rows, ...metaRows]
+      .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n')
     const blob = new Blob([csvContent], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -514,6 +584,12 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
       key: r.requirementId || r.id.substring(0, 8),
       label: r.title || (r.requirementId || r.id.substring(0, 8)),
       type: 'requirement',
+      description: (r.description ?? '').trim() || undefined,
+      meta: {
+        ...(r.status ? { status: String(r.status) } : {}),
+        ...(r.owner ? { owner: String(r.owner) } : {}),
+        ...(r.priority ? { priority: String(r.priority) } : {}),
+      },
     }))
 
     const cols = targetItems.map((t: any) => {
@@ -532,6 +608,13 @@ export default function TraceabilityMatrix({ projectId, onClose }: TraceabilityM
         key,
         label,
         type: LINKAGE_V1 ? linkageTargetType : (matrixType === 'requirements-functions' ? 'function' : 'requirement'),
+        description: String(t.description ?? t.targetDescription ?? '').trim() || undefined,
+        meta: {
+          ...(t.displayId ? { displayId: String(t.displayId) } : {}),
+          ...(t.targetDisplayId ? { displayId: String(t.targetDisplayId) } : {}),
+          ...(t.owner ? { owner: String(t.owner) } : {}),
+          ...(t.status ? { status: String(t.status) } : {}),
+        },
       }
     })
 

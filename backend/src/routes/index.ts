@@ -39,6 +39,7 @@ import tagsRoutes from './tags.routes'
 import attachmentsRoutes from './attachments.routes'
 import relationsRoutes from './relations.routes'
 import savedViewsRoutes from './savedViews.routes'
+import traceabilityViewsRoutes from './traceabilityViews.routes'
 import automationRoutes from './automation.routes'
 import importExportRoutes from './importExport.routes'
 import timeTrackingRoutes from './timeTracking.routes'
@@ -101,6 +102,7 @@ router.use('/tags', tagsRoutes)
 router.use('/attachments', attachmentsRoutes)
 router.use('/relations', relationsRoutes)
 router.use('/saved-views', savedViewsRoutes)
+router.use('/traceability-views', traceabilityViewsRoutes)
 router.use('/automation', automationRoutes)
 router.use('/csv', importExportRoutes)
 router.use('/time-tracking', timeTrackingRoutes)

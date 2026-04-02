@@ -149,6 +149,7 @@ model Project {
   parameters             Parameter[]
   changeRequests         ChangeRequest[]
   savedViews             SavedView[]
+  savedViewFolders       SavedViewFolder[]
   baselines              Baseline[]
   useCases               UseCase[]
   actors                 Actor[]
@@ -969,8 +970,10 @@ model SavedView {
   id        String   @id @default(uuid())
   projectId String
   userId    String?
+  folderId  String?
   name      String
   type      String   @default("personal") // 'personal' | 'project' | 'organization'
+  viewKind  String?  // e.g. 'traceability_matrix'
   filters   String? // JSON string of filter criteria
   columns   String? // JSON string of column configuration
   sortBy    String?
@@ -978,14 +981,38 @@ model SavedView {
   viewpoint String? // stakeholder, system, verification, etc. (ISO/IEC/IEEE 42010)
   concerns  String? // what the view addresses
   viewType  String? // diagram, table, matrix, report
+  definitionJson String? // JSON blob for view-specific definitions (e.g. traceability matrix saved definitions)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  folder  SavedViewFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
+  @@index([folderId])
   @@index([userId])
+  @@index([viewKind])
   @@index([viewpoint])
+}
+
+model SavedViewFolder {
+  id          String   @id @default(uuid())
+  projectId   String
+  parentId    String?
+  name        String
+  description String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent  SavedViewFolder? @relation("SavedViewFolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children SavedViewFolder[] @relation("SavedViewFolderTree")
+  views   SavedView[]
+
+  @@index([projectId])
+  @@index([parentId])
+  @@unique([projectId, parentId, name])
 }
 
 model RequirementVersion {
