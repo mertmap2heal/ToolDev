@@ -302,6 +302,103 @@ async function updateRequirementIdReferences(
   }
 }
 
+/**
+ * List filters use TraceLink as canonical storage (frontend link.service wraps traceability API).
+ */
+async function getRequirementIdsAllocatedToFunction(projectId: string, functionId: string): Promise<string[]> {
+  const links = await prisma.traceLink.findMany({
+    where: {
+      projectId,
+      sourceType: 'requirement',
+      targetType: 'function',
+      targetId: functionId,
+      linkType: 'allocated_to',
+    },
+    select: { sourceId: true },
+  })
+  return [...new Set(links.map((l) => l.sourceId))]
+}
+
+async function getRequirementIdsLinkedToTestCasesVerifies(projectId: string, testCaseIds: string[]): Promise<string[]> {
+  if (testCaseIds.length === 0) return []
+  const ids = new Set<string>()
+  const forward = await prisma.traceLink.findMany({
+    where: {
+      projectId,
+      sourceType: 'requirement',
+      targetId: { in: testCaseIds },
+      linkType: 'verifies',
+      OR: [{ targetType: 'test_case' }, { targetType: 'testcase' }],
+    },
+    select: { sourceId: true },
+  })
+  forward.forEach((l) => ids.add(l.sourceId))
+  const reverse = await prisma.traceLink.findMany({
+    where: {
+      projectId,
+      targetType: 'requirement',
+      sourceId: { in: testCaseIds },
+      linkType: 'verifies',
+      OR: [{ sourceType: 'test_case' }, { sourceType: 'testcase' }],
+    },
+    select: { targetId: true },
+  })
+  reverse.forEach((l) => ids.add(l.targetId))
+  return [...ids]
+}
+
+async function getTestCaseIdsForPlan(projectId: string, testPlanId: string): Promise<string[]> {
+  const plan = await prisma.verTestPlan.findFirst({
+    where: { id: testPlanId, projectId },
+    select: { id: true },
+  })
+  if (!plan) return []
+  const rows = await prisma.verTestPlanCase.findMany({
+    where: { testPlanId },
+    select: { testCaseId: true },
+  })
+  return [...new Set(rows.map((r) => r.testCaseId))]
+}
+
+/** Walk parentId chain so list pagination (roots only) includes roots of linked child requirements. */
+async function expandRequirementIdsToRootIds(projectId: string, requirementIds: string[]): Promise<string[]> {
+  const unique = [...new Set(requirementIds)].filter(Boolean)
+  if (unique.length === 0) return []
+  const roots = new Set<string>()
+  const visited = new Set<string>()
+  let frontier = [...unique]
+  let iter = 0
+  while (frontier.length > 0 && iter < 200) {
+    iter += 1
+    const rows = await prisma.requirement.findMany({
+      where: { id: { in: frontier }, projectId, deletedAt: null },
+      select: { id: true, parentId: true },
+    })
+    const byId = new Map(rows.map((r) => [r.id, r]))
+    const next: string[] = []
+    for (const id of frontier) {
+      if (visited.has(id)) continue
+      visited.add(id)
+      const r = byId.get(id)
+      if (!r) continue
+      if (!r.parentId) {
+        roots.add(r.id)
+      } else if (visited.has(r.parentId)) {
+        roots.add(r.id)
+      } else {
+        next.push(r.parentId)
+      }
+    }
+    frontier = [...new Set(next)]
+  }
+  return [...roots]
+}
+
+function intersectIds(a: string[], b: string[]): string[] {
+  const bs = new Set(b)
+  return a.filter((id) => bs.has(id))
+}
+
 export const getRequirements = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
@@ -324,6 +421,9 @@ export const getRequirements = async (req: AuthRequest, res: Response) => {
     const componentIdIncludeDescendants = (req.query.componentIdIncludeDescendants as string) !== 'false' // default true
     const verificationStatus = req.query.verificationStatus as string | undefined
     const reviewStatus = req.query.reviewStatus as string | undefined
+    const functionId = req.query.functionId as string | undefined
+    const testCaseId = req.query.testCaseId as string | undefined
+    const testPlanId = req.query.testPlanId as string | undefined
 
     // Resolve componentId filter: when include-descendants, show requirements for selected component + all children
     let componentIdsFilter: string[] | string | undefined
@@ -373,6 +473,34 @@ export const getRequirements = async (req: AuthRequest, res: Response) => {
     }
     if (verificationStatus) where.verificationStatus = verificationStatus
     if (reviewStatus) where.reviewStatus = reviewStatus
+
+    // Side-panel scope: function allocation + verification (TraceLink); intersect if multiple params
+    const scopeRootSets: string[][] = []
+    if (functionId) {
+      const linked = await getRequirementIdsAllocatedToFunction(projectId, functionId)
+      scopeRootSets.push(await expandRequirementIdsToRootIds(projectId, linked))
+    }
+    let caseIdsForVerifies: string[] = []
+    if (testCaseId) caseIdsForVerifies.push(testCaseId)
+    if (testPlanId) {
+      const planCases = await getTestCaseIdsForPlan(projectId, testPlanId)
+      if (testCaseId) {
+        caseIdsForVerifies = caseIdsForVerifies.filter((id) => planCases.includes(id))
+      } else {
+        caseIdsForVerifies = planCases
+      }
+    }
+    if (caseIdsForVerifies.length > 0) {
+      const linked = await getRequirementIdsLinkedToTestCasesVerifies(projectId, caseIdsForVerifies)
+      scopeRootSets.push(await expandRequirementIdsToRootIds(projectId, linked))
+    }
+    if (scopeRootSets.length > 0) {
+      let merged = scopeRootSets[0]
+      for (let i = 1; i < scopeRootSets.length; i++) {
+        merged = intersectIds(merged, scopeRootSets[i])
+      }
+      where.id = merged.length === 0 ? { in: [] } : { in: merged }
+    }
 
     // Full-text search across multiple fields
     if (search) {

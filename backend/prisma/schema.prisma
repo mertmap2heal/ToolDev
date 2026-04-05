@@ -592,6 +592,10 @@ model TraceLink {
   cachedTargetTitle     String? @db.VarChar(1024)
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, linkType])
+  @@index([projectId, sourceType, targetType, linkType])
+  @@index([projectId, targetId, linkType])
 }
 
 model Document {

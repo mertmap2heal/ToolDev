@@ -168,7 +168,7 @@ interface InlineEditState {
 
 export default function RequirementsPage() {
   const { projectId } = useParams<{ projectId: string }>()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const baselineId = searchParams.get('baselineId')
   const focusRequirementId = searchParams.get('requirementId')
@@ -235,31 +235,6 @@ export default function RequirementsPage() {
   const [verificationStatusFilter, setVerificationStatusFilter] = useState<string>('all')
   const [reviewStatusFilter, setReviewStatusFilter] = useState<string>('all')
 
-  // Active filter count
-  const activeFilterCount = useMemo(() => {
-    let count = 0
-    if (statusFilter !== 'all') count++
-    if (priorityFilter !== 'all') count++
-    if (ownerFilter !== 'all') count++
-    if (sourceFilter !== 'all') count++
-    if (requirementTypeFilter !== 'all') count++
-    if (categoryFilter !== 'all') count++
-    if (verificationStatusFilter !== 'all') count++
-    if (reviewStatusFilter !== 'all') count++
-    return count
-  }, [statusFilter, priorityFilter, ownerFilter, sourceFilter, requirementTypeFilter, categoryFilter, verificationStatusFilter, reviewStatusFilter])
-
-  const clearAllFilters = useCallback(() => {
-    setStatusFilter('all')
-    setPriorityFilter('all')
-    setOwnerFilter('all')
-    setSourceFilter('all')
-    setRequirementTypeFilter('all')
-    setCategoryFilter('all')
-    setVerificationStatusFilter('all')
-    setReviewStatusFilter('all')
-  }, [])
-
   // Pagination & sorting state
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [pageSize] = useState<number>(50)
@@ -282,9 +257,9 @@ export default function RequirementsPage() {
     return () => clearTimeout(timer)
   }, [searchQuery])
 
-  // Open Baseline Manager when navigating with openBaselines=1&baselineId= (e.g. from Version History "View baseline")
+  // Open Baseline Manager when navigating with openBaselines=1 (optionally with baselineId)
   useEffect(() => {
-    if (searchParams.get('openBaselines') === '1' && searchParams.get('baselineId')) {
+    if (searchParams.get('openBaselines') === '1') {
       setIsBaselineManagerOpen(true)
     }
   }, [searchParams])
@@ -295,10 +270,80 @@ export default function RequirementsPage() {
   const [selectedFunctionId, setSelectedFunctionId] = useState<string | null>(null)
   const [selectedVerificationNode, setSelectedVerificationNode] = useState<{ type: VerNodeType; id: string } | null>(null)
 
+  const listScopeActive = useMemo(() => {
+    if (leftPanelTab === 'pbs' && selectedComponentId) return true
+    if (leftPanelTab === 'functions' && selectedFunctionId) return true
+    if (
+      leftPanelTab === 'verification' &&
+      selectedVerificationNode &&
+      (selectedVerificationNode.type === 'test-case' || selectedVerificationNode.type === 'test-plan')
+    ) {
+      return true
+    }
+    return false
+  }, [leftPanelTab, selectedComponentId, selectedFunctionId, selectedVerificationNode])
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0
+    if (statusFilter !== 'all') count++
+    if (priorityFilter !== 'all') count++
+    if (ownerFilter !== 'all') count++
+    if (sourceFilter !== 'all') count++
+    if (requirementTypeFilter !== 'all') count++
+    if (categoryFilter !== 'all') count++
+    if (verificationStatusFilter !== 'all') count++
+    if (reviewStatusFilter !== 'all') count++
+    if (listScopeActive) count++
+    return count
+  }, [
+    statusFilter,
+    priorityFilter,
+    ownerFilter,
+    sourceFilter,
+    requirementTypeFilter,
+    categoryFilter,
+    verificationStatusFilter,
+    reviewStatusFilter,
+    listScopeActive,
+  ])
+
+  const clearAllFilters = useCallback(() => {
+    setStatusFilter('all')
+    setPriorityFilter('all')
+    setOwnerFilter('all')
+    setSourceFilter('all')
+    setRequirementTypeFilter('all')
+    setCategoryFilter('all')
+    setVerificationStatusFilter('all')
+    setReviewStatusFilter('all')
+    setSelectedComponentId(null)
+    setSelectedFunctionId(null)
+    setSelectedVerificationNode(null)
+  }, [])
+
+  const clearListScope = useCallback(() => {
+    setSelectedComponentId(null)
+    setSelectedFunctionId(null)
+    setSelectedVerificationNode(null)
+  }, [])
+
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [statusFilter, priorityFilter, ownerFilter, sourceFilter, requirementTypeFilter, categoryFilter, selectedComponentId, verificationStatusFilter, reviewStatusFilter])
+  }, [
+    statusFilter,
+    priorityFilter,
+    ownerFilter,
+    sourceFilter,
+    requirementTypeFilter,
+    categoryFilter,
+    selectedComponentId,
+    selectedFunctionId,
+    selectedVerificationNode,
+    leftPanelTab,
+    verificationStatusFilter,
+    reviewStatusFilter,
+  ])
 
   // Build server-side filter object
   const serverFilters = useMemo<RequirementFilters>(() => {
@@ -315,11 +360,36 @@ export default function RequirementsPage() {
     if (sourceFilter !== 'all') filters.source = sourceFilter
     if (requirementTypeFilter !== 'all') filters.requirementType = requirementTypeFilter
     if (categoryFilter !== 'all') filters.category = categoryFilter
-    if (selectedComponentId) filters.componentId = selectedComponentId
+    if (leftPanelTab === 'pbs' && selectedComponentId) filters.componentId = selectedComponentId
+    if (leftPanelTab === 'functions' && selectedFunctionId) filters.functionId = selectedFunctionId
+    if (leftPanelTab === 'verification' && selectedVerificationNode?.type === 'test-case') {
+      filters.testCaseId = selectedVerificationNode.id
+    }
+    if (leftPanelTab === 'verification' && selectedVerificationNode?.type === 'test-plan') {
+      filters.testPlanId = selectedVerificationNode.id
+    }
     if (verificationStatusFilter !== 'all') filters.verificationStatus = verificationStatusFilter
     if (reviewStatusFilter !== 'all') filters.reviewStatus = reviewStatusFilter
     return filters
-  }, [currentPage, pageSize, sortBy, sortOrder, debouncedSearch, statusFilter, priorityFilter, ownerFilter, sourceFilter, requirementTypeFilter, categoryFilter, selectedComponentId, verificationStatusFilter, reviewStatusFilter])
+  }, [
+    currentPage,
+    pageSize,
+    sortBy,
+    sortOrder,
+    debouncedSearch,
+    statusFilter,
+    priorityFilter,
+    ownerFilter,
+    sourceFilter,
+    requirementTypeFilter,
+    categoryFilter,
+    leftPanelTab,
+    selectedComponentId,
+    selectedFunctionId,
+    selectedVerificationNode,
+    verificationStatusFilter,
+    reviewStatusFilter,
+  ])
 
   // Handle column sort toggle
   const handleSort = useCallback((column: string) => {
@@ -357,6 +427,102 @@ export default function RequirementsPage() {
   const pbsResizing = useRef(false)
   const pbsStartX = useRef(0)
   const pbsStartWidth = useRef(0)
+
+  // URL → state (searchParams is source of truth for shareable scope / dashboard deep links)
+  useEffect(() => {
+    setReviewStatusFilter(searchParams.get('reviewStatus') || 'all')
+    setVerificationStatusFilter(searchParams.get('verificationStatus') || 'all')
+
+    if (searchParams.get('openSuspect') === '1') {
+      setIsSuspectReviewOpen(true)
+      const next = new URLSearchParams(searchParams)
+      next.delete('openSuspect')
+      setSearchParams(next, { replace: true })
+    }
+
+    const tabParam = searchParams.get('panelTab') || searchParams.get('tree')
+    const hasExplicitPanelTab =
+      tabParam === 'pbs' || tabParam === 'functions' || tabParam === 'verification'
+    if (hasExplicitPanelTab) {
+      setLeftPanelTab(tabParam as RequirementsLeftPanelTabId)
+    }
+    setIsPBSPanelOpen(
+      searchParams.get('panel') === '1' || searchParams.get('openPanel') === '1'
+    )
+
+    setSelectedComponentId(searchParams.get('componentId') || null)
+    setSelectedFunctionId(searchParams.get('functionId') || null)
+
+    const tc = searchParams.get('testCaseId')
+    const tp = searchParams.get('testPlanId')
+    const linkCase = searchParams.get('linkToCase')
+    // Deep links: infer tab from scope params only when panelTab/tree not set
+    if (!hasExplicitPanelTab) {
+      if (tc || tp || linkCase) {
+        setLeftPanelTab('verification')
+      } else if (searchParams.get('functionId')) {
+        setLeftPanelTab('functions')
+      } else if (searchParams.get('componentId')) {
+        setLeftPanelTab('pbs')
+      }
+    }
+    if (tc) {
+      setSelectedVerificationNode({ type: 'test-case', id: tc })
+    } else if (tp) {
+      setSelectedVerificationNode({ type: 'test-plan', id: tp })
+    } else if (linkCase) {
+      setSelectedVerificationNode({ type: 'test-case', id: linkCase })
+    } else {
+      setSelectedVerificationNode(null)
+    }
+  }, [searchParams, setSearchParams])
+
+  // State → URL (keep shareable params in sync; skip while baseline snapshot mode uses its own query)
+  useEffect(() => {
+    if (baselineId) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (isPBSPanelOpen) next.set('panel', '1')
+        else next.delete('panel')
+        next.set('panelTab', leftPanelTab)
+        next.set('tree', leftPanelTab)
+        if (selectedComponentId) next.set('componentId', selectedComponentId)
+        else next.delete('componentId')
+        if (selectedFunctionId) next.set('functionId', selectedFunctionId)
+        else next.delete('functionId')
+        if (selectedVerificationNode?.type === 'test-case') {
+          next.set('testCaseId', selectedVerificationNode.id)
+          next.delete('testPlanId')
+        } else if (selectedVerificationNode?.type === 'test-plan') {
+          next.set('testPlanId', selectedVerificationNode.id)
+          next.delete('testCaseId')
+        } else {
+          next.delete('testCaseId')
+          next.delete('testPlanId')
+        }
+        next.delete('linkToCase')
+        // One-shot dashboard param: hydrate opens modal then removes it; sync must not resurrect it
+        next.delete('openSuspect')
+        if (reviewStatusFilter !== 'all') next.set('reviewStatus', reviewStatusFilter)
+        else next.delete('reviewStatus')
+        if (verificationStatusFilter !== 'all') next.set('verificationStatus', verificationStatusFilter)
+        else next.delete('verificationStatus')
+        return next
+      },
+      { replace: true }
+    )
+  }, [
+    baselineId,
+    isPBSPanelOpen,
+    leftPanelTab,
+    selectedComponentId,
+    selectedFunctionId,
+    selectedVerificationNode,
+    reviewStatusFilter,
+    verificationStatusFilter,
+    setSearchParams,
+  ])
 
   // Column definitions for requirements
   type ColumnKey = string
@@ -553,10 +719,9 @@ export default function RequirementsPage() {
       .filter((r): r is Requirement => r != null)
   }, [baseline?.items])
 
-  // Requirements from baseline snapshot: filter and sort client-side
+  // Requirements from baseline snapshot: filter and sort client-side (PBS scope only; Functions/Verification scope applied in baselineFilteredAndSortedScoped)
   const baselineFilteredAndSorted = useMemo(() => {
     let list = [...baselineRequirements]
-    // Search filter
     if (debouncedSearch.trim()) {
       const q = debouncedSearch.toLowerCase()
       list = list.filter(
@@ -567,7 +732,6 @@ export default function RequirementsPage() {
           (r.category || '').toLowerCase().includes(q)
       )
     }
-    // Other filters
     if (statusFilter !== 'all') list = list.filter((r) => (r.status || '') === statusFilter)
     if (priorityFilter !== 'all') list = list.filter((r) => (r.priority || '') === priorityFilter)
     if (ownerFilter !== 'all') list = list.filter((r) => (r.owner || '') === ownerFilter)
@@ -576,10 +740,9 @@ export default function RequirementsPage() {
     if (categoryFilter !== 'all') list = list.filter((r) => (r.category || '') === categoryFilter)
     if (verificationStatusFilter !== 'all') list = list.filter((r) => (r.verificationStatus || '') === verificationStatusFilter)
     if (reviewStatusFilter !== 'all') list = list.filter((r) => (r.reviewStatus || '') === reviewStatusFilter)
-    if (selectedComponentId) {
+    if (leftPanelTab === 'pbs' && selectedComponentId) {
       list = list.filter((r) => (r as any).componentId === selectedComponentId)
     }
-    // Sort
     const key = sortBy || 'createdAt'
     const dir = sortOrder === 'asc' ? 1 : -1
     list.sort((a, b) => {
@@ -605,37 +768,10 @@ export default function RequirementsPage() {
     verificationStatusFilter,
     reviewStatusFilter,
     selectedComponentId,
+    leftPanelTab,
     sortBy,
     sortOrder,
   ])
-
-  // Final requirements and totals: baseline snapshot vs live
-  const isBaselineView = !!baselineId
-  const requirements = isBaselineView
-    ? baselineFilteredAndSorted.slice((currentPage - 1) * pageSize, currentPage * pageSize)
-    : (paginatedData?.items ?? [])
-  const totalRequirements = isBaselineView ? baselineFilteredAndSorted.length : (paginatedData?.total ?? 0)
-  const totalPages = isBaselineView ? Math.max(1, Math.ceil(baselineFilteredAndSorted.length / pageSize)) : (paginatedData?.totalPages ?? 1)
-  const allRequirements = isBaselineView ? baselineFilteredAndSorted : allRequirementsLive
-  const isLoading = isBaselineView ? (!!baselineId && baseline === undefined) : isLoadingLive
-
-  const openAddLinkByRequirementId = useCallback(
-    (id: string) => {
-      const r = allRequirements.find((x) => x.id === id)
-      if (r) setAddLinkSourceRequirement(r)
-    },
-    [allRequirements]
-  )
-
-  useEffect(() => {
-    if (!focusRequirementId) return
-    const req =
-      requirements.find((r) => r.id === focusRequirementId || r.requirementId === focusRequirementId) ??
-      allRequirements.find((r) => r.id === focusRequirementId || r.requirementId === focusRequirementId)
-    if (req) {
-      setDetailRequirement(req)
-    }
-  }, [focusRequirementId, requirements, allRequirements])
 
   // Fetch functions for linking
   const { data: functions = [] } = useQuery({
@@ -731,6 +867,8 @@ export default function RequirementsPage() {
 
   // Verification tree data (when Verification tab is active)
   const verificationTabActive = leftPanelTab === 'verification'
+  const fetchTestPlansForBaselineScope =
+    !!baselineId && selectedVerificationNode?.type === 'test-plan'
   const { data: verificationPlans = [] } = useQuery({
     queryKey: ['test-plans', projectId],
     queryFn: async () => {
@@ -738,7 +876,7 @@ export default function RequirementsPage() {
       const res = await verificationService.getTestPlans(projectId) as { success?: boolean; data?: any[] }
       return res.success && res.data ? res.data : []
     },
-    enabled: !!projectId && verificationTabActive,
+    enabled: !!projectId && (verificationTabActive || fetchTestPlansForBaselineScope),
   })
   const { data: verificationCases = [] } = useQuery({
     queryKey: ['test-cases', projectId],
@@ -780,6 +918,107 @@ export default function RequirementsPage() {
     return map
   }, [verificationRuns])
   const verificationPlansList = useMemo(() => Array.isArray(verificationPlans) ? verificationPlans : [], [verificationPlans])
+
+  /** Baseline view: narrow list by Functions / Verification side-panel scope using snapshot links + live plan→case membership. */
+  const baselineFilteredAndSortedScoped = useMemo(() => {
+    if (!baselineId) return baselineFilteredAndSorted
+    let list = [...baselineFilteredAndSorted]
+    const snapLinks = ((baseline?.linksSnapshot as { links?: any[] })?.links ?? []) as any[]
+    const norm = (s: string) => (s ?? '').toLowerCase().replace(/-/g, '_')
+    if (leftPanelTab === 'functions' && selectedFunctionId) {
+      list = list.filter((r) =>
+        snapLinks.some(
+          (l) =>
+            l.sourceType === 'requirement' &&
+            l.sourceId === r.id &&
+            l.targetType === 'function' &&
+            l.targetId === selectedFunctionId &&
+            l.linkType === 'allocated_to'
+        )
+      )
+    }
+    if (leftPanelTab === 'verification' && selectedVerificationNode?.type === 'test-case') {
+      const cid = selectedVerificationNode.id
+      list = list.filter((r) =>
+        snapLinks.some((l) => {
+          if ((l.linkType || '') !== 'verifies') return false
+          const st = norm(l.sourceType)
+          const tt = norm(l.targetType)
+          if (st === 'requirement' && (tt === 'test_case' || tt === 'testcase') && l.sourceId === r.id && l.targetId === cid)
+            return true
+          if (tt === 'requirement' && (st === 'test_case' || st === 'testcase') && l.targetId === r.id && l.sourceId === cid)
+            return true
+          return false
+        })
+      )
+    }
+    if (leftPanelTab === 'verification' && selectedVerificationNode?.type === 'test-plan') {
+      const plan = verificationPlansList.find((p: { id: string }) => p.id === selectedVerificationNode.id)
+      const caseIds = new Set(
+        ((plan as any)?.planCases ?? [])
+          .map((pc: { testCaseId?: string; testCase?: { id?: string } }) => pc.testCaseId ?? pc.testCase?.id)
+          .filter(Boolean) as string[]
+      )
+      if (caseIds.size === 0) {
+        list = []
+      } else {
+        list = list.filter((r) =>
+          [...caseIds].some((caseId) =>
+            snapLinks.some((l) => {
+              if ((l.linkType || '') !== 'verifies') return false
+              const st = norm(l.sourceType)
+              const tt = norm(l.targetType)
+              if (st === 'requirement' && (tt === 'test_case' || tt === 'testcase') && l.sourceId === r.id && l.targetId === caseId)
+                return true
+              if (tt === 'requirement' && (st === 'test_case' || st === 'testcase') && l.targetId === r.id && l.sourceId === caseId)
+                return true
+              return false
+            })
+          )
+        )
+      }
+    }
+    return list
+  }, [
+    baselineId,
+    baselineFilteredAndSorted,
+    baseline?.linksSnapshot,
+    leftPanelTab,
+    selectedFunctionId,
+    selectedVerificationNode,
+    verificationPlansList,
+  ])
+
+  const baselineListForView = baselineId ? baselineFilteredAndSortedScoped : baselineFilteredAndSorted
+
+  // Final requirements and totals: baseline snapshot vs live
+  const isBaselineView = !!baselineId
+  const requirements = isBaselineView
+    ? baselineListForView.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+    : (paginatedData?.items ?? [])
+  const totalRequirements = isBaselineView ? baselineListForView.length : (paginatedData?.total ?? 0)
+  const totalPages = isBaselineView ? Math.max(1, Math.ceil(baselineListForView.length / pageSize)) : (paginatedData?.totalPages ?? 1)
+  const allRequirements = isBaselineView ? baselineListForView : allRequirementsLive
+  const isLoading = isBaselineView ? (!!baselineId && baseline === undefined) : isLoadingLive
+
+  const openAddLinkByRequirementId = useCallback(
+    (id: string) => {
+      const r = allRequirements.find((x) => x.id === id)
+      if (r) setAddLinkSourceRequirement(r)
+    },
+    [allRequirements]
+  )
+
+  useEffect(() => {
+    if (!focusRequirementId) return
+    const req =
+      requirements.find((r) => r.id === focusRequirementId || r.requirementId === focusRequirementId) ??
+      allRequirements.find((r) => r.id === focusRequirementId || r.requirementId === focusRequirementId)
+    if (req) {
+      setDetailRequirement(req)
+    }
+  }, [focusRequirementId, requirements, allRequirements])
+
   const verificationCasesList = useMemo(() => Array.isArray(verificationCases) ? verificationCases : [], [verificationCases])
   const verificationSetupsList = useMemo(() => Array.isArray(verificationSetups) ? verificationSetups : [], [verificationSetups])
   // Verification sidebar linked requirements should be driven by live trace edges.
@@ -2711,10 +2950,6 @@ export default function RequirementsPage() {
                     selectedNode={selectedVerificationNode}
                     onSelect={(node) => {
                       setSelectedVerificationNode(node)
-                      if (node && projectId) {
-                        const tab = getVerificationTabForNodeType(node.type)
-                        navigate(buildVerificationUrl(projectId, { tab, focusType: node.type, focusId: node.id }))
-                      }
                     }}
                     onCreatePlan={() => projectId && navigate(buildVerificationUrl(projectId, { tab: 'plans', openCreate: 'plan' }))}
                     onCreateCase={(planId) => projectId && navigate(buildVerificationUrl(projectId, { tab: 'cases', openCreateCase: planId }))}
@@ -2731,7 +2966,13 @@ export default function RequirementsPage() {
                     requirementTestCaseLinks={requirementTestCaseLinks}
                     requirements={requirementsForVerificationTree}
                     onAddRequirementToTestCase={
-                      isBaselineView ? undefined : (caseId) => navigate(`/projects/${projectId}/requirements?tree=verification&linkToCase=${caseId}`)
+                      isBaselineView
+                        ? undefined
+                        : (caseId) => {
+                            setLeftPanelTab('verification')
+                            setIsPBSPanelOpen(true)
+                            setSelectedVerificationNode({ type: 'test-case', id: caseId })
+                          }
                     }
                     onRemoveRequirementFromTestCase={
                       isBaselineView ? undefined : (reqId, caseId) => removeRequirementFromTestCaseMutation.mutate({ reqId, caseId })
@@ -2846,7 +3087,11 @@ export default function RequirementsPage() {
               <button
                 onClick={() => setIsPBSPanelOpen(!isPBSPanelOpen)}
                 className="p-1.5 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                title={isPBSPanelOpen ? 'Hide PBS panel' : 'Show PBS panel'}
+                title={
+                  isPBSPanelOpen
+                    ? 'Hide structure panel (PBS / Functions / Verification)'
+                    : 'Show structure panel (PBS / Functions / Verification)'
+                }
               >
                 {isPBSPanelOpen ? <PanelLeftClose size={16} className="text-gray-500" /> : <PanelLeft size={16} className="text-gray-500" />}
               </button>
@@ -2861,32 +3106,29 @@ export default function RequirementsPage() {
                   Dashboard
                 </Link>
               )}
-              {leftPanelTab === 'pbs' && selectedComponentId && (
-                <button
-                  onClick={() => setSelectedComponentId(null)}
-                  className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
-                >
-                  <X size={12} />
-                  Clear filter
-                </button>
-              )}
-              {leftPanelTab === 'functions' && selectedFunctionId && (
-                <button
-                  onClick={() => setSelectedFunctionId(null)}
-                  className="flex items-center gap-1 px-2 py-1 text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
-                >
-                  <X size={12} />
-                  Clear filter
-                </button>
-              )}
-              {leftPanelTab === 'verification' && selectedVerificationNode && (
-                <button
-                  onClick={() => setSelectedVerificationNode(null)}
-                  className="flex items-center gap-1 px-2 py-1 text-xs bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 rounded-full hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors"
-                >
-                  <X size={12} />
-                  Clear selection
-                </button>
+              {listScopeActive && (
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400 max-w-[200px] truncate" title="Side panel list scope">
+                    Scope:{' '}
+                    {leftPanelTab === 'pbs' && selectedComponentId
+                      ? `PBS · ${selectedComponentId.slice(0, 8)}…`
+                      : leftPanelTab === 'functions' && selectedFunctionId
+                        ? `Function · ${selectedFunctionId.slice(0, 8)}…`
+                        : leftPanelTab === 'verification' && selectedVerificationNode?.type === 'test-case'
+                          ? `Test case · ${selectedVerificationNode.id.slice(0, 8)}…`
+                          : leftPanelTab === 'verification' && selectedVerificationNode?.type === 'test-plan'
+                            ? `Test plan · ${selectedVerificationNode.id.slice(0, 8)}…`
+                            : 'Active'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={clearListScope}
+                    className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    <X size={12} />
+                    Clear scope
+                  </button>
+                </div>
               )}
             </div>
             <button
