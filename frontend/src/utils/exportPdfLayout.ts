@@ -308,9 +308,18 @@ export function addTraceabilityMatrixSection(
   const startY = addSectionHeading(doc, sectionNumber, title, s, opts?.startOnNewPage !== false)
 
   const maxIds = Math.max(1, opts?.maxIdsPerCell ?? 8)
-  const head = [''].concat(matrix.cols.map((c) => c.label || c.key))
+  const head = ['Requirement'].concat(matrix.cols.map((c) => c.label || c.key))
   const body = matrix.rows.map((r) => {
-    const rowCells: string[] = [r.key]
+    const desc = (r.description ?? '').replace(/\s+/g, ' ').trim()
+    const descShort = desc.length > 220 ? `${desc.slice(0, 220)}…` : desc
+    const metaBits = r.meta
+      ? Object.entries(r.meta)
+          .filter(([, v]) => v != null && String(v).trim() !== '')
+          .map(([k, v]) => `${k}: ${String(v)}`)
+          .join(' · ')
+      : ''
+    const firstCell = [r.key, r.label || '', descShort, metaBits].filter(Boolean).join('\n')
+    const rowCells: string[] = [firstCell]
     for (const c of matrix.cols) {
       const entries = matrix.cells[r.id]?.[c.id] ?? []
       if (entries.length === 0) {

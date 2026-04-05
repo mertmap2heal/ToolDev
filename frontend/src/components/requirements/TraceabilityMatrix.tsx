@@ -26,6 +26,25 @@ import { addCoverPage, addHeaderFooterToAllPages, addTraceabilityMatrixSection }
 import { buildTraceabilityMatrixDocx } from '../../utils/exportDocx'
 import { traceabilityViewsService, type TraceabilityMatrixSavedDefinition } from '../../services/traceabilityViews.service'
 
+function matchesRowDefinitionFilters(req: Requirement, f: Record<string, unknown> | null | undefined): boolean {
+  if (!f || typeof f !== 'object') return true
+  const status = f.status
+  if (typeof status === 'string' && status !== '' && status !== 'all' && String(req.status ?? '') !== status) return false
+  const owner = f.owner
+  if (typeof owner === 'string' && owner !== '' && owner !== 'all' && String(req.owner ?? '') !== owner) return false
+  const priority = f.priority
+  if (typeof priority === 'string' && priority !== '' && priority !== 'all' && String(req.priority ?? '') !== priority) return false
+  const category = f.category
+  if (typeof category === 'string' && category !== '' && category !== 'all' && String(req.category ?? '') !== category) return false
+  const search = f.search
+  if (typeof search === 'string' && search.trim()) {
+    const q = search.toLowerCase()
+    const hay = `${req.requirementId ?? ''} ${req.title ?? ''} ${req.description ?? ''}`.toLowerCase()
+    if (!hay.includes(q)) return false
+  }
+  return true
+}
+
 // Dynamic import for jspdf-autotable to prevent build issues (mirrors ExportBuilder)
 let autoTableModule: any = null
 async function loadAutoTable() {
@@ -70,6 +89,7 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
   const [colMode, setColMode] = useState<'filters' | 'pinned' | 'mixed'>('mixed')
   const [pinnedRequirementIds, setPinnedRequirementIds] = useState<string[]>([])
   const [pinnedTargetIds, setPinnedTargetIds] = useState<string[]>([])
+  const [rowDefinitionFilters, setRowDefinitionFilters] = useState<Record<string, unknown> | null>(null)
 
   const queryClient = useQueryClient()
 
@@ -96,6 +116,11 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
       if (def.colMode) setColMode(def.colMode)
       if (Array.isArray(def.pinnedRequirementIds)) setPinnedRequirementIds(def.pinnedRequirementIds.filter(Boolean))
       if (Array.isArray(def.pinnedTargetIds)) setPinnedTargetIds(def.pinnedTargetIds.filter(Boolean))
+      if (def.filters && typeof def.filters === 'object' && !Array.isArray(def.filters)) {
+        setRowDefinitionFilters(def.filters as Record<string, unknown>)
+      } else {
+        setRowDefinitionFilters(null)
+      }
     } catch {
       // ignore invalid saved definitions
     }
@@ -352,10 +377,27 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
 
   // Filter requirements based on filter settings
   const filteredRequirements = useMemo(() => {
-    const base =
-      rowMode === 'pinned'
-        ? requirements.filter((r) => new Set(pinnedRequirementIds).has(r.id))
-        : requirements
+    const pinSet = new Set(pinnedRequirementIds)
+    const applySavedRowFilters = (list: Requirement[]) =>
+      list.filter((r) => matchesRowDefinitionFilters(r, rowDefinitionFilters))
+
+    let base: Requirement[]
+    if (rowMode === 'pinned') {
+      base = requirements.filter((r) => pinSet.has(r.id))
+    } else if (rowMode === 'filters') {
+      base = applySavedRowFilters(requirements)
+    } else {
+      // mixed: saved row filters + always include pinned requirement rows
+      base = applySavedRowFilters(requirements)
+      if (pinnedRequirementIds.length) {
+        const byId = new Map(requirements.map((r) => [r.id, r]))
+        for (const id of pinnedRequirementIds) {
+          const r = byId.get(id)
+          if (r && !base.some((x) => x.id === r.id)) base.push(r)
+        }
+      }
+    }
+
     return base.filter((req) => {
       const targetMap = linkMap.get(req.id)
       if (!targetMap) return true
@@ -369,7 +411,7 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
 
       return true
     })
-  }, [requirements, linkMap, filterLinked, showSuspectOnly, rowMode, pinnedRequirementIds])
+  }, [requirements, linkMap, filterLinked, showSuspectOnly, rowMode, pinnedRequirementIds, rowDefinitionFilters])
 
   // Get target items based on matrix type or linkage target
   const targetItems = useMemo(() => {
@@ -655,9 +697,10 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
 
     if (exportFormat === 'excel') {
       const wb = XLSX.utils.book_new()
-      const headerRow = ['Requirement', 'Title'].concat(matrix.cols.map((c) => c.label || c.key))
+      const headerRow = ['Requirement', 'Title', 'Description'].concat(matrix.cols.map((c) => c.label || c.key))
       const dataRows = matrix.rows.map((row) => {
-        const rowCells: (string | null)[] = [row.key, row.label]
+        const desc = (row.description ?? '').replace(/\s+/g, ' ').trim()
+        const rowCells: (string | null)[] = [row.key, row.label, desc]
         for (const col of matrix.cols) {
           const entries = matrix.cells[row.id]?.[col.id] ?? []
           rowCells.push(entries.map((e) => `${e.arrow} ${e.linkType}${e.isSuspect ? ' (?)' : ''}`).join(', '))
@@ -666,6 +709,32 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
       })
       const ws = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows])
       XLSX.utils.book_append_sheet(wb, ws, 'Matrix')
+
+      const metaRows: (string | number)[][] = [
+        ['# Row metadata'],
+        ['rowId', 'displayId', 'title', 'description', 'status', 'owner', 'priority'],
+        ...matrix.rows.map((r) => [
+          r.id,
+          r.key,
+          r.label,
+          (r.description ?? '').replace(/\s+/g, ' ').trim(),
+          r.meta?.status ?? '',
+          r.meta?.owner ?? '',
+          r.meta?.priority ?? '',
+        ]),
+        [],
+        ['# Column metadata'],
+        ['colId', 'key', 'label', 'description'],
+        ...matrix.cols.map((c) => [
+          c.id,
+          c.key,
+          c.label,
+          (c.description ?? '').replace(/\s+/g, ' ').trim(),
+        ]),
+      ]
+      const wsMeta = XLSX.utils.aoa_to_sheet(metaRows)
+      XLSX.utils.book_append_sheet(wb, wsMeta, 'Metadata')
+
       XLSX.writeFile(wb, `${fileBase}.xlsx`)
       return
     }

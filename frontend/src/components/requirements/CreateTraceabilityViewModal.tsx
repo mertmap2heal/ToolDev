@@ -25,6 +25,12 @@ export default function CreateTraceabilityViewModal({ projectId, initialFolderId
   const [filterLinked, setFilterLinked] = useState<'all' | 'linked' | 'unlinked'>('all')
   const [showSuspectOnly, setShowSuspectOnly] = useState(false)
 
+  const [rowFilterStatus, setRowFilterStatus] = useState('')
+  const [rowFilterOwner, setRowFilterOwner] = useState('')
+  const [rowFilterPriority, setRowFilterPriority] = useState('')
+  const [rowFilterCategory, setRowFilterCategory] = useState('')
+  const [rowFilterSearch, setRowFilterSearch] = useState('')
+
   const pinnedRequirementIds = useMemo(
     () => pinnedRequirementIdsText.split(/[\s,]+/g).map((s) => s.trim()).filter(Boolean),
     [pinnedRequirementIdsText]
@@ -33,6 +39,17 @@ export default function CreateTraceabilityViewModal({ projectId, initialFolderId
     () => pinnedTargetIdsText.split(/[\s,]+/g).map((s) => s.trim()).filter(Boolean),
     [pinnedTargetIdsText]
   )
+
+  const rowFilters = useMemo(() => {
+    if (rowMode === 'pinned') return undefined
+    const f: Record<string, string> = {}
+    if (rowFilterStatus.trim()) f.status = rowFilterStatus.trim()
+    if (rowFilterOwner.trim()) f.owner = rowFilterOwner.trim()
+    if (rowFilterPriority.trim()) f.priority = rowFilterPriority.trim()
+    if (rowFilterCategory.trim()) f.category = rowFilterCategory.trim()
+    if (rowFilterSearch.trim()) f.search = rowFilterSearch.trim()
+    return Object.keys(f).length ? f : undefined
+  }, [rowMode, rowFilterStatus, rowFilterOwner, rowFilterPriority, rowFilterCategory, rowFilterSearch])
 
   const definition: TraceabilityMatrixSavedDefinition = useMemo(() => ({
     viewKind: 'traceability_matrix',
@@ -44,7 +61,8 @@ export default function CreateTraceabilityViewModal({ projectId, initialFolderId
     targetSearchQuery: targetSearchQuery.trim() || undefined,
     filterLinked,
     showSuspectOnly,
-  }), [linkageTargetType, rowMode, colMode, pinnedRequirementIds, pinnedTargetIds, targetSearchQuery, filterLinked, showSuspectOnly])
+    filters: rowFilters,
+  }), [linkageTargetType, rowMode, colMode, pinnedRequirementIds, pinnedTargetIds, targetSearchQuery, filterLinked, showSuspectOnly, rowFilters])
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -130,6 +148,43 @@ export default function CreateTraceabilityViewModal({ projectId, initialFolderId
               <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 {pinnedRequirementIds.length} pinned requirement(s)
               </div>
+              {rowMode !== 'pinned' && (
+                <div className="mt-3 space-y-2 rounded-lg border border-gray-200 dark:border-gray-700 p-2 bg-gray-50/80 dark:bg-gray-900/30">
+                  <div className="text-xs font-medium text-gray-600 dark:text-gray-400">Row filters (exact match except Search)</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      value={rowFilterStatus}
+                      onChange={(e) => setRowFilterStatus(e.target.value)}
+                      placeholder="Status (exact)"
+                      className="px-2 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                    <input
+                      value={rowFilterOwner}
+                      onChange={(e) => setRowFilterOwner(e.target.value)}
+                      placeholder="Owner (exact)"
+                      className="px-2 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                    <input
+                      value={rowFilterPriority}
+                      onChange={(e) => setRowFilterPriority(e.target.value)}
+                      placeholder="Priority (exact)"
+                      className="px-2 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                    <input
+                      value={rowFilterCategory}
+                      onChange={(e) => setRowFilterCategory(e.target.value)}
+                      placeholder="Category (exact)"
+                      className="px-2 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                  <input
+                    value={rowFilterSearch}
+                    onChange={(e) => setRowFilterSearch(e.target.value)}
+                    placeholder="Search (matches ID, title, description)"
+                    className="w-full px-2 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="col-span-12 md:col-span-6">

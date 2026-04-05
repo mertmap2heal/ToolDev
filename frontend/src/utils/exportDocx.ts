@@ -95,7 +95,7 @@ export async function buildTraceabilityMatrixDocx(options: BuildTraceabilityMatr
     children: [
       new TableCell({
         shading: { fill: headerBg, color: headerFg },
-        children: [new Paragraph({ children: [new TextRun({ text: '', bold: true, size: sizeBody, font: fontFamily })] })],
+        children: [new Paragraph({ children: [new TextRun({ text: 'Requirement', bold: true, size: sizeBody, font: fontFamily })] })],
       }),
       ...options.matrix.cols.map((c) =>
         new TableCell({
@@ -107,11 +107,33 @@ export async function buildTraceabilityMatrixDocx(options: BuildTraceabilityMatr
   })
 
   const rows = options.matrix.rows.map((r) => {
-    const cells: any[] = [
-      new TableCell({
-        children: [new Paragraph({ children: [new TextRun({ text: r.key, bold: true, size: sizeBody, font: fontFamily })] })],
-      }),
+    const desc = (r.description ?? '').replace(/\s+/g, ' ').trim()
+    const descShort = desc.length > 2000 ? `${desc.slice(0, 2000)}…` : desc
+    const metaLines =
+      r.meta && Object.keys(r.meta).length
+        ? Object.entries(r.meta)
+            .filter(([, v]) => v != null && String(v).trim() !== '')
+            .map(([k, v]) => `${k}: ${String(v)}`)
+        : []
+    const firstCellChildren: any[] = [
+      new Paragraph({ children: [new TextRun({ text: r.key, bold: true, size: sizeBody, font: fontFamily })] }),
     ]
+    if (r.label) {
+      firstCellChildren.push(
+        new Paragraph({ children: [new TextRun({ text: String(r.label).slice(0, 32000), size: sizeBody, font: fontFamily })] })
+      )
+    }
+    if (descShort) {
+      firstCellChildren.push(
+        new Paragraph({ children: [new TextRun({ text: descShort.slice(0, 32000), size: sizeBody - 2, font: fontFamily })] })
+      )
+    }
+    for (const line of metaLines) {
+      firstCellChildren.push(
+        new Paragraph({ children: [new TextRun({ text: line.slice(0, 32000), italics: true, size: sizeBody - 4, font: fontFamily })] })
+      )
+    }
+    const cells: any[] = [new TableCell({ children: firstCellChildren })]
     for (const c of options.matrix.cols) {
       const entries = options.matrix.cells[r.id]?.[c.id] ?? []
       let paragraphs: any[]
