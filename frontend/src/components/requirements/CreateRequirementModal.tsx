@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties } from 'react'
+import ReactDOM from 'react-dom'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import RichTextEditor from '../common/RichTextEditor'
 import { X, Plus, Trash2, ChevronDown, ChevronRight, Layers, FileText, Link as LinkIcon, Tag, Activity, FileCheck, Shield, Target, GitBranch, CheckCircle2, AlertTriangle, ClipboardCheck, BarChart3, Info, ArrowRight, Sliders } from 'lucide-react'
@@ -81,6 +82,9 @@ interface QuickLinkAdapter {
   search: (query: string, projectId: string) => Promise<{ id: string; label: string }[]>
 }
 
+const DROPDOWN_MAX_HEIGHT = 192 // max-h-48 = 12rem = 192px
+const QUICK_LINK_DROPDOWN_Z = 110
+
 function QuickLinkSelector({
   label,
   projectId,
@@ -99,6 +103,14 @@ function QuickLinkSelector({
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<{ id: string; label: string }[]>([])
   const [showDropdown, setShowDropdown] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [dropdownPosition, setDropdownPosition] = useState<{
+    left: number
+    width: number
+    top?: number
+    bottom?: number
+    placement: 'above' | 'below'
+  } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -107,6 +119,91 @@ function QuickLinkSelector({
     })
     return () => { cancelled = true }
   }, [query, projectId])
+
+  useLayoutEffect(() => {
+    if (!showDropdown || results.length === 0 || !containerRef.current) {
+      setDropdownPosition(null)
+      return
+    }
+    const el = containerRef.current
+    const rect = el.getBoundingClientRect()
+    const spaceBelow = window.innerHeight - rect.bottom
+    const placement: 'above' | 'below' = spaceBelow >= DROPDOWN_MAX_HEIGHT + 4 ? 'below' : 'above'
+    if (placement === 'below') {
+      setDropdownPosition({
+        left: rect.left,
+        width: rect.width,
+        top: rect.bottom + 4,
+        placement: 'below',
+      })
+    } else {
+      setDropdownPosition({
+        left: rect.left,
+        width: rect.width,
+        bottom: window.innerHeight - rect.top + 4,
+        placement: 'above',
+      })
+    }
+  }, [showDropdown, results.length])
+
+  useEffect(() => {
+    if (!showDropdown) return
+    const close = () => setShowDropdown(false)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [showDropdown])
+
+  const dropdownContent =
+    showDropdown &&
+    results.length > 0 &&
+    dropdownPosition &&
+    (() => {
+      const style: CSSProperties = {
+        position: 'fixed',
+        left: dropdownPosition.left,
+        width: dropdownPosition.width,
+        zIndex: QUICK_LINK_DROPDOWN_Z,
+        ...(dropdownPosition.placement === 'below' && dropdownPosition.top != null
+          ? { top: dropdownPosition.top }
+          : {}),
+        ...(dropdownPosition.placement === 'above' && dropdownPosition.bottom != null
+          ? { bottom: dropdownPosition.bottom }
+          : {}),
+      }
+      return (
+        <div
+          className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-48 overflow-y-auto"
+          style={style}
+        >
+          {results.map((item) => {
+            const isSelected = selectedIds.includes(item.id)
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onToggle(item.id, item.label)
+                }}
+                className={clsx(
+                  'w-full text-left px-4 py-2 text-sm flex items-center justify-between',
+                  isSelected
+                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                    : 'text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700'
+                )}
+              >
+                <span>{item.label}</span>
+                {isSelected && <CheckCircle2 size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />}
+              </button>
+            )
+          })}
+        </div>
+      )
+    })()
 
   return (
     <div>
@@ -129,7 +226,7 @@ function QuickLinkSelector({
           })}
         </div>
       )}
-      <div className="relative">
+      <div className="relative" ref={containerRef}>
         <input
           type="text"
           value={query}
@@ -142,35 +239,8 @@ function QuickLinkSelector({
           placeholder="Search..."
           className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
         />
-        {showDropdown && results.length > 0 && (
-          <div
-            className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-48 overflow-y-auto"
-          >
-            {results.map((item) => {
-              const isSelected = selectedIds.includes(item.id)
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    onToggle(item.id, item.label)
-                  }}
-                  className={clsx(
-                    'w-full text-left px-4 py-2 text-sm flex items-center justify-between',
-                    isSelected
-                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                      : 'text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700'
-                  )}
-                >
-                  <span>{item.label}</span>
-                  {isSelected && <CheckCircle2 size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />}
-                </button>
-              )
-            })}
-          </div>
-        )}
       </div>
+      {dropdownContent && ReactDOM.createPortal(dropdownContent, document.body)}
     </div>
   )
 }

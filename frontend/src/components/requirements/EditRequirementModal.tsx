@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties } from 'react'
 import ReactDOM from 'react-dom'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { X, Plus, Trash2, ChevronDown, ChevronRight, Layers, FileText, Link as LinkIcon, Tag, Activity, FileCheck, Shield, Target, GitBranch, CheckCircle2, AlertTriangle, ClipboardCheck, BarChart3, Info, ArrowRight, Sliders } from 'lucide-react'
@@ -76,6 +76,7 @@ interface QuickLinkAdapter {
 }
 
 const DROPDOWN_MAX_HEIGHT = 192 // max-h-48 = 12rem = 192px
+const QUICK_LINK_DROPDOWN_Z = 110
 
 function QuickLinkSelector({
   label,
@@ -154,11 +155,11 @@ function QuickLinkSelector({
     results.length > 0 &&
     dropdownPosition &&
     (() => {
-      const style: React.CSSProperties = {
+      const style: CSSProperties = {
         position: 'fixed',
         left: dropdownPosition.left,
         width: dropdownPosition.width,
-        zIndex: 60,
+        zIndex: QUICK_LINK_DROPDOWN_Z,
         ...(dropdownPosition.placement === 'below' && dropdownPosition.top != null
           ? { top: dropdownPosition.top }
           : {}),
