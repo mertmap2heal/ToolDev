@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
 import { X, Edit2, Trash2, Paperclip, ChevronRight, ChevronDown, Link2, FileText, AlertCircle, Settings, ExternalLink } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { changeRequestService } from '../../services/changeRequest.service'
-import type { ChangeRequest } from 'shared/types/engineering.types'
+import type { ChangeRequest, ChangeRequestAttachment } from 'shared/types/engineering.types'
 import { format, isValid } from 'date-fns'
 import clsx from 'clsx'
 
@@ -354,7 +354,7 @@ export default function ChangeRequestDetailDrawer({
                                 </div>
                             ) : (
                                 <ul className="space-y-2">
-                                    {attachments.map((file: any) => (
+                                    {attachments.map((file: ChangeRequestAttachment) => (
                                         <li key={file.id} className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:border-blue-300 dark:hover:border-blue-600 transition-colors">
                                             <div className="flex items-center gap-3">
                                                 <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-blue-600 dark:text-blue-400">

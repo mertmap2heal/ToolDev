@@ -141,7 +141,7 @@ export default function TraceabilityViewsPage() {
             title="Delete folder"
             onClick={(e) => {
               e.stopPropagation()
-              if (window.confirm(`Delete folder \"${n.name}\"? Subfolders will be deleted. Views will be moved to Unfiled.`)) {
+              if (window.confirm(`Delete folder "${n.name}"? Subfolders will be deleted. Views will be moved to Unfiled.`)) {
                 deleteFolderMutation.mutate(n.id)
               }
             }}
@@ -268,7 +268,7 @@ export default function TraceabilityViewsPage() {
                           className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
                           title="Delete view"
                           onClick={() => {
-                            if (window.confirm(`Delete view \"${v.name}\"?`)) deleteViewMutation.mutate(v.id)
+                            if (window.confirm(`Delete view "${v.name}"?`)) deleteViewMutation.mutate(v.id)
                           }}
                         >
                           <Trash2 size={14} className="text-red-600" />

@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma'
+import { formatIssueKey, getMaxIssueSequenceNumber, isIssueKeyUniqueViolation } from '../lib/issueKey'
 import { Prisma } from '@prisma/client'
 
 export interface CreateChecklistInput {
@@ -476,30 +477,36 @@ export const transitionChecklistService = {
   },
 
   async createChecklistItemIssue(input: CreateChecklistItemIssueInput) {
-    const latestIssue = await prisma.issue.findFirst({
-      where: { issueKey: { not: null } },
-      orderBy: { issueKey: 'desc' },
-      select: { issueKey: true },
-    })
-
-    let issueNumber = 1
-    if (latestIssue?.issueKey) {
-      const match = latestIssue.issueKey.match(/ISS-(\d+)/)
-      if (match) issueNumber = parseInt(match[1]) + 1
+    const maxAttempts = 12
+    let issue: Awaited<ReturnType<typeof prisma.issue.create>> | null = null
+    let lastKeyError: unknown
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const nextSeq = (await getMaxIssueSequenceNumber()) + 1
+      const issueKey = formatIssueKey(nextSeq)
+      try {
+        issue = await prisma.issue.create({
+          data: {
+            projectId: input.projectId,
+            issueKey,
+            title: input.title,
+            description: input.description,
+            priority: input.priority || 'medium',
+            createdBy: input.createdBy,
+            updatedBy: input.createdBy,
+          },
+        })
+        break
+      } catch (e) {
+        if (isIssueKeyUniqueViolation(e)) {
+          lastKeyError = e
+          continue
+        }
+        throw e
+      }
     }
-    const issueKey = `ISS-${issueNumber.toString().padStart(4, '0')}`
-
-    const issue = await prisma.issue.create({
-      data: {
-        projectId: input.projectId,
-        issueKey,
-        title: input.title,
-        description: input.description,
-        priority: input.priority || 'medium',
-        createdBy: input.createdBy,
-        updatedBy: input.createdBy,
-      },
-    })
+    if (!issue) {
+      throw lastKeyError ?? new Error('Could not allocate a unique issue key')
+    }
 
     if (input.createdBy) {
       await prisma.issueSubscription.create({

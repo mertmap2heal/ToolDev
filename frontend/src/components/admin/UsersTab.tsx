@@ -36,21 +36,18 @@ export default function UsersTab() {
     queryKey: ['admin', 'authUsers'],
     queryFn: () => authService.getUsersAsAdminUsers(),
   })
-  const rawUsers: AdminUser[] = authUsersResponse ?? []
-
   const { data: projects = [] } = useQuery({
     queryKey: ['admin', 'projects'],
     queryFn: () => adminService.getProjects(),
   })
 
-  const users = useMemo(
-    () =>
-      rawUsers.map((u) => ({
-        ...u,
-        projects: projects.filter((p) => p.members.includes(u.id)).map((p) => p.id),
-      })),
-    [rawUsers, projects]
-  )
+  const users = useMemo(() => {
+    const raw: AdminUser[] = authUsersResponse ?? []
+    return raw.map((u) => ({
+      ...u,
+      projects: projects.filter((p) => p.members.includes(u.id)).map((p) => p.id),
+    }))
+  }, [authUsersResponse, projects])
 
   const { data: roles = [] } = useQuery({
     queryKey: ['admin', 'roles'],

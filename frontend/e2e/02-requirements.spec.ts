@@ -124,8 +124,8 @@ test.describe('Requirements', () => {
   test('traceability matrix opens from requirements page', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /traceability/i }).click()
-    await page.getByRole('button', { name: /traceability matrix/i }).click()
+    // Toolbar opens the matrix modal directly (no nested "Traceability matrix" menu item).
+    await page.getByRole('button', { name: 'Traceability', exact: true }).click()
     await expect(page.getByRole('heading', { name: /traceability matrix/i })).toBeVisible({ timeout: 15_000 })
   })
 

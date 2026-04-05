@@ -73,7 +73,7 @@ export function useRequirementLifecycleTransition({
       setTransitionsLoading(false)
       return
     }
-    ;(async () => {
+    void (async () => {
       try {
         const result = await lifecycleService.getAllowedTransitions(resolvedLifecycleId, currentStatusId)
         if (cancelled) return

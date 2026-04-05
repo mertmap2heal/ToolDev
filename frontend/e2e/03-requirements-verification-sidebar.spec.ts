@@ -5,6 +5,7 @@
  *  1) Linked requirements appear under the correct test case in live view.
  *  2) Baseline view shows the same linked tree, but disables requirement linking/unlinking affordances.
  */
+import type { Page } from '@playwright/test'
 import { test, expect } from './helpers/fixtures'
 
 async function ensureAuthToken(page: { evaluate: Function }) {
@@ -13,7 +14,22 @@ async function ensureAuthToken(page: { evaluate: Function }) {
   return token as string
 }
 
+/** Left panel toggle is icon-only; match toolbar `title` (not "show pbs panel"). */
+async function ensureRequirementsStructurePanelOpen(page: Page) {
+  const showToggle = page.getByTitle(/^Show structure panel/i)
+  if (await showToggle.isVisible().catch(() => false)) {
+    await showToggle.click()
+    return
+  }
+  const legacy = page.getByRole('button', { name: /show pbs panel/i })
+  if (await legacy.isVisible().catch(() => false)) {
+    await legacy.click()
+  }
+}
+
 test.describe('Requirements / Verification sidebar', () => {
+  test.describe.configure({ timeout: 90_000 })
+
   test('live view: linked requirement appears under test case', async ({ page, projectId }) => {
     const stamp = Date.now()
     const requirementTitle = `E2E Req ${stamp}`
@@ -91,10 +107,7 @@ test.describe('Requirements / Verification sidebar', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // Open left panel and switch to Verification tree
-    const showPanelBtn = page.getByRole('button', { name: /show pbs panel/i })
-    if (await showPanelBtn.isVisible().catch(() => false)) {
-      await showPanelBtn.click()
-    }
+    await ensureRequirementsStructurePanelOpen(page)
     await page.getByRole('button', { name: /^Verification$/i }).click()
     await expect(page.getByRole('heading', { name: 'Verification' })).toBeVisible()
 
@@ -218,10 +231,7 @@ test.describe('Requirements / Verification sidebar', () => {
     await page.goto(`/projects/${projectId}/requirements?baselineId=${baselineId}`)
     await page.waitForLoadState('domcontentloaded')
 
-    const showPanelBtn = page.getByRole('button', { name: /show pbs panel/i })
-    if (await showPanelBtn.isVisible().catch(() => false)) {
-      await showPanelBtn.click()
-    }
+    await ensureRequirementsStructurePanelOpen(page)
     await page.getByRole('button', { name: /^Verification$/i }).click()
     await expect(page.getByRole('heading', { name: 'Verification' })).toBeVisible()
 

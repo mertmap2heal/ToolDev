@@ -190,10 +190,10 @@ export function buildRequirementLinkedItems(
     let otherType: string | undefined
     let otherId: string | undefined
     let isOutgoing: boolean
-    let linkSourceType = l.sourceType
-    let linkSourceId = l.sourceId
-    let linkTargetType = l.targetType
-    let linkTargetId = l.targetId
+    const linkSourceType = l.sourceType
+    const linkSourceId = l.sourceId
+    const linkTargetType = l.targetType
+    const linkTargetId = l.targetId
 
     if (isRequirementEntityType(l.sourceType) && l.sourceId === requirementId) {
       otherType = l.targetType

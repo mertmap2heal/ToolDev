@@ -24,6 +24,8 @@ export default function EngineeringRoleEditorModal({
 }: EngineeringRoleEditorModalProps) {
     const onDiscardRef = useRef<() => void>()
     const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, true, () => onDiscardRef.current?.())
+    const guardCloseRef = useRef(guardClose)
+    guardCloseRef.current = guardClose
     const [name, setName] = useState(role?.name ?? '')
     const [description, setDescription] = useState(role?.description ?? '')
     const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(
@@ -43,11 +45,11 @@ export default function EngineeringRoleEditorModal({
 
     useEffect(() => {
         const handleEsc = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') guardClose()
+            if (e.key === 'Escape') guardCloseRef.current()
         }
         document.addEventListener('keydown', handleEsc)
         return () => document.removeEventListener('keydown', handleEsc)
-    }, [onClose])
+    }, [])
 
     const filteredUsers = users.filter((u) => {
         if (!userSearch) return true
@@ -84,8 +86,8 @@ export default function EngineeringRoleEditorModal({
             })
             resetDirty()
             onClose()
-        } catch (err: any) {
-            setError(err.message || 'Failed to save role')
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to save role')
         } finally {
             setSaving(false)
         }

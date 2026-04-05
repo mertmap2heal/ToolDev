@@ -100,8 +100,8 @@ export default function RolesTab() {
       await adminService.deleteEngineeringRole(deleteConfirm.id)
       queryClient.invalidateQueries({ queryKey: ['admin', 'engineeringRoles'] })
       setDeleteConfirm(null)
-    } catch (err: any) {
-      setDeleteError(err.message || 'Failed to delete role')
+    } catch (err: unknown) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete role')
     }
   }
 

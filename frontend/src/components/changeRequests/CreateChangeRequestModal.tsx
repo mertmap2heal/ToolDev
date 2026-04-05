@@ -9,7 +9,7 @@ import { parameterService } from '../../services/parameter.service'
 import { requirementService } from '../../services/requirement.service'
 import { authService } from '../../services/auth.service'
 import { invalidateLinkCaches } from '../../utils/invalidateLinkCaches'
-import type { CreateChangeRequestDto, SystemFunction, Issue, Parameter, Requirement } from 'shared/types/engineering.types'
+import type { CreateChangeRequestDto, Parameter, Requirement } from 'shared/types/engineering.types'
 
 interface CreateChangeRequestModalProps {
   isOpen: boolean

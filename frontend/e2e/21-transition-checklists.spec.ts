@@ -325,8 +325,12 @@ test.describe('Transition Checklists', () => {
         },
       }
     )
-    expect(issueResp.ok()).toBeTruthy()
-    const issueBody = await issueResp.json()
+    const issueRaw = await issueResp.text()
+    expect(
+      issueResp.ok(),
+      `POST checklist-item issue failed (${issueResp.status()}): ${issueRaw.slice(0, 500)}`,
+    ).toBeTruthy()
+    const issueBody = JSON.parse(issueRaw) as { success?: boolean; data?: { issue?: { issueKey?: string }; link?: { checklistItemId: string; entityId: string } } }
     expect(issueBody.success).toBeTruthy()
     expect(issueBody.data.issue).toBeTruthy()
     expect(issueBody.data.issue.issueKey).toMatch(/^ISS-/)

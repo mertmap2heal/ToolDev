@@ -92,7 +92,7 @@ export function prepareDefinitionExportRows(
 }
 
 function escapeCsvCell(value: string): string {
-  let v = value.replace(/"/g, '""')
+  const v = value.replace(/"/g, '""')
   if (v.includes(',') || v.includes('\n') || v.includes('"')) {
     return `"${v}"`
   }
