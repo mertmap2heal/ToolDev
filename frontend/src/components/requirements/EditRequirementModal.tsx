@@ -289,11 +289,11 @@ export default function EditRequirementModal({
   const [traceSection, setTraceSection] = useState<Record<string, boolean>>({
     sources: true,
     structure: true,
-    relationships: false,
+    relationships: true,
     allocation: true,
     verification: true,
-    safety: false,
-    certification: false,
+    safety: true,
+    certification: true,
   })
   // Premium Traceability
   const [linkRationale, setLinkRationale] = useState('')
