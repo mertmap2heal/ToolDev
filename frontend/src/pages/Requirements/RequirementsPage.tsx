@@ -276,7 +276,9 @@ export default function RequirementsPage() {
     if (
       leftPanelTab === 'verification' &&
       selectedVerificationNode &&
-      (selectedVerificationNode.type === 'test-case' || selectedVerificationNode.type === 'test-plan')
+      (selectedVerificationNode.type === 'test-case' ||
+        selectedVerificationNode.type === 'test-plan' ||
+        selectedVerificationNode.type === 'unassigned-group')
     ) {
       return true
     }
@@ -368,6 +370,9 @@ export default function RequirementsPage() {
     if (leftPanelTab === 'verification' && selectedVerificationNode?.type === 'test-plan') {
       filters.testPlanId = selectedVerificationNode.id
     }
+    if (leftPanelTab === 'verification' && selectedVerificationNode?.type === 'unassigned-group') {
+      filters.noTestCaseVerifiesLink = true
+    }
     if (verificationStatusFilter !== 'all') filters.verificationStatus = verificationStatusFilter
     if (reviewStatusFilter !== 'all') filters.reviewStatus = reviewStatusFilter
     return filters
@@ -456,9 +461,12 @@ export default function RequirementsPage() {
     const tc = searchParams.get('testCaseId')
     const tp = searchParams.get('testPlanId')
     const linkCase = searchParams.get('linkToCase')
+    const noTcVer =
+      searchParams.get('noTestCaseVerifiesLink') === '1' ||
+      String(searchParams.get('noTestCaseVerifiesLink') || '').toLowerCase() === 'true'
     // Deep links: infer tab from scope params only when panelTab/tree not set
     if (!hasExplicitPanelTab) {
-      if (tc || tp || linkCase) {
+      if (tc || tp || linkCase || noTcVer) {
         setLeftPanelTab('verification')
       } else if (searchParams.get('functionId')) {
         setLeftPanelTab('functions')
@@ -472,6 +480,8 @@ export default function RequirementsPage() {
       setSelectedVerificationNode({ type: 'test-plan', id: tp })
     } else if (linkCase) {
       setSelectedVerificationNode({ type: 'test-case', id: linkCase })
+    } else if (noTcVer) {
+      setSelectedVerificationNode({ type: 'unassigned-group', id: 'unassigned' })
     } else {
       setSelectedVerificationNode(null)
     }
@@ -494,12 +504,19 @@ export default function RequirementsPage() {
         if (selectedVerificationNode?.type === 'test-case') {
           next.set('testCaseId', selectedVerificationNode.id)
           next.delete('testPlanId')
+          next.delete('noTestCaseVerifiesLink')
         } else if (selectedVerificationNode?.type === 'test-plan') {
           next.set('testPlanId', selectedVerificationNode.id)
           next.delete('testCaseId')
+          next.delete('noTestCaseVerifiesLink')
+        } else if (selectedVerificationNode?.type === 'unassigned-group') {
+          next.set('noTestCaseVerifiesLink', '1')
+          next.delete('testCaseId')
+          next.delete('testPlanId')
         } else {
           next.delete('testCaseId')
           next.delete('testPlanId')
+          next.delete('noTestCaseVerifiesLink')
         }
         next.delete('linkToCase')
         // One-shot dashboard param: hydrate opens modal then removes it; sync must not resurrect it
@@ -977,6 +994,17 @@ export default function RequirementsPage() {
           )
         )
       }
+    }
+    if (leftPanelTab === 'verification' && selectedVerificationNode?.type === 'unassigned-group') {
+      const linkedReqIds = new Set<string>()
+      for (const l of snapLinks) {
+        if ((l.linkType || '') !== 'verifies') continue
+        const st = norm(l.sourceType)
+        const tt = norm(l.targetType)
+        if (st === 'requirement' && (tt === 'test_case' || tt === 'testcase')) linkedReqIds.add(l.sourceId)
+        if (tt === 'requirement' && (st === 'test_case' || st === 'testcase')) linkedReqIds.add(l.targetId)
+      }
+      list = list.filter((r) => !linkedReqIds.has(r.id))
     }
     return list
   }, [
@@ -3118,7 +3146,9 @@ export default function RequirementsPage() {
                           ? `Test case · ${selectedVerificationNode.id.slice(0, 8)}…`
                           : leftPanelTab === 'verification' && selectedVerificationNode?.type === 'test-plan'
                             ? `Test plan · ${selectedVerificationNode.id.slice(0, 8)}…`
-                            : 'Active'}
+                            : leftPanelTab === 'verification' && selectedVerificationNode?.type === 'unassigned-group'
+                              ? 'Verification · No test case link'
+                              : 'Active'}
                   </span>
                   <button
                     type="button"

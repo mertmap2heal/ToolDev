@@ -27,6 +27,8 @@ export interface RequirementFilters {
   testCaseId?: string
   /** Requirements linked with verifies to any test case in this plan. */
   testPlanId?: string
+  /** Root requirements with no verifies link to any test case (TraceLink). */
+  noTestCaseVerifiesLink?: boolean
   verificationStatus?: string
   reviewStatus?: string
 }
@@ -51,6 +53,7 @@ export const requirementService = {
       if (filters.functionId) params.append('functionId', filters.functionId)
       if (filters.testCaseId) params.append('testCaseId', filters.testCaseId)
       if (filters.testPlanId) params.append('testPlanId', filters.testPlanId)
+      if (filters.noTestCaseVerifiesLink) params.append('noTestCaseVerifiesLink', '1')
       if (filters.verificationStatus) params.append('verificationStatus', filters.verificationStatus)
       if (filters.reviewStatus) params.append('reviewStatus', filters.reviewStatus)
     }

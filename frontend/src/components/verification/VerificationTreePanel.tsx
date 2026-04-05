@@ -414,9 +414,11 @@ function buildTree(
         }
       : null
 
-  const roots: VerTreeNode[] = [...planNodes]
-  if (otherTestCasesNode && (otherTestCasesNode.children?.length ?? 0) > 0) roots.push(otherTestCasesNode)
+  // Unassigned first (parity with PBS / Functions trees), then plans, then other cases with links
+  const roots: VerTreeNode[] = []
   if (unassignedNode) roots.push(unassignedNode)
+  roots.push(...planNodes)
+  if (otherTestCasesNode && (otherTestCasesNode.children?.length ?? 0) > 0) roots.push(otherTestCasesNode)
   return roots
 }
 
@@ -592,7 +594,11 @@ export default function VerificationTreePanel({
   const handleSelect = useCallback(
     (node: VerTreeNode, e: React.MouseEvent) => {
       e.stopPropagation()
-      if (node.type === 'unassigned-group') return
+      if (node.type === 'unassigned-group') {
+        setMultiSelectedIds(new Set())
+        onSelect({ type: 'unassigned-group', id: node.id })
+        return
+      }
       if (node.type === 'requirement' && node.requirementId) {
         onRequirementClick?.(node.requirementId)
         return
@@ -618,7 +624,11 @@ export default function VerificationTreePanel({
         handleSelect(node, e)
         return
       }
-      if (node.type === 'unassigned-group') return
+      if (node.type === 'unassigned-group') {
+        toggleExpand(node.id, e)
+        handleSelect(node, e)
+        return
+      }
       if (isExpandableNode(node)) {
         toggleExpand(node.id, e)
         return
@@ -631,7 +641,12 @@ export default function VerificationTreePanel({
   const handleRowDoubleClick = useCallback(
     (node: VerTreeNode, e: React.MouseEvent) => {
       e.stopPropagation()
-      if (node.type === 'unassigned-group' || node.type === 'requirement' || node.type === 'plan-requirements-group') return
+      if (node.type === 'requirement' || node.type === 'plan-requirements-group') return
+      if (node.type === 'unassigned-group') {
+        setMultiSelectedIds(new Set())
+        onSelect({ type: 'unassigned-group', id: node.id })
+        return
+      }
       setMultiSelectedIds(new Set())
       onSelect({ type: node.type, id: node.id })
     },
@@ -738,7 +753,11 @@ export default function VerificationTreePanel({
     const hasReqLinks = reqLinks.length > 0
     const showReqExpand = isRequirement && hasReqLinks && !!onLinkedElementClick
     const isReqExpanded = isRequirement && node.requirementId ? expandedRequirementIds.has(node.requirementId) : false
-    const isSelected = !isRequirement && !isUnassignedGroup && !isPlanRequirementsGroup && selectedNode?.type === node.type && selectedNode?.id === node.id
+    const isSelected =
+      !isRequirement &&
+      !isPlanRequirementsGroup &&
+      selectedNode?.type === node.type &&
+      selectedNode?.id === node.id
     const isMultiSelected = multiSelectedIds.has(node.id)
     const isDropTargetPlan = isPlan && dragOverPlanId === node.id
     const isDropTargetCase = isCase && onDropRequirementsOnTestCase && dragOverCaseId === node.id
@@ -975,8 +994,8 @@ export default function VerificationTreePanel({
           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
             <p className="text-xs text-gray-500 dark:text-gray-400">
               {requirementTestCaseLinks?.length === 0
-                ? 'Linked requirements appear under each test plan and test case. To link: drag a requirement onto a test case, or use the test case context menu → Link requirement. Unassigned requirements are listed at the bottom.'
-                : 'Linked requirements appear under each test plan and test case. Unassigned requirements are listed at the bottom.'}
+                ? 'Linked requirements appear under each test plan and test case. To link: drag a requirement onto a test case, or use the test case context menu → Link requirement. Requirements not linked to any test case are listed under Unassigned at the top.'
+                : 'Linked requirements appear under each test plan and test case. Requirements not linked to any test case are listed under Unassigned at the top.'}
             </p>
             <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Unassigned: {unassignedCount}</span>
             <button

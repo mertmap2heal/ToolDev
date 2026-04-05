@@ -11,6 +11,7 @@ import { buildRequirementChangeSummary, notifyRequirementSubscribers } from '../
 import { extractParameterIds } from '../utils/parameterPlaceholder'
 import { parseReqIF } from '../services/reqifParser'
 import { collectComponentIdAndDescendants } from '../utils/componentHelpers'
+import { filterIdsExcluding } from '../utils/requirementScopeMerge'
 import { htmlToPlainText, truncatePlainText } from '../utils/htmlToPlainText'
 import fs from 'fs'
 import path from 'path'
@@ -347,6 +348,32 @@ async function getRequirementIdsLinkedToTestCasesVerifies(projectId: string, tes
   return [...ids]
 }
 
+/** Requirement IDs that have any `verifies` link to a test case (req→case or case→req). */
+async function getRequirementIdsLinkedToAnyTestCaseVerifies(projectId: string): Promise<string[]> {
+  const ids = new Set<string>()
+  const forward = await prisma.traceLink.findMany({
+    where: {
+      projectId,
+      sourceType: 'requirement',
+      linkType: 'verifies',
+      OR: [{ targetType: 'test_case' }, { targetType: 'testcase' }],
+    },
+    select: { sourceId: true },
+  })
+  forward.forEach((l) => ids.add(l.sourceId))
+  const reverse = await prisma.traceLink.findMany({
+    where: {
+      projectId,
+      targetType: 'requirement',
+      linkType: 'verifies',
+      OR: [{ sourceType: 'test_case' }, { sourceType: 'testcase' }],
+    },
+    select: { targetId: true },
+  })
+  reverse.forEach((l) => ids.add(l.targetId))
+  return [...ids]
+}
+
 async function getTestCaseIdsForPlan(projectId: string, testPlanId: string): Promise<string[]> {
   const plan = await prisma.verTestPlan.findFirst({
     where: { id: testPlanId, projectId },
@@ -424,6 +451,10 @@ export const getRequirements = async (req: AuthRequest, res: Response) => {
     const functionId = req.query.functionId as string | undefined
     const testCaseId = req.query.testCaseId as string | undefined
     const testPlanId = req.query.testPlanId as string | undefined
+    const noTestCaseVerifiesLinkRaw = req.query.noTestCaseVerifiesLink as string | undefined
+    const noTestCaseVerifiesLink =
+      noTestCaseVerifiesLinkRaw === '1' ||
+      String(noTestCaseVerifiesLinkRaw || '').toLowerCase() === 'true'
 
     // Resolve componentId filter: when include-descendants, show requirements for selected component + all children
     let componentIdsFilter: string[] | string | undefined
@@ -494,12 +525,24 @@ export const getRequirements = async (req: AuthRequest, res: Response) => {
       const linked = await getRequirementIdsLinkedToTestCasesVerifies(projectId, caseIdsForVerifies)
       scopeRootSets.push(await expandRequirementIdsToRootIds(projectId, linked))
     }
+
+    let excludeRootIdsWithTestCaseVerifies: string[] = []
+    if (noTestCaseVerifiesLink) {
+      const linkedReqIds = await getRequirementIdsLinkedToAnyTestCaseVerifies(projectId)
+      excludeRootIdsWithTestCaseVerifies = await expandRequirementIdsToRootIds(projectId, linkedReqIds)
+    }
+
     if (scopeRootSets.length > 0) {
       let merged = scopeRootSets[0]
       for (let i = 1; i < scopeRootSets.length; i++) {
         merged = intersectIds(merged, scopeRootSets[i])
       }
+      if (excludeRootIdsWithTestCaseVerifies.length > 0) {
+        merged = filterIdsExcluding(merged, excludeRootIdsWithTestCaseVerifies)
+      }
       where.id = merged.length === 0 ? { in: [] } : { in: merged }
+    } else if (excludeRootIdsWithTestCaseVerifies.length > 0) {
+      where.id = { notIn: excludeRootIdsWithTestCaseVerifies }
     }
 
     // Full-text search across multiple fields

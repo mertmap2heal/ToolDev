@@ -61,4 +61,24 @@ test.describe('Requirements panel scope & deep links', () => {
     await expect(page).not.toHaveURL(/\/projects\/[^/]+\/verification/)
     await expect(page.getByText(/^Scope:/)).toBeVisible({ timeout: 10_000 })
   })
+
+  test('verification Unassigned row sets scope and noTestCaseVerifiesLink in URL', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/requirements?panel=1&panelTab=verification`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.locator('[data-node-type="unassigned-group"]').first()).toBeVisible({ timeout: 15_000 })
+    // Tree may re-render while Playwright waits for a stable click target; use DOM click via evaluate
+    await page.evaluate(() => {
+      const el = document.querySelector('[data-node-id="unassigned"]') as HTMLElement | null
+      el?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    })
+    await expect(page).toHaveURL(/noTestCaseVerifiesLink=1/)
+    await expect(page.getByText('Verification · No test case link')).toBeVisible({ timeout: 10_000 })
+  })
+
+  test('noTestCaseVerifiesLink deep link hydrates verification unassigned scope', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/requirements?panel=1&noTestCaseVerifiesLink=1`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page).toHaveURL(/noTestCaseVerifiesLink=1/)
+    await expect(page.getByText('Verification · No test case link')).toBeVisible({ timeout: 10_000 })
+  })
 })
