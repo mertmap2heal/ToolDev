@@ -35,6 +35,7 @@ import type { CreateRequirementDto, Requirement, RequirementType } from 'shared/
 import type { ApiResponse } from 'shared/types/api.types'
 import type { ComponentTreeNode } from 'shared/types/project.types'
 import type { Editor } from '@tiptap/core'
+import TraceabilityStandardsIntro from './TraceabilityStandardsIntro'
 import ParameterPickerModal from '../parameters/ParameterPickerModal'
 import CreateDefinitionModal, { toCapitalCase } from '../definitions/CreateDefinitionModal'
 import GlossaryQuickAddPrompt from '../definitions/GlossaryQuickAddPrompt'
@@ -59,6 +60,8 @@ interface CreateRequirementModalProps {
   parentRequirement?: Requirement | null
   initialComponentId?: string
   initialFunctionAllocations?: string[]
+  /** Called after the requirement row is created (before modal closes). Use for UX hints (e.g. child under parent). */
+  onCreated?: (requirement: Requirement) => void
 }
 
 const defaultRequirementTypes = [
@@ -179,6 +182,7 @@ export default function CreateRequirementModal({
   parentRequirement,
   initialComponentId,
   initialFunctionAllocations,
+  onCreated,
 }: CreateRequirementModalProps) {
   const onDiscardRef = useRef<() => void>()
   const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
@@ -236,9 +240,10 @@ export default function CreateRequirementModal({
   const [quickLinksTasks, setQuickLinksTasks] = useState<string[]>([])
   const [quickLinksCertification, setQuickLinksCertification] = useState<string[]>([])
   const [quickLinksCompliance, setQuickLinksCompliance] = useState<string[]>([])
-  // Section collapse state for traceability sections
+  // Section collapse state for traceability sections (INCOSE / ISO 29148 flow: sources → structure → semantic → allocation → V&V → specialty)
   const [traceSection, setTraceSection] = useState<Record<string, boolean>>({
-    origin: true,
+    sources: true,
+    structure: true,
     relationships: false,
     allocation: true,
     verification: true,
@@ -591,6 +596,12 @@ export default function CreateRequirementModal({
   }, [parentRequirement])
 
   useEffect(() => {
+    if (isOpen && parentRequirement) {
+      setTraceSection((prev) => ({ ...prev, structure: true }))
+    }
+  }, [isOpen, parentRequirement])
+
+  useEffect(() => {
     if (isOpen && initialComponentId) {
       setFormDataBase((prev) => ({ ...prev, componentId: initialComponentId }))
     }
@@ -644,6 +655,7 @@ export default function CreateRequirementModal({
     mutationFn: (data: CreateRequirementDto) => requirementService.createRequirement(projectId, data),
     onSuccess: (response) => {
       if (response.success) {
+        if (response.data) onCreated?.(response.data)
         queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
         invalidateLinkCaches(queryClient, projectId)
         resetDirty()
@@ -723,7 +735,7 @@ export default function CreateRequirementModal({
     setQuickLinksCertification([])
     setQuickLinksCompliance([])
     setQuickLinksRequirements([])
-    setTraceSection({ origin: true, relationships: false, allocation: true, verification: true, safety: false, certification: false })
+    setTraceSection({ sources: true, structure: true, relationships: false, allocation: true, verification: true, safety: false, certification: false })
     setThresholdValue('')
     setObjectiveValue('')
     setCustomAttributeKey('')
@@ -1736,13 +1748,10 @@ export default function CreateRequirementModal({
               </div>
             )}
 
-            {/* ═══════════════════════════════════════════════════════
-                Traceability Tab — Enterprise (INCOSE / DO-178C / DO-254)
-                Full lifecycle traceability per ISO/IEC/IEEE 29148,
-                INCOSE SE Handbook 4.2.3, and DO-178C §6.3.4
-               ═══════════════════════════════════════════════════════ */}
+            {/* Traceability Tab — ISO 29148 / INCOSE / DO-178C / DO-254 themes */}
             {activeTab === 'traceability' && (
               <div className="space-y-4">
+                <TraceabilityStandardsIntro />
                 {/* ── Traceability Coverage Indicator ── */}
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                   <div className="flex items-center gap-2 mb-3">
@@ -1754,12 +1763,31 @@ export default function CreateRequirementModal({
                       INCOSE / DO-178C
                     </span>
                   </div>
-                  <div className="grid grid-cols-4 gap-2 text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
                     {[
-                      { label: 'Source / Parent', filled: !!formData.parentId || traceLinks.some(l => l.linkType === 'derives_from') || quickLinksDocuments.length > 0, icon: GitBranch },
-                      { label: 'Verification', filled: quickLinksVerification.length > 0, icon: ClipboardCheck },
-                      { label: 'Allocation', filled: quickLinksPbs.length > 0 || quickLinksFunctions.length > 0 || !!formData.componentId, icon: Target },
-                      { label: 'Compliance', filled: quickLinksCompliance.length > 0 || quickLinksCertification.length > 0, icon: Shield },
+                      { label: 'Sources', filled: quickLinksDocuments.length > 0, icon: FileText },
+                      { label: 'Structure', filled: !!formData.parentId, icon: GitBranch },
+                      { label: 'Req trace', filled: traceLinks.length > 0, icon: LinkIcon },
+                      { label: 'V&V', filled: quickLinksVerification.length > 0, icon: ClipboardCheck },
+                      {
+                        label: 'Architecture',
+                        filled:
+                          quickLinksPbs.length > 0 ||
+                          quickLinksFunctions.length > 0 ||
+                          !!formData.componentId ||
+                          quickLinksInterfaces.length > 0 ||
+                          quickLinksTasks.length > 0 ||
+                          quickLinksIssues.length > 0,
+                        icon: Target,
+                      },
+                      {
+                        label: 'Compliance',
+                        filled:
+                          quickLinksCompliance.length > 0 ||
+                          quickLinksCertification.length > 0 ||
+                          quickLinksChangeRequests.length > 0,
+                        icon: Shield,
+                      },
                     ].map((badge) => (
                       <div
                         key={badge.label}
@@ -1777,7 +1805,7 @@ export default function CreateRequirementModal({
                   </div>
                 </div>
 
-                {/* ── Derived Requirement Flag (DO-178C §6.3.4) ── */}
+                {/* ── Derived Requirement Flag (DO-178C 6.3.4) ── */}
                 <div className={clsx(
                   'border rounded-lg p-4',
                   isDerivedRequirement
@@ -1798,11 +1826,12 @@ export default function CreateRequirementModal({
                           Derived Requirement
                         </span>
                         <span className="text-[10px] uppercase bg-amber-100 dark:bg-amber-800 text-amber-600 dark:text-amber-300 px-1.5 py-0.5 rounded font-bold">
-                          DO-178C §6.3.4
+                          DO-178C 6.3.4
                         </span>
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                         Mark if this requirement originates from the design process rather than a higher-level source.
+                        This flag records derivation provenance (metadata); use Architecture and requirement-to-requirement trace for allocation and semantic links.
                         Derived requirements require additional safety assessment per DO-178C.
                       </p>
                     </div>
@@ -1823,27 +1852,29 @@ export default function CreateRequirementModal({
                   )}
                 </div>
 
-                {/* ═══════ Section 1: Origin & Upward Traceability ═══════ */}
+                {/* ═══════ Section 1: Sources and context ═══════ */}
                 <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                   <button
                     type="button"
-                    onClick={() => setTraceSection(prev => ({ ...prev, origin: !prev.origin }))}
+                    onClick={() => setTraceSection((prev) => ({ ...prev, sources: !prev.sources }))}
                     className="flex items-center gap-2 w-full text-left px-4 py-3 bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                   >
-                    {traceSection.origin ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                    <GitBranch size={16} className="text-blue-500" />
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Origin & Upward Traceability</span>
-                    <span className="text-[10px] text-gray-400 font-normal ml-auto uppercase">INCOSE 4.2.3</span>
-                    {((formData.parentId ? 1 : 0) + quickLinksDocuments.length) > 0 && (
-                        <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 rounded-full">
-                        {(formData.parentId ? 1 : 0) + quickLinksDocuments.length}
+                    {traceSection.sources ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <FileText size={16} className="text-blue-500" />
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Sources and context</span>
+                    <span className="text-[10px] text-gray-400 font-normal ml-auto uppercase">ISO 29148</span>
+                    {quickLinksDocuments.length > 0 && (
+                      <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 rounded-full">
+                        {quickLinksDocuments.length}
                       </span>
                     )}
                   </button>
-                  {traceSection.origin && (
-                    <div className="p-4 space-y-4 border-t border-gray-200 dark:border-gray-700">
-                      {/* Linked Documents (documented_in) */}
-                      {LINKAGE_V1 && (
+                  {traceSection.sources && (
+                    <div className="p-4 space-y-3 border-t border-gray-200 dark:border-gray-700">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 text-left">
+                        Link standards, specifications, and other source artifacts. Requirement-to-requirement semantics (e.g. refines, derives) are set in the next section.
+                      </p>
+                      {LINKAGE_V1 ? (
                         <QuickLinkSelector
                           label="Linked Documents (documented_in)"
                           projectId={projectId}
@@ -1851,16 +1882,47 @@ export default function CreateRequirementModal({
                           selectedIds={quickLinksDocuments}
                           selectedLabels={quickLinksLabels}
                           onToggle={(id, label) => {
-                            setQuickLinksDocuments(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
-                            setQuickLinksLabels(prev => { const next = { ...prev }; if (quickLinksDocuments.includes(id)) delete next[id]; else next[id] = label; return next })
+                            setQuickLinksDocuments((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+                            setQuickLinksLabels((prev) => {
+                              const next = { ...prev }
+                              if (quickLinksDocuments.includes(id)) delete next[id]
+                              else next[id] = label
+                              return next
+                            })
                           }}
                         />
+                      ) : (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 italic">Enable the Linkage feature flag to link documents.</p>
                       )}
+                    </div>
+                  )}
+                </div>
 
-                      {/* Parent Requirement / Decomposition */}
+                {/* ═══════ Section 2: Specification structure (decomposition) ═══════ */}
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setTraceSection((prev) => ({ ...prev, structure: !prev.structure }))}
+                    className="flex items-center gap-2 w-full text-left px-4 py-3 bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    {traceSection.structure ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <GitBranch size={16} className="text-blue-500" />
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Specification structure</span>
+                    <span className="text-[10px] text-gray-400 font-normal ml-auto uppercase">Decomposition</span>
+                    {formData.parentId ? (
+                      <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 rounded-full">
+                        1
+                      </span>
+                    ) : null}
+                  </button>
+                  {traceSection.structure && (
+                    <div className="p-4 space-y-4 border-t border-gray-200 dark:border-gray-700">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 text-left">
+                        Parent/child sets where this requirement lives in the specification tree. The main list shows root requirements only—expand the parent row to see children. A trace link to the parent may also be created when you save (depending on project linkage settings).
+                      </p>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                          Decomposition / Parent (Hierarchy)
+                          Parent (hierarchy)
                         </label>
                         <select
                           value={formData.parentId || ''}
@@ -1871,7 +1933,7 @@ export default function CreateRequirementModal({
                             'border-gray-300 dark:border-gray-600'
                           )}
                         >
-                          <option value="">None (Top-level requirement)</option>
+                          <option value="">None (top-level requirement)</option>
                           {availableParents.map((req) => (
                             <option key={req.id} value={req.id}>
                               {req.requirementId || req.id.substring(0, 8)} - {req.title}
@@ -1879,45 +1941,41 @@ export default function CreateRequirementModal({
                           ))}
                         </select>
                         {formData.parentId ? (
-                          <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 px-3 py-2">
-                            <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-500" />
-                            <p className="text-xs text-amber-700 dark:text-amber-300">
-                              <strong>Will be hidden from main table.</strong> This requirement will be nested under{' '}
+                          <div className="mt-2 flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-700 px-3 py-2">
+                            <Info size={14} className="mt-0.5 shrink-0 text-blue-600 dark:text-blue-400" />
+                            <p className="text-xs text-blue-800 dark:text-blue-200">
+                              This requirement will appear nested under{' '}
                               <span className="font-mono">
-                                {availableParents.find(p => p.id === formData.parentId)?.requirementId ?? 'the selected parent'}
+                                {availableParents.find((p) => p.id === formData.parentId)?.requirementId ?? 'the selected parent'}
                               </span>
-                              {' '}and will not appear in the root-level Requirements table. Only set a parent if you intend a hierarchy.
+                              . In the main table, expand that parent row (chevron) to open and edit the child. Use search or the detail drawer if you open requirements by id.
                             </p>
                           </div>
                         ) : (
                           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                             {availableParents.length === 0
-                              ? 'No parent requirements yet. Create requirements to build hierarchy.'
-                              : 'Nesting under a parent hides this requirement from the main table. Leave as None unless intentional.'}
+                              ? 'No parent requirements yet. Create top-level requirements first, then add children.'
+                              : 'Leave as None for a top-level row. Choose a parent only when you want this requirement under that specification branch.'}
                           </p>
                         )}
                       </div>
-
-                      {/* Link Rationale */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
-                          Link Rationale <span className="text-gray-400 font-normal ml-1">(Optional)</span>
+                          Link rationale for parent and quick links <span className="text-gray-400 font-normal ml-1">(optional)</span>
                         </label>
                         <textarea
                           value={linkRationale}
                           onChange={(e) => setLinkRationale(e.target.value)}
                           className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
                           rows={2}
-                          placeholder="Explain the rationale for these parent/component allocations..."
+                          placeholder="Optional rationale applied when creating the parent trace link and PBS/function/verification quick links on save."
                         />
                       </div>
-
-
                     </div>
                   )}
                 </div>
 
-                {/* ═══════ Section 2: Requirement Relationships (Lateral) ═══════ */}
+                {/* ═══════ Section 3: Requirement-to-requirement trace ═══════ */}
                 <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                   <button
                     type="button"
@@ -1926,7 +1984,7 @@ export default function CreateRequirementModal({
                   >
                     {traceSection.relationships ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                     <LinkIcon size={16} className="text-purple-500" />
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Requirement Relationships</span>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Requirement-to-requirement trace</span>
                     <span className="text-[10px] text-gray-400 font-normal ml-auto uppercase">ISO 29148</span>
                     {traceLinks.length > 0 && (
                       <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-300 rounded-full">
@@ -2068,13 +2126,13 @@ export default function CreateRequirementModal({
                         </div>
                       )}
                       <p className="text-xs text-gray-500 dark:text-gray-400 text-left mt-2">
-                        Define formal semantic links to other requirements for full lifecycle traceability.
+                        Semantic links (refines, derives, depends, …) between requirements. This is separate from the parent/child tree in Specification structure.
                       </p>
                     </div>
                   )}
                 </div>
 
-                {/* ═══════ Section 3: Allocation & Implementation ═══════ */}
+                {/* ═══════ Section 4: Architecture and allocation ═══════ */}
                 <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                   <button
                     type="button"
@@ -2083,7 +2141,7 @@ export default function CreateRequirementModal({
                   >
                     {traceSection.allocation ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                     <Target size={16} className="text-green-500" />
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Allocation & Implementation</span>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Architecture and allocation</span>
                     <span className="text-[10px] text-gray-400 font-normal ml-auto uppercase">INCOSE 4.2.5</span>
                     {(quickLinksPbs.length + quickLinksFunctions.length + quickLinksInterfaces.length + quickLinksTasks.length + quickLinksIssues.length + (formData.componentId ? 1 : 0)) > 0 && (
                       <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300 rounded-full">
@@ -2202,7 +2260,7 @@ export default function CreateRequirementModal({
                   )}
                 </div>
 
-                {/* ═══════ Section 4: Verification & Validation (DO-178C Table A-7) ═══════ */}
+                {/* ═══════ Section 5: Verification & validation (DO-178C Table A-7) ═══════ */}
                 <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                   <button
                     type="button"
@@ -2211,7 +2269,7 @@ export default function CreateRequirementModal({
                   >
                     {traceSection.verification ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                     <ClipboardCheck size={16} className="text-teal-500" />
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Verification & Validation</span>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Verification and validation</span>
                     <span className="text-[10px] text-gray-400 font-normal ml-auto uppercase">DO-178C A-7</span>
                     {quickLinksVerification.length > 0 && (
                       <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-teal-100 dark:bg-teal-900 text-teal-600 dark:text-teal-300 rounded-full">
@@ -2224,8 +2282,8 @@ export default function CreateRequirementModal({
                       <div className="flex items-start gap-2 p-3 bg-teal-50 dark:bg-teal-900/10 border border-teal-200 dark:border-teal-800 rounded-lg">
                         <Info size={14} className="text-teal-600 dark:text-teal-400 mt-0.5 shrink-0" />
                         <p className="text-xs text-teal-700 dark:text-teal-300">
-                          DO-178C Table A-7 requires bidirectional traceability between requirements and verification activities.
-                          Link test plans and test cases to establish forward traceability for coverage analysis.
+                          Supports bidirectional trace between requirements and verification activities (DO-178C Table A-7 themes).
+                          Link test plans and test cases for forward trace and coverage analysis per your verification plan.
                         </p>
                       </div>
 
@@ -2250,7 +2308,7 @@ export default function CreateRequirementModal({
                   )}
                 </div>
 
-                {/* ═══════ Section 5: Safety & Risk ═══════ */}
+                {/* ═══════ Section 6: Safety and risk ═══════ */}
                 <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                   <button
                     type="button"
@@ -2259,7 +2317,7 @@ export default function CreateRequirementModal({
                   >
                     {traceSection.safety ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                     <Shield size={16} className="text-red-500" />
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Safety & Risk</span>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Safety and risk</span>
                     <span className="text-[10px] text-gray-400 font-normal ml-auto uppercase">ARP4754A / ARP4761</span>
                     {(quickLinksHazards.length + quickLinksRisks.length) > 0 && (
                       <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-300 rounded-full">
@@ -2303,7 +2361,7 @@ export default function CreateRequirementModal({
                   )}
                 </div>
 
-                {/* ═══════ Section 6: Certification & Change Management ═══════ */}
+                {/* ═══════ Section 7: Certification, compliance, and change ═══════ */}
                 <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                   <button
                     type="button"
@@ -2312,7 +2370,7 @@ export default function CreateRequirementModal({
                   >
                     {traceSection.certification ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                     <FileCheck size={16} className="text-indigo-500" />
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Certification, Compliance & Change Mgmt</span>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">Certification, compliance, and change</span>
                     <span className="text-[10px] text-gray-400 font-normal ml-auto uppercase">DO-178C / DO-254</span>
                     {(quickLinksCertification.length + quickLinksCompliance.length + quickLinksChangeRequests.length) > 0 && (
                       <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300 rounded-full">

@@ -88,6 +88,10 @@ export default function CreateTraceabilityViewModal({ projectId, initialFolderId
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Create Traceability View</h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">Save a reusable, project-shared custom matrix.</p>
+            <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 leading-relaxed max-w-xl">
+              Use saved views for recurring allocation and verification coverage checks (ISO/IEC/IEEE 29148; ARP4754A allocation
+              and DO-178C Table A-7 themes)—scope follows your certification and safety plans.
+            </p>
           </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
             <X size={18} className="text-gray-600 dark:text-gray-300" />

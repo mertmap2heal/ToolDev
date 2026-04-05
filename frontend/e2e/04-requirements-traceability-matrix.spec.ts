@@ -28,6 +28,8 @@ test.describe('Requirements / Traceability matrix', () => {
     await expect(targetSelect).toBeVisible()
     await expect(targetSelect).toHaveValue('pbs_component')
 
+    await expect(modalRoot.getByText(/bidirectional trace reviews/i)).toBeVisible()
+
     // Either a data table or the empty-state message for this target type
     const emptyOrTable = page.getByRole('table').or(page.getByText(/No requirements found|No .* found\. Add items to build the matrix/i))
     await expect(emptyOrTable.first()).toBeVisible({ timeout: 30_000 })

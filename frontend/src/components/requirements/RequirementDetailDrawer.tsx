@@ -2029,6 +2029,11 @@ export default function RequirementDetailDrawer({
 
             {activeTab === 'hierarchy' && (
               <div className="space-y-4">
+                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                  Specification decomposition (ISO/IEC/IEEE 29148; ARP4754A-style breakdown): parent/child placement in the spec
+                  tree. The main table lists root rows only; expand a parent to see children—consistent with hierarchical spec
+                  reviews.
+                </p>
                 {displayRequirement.parent && (
                   <div>
                     <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Parent Requirement</h3>
@@ -2069,6 +2074,10 @@ export default function RequirementDetailDrawer({
 
             {activeTab === 'links' && (
               <div className="space-y-6">
+                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                  Trace links (refines, derives, allocation, verification, documents, …) in the trace graph for bidirectional
+                  trace (ISO/IEC/IEEE 29148; DO-178C/DO-254 themes)—separate from parent/child decomposition on the Hierarchy tab.
+                </p>
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Linked Items</h3>
                   <div className="flex items-center gap-2">

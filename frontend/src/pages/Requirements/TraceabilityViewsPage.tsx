@@ -179,6 +179,10 @@ export default function TraceabilityViewsPage() {
               Saved Traceability Views
             </h1>
             <p className="text-sm text-gray-600 dark:text-gray-400">Project-shared custom traceability matrices.</p>
+            <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 max-w-2xl leading-relaxed">
+              Supports recurring coverage and bidirectional trace reviews (ISO/IEC/IEEE 29148; DO-178C/DO-254 and ARP4754A themes)
+              per your verification and allocation plan.
+            </p>
           </div>
         </div>
         <button

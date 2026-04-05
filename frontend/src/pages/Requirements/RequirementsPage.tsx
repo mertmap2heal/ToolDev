@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { ArrowUp, ArrowDown } from 'lucide-react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
-import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, AlertTriangle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft, BarChart3, LayoutList, Sliders, Link2, Eye, Table, ClipboardCheck, Network, Folder } from 'lucide-react'
+import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, AlertTriangle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft, BarChart3, LayoutList, Sliders, Link2, Eye, Table, ClipboardCheck, Network, Folder, Info } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
@@ -205,6 +205,7 @@ export default function RequirementsPage() {
   const [lockWarning, setLockWarning] = useState<{ isOpen: boolean; message: string }>({ isOpen: false, message: '' })
   const [linkedElementPreview, setLinkedElementPreview] = useState<LinkedElementClickPayload | null>(null)
   const [addLinkSourceRequirement, setAddLinkSourceRequirement] = useState<Requirement | null>(null)
+  const [requirementsFlash, setRequirementsFlash] = useState<string | null>(null)
 
   // Toolbar dropdown states
   const [traceabilityDropdownOpen, setTraceabilityDropdownOpen] = useState(false)
@@ -265,6 +266,12 @@ export default function RequirementsPage() {
   const [sortBy, setSortBy] = useState<string>('createdAt')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [debouncedSearch, setDebouncedSearch] = useState<string>('')
+
+  useEffect(() => {
+    if (!requirementsFlash) return
+    const t = window.setTimeout(() => setRequirementsFlash(null), 12000)
+    return () => window.clearTimeout(t)
+  }, [requirementsFlash])
 
   // Debounce search input
   useEffect(() => {
@@ -2817,6 +2824,22 @@ export default function RequirementsPage() {
             </div>
           )}
 
+          {requirementsFlash && (
+            <div className="px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2 min-w-0">
+                <Info size={18} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                <p className="text-sm text-blue-800 dark:text-blue-200">{requirementsFlash}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRequirementsFlash(null)}
+                className="text-sm font-medium text-blue-700 dark:text-blue-300 hover:underline shrink-0"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
           <div className="flex flex-col gap-2 sticky top-0 z-20 bg-gray-50 dark:bg-gray-900 py-2 -mx-1 px-1">
             <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -3713,6 +3736,18 @@ export default function RequirementsPage() {
               parentRequirement={parentRequirement}
               initialComponentId={initialComponentId}
               initialFunctionAllocations={initialFunctionAllocations}
+              onCreated={(created) => {
+                if (created.parentId) {
+                  setExpandedRows((prev) => {
+                    const next = new Set(prev)
+                    next.add(created.parentId as string)
+                    return next
+                  })
+                  setRequirementsFlash(
+                    'Child requirement created. The main list shows root rows only — we expanded the parent row so you can see this requirement nested underneath. You can also open it from search or the detail drawer.'
+                  )
+                }
+              }}
             />
           )}
 

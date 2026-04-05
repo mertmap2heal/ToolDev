@@ -846,6 +846,11 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
             </button>
           </div>
 
+          <p className="px-4 py-2 text-[11px] text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 bg-slate-50/80 dark:bg-slate-900/30 leading-relaxed">
+            Bidirectional trace reviews (ISO/IEC/IEEE 29148; DO-178C/DO-254 and ARP4754A themes): each matrix is one slice of
+            the trace graph—combine target types, saved views, or exports for certification and safety evidence per your plan.
+          </p>
+
           {/* Stats Bar */}
           <div className="bg-gray-50 dark:bg-gray-900/50 flex items-center gap-6 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
             <div className="text-sm">

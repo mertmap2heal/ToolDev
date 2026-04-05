@@ -24,6 +24,21 @@ test.describe('Requirements', () => {
     await expect(page.locator(MODAL)).toContainText(/requirement/i)
   })
 
+  test('create modal: Traceability tab shows structured sections', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/requirements`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: /create requirement/i }).click()
+    const modal = page.locator(MODAL)
+    await expect(modal).toBeVisible({ timeout: 5_000 })
+    await modal.getByRole('button', { name: /traceability/i }).click()
+    await expect(modal.getByText(/sources and context/i)).toBeVisible({ timeout: 5_000 })
+    await expect(modal.getByText(/specification structure/i)).toBeVisible()
+    await expect(modal.getByText(/requirement-to-requirement trace/i)).toBeVisible()
+    await expect(modal.getByText(/architecture and allocation/i)).toBeVisible()
+    await expect(modal.getByText(/aerospace and systems engineering alignment/i)).toBeVisible()
+    await expect(modal.getByText(/iso\/iec\/ieee 29148/i)).toBeVisible()
+  })
+
   test('create modal: required field validation', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')

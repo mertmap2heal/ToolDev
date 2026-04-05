@@ -7,7 +7,7 @@
  * Columns: ID · Name · Type · Status · Parent · Children · Coverage %
  *
  * This is the "Digital Thread" view — every entity with its linkage context.
- * Aviation: ARP4754A §5.3 requires bi-directional traceability.
+ * Aviation: ARP4754A 5.3 themes — bi-directional traceability.
  * ============================================================================
  */
 
@@ -80,7 +80,7 @@ export function TraceabilityTable({ rows, isLoading }: Props) {
   return (
     <Section
       title="Traceability Thread"
-      subtitle={`${rows.length} entities · ARP4754A §5.3 bi-directional linkage`}
+      subtitle={`${rows.length} entities · ARP4754A 5.3 bi-directional linkage themes`}
       icon={Link2}
       actions={
         <div className="relative">
