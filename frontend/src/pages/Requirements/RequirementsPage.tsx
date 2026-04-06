@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { ArrowUp, ArrowDown } from 'lucide-react'
+import { ArrowUp, ArrowDown, ArrowUpDown, Inbox } from 'lucide-react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
-import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, AlertTriangle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft, BarChart3, LayoutList, Sliders, Link2, Eye, Table, ClipboardCheck, Network, Folder, Info } from 'lucide-react'
+import { Search, X, Filter, ChevronDown, ChevronUp, Plus, Edit2, Trash2, ChevronRight, ChevronLeft, FileText, Settings, AlertCircle, AlertTriangle, Check, Grid3X3, Archive, Download, Upload, GitBranch, Columns, CheckSquare, Square, PanelLeftClose, PanelLeft, BarChart3, LayoutList, Sliders, Link2, Eye, Table, ClipboardCheck, Network, Folder, Info, GripVertical } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
@@ -215,6 +215,7 @@ export default function RequirementsPage() {
   const [analysisDropdownOpen, setAnalysisDropdownOpen] = useState(false)
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false)
   const [panelTabDropdownOpen, setPanelTabDropdownOpen] = useState(false)
+  const [bulkActionDropdownOpen, setBulkActionDropdownOpen] = useState(false)
   const traceabilityDropdownRef = useRef<HTMLDivElement>(null)
   const dataDropdownRef = useRef<HTMLDivElement>(null)
   /** View menu + column selector share one container for outside-click detection. */
@@ -222,6 +223,7 @@ export default function RequirementsPage() {
   const analysisDropdownRef = useRef<HTMLDivElement>(null)
   const sortDropdownRef = useRef<HTMLDivElement>(null)
   const panelTabDropdownRef = useRef<HTMLDivElement>(null)
+  const bulkActionDropdownRef = useRef<HTMLDivElement>(null)
 
   // Inline editing state
   const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null)
@@ -723,6 +725,9 @@ export default function RequirementsPage() {
       }
       if (panelTabDropdownRef.current && !panelTabDropdownRef.current.contains(event.target as Node)) {
         setPanelTabDropdownOpen(false)
+      }
+      if (bulkActionDropdownRef.current && !bulkActionDropdownRef.current.contains(event.target as Node)) {
+        setBulkActionDropdownOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -2127,15 +2132,15 @@ export default function RequirementsPage() {
                     e.stopPropagation()
                     toggleRow(req.id)
                   }}
-                  className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                  className="p-1 hover:bg-gray-300 dark:hover:bg-gray-600 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/50 flex items-center justify-center"
                   title={isExpanded ? 'Collapse' : 'Expand linked items, change requests, description'}
                   aria-label={isExpanded ? 'Collapse' : 'Expand linked items, change requests, description'}
                   aria-expanded={isExpanded}
                 >
                   {isExpanded ? (
-                    <ChevronDown size={16} className="text-gray-600 dark:text-gray-400" />
+                    <ChevronDown size={14} className="text-gray-500 dark:text-gray-400 group-hover:text-gray-900 transition-colors" />
                   ) : (
-                    <ChevronRight size={16} className="text-gray-600 dark:text-gray-400" />
+                    <ChevronRight size={14} className="text-gray-500 dark:text-gray-400 group-hover:text-gray-900 transition-colors" />
                   )}
                 </button>
                 <span
@@ -2164,8 +2169,8 @@ export default function RequirementsPage() {
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <span
-                    className="font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer truncate max-w-[300px] inline-block"
+                  <div
+                    className="font-medium text-gray-900 dark:text-white cursor-pointer group/title inline-flex items-center min-w-0"
                     onClick={() => setDetailRequirement(req)}
                     onDoubleClick={(e) => {
                       e.stopPropagation()
@@ -2173,12 +2178,15 @@ export default function RequirementsPage() {
                     }}
                     title="Double-click to edit"
                   >
-                    {projectId && (req.title || '').includes('{{param:') ? (
-                      <RequirementParameterText projectId={projectId} text={req.title} />
-                    ) : (
-                      req.title
-                    )}
-                  </span>
+                    <span className="truncate max-w-[300px] group-hover/title:text-blue-600 dark:group-hover/title:text-blue-400 transition-colors">
+                      {projectId && (req.title || '').includes('{{param:') ? (
+                        <RequirementParameterText projectId={projectId} text={req.title} />
+                      ) : (
+                        req.title
+                      )}
+                    </span>
+                    <Edit2 size={12} className="opacity-0 group-hover/title:opacity-100 text-blue-500 ml-1.5 shrink-0 transition-opacity" />
+                  </div>
                   {req.requirementType && (
                     <span className={clsx('px-2 py-0.5 text-xs font-medium rounded-full', getRequirementTypeColor(req.requirementType))}>
                       {formatRequirementType(req.requirementType)}
@@ -2205,24 +2213,27 @@ export default function RequirementsPage() {
                 </div>
               ) : (
                 <div className="text-sm text-gray-600 dark:text-gray-400 min-w-0 w-full">
-                  <p
-                    className="break-words whitespace-pre-wrap cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                  <div
+                    className="break-words whitespace-pre-wrap cursor-pointer flex min-w-0 flex-1 group/desc"
                     title="Double-click to edit"
                     onDoubleClick={(e) => {
                       e.stopPropagation()
                       startInlineEdit(req, 'description')
                     }}
                   >
-                    {req.description ? (
-                      projectId && (req.description || '').includes('{{param:') ? (
-                        <RequirementParameterText projectId={projectId} text={req.description} stripHtml />
+                    <div className="group-hover/desc:text-blue-600 dark:group-hover/desc:text-blue-400 transition-colors line-clamp-2 w-full">
+                      {req.description ? (
+                        projectId && (req.description || '').includes('{{param:') ? (
+                          <RequirementParameterText projectId={projectId} text={req.description} stripHtml />
+                        ) : (
+                          <span>{req.description.replace(/<[^>]*>/g, '')}</span>
+                        )
                       ) : (
-                        <span>{req.description.replace(/<[^>]*>/g, '')}</span>
-                      )
-                    ) : (
-                      <span className="text-gray-400">—</span>
-                    )}
-                  </p>
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </div>
+                    <Edit2 size={12} className="opacity-0 group-hover/desc:opacity-100 text-blue-500 ml-1.5 shrink-0 transition-opacity flex-none mt-0.5" />
+                  </div>
                 </div>
               )}
             </td>
@@ -2456,14 +2467,14 @@ export default function RequirementsPage() {
             </td>
           )}
           <td className="px-2 py-3">
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
               <button
                 onClick={(e) => {
                   e.stopPropagation()
                   setSelectedRequirementForChangeRequest(req)
                   setIsChangeRequestModalOpen(true)
                 }}
-                className="p-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+                className="p-1.5 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900/40 text-gray-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
                 title="Create change request"
               >
                 <GitBranch size={14} />
@@ -2474,7 +2485,7 @@ export default function RequirementsPage() {
                   setSelectedRequirementForIssue(req)
                   setIsCreateIssueModalOpen(true)
                 }}
-                className="p-1 rounded hover:bg-amber-50 dark:hover:bg-amber-900/20 text-gray-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+                className="p-1.5 rounded-md hover:bg-amber-100 dark:hover:bg-amber-900/40 text-gray-400 hover:text-amber-700 dark:hover:text-amber-400 transition-colors"
                 title="Create issue"
               >
                 <AlertCircle size={14} />
@@ -2487,8 +2498,8 @@ export default function RequirementsPage() {
                       handleEditClick(req)
                     }}
                     className={clsx(
-                      "p-1 rounded transition-colors",
-                      req.isLocked ? "text-gray-300 cursor-not-allowed" : "text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                      "p-1.5 rounded-md transition-colors",
+                      req.isLocked ? "text-gray-300 cursor-not-allowed" : "text-gray-400 hover:text-blue-700 dark:hover:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40"
                     )}
                     title={req.isLocked ? "Requirement is locked" : "Edit requirement"}
                   >
@@ -2500,8 +2511,8 @@ export default function RequirementsPage() {
                       handleDeleteClick(req)
                     }}
                     className={clsx(
-                      "p-1 rounded transition-colors",
-                      req.isLocked ? "text-gray-300 cursor-not-allowed" : "text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      "p-1.5 rounded-md transition-colors",
+                      req.isLocked ? "text-gray-300 cursor-not-allowed" : "text-gray-400 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40"
                     )}
                     title={req.isLocked ? "Requirement is locked" : "Delete requirement"}
                   >
@@ -2517,8 +2528,8 @@ export default function RequirementsPage() {
             {/* Linked Items (LINKAGE_V1) or Linked Functions (legacy) */}
             {LINKAGE_V1 && rowData.linkedItems && (
               <tr>
-                <td colSpan={getTotalColumnCount()} className="px-4 py-2 bg-blue-50/50 dark:bg-blue-900/10">
-                  <div className="pl-8">
+                <td colSpan={getTotalColumnCount()} className="px-4 py-2 bg-blue-50/30 dark:bg-blue-900/10">
+                  <div className="pl-4 ml-6 border-l-2 border-blue-200 dark:border-blue-800">
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <p className="text-xs font-medium text-blue-600 dark:text-blue-400 flex items-center gap-2">
                         <Settings size={14} />
@@ -2616,8 +2627,8 @@ export default function RequirementsPage() {
             )}
             {!LINKAGE_V1 && rowData.linkedFunctions.length > 0 && (
               <tr>
-                <td colSpan={getTotalColumnCount()} className="px-4 py-2 bg-blue-50/50 dark:bg-blue-900/10">
-                  <div className="pl-8">
+                <td colSpan={getTotalColumnCount()} className="px-4 py-2 bg-blue-50/30 dark:bg-blue-900/10">
+                  <div className="pl-4 ml-6 border-l-2 border-blue-200 dark:border-blue-800">
                     <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-2 flex items-center gap-2">
                       <Settings size={14} />
                       Linked Functions ({rowData.linkedFunctions.length})
@@ -2642,8 +2653,8 @@ export default function RequirementsPage() {
             {/* Linked Issues (legacy heuristic when !LINKAGE_V1) */}
             {!LINKAGE_V1 && rowData.linkedIssues.length > 0 && (
               <tr>
-                <td colSpan={getTotalColumnCount()} className="px-4 py-2 bg-yellow-50/50 dark:bg-yellow-900/10">
-                  <div className="pl-8">
+                <td colSpan={getTotalColumnCount()} className="px-4 py-2 bg-yellow-50/30 dark:bg-yellow-900/10">
+                  <div className="pl-4 ml-6 border-l-2 border-yellow-200 dark:border-yellow-800">
                     <p className="text-xs font-medium text-yellow-600 dark:text-yellow-400 mb-2 flex items-center gap-2">
                       <AlertCircle size={14} />
                       Linked Issues ({rowData.linkedIssues.length})
@@ -2687,8 +2698,8 @@ export default function RequirementsPage() {
             {/* Linked Change Requests (legacy heuristic when !LINKAGE_V1) */}
             {!LINKAGE_V1 && rowData.linkedChangeRequests.length > 0 && (
               <tr>
-                <td colSpan={getTotalColumnCount()} className="px-4 py-2 bg-purple-50/50 dark:bg-purple-900/10">
-                  <div className="pl-8">
+                <td colSpan={getTotalColumnCount()} className="px-4 py-2 bg-purple-50/30 dark:bg-purple-900/10">
+                  <div className="pl-4 ml-6 border-l-2 border-purple-200 dark:border-purple-800">
                     <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-2 flex items-center gap-2">
                       <FileText size={14} />
                       Linked Change Requests ({rowData.linkedChangeRequests.length})
@@ -2731,8 +2742,9 @@ export default function RequirementsPage() {
             )}
             {/* Description */}
             <tr>
-              <td colSpan={getTotalColumnCount()} className="px-4 py-3 bg-gray-50 dark:bg-gray-900/50">
-                <div className="pl-8">
+              <td colSpan={getTotalColumnCount()} className="px-4 py-3 bg-gray-50/50 dark:bg-gray-900/30">
+                <div className="pl-4 ml-6 border-l-2 border-gray-200 dark:border-gray-700">
+
                   <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description</p>
                   {req.description ? (
                     projectId && (req.description || '').includes('{{param:') ? (
@@ -2918,28 +2930,34 @@ export default function RequirementsPage() {
                   />
                 </button>
                 {panelTabDropdownOpen && (
-                  <div className="absolute left-0 right-0 top-full z-50 bg-white dark:bg-gray-800 border-x border-b border-gray-200 dark:border-gray-700 rounded-b-md shadow-lg">
-                    {REQUIREMENTS_LEFT_PANEL_TABS.map((tab) => (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => { setLeftPanelTab(tab.id); setPanelTabDropdownOpen(false) }}
-                        className={clsx(
-                          'w-full flex items-center justify-between px-3 py-2 text-sm transition-colors',
-                          leftPanelTab === tab.id
-                            ? 'bg-gray-50 dark:bg-gray-700/50 font-medium'
-                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/30'
-                        )}
-                      >
-                        <span className={clsx('flex items-center gap-2', leftPanelTab === tab.id ? LEFT_PANEL_TAB_META[tab.id].color : '')}>
-                          {LEFT_PANEL_TAB_META[tab.id].icon}
-                          {tab.label}
-                        </span>
-                        {leftPanelTab === tab.id && (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden py-1">
+                    {REQUIREMENTS_LEFT_PANEL_TABS.map((tab) => {
+                      const description = tab.id === 'pbs' ? 'Product Breakdown Structure' : tab.id === 'functions' ? 'Functional architecture' : 'Test plans, cases, and runs'
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => { setLeftPanelTab(tab.id); setPanelTabDropdownOpen(false) }}
+                          className={clsx(
+                            'w-full flex items-center justify-between px-3 py-2 text-sm transition-colors',
+                            leftPanelTab === tab.id
+                              ? 'bg-blue-50/50 dark:bg-blue-900/10 font-medium'
+                              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/30'
+                          )}
+                        >
+                          <div className="flex flex-col items-start gap-0.5">
+                            <span className={clsx('flex items-center gap-2', leftPanelTab === tab.id ? LEFT_PANEL_TAB_META[tab.id].color : '')}>
+                              {LEFT_PANEL_TAB_META[tab.id].icon}
+                              {tab.label}
+                            </span>
+                            <span className="text-xs text-gray-500 font-normal pl-6">{description}</span>
+                          </div>
+                          {leftPanelTab === tab.id && (
                           <Check size={13} className={LEFT_PANEL_TAB_META[tab.id].color} />
                         )}
                       </button>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -3171,6 +3189,9 @@ export default function RequirementsPage() {
               onMouseDown={handlePBSResizeStart}
             >
               <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[1px] bg-gray-200 dark:bg-gray-700 group-hover:bg-blue-400 transition-colors" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 text-gray-400 border border-gray-200 dark:border-gray-700 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
+                <GripVertical size={12} />
+              </div>
             </div>
           </>
         )}
@@ -3180,15 +3201,23 @@ export default function RequirementsPage() {
 
           {isBaselineView && (
             <div className="px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <Archive size={20} className="text-amber-600 dark:text-amber-400" />
                 <span className="font-medium text-amber-800 dark:text-amber-200">
-                  Viewing baseline{baseline ? `: ${baseline.name}` : ''}. Editing is disabled.
+                  Viewing baseline:
+                </span>
+                {baseline && (
+                  <span className="px-2.5 py-0.5 bg-amber-200/60 dark:bg-amber-800/60 text-amber-900 dark:text-amber-100 rounded-full text-xs font-semibold border border-amber-300 dark:border-amber-700/50 shadow-sm">
+                    {baseline.name}
+                  </span>
+                )}
+                <span className="text-amber-700 dark:text-amber-300 text-sm border-l border-amber-200 dark:border-amber-800 pl-3">
+                  Editing is disabled
                 </span>
               </div>
               <button
                 onClick={() => navigate(`/projects/${projectId}/requirements`)}
-                className="px-3 py-1.5 text-sm font-medium text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium bg-white dark:bg-gray-800 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-gray-700 border border-amber-200 dark:border-amber-700/50 shadow-sm rounded-lg transition-colors flex items-center gap-2"
               >
                 Exit baseline view
               </button>
@@ -3217,51 +3246,14 @@ export default function RequirementsPage() {
               <button
                 onClick={() => setIsPBSPanelOpen((v) => !v)}
                 className="p-1.5 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                title={
-                  isPBSPanelOpen
-                    ? 'Hide structure panel (PBS / Functions / Verification)'
-                    : 'Show structure panel (PBS / Functions / Verification)'
-                }
+                title={isPBSPanelOpen ? 'Close left panel' : 'Open left panel (Structure & Verification)'}
               >
                 {isPBSPanelOpen ? <PanelLeftClose size={16} className="text-gray-500" /> : <PanelLeft size={16} className="text-gray-500" />}
               </button>
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">Requirements</h2>
-              <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">{totalRequirements}</span>
-              {projectId && (
-                <Link
-                  to={`/projects/${projectId}/requirements/dashboard`}
-                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
-                >
-                  <BarChart3 size={14} />
-                  Dashboard
-                </Link>
-              )}
-              {listScopeActive && (
-                <div className="flex items-center gap-1 flex-wrap">
-                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400 max-w-[200px] truncate" title="Side panel list scope">
-                    Scope:{' '}
-                    {leftPanelTab === 'pbs' && selectedComponentId
-                      ? `PBS · ${selectedComponentId.slice(0, 8)}…`
-                      : leftPanelTab === 'functions' && selectedFunctionId
-                        ? `Function · ${selectedFunctionId.slice(0, 8)}…`
-                        : leftPanelTab === 'verification' && selectedVerificationNode?.type === 'test-case'
-                          ? `Test case · ${selectedVerificationNode.id.slice(0, 8)}…`
-                          : leftPanelTab === 'verification' && selectedVerificationNode?.type === 'test-plan'
-                            ? `Test plan · ${selectedVerificationNode.id.slice(0, 8)}…`
-                            : leftPanelTab === 'verification' && selectedVerificationNode?.type === 'unassigned-group'
-                              ? 'Verification · No test case link'
-                              : 'Active'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={clearListScope}
-                    className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                  >
-                    <X size={12} />
-                    Clear scope
-                  </button>
-                </div>
-              )}
+              <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                {activeFilterCount > 0 || listScopeActive ? `${filteredRequirements.length} of ${totalRequirements}` : totalRequirements}
+              </span>
             </div>
             <button
               onClick={() => {
@@ -3276,59 +3268,7 @@ export default function RequirementsPage() {
             </button>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {selectedRequirements.size > 0 && !isBaselineView && (
-                <>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                      {selectedRequirements.size} selected
-                    </span>
-                    <select
-                    onChange={(e) => {
-                      const action = e.target.value
-                      if (action && action !== 'bulk-action') {
-                        const requirementIds = Array.from(selectedRequirements)
-                        // Check for locks before critical actions
-                        if (action === 'bulk-delete') {
-                          const selectedReqs = requirements.filter(r => selectedRequirements.has(r.id))
-                          const lockedReqs = selectedReqs.filter(r => r.isLocked)
 
-                          if (lockedReqs.length > 0) {
-                            setLockWarning({
-                              isOpen: true,
-                              message: `Cannot delete ${lockedReqs.length} locked requirement(s). Please unlock them first.`
-                            })
-                            e.target.value = 'bulk-action'
-                            return
-                          }
-
-                          if (window.confirm(`Are you sure you want to delete ${requirementIds.length} requirement(s)? This action cannot be undone.`)) {
-                            bulkDeleteMutation.mutate(requirementIds)
-                          }
-                        } else if (action === 'create-change-request') {
-                          if (window.confirm(`Create change request(s) for ${requirementIds.length} selected requirement(s)?`)) {
-                            bulkCreateChangeRequestsMutation.mutate(requirementIds)
-                          }
-                        } else if (action === 'create-issue') {
-                          if (window.confirm(`Create issue(s) for ${requirementIds.length} selected requirement(s)?`)) {
-                            bulkCreateIssuesMutation.mutate(requirementIds)
-                          }
-                        }
-                        e.target.value = 'bulk-action'
-                      }
-                    }}
-                    className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-                    defaultValue="bulk-action"
-                  >
-                    <option value="bulk-action">Bulk Actions...</option>
-                    <option value="create-change-request">Create Change Request(s)</option>
-                    <option value="create-issue">Create Issue(s)</option>
-                    <option value="bulk-delete">Delete Selected</option>
-                  </select>
-                  </div>
-                  <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
-                </>
-              )}
-              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
 
               {/* Analysis dropdown */}
               <div className="relative" ref={analysisDropdownRef}>
@@ -3401,6 +3341,9 @@ export default function RequirementsPage() {
                 <span className="hidden sm:inline">Views</span>
               </button>
 
+              {/* Divider: Analysis/Trace group | Data group */}
+              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
+
               {/* Data dropdown */}
               <div className="relative" ref={dataDropdownRef}>
                 <button
@@ -3453,6 +3396,9 @@ export default function RequirementsPage() {
                 )}
               </div>
 
+              {/* Divider: Data group | View/Settings group */}
+              <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
+
               {/* View dropdown */}
               <div className="relative" ref={viewColumnDropdownRef}>
                 <button
@@ -3468,7 +3414,9 @@ export default function RequirementsPage() {
                     'px-2.5 py-2 border rounded-lg flex items-center gap-1.5 transition-colors text-sm',
                     viewDropdownOpen || columnSelectorOpen
                       ? 'bg-gray-100 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-gray-900 dark:text-white'
-                      : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                      : (groupByType || listViewStyle === 'document')
+                        ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                        : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
                   )}
                   title="View Options"
                 >
@@ -3484,6 +3432,7 @@ export default function RequirementsPage() {
                     >
                       <Grid3X3 size={16} className={clsx(groupByType ? "text-blue-500" : "text-gray-500 dark:text-gray-400")} />
                       {groupByType ? 'Ungroup Requirements' : 'Group by Type'}
+                      {groupByType && <Check size={13} className="ml-auto text-blue-500" />}
                     </button>
                     <button
                       onClick={() => { persistListViewStyle(listViewStyle === 'document' ? 'table' : 'document'); setViewDropdownOpen(false) }}
@@ -3491,6 +3440,7 @@ export default function RequirementsPage() {
                     >
                       <LayoutList size={16} className={clsx(listViewStyle === 'document' ? "text-blue-500" : "text-gray-500 dark:text-gray-400")} />
                       {listViewStyle === 'document' ? 'Table View' : 'Document View'}
+                      {listViewStyle === 'document' && <Check size={13} className="ml-auto text-blue-500" />}
                     </button>
                     <button
                       onClick={() => { setIsDiagramOpen(true); setViewDropdownOpen(false) }}
@@ -3556,10 +3506,11 @@ export default function RequirementsPage() {
               </div>
               <Link
                 to={`/projects/${projectId}/requirements/settings`}
-                className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-1 transition-colors"
+                className="px-2.5 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center gap-1.5 transition-colors text-sm font-medium"
                 title="Requirements Settings"
               >
                 <Settings size={16} />
+                <span>Settings</span>
               </Link>
               {projectId && <SafetyLinkPanel variant="linked" count={linkedSafetyCount} />}
             </div>
@@ -3570,7 +3521,8 @@ export default function RequirementsPage() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
             <input
               type="text"
-              placeholder="Search all fields (title, description, ID, requirement type, owner, tags, criteria...)"
+              placeholder="Search requirements (title, ID, description...)"
+              title="Search all fields (title, description, ID, requirement type, owner, tags, criteria...)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
@@ -3578,119 +3530,187 @@ export default function RequirementsPage() {
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-full p-0.5"
               >
-                <X size={16} />
+                <X size={14} />
               </button>
             )}
           </div>
 
-          {/* Inline Quick Filters — Status, Priority, Type (most-used filters, always visible) */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className={clsx(
-                'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30',
-                statusFilter !== 'all'
-                  ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
-                  : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
-              )}
-            >
-              <option value="all">Status: All</option>
-              {uniqueStatuses.map((status) => (
-                <option key={status} value={status}>{status}</option>
-              ))}
-            </select>
+          {/* Filter Bar */}
+          <div className="flex flex-col gap-2">
+            {/* Primary Filter Row */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Sort Control as distinct indicator */}
+              <div className="relative" ref={sortDropdownRef}>
+                <button
+                  onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
+                  className={clsx(
+                    'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors flex items-center gap-1',
+                    sortDropdownOpen
+                      ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                      : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                  )}
+                  title="Sort By"
+                >
+                  <ArrowUpDown size={12} className="text-gray-400 mr-0.5" />
+                  <span>Sort: {REQUIREMENT_COLUMNS.find(c => (c.sortKey || c.key) === sortBy)?.label || 'Created'}</span>
+                  {sortOrder === 'desc' ? <ArrowDown size={12} /> : <ArrowUp size={12} />}
+                </button>
+                {sortDropdownOpen && (
+                  <div className="absolute left-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 py-1 z-[60]">
+                    <div className="max-h-64 overflow-y-auto">
+                      {REQUIREMENT_COLUMNS.filter(c => c.sortable).map(col => {
+                        const isSorted = sortBy === (col.sortKey || col.key)
+                        return (
+                          <button
+                            key={col.key}
+                            onClick={() => { handleSort(col.sortKey || col.key); setSortDropdownOpen(false); }}
+                            className={clsx(
+                              "w-full flex items-center justify-between px-3 py-1.5 text-xs transition-colors",
+                              isSorted 
+                                ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20"
+                                : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                            )}
+                          >
+                            <span>{col.label}</span>
+                            {isSorted && (
+                              sortOrder === 'desc' ? <ArrowDown size={12} /> : <ArrowUp size={12} />
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
 
-            <select
-              value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value)}
-              className={clsx(
-                'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30',
-                priorityFilter !== 'all'
-                  ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
-                  : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
-              )}
-            >
-              <option value="all">Priority: All</option>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="critical">Critical</option>
-            </select>
+              <div className="w-px h-4 bg-gray-300 dark:bg-gray-600" aria-hidden />
 
-            <select
-              value={requirementTypeFilter}
-              onChange={(e) => setRequirementTypeFilter(e.target.value)}
-              className={clsx(
-                'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30',
-                requirementTypeFilter !== 'all'
-                  ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
-                  : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
-              )}
-            >
-              <option value="all">Type: All</option>
-              <option value="functional">Functional</option>
-              <option value="performance">Performance</option>
-              <option value="interface">Interface</option>
-              <option value="design_constraint">Design Constraint</option>
-              <option value="safety">Safety</option>
-              <option value="security">Security</option>
-              <option value="usability">Usability</option>
-              <option value="other">Other</option>
-            </select>
-
-            {/* Sort Dropdown */}
-            <div className="relative" ref={sortDropdownRef}>
-              <button
-                onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
+              {/* Core Filters */}
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
                 className={clsx(
-                  'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors flex items-center gap-1',
-                  sortDropdownOpen
+                  'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30 appearance-none',
+                  statusFilter !== 'all'
                     ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
                     : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
                 )}
-                title="Sort By"
               >
-                <span>Sort: {REQUIREMENT_COLUMNS.find(c => (c.sortKey || c.key) === sortBy)?.label || 'Created'}</span>
-                {sortOrder === 'desc' ? <ArrowDown size={12} /> : <ArrowUp size={12} />}
+                <option value="all">Status: All</option>
+                {uniqueStatuses.map((status) => (
+                  <option key={status} value={status}>{status}</option>
+                ))}
+              </select>
+
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value)}
+                className={clsx(
+                  'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30 appearance-none',
+                  priorityFilter !== 'all'
+                    ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                    : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                )}
+              >
+                <option value="all">Priority: All</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+
+              <select
+                value={requirementTypeFilter}
+                onChange={(e) => setRequirementTypeFilter(e.target.value)}
+                className={clsx(
+                  'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30 appearance-none',
+                  requirementTypeFilter !== 'all'
+                    ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                    : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                )}
+              >
+                <option value="all">Type: All</option>
+                <option value="functional">Functional</option>
+                <option value="performance">Performance</option>
+                <option value="interface">Interface</option>
+                <option value="design_constraint">Design Constraint</option>
+                <option value="safety">Safety</option>
+                <option value="security">Security</option>
+                <option value="usability">Usability</option>
+                <option value="other">Other</option>
+              </select>
+
+              <button
+                onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
+                title={(activeFilterCount - (statusFilter !== 'all' ? 1 : 0) - (priorityFilter !== 'all' ? 1 : 0) - (requirementTypeFilter !== 'all' ? 1 : 0)) > 0 ? 'Secondary filters are active' : 'Show more filters'}
+                className={clsx(
+                  "px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors flex items-center gap-1",
+                  isFiltersExpanded 
+                    ? "bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300"
+                    : "border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+                )}
+              >
+                <Filter size={12} />
+                {isFiltersExpanded ? "Fewer Filters" : "More Filters"}
+                {!isFiltersExpanded && activeFilterCount > 0 && (
+                  <span className="px-1 py-0.5 text-[10px] font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 ml-1">
+                    {activeFilterCount} active
+                  </span>
+                )}
               </button>
-              {sortDropdownOpen && (
-                <div className="absolute left-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 py-1 z-[60]">
-                  <div className="max-h-64 overflow-y-auto">
-                    {REQUIREMENT_COLUMNS.filter(c => c.sortable).map(col => {
-                      const isSorted = sortBy === (col.sortKey || col.key)
-                      return (
-                        <button
-                          key={col.key}
-                          onClick={() => { handleSort(col.sortKey || col.key); setSortDropdownOpen(false); }}
-                          className={clsx(
-                            "w-full flex items-center justify-between px-3 py-1.5 text-xs transition-colors",
-                            isSorted 
-                              ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20"
-                              : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                          )}
-                        >
-                          <span>{col.label}</span>
-                          {isSorted && (
-                            sortOrder === 'desc' ? <ArrowDown size={12} /> : <ArrowUp size={12} />
-                          )}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
+
+              {activeFilterCount > 0 && (
+                <button
+                  onClick={clearAllFilters}
+                  className="px-2 py-1 text-xs font-medium text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors flex items-center gap-1"
+                  title="Clear all active filters"
+                >
+                  <X size={12} />
+                  Clear all
+                </button>
               )}
             </div>
 
+            {/* Scope Badge (Moved from Header) */}
+            {listScopeActive && (
+              <div className="flex items-center gap-1">
+                <span className="inline-flex items-center gap-2 px-2.5 py-1.5 text-xs font-medium rounded-full bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300">
+                  <span className="font-semibold px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-800 rounded">Scope</span>
+                  <span className="max-w-[300px] truncate" title="Side panel list scope">
+                    {leftPanelTab === 'pbs' && selectedComponentId
+                      ? `PBS Node (${selectedComponentId.slice(0, 8)})`
+                      : leftPanelTab === 'functions' && selectedFunctionId
+                        ? `Function (${selectedFunctionId.slice(0, 8)})`
+                        : leftPanelTab === 'verification' && selectedVerificationNode?.type === 'test-case'
+                          ? `Test Case (${selectedVerificationNode.id.slice(0, 8)})`
+                          : leftPanelTab === 'verification' && selectedVerificationNode?.type === 'test-plan'
+                            ? `Test Plan (${selectedVerificationNode.id.slice(0, 8)})`
+                            : leftPanelTab === 'verification' && selectedVerificationNode?.type === 'unassigned-group'
+                              ? 'Verification: No test case link'
+                              : 'Active'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={clearListScope}
+                    className="ml-1 hover:bg-indigo-200 dark:hover:bg-indigo-800 rounded-full p-0.5"
+                    title="Clear scope"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              </div>
+            )}
+
+            {/* Secondary Filter Row (Expanded) */}
             {isFiltersExpanded && (
-              <>
+              <div className="flex items-center gap-2 flex-wrap pl-2 border-l-2 border-gray-200 dark:border-gray-700">
                 <select
                   value={categoryFilter}
                   onChange={(e) => setCategoryFilter(e.target.value)}
                   className={clsx(
-                    'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+                    'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30 appearance-none',
                     categoryFilter !== 'all'
                       ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
                       : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
@@ -3707,7 +3727,7 @@ export default function RequirementsPage() {
                   value={ownerFilter}
                   onChange={(e) => setOwnerFilter(e.target.value)}
                   className={clsx(
-                    'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+                    'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30 appearance-none',
                     ownerFilter !== 'all'
                       ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
                       : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
@@ -3724,7 +3744,7 @@ export default function RequirementsPage() {
                   value={sourceFilter}
                   onChange={(e) => setSourceFilter(e.target.value)}
                   className={clsx(
-                    'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+                    'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30 appearance-none',
                     sourceFilter !== 'all'
                       ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
                       : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
@@ -3741,7 +3761,7 @@ export default function RequirementsPage() {
                   value={verificationStatusFilter}
                   onChange={(e) => setVerificationStatusFilter(e.target.value)}
                   className={clsx(
-                    'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+                    'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30 appearance-none',
                     verificationStatusFilter !== 'all'
                       ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
                       : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
@@ -3757,7 +3777,7 @@ export default function RequirementsPage() {
                   value={reviewStatusFilter}
                   onChange={(e) => setReviewStatusFilter(e.target.value)}
                   className={clsx(
-                    'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+                    'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30 appearance-none',
                     reviewStatusFilter !== 'all'
                       ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
                       : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
@@ -3769,45 +3789,95 @@ export default function RequirementsPage() {
                   <option value="approved">Approved</option>
                   <option value="rejected">Rejected</option>
                 </select>
-              </>
-            )}
-
-            <button
-              onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
-              className={clsx(
-                "px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors flex items-center gap-1",
-                isFiltersExpanded 
-                  ? "bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300"
-                  : "border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
-              )}
-            >
-              <Filter size={12} />
-              {isFiltersExpanded ? "Fewer Filters" : "More Filters"}
-              {!isFiltersExpanded && activeFilterCount > 3 && (
-                <span className="px-1 py-0.5 text-[10px] font-medium rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                  +{activeFilterCount - (statusFilter !== 'all' ? 1 : 0) - (priorityFilter !== 'all' ? 1 : 0) - (requirementTypeFilter !== 'all' ? 1 : 0)}
-                </span>
-              )}
-            </button>
-
-            {activeFilterCount > 0 && (
-              <button
-                onClick={clearAllFilters}
-                className="px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
-                title="Clear all active filters"
-              >
-                Clear all ({activeFilterCount})
-              </button>
+              </div>
             )}
           </div>
+
+          {/* Bulk Selection Sticky Banner */}
+          {selectedRequirements.size > 0 && !isBaselineView && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-2 flex items-center justify-between shadow-sm flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <span className="font-semibold text-blue-800 dark:text-blue-300">
+                  {selectedRequirements.size} {selectedRequirements.size === 1 ? 'requirement' : 'requirements'} selected
+                </span>
+                <button
+                  onClick={() => setSelectedRequirements(new Set())}
+                  className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
+                >
+                  Clear selection
+                </button>
+              </div>
+              <div className="flex items-center gap-2 relative" ref={bulkActionDropdownRef}>
+                <button
+                  onClick={() => setBulkActionDropdownOpen(!bulkActionDropdownOpen)}
+                  className="px-3 py-1.5 bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-700 rounded-md text-blue-700 dark:text-blue-300 text-sm font-medium hover:bg-blue-50 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors shadow-sm"
+                >
+                  Bulk Actions
+                  <ChevronDown size={14} />
+                </button>
+                {bulkActionDropdownOpen && (
+                  <div className="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 py-1">
+                    <button
+                      onClick={() => {
+                        const requirementIds = Array.from(selectedRequirements)
+                        if (window.confirm(`Create change request(s) for ${requirementIds.length} selected requirement(s)?`)) {
+                          bulkCreateChangeRequestsMutation.mutate(requirementIds)
+                        }
+                        setBulkActionDropdownOpen(false)
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
+                      Create Change Request(s)
+                    </button>
+                    <button
+                      onClick={() => {
+                        const requirementIds = Array.from(selectedRequirements)
+                        if (window.confirm(`Create issue(s) for ${requirementIds.length} selected requirement(s)?`)) {
+                          bulkCreateIssuesMutation.mutate(requirementIds)
+                        }
+                        setBulkActionDropdownOpen(false)
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
+                      Create Issue(s)
+                    </button>
+                    <button
+                      onClick={() => {
+                        const requirementIds = Array.from(selectedRequirements)
+                        const selectedReqs = requirements.filter(r => selectedRequirements.has(r.id))
+                        const lockedReqs = selectedReqs.filter(r => r.isLocked)
+                        if (lockedReqs.length > 0) {
+                          setLockWarning({ isOpen: true, message: `Cannot delete ${lockedReqs.length} locked requirement(s).` })
+                        } else if (window.confirm(`Delete ${requirementIds.length} requirement(s)?`)) {
+                          bulkDeleteMutation.mutate(requirementIds)
+                        }
+                        setBulkActionDropdownOpen(false)
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                    >
+                      Delete Selected
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Requirements Table / Document View */}
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden flex-1 min-h-0">
             {listViewStyle === 'document' ? (
               <div className="overflow-y-auto h-full p-4 space-y-6">
                 {isLoading ? (
-                  <div className="py-8 text-center text-gray-500 dark:text-gray-400">
-                    Loading requirements...
+                  <div className="space-y-4">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="animate-pulse flex flex-col gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-lg max-w-4xl bg-white dark:bg-gray-800">
+                        <div className="flex gap-2">
+                           <div className="w-20 h-5 bg-gray-200 dark:bg-gray-700 rounded-md"></div>
+                           <div className="flex-1 max-w-md h-5 bg-gray-200 dark:bg-gray-700 rounded-md"></div>
+                        </div>
+                        <div className="w-full max-w-2xl h-16 bg-gray-100 dark:bg-gray-900 rounded-md mt-2"></div>
+                      </div>
+                    ))}
                   </div>
                 ) : groupByType ? (
                   (() => {
@@ -3815,10 +3885,28 @@ export default function RequirementsPage() {
                     const hasAny = orderedKeys.some((k) => groups[k]?.length)
                     if (!hasAny) {
                       return (
-                        <div className="py-8 text-center text-gray-500 dark:text-gray-400">
-                          {totalRequirements === 0
-                            ? 'No requirements found. Click "Create Requirement" to get started.'
-                            : 'No requirements match your search or filter criteria.'}
+                        <div className="py-16 flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
+                          <Inbox className="w-12 h-12 text-gray-300 dark:text-gray-600 mb-4" />
+                          <p className="text-base font-medium text-gray-900 dark:text-gray-200">
+                            {totalRequirements === 0 ? 'No requirements found' : 'No requirements match criteria'}
+                          </p>
+                          <p className="text-sm max-w-sm mt-1 text-center">
+                            {totalRequirements === 0
+                              ? 'Get started by creating your first requirement or importing from a file.'
+                              : 'Try adjusting your search and filter settings to find what you are looking for.'}
+                          </p>
+                          {totalRequirements === 0 && (
+                            <button
+                              onClick={() => {
+                                setParentRequirement(null)
+                                setIsCreateModalOpen(true)
+                              }}
+                              className="mt-6 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm transition-colors flex items-center gap-2"
+                            >
+                              <Plus size={16} />
+                              Create Requirement
+                            </button>
+                          )}
                         </div>
                       )
                     }
@@ -3856,10 +3944,28 @@ export default function RequirementsPage() {
                     })
                   })()
                 ) : documentViewRequirements.length === 0 ? (
-                  <div className="py-8 text-center text-gray-500 dark:text-gray-400">
-                    {totalRequirements === 0
-                      ? 'No requirements found. Click "Create Requirement" to get started.'
-                      : 'No requirements match your search or filter criteria.'}
+                  <div className="py-16 flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
+                    <Inbox className="w-12 h-12 text-gray-300 dark:text-gray-600 mb-4" />
+                    <p className="text-base font-medium text-gray-900 dark:text-gray-200">
+                      {totalRequirements === 0 ? 'No requirements found' : 'No requirements match criteria'}
+                    </p>
+                    <p className="text-sm max-w-sm mt-1 text-center">
+                      {totalRequirements === 0
+                        ? 'Get started by creating your first requirement or importing from a file.'
+                        : 'Try adjusting your search and filter settings to find what you are looking for.'}
+                    </p>
+                    {totalRequirements === 0 && (
+                      <button
+                        onClick={() => {
+                          setParentRequirement(null)
+                          setIsCreateModalOpen(true)
+                        }}
+                        className="mt-6 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm transition-colors flex items-center gap-2"
+                      >
+                        <Plus size={16} />
+                        Create Requirement
+                      </button>
+                    )}
                   </div>
                 ) : (
                   documentViewRequirements.map((req) => (
@@ -3918,10 +4024,14 @@ export default function RequirementsPage() {
                           )}
                           onClick={col.sortable ? () => handleSort(sortAttribute) : undefined}
                         >
-                          <span className={clsx(col.sortable && "inline-flex items-center gap-1")}>
+                          <span className={clsx(col.sortable && "inline-flex items-center gap-1 group/th relative")}>
                             {col.label}
-                            {col.sortable && sortBy === sortAttribute && (
-                              sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                            {col.sortable && (
+                              sortBy === sortAttribute ? (
+                                sortOrder === 'asc' ? <ArrowUp size={14} className="text-blue-600 dark:text-blue-400" /> : <ArrowDown size={14} className="text-blue-600 dark:text-blue-400" />
+                              ) : (
+                                <ArrowUpDown size={14} className="opacity-0 group-hover/th:opacity-40 transition-opacity text-gray-400 absolute -right-5" />
+                              )
                             )}
                           </span>
                         </ResizableTh>
@@ -3934,11 +4044,20 @@ export default function RequirementsPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                   {isLoading ? (
-                    <tr>
-                      <td colSpan={getTotalColumnCount()} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                        Loading requirements...
-                      </td>
-                    </tr>
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <tr key={i} className="animate-pulse">
+                        <td colSpan={getTotalColumnCount()} className="px-4 py-3">
+                          <div className="flex gap-4 items-center">
+                            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-[5%]"></div>
+                            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-[15%]"></div>
+                            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-[45%]"></div>
+                            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-[10%]"></div>
+                            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-[10%]"></div>
+                            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-[15%]"></div>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
                   ) : (() => {
                     if (groupByType) {
                       const { groups, orderedKeys } = groupedRequirements
@@ -3948,10 +4067,30 @@ export default function RequirementsPage() {
                       if (!hasAnyRequirements) {
                         return (
                           <tr>
-                            <td colSpan={getTotalColumnCount()} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                              {totalRequirements === 0
-                                ? 'No requirements found. Click "Create Requirement" to get started.'
-                                : 'No requirements match your search or filter criteria.'}
+                            <td colSpan={getTotalColumnCount()} className="py-16">
+                              <div className="flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
+                                <Inbox className="w-12 h-12 text-gray-300 dark:text-gray-600 mb-4" />
+                                <p className="text-base font-medium text-gray-900 dark:text-gray-200">
+                                  {totalRequirements === 0 ? 'No requirements found' : 'No requirements match criteria'}
+                                </p>
+                                <p className="text-sm max-w-sm mt-1 text-center">
+                                  {totalRequirements === 0
+                                    ? 'Get started by creating your first requirement or importing from a file.'
+                                    : 'Try adjusting your search and filter settings to find what you are looking for.'}
+                                </p>
+                                {totalRequirements === 0 && (
+                                  <button
+                                    onClick={() => {
+                                      setParentRequirement(null)
+                                      setIsCreateModalOpen(true)
+                                    }}
+                                    className="mt-6 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm transition-colors flex items-center gap-2"
+                                  >
+                                    <Plus size={16} />
+                                    Create Requirement
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         )
@@ -3999,10 +4138,30 @@ export default function RequirementsPage() {
                       if (hierarchyRequirements.length === 0) {
                         return (
                           <tr>
-                            <td colSpan={getTotalColumnCount()} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                              {totalRequirements === 0
-                                ? 'No requirements found. Click "Create Requirement" to get started.'
-                                : 'No requirements match your search or filter criteria.'}
+                            <td colSpan={getTotalColumnCount()} className="py-16">
+                              <div className="flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
+                                <Inbox className="w-12 h-12 text-gray-300 dark:text-gray-600 mb-4" />
+                                <p className="text-base font-medium text-gray-900 dark:text-gray-200">
+                                  {totalRequirements === 0 ? 'No requirements found' : 'No requirements match criteria'}
+                                </p>
+                                <p className="text-sm max-w-sm mt-1 text-center">
+                                  {totalRequirements === 0
+                                    ? 'Get started by creating your first requirement or importing from a file.'
+                                    : 'Try adjusting your search and filter settings to find what you are looking for.'}
+                                </p>
+                                {totalRequirements === 0 && (
+                                  <button
+                                    onClick={() => {
+                                      setParentRequirement(null)
+                                      setIsCreateModalOpen(true)
+                                    }}
+                                    className="mt-6 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm transition-colors flex items-center gap-2"
+                                  >
+                                    <Plus size={16} />
+                                    Create Requirement
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         )
