@@ -53,11 +53,14 @@ import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 import { useParameterDisplayStore } from '../../store/parameterDisplayStore'
 import RequirementParameterText from '../../components/requirements/RequirementParameterText'
 import RequirementRichTextField from '../../components/requirements/RequirementRichTextField'
+import { plainTextFromRichText } from '../../utils/richText'
+import { REQUIREMENT_FIELDS, type RequirementFieldKey, getDefaultVisibleRequirementFields } from '../../config/requirementsFields'
 import type { Requirement, UpdateRequirementDto } from 'shared/types/engineering.types'
 import type { Link as LinkType, EntityType } from 'shared/types/linkage.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
 import { useAuthStore } from '../../store/authStore'
+import { requirementsViewPreferencesService, type RequirementsViewPreferences } from '../../services/requirementsViewPreferences.service'
 
 interface ExpandedRow {
   requirementId: string
@@ -86,26 +89,6 @@ interface ExpandedRow {
 function humanizeLinkType(linkType: string | undefined): string {
   if (!linkType) return ''
   return linkType.replace(/_/g, ' ')
-}
-
-function decodeHtmlEntities(input: string): string {
-  // Covers the common entities we see in stored rich-text; keeps it lightweight and SSR-safe.
-  const withNamed = input
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-  return withNamed.replace(/&#(\d+);/g, (m, code) => {
-    const n = Number(code)
-    return Number.isFinite(n) ? String.fromCharCode(n) : m
-  })
-}
-
-function plainTextFromRichText(input: string): string {
-  const decoded = decodeHtmlEntities(input)
-  return decoded.replace(/<[^>]*>/g, '').trim()
 }
 
 /** Normalize id token for matching titles like "Deleted test case (b531f48f)". */
@@ -459,6 +442,38 @@ export default function RequirementsPage() {
     } catch (e) { /* ignore */ }
   }, [])
 
+  // Density (table + document): comfortable or compact
+  const loadDensity = (): 'comfortable' | 'compact' => {
+    try {
+      const stored = localStorage.getItem('requirements-density')
+      if (stored === 'compact' || stored === 'comfortable') return stored
+    } catch { /* ignore */ }
+    return 'comfortable'
+  }
+  const [density, setDensity] = useState<'comfortable' | 'compact'>(() => loadDensity())
+  const persistDensity = useCallback((d: 'comfortable' | 'compact') => {
+    setDensity(d)
+    try { localStorage.setItem('requirements-density', d) } catch { /* ignore */ }
+  }, [])
+
+  // Document outline (document view only)
+  const loadDocOutlineOpen = (): boolean => {
+    try {
+      const stored = localStorage.getItem('requirements-doc-outline-open')
+      if (stored === '0') return false
+      if (stored === '1') return true
+    } catch { /* ignore */ }
+    return true
+  }
+  const [docOutlineOpen, setDocOutlineOpen] = useState<boolean>(() => loadDocOutlineOpen())
+  const [docOutlineSearch, setDocOutlineSearch] = useState('')
+  const persistDocOutlineOpen = useCallback((open: boolean) => {
+    setDocOutlineOpen(open)
+    try { localStorage.setItem('requirements-doc-outline-open', open ? '1' : '0') } catch { /* ignore */ }
+  }, [])
+  const docCardElsRef = useRef<Record<string, HTMLDivElement | null>>({})
+  // Server preferences hydration/persistence is wired below, after field/width state is declared.
+
   const [isPBSPanelOpen, setIsPBSPanelOpen] = useState<boolean>(false)
   const [pbsPanelWidth, setPbsPanelWidth] = useState<number>(280)
   const pbsResizing = useRef(false)
@@ -630,64 +645,24 @@ export default function RequirementsPage() {
     urlHydrated,
   ])
 
-  // Column definitions for requirements
-  type ColumnKey = string
-  type ColumnConfig = {
-    key: ColumnKey
-    label: string
-    defaultVisible: boolean
-    sortable?: boolean
-    sortKey?: string
-    defaultWidth?: number
-  }
-
-  const REQUIREMENT_COLUMNS: ColumnConfig[] = [
-    { key: 'requirementId', label: 'ID', defaultVisible: true, sortable: true, defaultWidth: 100 },
-    { key: 'title', label: 'Title', defaultVisible: true, sortable: true, defaultWidth: 250 },
-    { key: 'description', label: 'Description', defaultVisible: true, sortable: false, defaultWidth: 350 },
-    { key: 'priority', label: 'Priority', defaultVisible: true, sortable: true, defaultWidth: 100 },
-    { key: 'status', label: 'Status', defaultVisible: true, sortable: true, defaultWidth: 120 },
-    { key: 'owner', label: 'Owner', defaultVisible: true, sortable: true, defaultWidth: 150 },
-    { key: 'category', label: 'Category', defaultVisible: false, sortable: true, defaultWidth: 150 },
-    { key: 'source', label: 'Source', defaultVisible: false, sortable: true, defaultWidth: 150 },
-    { key: 'requirementType', label: 'Type', defaultVisible: false, sortable: true, defaultWidth: 150 },
-    { key: 'requirementLevel', label: 'Level', defaultVisible: false, sortable: true, defaultWidth: 120 },
-    { key: 'risk', label: 'Risk', defaultVisible: false, sortable: true, defaultWidth: 100 },
-    { key: 'complexity', label: 'Complexity', defaultVisible: false, sortable: true, defaultWidth: 120 },
-    { key: 'verificationMethod', label: 'Verification Method', defaultVisible: false, sortable: false, defaultWidth: 180 },
-    { key: 'verificationStatus', label: 'Verification Status', defaultVisible: false, sortable: false, defaultWidth: 150 },
-    { key: 'verificationDate', label: 'Verification Date', defaultVisible: false, sortable: true, defaultWidth: 150 },
-    { key: 'linkedMocCode', label: 'MoC', defaultVisible: false, sortable: false, defaultWidth: 120 },
-    { key: 'acceptanceCriteria', label: 'Acceptance Criteria', defaultVisible: false, sortable: false, defaultWidth: 250 },
-    { key: 'stage', label: 'Stage', defaultVisible: false, sortable: true, defaultWidth: 120 },
-    { key: 'rationale', label: 'Rationale', defaultVisible: false, sortable: false, defaultWidth: 250 },
-    { key: 'component', label: 'Component', defaultVisible: false, sortable: true, sortKey: 'componentId', defaultWidth: 150 },
-    { key: 'reviewStatus', label: 'Review Status', defaultVisible: false, sortable: false, defaultWidth: 150 },
-    { key: 'createdAt', label: 'Created', defaultVisible: false, sortable: true, defaultWidth: 150 },
-    { key: 'updatedAt', label: 'Updated', defaultVisible: false, sortable: true, defaultWidth: 150 },
-  ]
-
-  // Helper to get default visible columns
-  const getDefaultVisibleColumns = (columns: ColumnConfig[]): Set<ColumnKey> => {
-    return new Set(columns.filter(col => col.defaultVisible).map(col => col.key))
-  }
+  // Requirement field schema lives in `config/requirementsFields` and drives both Table + Document views.
 
   // Helper to load column preferences from localStorage
-  const loadColumnPreferences = (): Set<ColumnKey> => {
+  const loadColumnPreferences = (): Set<RequirementFieldKey> => {
     try {
       const stored = localStorage.getItem('requirements-columns')
       if (stored) {
-        const parsed = JSON.parse(stored) as ColumnKey[]
-        return new Set(parsed)
+        const parsed = JSON.parse(stored) as RequirementFieldKey[]
+        return new Set((parsed || []).filter(Boolean))
       }
     } catch (e) {
       console.error('Failed to load column preferences:', e)
     }
-    return getDefaultVisibleColumns(REQUIREMENT_COLUMNS)
+    return getDefaultVisibleRequirementFields()
   }
 
   // Helper to save column preferences to localStorage
-  const saveColumnPreferences = (visibleColumns: Set<ColumnKey>) => {
+  const saveColumnPreferences = (visibleColumns: Set<RequirementFieldKey>) => {
     try {
       localStorage.setItem('requirements-columns', JSON.stringify(Array.from(visibleColumns)))
     } catch (e) {
@@ -696,7 +671,7 @@ export default function RequirementsPage() {
   }
 
   // Column visibility state
-  const [requirementColumns, setRequirementColumns] = useState<Set<ColumnKey>>(() =>
+  const [requirementColumns, setRequirementColumns] = useState<Set<RequirementFieldKey>>(() =>
     loadColumnPreferences()
   )
 
@@ -709,12 +684,92 @@ export default function RequirementsPage() {
       console.error('Failed to load column widths:', e)
     }
     const defaults: Record<string, number> = {}
-    REQUIREMENT_COLUMNS.forEach(c => {
+    REQUIREMENT_FIELDS.forEach((c) => {
       defaults[c.key] = c.defaultWidth || 150
     })
     return defaults
   }
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => loadColumnWidths())
+
+  const prefsQuery = useQuery({
+    queryKey: ['requirements-view-preferences', projectId],
+    queryFn: async () => {
+      if (!projectId) return null
+      const res = await requirementsViewPreferencesService.get(projectId)
+      return res.success ? (res.data ?? null) : null
+    },
+    enabled: !!projectId,
+    staleTime: 30_000,
+  })
+
+  // Hydrate local state from server preferences (with localStorage fallback already applied by initializers).
+  useEffect(() => {
+    const prefs = prefsQuery.data
+    if (!prefs) return
+
+    if (prefs.listViewStyle === 'table' || prefs.listViewStyle === 'document') {
+      setListViewStyle(prefs.listViewStyle)
+      try { localStorage.setItem('requirements-list-view', prefs.listViewStyle) } catch { /* ignore */ }
+    }
+
+    if (Array.isArray(prefs.visibleFieldKeys)) {
+      const next = new Set(prefs.visibleFieldKeys.filter(Boolean) as any)
+      setRequirementColumns(next as any)
+      try { localStorage.setItem('requirements-columns', JSON.stringify(Array.from(next))) } catch { /* ignore */ }
+    }
+
+    if (prefs.columnWidths && typeof prefs.columnWidths === 'object') {
+      setColumnWidths(prefs.columnWidths)
+      try { localStorage.setItem('requirements-column-widths', JSON.stringify(prefs.columnWidths)) } catch { /* ignore */ }
+    }
+
+    if (prefs.density === 'compact' || prefs.density === 'comfortable') {
+      setDensity(prefs.density)
+      try { localStorage.setItem('requirements-density', prefs.density) } catch { /* ignore */ }
+    }
+
+    if (typeof prefs.docOutlineOpen === 'boolean') {
+      setDocOutlineOpen(prefs.docOutlineOpen)
+      try { localStorage.setItem('requirements-doc-outline-open', prefs.docOutlineOpen ? '1' : '0') } catch { /* ignore */ }
+    }
+
+    if (prefs.docCollapsedSections && typeof prefs.docCollapsedSections === 'object') {
+      try { localStorage.setItem('requirements-doc-collapsed', JSON.stringify(prefs.docCollapsedSections)) } catch { /* ignore */ }
+    }
+
+    if (prefs.relationshipsFilters && typeof prefs.relationshipsFilters === 'object') {
+      try { localStorage.setItem('requirements-doc-relationship-filters', JSON.stringify(prefs.relationshipsFilters)) } catch { /* ignore */ }
+    }
+  }, [prefsQuery.data])
+
+  const prefsMutation = useMutation({
+    mutationFn: async (prefs: RequirementsViewPreferences) => {
+      if (!projectId) throw new Error('Missing projectId')
+      const res = await requirementsViewPreferencesService.update(projectId, prefs)
+      if (!res.success) throw new Error(res.error || 'Failed to save preferences')
+      return res.data
+    },
+  })
+
+  // Debounced server persistence for key preferences.
+  useEffect(() => {
+    if (!projectId) return
+    const timer = window.setTimeout(() => {
+      const collapsed = (() => { try { return JSON.parse(localStorage.getItem('requirements-doc-collapsed') || 'null') } catch { return null } })()
+      const relFilters = (() => { try { return JSON.parse(localStorage.getItem('requirements-doc-relationship-filters') || 'null') } catch { return null } })()
+      const prefs: RequirementsViewPreferences = {
+        listViewStyle,
+        visibleFieldKeys: Array.from(requirementColumns),
+        columnWidths,
+        density,
+        docOutlineOpen,
+        docCollapsedSections: collapsed || undefined,
+        relationshipsFilters: relFilters || undefined,
+      }
+      prefsMutation.mutate(prefs)
+    }, 800)
+    return () => window.clearTimeout(timer)
+  }, [projectId, listViewStyle, requirementColumns, columnWidths, density, docOutlineOpen])
 
   const handleColumnResize = useCallback((columnKey: string, newWidth: number) => {
     setColumnWidths(prev => {
@@ -726,6 +781,7 @@ export default function RequirementsPage() {
 
   // Column selector dropdown state
   const [columnSelectorOpen, setColumnSelectorOpen] = useState<boolean>(false)
+  const [visibleFieldsSearch, setVisibleFieldsSearch] = useState('')
 
   // Close column selector and toolbar dropdowns when clicking outside
   useEffect(() => {
@@ -758,7 +814,7 @@ export default function RequirementsPage() {
   }, [])
 
   // Column selector handlers
-  const toggleColumn = (columnKey: ColumnKey) => {
+  const toggleColumn = (columnKey: RequirementFieldKey) => {
     const newSet = new Set(requirementColumns)
 
     if (newSet.has(columnKey)) {
@@ -769,6 +825,11 @@ export default function RequirementsPage() {
 
     setRequirementColumns(newSet)
     saveColumnPreferences(newSet)
+  }
+
+  const setAllVisibleFields = (next: Set<RequirementFieldKey>) => {
+    setRequirementColumns(next)
+    saveColumnPreferences(next)
   }
 
   // Calculate total column count (checkbox + visible columns + actions)
@@ -2182,7 +2243,14 @@ export default function RequirementsPage() {
           draggable={leftPanelTab === 'functions'}
           onDragStart={(e) => handleRequirementDragStart(e, req)}
         >
-          <td className="px-4 py-3">
+          <td
+            className={clsx(
+              "px-4 py-3 sticky left-0 z-20 bg-white dark:bg-gray-800",
+              level > 0 && 'bg-gray-50/50 dark:bg-gray-900/30',
+              "shadow-[2px_0_0_0_rgba(0,0,0,0.06)] dark:shadow-[2px_0_0_0_rgba(255,255,255,0.06)]"
+            )}
+            style={{ width: 48, minWidth: 48, maxWidth: 48 }}
+          >
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -2206,7 +2274,13 @@ export default function RequirementsPage() {
             </div>
           </td>
           {requirementColumns.has('requirementId') && (
-            <td className="px-4 py-3">
+            <td
+              className={clsx(
+                "px-4 py-3 sticky z-10",
+                level > 0 ? 'bg-gray-50/50 dark:bg-gray-900/30' : 'bg-white dark:bg-gray-800'
+              )}
+              style={{ left: 48 }}
+            >
               <div className="flex items-center gap-2" style={{ paddingLeft: `${level * 24}px` }}>
                 <button
                   type="button"
@@ -3542,6 +3616,9 @@ export default function RequirementsPage() {
                 >
                   <Eye size={16} />
                   <span className="text-sm font-medium">View</span>
+                  <span className="ml-1 text-[11px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-500">
+                    Fields: {requirementColumns.size}
+                  </span>
                   <ChevronDown size={12} className={clsx('transition-transform', (viewDropdownOpen || columnSelectorOpen) && 'rotate-180')} />
                 </button>
                 {viewDropdownOpen && (
@@ -3603,8 +3680,45 @@ export default function RequirementsPage() {
                         <X size={16} />
                       </button>
                     </div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <input
+                        value={visibleFieldsSearch}
+                        onChange={(e) => setVisibleFieldsSearch(e.target.value)}
+                        placeholder="Search fields…"
+                        className="w-full px-2 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setAllVisibleFields(new Set(REQUIREMENT_FIELDS.map((f) => f.key)))}
+                        className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                      >
+                        Select all
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAllVisibleFields(new Set())}
+                        className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                      >
+                        Select none
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAllVisibleFields(getDefaultVisibleRequirementFields())}
+                        className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                      >
+                        Reset
+                      </button>
+                    </div>
                     <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {REQUIREMENT_COLUMNS.map((col) => (
+                      {REQUIREMENT_FIELDS
+                        .filter((col) => {
+                          const q = visibleFieldsSearch.trim().toLowerCase()
+                          if (!q) return true
+                          return `${col.label} ${col.key}`.toLowerCase().includes(q)
+                        })
+                        .map((col) => (
                         <label
                           key={col.key}
                           onClick={() => toggleColumn(col.key)}
@@ -3623,6 +3737,35 @@ export default function RequirementsPage() {
                     </div>
                   </div>
                 )}
+              </div>
+              {/* Density toggle */}
+              <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden bg-white dark:bg-gray-700">
+                <button
+                  type="button"
+                  onClick={() => persistDensity('comfortable')}
+                  className={clsx(
+                    'px-2.5 py-2 text-sm font-medium transition-colors',
+                    density === 'comfortable'
+                      ? 'bg-gray-100 dark:bg-gray-600 text-gray-900 dark:text-white'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                  )}
+                  title="Comfortable density"
+                >
+                  Comfortable
+                </button>
+                <button
+                  type="button"
+                  onClick={() => persistDensity('compact')}
+                  className={clsx(
+                    'px-2.5 py-2 text-sm font-medium transition-colors border-l border-gray-300 dark:border-gray-600',
+                    density === 'compact'
+                      ? 'bg-gray-100 dark:bg-gray-600 text-gray-900 dark:text-white'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                  )}
+                  title="Compact density"
+                >
+                  Compact
+                </button>
               </div>
               <Link
                 to={`/projects/${projectId}/requirements/settings`}
@@ -3674,13 +3817,13 @@ export default function RequirementsPage() {
                   title="Sort By"
                 >
                   <ArrowUpDown size={12} className="text-gray-400 mr-0.5" />
-                  <span>Sort: {REQUIREMENT_COLUMNS.find(c => (c.sortKey || c.key) === sortBy)?.label || 'Created'}</span>
+                  <span>Sort: {REQUIREMENT_FIELDS.find(c => (c.sortKey || c.key) === sortBy)?.label || 'Created'}</span>
                   {sortOrder === 'desc' ? <ArrowDown size={12} /> : <ArrowUp size={12} />}
                 </button>
                 {sortDropdownOpen && (
                   <div className="absolute left-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 py-1 z-[60]">
                     <div className="max-h-64 overflow-y-auto">
-                      {REQUIREMENT_COLUMNS.filter(c => c.sortable).map(col => {
+                      {REQUIREMENT_FIELDS.filter(c => c.sortable).map(col => {
                         const isSorted = sortBy === (col.sortKey || col.key)
                         return (
                           <button
@@ -3986,7 +4129,84 @@ export default function RequirementsPage() {
           {/* Requirements Table / Document View */}
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden flex-1 min-h-0">
             {listViewStyle === 'document' ? (
-              <div className="overflow-y-auto h-full p-4 space-y-6">
+              <div className="h-full flex">
+                {docOutlineOpen && (
+                  <aside className="w-72 shrink-0 border-r border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/30">
+                    <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2">
+                      <div className="text-sm font-semibold text-gray-900 dark:text-white">Outline</div>
+                      <button
+                        type="button"
+                        onClick={() => persistDocOutlineOpen(false)}
+                        className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
+                        title="Hide outline"
+                      >
+                        Hide
+                      </button>
+                    </div>
+                    <div className="p-3">
+                      <input
+                        value={docOutlineSearch}
+                        onChange={(e) => setDocOutlineSearch(e.target.value)}
+                        placeholder="Search ID/title…"
+                        className="w-full px-2 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="overflow-y-auto h-[calc(100%-88px)] px-2 pb-3">
+                      {(() => {
+                        const q = docOutlineSearch.trim().toLowerCase()
+                        const items = groupByType
+                          ? (() => {
+                              const { groups, orderedKeys } = groupedRequirements
+                              const flat: Requirement[] = []
+                              orderedKeys.forEach((k) => {
+                                const list = groups[k] ?? []
+                                flat.push(...flattenReqs(list))
+                              })
+                              return flat
+                            })()
+                          : documentViewRequirements
+                        const filtered = q
+                          ? items.filter((r) => `${r.requirementId ?? ''} ${r.title ?? ''}`.toLowerCase().includes(q))
+                          : items
+                        return filtered.length === 0 ? (
+                          <div className="px-2 py-6 text-sm text-gray-500 dark:text-gray-400">No matches</div>
+                        ) : (
+                          <div className="space-y-1">
+                            {filtered.map((r) => {
+                              const displayId = r.requirementId ?? r.id.slice(0, 8)
+                              return (
+                                <button
+                                  key={r.id}
+                                  type="button"
+                                  onClick={() => {
+                                    const el = docCardElsRef.current[r.id]
+                                    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                                  }}
+                                  className="w-full text-left px-2 py-1.5 rounded hover:bg-white/70 dark:hover:bg-gray-800/60 transition-colors"
+                                  title={r.title ?? ''}
+                                >
+                                  <div className="text-xs font-mono text-gray-600 dark:text-gray-400">{displayId}</div>
+                                  <div className="text-sm text-gray-900 dark:text-gray-100 line-clamp-2">{r.title ?? '—'}</div>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  </aside>
+                )}
+                {!docOutlineOpen && (
+                  <button
+                    type="button"
+                    onClick={() => persistDocOutlineOpen(true)}
+                    className="absolute left-3 top-[160px] z-20 text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white/90 dark:bg-gray-900/80 hover:bg-white dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
+                    title="Show outline"
+                  >
+                    Show outline
+                  </button>
+                )}
+                <div className="overflow-y-auto h-full p-4 space-y-6 flex-1 min-w-0">
                 {isLoading ? (
                   <div className="space-y-4">
                     {Array.from({ length: 3 }).map((_, i) => (
@@ -4040,26 +4260,28 @@ export default function RequirementsPage() {
                             {formatRequirementTypeName(type)} Requirements ({flatReqs.length})
                           </h3>
                           {flatReqs.map((req) => (
-                            <RequirementDocumentCard
-                              key={req.id}
-                              requirement={req}
-                              links={getLinksForRequirement(req.id)}
-                              visibleColumnKeys={requirementColumns}
-                              onLinkedElementClick={setLinkedElementPreview}
-                              onRequirementClick={setDetailRequirement}
-                              draggable={leftPanelTab === 'functions' || leftPanelTab === 'verification'}
-                              onDragStart={(e) => handleRequirementDragStart(e, req)}
-                              inlineEdit={inlineEdit?.field === 'title' || inlineEdit?.field === 'description' ? inlineEdit : null}
-                              onStartInlineEdit={startInlineEdit}
-                              onSaveInlineEdit={saveInlineEdit}
-                              onCancelInlineEdit={cancelInlineEdit}
-                              onInlineEditChange={(value) => setInlineEdit((prev) => (prev ? { ...prev, value } : null))}
-                              inlineInputRef={inlineInputRef}
-                              inlineTextareaRef={inlineTextareaRef}
-                              onInlineKeyDown={handleInlineKeyDown}
-                              onDescriptionKeyDown={handleDescriptionKeyDown}
-                              isBaselineView={isBaselineView}
-                            />
+                            <div key={req.id} ref={(el) => { docCardElsRef.current[req.id] = el }}>
+                              <RequirementDocumentCard
+                                requirement={req}
+                                links={getLinksForRequirement(req.id)}
+                                visibleColumnKeys={requirementColumns}
+                                onLinkedElementClick={setLinkedElementPreview}
+                                onRequirementClick={setDetailRequirement}
+                                density={density}
+                                draggable={leftPanelTab === 'functions' || leftPanelTab === 'verification'}
+                                onDragStart={(e) => handleRequirementDragStart(e, req)}
+                                inlineEdit={inlineEdit?.field === 'title' || inlineEdit?.field === 'description' ? inlineEdit : null}
+                                onStartInlineEdit={startInlineEdit}
+                                onSaveInlineEdit={saveInlineEdit}
+                                onCancelInlineEdit={cancelInlineEdit}
+                                onInlineEditChange={(value) => setInlineEdit((prev) => (prev ? { ...prev, value } : null))}
+                                inlineInputRef={inlineInputRef}
+                                inlineTextareaRef={inlineTextareaRef}
+                                onInlineKeyDown={handleInlineKeyDown}
+                                onDescriptionKeyDown={handleDescriptionKeyDown}
+                                isBaselineView={isBaselineView}
+                              />
+                            </div>
                           ))}
                         </div>
                       )
@@ -4091,35 +4313,49 @@ export default function RequirementsPage() {
                   </div>
                 ) : (
                   documentViewRequirements.map((req) => (
-                    <RequirementDocumentCard
-                      draggable={leftPanelTab === 'functions' || leftPanelTab === 'verification'}
-                      onDragStart={(e) => handleRequirementDragStart(e, req)}
-                      key={req.id}
-                      requirement={req}
-                      links={getLinksForRequirement(req.id)}
-                      visibleColumnKeys={requirementColumns}
-                      onLinkedElementClick={setLinkedElementPreview}
-                      onRequirementClick={setDetailRequirement}
-                      inlineEdit={inlineEdit?.field === 'title' || inlineEdit?.field === 'description' ? inlineEdit : null}
-                      onStartInlineEdit={startInlineEdit}
-                      onSaveInlineEdit={saveInlineEdit}
-                      onCancelInlineEdit={cancelInlineEdit}
-                      onInlineEditChange={(value) => setInlineEdit((prev) => (prev ? { ...prev, value } : null))}
-                      inlineInputRef={inlineInputRef}
-                      inlineTextareaRef={inlineTextareaRef}
-                      onInlineKeyDown={handleInlineKeyDown}
-                      onDescriptionKeyDown={handleDescriptionKeyDown}
-                      isBaselineView={isBaselineView}
-                    />
+                    <div key={req.id} ref={(el) => { docCardElsRef.current[req.id] = el }}>
+                      <RequirementDocumentCard
+                        draggable={leftPanelTab === 'functions' || leftPanelTab === 'verification'}
+                        onDragStart={(e) => handleRequirementDragStart(e, req)}
+                        requirement={req}
+                        links={getLinksForRequirement(req.id)}
+                        visibleColumnKeys={requirementColumns}
+                        onLinkedElementClick={setLinkedElementPreview}
+                        onRequirementClick={setDetailRequirement}
+                        density={density}
+                        inlineEdit={inlineEdit?.field === 'title' || inlineEdit?.field === 'description' ? inlineEdit : null}
+                        onStartInlineEdit={startInlineEdit}
+                        onSaveInlineEdit={saveInlineEdit}
+                        onCancelInlineEdit={cancelInlineEdit}
+                        onInlineEditChange={(value) => setInlineEdit((prev) => (prev ? { ...prev, value } : null))}
+                        inlineInputRef={inlineInputRef}
+                        inlineTextareaRef={inlineTextareaRef}
+                        onInlineKeyDown={handleInlineKeyDown}
+                        onDescriptionKeyDown={handleDescriptionKeyDown}
+                        isBaselineView={isBaselineView}
+                      />
+                    </div>
                   ))
                 )}
+                </div>
               </div>
             ) : (
             <div className="overflow-x-auto h-full">
-              <table className="w-full border-collapse table-fixed">
+              <table
+                className={clsx(
+                  'w-full border-collapse table-fixed',
+                  density === 'compact' && '[&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2'
+                )}
+              >
                 <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(0,0,0,0.1)] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" style={{ width: 48, minWidth: 48, maxWidth: 48 }}>
+                    <th
+                      className={clsx(
+                        'px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider sticky left-0 z-30 bg-gray-50 dark:bg-gray-900',
+                        'shadow-[2px_0_0_0_rgba(0,0,0,0.06)] dark:shadow-[2px_0_0_0_rgba(255,255,255,0.06)]'
+                      )}
+                      style={{ width: 48, minWidth: 48, maxWidth: 48 }}
+                    >
                       <input
                         type="checkbox"
                         checked={selectedRequirements.size > 0 && selectedRequirements.size === filteredRequirements.length}
@@ -4135,8 +4371,9 @@ export default function RequirementsPage() {
                         className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
                       />
                     </th>
-                    {REQUIREMENT_COLUMNS.filter(col => requirementColumns.has(col.key)).map(col => {
+                    {REQUIREMENT_FIELDS.filter(col => requirementColumns.has(col.key)).map(col => {
                       const sortAttribute = col.sortKey || col.key;
+                      const isStickyIdCol = col.key === 'requirementId'
                       return (
                         <ResizableTh
                           key={col.key}
@@ -4146,6 +4383,17 @@ export default function RequirementsPage() {
                             "px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider",
                             col.sortable && "cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none"
                           )}
+                          style={
+                            isStickyIdCol
+                              ? {
+                                  position: 'sticky',
+                                  left: 48,
+                                  zIndex: 25,
+                                  background: 'inherit',
+                                  boxShadow: '2px 0 0 0 rgba(0,0,0,0.06)',
+                                }
+                              : undefined
+                          }
                           onClick={col.sortable ? () => handleSort(sortAttribute) : undefined}
                         >
                           <span className={clsx(col.sortable && "inline-flex items-center gap-1 group/th relative")}>

@@ -4,6 +4,9 @@ import type { Requirement } from 'shared/types/engineering.types'
 import type { Link } from 'shared/types/linkage.types'
 import type { LinkedElementClickPayload } from './RequirementsPBSTree'
 import clsx from 'clsx'
+import { ChevronDown, ChevronRight } from 'lucide-react'
+import { plainTextFromRichText } from '../../utils/richText'
+import { REQUIREMENT_FIELDS, REQUIREMENT_FIELD_LABELS, type RequirementFieldKey } from '../../config/requirementsFields'
 
 /** Inline edit state when document view reuses page-level edit (optional). Accepts page InlineEditState; card only uses title/description. */
 export type InlineEditStateForCard = {
@@ -34,6 +37,11 @@ interface RequirementDocumentCardProps {
   onInlineKeyDown?: (e: React.KeyboardEvent) => void
   onDescriptionKeyDown?: (e: React.KeyboardEvent) => void
   isBaselineView?: boolean
+  density?: 'comfortable' | 'compact'
+  collapsedDetails?: boolean
+  collapsedRelationships?: boolean
+  onToggleDetails?: () => void
+  onToggleRelationships?: () => void
 }
 
 function formatLinkType(linkType: string): string {
@@ -56,25 +64,6 @@ function formatEntityType(type: string): string {
     use_case: 'Use Case',
   }
   return map[type] ?? type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
-function decodeHtmlEntities(input: string): string {
-  const withNamed = input
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-  return withNamed.replace(/&#(\d+);/g, (m, code) => {
-    const n = Number(code)
-    return Number.isFinite(n) ? String.fromCharCode(n) : m
-  })
-}
-
-function plainTextFromRichText(input: string): string {
-  const decoded = decodeHtmlEntities(input)
-  return decoded.replace(/<[^>]*>/g, '').trim()
 }
 
 function shortId(id: string | undefined | null): string {
@@ -150,7 +139,32 @@ export default function RequirementDocumentCard({
   onInlineKeyDown,
   onDescriptionKeyDown,
   isBaselineView,
+  density = 'comfortable',
+  collapsedDetails: collapsedDetailsProp,
+  collapsedRelationships: collapsedRelationshipsProp,
+  onToggleDetails: onToggleDetailsProp,
+  onToggleRelationships: onToggleRelationshipsProp,
 }: RequirementDocumentCardProps) {
+  const [collapsed, setCollapsed] = React.useState<{ details: boolean; relationships: boolean }>(() => {
+    try {
+      const stored = localStorage.getItem('requirements-doc-collapsed')
+      if (stored) {
+        const parsed = JSON.parse(stored) as any
+        return { details: !!parsed?.details, relationships: !!parsed?.relationships }
+      }
+    } catch { /* ignore */ }
+    return { details: false, relationships: false }
+  })
+
+  const persistCollapsed = React.useCallback((next: { details: boolean; relationships: boolean }) => {
+    setCollapsed(next)
+    try { localStorage.setItem('requirements-doc-collapsed', JSON.stringify(next)) } catch { /* ignore */ }
+  }, [])
+
+  const collapsedDetails = typeof collapsedDetailsProp === 'boolean' ? collapsedDetailsProp : collapsed.details
+  const collapsedRelationships = typeof collapsedRelationshipsProp === 'boolean' ? collapsedRelationshipsProp : collapsed.relationships
+  const onToggleDetails = onToggleDetailsProp ?? (() => persistCollapsed({ ...collapsed, details: !collapsed.details }))
+  const onToggleRelationships = onToggleRelationshipsProp ?? (() => persistCollapsed({ ...collapsed, relationships: !collapsed.relationships }))
   const canInlineEdit = !isBaselineView && onStartInlineEdit && onSaveInlineEdit && onInlineEditChange
   const isEditingTitle = inlineEdit?.requirementId === requirement.id && inlineEdit?.field === 'title'
   const isEditingDescription = inlineEdit?.requirementId === requirement.id && inlineEdit?.field === 'description'
@@ -173,31 +187,39 @@ export default function RequirementDocumentCard({
     [visibleSet]
   )
 
-  const detailsAll: { key: string; label: string; value: string | undefined }[] = [
-    { key: 'requirementId', label: 'ID', value: requirement.requirementId ?? undefined },
-    { key: 'title', label: 'Title', value: requirement.title ?? undefined },
-    { key: 'description', label: 'Description', value: requirement.description ? plainTextFromRichText(requirement.description) : undefined },
-    { key: 'priority', label: 'Priority', value: requirement.priority ?? undefined },
-    { key: 'status', label: 'Status', value: requirement.reviewStatus ?? requirement.status ?? undefined },
-    { key: 'owner', label: 'Owner', value: requirement.owner ?? undefined },
-    { key: 'category', label: 'Category', value: requirement.category ?? undefined },
-    { key: 'source', label: 'Source', value: requirement.source ?? undefined },
-    { key: 'requirementType', label: 'Type', value: requirement.requirementType?.replace(/_/g, ' ') ?? undefined },
-    { key: 'requirementLevel', label: 'Level', value: requirement.requirementLevel ?? undefined },
-    { key: 'risk', label: 'Risk', value: requirement.risk ?? undefined },
-    { key: 'complexity', label: 'Complexity', value: requirement.complexity ?? undefined },
-    { key: 'verificationMethod', label: 'Verification Method', value: requirement.verificationMethod ? plainTextFromRichText(requirement.verificationMethod) : undefined },
-    { key: 'verificationStatus', label: 'Verification Status', value: requirement.verificationStatus || undefined },
-    { key: 'verificationDate', label: 'Verification Date', value: requirement.verificationDate || undefined },
-    { key: 'linkedMocCode', label: 'MoC', value: (requirement as any).linkedMocCode || undefined },
-    { key: 'acceptanceCriteria', label: 'Acceptance Criteria', value: requirement.acceptanceCriteria ? plainTextFromRichText(requirement.acceptanceCriteria) : undefined },
-    { key: 'stage', label: 'Stage', value: requirement.stage || undefined },
-    { key: 'rationale', label: 'Rationale', value: requirement.rationale ? plainTextFromRichText(requirement.rationale) : undefined },
-    { key: 'component', label: 'Component', value: (requirement as any).component?.name ?? (requirement as any).componentName ?? undefined },
-    { key: 'reviewStatus', label: 'Review Status', value: requirement.reviewStatus || undefined },
-    { key: 'createdAt', label: 'Created', value: requirement.createdAt ? createdFormatted : undefined },
-    { key: 'updatedAt', label: 'Updated', value: requirement.updatedAt ? updatedFormatted : undefined },
-  ]
+  const detailsAll: { key: RequirementFieldKey; label: string; value: string | undefined }[] = REQUIREMENT_FIELDS.map((f) => {
+    const key = f.key
+    const label = REQUIREMENT_FIELD_LABELS[key]
+    const value = (() => {
+      switch (key) {
+        case 'requirementId': return requirement.requirementId ?? undefined
+        case 'title': return requirement.title ?? undefined
+        case 'description': return requirement.description ? plainTextFromRichText(requirement.description) : undefined
+        case 'priority': return requirement.priority ?? undefined
+        case 'status': return requirement.reviewStatus ?? requirement.status ?? undefined
+        case 'owner': return requirement.owner ?? undefined
+        case 'category': return requirement.category ?? undefined
+        case 'source': return requirement.source ?? undefined
+        case 'requirementType': return requirement.requirementType?.replace(/_/g, ' ') ?? undefined
+        case 'requirementLevel': return (requirement as any).requirementLevel ?? undefined
+        case 'risk': return (requirement as any).risk ?? undefined
+        case 'complexity': return (requirement as any).complexity ?? undefined
+        case 'verificationMethod': return requirement.verificationMethod ? plainTextFromRichText(requirement.verificationMethod) : undefined
+        case 'verificationStatus': return requirement.verificationStatus || undefined
+        case 'verificationDate': return requirement.verificationDate || undefined
+        case 'linkedMocCode': return (requirement as any).linkedMocCode || undefined
+        case 'acceptanceCriteria': return requirement.acceptanceCriteria ? plainTextFromRichText(requirement.acceptanceCriteria) : undefined
+        case 'stage': return requirement.stage || undefined
+        case 'rationale': return requirement.rationale ? plainTextFromRichText(requirement.rationale) : undefined
+        case 'component': return (requirement as any).component?.name ?? (requirement as any).componentName ?? undefined
+        case 'reviewStatus': return requirement.reviewStatus || undefined
+        case 'createdAt': return requirement.createdAt ? createdFormatted : undefined
+        case 'updatedAt': return requirement.updatedAt ? updatedFormatted : undefined
+        default: return undefined
+      }
+    })()
+    return { key, label, value }
+  })
 
   const details = detailsAll.filter((d) => isVisible(d.key))
   const showCreatedUpdatedLine = isVisible('createdAt') || isVisible('updatedAt')
@@ -237,6 +259,41 @@ export default function RequirementDocumentCard({
     }
   })
 
+  const [relationshipFilters, setRelationshipFilters] = React.useState<{ direction: 'all' | 'upstream' | 'downstream'; groups: string[] }>(() => {
+    try {
+      const stored = localStorage.getItem('requirements-doc-relationship-filters')
+      if (stored) {
+        const parsed = JSON.parse(stored) as any
+        const direction = parsed?.direction
+        const groups = Array.isArray(parsed?.groups) ? parsed.groups.filter((x: any) => typeof x === 'string') : []
+        return {
+          direction: direction === 'upstream' || direction === 'downstream' ? direction : 'all',
+          groups,
+        }
+      }
+    } catch { /* ignore */ }
+    return { direction: 'all', groups: [] }
+  })
+
+  const persistRelationshipFilters = React.useCallback((next: { direction: 'all' | 'upstream' | 'downstream'; groups: string[] }) => {
+    setRelationshipFilters(next)
+    try { localStorage.setItem('requirements-doc-relationship-filters', JSON.stringify(next)) } catch { /* ignore */ }
+  }, [])
+
+  const uniqueRelationshipGroups = React.useMemo(() => {
+    return Array.from(new Set(relationshipRows.map((r) => r.group).filter(Boolean))).sort((a, b) => a.localeCompare(b))
+  }, [relationshipRows])
+
+  const filteredRelationshipRows = React.useMemo(() => {
+    const dir = relationshipFilters.direction
+    const groups = relationshipFilters.groups
+    return relationshipRows.filter((r) => {
+      if (dir !== 'all' && r.direction.toLowerCase() !== dir) return false
+      if (groups.length > 0 && !groups.includes(r.group)) return false
+      return true
+    })
+  }, [relationshipRows, relationshipFilters.direction, relationshipFilters.groups])
+
   return (
     <div
       className={clsx(
@@ -247,7 +304,12 @@ export default function RequirementDocumentCard({
       onDragStart={onDragStart}
     >
       {/* Header */}
-      <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700/50">
+      <div
+        className={clsx(
+          'border-b border-gray-100 dark:border-gray-700/50',
+          density === 'compact' ? 'px-4 py-3' : 'px-5 py-4'
+        )}
+      >
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
           <span className="font-mono text-gray-600 dark:text-gray-400 mr-2">
             {requirement.requirementId ?? '—'}
@@ -294,160 +356,242 @@ export default function RequirementDocumentCard({
       </div>
 
       {/* Details section */}
-      <div className="px-5 py-4">
-        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-          Requirement Details
-        </h3>
-        <table className="w-full text-sm border-collapse border border-gray-200 dark:border-gray-600">
-          <tbody>
-            {details.map(({ key, label, value }) => {
-              const isTitleRow = key === 'title'
-              const isDescriptionRow = key === 'description'
-              const showDescriptionTextarea =
-                isDescriptionRow && isEditingDescription && inlineTextareaRef && onDescriptionKeyDown && onSaveInlineEdit
+      <div className={clsx(density === 'compact' ? 'px-4 py-3' : 'px-5 py-4')}>
+        <button
+          type="button"
+          onClick={onToggleDetails}
+          className={clsx(
+            'w-full flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3',
+            onToggleDetails && 'hover:text-gray-900 dark:hover:text-white'
+          )}
+          title={collapsedDetails ? 'Expand details' : 'Collapse details'}
+        >
+          <span className="flex items-center gap-2">
+            {collapsedDetails ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+            Requirement Details
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">({details.length})</span>
+          </span>
+        </button>
+        {!collapsedDetails && (
+          <table className="w-full text-sm border-collapse border border-gray-200 dark:border-gray-600">
+            <tbody>
+              {details.map(({ key, label, value }) => {
+                const isTitleRow = key === 'title'
+                const isDescriptionRow = key === 'description'
+                const showDescriptionTextarea =
+                  isDescriptionRow && isEditingDescription && inlineTextareaRef && onDescriptionKeyDown && onSaveInlineEdit
 
-              return (
-                <tr key={key} className="border-b border-gray-200 dark:border-gray-600 last:border-b-0">
-                  <td className="px-3 py-2 w-1/3 font-medium text-gray-600 dark:text-gray-400 bg-gray-50/50 dark:bg-gray-900/30">
-                    {label}
-                  </td>
-                  <td className="px-3 py-2 text-gray-900 dark:text-gray-100">
-                    {showDescriptionTextarea ? (
-                      <textarea
-                        ref={inlineTextareaRef as React.RefObject<HTMLTextAreaElement>}
-                        value={inlineEdit!.value}
-                        onChange={(e) => onInlineEditChange?.(e.target.value)}
-                        onKeyDown={onDescriptionKeyDown}
-                        onBlur={onSaveInlineEdit}
-                        rows={3}
-                        className={textareaClassName}
-                      />
-                    ) : isTitleRow && isEditingTitle ? (
-                      inlineEdit?.value ?? '—'
-                    ) : isTitleRow && canInlineEdit ? (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
-                        title="Double-click to edit"
-                        onDoubleClick={(e) => {
-                          e.stopPropagation()
-                          onStartInlineEdit?.(requirement, 'title')
-                        }}
-                        onKeyDown={(e) => e.key === 'Enter' && onStartInlineEdit?.(requirement, 'title')}
-                      >
-                        {value ?? '—'}
-                      </span>
-                    ) : isDescriptionRow && canInlineEdit ? (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 block"
-                        title="Double-click to edit"
-                        onDoubleClick={(e) => {
-                          e.stopPropagation()
-                          onStartInlineEdit?.(requirement, 'description')
-                        }}
-                        onKeyDown={(e) => e.key === 'Enter' && onStartInlineEdit?.(requirement, 'description')}
-                      >
-                        {value ?? '—'}
-                      </span>
-                    ) : (
-                      value ?? '—'
-                    )}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+                return (
+                  <tr key={key} className="border-b border-gray-200 dark:border-gray-600 last:border-b-0">
+                    <td className="px-3 py-2 w-1/3 font-medium text-gray-600 dark:text-gray-400 bg-gray-50/50 dark:bg-gray-900/30">
+                      {label}
+                    </td>
+                    <td className="px-3 py-2 text-gray-900 dark:text-gray-100">
+                      {showDescriptionTextarea ? (
+                        <textarea
+                          ref={inlineTextareaRef as React.RefObject<HTMLTextAreaElement>}
+                          value={inlineEdit!.value}
+                          onChange={(e) => onInlineEditChange?.(e.target.value)}
+                          onKeyDown={onDescriptionKeyDown}
+                          onBlur={onSaveInlineEdit}
+                          rows={3}
+                          className={textareaClassName}
+                        />
+                      ) : isTitleRow && isEditingTitle ? (
+                        inlineEdit?.value ?? '—'
+                      ) : isTitleRow && canInlineEdit ? (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                          title="Double-click to edit"
+                          onDoubleClick={(e) => {
+                            e.stopPropagation()
+                            onStartInlineEdit?.(requirement, 'title')
+                          }}
+                          onKeyDown={(e) => e.key === 'Enter' && onStartInlineEdit?.(requirement, 'title')}
+                        >
+                          {value ?? '—'}
+                        </span>
+                      ) : isDescriptionRow && canInlineEdit ? (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 block"
+                          title="Double-click to edit"
+                          onDoubleClick={(e) => {
+                            e.stopPropagation()
+                            onStartInlineEdit?.(requirement, 'description')
+                          }}
+                          onKeyDown={(e) => e.key === 'Enter' && onStartInlineEdit?.(requirement, 'description')}
+                        >
+                          {value ?? '—'}
+                        </span>
+                      ) : (
+                        value ?? '—'
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* Relationships section */}
-      <div className="px-5 py-4 border-t border-gray-100 dark:border-gray-700/50">
-        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-          Relationships
-        </h3>
-        {relationshipRows.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400 italic">No relationships</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse border border-gray-200 dark:border-gray-600">
-              <thead>
-                <tr className="bg-gray-50 dark:bg-gray-900/50">
-                  <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-600">
-                    Item ID
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-600">
-                    Name
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-600">
-                    Direction
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-600">
-                    Project
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-600">
-                    Group
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-600">
-                    Relationship
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {relationshipRows.map((row, idx) => (
-                  <tr
-                    key={idx}
-                    onClick={() => {
-                      if (!onLinkedElementClick) return
-                      const l = row.link as any
-                      const st = (l.linkSourceType ?? l.sourceType ?? 'requirement') as any
-                      const sid = (l.linkSourceId ?? l.sourceId ?? requirement.id) as string
-                      const tt = (l.linkTargetType ?? l.targetType) as any
-                      const tid = (l.linkTargetId ?? l.targetId) as string
-                      const outgoing = row.isOutgoing !== false
-                      onLinkedElementClick({
-                        sourceType: st,
-                        sourceId: sid,
-                        targetType: tt,
-                        targetId: tid,
-                        isOutgoing: outgoing,
-                        contextRequirementId: requirement.id,
-                        link: {
-                          sourceType: st,
-                          sourceId: sid,
-                          targetType: tt,
-                          targetId: tid,
-                          targetDisplayId: outgoing ? (l.targetDisplayId ?? row.itemId) : undefined,
-                          targetTitle: outgoing ? (l.targetTitle ?? row.name) : undefined,
-                          targetLabel: outgoing ? (l.targetLabel ?? row.name) : undefined,
-                          sourceDisplayId: !outgoing ? (l.sourceDisplayId ?? row.itemId) : undefined,
-                          sourceTitle: !outgoing ? (l.sourceTitle ?? row.name) : undefined,
-                          linkType: l.linkType,
-                        },
-                      })
-                    }}
+      <div className={clsx(density === 'compact' ? 'px-4 py-3' : 'px-5 py-4', 'border-t border-gray-100 dark:border-gray-700/50')}>
+        <button
+          type="button"
+          onClick={onToggleRelationships}
+          className={clsx(
+            'w-full flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3',
+            onToggleRelationships && 'hover:text-gray-900 dark:hover:text-white'
+          )}
+          title={collapsedRelationships ? 'Expand relationships' : 'Collapse relationships'}
+        >
+          <span className="flex items-center gap-2">
+            {collapsedRelationships ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+            Relationships
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">({relationshipRows.length})</span>
+          </span>
+        </button>
+        {!collapsedRelationships && (
+          <>
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <div className="inline-flex rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
+                {(['all', 'upstream', 'downstream'] as const).map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => persistRelationshipFilters({ ...relationshipFilters, direction: d })}
                     className={clsx(
-                      "border-b border-gray-200 dark:border-gray-600 last:border-b-0 hover:bg-gray-50/50 dark:hover:bg-gray-900/20",
-                      onLinkedElementClick && "cursor-pointer"
+                      'px-2.5 py-1 text-xs font-medium transition-colors',
+                      relationshipFilters.direction === d
+                        ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
                     )}
                   >
-                    <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300">
-                      {row.itemId}
-                    </td>
-                    <td className="px-3 py-2 text-gray-900 dark:text-gray-100">{row.name}</td>
-                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{row.direction}</td>
-                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{row.project}</td>
-                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{row.group}</td>
-                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
-                      {row.relationship}
-                    </td>
-                  </tr>
+                    {d === 'all' ? 'All' : d === 'upstream' ? 'Upstream' : 'Downstream'}
+                  </button>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </div>
+              {uniqueRelationshipGroups.length > 0 && (
+                <select
+                  value={relationshipFilters.groups[0] ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    persistRelationshipFilters({ ...relationshipFilters, groups: v ? [v] : [] })
+                  }}
+                  className="px-2 py-1 text-xs rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200"
+                  title="Filter by type"
+                >
+                  <option value="">Type: All</option>
+                  {uniqueRelationshipGroups.map((g) => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+              )}
+              {(relationshipFilters.direction !== 'all' || relationshipFilters.groups.length > 0) && (
+                <button
+                  type="button"
+                  onClick={() => persistRelationshipFilters({ direction: 'all', groups: [] })}
+                  className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+
+            {filteredRelationshipRows.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400 italic">No relationships</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border-collapse border border-gray-200 dark:border-gray-600">
+                  <thead>
+                    <tr className="bg-gray-50 dark:bg-gray-900/50">
+                      <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-600">
+                        Item ID
+                      </th>
+                      <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-600">
+                        Name
+                      </th>
+                      <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-600">
+                        Direction
+                      </th>
+                      <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-600">
+                        Project
+                      </th>
+                      <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-600">
+                        Group
+                      </th>
+                      <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-600">
+                        Relationship
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRelationshipRows.map((row, idx) => (
+                      <tr
+                        key={idx}
+                        onClick={() => {
+                          if (!onLinkedElementClick) return
+                          const l = row.link as any
+                          const st = (l.linkSourceType ?? l.sourceType ?? 'requirement') as any
+                          const sid = (l.linkSourceId ?? l.sourceId ?? requirement.id) as string
+                          const tt = (l.linkTargetType ?? l.targetType) as any
+                          const tid = (l.linkTargetId ?? l.targetId) as string
+                          const outgoing = row.isOutgoing !== false
+                          onLinkedElementClick({
+                            sourceType: st,
+                            sourceId: sid,
+                            targetType: tt,
+                            targetId: tid,
+                            isOutgoing: outgoing,
+                            contextRequirementId: requirement.id,
+                            link: {
+                              sourceType: st,
+                              sourceId: sid,
+                              targetType: tt,
+                              targetId: tid,
+                              targetDisplayId: outgoing ? (l.targetDisplayId ?? row.itemId) : undefined,
+                              targetTitle: outgoing ? (l.targetTitle ?? row.name) : undefined,
+                              targetLabel: outgoing ? (l.targetLabel ?? row.name) : undefined,
+                              sourceDisplayId: !outgoing ? (l.sourceDisplayId ?? row.itemId) : undefined,
+                              sourceTitle: !outgoing ? (l.sourceTitle ?? row.name) : undefined,
+                              linkType: l.linkType,
+                            },
+                          })
+                        }}
+                        className={clsx(
+                          "border-b border-gray-200 dark:border-gray-600 last:border-b-0 hover:bg-gray-50/50 dark:hover:bg-gray-900/20",
+                          onLinkedElementClick && "cursor-pointer"
+                        )}
+                      >
+                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300">
+                          {row.itemId}
+                        </td>
+                        <td className="px-3 py-2 text-gray-900 dark:text-gray-100">
+                          <span className="inline-flex items-center gap-1 group/name">
+                            <span className={clsx(onLinkedElementClick && 'group-hover/name:underline')}>
+                              {row.name}
+                            </span>
+                            {onLinkedElementClick && <ChevronRight size={14} className="opacity-0 group-hover/name:opacity-60 transition-opacity" />}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{row.direction}</td>
+                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{row.project}</td>
+                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{row.group}</td>
+                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
+                          {row.relationship}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

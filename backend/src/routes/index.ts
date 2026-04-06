@@ -54,6 +54,7 @@ import adminRoutes from './admin.routes'
 import lifecycleRoutes from './lifecycle.routes'
 import transitionChecklistRoutes from './transitionChecklist.routes'
 import searchRoutes from './search.routes'
+import requirementsViewPreferencesRoutes from './requirementsViewPreferences.routes'
 
 const router = Router()
 
@@ -65,6 +66,7 @@ router.use('/notifications', notificationsRoutes)
 // Mount components (PBS) before project so /projects/:projectId/components is matched
 router.use('/projects', componentsRoutes)
 router.use('/projects', projectRoutes)
+router.use('/projects', requirementsViewPreferencesRoutes)
 router.use('/workflow', workflowRoutes)
 router.use('/requirements', requirementsRoutes)
 router.use('/functions', functionsRoutes)

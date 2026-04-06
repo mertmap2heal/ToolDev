@@ -121,6 +121,58 @@ test.describe('Requirements', () => {
     await expect(page).toHaveURL(/requirements\/dashboard/)
   })
 
+  test('Visible fields affects both Table and Document views', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/requirements`)
+    await page.waitForLoadState('domcontentloaded')
+
+    await page.evaluate(() => {
+      try {
+        localStorage.removeItem('requirements-columns')
+        localStorage.setItem('requirements-list-view', 'table')
+        localStorage.removeItem('requirements-doc-collapsed')
+      } catch {
+        /* ignore */
+      }
+    })
+    await page.reload({ waitUntil: 'domcontentloaded' })
+
+    // Hide Description in Visible fields
+    await page.getByRole('button', { name: /^view/i }).click()
+    await page.getByRole('button', { name: /visible fields/i }).click()
+    const popover = page
+      .getByRole('heading', { name: /visible fields/i })
+      .locator('..')
+      .locator('..')
+    await popover.getByPlaceholder(/search fields/i).fill('Description')
+    await popover.locator('label', { hasText: 'Description' }).first().click()
+    await page.keyboard.press('Escape')
+
+    // Switch to Document View
+    await page.getByRole('button', { name: /^view/i }).click()
+    await page.getByRole('button', { name: /document view/i }).click()
+
+    // First card should not show the Description field in details table
+    const firstCard = page.locator('div.shadow-sm').first()
+    await expect(firstCard.getByText(/^Description$/)).toHaveCount(0)
+  })
+
+  test('Document view: collapsible sections persist on reload', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/requirements`)
+    await page.waitForLoadState('domcontentloaded')
+
+    // Switch to Document View
+    await page.getByRole('button', { name: /^view/i }).click()
+    await page.getByRole('button', { name: /document view/i }).click()
+
+    const firstCard = page.locator('div.shadow-sm').first()
+    const detailsToggle = firstCard.getByRole('button', { name: /requirement details/i })
+    await detailsToggle.click()
+
+    // Reload and ensure details are still collapsed (no table cells for a typical field like Priority)
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(page.locator('div.shadow-sm').first().getByText(/^Priority$/)).toHaveCount(0)
+  })
+
   test('Data menu: Audit opens audit log modal', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
