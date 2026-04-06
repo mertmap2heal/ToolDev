@@ -90,6 +90,8 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
   const [pinnedRequirementIds, setPinnedRequirementIds] = useState<string[]>([])
   const [pinnedTargetIds, setPinnedTargetIds] = useState<string[]>([])
   const [rowDefinitionFilters, setRowDefinitionFilters] = useState<Record<string, unknown> | null>(null)
+  const [saveAsOpen, setSaveAsOpen] = useState(false)
+  const [saveAsName, setSaveAsName] = useState('')
 
   const queryClient = useQueryClient()
 
@@ -125,6 +127,71 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
       // ignore invalid saved definitions
     }
   }, [savedView?.definitionJson])
+
+  const currentDefinition: TraceabilityMatrixSavedDefinition = useMemo(() => ({
+    viewKind: 'traceability_matrix',
+    linkageTargetType,
+    rowMode,
+    colMode,
+    filters: rowDefinitionFilters ?? undefined,
+    pinnedRequirementIds: pinnedRequirementIds.length ? pinnedRequirementIds : undefined,
+    pinnedTargetIds: pinnedTargetIds.length ? pinnedTargetIds : undefined,
+    targetSearchQuery: targetSearchQuery.trim() || undefined,
+    filterLinked,
+    showSuspectOnly,
+  }), [
+    linkageTargetType,
+    rowMode,
+    colMode,
+    rowDefinitionFilters,
+    pinnedRequirementIds,
+    pinnedTargetIds,
+    targetSearchQuery,
+    filterLinked,
+    showSuspectOnly,
+  ])
+
+  const saveViewMutation = useMutation({
+    mutationFn: async () => {
+      if (!savedViewId) throw new Error('Missing view id')
+      const res = await traceabilityViewsService.updateView(projectId, savedViewId, {
+        definition: currentDefinition,
+      })
+      if (!res.success) throw new Error(res.error || 'Failed to save view')
+      return res.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['traceability-view', projectId, savedViewId] })
+      queryClient.invalidateQueries({ queryKey: ['traceability-views', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['traceability-views-all', projectId] })
+    },
+  })
+
+  const saveAsMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const trimmed = name.trim()
+      if (!trimmed) throw new Error('Name is required')
+      const res = await traceabilityViewsService.createView(projectId, {
+        name: trimmed,
+        folderId: (savedView as any)?.folderId ?? null,
+        definition: currentDefinition,
+      })
+      if (!res.success || !res.data) throw new Error(res.error || 'Failed to create view')
+      return res.data
+    },
+    onSuccess: (v) => {
+      queryClient.invalidateQueries({ queryKey: ['traceability-views', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['traceability-views-all', projectId] })
+      // keep the user in matrix; they can close and open from library if desired
+      void v
+    },
+  })
+
+  useEffect(() => {
+    if (!saveAsOpen) return
+    const base = savedView?.name ? `${savedView.name} (copy)` : 'New traceability view'
+    setSaveAsName(base)
+  }, [saveAsOpen, savedView?.name])
 
   // Fetch requirements
   const { data: requirements = [], isLoading: loadingReqs } = useQuery({
@@ -788,7 +855,7 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
           <div className="bg-white dark:bg-gray-800 flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-4">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                Traceability Matrix
+                Traceability Matrix{savedView?.name ? ` — ${savedView.name}` : ''}
               </h2>
               {LINKAGE_V1 ? (
                 <select
@@ -840,6 +907,8 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
             </div>
             <button
               onClick={onClose}
+              aria-label="Close"
+              title="Close"
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
             >
               <X size={20} className="text-gray-600 dark:text-gray-400" />
@@ -885,6 +954,42 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
             )}
             <div className="flex-1" />
             <div className="flex items-center gap-2">
+              {savedViewId && (
+                <>
+                  <button
+                    onClick={() => saveViewMutation.mutate()}
+                    disabled={saveViewMutation.isPending}
+                    className={clsx(
+                      'px-3 py-1.5 text-sm rounded-lg border flex items-center gap-1',
+                      saveViewMutation.isPending
+                        ? 'opacity-60 cursor-not-allowed border-gray-300 dark:border-gray-600'
+                        : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700',
+                      'bg-white dark:bg-gray-800 text-gray-900 dark:text-white'
+                    )}
+                    title="Save changes to this view"
+                  >
+                    <Check size={14} />
+                    Save
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSaveAsOpen(true)
+                    }}
+                    disabled={saveAsMutation.isPending}
+                    className={clsx(
+                      'px-3 py-1.5 text-sm rounded-lg border flex items-center gap-1',
+                      saveAsMutation.isPending
+                        ? 'opacity-60 cursor-not-allowed border-gray-300 dark:border-gray-600'
+                        : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700',
+                      'bg-white dark:bg-gray-800 text-gray-900 dark:text-white'
+                    )}
+                    title="Save as a new view"
+                  >
+                    <Plus size={14} />
+                    Save as
+                  </button>
+                </>
+              )}
               <select
                 value={filterLinked}
                 onChange={(e) => setFilterLinked(e.target.value as any)}
@@ -1225,6 +1330,64 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
                     Create Link
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {saveAsOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[520px] max-w-[95vw]">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <div className="text-sm font-semibold text-gray-900 dark:text-white">Save as new view</div>
+              <button
+                onClick={() => setSaveAsOpen(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label="Close"
+                title="Close"
+              >
+                <X size={18} className="text-gray-600 dark:text-gray-300" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Name</label>
+              <input
+                value={saveAsName}
+                onChange={(e) => setSaveAsName(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder="e.g. Allocation coverage (Functions)"
+                autoFocus
+              />
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                This creates a new saved view; it won’t overwrite the current one.
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setSaveAsOpen(false)}
+                className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const trimmed = saveAsName.trim()
+                  if (!trimmed) return
+                  try {
+                    await saveAsMutation.mutateAsync(trimmed)
+                    setSaveAsOpen(false)
+                  } catch {
+                    // keep modal open on error
+                  }
+                }}
+                disabled={saveAsMutation.isPending || !saveAsName.trim()}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm flex items-center gap-2"
+              >
+                {saveAsMutation.isPending ? <Loader size={14} className="animate-spin" /> : <Plus size={14} />}
+                Create
               </button>
             </div>
           </div>

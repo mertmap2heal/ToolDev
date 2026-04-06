@@ -64,9 +64,9 @@ test.describe('Saved Traceability Views', () => {
     await page.getByRole('button', { name: 'Open' }).first().click()
 
     // Matrix opens and selector should be pbs_component (from saved definition)
-    await expect(page.getByRole('heading', { name: 'Traceability Matrix' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /Traceability Matrix/i })).toBeVisible()
     const modalRoot = page
-      .getByRole('heading', { name: 'Traceability Matrix' })
+      .getByRole('heading', { name: /Traceability Matrix/i })
       .locator('xpath=ancestor::div[contains(@class,\"shadow-xl\")]')
     const targetSelect = modalRoot.locator('select').first()
     await expect(targetSelect).toHaveValue('pbs_component')
@@ -75,8 +75,8 @@ test.describe('Saved Traceability Views', () => {
     await modalRoot.getByRole('button', { name: /Export/i }).click()
 
     // Close
-    await page.getByRole('button', { name: /^Close$/ }).last().click()
-    await expect(page.getByRole('heading', { name: 'Traceability Matrix' })).toHaveCount(0)
+    await page.getByLabel('Close', { exact: true }).click()
+    await expect(page.getByRole('heading', { name: /Traceability Matrix/i })).toHaveCount(0)
   })
 })
 
