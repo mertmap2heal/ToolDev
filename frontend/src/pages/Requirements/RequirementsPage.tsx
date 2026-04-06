@@ -2632,7 +2632,7 @@ export default function RequirementsPage() {
             </td>
           )}
           <td className="px-2 py-3">
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <div className="flex items-center gap-1 opacity-100 group-hover:opacity-100 transition-opacity duration-200">
               <button
                 onClick={(e) => {
                   e.stopPropagation()
