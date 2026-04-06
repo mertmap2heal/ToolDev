@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { X, ClipboardCheck, ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import clsx from 'clsx'
-import { format } from 'date-fns'
+import { format, formatDistanceToNow, parseISO } from 'date-fns'
 import { requirementService } from '../../services/requirement.service'
 
 type AuditCategory = 'requirement' | 'links' | 'comments' | 'baselines' | 'imports_exports'
@@ -44,6 +44,46 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === 'object' && !Array.isArray(v)
 }
 
+function isEmptyish(v: unknown): boolean {
+  return v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0)
+}
+
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  // Treat "empty" representations as equivalent for audit readability
+  // (e.g. undefined vs null, or undefined vs [] from serializers).
+  if (isEmptyish(a) && isEmptyish(b)) return true
+  if (a == null || b == null) return a === b
+  if (typeof a !== typeof b) return false
+
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      if (!deepEqual(a[i], b[i])) return false
+    }
+    return true
+  }
+
+  if (isPlainObject(a) && isPlainObject(b)) {
+    const ak = Object.keys(a).sort()
+    const bk = Object.keys(b).sort()
+    if (ak.length !== bk.length) return false
+    for (let i = 0; i < ak.length; i++) {
+      if (ak[i] !== bk[i]) return false
+      const k = ak[i]
+      if (!deepEqual((a as any)[k], (b as any)[k])) return false
+    }
+    return true
+  }
+
+  // fallback for non-plain objects (should be rare in audit JSON)
+  try {
+    return JSON.stringify(a) === JSON.stringify(b)
+  } catch {
+    return false
+  }
+}
+
 function computeObjectDiff(oldValue: unknown, newValue: unknown): Array<{ key: string; before: unknown; after: unknown }> {
   if (!isPlainObject(oldValue) || !isPlainObject(newValue)) return []
   const keys = new Set([...Object.keys(oldValue), ...Object.keys(newValue)])
@@ -51,7 +91,8 @@ function computeObjectDiff(oldValue: unknown, newValue: unknown): Array<{ key: s
   for (const k of Array.from(keys).sort()) {
     const before = (oldValue as any)[k]
     const after = (newValue as any)[k]
-    if (JSON.stringify(before) !== JSON.stringify(after)) out.push({ key: k, before, after })
+    // Only include true changes (stable deep comparison; avoids object key-order false positives)
+    if (!deepEqual(before, after)) out.push({ key: k, before, after })
   }
   return out
 }
@@ -171,6 +212,18 @@ export default function RequirementsAuditLogModal({ projectId, onClose }: Props)
   const formatValue = (v: unknown): { kind: 'empty' | 'text' | 'json'; text: string } => {
     if (v === null || v === undefined || v === '') return { kind: 'empty', text: '—' }
     if (typeof v === 'string') {
+      // Prefer human-readable timestamps for ISO-like strings
+      const isoCandidate = v.trim()
+      try {
+        const d = parseISO(isoCandidate)
+        if (!isNaN(d.getTime()) && /^\d{4}-\d{2}-\d{2}t/i.test(isoCandidate)) {
+          const abs = format(d, 'yyyy-MM-dd HH:mm:ss')
+          const rel = formatDistanceToNow(d, { addSuffix: true })
+          return { kind: 'text', text: `${abs} (${rel})` }
+        }
+      } catch {
+        // ignore
+      }
       const t = v.replace(/\r\n/g, '\n')
       const short = t.length > 400 ? `${t.slice(0, 400)}…` : t
       return { kind: 'text', text: short }
