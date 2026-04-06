@@ -170,6 +170,7 @@ export default function RequirementsPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
+  const [urlHydrated, setUrlHydrated] = useState(false)
   const baselineId = searchParams.get('baselineId')
   const focusRequirementId = searchParams.get('requirementId')
   const [searchQuery, setSearchQuery] = useState('')
@@ -329,6 +330,10 @@ export default function RequirementsPage() {
     setSelectedVerificationNode(null)
   }, [])
 
+  const handleVerificationPanelSelect = useCallback((node: { type: VerNodeType; id: string } | null) => {
+    setSelectedVerificationNode(node)
+  }, [])
+
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1)
@@ -436,6 +441,7 @@ export default function RequirementsPage() {
   // URL → state (searchParams is source of truth for shareable scope / dashboard deep links)
   useEffect(() => {
     const baselineActive = Boolean(searchParams.get('baselineId'))
+    const openPanelOneShot = searchParams.get('openPanel') === '1'
 
     setReviewStatusFilter((prev) => {
       const v = searchParams.get('reviewStatus') || 'all'
@@ -451,6 +457,7 @@ export default function RequirementsPage() {
       const next = new URLSearchParams(searchParams)
       next.delete('openSuspect')
       setSearchParams(next, { replace: true })
+      setUrlHydrated(true)
       return
     }
 
@@ -483,10 +490,19 @@ export default function RequirementsPage() {
 
     // Baseline snapshot mode: state→URL does not persist `panel=1`, so do not force panel closed from URL
     if (!baselineActive) {
-      setIsPBSPanelOpen((prev) => {
-        const open = searchParams.get('panel') === '1' || searchParams.get('openPanel') === '1'
-        return prev === open ? prev : open
-      })
+      if (openPanelOneShot) {
+        setIsPBSPanelOpen(true)
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev)
+          next.delete('openPanel')
+          return next
+        }, { replace: true })
+      } else {
+        setIsPBSPanelOpen((prev) => {
+          const open = searchParams.get('panel') === '1'
+          return prev === open ? prev : open
+        })
+      }
     }
 
     setSelectedComponentId((prev) => {
@@ -524,14 +540,19 @@ export default function RequirementsPage() {
       }
       return prev === null ? prev : null
     })
+
+    setUrlHydrated(true)
   }, [searchParams, setSearchParams])
 
   // State → URL (keep shareable params in sync; skip while baseline snapshot mode uses its own query)
   useEffect(() => {
     if (baselineId) return
+    // Avoid clobbering deep-link params before the URL→state hydration runs at least once.
+    if (!urlHydrated) return
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev)
+        next.delete('openPanel')
         if (isPBSPanelOpen) next.set('panel', '1')
         else next.delete('panel')
         next.set('panelTab', leftPanelTab)
@@ -579,6 +600,7 @@ export default function RequirementsPage() {
     reviewStatusFilter,
     verificationStatusFilter,
     setSearchParams,
+    urlHydrated,
   ])
 
   // Column definitions for requirements
@@ -1089,7 +1111,7 @@ export default function RequirementsPage() {
 
   const verificationCasesList = useMemo(() => Array.isArray(verificationCases) ? verificationCases : [], [verificationCases])
   const verificationSetupsList = useMemo(() => Array.isArray(verificationSetups) ? verificationSetups : [], [verificationSetups])
-  // Verification sidebar linked requirements should be driven by live trace edges.
+  // Verification sidebar: only linkType "verifies" between requirement and test_case (matches getRequirements noTestCaseVerifiesLink).
   // Baseline snapshots may omit requirement<->test_case links, which would otherwise hide them.
   const requirementTestCaseLinksFromTrace = useMemo((): RequirementTestCaseLinkLike[] => {
     const links = Array.isArray(traceLinks) ? (traceLinks as any[]) : []
@@ -1097,6 +1119,8 @@ export default function RequirementsPage() {
     const result: RequirementTestCaseLinkLike[] = []
     const seen = new Set<string>()
     for (const l of links) {
+      const lt = String((l as any).linkType ?? '').toLowerCase()
+      if (lt !== 'verifies') continue
       const st = norm((l as any).sourceType)
       const tt = norm((l as any).targetType)
       const isForward = st === 'requirement' && (tt === 'test_case' || tt === 'testcase')
@@ -1132,6 +1156,8 @@ export default function RequirementsPage() {
     const result: RequirementTestCaseLinkLike[] = []
     const seen = new Set<string>()
     for (const l of links) {
+      const lt = String((l as any).linkType ?? '').toLowerCase()
+      if (lt !== 'verifies') continue
       const st = norm((l as any).sourceType)
       const tt = norm((l as any).targetType)
       const isForward = st === 'requirement' && (tt === 'test_case' || tt === 'testcase')
@@ -3016,9 +3042,7 @@ export default function RequirementsPage() {
                     testSetups={verificationSetupsList}
                     runsByPlanId={verificationRunsByPlanId}
                     selectedNode={selectedVerificationNode}
-                    onSelect={(node) => {
-                      setSelectedVerificationNode(node)
-                    }}
+                    onSelect={handleVerificationPanelSelect}
                     onCreatePlan={() => projectId && navigate(buildVerificationUrl(projectId, { tab: 'plans', openCreate: 'plan' }))}
                     onCreateCase={(planId) => projectId && navigate(buildVerificationUrl(projectId, { tab: 'cases', openCreateCase: planId }))}
                     onCreateSetup={(planId) => projectId && navigate(buildVerificationUrl(projectId, { tab: 'setups', openCreateSetup: planId }))}
@@ -3153,7 +3177,7 @@ export default function RequirementsPage() {
             <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setIsPBSPanelOpen(!isPBSPanelOpen)}
+                onClick={() => setIsPBSPanelOpen((v) => !v)}
                 className="p-1.5 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 title={
                   isPBSPanelOpen

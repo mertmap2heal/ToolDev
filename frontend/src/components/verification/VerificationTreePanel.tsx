@@ -226,7 +226,7 @@ function buildTree(
         const derived: string[] = []
         planCaseIds.forEach((cid) => {
           const c = caseMap.get(cid)
-          const ids = (c?.linkedSetupIds ?? (c as any)?.setupIds ?? []) as string[]
+          const ids = ((c as any)?.linkedSetupIds ?? (c as any)?.setupIds ?? []) as string[]
           ids.forEach((sid) => {
             if (!derived.includes(sid)) derived.push(sid)
           })
