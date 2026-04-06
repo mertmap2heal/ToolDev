@@ -14,7 +14,10 @@ export const getTestPlans = async (req: AuthRequest, res: Response) => {
     const { projectId } = req.params
     const plans = await prisma.verTestPlan.findMany({
       where: { projectId },
-      include: { planCases: { include: { testCase: true } } },
+      include: {
+        planCases: { include: { testCase: true } },
+        planSetups: { include: { setup: true } },
+      },
       orderBy: { createdAt: 'desc' },
     })
 
@@ -71,7 +74,10 @@ export const getTestPlan = async (req: AuthRequest, res: Response) => {
     const { projectId, id } = req.params
     const plan = await prisma.verTestPlan.findFirst({
       where: { id, projectId },
-      include: { planCases: { include: { testCase: true }, orderBy: { orderIndex: 'asc' } } },
+      include: {
+        planCases: { include: { testCase: true }, orderBy: { orderIndex: 'asc' } },
+        planSetups: { include: { setup: true }, orderBy: { createdAt: 'asc' } },
+      },
     })
     if (!plan) return res.status(404).json({ success: false, error: 'Test plan not found' })
     res.json({ success: true, data: plan })
@@ -201,6 +207,72 @@ export const removeCaseFromPlan = async (req: AuthRequest, res: Response) => {
     res.json({ success: true, message: 'Test case removed from plan' })
   } catch (error: any) {
     console.error('Remove case from plan error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+}
+
+export const linkSetupToPlan = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id } = req.params
+    const { setupId } = req.body
+    if (!setupId) return res.status(400).json({ success: false, error: 'setupId is required' })
+
+    const plan = await prisma.verTestPlan.findFirst({ where: { id, projectId } })
+    if (!plan) return res.status(404).json({ success: false, error: 'Test plan not found' })
+
+    const setup = await prisma.verTestSetup.findFirst({ where: { id: setupId, projectId } })
+    if (!setup) return res.status(404).json({ success: false, error: 'Test setup not found' })
+
+    const existing = await prisma.verTestPlanSetup.findFirst({
+      where: { testPlanId: id, setupId },
+    })
+    if (existing) {
+      return res.json({ success: true, data: existing })
+    }
+
+    const link = await prisma.verTestPlanSetup.create({
+      data: { testPlanId: id, setupId },
+      include: { setup: true },
+    })
+
+    await auditService.logEvent({
+      projectId,
+      entityType: 'TEST_PLAN',
+      entityId: id,
+      action: AuditAction.UPDATE,
+      newValue: { linkedSetupId: setupId },
+      performedByUserId: req.userId,
+    })
+
+    res.json({ success: true, data: link })
+  } catch (error: any) {
+    console.error('Link setup to plan error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+}
+
+export const unlinkSetupFromPlan = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id, setupId } = req.params
+    const plan = await prisma.verTestPlan.findFirst({ where: { id, projectId } })
+    if (!plan) return res.status(404).json({ success: false, error: 'Test plan not found' })
+
+    await prisma.verTestPlanSetup.deleteMany({
+      where: { testPlanId: id, setupId },
+    })
+
+    await auditService.logEvent({
+      projectId,
+      entityType: 'TEST_PLAN',
+      entityId: id,
+      action: AuditAction.UPDATE,
+      newValue: { unlinkedSetupId: setupId },
+      performedByUserId: req.userId,
+    })
+
+    res.json({ success: true, message: 'Test setup unlinked from plan' })
+  } catch (error: any) {
+    console.error('Unlink setup from plan error:', error)
     res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
   }
 }

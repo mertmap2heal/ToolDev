@@ -1082,11 +1082,6 @@ export default function VerificationTreePanel({
         </div>
         {requirements != null && (
           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {requirementTestCaseLinks?.length === 0
-                ? 'Linked requirements appear under each test plan and test case. To link: drag a requirement onto a test case, or use the test case context menu → Link requirement. Requirements not linked to any test case are listed under Unassigned at the bottom.'
-                : 'Linked requirements appear under each test plan and test case. Requirements not linked to any test case are listed under Unassigned at the bottom.'}
-            </p>
             <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Unassigned: {unassignedCount}</span>
             <button
               type="button"

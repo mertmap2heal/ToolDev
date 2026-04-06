@@ -1,0 +1,189 @@
+{
+  "runId": "aee90379-84a0-4b1c-862f-29fdfc5b4b06",
+  "runName": "Qualification Run – Build 2026.04.06-rc1",
+  "planKey": "TP-UAV-QUAL-001",
+  "planId": "08660c54-b550-4bf1-b967-ae1985850e3e",
+  "planName": "Qualification Flight Test Plan – Comms, Nav & Power",
+  "statusCounts": {
+    "PASS": 1,
+    "PASSED_WITH_ERRORS": 1,
+    "FAIL": 1
+  },
+  "aggregatedStatus": "FAIL",
+  "executedAt": "2026-04-06T17:30:27.338Z",
+  "durationSeconds": 0,
+  "environment": null,
+  "scenarioResults": [
+    {
+      "testCaseId": "283afb06-c3cc-467a-9c2e-7a80665c3c17",
+      "testCaseKey": "TC-UAV-COMMS-001",
+      "testCaseTitle": "Loss-of-link failsafe triggers Return-to-Home (RTH)",
+      "testCaseVersion": "1.0",
+      "resultStatus": "PASS",
+      "testCaseVersionSnapshot": {
+        "steps": [
+          "Arm the vehicle and take off to 20 m AGL in a controlled environment (HIL or safe test field).",
+          "Confirm vehicle is in AUTO mission mode and receiving telemetry.",
+          "Induce command-link loss by powering off the telemetry radio for 15 seconds.",
+          "Observe flight mode transition and record timestamps of: link-loss detection, failsafe mode entry, and first RTH navigation command.",
+          "Restore telemetry radio power and verify the vehicle reports link restoration.",
+          "If configured to continue mission after link restore, verify it resumes mission; otherwise verify it loiters and awaits operator action."
+        ],
+        "title": "Loss-of-link failsafe triggers Return-to-Home (RTH)",
+        "version": "1.0",
+        "objective": "Verify that the vehicle detects command-link loss and transitions to the configured failsafe mode (Return-to-Home), maintaining safe flight behavior until link is restored or landing completes.",
+        "preconditions": "1. Vehicle firmware build is installed and parameters are at default except failsafe settings.\n2. A mission with a valid home position is configured.\n3. GNSS lock is established (HDOP within limits).\n4. Command link is established via radio telemetry.\n5. Test bench can simulate link loss (radio power toggle or shielding).",
+        "expectedResults": [
+          "Vehicle detects link loss within the configured timeout (≤ 3 s) and logs an event.",
+          "Vehicle transitions into Return-to-Home failsafe mode and begins navigation to home without unstable attitude or altitude excursions.",
+          "On link restoration, telemetry status returns to normal and the system follows the configured post-restore behavior (resume mission or loiter)."
+        ],
+        "passFailCriteria": "PASS if link loss is detected within timeout, RTH is entered reliably, and recovery behavior matches configuration. FAIL if failsafe does not trigger, triggers late, or produces unsafe flight behavior."
+      },
+      "actualResults": {
+        "stepOutcomes": [
+          {
+            "note": "Setup and preconditions satisfied.",
+            "status": "PASS",
+            "stepIndex": 0
+          },
+          {
+            "note": "Procedure executed as written.",
+            "status": "PASS",
+            "stepIndex": 1
+          },
+          {
+            "note": "All checks within limits.",
+            "status": "PASS",
+            "stepIndex": 2
+          }
+        ]
+      },
+      "actualResultBlocks": [
+        {
+          "contentType": "TEXT_RICH",
+          "textContent": "<p><b>Observed:</b> Failsafe entered within 2.1s. Mode transition and RTH track stable. Link restored and vehicle loitered as configured.</p><ul><li>Operator: 7a20bc84</li><li>Run context: Qualification Run – Build 2026.04.06-rc1</li></ul>",
+          "imageStorageKey": null,
+          "imageFileName": null
+        }
+      ],
+      "executedAt": "2026-04-06T17:23:26.929Z",
+      "isSuspect": false,
+      "isOutOfSync": false
+    },
+    {
+      "testCaseId": "af7a1ec5-7758-4cdf-b889-8b530614363b",
+      "testCaseKey": "TC-UAV-NAV-002",
+      "testCaseTitle": "Waypoint navigation accuracy under nominal wind",
+      "testCaseVersion": "1.0",
+      "resultStatus": "PASSED_WITH_ERRORS",
+      "testCaseVersionSnapshot": {
+        "steps": [
+          "Take off and transition to AUTO mission mode.",
+          "Command vehicle to navigate to WP2 and hold for 60 seconds.",
+          "Record GNSS position and EKF position estimate throughout the hold.",
+          "Compute the 2D distance error to WP2 for each sample and the time spent within tolerance.",
+          "Command return to WP3/home and land."
+        ],
+        "title": "Waypoint navigation accuracy under nominal wind",
+        "version": "1.0",
+        "objective": "Verify that the navigation controller reaches a waypoint within the specified position tolerance and holds within tolerance for a sustained period under nominal wind conditions.",
+        "preconditions": "1. Vehicle is configured with navigation gains per baseline.\n2. Wind profile is nominal (≤ 5 m/s) or simulated in HIL.\n3. Waypoints are loaded: WP1 (takeoff), WP2 (hold), WP3 (return).\n4. Logging is enabled for position, velocity, and controller setpoints.",
+        "expectedResults": [
+          "Vehicle reaches WP2 and enters hold without oscillations or overshoot beyond safety limits.",
+          "2D position error remains within 2.0 m for ≥ 55 of 60 seconds during the hold.",
+          "Logged setpoints and measured states show stable control (no divergence, no integrator windup)."
+        ],
+        "passFailCriteria": "PASS if the vehicle reaches WP2 and holds within tolerance as specified. FAIL if tolerance is exceeded for > 5 seconds or unstable control is observed."
+      },
+      "actualResults": {
+        "stepOutcomes": [
+          {
+            "note": "Setup and preconditions satisfied.",
+            "status": "PASS",
+            "stepIndex": 0
+          },
+          {
+            "note": "Procedure executed as written.",
+            "status": "PASS",
+            "stepIndex": 1
+          },
+          {
+            "note": "Minor excursion; see note.",
+            "status": "PASS",
+            "stepIndex": 2
+          }
+        ]
+      },
+      "actualResultBlocks": [
+        {
+          "contentType": "TEXT_RICH",
+          "textContent": "<p><b>Observed:</b> Within tolerance for 58/60 seconds. Brief 2.3m excursion coincided with GNSS jitter spike; controller remained stable.</p><ul><li>Operator: 7a20bc84</li><li>Run context: Qualification Run – Build 2026.04.06-rc1</li></ul>",
+          "imageStorageKey": null,
+          "imageFileName": null
+        }
+      ],
+      "executedAt": "2026-04-06T17:24:26.929Z",
+      "isSuspect": false,
+      "isOutOfSync": false
+    },
+    {
+      "testCaseId": "c30316fe-ffcf-473f-89bd-d08b08dcc13f",
+      "testCaseKey": "TC-UAV-PWR-003",
+      "testCaseTitle": "Low-battery warning and automated RTL initiation",
+      "testCaseVersion": "1.0",
+      "resultStatus": "FAIL",
+      "testCaseVersionSnapshot": {
+        "steps": [
+          "Start with a fully charged battery (or HIL initial SOC ≥ 80%).",
+          "Enter loiter at 20 m AGL and maintain for 3 minutes.",
+          "Induce battery discharge until the warning threshold is crossed.",
+          "Verify warning is presented to operator and event is logged.",
+          "Continue discharge until the RTL trigger threshold is crossed.",
+          "Verify RTL is initiated automatically and vehicle proceeds to launch/home position and lands (or enters final loiter per configuration)."
+        ],
+        "title": "Low-battery warning and automated RTL initiation",
+        "version": "1.0",
+        "objective": "Verify that low-battery thresholds generate the correct warnings and that the vehicle initiates the configured automated Return-to-Launch (RTL) sequence before critical voltage is reached.",
+        "preconditions": "1. Battery model is configured (capacity, cell count, voltage thresholds).\n2. Vehicle is flying a loiter pattern at 20 m AGL (HIL or field).\n3. Battery discharge can be accelerated in HIL or by controlled load profile.\n4. Audible/visual warnings and event logs are enabled.",
+        "expectedResults": [
+          "Low-battery warning is emitted at the configured warning threshold and appears in logs/telemetry.",
+          "RTL is initiated at the configured trigger threshold without operator intervention.",
+          "Vehicle reaches home and executes the configured landing/loiter behavior while maintaining stable flight."
+        ],
+        "passFailCriteria": "PASS if warning and RTL trigger thresholds are respected and the vehicle completes the RTL sequence safely. FAIL if warnings are missing/late or RTL does not initiate."
+      },
+      "actualResults": {
+        "stepOutcomes": [
+          {
+            "note": "Setup and preconditions satisfied.",
+            "status": "PASS",
+            "stepIndex": 0
+          },
+          {
+            "note": "Procedure executed as written.",
+            "status": "PASS",
+            "stepIndex": 1
+          },
+          {
+            "note": "RTL initiation lag observed; see fail conditions.",
+            "status": "FAIL",
+            "stepIndex": 2
+          }
+        ],
+        "failConditions": "RTL trigger occurred below configured threshold (late trigger)."
+      },
+      "actualResultBlocks": [
+        {
+          "contentType": "TEXT_RICH",
+          "textContent": "<p><b>Observed:</b> Low-battery warning displayed, but RTL trigger occurred ~18s late (below configured threshold). Needs investigation.</p><ul><li>Operator: 7a20bc84</li><li>Run context: Qualification Run – Build 2026.04.06-rc1</li></ul>",
+          "imageStorageKey": null,
+          "imageFileName": null
+        }
+      ],
+      "executedAt": "2026-04-06T17:25:26.929Z",
+      "isSuspect": false,
+      "isOutOfSync": false
+    }
+  ]
+}

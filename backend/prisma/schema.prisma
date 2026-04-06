@@ -2425,6 +2425,7 @@ model VerTestSetup {
 
   project        Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   testCaseSetups VerTestCaseSetup[]
+  planSetups     VerTestPlanSetup[]
   testResults    VerTestResult[]
 
   @@index([projectId])
@@ -2555,11 +2556,27 @@ model VerTestPlan {
 
   project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   planCases VerTestPlanCase[]
+  planSetups VerTestPlanSetup[]
   testRuns  VerTestRun[]
 
   @@unique([projectId, key])
   @@index([projectId])
   @@index([status])
+}
+
+// Join table: Test Plan ↔ Setup
+model VerTestPlanSetup {
+  id         String   @id @default(uuid())
+  testPlanId String
+  setupId    String
+  createdAt  DateTime @default(now())
+
+  testPlan VerTestPlan  @relation(fields: [testPlanId], references: [id], onDelete: Cascade)
+  setup    VerTestSetup @relation(fields: [setupId], references: [id], onDelete: Cascade)
+
+  @@unique([testPlanId, setupId])
+  @@index([testPlanId])
+  @@index([setupId])
 }
 
 // Join table: Test Plan ↔ Test Cases

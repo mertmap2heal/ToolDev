@@ -540,7 +540,7 @@ function VerificationLayoutInner() {
       {/* Main column + detail drawers share one flex row so the panel squeezes content (like Requirements). */}
       <div className="flex flex-1 min-h-0 min-w-0">
         <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden pr-6 gap-6">
-        <div className="flex-shrink-0 flex items-center justify-between gap-2">
+        <div className="flex-shrink-0 flex items-center gap-2">
           {showTreePanel && (
             <button
               type="button"
@@ -553,22 +553,12 @@ function VerificationLayoutInner() {
             </button>
           )}
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Verification</h2>
-          {projectId && <SafetyLinkPanel variant="evidence" count={2} />}
+          {projectId && (
+            <div className="ml-auto">
+              <SafetyLinkPanel variant="evidence" count={2} />
+            </div>
+          )}
         </div>
-
-        {showTreePanel && projectId && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 -mt-4 mb-1 max-w-3xl">
-            Requirements without a <span className="font-medium">verifies</span> link to any test case appear under{' '}
-            <span className="font-medium">Unassigned</span> in the tree. To filter the full requirements table the same way, open{' '}
-            <Link
-              to={`/projects/${projectId}/requirements?panel=1&panelTab=verification`}
-              className="text-teal-600 dark:text-teal-400 hover:underline font-medium"
-            >
-              Requirements
-            </Link>{' '}
-            (structure panel, Verification tab) and select Unassigned.
-          </p>
-        )}
 
         <div className="flex-shrink-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-x-auto">
           <div className="flex border-b border-gray-200 dark:border-gray-700 min-w-max">

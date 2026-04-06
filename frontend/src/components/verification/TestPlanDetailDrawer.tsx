@@ -234,15 +234,32 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
   }, [planCases, allTestCases])
 
   const planSetupEntities = useMemo(() => {
-    const ids = Array.isArray(currentPlan?.linkedSetups)
-      ? (currentPlan.linkedSetups as string[])
-      : Array.isArray(currentPlan?.planSetups)
-        ? (currentPlan.planSetups as any[]).map((ps) => ps?.id ?? ps)
-        : []
     const setups = Array.isArray(allSetups) ? allSetups : []
-    return ids
-      .map((id) => setups.find((s: any) => s.id === id) ?? { id })
+
+    // Support both shapes:
+    // - legacy: currentPlan.linkedSetups: string[] of setupIds
+    // - new: currentPlan.planSetups: join rows { id, testPlanId, setupId, setup? }
+    const fromLinked = Array.isArray(currentPlan?.linkedSetups) ? (currentPlan.linkedSetups as string[]) : []
+    const fromJoin = Array.isArray(currentPlan?.planSetups) ? (currentPlan.planSetups as any[]) : []
+
+    const resolvedFromJoin = fromJoin
+      .map((ps) => ps?.setup ?? (ps?.setupId ? setups.find((s: any) => s.id === ps.setupId) : null) ?? null)
       .filter(Boolean) as any[]
+
+    const resolvedFromLinked = fromLinked
+      .map((id) => setups.find((s: any) => s.id === id) ?? { id, name: `Setup ${String(id).slice(0, 8)}` })
+      .filter(Boolean) as any[]
+
+    // De-dupe by setup id.
+    const out: any[] = []
+    const seen = new Set<string>()
+    for (const s of [...resolvedFromJoin, ...resolvedFromLinked]) {
+      const id = (s as any)?.id
+      if (!id || seen.has(id)) continue
+      seen.add(id)
+      out.push(s)
+    }
+    return out
   }, [currentPlan?.linkedSetups, currentPlan?.planSetups, allSetups])
 
   const relationshipSections = useMemo(() => {
