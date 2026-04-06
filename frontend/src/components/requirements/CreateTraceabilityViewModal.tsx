@@ -84,6 +84,9 @@ export default function CreateTraceabilityViewModal({
   const [targetSearchQuery, setTargetSearchQuery] = useState('')
   const [filterLinked, setFilterLinked] = useState<'all' | 'linked' | 'unlinked'>('all')
   const [showSuspectOnly, setShowSuspectOnly] = useState(false)
+  const [objectiveMinSourceCoveragePct, setObjectiveMinSourceCoveragePct] = useState<number | ''>('')
+  const [objectiveMinTargetCoveragePct, setObjectiveMinTargetCoveragePct] = useState<number | ''>('')
+  const [objectiveMaxSuspectLinks, setObjectiveMaxSuspectLinks] = useState<number | ''>('')
 
   const [rowFilterStatus, setRowFilterStatus] = useState('')
   const [rowFilterOwner, setRowFilterOwner] = useState('')
@@ -125,18 +128,49 @@ export default function CreateTraceabilityViewModal({
     return Object.keys(f).length ? f : undefined
   }, [rowMode, rowFilterStatus, rowFilterOwner, rowFilterPriority, rowFilterCategory, rowFilterSearch])
 
+  const effectiveRowMode = useMemo(() => {
+    // In practice, users expect pinned picks to constrain the matrix.
+    // If they pinned rows but left row filters empty and kept default "mixed", treat it as pinned-only.
+    if (rowMode === 'mixed' && pinnedRequirementIds.length > 0 && !rowFilters) return 'pinned'
+    return rowMode
+  }, [rowMode, pinnedRequirementIds.length, rowFilters])
+
+  const effectiveColMode = useMemo(() => {
+    // If user pinned columns but left dynamic target search empty and kept default "mixed", treat it as pinned-only.
+    if (colMode === 'mixed' && pinnedTargetIds.length > 0 && !targetSearchQuery.trim()) return 'pinned'
+    return colMode
+  }, [colMode, pinnedTargetIds.length, targetSearchQuery])
+
   const definition: TraceabilityMatrixSavedDefinition = useMemo(() => ({
     viewKind: 'traceability_matrix',
     linkageTargetType,
-    rowMode,
-    colMode,
+    rowMode: effectiveRowMode,
+    colMode: effectiveColMode,
     pinnedRequirementIds,
     pinnedTargetIds,
     targetSearchQuery: targetSearchQuery.trim() || undefined,
     filterLinked,
     showSuspectOnly,
     filters: rowFilters,
-  }), [linkageTargetType, rowMode, colMode, pinnedRequirementIds, pinnedTargetIds, targetSearchQuery, filterLinked, showSuspectOnly, rowFilters])
+    objectives: {
+      ...(objectiveMinSourceCoveragePct === '' ? {} : { minSourceCoveragePct: Number(objectiveMinSourceCoveragePct) }),
+      ...(objectiveMinTargetCoveragePct === '' ? {} : { minTargetCoveragePct: Number(objectiveMinTargetCoveragePct) }),
+      ...(objectiveMaxSuspectLinks === '' ? {} : { maxSuspectLinks: Number(objectiveMaxSuspectLinks) }),
+    },
+  }), [
+    linkageTargetType,
+    effectiveRowMode,
+    effectiveColMode,
+    pinnedRequirementIds,
+    pinnedTargetIds,
+    targetSearchQuery,
+    filterLinked,
+    showSuspectOnly,
+    rowFilters,
+    objectiveMinSourceCoveragePct,
+    objectiveMinTargetCoveragePct,
+    objectiveMaxSuspectLinks,
+  ])
 
   useEffect(() => {
     const verb = mode === 'edit' ? 'Edit' : mode === 'duplicate' ? 'Duplicate' : 'Create'
@@ -156,6 +190,12 @@ export default function CreateTraceabilityViewModal({
     if (typeof initialDef?.targetSearchQuery === 'string') setTargetSearchQuery(initialDef.targetSearchQuery)
     if (initialDef?.filterLinked) setFilterLinked(initialDef.filterLinked)
     if (typeof initialDef?.showSuspectOnly === 'boolean') setShowSuspectOnly(initialDef.showSuspectOnly)
+    if (initialDef?.objectives && typeof initialDef.objectives === 'object') {
+      const o: any = initialDef.objectives
+      if (typeof o.minSourceCoveragePct === 'number') setObjectiveMinSourceCoveragePct(o.minSourceCoveragePct)
+      if (typeof o.minTargetCoveragePct === 'number') setObjectiveMinTargetCoveragePct(o.minTargetCoveragePct)
+      if (typeof o.maxSuspectLinks === 'number') setObjectiveMaxSuspectLinks(o.maxSuspectLinks)
+    }
 
     if (initialView?.folderId !== undefined && mode !== 'create') {
       setFolderId(initialView.folderId ?? null)
@@ -665,6 +705,43 @@ export default function CreateTraceabilityViewModal({
               <pre className="text-[11px] rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-2 max-h-28 overflow-auto">
                 {JSON.stringify(definition, null, 2)}
               </pre>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-12 gap-3">
+            <div className="col-span-12">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Objectives (optional)</label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <input
+                  value={objectiveMinSourceCoveragePct}
+                  onChange={(e) => setObjectiveMinSourceCoveragePct(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="Min source coverage %"
+                  type="number"
+                  min={0}
+                  max={100}
+                  className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+                <input
+                  value={objectiveMinTargetCoveragePct}
+                  onChange={(e) => setObjectiveMinTargetCoveragePct(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="Min target coverage %"
+                  type="number"
+                  min={0}
+                  max={100}
+                  className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+                <input
+                  value={objectiveMaxSuspectLinks}
+                  onChange={(e) => setObjectiveMaxSuspectLinks(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="Max suspect links"
+                  type="number"
+                  min={0}
+                  className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                When objectives are set, the matrix can show pass/fail against coverage and suspect thresholds.
+              </div>
             </div>
           </div>
 

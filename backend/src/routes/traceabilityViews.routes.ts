@@ -11,6 +11,12 @@ import {
   getTraceabilityView,
   updateTraceabilityView,
   deleteTraceabilityView,
+  listTraceabilityViewRevisions,
+  getTraceabilityViewRevision,
+  rollbackTraceabilityView,
+  listTraceabilityViewAuditEvents,
+  runTraceabilityViewAtBaseline,
+  compareTraceabilityViewToCurrent,
 } from '../controllers/traceabilityViews.controller'
 
 const router = Router()
@@ -30,6 +36,16 @@ router.post('/:projectId/views', createTraceabilityView)
 router.get('/:projectId/views/:viewId', getTraceabilityView)
 router.patch('/:projectId/views/:viewId', updateTraceabilityView)
 router.delete('/:projectId/views/:viewId', deleteTraceabilityView)
+
+// Revisions / audit
+router.get('/:projectId/views/:viewId/revisions', listTraceabilityViewRevisions)
+router.get('/:projectId/views/:viewId/revisions/:revisionNumber', getTraceabilityViewRevision)
+router.post('/:projectId/views/:viewId/rollback', rollbackTraceabilityView)
+router.get('/:projectId/views/:viewId/audit', listTraceabilityViewAuditEvents)
+
+// Baseline run/compare
+router.get('/:projectId/views/:viewId/run', runTraceabilityViewAtBaseline)
+router.get('/:projectId/views/:viewId/compare', compareTraceabilityViewToCurrent)
 
 export default router
 

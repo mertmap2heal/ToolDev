@@ -25,6 +25,7 @@ import { hasAllocatedToComponent } from '../../linkage/buildRequirementLinkedIte
 import { addCoverPage, addHeaderFooterToAllPages, addTraceabilityMatrixSection } from '../../utils/exportPdfLayout'
 import { buildTraceabilityMatrixDocx } from '../../utils/exportDocx'
 import { traceabilityViewsService, type TraceabilityMatrixSavedDefinition } from '../../services/traceabilityViews.service'
+import { baselineService } from '../../services/baseline.service'
 
 function matchesRowDefinitionFilters(req: Requirement, f: Record<string, unknown> | null | undefined): boolean {
   if (!f || typeof f !== 'object') return true
@@ -92,6 +93,8 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
   const [rowDefinitionFilters, setRowDefinitionFilters] = useState<Record<string, unknown> | null>(null)
   const [saveAsOpen, setSaveAsOpen] = useState(false)
   const [saveAsName, setSaveAsName] = useState('')
+  const [baselineId, setBaselineId] = useState<string>('')
+  const [compareModalOpen, setCompareModalOpen] = useState(false)
 
   const queryClient = useQueryClient()
 
@@ -101,6 +104,32 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
       if (!savedViewId) return null
       const r = await traceabilityViewsService.getView(projectId, savedViewId)
       return r.success && r.data ? r.data : null
+    },
+    enabled: !!projectId && !!savedViewId,
+  })
+
+  // helper for parsing saved definitions (for objectives, etc.)
+  function safeJsonParse(v: any): any {
+    if (!v || typeof v !== 'string') return null
+    try { return JSON.parse(v) } catch { return null }
+  }
+
+  const { data: revisionsResp } = useQuery({
+    queryKey: ['traceability-view-revisions', projectId, savedViewId],
+    queryFn: async () => {
+      if (!savedViewId) return null
+      const r = await traceabilityViewsService.getRevisions(projectId, savedViewId)
+      return r.success && r.data ? r.data : []
+    },
+    enabled: !!projectId && !!savedViewId,
+  })
+  const latestRevisionNumber = Array.isArray(revisionsResp) && revisionsResp.length > 0 ? (revisionsResp[0] as any).revisionNumber : null
+
+  const { data: baselines = [] } = useQuery({
+    queryKey: ['baselines', projectId],
+    queryFn: async () => {
+      const r = await baselineService.getBaselines(projectId)
+      return r.success && r.data ? r.data : []
     },
     enabled: !!projectId && !!savedViewId,
   })
@@ -127,6 +156,8 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
       // ignore invalid saved definitions
     }
   }, [savedView?.definitionJson])
+
+  const objectives = (safeJsonParse(savedView?.definitionJson) as any)?.objectives as any | undefined
 
   const currentDefinition: TraceabilityMatrixSavedDefinition = useMemo(() => ({
     viewKind: 'traceability_matrix',
@@ -455,7 +486,8 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
       base = applySavedRowFilters(requirements)
     } else {
       // mixed: saved row filters + always include pinned requirement rows
-      base = applySavedRowFilters(requirements)
+      // If there are pinned rows but no filters, users typically expect the matrix to be scoped to the pinned set.
+      base = rowDefinitionFilters ? applySavedRowFilters(requirements) : requirements.filter((r) => pinSet.has(r.id))
       if (pinnedRequirementIds.length) {
         const byId = new Map(requirements.map((r) => [r.id, r]))
         for (const id of pinnedRequirementIds) {
@@ -484,6 +516,11 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
   const targetItems = useMemo(() => {
     if (LINKAGE_V1) {
       if (colMode === 'pinned') {
+        const set = new Set(pinnedTargetIds)
+        return filteredTargets.filter((t) => set.has((t as any).id))
+      }
+      // If there are pinned columns but no dynamic search query, users typically expect pinned-only.
+      if (colMode === 'mixed' && pinnedTargetIds.length && !targetSearchQuery.trim()) {
         const set = new Set(pinnedTargetIds)
         return filteredTargets.filter((t) => set.has((t as any).id))
       }
@@ -637,6 +674,24 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
 
   // Export matrix as CSV – cells now show "→ linkType" instead of just "X"
   const exportToCsv = () => {
+    const exportMeta = {
+      projectId,
+      viewId: savedViewId ?? null,
+      viewName: savedView?.name ?? null,
+      viewRevisionNumber: savedViewId ? (latestRevisionNumber ?? null) : null,
+      baselineId: baselineId || null,
+      baselineName: baselineId ? (baselines.find((b: any) => b.id === baselineId)?.name ?? null) : null,
+      linkageTargetType,
+      rowMode,
+      colMode,
+      filterLinked,
+      showSuspectOnly,
+      pinnedRequirementIdsCount: pinnedRequirementIds.length,
+      pinnedTargetIdsCount: pinnedTargetIds.length,
+      targetSearchQuery: targetSearchQuery.trim() || null,
+      exportedAt: new Date().toISOString(),
+      stats,
+    }
     const sourceLabel = 'ID'
     const sourceTitleLabel = 'Requirement Title'
     const sourceDescLabel = 'Requirement Description'
@@ -675,7 +730,13 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
       ...targetItems.map((t: any) => [t.id, LINKAGE_V1 ? (t.label || t.id) : matrixType === 'requirements-functions' ? (t.name || t.functionId || t.id.substring(0, 8)) : (t.title || t.requirementId || t.id.substring(0, 8))]),
     ]
 
-    const csvContent = [headers, ...rows, ...metaRows]
+    const metaHeaderRows = [
+      [`# Traceability Matrix Export`],
+      [`# metadata: ${JSON.stringify(exportMeta)}`],
+      [],
+    ]
+
+    const csvContent = [...metaHeaderRows, headers, ...rows, ...metaRows]
       .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
       .join('\n')
     const blob = new Blob([csvContent], { type: 'text/csv' })
@@ -761,9 +822,29 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
 
     const matrix = buildExportMatrixModel()
     const fileBase = `traceability_matrix_${LINKAGE_V1 ? linkageTargetType : matrixType}`
+    const exportMeta = {
+      projectId,
+      viewId: savedViewId ?? null,
+      viewName: savedView?.name ?? null,
+      viewRevisionNumber: savedViewId ? (latestRevisionNumber ?? null) : null,
+      baselineId: baselineId || null,
+      baselineName: baselineId ? (baselines.find((b: any) => b.id === baselineId)?.name ?? null) : null,
+      linkageTargetType,
+      rowMode,
+      colMode,
+      filterLinked,
+      showSuspectOnly,
+      pinnedRequirementIdsCount: pinnedRequirementIds.length,
+      pinnedTargetIdsCount: pinnedTargetIds.length,
+      targetSearchQuery: targetSearchQuery.trim() || null,
+      exportedAt: new Date().toISOString(),
+      stats,
+    }
 
     if (exportFormat === 'excel') {
       const wb = XLSX.utils.book_new()
+      const wsExportInfo = XLSX.utils.json_to_sheet([exportMeta as any])
+      XLSX.utils.book_append_sheet(wb, wsExportInfo, 'ExportInfo')
       const headerRow = ['Requirement', 'Title', 'Description'].concat(matrix.cols.map((c) => c.label || c.key))
       const dataRows = matrix.rows.map((row) => {
         const desc = (row.description ?? '').replace(/\s+/g, ' ').trim()
@@ -817,6 +898,19 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
           : 'Requirements ↔ Requirements'
       const style = DEFAULT_AUTHORITY_STYLE
       addCoverPage(doc, { documentTitle: title, showDate: true }, style)
+      try {
+        doc.setPage(1)
+        doc.setFontSize(8)
+        const lines = [
+          `View: ${exportMeta.viewName ?? '(unsaved)'}${exportMeta.viewRevisionNumber ? ` (rev ${exportMeta.viewRevisionNumber})` : ''}`,
+          `Baseline: ${exportMeta.baselineName ?? 'Current'}`,
+          `Target: ${exportMeta.linkageTargetType}`,
+          `Exported: ${exportMeta.exportedAt}`,
+        ]
+        doc.text(lines, 14, 40)
+      } catch {
+        // ignore
+      }
       addTraceabilityMatrixSection(doc, autoTable, 1, sectionTitle, matrix, style, { startOnNewPage: true })
       addHeaderFooterToAllPages(doc, title, style)
       doc.save(`${fileBase}.pdf`)
@@ -830,7 +924,7 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
         ? 'Requirements ↔ Functions'
         : 'Requirements ↔ Requirements'
     const blob = await buildTraceabilityMatrixDocx({
-      documentTitle: `Traceability Matrix – ${sectionTitle}`,
+      documentTitle: `Traceability Matrix – ${sectionTitle}${exportMeta.viewRevisionNumber ? ` (rev ${exportMeta.viewRevisionNumber})` : ''}${exportMeta.baselineName ? ` – ${exportMeta.baselineName}` : ''}`,
       matrix,
       documentStyle: DEFAULT_AUTHORITY_STYLE,
     })
@@ -857,6 +951,24 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">
                 Traceability Matrix{savedView?.name ? ` — ${savedView.name}` : ''}
               </h2>
+              {savedViewId && latestRevisionNumber != null && (
+                <span className="px-2 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-200 border border-gray-200 dark:border-gray-600">
+                  Rev {latestRevisionNumber}
+                </span>
+              )}
+              {savedViewId && (
+                <select
+                  value={baselineId}
+                  onChange={(e) => setBaselineId(e.target.value)}
+                  className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  title="Baseline context"
+                >
+                  <option value="">Current</option>
+                  {baselines.map((b: any) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              )}
               {LINKAGE_V1 ? (
                 <select
                   value={linkageTargetType}
@@ -954,6 +1066,37 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
             )}
             <div className="flex-1" />
             <div className="flex items-center gap-2">
+              {objectives && (
+                <span
+                  className={clsx(
+                    'px-2 py-1 text-xs rounded-full border',
+                    (() => {
+                      const minSrc = typeof objectives.minSourceCoveragePct === 'number' ? objectives.minSourceCoveragePct : null
+                      const minTgt = typeof objectives.minTargetCoveragePct === 'number' ? objectives.minTargetCoveragePct : null
+                      const maxSus = typeof objectives.maxSuspectLinks === 'number' ? objectives.maxSuspectLinks : null
+                      const pass =
+                        (minSrc == null || stats.sourceCoverage >= minSrc) &&
+                        (minTgt == null || stats.targetCoverage >= minTgt) &&
+                        (maxSus == null || stats.suspectLinks <= maxSus)
+                      return pass
+                        ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-200 border-green-200 dark:border-green-900/60'
+                        : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-200 border-red-200 dark:border-red-900/60'
+                    })()
+                  )}
+                  title="Objectives status"
+                >
+                  Objectives {(() => {
+                    const minSrc = typeof objectives.minSourceCoveragePct === 'number' ? objectives.minSourceCoveragePct : null
+                    const minTgt = typeof objectives.minTargetCoveragePct === 'number' ? objectives.minTargetCoveragePct : null
+                    const maxSus = typeof objectives.maxSuspectLinks === 'number' ? objectives.maxSuspectLinks : null
+                    const pass =
+                      (minSrc == null || stats.sourceCoverage >= minSrc) &&
+                      (minTgt == null || stats.targetCoverage >= minTgt) &&
+                      (maxSus == null || stats.suspectLinks <= maxSus)
+                    return pass ? 'PASS' : 'FAIL'
+                  })()}
+                </span>
+              )}
               {savedViewId && (
                 <>
                   <button
@@ -988,6 +1131,15 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
                     <Plus size={14} />
                     Save as
                   </button>
+                  {baselineId && (
+                    <button
+                      onClick={() => setCompareModalOpen(true)}
+                      className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                      title="Compare selected baseline to current"
+                    >
+                      Compare
+                    </button>
+                  )}
                 </>
               )}
               <select
@@ -1336,6 +1488,16 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
         </div>
       )}
 
+      {compareModalOpen && savedViewId && baselineId && (
+        <CompareBaselineModal
+          projectId={projectId}
+          viewId={savedViewId}
+          baselineId={baselineId}
+          baselineName={baselines.find((b: any) => b.id === baselineId)?.name ?? baselineId}
+          onClose={() => setCompareModalOpen(false)}
+        />
+      )}
+
       {saveAsOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[520px] max-w-[95vw]">
@@ -1393,6 +1555,83 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function CompareBaselineModal(props: {
+  projectId: string
+  viewId: string
+  baselineId: string
+  baselineName: string
+  onClose: () => void
+}) {
+  const { projectId, viewId, baselineId, baselineName, onClose } = props
+  const { data } = useQuery({
+    queryKey: ['traceability-view-compare', projectId, viewId, baselineId],
+    queryFn: async () => {
+      const r = await traceabilityViewsService.compareToCurrent(projectId, viewId, baselineId)
+      return r.success ? r.data : null
+    },
+    enabled: !!projectId && !!viewId && !!baselineId,
+  })
+
+  const delta = (data as any)?.delta
+  const stats = (data as any)?.stats
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[760px] max-w-[95vw] max-h-[90vh] overflow-auto">
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-gray-900 dark:text-white">Baseline compare</div>
+            <div className="text-xs text-gray-600 dark:text-gray-400">Baseline: {baselineName}</div>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Close" title="Close">
+            <X size={18} className="text-gray-600 dark:text-gray-300" />
+          </button>
+        </div>
+        <div className="p-4 space-y-3">
+          {!data ? (
+            <div className="text-sm text-gray-600 dark:text-gray-300">Loading…</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Baseline</div>
+                  <div className="text-sm text-gray-900 dark:text-white">
+                    Links: {stats?.baseline?.totalLinks ?? 0} • Suspect: {stats?.baseline?.suspectLinks ?? 0}
+                  </div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                    Source coverage: {stats?.baseline?.sourceCoveragePct ?? 0}% • Target coverage: {stats?.baseline?.targetCoveragePct ?? 0}%
+                  </div>
+                </div>
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Current</div>
+                  <div className="text-sm text-gray-900 dark:text-white">
+                    Links: {stats?.current?.totalLinks ?? 0} • Suspect: {stats?.current?.suspectLinks ?? 0}
+                  </div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                    Source coverage: {stats?.current?.sourceCoveragePct ?? 0}% • Target coverage: {stats?.current?.targetCoveragePct ?? 0}%
+                  </div>
+                </div>
+              </div>
+
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                <div className="text-sm font-medium text-gray-900 dark:text-white">Delta</div>
+                <div className="text-sm text-gray-800 dark:text-gray-200 mt-1">
+                  Added links: {delta?.linksAdded ?? 0} • Removed links: {delta?.linksRemoved ?? 0}
+                </div>
+                {(delta?.addedSample?.length || delta?.removedSample?.length) && (
+                  <pre className="mt-2 text-[11px] bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded p-2 overflow-auto max-h-40">
+                    {JSON.stringify({ addedSample: delta?.addedSample ?? [], removedSample: delta?.removedSample ?? [] }, null, 2)}
+                  </pre>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

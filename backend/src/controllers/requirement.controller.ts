@@ -985,6 +985,166 @@ export const getAuditEvents = async (req: AuthRequest, res: Response) => {
   }
 }
 
+function parseCsvList(value: unknown): string[] {
+  if (typeof value !== 'string') return []
+  return value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+function clampInt(value: unknown, def: number, min: number, max: number): number {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return def
+  return Math.max(min, Math.min(max, Math.floor(n)))
+}
+
+function buildActionPrefixesForCategories(categories: string[]): string[] {
+  const set = new Set<string>()
+  for (const c of categories) {
+    switch (String(c).toLowerCase()) {
+      case 'requirement':
+        set.add('REQUIREMENT_')
+        break
+      case 'links':
+        set.add('LINK_')
+        // requirement linkage actions also include trace-link actions
+        set.add('REQUIREMENT_TRACE_LINK_')
+        set.add('ISSUE_')
+        set.add('CHANGE_REQUEST_')
+        set.add('TEST_CASE_')
+        set.add('TEST_PLAN_')
+        break
+      case 'comments':
+        set.add('REQUIREMENT_COMMENT_')
+        break
+      case 'baselines':
+        set.add('BASELINE_')
+        break
+      case 'imports_exports':
+        set.add('REQUIREMENTS_IMPORT_')
+        set.add('REQUIREMENTS_EXPORT_')
+        break
+    }
+  }
+  return Array.from(set.values())
+}
+
+/** GET /requirements/:projectId/audit/project - project-wide audit log with filters + pagination */
+export const getProjectAuditEvents = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+    const { page, pageSize, from, to, categories, actor, search } = req.query as any
+
+    const pageNum = clampInt(page, 1, 1, 1000000)
+    const sizeNum = clampInt(pageSize, 50, 1, 200)
+    const skip = (pageNum - 1) * sizeNum
+
+    const fromDate = typeof from === 'string' && from.trim() ? new Date(from) : null
+    const toDate = typeof to === 'string' && to.trim() ? new Date(to) : null
+    if (fromDate && isNaN(fromDate.getTime())) {
+      return res.status(400).json({ success: false, error: 'Invalid from date' })
+    }
+    if (toDate && isNaN(toDate.getTime())) {
+      return res.status(400).json({ success: false, error: 'Invalid to date' })
+    }
+
+    const categoryList = Array.isArray(categories)
+      ? (categories as any[]).map(String)
+      : parseCsvList(categories)
+    const prefixes = categoryList.length ? buildActionPrefixesForCategories(categoryList) : []
+
+    const actorQ = typeof actor === 'string' ? actor.trim() : ''
+    const searchQ = typeof search === 'string' ? search.trim() : ''
+
+    const actorIds =
+      actorQ.length > 0
+        ? (
+            await prisma.user.findMany({
+              where: {
+                OR: [
+                  { name: { contains: actorQ, mode: 'insensitive' } },
+                  { email: { contains: actorQ, mode: 'insensitive' } },
+                ],
+              },
+              select: { id: true },
+              take: 50,
+            })
+          ).map((u) => u.id)
+        : []
+
+    const where: any = {
+      projectId,
+      ...(fromDate || toDate
+        ? {
+            performedAt: {
+              ...(fromDate ? { gte: fromDate } : {}),
+              ...(toDate ? { lte: toDate } : {}),
+            },
+          }
+        : {}),
+      ...(actorQ ? { performedByUserId: { in: actorIds.length ? actorIds : ['__none__'] } } : {}),
+      ...(prefixes.length
+        ? {
+            OR: prefixes.map((p) => ({ action: { startsWith: p } })),
+          }
+        : {}),
+      ...(searchQ
+        ? {
+            AND: [
+              {
+                OR: [
+                  { entityId: { contains: searchQ, mode: 'insensitive' } },
+                  { entityType: { contains: searchQ, mode: 'insensitive' } },
+                  { action: { contains: searchQ, mode: 'insensitive' } },
+                ],
+              },
+            ],
+          }
+        : {}),
+    }
+
+    const [total, events] = await Promise.all([
+      prisma.verAuditEvent.count({ where }),
+      prisma.verAuditEvent.findMany({
+        where,
+        orderBy: { performedAt: 'desc' },
+        skip,
+        take: sizeNum,
+      }),
+    ])
+
+    const actorIdsForPage = [...new Set(events.map((e) => e.performedByUserId).filter((id): id is string => !!id))]
+    const actors =
+      actorIdsForPage.length > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: actorIdsForPage } },
+            select: { id: true, name: true, email: true },
+          })
+        : []
+    const actorById = new Map(actors.map((u) => [u.id, u]))
+
+    const items = events.map((e) => ({
+      ...e,
+      performedBy: e.performedByUserId ? actorById.get(e.performedByUserId) ?? null : null,
+      correlationId: null as any, // reserved for future (not on VerAuditEvent schema yet)
+    }))
+
+    res.json({
+      success: true,
+      data: {
+        items,
+        total,
+        page: pageNum,
+        pageSize: sizeNum,
+      },
+    })
+  } catch (error) {
+    console.error('Get project audit events error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+}
+
 export const createRequirement = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
@@ -2518,6 +2678,21 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
       })
     }
 
+    // Audit: import started (project-wide)
+    await linkageAuditService.log({
+      projectId,
+      entityType: 'PROJECT',
+      entityId: projectId,
+      action: 'REQUIREMENTS_IMPORT_STARTED',
+      oldValue: null,
+      newValue: {
+        kind: 'bulk_import',
+        createCount: Array.isArray(create) ? create.length : 0,
+        updateCount: Array.isArray(update) ? update.length : 0,
+      },
+      performedByUserId: req.userId,
+    })
+
     const errors: Array<{ row: number; errors: string[] }> = []
     let createdCount = 0
     let updatedCount = 0
@@ -2770,8 +2945,41 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
         errors,
       },
     })
+
+    // Audit: import completed (project-wide)
+    await linkageAuditService.log({
+      projectId,
+      entityType: 'PROJECT',
+      entityId: projectId,
+      action: 'REQUIREMENTS_IMPORT_COMPLETED',
+      oldValue: null,
+      newValue: {
+        kind: 'bulk_import',
+        created: createdCount,
+        updated: updatedCount,
+        skipped: skippedCount,
+        errorCount: errors.length,
+      },
+      performedByUserId: req.userId,
+    })
   } catch (error: any) {
     console.error('Bulk import requirements error:', error)
+
+    try {
+      const { projectId } = req.params
+      await linkageAuditService.log({
+        projectId,
+        entityType: 'PROJECT',
+        entityId: projectId,
+        action: 'REQUIREMENTS_IMPORT_FAILED',
+        oldValue: null,
+        newValue: { kind: 'bulk_import', error: error?.message || 'Internal server error' },
+        performedByUserId: req.userId,
+      })
+    } catch {
+      // ignore audit failures
+    }
+
     res.status(500).json({
       success: false,
       error: error.message || 'Internal server error',

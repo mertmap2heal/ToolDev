@@ -1,6 +1,7 @@
 import { Response } from 'express'
 import type { AuthRequest } from '../middleware/auth.middleware'
 import * as service from '../services/exportJob.service'
+import { linkageAuditService } from '../services/linkageAudit.service'
 
 export const list = async (req: AuthRequest, res: Response) => {
   try {
@@ -37,6 +38,24 @@ export const create = async (req: AuthRequest, res: Response) => {
       },
       req.userId
     )
+
+    // Audit: export started (project-wide)
+    await linkageAuditService.log({
+      projectId,
+      entityType: 'PROJECT',
+      entityId: projectId,
+      action: 'REQUIREMENTS_EXPORT_STARTED',
+      oldValue: null,
+      newValue: {
+        kind: 'export_job',
+        exportJobId: item.id,
+        format: item.format,
+        totalCount: item.totalCount,
+        label: item.label ?? null,
+      },
+      performedByUserId: req.userId,
+    })
+
     res.status(201).json({ success: true, data: item })
   } catch (error: any) {
     res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
@@ -47,6 +66,7 @@ export const update = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId, id } = req.params
     const body = req.body as { status?: string; progress?: number; doneCount?: number; error?: string }
+    const before = await service.getOne(projectId, id)
     const item = await service.update(projectId, id, {
       status: body.status as any,
       progress: body.progress,
@@ -54,6 +74,20 @@ export const update = async (req: AuthRequest, res: Response) => {
       error: body.error,
     })
     if (!item) return res.status(404).json({ success: false, error: 'Export job not found' })
+
+    // Audit: export completed / failed (project-wide)
+    if (before?.status !== item.status && (item.status === 'done' || item.status === 'failed')) {
+      await linkageAuditService.log({
+        projectId,
+        entityType: 'PROJECT',
+        entityId: projectId,
+        action: item.status === 'done' ? 'REQUIREMENTS_EXPORT_COMPLETED' : 'REQUIREMENTS_EXPORT_FAILED',
+        oldValue: before,
+        newValue: item,
+        performedByUserId: req.userId,
+      })
+    }
+
     res.json({ success: true, data: item })
   } catch (error: any) {
     res.status(500).json({ success: false, error: error?.message || 'Internal server error' })

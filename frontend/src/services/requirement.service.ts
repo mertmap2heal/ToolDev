@@ -179,6 +179,48 @@ export const requirementService = {
     )
   },
 
+  async getProjectAuditEvents(
+    projectId: string,
+    params: {
+      page?: number
+      pageSize?: number
+      from?: string
+      to?: string
+      categories?: string[]
+      actor?: string
+      search?: string
+    }
+  ): Promise<
+    ApiResponse<{
+      items: Array<{
+        id: string
+        entityType: string
+        entityId: string
+        action: string
+        oldValue?: unknown
+        newValue?: unknown
+        performedByUserId?: string | null
+        performedAt: string
+        correlationId?: string | null
+        performedBy?: { id: string; name: string | null; email: string | null } | null
+      }>
+      total: number
+      page: number
+      pageSize: number
+    }>
+  > {
+    const qs = new URLSearchParams()
+    if (params.page) qs.set('page', String(params.page))
+    if (params.pageSize) qs.set('pageSize', String(params.pageSize))
+    if (params.from) qs.set('from', params.from)
+    if (params.to) qs.set('to', params.to)
+    if (params.actor) qs.set('actor', params.actor)
+    if (params.search) qs.set('search', params.search)
+    if (params.categories && params.categories.length) qs.set('categories', params.categories.join(','))
+    const suffix = qs.toString() ? `?${qs.toString()}` : ''
+    return apiClient.get(`/requirements/${projectId}/audit/project${suffix}`)
+  },
+
   async bulkImportRequirements(projectId: string, data: BulkImportRequest): Promise<ApiResponse<BulkImportResult>> {
     return apiClient.post<BulkImportResult>(`/requirements/${projectId}/bulk-import`, data)
   },

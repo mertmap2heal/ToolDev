@@ -150,6 +150,8 @@ model Project {
   changeRequests         ChangeRequest[]
   savedViews             SavedView[]
   savedViewFolders       SavedViewFolder[]
+  savedViewRevisions     SavedViewRevision[]
+  savedViewAuditEvents   SavedViewAuditEvent[]
   baselines              Baseline[]
   useCases               UseCase[]
   actors                 Actor[]
@@ -991,12 +993,52 @@ model SavedView {
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   folder  SavedViewFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  revisions SavedViewRevision[]
+  auditEvents SavedViewAuditEvent[]
 
   @@index([projectId])
   @@index([folderId])
   @@index([userId])
   @@index([viewKind])
   @@index([viewpoint])
+}
+
+model SavedViewRevision {
+  id                    String   @id @default(uuid())
+  projectId             String
+  viewId                String
+  revisionNumber        Int
+  nameSnapshot          String
+  folderIdSnapshot      String?
+  definitionJsonSnapshot String?
+  createdByUserId       String?
+  createdAt             DateTime @default(now())
+
+  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  view    SavedView @relation(fields: [viewId], references: [id], onDelete: Cascade)
+
+  @@unique([viewId, revisionNumber])
+  @@index([projectId, viewId])
+  @@index([viewId])
+  @@index([createdAt])
+}
+
+model SavedViewAuditEvent {
+  id              String   @id @default(uuid())
+  projectId       String
+  viewId          String
+  action          String
+  oldValueJson    Json?
+  newValueJson    Json?
+  performedByUserId String?
+  performedAt     DateTime @default(now())
+
+  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  view    SavedView @relation(fields: [viewId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, viewId])
+  @@index([viewId])
+  @@index([performedAt])
 }
 
 model SavedViewFolder {

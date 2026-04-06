@@ -15,6 +15,7 @@ import SuspectLinksReview from '../../components/requirements/SuspectLinksReview
 import BaselineManager from '../../components/requirements/BaselineManager'
 import ExportBuilder from '../../components/requirements/ExportBuilder'
 import ImportWizard from '../../components/requirements/ImportWizard'
+import RequirementsAuditLogModal from '../../components/requirements/RequirementsAuditLogModal'
 import RequirementDiagramsModal from '../../components/requirements/RequirementDiagramsModal'
 import ResizableTh from '../../components/requirements/ResizableTh'
 import RequirementQualityPanel from '../../components/requirements/RequirementQualityPanel'
@@ -195,6 +196,7 @@ export default function RequirementsPage() {
   const [isExportOpen, setIsExportOpen] = useState(false)
   const [exportScope, setExportScope] = useState<{ type: 'component' | 'function' | 'test_plan' | 'test_case'; id: string; label: string } | null>(null)
   const [isImportOpen, setIsImportOpen] = useState(false)
+  const [isAuditLogOpen, setIsAuditLogOpen] = useState(false)
   const [isDiagramOpen, setIsDiagramOpen] = useState(false)
   const [isQualityPanelOpen, setIsQualityPanelOpen] = useState(false)
   const [isChangeRequestModalOpen, setIsChangeRequestModalOpen] = useState(false)
@@ -3416,6 +3418,15 @@ export default function RequirementsPage() {
                       <GitBranch size={16} className="text-gray-500 dark:text-gray-400" />
                       Baselines
                     </button>
+                    <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
+                    <button
+                      onClick={() => { setIsAuditLogOpen(true); setDataDropdownOpen(false) }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      title="View detailed audit log for this project’s requirements"
+                    >
+                      <ClipboardCheck size={16} className="text-gray-500 dark:text-gray-400" />
+                      Audit
+                    </button>
                   </div>
                 )}
               </div>
@@ -4462,6 +4473,13 @@ export default function RequirementsPage() {
             <ImportWizard
               projectId={projectId}
               onClose={() => setIsImportOpen(false)}
+            />
+          )}
+
+          {isAuditLogOpen && projectId && (
+            <RequirementsAuditLogModal
+              projectId={projectId}
+              onClose={() => setIsAuditLogOpen(false)}
             />
           )}
 

@@ -121,6 +121,22 @@ test.describe('Requirements', () => {
     await expect(page).toHaveURL(/requirements\/dashboard/)
   })
 
+  test('Data menu: Audit opens audit log modal', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/requirements`)
+    await page.waitForLoadState('domcontentloaded')
+
+    // Open Data dropdown
+    await page.getByRole('button', { name: /^data$/i }).click()
+    await page.getByRole('button', { name: /^audit$/i }).click()
+
+    const modal = page.locator(MODAL)
+    await expect(modal).toBeVisible({ timeout: 10_000 })
+    await expect(modal).toContainText(/audit log/i)
+
+    // The modal should not show a raw "Cannot GET" HTML error
+    await expect(modal).not.toContainText(/cannot get/i)
+  })
+
   test('traceability matrix opens from requirements page', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')

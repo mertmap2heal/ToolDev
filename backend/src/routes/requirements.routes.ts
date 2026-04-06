@@ -6,6 +6,7 @@ import {
   getAllRequirements,
   getRequirement,
   getAuditEvents,
+  getProjectAuditEvents,
   getRequirementsDashboard,
   importReqif,
   createRequirement,
@@ -53,6 +54,7 @@ router.post('/:projectId/import/reqif', importReqif)
 router.get('/:projectId', getRequirements)
 router.get('/:projectId/all', getAllRequirements)
 router.get('/:projectId/audit', getAuditEvents)
+router.get('/:projectId/audit/project', getProjectAuditEvents)
 router.post(
   '/:projectId/:requirementId/lifecycle-transition-reminder',
   sendLifecycleTransitionReminder

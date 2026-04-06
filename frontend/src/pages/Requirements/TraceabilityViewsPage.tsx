@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FolderPlus, Folder, Trash2, Edit2, Plus, ArrowLeft, Table, Search, Copy, X, Check } from 'lucide-react'
+import { FolderPlus, Folder, Trash2, Edit2, Plus, ArrowLeft, Table, Search, Copy, X, Check, History } from 'lucide-react'
 import clsx from 'clsx'
-import { traceabilityViewsService, type SavedViewFolder, type TraceabilitySavedView } from '../../services/traceabilityViews.service'
+import { traceabilityViewsService, type SavedViewFolder, type TraceabilitySavedView, type TraceabilitySavedViewRevision, type TraceabilitySavedViewAuditEvent } from '../../services/traceabilityViews.service'
 import TraceabilityMatrix from '../../components/requirements/TraceabilityMatrix'
 import CreateTraceabilityViewModal from '../../components/requirements/CreateTraceabilityViewModal'
 import { LINKAGE_TARGET_OPTIONS } from '../../linkage/requirementLinkDialogConfig'
@@ -58,6 +58,11 @@ export default function TraceabilityViewsPage() {
     open: false,
   })
 
+  const [historyModal, setHistoryModal] = useState<{ open: true; view: TraceabilitySavedView } | { open: false }>({
+    open: false,
+  })
+  const [historyTab, setHistoryTab] = useState<'revisions' | 'audit'>('revisions')
+
   const { data: folders = [], isLoading: loadingFolders } = useQuery({
     queryKey: ['traceability-view-folders', projectId],
     queryFn: async () => {
@@ -73,10 +78,16 @@ export default function TraceabilityViewsPage() {
 
   const folderIdFilter = selectedFolderKey === 'unfiled' ? null : selectedFolderKey === 'all' ? undefined : selectedFolderKey
   const { data: views = [], isLoading: loadingViews } = useQuery({
-    queryKey: ['traceability-views', projectId, folderIdFilter],
+    queryKey: ['traceability-views', projectId, folderIdFilter, viewSearch, sortKey, targetTypeFilter, suspectOnlyFilter],
     queryFn: async () => {
       if (!projectId) throw new Error('Project ID required')
-      const r = await traceabilityViewsService.getViews(projectId, folderIdFilter)
+      const r = await traceabilityViewsService.getViews(projectId, folderIdFilter, {
+        q: viewSearch.trim() || undefined,
+        targetType: targetTypeFilter !== 'all' ? targetTypeFilter : undefined,
+        suspectOnly: suspectOnlyFilter === 'suspect_only',
+        sort: sortKey.startsWith('name') ? 'name' : 'updatedAt',
+        dir: sortKey.endsWith('_asc') ? 'asc' : 'desc',
+      })
       if (r.success && r.data) return r.data
       throw new Error(r.error || 'Failed to load views')
     },
@@ -174,30 +185,20 @@ export default function TraceabilityViewsPage() {
     return counts
   }, [allViewsForCounts])
 
-  const filteredSortedViews = useMemo(() => {
-    const q = viewSearch.trim().toLowerCase()
-    let list = [...views]
-    if (q) list = list.filter((v) => (v.name ?? '').toLowerCase().includes(q))
-    if (targetTypeFilter !== 'all') {
-      list = list.filter((v) => {
-        const def = safeParseDefinition(v.definitionJson)
-        return String(def?.linkageTargetType ?? '') === targetTypeFilter
-      })
+  const filteredSortedViews = useMemo(() => views, [views])
+
+  const diffKeys = (a: any, b: any): string[] => {
+    const ak = a && typeof a === 'object' ? Object.keys(a) : []
+    const bk = b && typeof b === 'object' ? Object.keys(b) : []
+    const all = new Set([...ak, ...bk])
+    const changed: string[] = []
+    for (const k of all) {
+      const av = a?.[k]
+      const bv = b?.[k]
+      if (JSON.stringify(av) !== JSON.stringify(bv)) changed.push(k)
     }
-    if (suspectOnlyFilter === 'suspect_only') {
-      list = list.filter((v) => !!safeParseDefinition(v.definitionJson)?.showSuspectOnly)
-    }
-    const cmp = (a: TraceabilitySavedView, b: TraceabilitySavedView) => {
-      if (sortKey === 'name_asc') return (a.name ?? '').localeCompare(b.name ?? '')
-      if (sortKey === 'name_desc') return (b.name ?? '').localeCompare(a.name ?? '')
-      const ta = new Date(String(a.updatedAt)).getTime()
-      const tb = new Date(String(b.updatedAt)).getTime()
-      if (sortKey === 'updated_asc') return ta - tb
-      return tb - ta
-    }
-    list.sort(cmp)
-    return list
-  }, [views, viewSearch, sortKey, targetTypeFilter, suspectOnlyFilter])
+    return changed.sort()
+  }
 
   const renderFolderNode = (n: FolderNode, depth = 0) => {
     const isOpen = !!expanded[n.id]
@@ -430,6 +431,13 @@ export default function TraceabilityViewsPage() {
                         </button>
                         <button
                           className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                          title="History"
+                          onClick={() => { setHistoryTab('revisions'); setHistoryModal({ open: true, view: v }) }}
+                        >
+                          <History size={14} className="text-gray-600 dark:text-gray-300" />
+                        </button>
+                        <button
+                          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
                           title="Edit view"
                           onClick={() => setViewModal({ open: true, mode: 'edit', view: v })}
                         >
@@ -646,6 +654,226 @@ export default function TraceabilityViewsPage() {
               >
                 <Trash2 size={14} />
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {historyModal.open && (
+        <TraceabilityViewHistoryModal
+          projectId={projectId}
+          view={historyModal.view}
+          tab={historyTab}
+          onTabChange={setHistoryTab}
+          onClose={() => setHistoryModal({ open: false })}
+          onOpenRevision={(rev) => {
+            // open matrix by cloning view with snapshot definition
+            setHistoryModal({ open: false })
+            setOpenMatrixView({
+              ...historyModal.view,
+              name: `${historyModal.view.name} (rev ${rev.revisionNumber})`,
+              definitionJson: rev.definitionJsonSnapshot ?? null,
+            })
+          }}
+          onRollback={async (revNumber) => {
+            await traceabilityViewsService.rollback(projectId, historyModal.view.id, revNumber)
+            queryClient.invalidateQueries({ queryKey: ['traceability-views', projectId] })
+            queryClient.invalidateQueries({ queryKey: ['traceability-views-all', projectId] })
+          }}
+          diffKeys={diffKeys}
+        />
+      )}
+    </div>
+  )
+}
+
+function TraceabilityViewHistoryModal(props: {
+  projectId: string
+  view: TraceabilitySavedView
+  tab: 'revisions' | 'audit'
+  onTabChange: (t: 'revisions' | 'audit') => void
+  onClose: () => void
+  onOpenRevision: (rev: TraceabilitySavedViewRevision) => void
+  onRollback: (revNumber: number) => Promise<void>
+  diffKeys: (a: any, b: any) => string[]
+}) {
+  const { projectId, view, tab, onTabChange, onClose, onOpenRevision, onRollback, diffKeys } = props
+  const [confirmRollbackRev, setConfirmRollbackRev] = useState<number | null>(null)
+
+  const { data: revisionsResp } = useQuery({
+    queryKey: ['traceability-view-revisions', projectId, view.id],
+    queryFn: () => traceabilityViewsService.getRevisions(projectId, view.id),
+    enabled: !!projectId && !!view.id,
+  })
+  const revisions = (revisionsResp?.success && revisionsResp.data) ? revisionsResp.data : []
+
+  const { data: auditResp } = useQuery({
+    queryKey: ['traceability-view-audit', projectId, view.id],
+    queryFn: () => traceabilityViewsService.getAudit(projectId, view.id, { limit: 100 }),
+    enabled: !!projectId && !!view.id && tab === 'audit',
+  })
+  const audit = (auditResp?.success && auditResp.data) ? (auditResp.data as unknown as TraceabilitySavedViewAuditEvent[]) : []
+
+  const parseDef = (s: string | null | undefined) => {
+    if (!s) return null
+    try { return JSON.parse(s) } catch { return null }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[80]">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[900px] max-w-[95vw] max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-gray-900 dark:text-white">History</div>
+            <div className="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[760px]">{view.name}</div>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" aria-label="Close" title="Close">
+            <X size={18} className="text-gray-600 dark:text-gray-300" />
+          </button>
+        </div>
+
+        <div className="px-4 pt-3 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onTabChange('revisions')}
+            className={clsx('px-3 py-1.5 text-sm rounded-lg border', tab === 'revisions'
+              ? 'bg-blue-600 text-white border-blue-600'
+              : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700')}
+          >
+            Revisions
+          </button>
+          <button
+            type="button"
+            onClick={() => onTabChange('audit')}
+            className={clsx('px-3 py-1.5 text-sm rounded-lg border', tab === 'audit'
+              ? 'bg-blue-600 text-white border-blue-600'
+              : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700')}
+          >
+            Audit
+          </button>
+          <div className="flex-1" />
+          <div className="text-xs text-gray-500 dark:text-gray-400">{revisions.length} revision(s)</div>
+        </div>
+
+        <div className="p-4 overflow-auto flex-1">
+          {tab === 'revisions' ? (
+            revisions.length === 0 ? (
+              <div className="text-sm text-gray-600 dark:text-gray-300">No revisions yet.</div>
+            ) : (
+              <div className="space-y-2">
+                {revisions.map((r, idx) => {
+                  const prev = revisions[idx + 1]
+                  const curDef = parseDef(r.definitionJsonSnapshot)
+                  const prevDef = prev ? parseDef(prev.definitionJsonSnapshot) : null
+                  const changed = prev ? diffKeys(prevDef, curDef) : []
+                  return (
+                    <div key={r.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">
+                            Revision {r.revisionNumber}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {String(r.createdAt).replace('T', ' ').slice(0, 19)}
+                            {r.createdByUserId ? ` • ${r.createdByUserId}` : ''}
+                          </div>
+                          {changed.length > 0 && (
+                            <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                              Changed: {changed.slice(0, 8).join(', ')}{changed.length > 8 ? ` (+${changed.length - 8} more)` : ''}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            className="px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
+                            onClick={() => onOpenRevision(r)}
+                          >
+                            Open
+                          </button>
+                          <button
+                            className="px-3 py-1.5 text-xs rounded-lg bg-red-600 hover:bg-red-700 text-white"
+                            onClick={() => setConfirmRollbackRev(r.revisionNumber)}
+                          >
+                            Rollback
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          ) : (
+            audit.length === 0 ? (
+              <div className="text-sm text-gray-600 dark:text-gray-300">No audit events yet.</div>
+            ) : (
+              <div className="space-y-2">
+                {audit.map((e) => (
+                  <div key={e.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">{e.action}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {String(e.performedAt).replace('T', ' ').slice(0, 19)}
+                          {e.performedByUserId ? ` • ${e.performedByUserId}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                    {(e.oldValueJson || e.newValueJson) && (
+                      <pre className="mt-2 text-[11px] bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 rounded p-2 overflow-auto max-h-40">
+                        {JSON.stringify({ old: e.oldValueJson, next: e.newValueJson }, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+        </div>
+      </div>
+
+      {confirmRollbackRev != null && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[90]">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[520px] max-w-[95vw]">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <div className="text-sm font-semibold text-gray-900 dark:text-white">Rollback view</div>
+              <button
+                onClick={() => setConfirmRollbackRev(null)}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label="Close"
+                title="Close"
+              >
+                <X size={18} className="text-gray-600 dark:text-gray-300" />
+              </button>
+            </div>
+            <div className="p-4 space-y-2">
+              <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                Rollback <span className="font-medium">“{view.name}”</span> to revision{' '}
+                <span className="font-medium">{confirmRollbackRev}</span>?
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                This will overwrite the current definition. A new revision will be created for the rollback action.
+              </div>
+            </div>
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setConfirmRollbackRev(null)}
+                className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const target = confirmRollbackRev
+                  setConfirmRollbackRev(null)
+                  if (target == null) return
+                  await onRollback(target)
+                }}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm flex items-center gap-2"
+              >
+                <Trash2 size={14} />
+                Rollback
               </button>
             </div>
           </div>
