@@ -81,4 +81,35 @@ test.describe('Requirements panel scope & deep links', () => {
     await expect(page).toHaveURL(/noTestCaseVerifiesLink=1/)
     await expect(page.getByText('Verification · No test case link')).toBeVisible({ timeout: 10_000 })
   })
+
+  test('URL search string stabilizes after load (no query thrash)', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/requirements?panel=1&panelTab=pbs`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByRole('heading', { name: /^Requirements$/i })).toBeVisible({ timeout: 15_000 })
+
+    const readSearch = () => new URL(page.url()).search
+    const snapshots: string[] = []
+    for (let i = 0; i < 8; i++) {
+      snapshots.push(readSearch())
+      await page.waitForTimeout(200)
+    }
+    expect(new Set(snapshots).size).toBe(1)
+  })
+
+  test('switching structure panel tab stabilizes URL', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/requirements?panel=1&panelTab=pbs`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByRole('heading', { name: /^Requirements$/i })).toBeVisible({ timeout: 15_000 })
+    await page.getByRole('button', { name: /^Functions$/ }).click()
+    const readSearch = () => new URL(page.url()).search
+    await expect.poll(() => readSearch(), { timeout: 5_000 }).toMatch(/panelTab=functions/)
+    const afterSettle = readSearch()
+    const snapshots: string[] = []
+    for (let i = 0; i < 6; i++) {
+      snapshots.push(readSearch())
+      await page.waitForTimeout(200)
+    }
+    expect(new Set(snapshots).size).toBe(1)
+    expect(snapshots[0]).toBe(afterSettle)
+  })
 })

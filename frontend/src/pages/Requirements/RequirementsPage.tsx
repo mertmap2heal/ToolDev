@@ -435,28 +435,68 @@ export default function RequirementsPage() {
 
   // URL → state (searchParams is source of truth for shareable scope / dashboard deep links)
   useEffect(() => {
-    setReviewStatusFilter(searchParams.get('reviewStatus') || 'all')
-    setVerificationStatusFilter(searchParams.get('verificationStatus') || 'all')
+    const baselineActive = Boolean(searchParams.get('baselineId'))
+
+    setReviewStatusFilter((prev) => {
+      const v = searchParams.get('reviewStatus') || 'all'
+      return prev === v ? prev : v
+    })
+    setVerificationStatusFilter((prev) => {
+      const v = searchParams.get('verificationStatus') || 'all'
+      return prev === v ? prev : v
+    })
 
     if (searchParams.get('openSuspect') === '1') {
       setIsSuspectReviewOpen(true)
       const next = new URLSearchParams(searchParams)
       next.delete('openSuspect')
       setSearchParams(next, { replace: true })
+      return
     }
 
     const tabParam = searchParams.get('panelTab') || searchParams.get('tree')
     const hasExplicitPanelTab =
       tabParam === 'pbs' || tabParam === 'functions' || tabParam === 'verification'
-    if (hasExplicitPanelTab) {
-      setLeftPanelTab(tabParam as RequirementsLeftPanelTabId)
-    }
-    setIsPBSPanelOpen(
-      searchParams.get('panel') === '1' || searchParams.get('openPanel') === '1'
-    )
 
-    setSelectedComponentId(searchParams.get('componentId') || null)
-    setSelectedFunctionId(searchParams.get('functionId') || null)
+    setLeftPanelTab((prev) => {
+      if (hasExplicitPanelTab) {
+        const t = tabParam as RequirementsLeftPanelTabId
+        return prev === t ? prev : t
+      }
+      const tc0 = searchParams.get('testCaseId')
+      const tp0 = searchParams.get('testPlanId')
+      const linkCase0 = searchParams.get('linkToCase')
+      const noTcVer0 =
+        searchParams.get('noTestCaseVerifiesLink') === '1' ||
+        String(searchParams.get('noTestCaseVerifiesLink') || '').toLowerCase() === 'true'
+      if (tc0 || tp0 || linkCase0 || noTcVer0) {
+        return prev === 'verification' ? prev : 'verification'
+      }
+      if (searchParams.get('functionId')) {
+        return prev === 'functions' ? prev : 'functions'
+      }
+      if (searchParams.get('componentId')) {
+        return prev === 'pbs' ? prev : 'pbs'
+      }
+      return prev
+    })
+
+    // Baseline snapshot mode: state→URL does not persist `panel=1`, so do not force panel closed from URL
+    if (!baselineActive) {
+      setIsPBSPanelOpen((prev) => {
+        const open = searchParams.get('panel') === '1' || searchParams.get('openPanel') === '1'
+        return prev === open ? prev : open
+      })
+    }
+
+    setSelectedComponentId((prev) => {
+      const v = searchParams.get('componentId') || null
+      return prev === v ? prev : v
+    })
+    setSelectedFunctionId((prev) => {
+      const v = searchParams.get('functionId') || null
+      return prev === v ? prev : v
+    })
 
     const tc = searchParams.get('testCaseId')
     const tp = searchParams.get('testPlanId')
@@ -464,27 +504,26 @@ export default function RequirementsPage() {
     const noTcVer =
       searchParams.get('noTestCaseVerifiesLink') === '1' ||
       String(searchParams.get('noTestCaseVerifiesLink') || '').toLowerCase() === 'true'
-    // Deep links: infer tab from scope params only when panelTab/tree not set
-    if (!hasExplicitPanelTab) {
-      if (tc || tp || linkCase || noTcVer) {
-        setLeftPanelTab('verification')
-      } else if (searchParams.get('functionId')) {
-        setLeftPanelTab('functions')
-      } else if (searchParams.get('componentId')) {
-        setLeftPanelTab('pbs')
+
+    setSelectedVerificationNode((prev) => {
+      if (tc) {
+        if (prev?.type === 'test-case' && prev.id === tc) return prev
+        return { type: 'test-case', id: tc }
       }
-    }
-    if (tc) {
-      setSelectedVerificationNode({ type: 'test-case', id: tc })
-    } else if (tp) {
-      setSelectedVerificationNode({ type: 'test-plan', id: tp })
-    } else if (linkCase) {
-      setSelectedVerificationNode({ type: 'test-case', id: linkCase })
-    } else if (noTcVer) {
-      setSelectedVerificationNode({ type: 'unassigned-group', id: 'unassigned' })
-    } else {
-      setSelectedVerificationNode(null)
-    }
+      if (tp) {
+        if (prev?.type === 'test-plan' && prev.id === tp) return prev
+        return { type: 'test-plan', id: tp }
+      }
+      if (linkCase) {
+        if (prev?.type === 'test-case' && prev.id === linkCase) return prev
+        return { type: 'test-case', id: linkCase }
+      }
+      if (noTcVer) {
+        if (prev?.type === 'unassigned-group' && prev.id === 'unassigned') return prev
+        return { type: 'unassigned-group', id: 'unassigned' }
+      }
+      return prev === null ? prev : null
+    })
   }, [searchParams, setSearchParams])
 
   // State → URL (keep shareable params in sync; skip while baseline snapshot mode uses its own query)
@@ -525,6 +564,7 @@ export default function RequirementsPage() {
         else next.delete('reviewStatus')
         if (verificationStatusFilter !== 'all') next.set('verificationStatus', verificationStatusFilter)
         else next.delete('verificationStatus')
+        if (next.toString() === prev.toString()) return prev
         return next
       },
       { replace: true }
