@@ -1,4 +1,5 @@
-import { useParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
 import { CheckCircle, XCircle, AlertTriangle, Download } from 'lucide-react'
@@ -63,6 +64,13 @@ function exportToExcel(rows: any[]) {
 
 export default function TraceabilityMatrixView() {
   const { projectId } = useParams<{ projectId: string }>()
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const matrixReqId = searchParams.get('matrixReqId') || ''
+  const matrixCaseId = searchParams.get('matrixCaseId') || ''
+  const [reqSearch, setReqSearch] = useState(matrixReqId)
+  const [caseSearch, setCaseSearch] = useState(matrixCaseId)
+  const [gapFilter, setGapFilter] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['traceability-matrix', projectId],
@@ -78,6 +86,38 @@ export default function TraceabilityMatrixView() {
 
   const rows = data?.rows ?? []
   const summary = data?.coverageSummary ?? { total: 0, verified: 0, gaps: 0 }
+  useEffect(() => {
+    // keep local search in sync with deep-link params (tree context action)
+    if (matrixReqId) setReqSearch(matrixReqId)
+  }, [matrixReqId])
+  useEffect(() => {
+    if (matrixCaseId) setCaseSearch(matrixCaseId)
+  }, [matrixCaseId])
+
+  const filteredRows = useMemo(() => {
+    const reqQ = reqSearch.trim().toLowerCase()
+    const caseQ = caseSearch.trim().toLowerCase()
+    const gapQ = gapFilter.trim()
+    return (Array.isArray(rows) ? rows : []).filter((row: any) => {
+      const reqMatch =
+        !reqQ ||
+        String(row.requirementKey || '').toLowerCase().includes(reqQ) ||
+        String(row.requirementTitle || '').toLowerCase().includes(reqQ) ||
+        String(row.requirementId || '').toLowerCase().includes(reqQ)
+      const tcs = Array.isArray(row.testCases) ? row.testCases : []
+      const caseMatch =
+        !caseQ ||
+        tcs.some((tc: any) =>
+          String(tc.testCaseKey || '').toLowerCase().includes(caseQ) ||
+          String(tc.testCaseTitle || '').toLowerCase().includes(caseQ) ||
+          String(tc.testCaseId || '').toLowerCase().includes(caseQ)
+        )
+      const gapMatch =
+        !gapQ ||
+        tcs.some((tc: any) => String(tc.gapReason || '').toUpperCase() === gapQ)
+      return reqMatch && caseMatch && gapMatch
+    })
+  }, [rows, reqSearch, caseSearch, gapFilter])
 
   const { data: gapsData = [] } = useQuery({
     queryKey: ['traceability-gaps', projectId],
@@ -149,6 +189,61 @@ export default function TraceabilityMatrixView() {
 
   return (
     <div className="space-y-6">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Requirement</label>
+            <input
+              value={reqSearch}
+              onChange={(e) => setReqSearch(e.target.value)}
+              placeholder="Search key/title…"
+              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Test case</label>
+            <input
+              value={caseSearch}
+              onChange={(e) => setCaseSearch(e.target.value)}
+              placeholder="Search key/title…"
+              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+          </div>
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Gap reason</label>
+              <select
+                value={gapFilter}
+                onChange={(e) => setGapFilter(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="">All</option>
+                <option value="OK">OK</option>
+                <option value="NO_RUN">NO_RUN</option>
+                <option value="OUT_OF_SYNC">OUT_OF_SYNC</option>
+                <option value="NOT_PASSED">NOT_PASSED</option>
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setReqSearch('')
+                setCaseSearch('')
+                setGapFilter('')
+                setSearchParams((p) => {
+                  const n = new URLSearchParams(p)
+                  n.delete('matrixReqId')
+                  n.delete('matrixCaseId')
+                  return n
+                }, { replace: true })
+              }}
+              className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
@@ -205,8 +300,37 @@ export default function TraceabilityMatrixView() {
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {gapsData.map((g: any, idx: number) => (
                   <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                    <td className="px-4 py-2 font-mono text-gray-600 dark:text-gray-400">{g.requirementKey}</td>
-                    <td className="px-4 py-2 font-mono text-gray-600 dark:text-gray-400">{g.testCaseKey || '—'}</td>
+                    <td className="px-4 py-2 font-mono text-gray-600 dark:text-gray-400">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!g.requirementId && !g.requirementKey) return
+                          // Prefer requirementId when backend provides it; fallback to key search.
+                          if (g.requirementId) navigate(`/projects/${projectId}/requirements?requirementId=${g.requirementId}`)
+                          else {
+                            setReqSearch(String(g.requirementKey || ''))
+                          }
+                        }}
+                        className="hover:underline"
+                        title="Open requirement"
+                      >
+                        {g.requirementKey}
+                      </button>
+                    </td>
+                    <td className="px-4 py-2 font-mono text-gray-600 dark:text-gray-400">
+                      {g.testCaseId ? (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/projects/${projectId}/verification?tab=cases&focusType=test-case&focusId=${g.testCaseId}`)}
+                          className="hover:underline"
+                          title="Open test case"
+                        >
+                          {g.testCaseKey || '—'}
+                        </button>
+                      ) : (
+                        <span>{g.testCaseKey || '—'}</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2">{getGapBadge(g.gapReason)}</td>
                   </tr>
                 ))}
@@ -233,7 +357,7 @@ export default function TraceabilityMatrixView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {rows.length === 0 ? (
+              {filteredRows.length === 0 ? (
                 <tr>
                   <td colSpan={3} className="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
                     No requirements with linked test cases. Link requirements to test cases via the verification
@@ -241,23 +365,41 @@ export default function TraceabilityMatrixView() {
                   </td>
                 </tr>
               ) : (
-                rows.map((row: any) => (
+                filteredRows.map((row: any) => (
                   <tr key={row.requirementId} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                     <td className="px-4 py-3">
-                      <div className="font-mono text-sm text-gray-600 dark:text-gray-400">
-                        {row.requirementKey}
-                      </div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2">
-                        {row.requirementTitle}
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => row.requirementId && navigate(`/projects/${projectId}/requirements?requirementId=${row.requirementId}`)}
+                        className="text-left w-full"
+                        title="Open requirement"
+                      >
+                        <div className="font-mono text-sm text-gray-600 dark:text-gray-400 hover:underline">
+                          {row.requirementKey}
+                        </div>
+                        <div className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 hover:text-blue-600 dark:hover:text-blue-400">
+                          {row.requirementTitle}
+                        </div>
+                      </button>
                     </td>
                     <td className="px-4 py-3">
                       <div className="space-y-1">
                         {row.testCases?.map((tc: any) => (
-                          <div key={tc.testCaseId} className="text-sm">
+                          <button
+                            key={tc.testCaseId}
+                            type="button"
+                            onClick={() =>
+                              tc.testCaseId &&
+                              navigate(
+                                `/projects/${projectId}/verification?tab=cases&focusType=test-case&focusId=${tc.testCaseId}`
+                              )
+                            }
+                            className="text-sm text-left w-full hover:bg-gray-50 dark:hover:bg-gray-700/40 rounded px-2 py-1"
+                            title="Open test case"
+                          >
                             <span className="font-mono text-gray-500 dark:text-gray-400">{tc.testCaseKey}</span>
                             <span className="ml-2 text-gray-900 dark:text-white">{tc.testCaseTitle}</span>
-                          </div>
+                          </button>
                         ))}
                         {(!row.testCases || row.testCases.length === 0) && (
                           <span className="text-sm text-gray-500 dark:text-gray-400">No linked test cases</span>

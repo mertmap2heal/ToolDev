@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { X, Play, Pause, Square, RotateCcw, CheckCircle, AlertTriangle, PlayCircle, ExternalLink, Download, FileText } from 'lucide-react'
 import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
@@ -7,6 +7,7 @@ import { verificationService } from '../../services/verification.service'
 import FullReportModal from './FullReportModal'
 import ReportExporter from './ReportExporter'
 import clsx from 'clsx'
+import RelationshipsPanel from './RelationshipsPanel'
 
 interface TestRunDetailDrawerProps {
   run: any
@@ -130,6 +131,47 @@ export default function TestRunDetailDrawer({ run, isOpen, onClose, projectId, o
   const canResume = r?.status === 'IN_PROGRESS' && r?.pausedAt
   const canStop = r?.status === 'IN_PROGRESS'
 
+  const relationshipSections = useMemo(() => {
+    const planItem = r?.testPlan?.id
+      ? [{
+          id: `plan-${r.testPlan.id}`,
+          label: r.testPlan.key || r.testPlan.name || 'Plan',
+          subLabel: r.testPlan.key ? r.testPlan.name : undefined,
+          icon: FileText,
+          onClick: () => drawer.openPlan?.(r.testPlan),
+          title: 'Open test plan',
+        }]
+      : []
+
+    const cases = (Array.isArray(r?.results) ? r.results : [])
+      .slice(0, 8)
+      .map((res: any) => ({
+        id: `case-${res.testCase?.id ?? res.testCaseId ?? res.id}`,
+        label: res.testCase?.key || res.testCaseId?.slice(0, 8) || 'Case',
+        subLabel: res.resultStatus || 'NOT_RUN',
+        icon: CheckCircle,
+        onClick: () => res.testCase && drawer.openCase?.(res.testCase),
+        title: 'Open test case',
+        disabled: !res.testCase,
+      }))
+
+    const exported = (Array.isArray(r?.exportedTestResults) ? r.exportedTestResults : [])
+      .slice(0, 8)
+      .map((tr: any) => ({
+        id: `result-${tr.id}`,
+        label: tr.title || 'Test result',
+        icon: ExternalLink,
+        onClick: () => drawer.openResult?.({ id: tr.id, title: tr.title }),
+        title: 'Open exported test result',
+      }))
+
+    return [
+      { id: 'plan', label: 'Executes test plan', items: planItem, emptyText: 'No linked plan.' },
+      { id: 'cases', label: 'Run results (by test case)', items: cases, emptyText: 'No results yet.' },
+      { id: 'exported', label: 'Exported to test results', items: exported, emptyText: 'Not exported yet.' },
+    ]
+  }, [r, drawer])
+
   if (!isOpen) return null
 
   return (
@@ -196,6 +238,8 @@ export default function TestRunDetailDrawer({ run, isOpen, onClose, projectId, o
                   Duration: {formatDuration(r?.actualDurationSeconds)}
                 </div>
               </div>
+
+              <RelationshipsPanel sections={relationshipSections} dense />
 
               <div>
                 <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Actions</h3>

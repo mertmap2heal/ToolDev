@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { X, Download, Trash2, Edit2, Link2, Unlink, Play } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
 import clsx from 'clsx'
 import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
+import RelationshipsPanel from './RelationshipsPanel'
 
 interface TestResultDetailDrawerProps {
   testResult: any
@@ -103,6 +104,31 @@ export default function TestResultDetailDrawer({
         return plan ? { ...plan, linkId: link.id } : null
       })()
     : null
+
+  const relationshipSections = useMemo(() => {
+    const plans = linkedTestPlan
+      ? [{
+          id: `plan-${linkedTestPlan.id}`,
+          label: linkedTestPlan.key ?? linkedTestPlan.name ?? String(linkedTestPlan.id).slice(0, 8),
+          subLabel: linkedTestPlan.key ? linkedTestPlan.name : undefined,
+          icon: Link2,
+          onClick: () => drawer.openPlan?.(linkedTestPlan),
+          title: 'Open test plan',
+        }]
+      : []
+    const cases = (Array.isArray(linkedTestCases) ? linkedTestCases : []).slice(0, 8).map((tc: any) => ({
+      id: `case-${tc.id}`,
+      label: tc.key ?? tc.title ?? String(tc.id).slice(0, 8),
+      subLabel: tc.key ? tc.title : undefined,
+      icon: Link2,
+      onClick: () => drawer.openCase?.(tc),
+      title: 'Open test case',
+    }))
+    return [
+      { id: 'plan', label: 'Primary test plan', items: plans, emptyText: 'Not linked.' },
+      { id: 'cases', label: 'Evidence for test cases', items: cases, emptyText: 'No test cases linked.' },
+    ]
+  }, [linkedTestPlan, linkedTestCases, drawer])
 
   const updateMutation = useMutation({
     mutationFn: (data: any) => verificationService.updateTestResult(projectId, testResult.id, data),
@@ -269,6 +295,7 @@ export default function TestResultDetailDrawer({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+          {!isEditing && <RelationshipsPanel sections={relationshipSections} dense />}
           {isEditing ? (
             <>
               {/* Edit Form */}

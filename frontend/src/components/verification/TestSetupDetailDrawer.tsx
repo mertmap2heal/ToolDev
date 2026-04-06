@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { X, ChevronDown, Edit2, CheckCircle, XCircle, FileText, Download, AlertCircle } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
@@ -8,6 +8,8 @@ import InterfaceFormSection from './InterfaceFormSection'
 import CustomDropdown from './CustomDropdown'
 import VerificationLifecycle from './VerificationLifecycle'
 import clsx from 'clsx'
+import RelationshipsPanel from './RelationshipsPanel'
+import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
 import ReactFlow, {
   type Node as ReactFlowNode,
   type Edge,
@@ -152,6 +154,7 @@ function DiagramTab({
 }
 
 export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectId }: TestSetupDetailDrawerProps) {
+  const drawer = useVerificationDrawer()
   const [activeTab, setActiveTab] = useState<'overview' | 'components' | 'interfaces' | 'diagram'>(
     'overview'
   )
@@ -195,6 +198,68 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
     },
     enabled: isOpen && !!setup?.id,
   })
+
+  const currentSetup = setupDetails || setup
+
+  const { data: allPlans = [] } = useQuery({
+    queryKey: ['test-plans', projectId],
+    queryFn: async () => {
+      const res = await verificationService.getTestPlans(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    enabled: isOpen && !!projectId,
+  })
+
+  const { data: allCases = [] } = useQuery({
+    queryKey: ['test-cases', projectId],
+    queryFn: async () => {
+      const res = await verificationService.getTestCases(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    enabled: isOpen && !!projectId,
+  })
+
+  const relationshipSections = useMemo(() => {
+    const setupId = currentSetup?.id
+    const plans = (Array.isArray(allPlans) ? allPlans : [])
+      .filter((p: any) => {
+        const ids = Array.isArray(p?.linkedSetups)
+          ? p.linkedSetups
+          : Array.isArray(p?.planSetups)
+            ? p.planSetups.map((ps: any) => ps?.id ?? ps)
+            : []
+        return setupId ? ids.includes(setupId) : false
+      })
+      .slice(0, 8)
+      .map((p: any) => ({
+        id: `plan-${p.id}`,
+        label: p.key ?? p.name ?? String(p.id).slice(0, 8),
+        subLabel: p.key ? p.name : undefined,
+        icon: FileText,
+        onClick: () => drawer.openPlan?.(p),
+        title: 'Open test plan',
+      }))
+
+    const cases = (Array.isArray(allCases) ? allCases : [])
+      .filter((c: any) => {
+        const ids = (c?.linkedSetupIds ?? c?.setupIds ?? []) as string[]
+        return setupId ? Array.isArray(ids) && ids.includes(setupId) : false
+      })
+      .slice(0, 8)
+      .map((c: any) => ({
+        id: `case-${c.id}`,
+        label: c.key ?? c.title ?? String(c.id).slice(0, 8),
+        subLabel: c.key ? c.title : undefined,
+        icon: FileText,
+        onClick: () => drawer.openCase?.(c),
+        title: 'Open test case',
+      }))
+
+    return [
+      { id: 'plans', label: 'Used by test plans', items: plans, emptyText: 'Not linked to any plan.' },
+      { id: 'cases', label: 'Used by test cases', items: cases, emptyText: 'Not linked to any case.' },
+    ]
+  }, [allPlans, allCases, currentSetup?.id, drawer])
 
   const [nodes, setNodes] = useNodesState(setupDetails?.diagramData?.nodes || [])
   const [edges, setEdges] = useEdgesState(setupDetails?.diagramData?.edges || [])
@@ -286,7 +351,6 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
     { value: 'DEPRECATED', label: 'Deprecated' },
   ]
 
-  const currentSetup = setupDetails || setup
   const components = (currentSetup?.components as Component[]) || []
   const interfaces = (currentSetup?.interfaces as Interface[]) || []
 
@@ -448,6 +512,8 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
           <div>
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              <RelationshipsPanel sections={relationshipSections} dense />
+
               {/* Status */}
               <div className="relative" ref={statusDropdownRef}>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Status</label>

@@ -60,46 +60,64 @@ export function VerificationDrawerProvider({ children }: { children: ReactNode }
   const [selectedRun, setSelectedRun] = useState<any>(null)
   const [isRunDrawerOpen, setIsRunDrawerOpen] = useState(false)
 
+  const closeAll = useCallback(() => {
+    setIsPlanDrawerOpen(false)
+    setSelectedPlan(null)
+    setIsCaseDrawerOpen(false)
+    setSelectedCase(null)
+    setIsSetupDrawerOpen(false)
+    setSelectedSetup(null)
+    setIsResultDrawerOpen(false)
+    setSelectedResult(null)
+    setIsRunDrawerOpen(false)
+    setSelectedRun(null)
+  }, [])
+
   const openPlan = useCallback((plan: any) => {
+    closeAll()
     setSelectedPlan(plan)
     setIsPlanDrawerOpen(true)
-  }, [])
+  }, [closeAll])
   const closePlan = useCallback(() => {
     setIsPlanDrawerOpen(false)
     setSelectedPlan(null)
   }, [])
 
   const openCase = useCallback((testCase: any) => {
+    closeAll()
     setSelectedCase(testCase)
     setIsCaseDrawerOpen(true)
-  }, [])
+  }, [closeAll])
   const closeCase = useCallback(() => {
     setIsCaseDrawerOpen(false)
     setSelectedCase(null)
   }, [])
 
   const openSetup = useCallback((setup: any) => {
+    closeAll()
     setSelectedSetup(setup)
     setIsSetupDrawerOpen(true)
-  }, [])
+  }, [closeAll])
   const closeSetup = useCallback(() => {
     setIsSetupDrawerOpen(false)
     setSelectedSetup(null)
   }, [])
 
   const openResult = useCallback((result: any) => {
+    closeAll()
     setSelectedResult(result)
     setIsResultDrawerOpen(true)
-  }, [])
+  }, [closeAll])
   const closeResult = useCallback(() => {
     setIsResultDrawerOpen(false)
     setSelectedResult(null)
   }, [])
 
   const openRun = useCallback((run: any) => {
+    closeAll()
     setSelectedRun(run)
     setIsRunDrawerOpen(true)
-  }, [])
+  }, [closeAll])
   const closeRun = useCallback(() => {
     setIsRunDrawerOpen(false)
     setSelectedRun(null)

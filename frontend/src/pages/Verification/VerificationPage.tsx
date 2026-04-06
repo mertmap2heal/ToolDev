@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -37,6 +37,7 @@ import TestSetupDocumentCard from '../../components/verification/TestSetupDocume
 import TestResultDocumentCard from '../../components/verification/TestResultDocumentCard'
 import ReviewDocumentCard from '../../components/verification/ReviewDocumentCard'
 import { VERIFICATION_VALID_TAB_IDS, buildVerificationUrl } from '../../config/verificationTabs'
+import { LINKAGE_V1 } from '../../config/featureFlags'
 
 // Helper function to format test results status summary
 const formatTestResultsSummary = (statusSummary: Record<string, number> | undefined): string => {
@@ -79,6 +80,8 @@ const TEST_PLAN_COLUMNS: ColumnConfig[] = [
   { key: 'status', label: 'Status', defaultVisible: true },
   { key: 'phase', label: 'Phase', defaultVisible: false },
   { key: 'testCases', label: 'Test Cases', defaultVisible: true },
+  { key: 'setups', label: 'Setups', defaultVisible: false },
+  { key: 'runs', label: 'Runs', defaultVisible: false },
   { key: 'testResults', label: 'Test Results', defaultVisible: false },
   { key: 'owner', label: 'Owner', defaultVisible: false },
   { key: 'createdAt', label: 'Created', defaultVisible: false },
@@ -93,6 +96,9 @@ const TEST_CASE_COLUMNS: ColumnConfig[] = [
   { key: 'version', label: 'Version', defaultVisible: true },
   { key: 'moc', label: 'MOC', defaultVisible: false },
   { key: 'method', label: 'Method', defaultVisible: false },
+  { key: 'requirements', label: 'Requirements', defaultVisible: false },
+  { key: 'plans', label: 'Plans', defaultVisible: false },
+  { key: 'setups', label: 'Setups', defaultVisible: false },
   { key: 'testResults', label: 'Test Results', defaultVisible: false },
   { key: 'owner', label: 'Owner', defaultVisible: false },
   { key: 'createdAt', label: 'Created', defaultVisible: false },
@@ -171,6 +177,7 @@ export default function VerificationPage() {
   const openCreateRun = searchParams.get('openCreateRun')
   const statusFilter = searchParams.get('status') || ''
   const mocFilter = searchParams.get('moc') || ''
+  const quickFilter = searchParams.get('quick') || ''
   const [searchQuery, setSearchQuery] = useState('')
 
   // Modal states
@@ -180,6 +187,39 @@ export default function VerificationPage() {
   const [isCreateResultOpen, setIsCreateResultOpen] = useState(false)
 
   const drawer = useVerificationDrawer()
+  const queryClient = useQueryClient()
+
+  const traceLinksData = queryClient.getQueryData(LINKAGE_V1 ? ['links', projectId] : ['trace-links', projectId]) as any[] | undefined
+  const runsData = queryClient.getQueryData(['test-runs', projectId]) as any[] | undefined
+
+  const requirementsCountByCaseId = useMemo(() => {
+    const links = Array.isArray(traceLinksData) ? traceLinksData : []
+    const norm = (s: string) => (s ?? '').toLowerCase().replace(/-/g, '_')
+    const m = new Map<string, number>()
+    for (const l of links) {
+      const lt = String((l as any).linkType ?? '').toLowerCase()
+      if (lt !== 'verifies') continue
+      const st = norm((l as any).sourceType)
+      const tt = norm((l as any).targetType)
+      const isForward = st === 'requirement' && (tt === 'test_case' || tt === 'testcase')
+      const isReverse = (st === 'test_case' || st === 'testcase') && tt === 'requirement'
+      if (!isForward && !isReverse) continue
+      const tcId = isForward ? (l as any).targetId : (l as any).sourceId
+      if (!tcId) continue
+      m.set(tcId, (m.get(tcId) ?? 0) + 1)
+    }
+    return m
+  }, [traceLinksData])
+
+  const runsCountByPlanId = useMemo(() => {
+    const m = new Map<string, number>()
+    ;(Array.isArray(runsData) ? runsData : []).forEach((r: any) => {
+      const planId = r.testPlanId ?? r.testPlan?.id
+      if (!planId) return
+      m.set(planId, (m.get(planId) ?? 0) + 1)
+    })
+    return m
+  }, [runsData])
 
   // Open create modal when navigating from Templates "Use" (useTemplateId in URL)
   useEffect(() => {
@@ -284,8 +324,6 @@ export default function VerificationPage() {
     } catch (e) { /* ignore */ }
   }
 
-  const queryClient = useQueryClient()
-
   // Close column selector when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -358,6 +396,18 @@ export default function VerificationPage() {
     },
     enabled: !!projectId,
   })
+
+  const plansCountByCaseId = useMemo(() => {
+    const m = new Map<string, number>()
+    ;(Array.isArray(testPlans) ? testPlans : []).forEach((p: any) => {
+      ;(p.planCases ?? []).forEach((pc: any) => {
+        const caseId = pc?.testCase?.id ?? pc?.testCaseId ?? pc?.id ?? pc
+        if (!caseId) return
+        m.set(caseId, (m.get(caseId) ?? 0) + 1)
+      })
+    })
+    return m
+  }, [testPlans])
 
   // Fetch test cases (always when on Verification so tree and Cases tab show seeded/created cases)
   const { data: testCases = [], isLoading: loadingCases } = useQuery({
@@ -644,7 +694,17 @@ export default function VerificationPage() {
     const caseMoc = case_.moc?.code ?? case_.linkedMocCode ?? case_.moc
     const mocStr = caseMoc != null ? String(caseMoc) : ''
     const matchesMoc = !mocFilter || mocStr === mocFilter
-    return matchesSearch && matchesStatus && matchesMoc
+    const reqCount = requirementsCountByCaseId.get(case_.id) ?? 0
+    const planCount = plansCountByCaseId.get(case_.id) ?? 0
+    const setupCount = Array.isArray(case_.linkedSetupIds ?? case_.setupIds) ? (case_.linkedSetupIds ?? case_.setupIds).length : 0
+    const resultsCount = case_.linkedTestResultsCount ?? 0
+    const matchesQuick =
+      !quickFilter ||
+      (quickFilter === 'unlinkedReqs' && reqCount === 0) ||
+      (quickFilter === 'noPlans' && planCount === 0) ||
+      (quickFilter === 'noSetups' && setupCount === 0) ||
+      (quickFilter === 'noResults' && resultsCount === 0)
+    return matchesSearch && matchesStatus && matchesMoc && matchesQuick
   })
 
   const filteredSetups = (Array.isArray(testSetups) ? testSetups : []).filter((setup: any) =>
@@ -938,6 +998,12 @@ export default function VerificationPage() {
                     {planColumns.has('testCases') && (
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Test Cases</th>
                     )}
+                    {planColumns.has('setups') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Setups</th>
+                    )}
+                    {planColumns.has('runs') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Runs</th>
+                    )}
                     {planColumns.has('testResults') && (
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Test Results</th>
                     )}
@@ -988,6 +1054,16 @@ export default function VerificationPage() {
                       {planColumns.has('testCases') && (
                         <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
                           {plan.planCases?.length || 0}
+                        </td>
+                      )}
+                      {planColumns.has('setups') && (
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                          {(Array.isArray(plan.linkedSetups) ? plan.linkedSetups.length : Array.isArray(plan.planSetups) ? plan.planSetups.length : 0) || 0}
+                        </td>
+                      )}
+                      {planColumns.has('runs') && (
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                          {runsCountByPlanId.get(plan.id) ?? 0}
                         </td>
                       )}
                       {planColumns.has('testResults') && plan.linkedTestResultsCount > 0 && (
@@ -1101,6 +1177,59 @@ export default function VerificationPage() {
               </button>
             </div>
           )}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-2">
+              {[
+                { id: '', label: 'All' },
+                { id: 'unlinkedReqs', label: 'No requirements' },
+                { id: 'noPlans', label: 'Not in plan' },
+                { id: 'noSetups', label: 'No setups' },
+                { id: 'noResults', label: 'No results' },
+              ].map((opt) => {
+                const active = (quickFilter || '') === opt.id
+                return (
+                  <button
+                    key={opt.id || 'all'}
+                    type="button"
+                    onClick={() =>
+                      setSearchParams(
+                        (p) => {
+                          const n = new URLSearchParams(p)
+                          if (!opt.id) n.delete('quick')
+                          else n.set('quick', opt.id)
+                          return n
+                        },
+                        { replace: true }
+                      )
+                    }
+                    className={clsx(
+                      'px-3 py-1.5 text-sm rounded-full border transition-colors',
+                      active
+                        ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+                        : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
+            {quickFilter && (
+              <button
+                type="button"
+                onClick={() =>
+                  setSearchParams((p) => {
+                    const n = new URLSearchParams(p)
+                    n.delete('quick')
+                    return n
+                  })
+                }
+                className="text-sm text-gray-600 dark:text-gray-300 hover:underline"
+              >
+                Clear quick filter
+              </button>
+            )}
+          </div>
           {selectedCaseIds.size > 0 && (
             <div className="flex items-center justify-between gap-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
               <span className="text-sm font-medium text-gray-900 dark:text-white">
@@ -1298,6 +1427,15 @@ export default function VerificationPage() {
                     {caseColumns.has('method') && (
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Method</th>
                     )}
+                    {caseColumns.has('requirements') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Reqs</th>
+                    )}
+                    {caseColumns.has('plans') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Plans</th>
+                    )}
+                    {caseColumns.has('setups') && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Setups</th>
+                    )}
                     {caseColumns.has('testResults') && (
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Test Results</th>
                     )}
@@ -1382,6 +1520,21 @@ export default function VerificationPage() {
                       {caseColumns.has('method') && (
                         <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
                           {case_.method?.name || '—'}
+                        </td>
+                      )}
+                      {caseColumns.has('requirements') && (
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                          {requirementsCountByCaseId.get(case_.id) ?? 0}
+                        </td>
+                      )}
+                      {caseColumns.has('plans') && (
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                          {plansCountByCaseId.get(case_.id) ?? 0}
+                        </td>
+                      )}
+                      {caseColumns.has('setups') && (
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                          {Array.isArray(case_.linkedSetupIds ?? case_.setupIds) ? (case_.linkedSetupIds ?? case_.setupIds).length : 0}
                         </td>
                       )}
                       {caseColumns.has('testResults') && case_.linkedTestResultsCount > 0 && (

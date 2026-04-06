@@ -119,6 +119,8 @@ export interface VerificationTreePanelProps {
   onCreateChangeRequest?: (reqId: string) => void
   onCreateIssue?: (reqId: string) => void
   onOpenTraceabilityMatrix?: (focusReqId?: string) => void
+  /** Optional: open traceability matrix focused to a test case */
+  onOpenTraceabilityMatrixForCase?: (caseId: string) => void
   /** Optional: show linked elements under requirement nodes (issues, CRs, etc.) */
   getLinksForRequirement?: (reqId: string) => VerLinkLike[]
   onLinkedElementClick?: (payload: VerLinkedElementClickPayload) => void
@@ -469,6 +471,7 @@ export default function VerificationTreePanel({
   onCreateChangeRequest,
   onCreateIssue,
   onOpenTraceabilityMatrix,
+  onOpenTraceabilityMatrixForCase,
   getLinksForRequirement,
   onLinkedElementClick,
   onRemoveLink,
@@ -477,6 +480,7 @@ export default function VerificationTreePanel({
   onOpenInVerificationPage,
 }: VerificationTreePanelProps) {
   const [searchQuery, setSearchQuery] = useState('')
+  const [showBadges, setShowBadges] = useState(true)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [expandedRequirementIds, setExpandedRequirementIds] = useState<Set<string>>(new Set())
   const [allExpanded, setAllExpanded] = useState(false)
@@ -507,6 +511,47 @@ export default function VerificationTreePanel({
       ),
     [plans, testCases, testSetups, runsByPlanId, searchQuery, requirementTestCaseLinks, requirements]
   )
+
+  const copyText = useCallback(async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = text
+        ta.style.position = 'fixed'
+        ta.style.left = '-9999px'
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+        return true
+      } catch {
+        return false
+      }
+    }
+  }, [])
+
+  const buildDeepLink = useCallback((node: VerTreeNode): string | null => {
+    if (node.type === 'requirement') {
+      if (!node.requirementId) return null
+      return `${window.location.origin}/projects/${projectId}/requirements?requirementId=${node.requirementId}`
+    }
+    const tab = TAB_MAP[node.type]
+    if (!tab) return null
+    const qs = new URLSearchParams()
+    qs.set('tab', tab)
+    qs.set('focusType', node.type)
+    qs.set('focusId', node.id)
+    return `${window.location.origin}/projects/${projectId}/verification?${qs.toString()}`
+  }, [projectId])
+
+  const handleCopyDeepLink = useCallback(async (node: VerTreeNode) => {
+    const url = buildDeepLink(node)
+    if (!url) return
+    await copyText(url)
+  }, [buildDeepLink, copyText])
 
   const allPlanIds = useMemo(() => tree.map((n) => n.id), [tree])
   const unassignedNodeInTree = useMemo(() => tree.find((n) => n.type === 'unassigned-group') ?? null, [tree])
@@ -853,6 +898,48 @@ export default function VerificationTreePanel({
             <span className="flex-shrink-0 text-[10px] font-mono text-gray-400 dark:text-gray-500">{node.key}</span>
           )}
           <span className={clsx('truncate flex-1', (isSelected || isMultiSelected) && 'font-medium')}>{node.label}</span>
+          {showBadges && (isPlan || isCase) && (
+            <span className="flex items-center gap-1.5 flex-shrink-0">
+              {isPlan && (
+                <>
+                  <span
+                    className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-[10px] text-gray-600 dark:text-gray-300"
+                    title="Test cases in plan"
+                  >
+                    {node.children?.filter((c) => c.type === 'test-case').length ?? 0} C
+                  </span>
+                  <span
+                    className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-[10px] text-gray-600 dark:text-gray-300"
+                    title="Setups in plan"
+                  >
+                    {node.children?.filter((c) => c.type === 'test-setup').length ?? 0} S
+                  </span>
+                  <span
+                    className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-[10px] text-gray-600 dark:text-gray-300"
+                    title="Runs for plan"
+                  >
+                    {node.children?.filter((c) => c.type === 'test-run').length ?? 0} R
+                  </span>
+                </>
+              )}
+              {isCase && (
+                <>
+                  <span
+                    className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-[10px] text-gray-600 dark:text-gray-300"
+                    title="Requirements verified by this case"
+                  >
+                    {node.children?.filter((c) => c.type === 'requirement').length ?? 0} Req
+                  </span>
+                  <span
+                    className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-[10px] text-gray-600 dark:text-gray-300"
+                    title="Linked setups"
+                  >
+                    {node.children?.filter((c) => c.type === 'test-setup').length ?? 0} S
+                  </span>
+                </>
+              )}
+            </span>
+          )}
           {node.status && !isRequirement && (
             <span className={clsx('flex-shrink-0 w-2 h-2 rounded-full', statusDot)} title={node.status} />
           )}
@@ -953,6 +1040,17 @@ export default function VerificationTreePanel({
               {allExpanded ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
             </button>
             <button
+              type="button"
+              onClick={() => setShowBadges((v) => !v)}
+              className={clsx(
+                'p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700',
+                showBadges ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'
+              )}
+              title={showBadges ? 'Hide relationship badges' : 'Show relationship badges'}
+            >
+              <BarChart3 size={14} />
+            </button>
+            <button
               onClick={onCreatePlan}
               className="p-1.5 rounded hover:bg-teal-100 dark:hover:bg-teal-900/30 text-teal-600 dark:text-teal-400"
               title="New test plan"
@@ -1044,6 +1142,17 @@ export default function VerificationTreePanel({
               <button
                 type="button"
                 onClick={() => {
+                  handleCopyDeepLink(contextMenu.node)
+                  setContextMenu(null)
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+              >
+                <ExternalLink size={14} />
+                Copy deep link
+              </button>
+              <button
+                type="button"
+                onClick={() => {
                   onCreateCase(contextMenu.node.id)
                   setContextMenu(null)
                 }}
@@ -1128,6 +1237,30 @@ export default function VerificationTreePanel({
           )}
           {contextMenu.node.type === 'test-case' && contextMenu.node.planId && (
             <>
+              <button
+                type="button"
+                onClick={() => {
+                  handleCopyDeepLink(contextMenu.node)
+                  setContextMenu(null)
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+              >
+                <ExternalLink size={14} />
+                Copy deep link
+              </button>
+              {onOpenTraceabilityMatrixForCase && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenTraceabilityMatrixForCase(contextMenu.node.id)
+                    setContextMenu(null)
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+                >
+                  <BarChart3 size={14} />
+                  Open traceability matrix
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -1218,6 +1351,17 @@ export default function VerificationTreePanel({
               <button
                 type="button"
                 onClick={() => {
+                  handleCopyDeepLink(contextMenu.node)
+                  setContextMenu(null)
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+              >
+                <ExternalLink size={14} />
+                Copy deep link
+              </button>
+              <button
+                type="button"
+                onClick={() => {
                   onSelect({ type: 'test-setup', id: contextMenu.node.id })
                   setContextMenu(null)
                 }}
@@ -1257,6 +1401,17 @@ export default function VerificationTreePanel({
             const isLocked = reqMeta?.isLocked ?? false
             return (
             <>
+              <button
+                type="button"
+                onClick={() => {
+                  handleCopyDeepLink(contextMenu.node)
+                  setContextMenu(null)
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+              >
+                <ExternalLink size={14} />
+                Copy requirement link
+              </button>
               <button
                 type="button"
                 onClick={() => {

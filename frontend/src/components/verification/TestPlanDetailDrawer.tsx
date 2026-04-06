@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
-import { X, ChevronDown, Plus, Trash2, GripVertical, Search, Download, FileCode, FileText, CheckSquare, Square, Play } from 'lucide-react'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { X, ChevronDown, Plus, Trash2, GripVertical, Search, Download, FileCode, FileText, CheckSquare, Square, Play, Settings } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ApiResponse } from 'shared/types/api.types'
 import { verificationService } from '../../services/verification.service'
@@ -11,6 +11,7 @@ import FullReportModal from './FullReportModal'
 import VerificationLifecycle from './VerificationLifecycle'
 import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
 import clsx from 'clsx'
+import RelationshipsPanel from './RelationshipsPanel'
 
 interface TestPlanDetailDrawerProps {
   plan: any
@@ -216,6 +217,88 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
   const currentPlan = planDetails || plan
   const planCases = currentPlan?.planCases || []
 
+  const planCaseEntities = useMemo(() => {
+    const raw = Array.isArray(planCases) ? planCases : []
+    const resolved = raw
+      .map((pc: any) => pc?.testCase ?? pc?.testCaseId ?? pc?.id ?? pc)
+      .map((v: any) => {
+        if (!v) return null
+        if (typeof v === 'string') {
+          return allTestCases.find((tc: any) => tc.id === v) ?? { id: v }
+        }
+        if (typeof v === 'object' && v.id) return v
+        return null
+      })
+      .filter(Boolean) as any[]
+    return resolved
+  }, [planCases, allTestCases])
+
+  const planSetupEntities = useMemo(() => {
+    const ids = Array.isArray(currentPlan?.linkedSetups)
+      ? (currentPlan.linkedSetups as string[])
+      : Array.isArray(currentPlan?.planSetups)
+        ? (currentPlan.planSetups as any[]).map((ps) => ps?.id ?? ps)
+        : []
+    const setups = Array.isArray(allSetups) ? allSetups : []
+    return ids
+      .map((id) => setups.find((s: any) => s.id === id) ?? { id })
+      .filter(Boolean) as any[]
+  }, [currentPlan?.linkedSetups, currentPlan?.planSetups, allSetups])
+
+  const relationshipSections = useMemo(() => {
+    const max = 6
+    const cases = planCaseEntities.slice(0, max).map((tc: any) => ({
+      id: `case-${tc.id}`,
+      label: tc.key ?? tc.title ?? String(tc.id).slice(0, 8),
+      subLabel: tc.title && tc.key ? tc.title : undefined,
+      icon: FileText,
+      onClick: () => drawer.openCase?.(tc),
+      title: 'Open test case',
+    }))
+    const remainingCases = Math.max(0, planCaseEntities.length - max)
+    if (remainingCases > 0) {
+      cases.push({
+        id: 'cases-more',
+        label: `+${remainingCases} more`,
+        icon: FileText,
+        onClick: () => setActiveTab('cases'),
+        title: 'View all cases in this plan',
+      })
+    }
+
+    const setups = planSetupEntities.slice(0, max).map((s: any) => ({
+      id: `setup-${s.id}`,
+      label: s.name ?? String(s.id).slice(0, 8),
+      icon: Settings,
+      onClick: () => drawer.openSetup?.(s),
+      title: 'Open test setup',
+    }))
+    const remainingSetups = Math.max(0, planSetupEntities.length - max)
+    if (remainingSetups > 0) {
+      setups.push({
+        id: 'setups-more',
+        label: `+${remainingSetups} more`,
+        icon: Settings,
+        onClick: () => setActiveTab('cases'),
+        title: 'View setups linked to this plan',
+      })
+    }
+
+    const runs = (Array.isArray(planTestRuns) ? planTestRuns : []).slice(0, 6).map((r: any) => ({
+      id: `run-${r.id}`,
+      label: r.runName ?? 'Run',
+      icon: Play,
+      onClick: () => drawer.openRun?.(r),
+      title: 'Open test run',
+    }))
+
+    return [
+      { id: 'includes', label: 'Includes test cases', items: cases, emptyText: 'No test cases linked yet.' },
+      { id: 'setups', label: 'Uses test setups', items: setups, emptyText: 'No setups linked.' },
+      { id: 'runs', label: 'Evidence (test runs)', items: runs, emptyText: 'No runs yet.' },
+    ]
+  }, [planCaseEntities, planSetupEntities, planTestRuns, drawer, setActiveTab])
+
   // Get test cases not in plan
   const availableCases = allTestCases.filter(
     (tc: any) => !planCases.some((pc: any) => pc.testCaseId === tc.id)
@@ -412,6 +495,11 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
           <div>
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              <RelationshipsPanel
+                sections={relationshipSections}
+                dense
+              />
+
               {/* Status */}
               <div className="relative" ref={statusDropdownRef}>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

@@ -467,6 +467,18 @@ function VerificationLayoutInner() {
                   onRequirementClick={(reqId) => {
                     navigate(`/projects/${projectId}/requirements?requirementId=${reqId}`)
                   }}
+                  onOpenTraceabilityMatrix={(focusReqId) => {
+                    const qs = new URLSearchParams()
+                    qs.set('tab', 'traceability')
+                    if (focusReqId) qs.set('matrixReqId', focusReqId)
+                    navigate(`/projects/${projectId}/verification?${qs.toString()}`, { replace: true })
+                  }}
+                  onOpenTraceabilityMatrixForCase={(caseId) => {
+                    const qs = new URLSearchParams()
+                    qs.set('tab', 'traceability')
+                    qs.set('matrixCaseId', caseId)
+                    navigate(`/projects/${projectId}/verification?${qs.toString()}`, { replace: true })
+                  }}
                 />
               </div>
               <div

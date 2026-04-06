@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { X, ChevronDown, Link2, Download, Search, Check, Plus, FileCode, Play, FileText } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
@@ -12,6 +13,10 @@ import VerificationLifecycle from './VerificationLifecycle'
 import StructuredStepEditor, { parseStepsToPairs, pairsToStepsAndExpected, type StepPair } from './StructuredStepEditor'
 import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
 import clsx from 'clsx'
+import RelationshipsPanel from './RelationshipsPanel'
+import { LINKAGE_V1 } from '../../config/featureFlags'
+import { traceabilityService } from '../../services/traceability.service'
+import { linkService } from '../../services/link.service'
 
 interface TestCaseDetailDrawerProps {
   testCase: any
@@ -21,6 +26,7 @@ interface TestCaseDetailDrawerProps {
 }
 
 export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projectId }: TestCaseDetailDrawerProps) {
+  const navigate = useNavigate()
   const drawer = useVerificationDrawer()
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState({
@@ -53,6 +59,8 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
     },
     enabled: isOpen && !!testCase?.id,
   })
+
+  const currentCase = caseDetails || testCase
 
   // Fetch MoCs and Methods
   const { data: mocs = [] } = useQuery({
@@ -221,14 +229,142 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
     }
   }
 
+  // Fetch plans list to compute parent plans
+  const { data: allPlans = [] } = useQuery({
+    queryKey: ['test-plans', projectId],
+    queryFn: async () => {
+      const res = await verificationService.getTestPlans(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    enabled: isOpen && !!projectId,
+  })
+
+  // Fetch requirement<->test-case verifies links (same normalization as VerificationLayoutPage)
+  const { data: traceLinksData = [] } = useQuery({
+    queryKey: LINKAGE_V1 ? ['links', projectId] : ['trace-links', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const res = LINKAGE_V1 ? await linkService.getLinks(projectId) : await traceabilityService.getTraceLinks(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    enabled: isOpen && !!projectId,
+  })
+
+  const parentPlans = useMemo(() => {
+    const plans = Array.isArray(allPlans) ? allPlans : []
+    const caseId = testCase?.id
+    if (!caseId) return []
+    return plans.filter((p: any) => (p.planCases ?? []).some((pc: any) => (pc?.testCase?.id ?? pc?.testCaseId ?? pc?.id ?? pc) === caseId))
+  }, [allPlans, testCase?.id])
+
+  const linkedRequirements = useMemo(() => {
+    const links = Array.isArray(traceLinksData) ? traceLinksData : []
+    const norm = (s: string) => (s ?? '').toLowerCase().replace(/-/g, '_')
+    const out: Array<{ id: string; label: string; title?: string }> = []
+    const seen = new Set<string>()
+    for (const l of links) {
+      const lt = String((l as any).linkType ?? '').toLowerCase()
+      if (lt !== 'verifies') continue
+      const st = norm((l as any).sourceType)
+      const tt = norm((l as any).targetType)
+      const isForward = st === 'requirement' && (tt === 'test_case' || tt === 'testcase')
+      const isReverse = (st === 'test_case' || st === 'testcase') && tt === 'requirement'
+      if (!isForward && !isReverse) continue
+      const reqId = isForward ? (l as any).sourceId : (l as any).targetId
+      const tcId = isForward ? (l as any).targetId : (l as any).sourceId
+      if (tcId !== testCase?.id) continue
+      const lid = (l as any).id ?? `${reqId}-${tcId}`
+      if (seen.has(lid)) continue
+      seen.add(lid)
+      out.push({
+        id: reqId,
+        label: (l as any).sourceDisplayId ?? (l as any).sourceLabel ?? (l as any).sourceTitle ?? String(reqId).slice(0, 8),
+        title: (l as any).sourceTitle ?? (l as any).sourceLabel,
+      })
+    }
+    return out
+  }, [traceLinksData, testCase?.id])
+
+  const linkedSetupsForCase = useMemo(() => {
+    const links = (currentCase?.testCaseSetups ?? []) as any[]
+    const setupIds = links.map((l) => l.setupId).filter(Boolean)
+    const list = Array.isArray(setups) ? setups : []
+    return setupIds.map((id) => list.find((s: any) => s.id === id) ?? { id }).filter(Boolean)
+  }, [currentCase?.testCaseSetups, setups])
+
+  const relationshipSections = useMemo(() => {
+    const max = 6
+    const plans = parentPlans.slice(0, max).map((p: any) => ({
+      id: `plan-${p.id}`,
+      label: p.key ?? p.name ?? String(p.id).slice(0, 8),
+      subLabel: p.key ? p.name : undefined,
+      icon: FileText,
+      onClick: () => drawer.openPlan?.(p),
+      title: 'Open test plan',
+    }))
+    const remainingPlans = Math.max(0, parentPlans.length - max)
+    if (remainingPlans > 0) {
+      plans.push({
+        id: 'plans-more',
+        label: `+${remainingPlans} more`,
+        icon: FileText,
+        onClick: () => {},
+        disabled: true,
+      })
+    }
+
+    const reqs = linkedRequirements.slice(0, max).map((r) => ({
+      id: `req-${r.id}`,
+      label: r.label,
+      icon: Link2,
+      onClick: () => {
+        if (!r.id) return
+        navigate(`/projects/${projectId}/requirements?requirementId=${r.id}`)
+      },
+      title: r.title ? `Open requirement: ${r.title}` : 'Open requirement',
+    }))
+    const remainingReqs = Math.max(0, linkedRequirements.length - max)
+    if (remainingReqs > 0) {
+      reqs.push({
+        id: 'reqs-more',
+        label: `+${remainingReqs} more`,
+        icon: Link2,
+        onClick: () => {},
+        disabled: true,
+      })
+    }
+
+    const setupsItems = linkedSetupsForCase.slice(0, max).map((s: any) => ({
+      id: `setup-${s.id}`,
+      label: s.name ?? String(s.id).slice(0, 8),
+      icon: Link2,
+      onClick: () => drawer.openSetup?.(s),
+      title: 'Open test setup',
+    }))
+
+    const evidence = (Array.isArray(runResultsForCase) ? runResultsForCase : []).slice(0, 6).map((rr: any) => ({
+      id: `run-${rr.testRun?.id ?? rr.id}`,
+      label: rr.testRun?.runName ?? 'Run',
+      subLabel: rr.resultStatus ?? undefined,
+      icon: Play,
+      onClick: () => rr.testRun?.id && drawer.openRun?.(rr.testRun),
+      title: 'Open test run',
+    }))
+
+    return [
+      { id: 'plans', label: 'Included in test plans', items: plans, emptyText: 'Not in any plan.' },
+      { id: 'requirements', label: 'Verifies requirements', items: reqs, emptyText: 'No verified requirements yet.' },
+      { id: 'setups', label: 'Uses test setups', items: setupsItems, emptyText: 'No setups linked.' },
+      { id: 'evidence', label: 'Evidence (recent run results)', items: evidence, emptyText: 'No run results yet.' },
+    ]
+  }, [parentPlans, linkedRequirements, linkedSetupsForCase, runResultsForCase, drawer, projectId])
+
   const statusOptions = [
     { value: 'DRAFT', label: 'Draft' },
     { value: 'REVIEWED', label: 'Reviewed' },
     { value: 'APPROVED', label: 'Approved' },
     { value: 'READY', label: 'Ready' },
   ]
-
-  const currentCase = caseDetails || testCase
 
   const stepDesignNotesSection = (Array.isArray(customSections) ? customSections : []).find((s: any) => s.title === '_StepDesignNotes')
 
@@ -496,6 +632,8 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
         {/* Scrollable Content */}
         <div className="overflow-y-auto flex-1 px-6 py-4">
           <div className="space-y-6">
+          <RelationshipsPanel sections={relationshipSections} dense />
+
           {/* Status */}
           <div className="relative" ref={statusDropdownRef}>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
