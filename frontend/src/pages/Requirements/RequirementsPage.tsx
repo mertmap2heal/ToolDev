@@ -3452,7 +3452,7 @@ export default function RequirementsPage() {
                       ? 'bg-gray-100 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-gray-900 dark:text-white'
                       : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
                   )}
-                  title="Analysis Tools"
+                  title="Analysis"
                 >
                   <BarChart3 size={16} />
                   <span className="text-sm font-medium">Analysis</span>
@@ -3465,21 +3465,22 @@ export default function RequirementsPage() {
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
                       <BarChart3 size={16} className="text-gray-500 dark:text-gray-400" />
-                      Quality Analysis
+                      Requirement quality
                     </button>
                     <button
                       onClick={() => { setIsFunctionVerificationMatrixOpen(true); setAnalysisDropdownOpen(false) }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      title="Verification coverage by function"
                     >
                       <ClipboardCheck size={16} className="text-gray-500 dark:text-gray-400" />
-                      Function Verification
+                      Function verification
                     </button>
                     <button
                       onClick={() => { setIsSuspectReviewOpen(true); setAnalysisDropdownOpen(false) }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
                       <AlertTriangle size={16} className="text-gray-500 dark:text-gray-400" />
-                      Suspect Links
+                      Suspect link review
                     </button>
                   </div>
                 )}
@@ -3524,7 +3525,7 @@ export default function RequirementsPage() {
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
                       <Folder size={16} className="text-gray-500 dark:text-gray-400" />
-                      Custom Matrices
+                      Matrix library
                     </button>
                   </div>
                 )}
@@ -3550,10 +3551,10 @@ export default function RequirementsPage() {
                       ? 'bg-gray-100 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-gray-900 dark:text-white'
                       : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
                   )}
-                  title="Data Management"
+                  title="Manage"
                 >
                   <Archive size={16} />
-                  <span className="text-sm font-medium">Data</span>
+                  <span className="text-sm font-medium">Manage</span>
                   <ChevronDown size={12} className={clsx('transition-transform', dataDropdownOpen && 'rotate-180')} />
                 </button>
                 {dataDropdownOpen && (
@@ -3588,7 +3589,7 @@ export default function RequirementsPage() {
                       title="View detailed audit log for this project’s requirements"
                     >
                       <ClipboardCheck size={16} className="text-gray-500 dark:text-gray-400" />
-                      Audit
+                      Audit log
                     </button>
                   </div>
                 )}
@@ -3645,14 +3646,14 @@ export default function RequirementsPage() {
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
                       <Network size={16} className="text-gray-500 dark:text-gray-400" />
-                      Diagram
+                      Relationship diagram
                     </button>
                     <button
                       onClick={() => { setColumnSelectorOpen(true); setViewDropdownOpen(false) }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
                       <Columns size={16} className="text-gray-500 dark:text-gray-400" />
-                      Visible fields
+                      Columns
                     </button>
                     <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
                     <button
@@ -3680,8 +3681,8 @@ export default function RequirementsPage() {
                           onChange={(e) => setParameterDisplayMode(e.target.value as 'name' | 'resolved')}
                           className="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm cursor-pointer"
                         >
-                          <option value="name">Params: Name</option>
-                          <option value="resolved">Params: Value</option>
+                          <option value="name">Parameters: names</option>
+                          <option value="resolved">Parameters: values</option>
                         </select>
                       </div>
                     )}
@@ -3690,7 +3691,7 @@ export default function RequirementsPage() {
                 {columnSelectorOpen && (
                   <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Visible fields</h3>
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Columns</h3>
                       <button
                         onClick={() => setColumnSelectorOpen(false)}
                         className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
