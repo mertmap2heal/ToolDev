@@ -3320,26 +3320,50 @@ export default function RequirementsPage() {
                 )}
               </div>
 
-              {/* Traceability Matrix Button */}
-              <button
-                onClick={() => setIsTraceMatrixOpen(true)}
-                disabled={isBaselineView}
-                className="px-2.5 py-2 border rounded-lg flex items-center gap-1.5 transition-colors bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-gray-700"
-                title={isBaselineView ? 'Traceability matrix is unavailable in baseline view' : 'Traceability Matrix'}
-              >
-                <Table size={16} />
-                <span>Traceability</span>
-              </button>
-
-              {/* Saved Traceability Views */}
-              <button
-                onClick={() => navigate(`/projects/${projectId}/requirements/traceability-views`)}
-                className="px-2.5 py-2 border rounded-lg flex items-center gap-1.5 transition-colors bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 text-sm font-medium"
-                title="Saved Traceability Views"
-              >
-                <Folder size={16} />
-                <span className="hidden sm:inline">Views</span>
-              </button>
+              {/* Traceability dropdown */}
+              <div className="relative" ref={traceabilityDropdownRef}>
+                <button
+                  onClick={() => {
+                    setTraceabilityDropdownOpen(!traceabilityDropdownOpen)
+                    setAnalysisDropdownOpen(false)
+                    setDataDropdownOpen(false)
+                    setViewDropdownOpen(false)
+                    setColumnSelectorOpen(false)
+                    setSortDropdownOpen(false)
+                  }}
+                  className={clsx(
+                    'px-2.5 py-2 border rounded-lg flex items-center gap-1.5 transition-colors text-sm',
+                    traceabilityDropdownOpen
+                      ? 'bg-gray-100 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-gray-900 dark:text-white'
+                      : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                  )}
+                  title="Traceability Options"
+                >
+                  <Table size={16} />
+                  <span className="text-sm font-medium">Traceability</span>
+                  <ChevronDown size={12} className={clsx('transition-transform', traceabilityDropdownOpen && 'rotate-180')} />
+                </button>
+                {traceabilityDropdownOpen && (
+                  <div className="absolute left-0 top-full mt-1 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 py-1">
+                    <button
+                      onClick={() => { setIsTraceMatrixOpen(true); setTraceabilityDropdownOpen(false) }}
+                      disabled={isBaselineView}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={isBaselineView ? 'Traceability matrix is unavailable in baseline view' : 'Standard trace matrix'}
+                    >
+                      <Table size={16} className="text-gray-500 dark:text-gray-400" />
+                      Traceability Matrix
+                    </button>
+                    <button
+                      onClick={() => { navigate(`/projects/${projectId}/requirements/traceability-views`); setTraceabilityDropdownOpen(false) }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <Folder size={16} className="text-gray-500 dark:text-gray-400" />
+                      Custom Matrices
+                    </button>
+                  </div>
+                )}
+              </div>
 
               {/* Divider: Analysis/Trace group | Data group */}
               <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" aria-hidden />
