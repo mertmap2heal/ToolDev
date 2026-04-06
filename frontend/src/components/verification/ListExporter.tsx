@@ -48,8 +48,81 @@ interface TestCaseReport {
 }
 
 interface TestPlanReport {
-  testPlan?: { key?: string; name?: string; status?: string; phase?: string; description?: string; scope?: string; planCases?: unknown[] }
+  testPlan?: {
+    id?: string
+    key?: string
+    name?: string
+    status?: string
+    phase?: string
+    description?: string
+    scope?: string
+    entryCriteria?: string
+    exitCriteria?: string
+    docNumber?: string
+    docConfidentiality?: string
+    docProjectCode?: string
+    docRevision?: string
+    docPlanDate?: string
+    docPreparedByName?: string
+    docQaByName?: string
+    docApprovedByName?: string
+    docApprovedAt?: string
+    docPurpose?: string
+    docOverview?: string
+    docStatementOfConformity?: string
+    docChangesPolicy?: string
+    docDistribution?: string
+    docAcronymsNote?: string
+    docApplicableDocuments?: any
+    docGeneralPrecautions?: string
+    docGeneralConditions?: any
+    docTools?: any
+    docTestSetupNotes?: string
+  }
+  revisions?: Array<{
+    revisionNumber?: string
+    revisionDate?: string
+    editedByName?: string
+    approvedByName?: string
+    approvedAt?: string
+    summaryOfChanges?: string
+  }>
+  setups?: Array<{
+    id?: string
+    name?: string
+    description?: string
+    version?: string
+    status?: string
+    environmentType?: string
+    diagramExportPath?: string
+    photos?: any
+  }>
   statistics?: { totalCases?: number; executed?: number; passed?: number; failed?: number; coveragePercentage?: number }
+  testCases?: Array<{
+    orderIndex?: number
+    isMandatory?: boolean
+    notes?: string
+    testCase?: {
+      id?: string
+      key?: string
+      title?: string
+      status?: string
+      objective?: string
+      preconditions?: string
+      steps?: any
+      expectedResults?: any
+      passFailCriteria?: string
+      verifiesElements?: Array<{ type?: string; id?: string; name?: string }>
+      customSections?: Array<{
+        id?: string
+        title?: string
+        content?: any
+        orderIndex?: number
+        images?: Array<{ fileName?: string; fileUrl?: string }>
+      }>
+    }
+    latestResult?: { status?: string; executedAt?: string } | null
+  }>
   testResults?: Array<{ title?: string; resultStatus?: string; executedByName?: string; executedAt?: string }>
 }
 
@@ -151,7 +224,421 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
     const pageWidth = doc.internal.pageSize.getWidth()
     let yPos = 20
 
-    // Title
+    const wrapText = (text: string, maxWidth: number) => doc.splitTextToSize(text, maxWidth) as string[]
+
+    const setPlaceholderStyle = () => {
+      doc.setTextColor(220, 38, 38)
+      doc.setFont('helvetica', 'bold')
+    }
+    const resetTextStyle = () => {
+      doc.setTextColor(0, 0, 0)
+      doc.setFont('helvetica', 'normal')
+    }
+
+    const placeholder = (label: string) => `TODO: ${label}`
+
+    const resolveUrl = (url: string) => {
+      if (!url) return url
+      if (url.startsWith('data:')) return url
+      if (url.startsWith('http://') || url.startsWith('https://')) return url
+      if (url.startsWith('/')) return `${window.location.origin}${url}`
+      return url
+    }
+
+    const fetchAsDataUrl = async (url: string): Promise<{ dataUrl: string; mime: string } | null> => {
+      if (!url) return null
+      if (url.startsWith('data:')) {
+        const mime = url.slice(5).split(';')[0] || 'image/png'
+        return { dataUrl: url, mime }
+      }
+      const res = await fetch(resolveUrl(url))
+      if (!res.ok) return null
+      const blob = await res.blob()
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result))
+        reader.onerror = () => reject(new Error('Failed to read image'))
+        reader.readAsDataURL(blob)
+      })
+      return { dataUrl, mime: blob.type || 'image/png' }
+    }
+
+    const drawHeaderFooterAllPages = (opts: { confidentiality?: string; docNumber?: string; revision?: string }) => {
+      const totalPages = doc.getNumberOfPages()
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p)
+        const w = doc.internal.pageSize.getWidth()
+        const h = doc.internal.pageSize.getHeight()
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        const left = opts.confidentiality || ''
+        const right = [opts.docNumber, opts.revision ? `Rev ${opts.revision}` : null].filter(Boolean).join(' • ')
+        if (left) doc.text(left, 14, 10)
+        if (right) doc.text(right, w - 14, 10, { align: 'right' })
+        doc.setDrawColor(220)
+        doc.line(14, 12, w - 14, 12)
+        doc.line(14, h - 12, w - 14, h - 12)
+        doc.text(`Page ${p}/${totalPages}`, w - 14, h - 6, { align: 'right' })
+      }
+    }
+
+    const addCoverPage = (r: TestPlanReport) => {
+      const tp = r.testPlan || {}
+      const w = doc.internal.pageSize.getWidth()
+      const h = doc.internal.pageSize.getHeight()
+      const confidentiality = tp.docConfidentiality || 'CONFIDENTIAL'
+      const docNumber = tp.docNumber || tp.key || ''
+      const revision = tp.docRevision || '1.0'
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(12)
+      doc.text(confidentiality, 14, 24)
+
+      doc.setFontSize(18)
+      doc.text('TEST PLAN', w / 2, 60, { align: 'center' })
+
+      doc.setFontSize(14)
+      doc.text(tp.name || tp.key || 'Test Plan', w / 2, 78, { align: 'center' })
+
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10)
+      const subtitle = [
+        docNumber ? `Document: ${docNumber}` : null,
+        tp.docProjectCode ? `Project: ${tp.docProjectCode}` : null,
+        revision ? `Revision: ${revision}` : null,
+        tp.docPlanDate ? `Test Plan from: ${formatDate(tp.docPlanDate)}` : null,
+      ]
+        .filter(Boolean)
+        .join('   |   ')
+      if (subtitle) {
+        const lines = wrapText(subtitle, w - 28)
+        doc.text(lines, w / 2, 92, { align: 'center' })
+      }
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(11)
+      doc.text('Overall Result', 14, h - 70)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10)
+      doc.rect(14, h - 62, 5, 5)
+      doc.text('PASS', 22, h - 58)
+      doc.rect(52, h - 62, 5, 5)
+      doc.text('FAIL', 60, h - 58)
+
+      doc.setFontSize(8)
+      doc.text(`Generated: ${formatDate(new Date())}`, 14, h - 20)
+
+      return { confidentiality, docNumber, revision }
+    }
+
+    const addSimpleSectionPage = (title: string, body?: string) => {
+      doc.addPage()
+      const w = doc.internal.pageSize.getWidth()
+      let y = 24
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(14)
+      doc.text(title, 14, y)
+      y += 8
+      if (body) {
+        doc.setFontSize(10)
+        const lines = wrapText(body, w - 28)
+        for (const line of lines) {
+          const isTodo = line.trim().startsWith('TODO:')
+          if (isTodo) setPlaceholderStyle()
+          else resetTextStyle()
+          doc.text(line, 14, y)
+          y += 5
+          if (y > doc.internal.pageSize.getHeight() - 20) {
+            doc.addPage()
+            y = 24
+          }
+        }
+        resetTextStyle()
+      } else {
+        resetTextStyle()
+        doc.setFontSize(10)
+        doc.text('N/A', 14, y)
+      }
+    }
+
+    const addRevisionControl = (r: TestPlanReport) => {
+      doc.addPage()
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(14)
+      doc.text('Revision Control', 14, 24)
+
+      const rows = (r.revisions || []).map((rev) => [
+        rev.revisionNumber || '',
+        rev.revisionDate ? formatDate(rev.revisionDate) : '',
+        rev.editedByName || '',
+        rev.approvedByName || '',
+        rev.approvedAt ? formatDate(rev.approvedAt) : '',
+        rev.summaryOfChanges || '',
+      ])
+
+      docAutoTable({
+        startY: 32,
+        head: [['Rev', 'Date', 'Edited by', 'Approved by', 'Approved at', 'Summary of Changes']],
+        body: rows.length ? rows : [['', '', '', '', '', 'No revision history']],
+        theme: 'striped',
+        margin: { left: 14, right: 14 },
+        headStyles: { fillColor: [31, 41, 55] },
+        styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+        columnStyles: {
+          0: { cellWidth: 12 },
+          1: { cellWidth: 22 },
+          2: { cellWidth: 25 },
+          3: { cellWidth: 25 },
+          4: { cellWidth: 22 },
+          5: { cellWidth: 'auto' },
+        },
+      })
+    }
+
+    const addTOCPage = () => {
+      doc.addPage()
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(14)
+      doc.text('Table of Contents', 14, 24)
+    }
+
+    const fillTOCPage = (tocPageNumber: number, tocEntries: Array<{ title: string; page: number }>) => {
+      doc.setPage(tocPageNumber)
+      const w = doc.internal.pageSize.getWidth()
+      let y = 34
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10)
+      for (const e of tocEntries) {
+        if (y > doc.internal.pageSize.getHeight() - 20) {
+          doc.addPage()
+          y = 24
+        }
+        doc.text(e.title, 14, y)
+        doc.text(String(e.page), w - 14, y, { align: 'right' })
+        y += 6
+      }
+    }
+
+    const addToolsAndSetup = async (r: TestPlanReport) => {
+      doc.addPage()
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(14)
+      doc.text('General Conditions / Tools / Test Setup', 14, 24)
+
+      const tools = Array.isArray(r.testPlan?.docTools) ? (r.testPlan?.docTools as any[]) : []
+      doc.setFontSize(11)
+      doc.text('Tools', 14, 34)
+      docAutoTable({
+        startY: 38,
+        head: [['Tool', 'Manufacturer', 'Part #', 'Serial #', 'Calibration valid till']],
+        body: tools.length
+          ? tools.map((t) => [t?.name || '', t?.manufacturer || '', t?.partNumber || '', t?.serialNumber || '', t?.calibrationValidTill || ''])
+          : [['', '', '', '', '']],
+        theme: 'striped',
+        margin: { left: 14, right: 14 },
+        headStyles: { fillColor: [59, 130, 246] },
+        styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+      })
+
+      let y = getLastAutoTableY() + 10
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(11)
+      doc.text('Linked Test Setups', 14, y)
+      y += 6
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10)
+      const setups = r.setups || []
+      const setupLines = setups.length ? setups.map((s) => `- ${s.name || s.id || 'Setup'}`) : ['- N/A']
+      doc.text(setupLines, 14, y)
+
+      const notes = r.testPlan?.docTestSetupNotes
+      if (notes) {
+        const w = doc.internal.pageSize.getWidth()
+        const lines = wrapText(notes, w - 28)
+        doc.text(lines, 14, y + 10)
+      }
+
+      // Setup diagram image (if available)
+      const primary = setups[0]
+      const diagramUrl =
+        (primary?.diagramExportPath as any) ||
+        (Array.isArray(primary?.photos) ? (primary?.photos as any[])?.[0]?.fileUrl || (primary?.photos as any[])?.[0]?.url : null)
+
+      const img = diagramUrl ? await fetchAsDataUrl(String(diagramUrl)) : null
+      const afterTextY = (notes ? y + 20 : y + 12)
+      const startY = Math.min(afterTextY + 8, doc.internal.pageSize.getHeight() - 120)
+
+      if (img?.dataUrl) {
+        const w = doc.internal.pageSize.getWidth()
+        const maxW = w - 28
+        const maxH = 90
+        const fmt = img.mime.includes('jpeg') || img.mime.includes('jpg') ? 'JPEG' : 'PNG'
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(11)
+        doc.text('Setup Diagram', 14, startY)
+        try {
+          // Place below header; jsPDF will keep aspect ratio when width/height provided but image exceeds; we choose fixed box.
+          ;(doc as any).addImage(img.dataUrl, fmt, 14, startY + 4, maxW, maxH)
+        } catch {
+          setPlaceholderStyle()
+          doc.text(placeholder('Unable to render setup diagram image'), 14, startY + 14)
+          resetTextStyle()
+        }
+      } else {
+        // Mark as user action if missing
+        setPlaceholderStyle()
+        doc.text(placeholder('Export setup diagram to make it visible here'), 14, startY + 14)
+        resetTextStyle()
+      }
+    }
+
+    const addPerTestCaseChapters = (r: TestPlanReport, tocEntries: Array<{ title: string; page: number }>) => {
+      const cases = r.testCases || []
+      for (const pc of cases) {
+        const tc = pc.testCase || {}
+        doc.addPage()
+        const startPage = doc.getNumberOfPages()
+        tocEntries.push({ title: `${tc.key || 'TC'} ${tc.title || ''}`.trim(), page: startPage })
+
+        let y = 24
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(14)
+        doc.text(`${tc.key || 'TC'}: ${tc.title || ''}`.trim(), 14, y)
+        y += 8
+
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(10)
+        const metaLine = [`Status: ${tc.status || 'N/A'}`, pc.isMandatory ? 'Mandatory' : 'Optional'].filter(Boolean).join('   |   ')
+        doc.text(metaLine, 14, y)
+        y += 10
+
+        const section = (title: string, text?: string) => {
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(11)
+          doc.text(title, 14, y)
+          y += 6
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10)
+          const w = doc.internal.pageSize.getWidth()
+          const lines = wrapText(text || 'N/A', w - 28)
+          doc.text(lines, 14, y)
+          y += lines.length * 5 + 4
+          if (y > doc.internal.pageSize.getHeight() - 30) {
+            doc.addPage()
+            y = 24
+          }
+        }
+
+        section('Objective', tc.objective as any)
+        section('Preconditions / Assumptions', tc.preconditions as any)
+
+        const verifies = (tc.verifiesElements || []).map((v) => `- ${(v.id || '').toString()} ${v.name || ''}`.trim()).filter(Boolean)
+        section('Requirements Verified', verifies.length ? verifies.join('\n') : 'N/A')
+
+        if (tc.passFailCriteria) {
+          section('Expected Outcomes / Pass-Fail Criteria', tc.passFailCriteria as any)
+        }
+
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(11)
+        doc.text('Test Procedure', 14, y)
+
+        const steps = Array.isArray(tc.steps) ? (tc.steps as any[]) : []
+        const expected = Array.isArray(tc.expectedResults) ? (tc.expectedResults as any[]) : []
+        const rows = steps.length
+          ? steps.map((s, idx) => {
+              const desc = typeof s === 'string' ? s : (s?.text || s?.description || JSON.stringify(s))
+              const exp = expected[idx]
+              const expTxt = typeof exp === 'string' ? exp : (exp?.text || exp?.description || (exp ? JSON.stringify(exp) : ''))
+              return [String(idx + 1), desc, expTxt, '', '']
+            })
+          : [['', 'N/A', '', '', '']]
+
+        docAutoTable({
+          startY: y + 4,
+          head: [['No', 'Description', 'Expected Result', 'Value', 'Pass/Fail']],
+          body: rows,
+          theme: 'striped',
+          margin: { left: 14, right: 14 },
+          headStyles: { fillColor: [31, 41, 55] },
+          styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+          columnStyles: {
+            0: { cellWidth: 10 },
+            1: { cellWidth: 70 },
+            2: { cellWidth: 60 },
+            3: { cellWidth: 20 },
+            4: { cellWidth: 20 },
+          },
+        })
+      }
+    }
+
+    // Structured Test Plan PDF export (reference-like)
+    if (exportType === 'test-plans') {
+      const reports = await fetchDetailedReports()
+      if (!reports.length) throw new Error('No report data available')
+
+      // Multi-plan export supported: append “document blocks”
+      for (let i = 0; i < reports.length; i++) {
+        const r = reports[i] as TestPlanReport
+        if (i > 0) doc.addPage()
+
+        const { confidentiality, docNumber, revision } = addCoverPage(r)
+        const tocEntries: Array<{ title: string; page: number }> = []
+
+        addSimpleSectionPage(
+          'Signatures',
+          [
+            `Prepared by: ${r.testPlan?.docPreparedByName || placeholder('Prepared by')}`,
+            `QA: ${r.testPlan?.docQaByName || placeholder('QA')}`,
+            `Approved by: ${r.testPlan?.docApprovedByName || placeholder('Approved by')}`,
+            `Approved at: ${r.testPlan?.docApprovedAt ? formatDate(r.testPlan?.docApprovedAt) : placeholder('Approved at')}`,
+          ].join('\n')
+        )
+        tocEntries.push({ title: 'Signatures', page: doc.getNumberOfPages() })
+
+        addRevisionControl(r)
+        tocEntries.push({ title: 'Revision Control', page: doc.getNumberOfPages() })
+
+        addTOCPage()
+        const tocPageNumber = doc.getNumberOfPages()
+
+        const addGeneral = (title: string, body?: string) => {
+          addSimpleSectionPage(title, body)
+          tocEntries.push({ title, page: doc.getNumberOfPages() })
+        }
+
+        addGeneral('Introduction – Purpose', r.testPlan?.docPurpose || r.testPlan?.description || '')
+        addGeneral('Introduction – Overview', r.testPlan?.docOverview || r.testPlan?.scope || '')
+        addGeneral('Statement of Conformity', r.testPlan?.docStatementOfConformity || '')
+        addGeneral('Changes', r.testPlan?.docChangesPolicy || '')
+        addGeneral('Distribution', r.testPlan?.docDistribution || '')
+        addGeneral('Acronyms & Abbreviations', r.testPlan?.docAcronymsNote || '')
+        addGeneral(
+          'Applicable Documents',
+          Array.isArray(r.testPlan?.docApplicableDocuments) ? (r.testPlan?.docApplicableDocuments as any[]).map((d) => `- ${d?.title || ''}`).join('\n') : ''
+        )
+        addGeneral('General Notes and Precautions', r.testPlan?.docGeneralPrecautions || '')
+
+        await addToolsAndSetup(r)
+        tocEntries.push({ title: 'General Conditions / Tools / Test Setup', page: doc.getNumberOfPages() })
+
+        const chapterStartPage = doc.getNumberOfPages() + 1
+        addPerTestCaseChapters(r, tocEntries)
+        if (r.testCases?.length) {
+          tocEntries.unshift({ title: 'Test Cases', page: chapterStartPage })
+        }
+
+        fillTOCPage(tocPageNumber, tocEntries)
+        drawHeaderFooterAllPages({ confidentiality, docNumber, revision })
+      }
+
+      const filename = `Test_Plans_Export.pdf`
+      doc.save(filename)
+      return
+    }
+
+    // Title (legacy export path)
     doc.setFontSize(18)
     doc.setFont('helvetica', 'bold')
     doc.text(exportType === 'test-cases' ? 'Test Cases Export' : 'Test Plans Export', pageWidth / 2, yPos, { align: 'center' })
@@ -485,9 +972,13 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
 
     const children: any[] = []
 
-    const createParagraph = (text: string, options: { bold?: boolean; size?: number; heading?: any } = {}) => {
+    const createParagraph = (
+      text: string,
+      options: { bold?: boolean; size?: number; heading?: any; pageBreakBefore?: boolean } = {}
+    ) => {
       return new Paragraph({
         heading: options.heading,
+        pageBreakBefore: options.pageBreakBefore,
         spacing: { after: 100 },
         children: [
           new TextRun({
@@ -495,6 +986,30 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
             bold: options.bold,
             size: options.size || 24,
           }),
+        ],
+      })
+    }
+
+    const createRedTodo = (label: string) =>
+      new Paragraph({
+        spacing: { after: 100 },
+        children: [
+          new TextRun({
+            text: `TODO: ${label}`,
+            bold: true,
+            color: 'DC2626',
+            size: 24,
+          }),
+        ],
+      })
+
+    const createMaybeTodoLine = (label: string, value?: string) => {
+      if (value && String(value).trim()) return createParagraph(`${label}: ${value}`)
+      return new Paragraph({
+        spacing: { after: 100 },
+        children: [
+          new TextRun({ text: `${label}: `, size: 24 }),
+          new TextRun({ text: `TODO: ${label}`, bold: true, color: 'DC2626', size: 24 }),
         ],
       })
     }
@@ -572,32 +1087,149 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
           const r = report as TestPlanReport
           const tp = r.testPlan!
 
-          children.push(createParagraph(`${tp.key}: ${tp.name}`, { heading: HeadingLevel.HEADING_2, size: 28 }))
-          children.push(createParagraph(`Status: ${tp.status || 'N/A'}`))
-          children.push(createParagraph(`Phase: ${tp.phase || 'N/A'}`))
-          children.push(createParagraph(`Description: ${tp.description || 'N/A'}`))
+          const docNumber = tp.docNumber || tp.key || ''
+          const confidentiality = tp.docConfidentiality || 'INTERNAL'
+          const revision = tp.docRevision || '1.0'
 
-          if (r.statistics) {
-            children.push(createParagraph('Statistics', { heading: HeadingLevel.HEADING_3, size: 26 }))
-            children.push(createParagraph(`Total Cases: ${r.statistics.totalCases || 0}`))
-            children.push(createParagraph(`Executed: ${r.statistics.executed || 0}`))
-            children.push(createParagraph(`Passed: ${r.statistics.passed || 0}`))
-            children.push(createParagraph(`Failed: ${r.statistics.failed || 0}`))
-            children.push(createParagraph(`Coverage: ${r.statistics.coveragePercentage || 0}%`))
-          }
-
-          if (r.testResults && r.testResults.length > 0) {
-            children.push(createParagraph('Linked Test Results', { heading: HeadingLevel.HEADING_3, size: 26 }))
-            const trRows = r.testResults.map((tr: any) => [
-              tr.title || 'N/A',
-              tr.resultStatus || 'N/A',
-              tr.executedByName || 'N/A',
-              formatDate(tr.executedAt),
-            ])
-            children.push(createTable(['Title', 'Status', 'Executed By', 'Date'], trRows))
-          }
-
+          // Cover-ish header (Word doesn’t have “pages” in the same way; we use page breaks)
+          children.push(createParagraph('TEST PLAN', { heading: HeadingLevel.HEADING_1, size: 36, pageBreakBefore: true }))
+          children.push(createParagraph(tp.name || tp.key || 'Test Plan', { heading: HeadingLevel.HEADING_2, size: 28 }))
+          children.push(createParagraph(`Confidentiality: ${confidentiality}`))
+          children.push(createParagraph(`Document: ${docNumber}`))
+          children.push(createParagraph(`Revision: ${revision}`))
+          if (tp.docPlanDate) children.push(createParagraph(`Test Plan from: ${formatDate(tp.docPlanDate)}`))
           children.push(createParagraph(''))
+
+          // Table of contents (manual list of major sections)
+          children.push(createParagraph('Table of Contents', { heading: HeadingLevel.HEADING_2, size: 28 }))
+          const tocLines = [
+            'Signatures',
+            'Revision Control',
+            'Introduction – Purpose',
+            'Introduction – Overview',
+            'Statement of Conformity',
+            'Changes',
+            'Distribution',
+            'Acronyms & Abbreviations',
+            'Applicable Documents',
+            'General Notes and Precautions',
+            'General Conditions / Tools / Test Setup',
+            'Test Cases',
+          ]
+          tocLines.forEach((t) => children.push(createParagraph(`- ${t}`)))
+          children.push(createParagraph(''))
+
+          // Signatures
+          children.push(createParagraph('Signatures', { heading: HeadingLevel.HEADING_2, size: 28, pageBreakBefore: true }))
+          children.push(createMaybeTodoLine('Prepared by', tp.docPreparedByName))
+          children.push(createMaybeTodoLine('QA', tp.docQaByName))
+          children.push(createMaybeTodoLine('Approved by', tp.docApprovedByName))
+          children.push(createMaybeTodoLine('Approved at', tp.docApprovedAt ? formatDate(tp.docApprovedAt) : ''))
+          children.push(createParagraph(''))
+
+          // Revision Control
+          children.push(createParagraph('Revision Control', { heading: HeadingLevel.HEADING_2, size: 28, pageBreakBefore: true }))
+          const revRows =
+            r.revisions && r.revisions.length
+              ? r.revisions.map((rev) => [
+                  rev.revisionNumber || '',
+                  rev.revisionDate ? formatDate(rev.revisionDate) : '',
+                  rev.editedByName || '',
+                  rev.approvedByName || '',
+                  rev.approvedAt ? formatDate(rev.approvedAt) : '',
+                  rev.summaryOfChanges || '',
+                ])
+              : [['', '', '', '', '', 'No revision history']]
+          children.push(createTable(['Rev', 'Date', 'Edited by', 'Approved by', 'Approved at', 'Summary of Changes'], revRows))
+          children.push(createParagraph(''))
+
+          const addSection = (title: string, body?: string) => {
+            children.push(createParagraph(title, { heading: HeadingLevel.HEADING_2, size: 28, pageBreakBefore: true }))
+            children.push(createParagraph(body || 'N/A'))
+            children.push(createParagraph(''))
+          }
+
+          addSection('Introduction – Purpose', tp.docPurpose || tp.description || '')
+          addSection('Introduction – Overview', tp.docOverview || tp.scope || '')
+          addSection('Statement of Conformity', tp.docStatementOfConformity || '')
+          addSection('Changes', tp.docChangesPolicy || '')
+          addSection('Distribution', tp.docDistribution || '')
+          addSection('Acronyms & Abbreviations', tp.docAcronymsNote || '')
+          addSection(
+            'Applicable Documents',
+            Array.isArray(tp.docApplicableDocuments) ? (tp.docApplicableDocuments as any[]).map((d) => `- ${d?.title || ''}`).join('\n') : ''
+          )
+          addSection('General Notes and Precautions', tp.docGeneralPrecautions || '')
+
+          // Tools / Setup
+          children.push(
+            createParagraph('General Conditions / Tools / Test Setup', { heading: HeadingLevel.HEADING_2, size: 28, pageBreakBefore: true })
+          )
+          children.push(createParagraph('Tools', { heading: HeadingLevel.HEADING_3, size: 26 }))
+          const tools = Array.isArray(tp.docTools) ? (tp.docTools as any[]) : []
+          const toolRows = tools.length
+            ? tools.map((t) => [t?.name || '', t?.manufacturer || '', t?.partNumber || '', t?.serialNumber || '', t?.calibrationValidTill || ''])
+            : [['', '', '', '', '']]
+          children.push(createTable(['Tool', 'Manufacturer', 'Part #', 'Serial #', 'Calibration valid till'], toolRows))
+          children.push(createParagraph(''))
+          children.push(createParagraph('Linked Test Setups', { heading: HeadingLevel.HEADING_3, size: 26 }))
+          const setups = r.setups || []
+          children.push(createParagraph(setups.length ? setups.map((s) => `- ${s.name || s.id || 'Setup'}`).join('\n') : 'N/A'))
+          const primary = setups[0] as any
+          const diagramUrl =
+            primary?.diagramExportPath ||
+            (Array.isArray(primary?.photos) ? primary?.photos?.[0]?.fileUrl || primary?.photos?.[0]?.url : null)
+          if (!diagramUrl) {
+            children.push(createRedTodo('Export setup diagram to make it visible here'))
+          } else {
+            children.push(createParagraph(`Setup Diagram: ${String(diagramUrl)}`))
+          }
+          if (tp.docTestSetupNotes) children.push(createParagraph(tp.docTestSetupNotes))
+          children.push(createParagraph(''))
+
+          // Per-test-case chapters
+          children.push(createParagraph('Test Cases', { heading: HeadingLevel.HEADING_2, size: 28, pageBreakBefore: true }))
+          const pcs = r.testCases || []
+          for (const pc of pcs) {
+            const tc = pc.testCase || {}
+            children.push(createParagraph(`${tc.key || 'TC'}: ${tc.title || ''}`.trim(), { heading: HeadingLevel.HEADING_3, size: 26, pageBreakBefore: true }))
+            children.push(createParagraph(`Status: ${tc.status || 'N/A'}`))
+            children.push(createParagraph(pc.isMandatory ? 'Mandatory' : 'Optional'))
+            children.push(createParagraph(''))
+
+            children.push(createParagraph('Objective', { heading: HeadingLevel.HEADING_4, size: 24 }))
+            children.push(createParagraph((tc.objective as any) || 'N/A'))
+            children.push(createParagraph(''))
+
+            children.push(createParagraph('Preconditions / Assumptions', { heading: HeadingLevel.HEADING_4, size: 24 }))
+            children.push(createParagraph((tc.preconditions as any) || 'N/A'))
+            children.push(createParagraph(''))
+
+            children.push(createParagraph('Requirements Verified', { heading: HeadingLevel.HEADING_4, size: 24 }))
+            const verifies = (tc.verifiesElements || []).map((v) => `- ${(v.id || '').toString()} ${v.name || ''}`.trim()).filter(Boolean)
+            children.push(createParagraph(verifies.length ? verifies.join('\n') : 'N/A'))
+            children.push(createParagraph(''))
+
+            if (tc.passFailCriteria) {
+              children.push(createParagraph('Expected Outcomes / Pass-Fail Criteria', { heading: HeadingLevel.HEADING_4, size: 24 }))
+              children.push(createParagraph(tc.passFailCriteria as any))
+              children.push(createParagraph(''))
+            }
+
+            const steps = Array.isArray(tc.steps) ? (tc.steps as any[]) : []
+            const expected = Array.isArray(tc.expectedResults) ? (tc.expectedResults as any[]) : []
+            const procRows = steps.length
+              ? steps.map((s, idx) => {
+                  const desc = typeof s === 'string' ? s : (s?.text || s?.description || JSON.stringify(s))
+                  const exp = expected[idx]
+                  const expTxt = typeof exp === 'string' ? exp : (exp?.text || exp?.description || (exp ? JSON.stringify(exp) : ''))
+                  return [String(idx + 1), desc, expTxt, '', '']
+                })
+              : [['', 'N/A', '', '', '']]
+            children.push(createParagraph('Test Procedure', { heading: HeadingLevel.HEADING_4, size: 24 }))
+            children.push(createTable(['No', 'Description', 'Expected Result', 'Value', 'Pass/Fail'], procRows))
+            children.push(createParagraph(''))
+          }
         }
       }
     } else {

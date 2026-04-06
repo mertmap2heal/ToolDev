@@ -209,6 +209,19 @@ export const reportService = {
         projectId,
       },
       include: {
+        planSetups: {
+          include: {
+            setup: true,
+          },
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
+        revisions: {
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
         planCases: {
           include: {
             testCase: {
@@ -292,6 +305,60 @@ export const reportService = {
       })
     )
 
+    // For each test case, include requirements/functions it verifies (for “Requirements Verified by This Test” sections)
+    const caseIds = plan.planCases.map((pc) => pc.testCaseId)
+    const tcVerifiesLinks = await prisma.traceLink.findMany({
+      where: {
+        projectId,
+        sourceType: 'test_case',
+        sourceId: { in: caseIds },
+        linkType: 'verifies',
+      },
+      orderBy: { createdAt: 'asc' },
+    })
+
+    const tcLinksByCaseId = new Map<string, any[]>()
+    for (const l of tcVerifiesLinks) {
+      const list = tcLinksByCaseId.get(l.sourceId) ?? []
+      list.push(l)
+      tcLinksByCaseId.set(l.sourceId, list)
+    }
+
+    const reqIds = Array.from(new Set(tcVerifiesLinks.filter((l) => l.targetType === 'requirement').map((l) => l.targetId)))
+    const fnIds = Array.from(new Set(tcVerifiesLinks.filter((l) => l.targetType === 'function').map((l) => l.targetId)))
+    const [reqs, funcs] = await Promise.all([
+      reqIds.length
+        ? prisma.requirement.findMany({
+            where: { projectId, id: { in: reqIds } },
+            select: { id: true, requirementId: true, title: true },
+          })
+        : Promise.resolve([] as any[]),
+      fnIds.length
+        ? prisma.systemFunction.findMany({
+            where: { projectId, id: { in: fnIds } },
+            select: { id: true, functionId: true, name: true },
+          })
+        : Promise.resolve([] as any[]),
+    ])
+    const reqById = new Map(reqs.map((r) => [r.id, r]))
+    const fnById = new Map(funcs.map((f) => [f.id, f]))
+
+    // Include custom sections for each test case (for rich “Input/Attachments/Notes” style content)
+    const customSections = await prisma.verTestCaseCustomSection.findMany({
+      where: {
+        projectId,
+        testCaseId: { in: caseIds },
+      },
+      orderBy: { orderIndex: 'asc' },
+      include: { images: true },
+    })
+    const sectionsByCaseId = new Map<string, any[]>()
+    for (const s of customSections) {
+      const list = sectionsByCaseId.get(s.testCaseId) ?? []
+      list.push(s)
+      sectionsByCaseId.set(s.testCaseId, list)
+    }
+
     return {
       metadata: {
         projectId,
@@ -312,7 +379,47 @@ export const reportService = {
         ownerUserId: plan.ownerUserId ?? undefined,
         testingEnvironmentIds: plan.testingEnvironmentIds ?? undefined,
         testingToolIds: plan.testingToolIds ?? undefined,
+        docNumber: plan.docNumber ?? undefined,
+        docConfidentiality: plan.docConfidentiality ?? undefined,
+        docProjectCode: plan.docProjectCode ?? undefined,
+        docRevision: plan.docRevision ?? undefined,
+        docPlanDate: plan.docPlanDate ?? undefined,
+        docPreparedByName: plan.docPreparedByName ?? undefined,
+        docQaByName: plan.docQaByName ?? undefined,
+        docApprovedByName: plan.docApprovedByName ?? undefined,
+        docApprovedAt: plan.docApprovedAt ?? undefined,
+        docPurpose: plan.docPurpose ?? undefined,
+        docOverview: plan.docOverview ?? undefined,
+        docStatementOfConformity: plan.docStatementOfConformity ?? undefined,
+        docChangesPolicy: plan.docChangesPolicy ?? undefined,
+        docDistribution: plan.docDistribution ?? undefined,
+        docAcronymsNote: plan.docAcronymsNote ?? undefined,
+        docApplicableDocuments: plan.docApplicableDocuments ?? undefined,
+        docGeneralPrecautions: plan.docGeneralPrecautions ?? undefined,
+        docGeneralConditions: plan.docGeneralConditions ?? undefined,
+        docTools: plan.docTools ?? undefined,
+        docTestSetupNotes: plan.docTestSetupNotes ?? undefined,
       },
+      revisions: (plan.revisions ?? []).map((r) => ({
+        revisionNumber: r.revisionNumber,
+        revisionDate: r.revisionDate,
+        editedByName: r.editedByName,
+        approvedByName: r.approvedByName,
+        approvedAt: r.approvedAt,
+        summaryOfChanges: r.summaryOfChanges,
+      })),
+      setups: (plan.planSetups ?? []).map((ps) => ({
+        id: ps.setup.id,
+        name: ps.setup.name,
+        environmentType: ps.setup.environmentType,
+        description: ps.setup.description,
+        version: ps.setup.version,
+        status: ps.setup.status,
+        components: ps.setup.components,
+        interfaces: ps.setup.interfaces,
+        diagramExportPath: (ps.setup as any).diagramExportPath ?? undefined,
+        photos: (ps.setup as any).photos ?? undefined,
+      })),
       statistics: {
         totalCases,
         mandatoryCases,
@@ -324,6 +431,7 @@ export const reportService = {
       testCases: plan.planCases.map((pc) => ({
         orderIndex: pc.orderIndex,
         isMandatory: pc.isMandatory,
+        notes: pc.notes ?? undefined,
         testCase: {
           id: pc.testCase.id,
           key: pc.testCase.key,
@@ -334,6 +442,30 @@ export const reportService = {
           steps: pc.testCase.steps ?? undefined,
           expectedResults: pc.testCase.expectedResults ?? undefined,
           passFailCriteria: pc.testCase.passFailCriteria ?? undefined,
+          verifiesElements: (tcLinksByCaseId.get(pc.testCase.id) ?? [])
+            .map((l) => {
+              if (l.targetType === 'requirement') {
+                const r = reqById.get(l.targetId)
+                return r ? { type: 'requirement', id: r.requirementId || r.id, name: r.title } : null
+              }
+              if (l.targetType === 'function') {
+                const f = fnById.get(l.targetId)
+                return f ? { type: 'function', id: f.functionId || f.id, name: f.name } : null
+              }
+              return null
+            })
+            .filter(Boolean),
+          customSections: (sectionsByCaseId.get(pc.testCase.id) ?? []).map((s) => ({
+            id: s.id,
+            title: s.title,
+            content: s.content,
+            orderIndex: s.orderIndex,
+            images: (s.images ?? []).map((img: any) => ({
+              fileName: img.fileName,
+              fileUrl: img.fileUrl,
+              mimeType: img.mimeType,
+            })),
+          })),
         },
         latestResult: pc.testCase.runResults.length > 0
           ? {
@@ -425,6 +557,154 @@ export const reportService = {
         notes: r.notes,
       })),
       statistics: stats,
+    }
+  },
+
+  /**
+   * Generate test setup report
+   */
+  async generateTestSetupReport(projectId: string, setupId: string): Promise<any> {
+    const setup = await prisma.verTestSetup.findFirst({
+      where: { id: setupId, projectId },
+      include: {
+        testCaseSetups: {
+          include: { testCase: true },
+          orderBy: { createdAt: 'asc' },
+        },
+        planSetups: {
+          include: { testPlan: true },
+          orderBy: { createdAt: 'asc' },
+        },
+        testResults: {
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        },
+      },
+    })
+
+    if (!setup) throw new Error('Setup not found')
+
+    const auditTrail = await prisma.verAuditEvent.findMany({
+      where: { projectId, entityType: 'SETUP', entityId: setupId },
+      orderBy: { performedAt: 'desc' },
+      take: 50,
+    })
+
+    return {
+      metadata: {
+        projectId,
+        reportType: 'TEST_SETUP',
+        generatedAt: new Date().toISOString(),
+        version: '1.0',
+      },
+      testSetup: {
+        id: setup.id,
+        name: setup.name,
+        description: setup.description,
+        environmentType: setup.environmentType,
+        version: setup.version,
+        status: setup.status,
+        components: setup.components,
+        interfaces: setup.interfaces,
+        diagramData: setup.diagramData,
+        diagramExportPath: setup.diagramExportPath,
+        photos: setup.photos,
+        createdAt: setup.createdAt,
+        updatedAt: setup.updatedAt,
+      },
+      linkedTestCases: (setup.testCaseSetups ?? []).map((l) => ({
+        id: l.testCase.id,
+        key: l.testCase.key,
+        title: l.testCase.title,
+        status: l.testCase.status,
+      })),
+      linkedTestPlans: (setup.planSetups ?? []).map((l) => ({
+        id: l.testPlan.id,
+        key: l.testPlan.key,
+        name: l.testPlan.name,
+        status: l.testPlan.status,
+        phase: l.testPlan.phase,
+      })),
+      recentTestResults: (setup.testResults ?? []).map((tr) => ({
+        id: tr.id,
+        title: tr.title,
+        resultStatus: tr.resultStatus,
+        executedAt: tr.executedAt,
+        executedByName: tr.executedByName,
+        testEnvironment: tr.testEnvironment,
+      })),
+      auditTrail,
+    }
+  },
+
+  /**
+   * Generate test result report
+   */
+  async generateTestResultReport(projectId: string, resultId: string): Promise<any> {
+    const testResult = await prisma.verTestResult.findFirst({
+      where: { id: resultId, projectId },
+      include: {
+        setup: true,
+        links: true,
+      },
+    })
+
+    if (!testResult) throw new Error('Test result not found')
+
+    const linked = await Promise.all(
+      (testResult.links ?? []).map(async (l) => {
+        if (l.linkedEntityType === 'TEST_CASE') {
+          const tc = await prisma.verTestCase.findFirst({
+            where: { id: l.linkedEntityId, projectId },
+            select: { id: true, key: true, title: true, status: true },
+          })
+          return tc ? { type: 'TEST_CASE', id: tc.id, key: tc.key, name: tc.title, status: tc.status, relation: l.relation } : null
+        }
+        if (l.linkedEntityType === 'TEST_PLAN') {
+          const tp = await prisma.verTestPlan.findFirst({
+            where: { id: l.linkedEntityId, projectId },
+            select: { id: true, key: true, name: true, status: true, phase: true },
+          })
+          return tp ? { type: 'TEST_PLAN', id: tp.id, key: tp.key, name: tp.name, status: tp.status, phase: tp.phase, relation: l.relation } : null
+        }
+        return { type: l.linkedEntityType, id: l.linkedEntityId, relation: l.relation }
+      })
+    )
+
+    return {
+      metadata: {
+        projectId,
+        reportType: 'TEST_RESULT',
+        generatedAt: new Date().toISOString(),
+        version: '1.0',
+      },
+      testResult: {
+        id: testResult.id,
+        title: testResult.title,
+        description: testResult.description,
+        fileName: testResult.fileName,
+        fileSize: testResult.fileSize,
+        mimeType: testResult.mimeType,
+        checksum: testResult.checksum,
+        storageRef: testResult.storageRef,
+        resultStatus: testResult.resultStatus,
+        executedAt: testResult.executedAt,
+        executedByName: testResult.executedByName,
+        testEnvironment: testResult.testEnvironment,
+        notes: testResult.notes,
+        setup: testResult.setup
+          ? {
+              id: testResult.setup.id,
+              name: testResult.setup.name,
+              environmentType: testResult.setup.environmentType,
+              diagramExportPath: testResult.setup.diagramExportPath,
+              photos: testResult.setup.photos,
+            }
+          : null,
+        createdAt: testResult.createdAt,
+        updatedAt: testResult.updatedAt,
+      },
+      linkedEntities: linked.filter(Boolean),
     }
   },
 

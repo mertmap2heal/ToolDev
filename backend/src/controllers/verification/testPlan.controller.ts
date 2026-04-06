@@ -90,7 +90,36 @@ export const getTestPlan = async (req: AuthRequest, res: Response) => {
 export const createTestPlan = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
-    const { key, name, description, scope, entryCriteria, exitCriteria, testingEnvironmentIds, testingToolIds } = req.body
+    const {
+      key,
+      name,
+      description,
+      scope,
+      entryCriteria,
+      exitCriteria,
+      testingEnvironmentIds,
+      testingToolIds,
+      docNumber,
+      docConfidentiality,
+      docProjectCode,
+      docRevision,
+      docPlanDate,
+      docPreparedByName,
+      docQaByName,
+      docApprovedByName,
+      docApprovedAt,
+      docPurpose,
+      docOverview,
+      docStatementOfConformity,
+      docChangesPolicy,
+      docDistribution,
+      docAcronymsNote,
+      docApplicableDocuments,
+      docGeneralPrecautions,
+      docGeneralConditions,
+      docTools,
+      docTestSetupNotes,
+    } = req.body
     if (!name) return res.status(400).json({ success: false, error: 'Name is required' })
     const planKey = key || await verificationService.generateTestPlanKey(projectId)
     const existing = await prisma.verTestPlan.findFirst({ where: { projectId, key: planKey } })
@@ -107,6 +136,26 @@ export const createTestPlan = async (req: AuthRequest, res: Response) => {
         ownerUserId: req.userId,
         testingEnvironmentIds: (Array.isArray(testingEnvironmentIds) ? testingEnvironmentIds : null) as any,
         testingToolIds: (Array.isArray(testingToolIds) ? testingToolIds : null) as any,
+        docNumber,
+        docConfidentiality,
+        docProjectCode,
+        docRevision,
+        docPlanDate: docPlanDate ? new Date(docPlanDate) : null,
+        docPreparedByName,
+        docQaByName,
+        docApprovedByName,
+        docApprovedAt: docApprovedAt ? new Date(docApprovedAt) : null,
+        docPurpose,
+        docOverview,
+        docStatementOfConformity,
+        docChangesPolicy,
+        docDistribution,
+        docAcronymsNote,
+        docApplicableDocuments: (docApplicableDocuments && typeof docApplicableDocuments === 'object') ? (docApplicableDocuments as any) : null,
+        docGeneralPrecautions,
+        docGeneralConditions: (docGeneralConditions && typeof docGeneralConditions === 'object') ? (docGeneralConditions as any) : null,
+        docTools: (docTools && typeof docTools === 'object') ? (docTools as any) : null,
+        docTestSetupNotes,
         status: TestPlanStatus.DRAFT,
       },
     })
@@ -130,13 +179,73 @@ export const updateTestPlan = async (req: AuthRequest, res: Response) => {
     const { projectId, id } = req.params
     const existing = await prisma.verTestPlan.findFirst({ where: { id, projectId } })
     if (!existing) return res.status(404).json({ success: false, error: 'Test plan not found' })
-    const { name, description, scope, entryCriteria, exitCriteria, phase, ownerUserId, testingEnvironmentIds, testingToolIds, status } = req.body
+    const {
+      name,
+      description,
+      scope,
+      entryCriteria,
+      exitCriteria,
+      phase,
+      ownerUserId,
+      testingEnvironmentIds,
+      testingToolIds,
+      status,
+      docNumber,
+      docConfidentiality,
+      docProjectCode,
+      docRevision,
+      docPlanDate,
+      docPreparedByName,
+      docQaByName,
+      docApprovedByName,
+      docApprovedAt,
+      docPurpose,
+      docOverview,
+      docStatementOfConformity,
+      docChangesPolicy,
+      docDistribution,
+      docAcronymsNote,
+      docApplicableDocuments,
+      docGeneralPrecautions,
+      docGeneralConditions,
+      docTools,
+      docTestSetupNotes,
+    } = req.body
     if (status && status !== existing.status) {
       statusTransitionService.validateTransition('TEST_PLAN', existing.status, status)
     }
-    const updateData: Record<string, unknown> = { name, description, scope, entryCriteria, exitCriteria, phase, ownerUserId, status }
+    const updateData: Record<string, unknown> = {
+      name,
+      description,
+      scope,
+      entryCriteria,
+      exitCriteria,
+      phase,
+      ownerUserId,
+      status,
+    }
     if (testingEnvironmentIds !== undefined) updateData.testingEnvironmentIds = Array.isArray(testingEnvironmentIds) ? testingEnvironmentIds : null
     if (testingToolIds !== undefined) updateData.testingToolIds = Array.isArray(testingToolIds) ? testingToolIds : null
+    if (docNumber !== undefined) updateData.docNumber = docNumber
+    if (docConfidentiality !== undefined) updateData.docConfidentiality = docConfidentiality
+    if (docProjectCode !== undefined) updateData.docProjectCode = docProjectCode
+    if (docRevision !== undefined) updateData.docRevision = docRevision
+    if (docPlanDate !== undefined) updateData.docPlanDate = docPlanDate ? new Date(docPlanDate) : null
+    if (docPreparedByName !== undefined) updateData.docPreparedByName = docPreparedByName
+    if (docQaByName !== undefined) updateData.docQaByName = docQaByName
+    if (docApprovedByName !== undefined) updateData.docApprovedByName = docApprovedByName
+    if (docApprovedAt !== undefined) updateData.docApprovedAt = docApprovedAt ? new Date(docApprovedAt) : null
+    if (docPurpose !== undefined) updateData.docPurpose = docPurpose
+    if (docOverview !== undefined) updateData.docOverview = docOverview
+    if (docStatementOfConformity !== undefined) updateData.docStatementOfConformity = docStatementOfConformity
+    if (docChangesPolicy !== undefined) updateData.docChangesPolicy = docChangesPolicy
+    if (docDistribution !== undefined) updateData.docDistribution = docDistribution
+    if (docAcronymsNote !== undefined) updateData.docAcronymsNote = docAcronymsNote
+    if (docApplicableDocuments !== undefined) updateData.docApplicableDocuments = (docApplicableDocuments && typeof docApplicableDocuments === 'object') ? (docApplicableDocuments as any) : null
+    if (docGeneralPrecautions !== undefined) updateData.docGeneralPrecautions = docGeneralPrecautions
+    if (docGeneralConditions !== undefined) updateData.docGeneralConditions = (docGeneralConditions && typeof docGeneralConditions === 'object') ? (docGeneralConditions as any) : null
+    if (docTools !== undefined) updateData.docTools = (docTools && typeof docTools === 'object') ? (docTools as any) : null
+    if (docTestSetupNotes !== undefined) updateData.docTestSetupNotes = docTestSetupNotes
     const updated = await prisma.verTestPlan.update({
       where: { id },
       data: updateData,

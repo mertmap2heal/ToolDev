@@ -174,6 +174,7 @@ model Project {
   verTestSetups          VerTestSetup[]
   verTestCases           VerTestCase[]
   verTestPlans           VerTestPlan[]
+  verTestPlanRevisions   VerTestPlanRevision[]
   verTestRuns            VerTestRun[]
   verTestProcedures      VerTestProcedure[]
   verTestEnvironments    VerTestEnvironment[]
@@ -2551,17 +2552,60 @@ model VerTestPlan {
   testingEnvironmentIds Json? // Array of ENVIRONMENT_TYPE option values
   testingToolIds        Json? // Array of TESTING_TOOL option values
   status        String   @default("DRAFT") // DRAFT, REVIEWED, APPROVED, ACTIVE, CLOSED
+  // Document metadata (for structured PDF exports)
+  docNumber                 String?  // e.g. TPL-10279003A-08-01
+  docConfidentiality        String?  // e.g. AMDC - INTERN
+  docProjectCode            String?  // e.g. I2403
+  docRevision               String?  @default("1.0")
+  docPlanDate               DateTime? // "Test Plan from ..."
+  docPreparedByName         String?
+  docQaByName               String?
+  docApprovedByName         String?
+  docApprovedAt             DateTime?
+  docPurpose                String?  @db.Text
+  docOverview               String?  @db.Text
+  docStatementOfConformity  String?  @db.Text
+  docChangesPolicy          String?  @db.Text
+  docDistribution           String?  @db.Text
+  docAcronymsNote           String?  @db.Text
+  docApplicableDocuments    Json? // Array<{ title: string; revision?: string; date?: string; publisher?: string }>
+  docGeneralPrecautions     String?  @db.Text
+  docGeneralConditions      Json? // free-form object/table data
+  docTools                  Json? // Array<{ name: string; manufacturer?: string; partNumber?: string; serialNumber?: string; calibrationValidTill?: string }>
+  docTestSetupNotes         String?  @db.Text
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   planCases VerTestPlanCase[]
   planSetups VerTestPlanSetup[]
+  revisions VerTestPlanRevision[]
   testRuns  VerTestRun[]
 
   @@unique([projectId, key])
   @@index([projectId])
   @@index([status])
+}
+
+// Revision control entries for a test plan document export
+model VerTestPlanRevision {
+  id               String   @id @default(uuid())
+  projectId        String
+  testPlanId       String
+  revisionNumber   String
+  revisionDate     DateTime?
+  editedByName     String?
+  approvedByName   String?
+  approvedAt       DateTime?
+  summaryOfChanges String?  @db.Text
+  createdAt        DateTime @default(now())
+
+  project  Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testPlan VerTestPlan @relation(fields: [testPlanId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([testPlanId])
+  @@unique([testPlanId, revisionNumber])
 }
 
 // Join table: Test Plan ↔ Setup

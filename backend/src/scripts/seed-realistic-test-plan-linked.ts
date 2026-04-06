@@ -14,6 +14,8 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
+const formatDate = (date: Date) => date.toISOString().slice(0, 10)
+
 const PLAN = {
   key: 'TP-UAV-QUAL-001',
   name: 'Qualification Flight Test Plan – Comms, Nav & Power',
@@ -114,12 +116,106 @@ async function main() {
         phase: PLAN.phase,
         ownerUserId: owner.id,
         status: PLAN.status,
+        // NOTE: do not seed any real document identifiers/labels; keep placeholders only.
+        docNumber: PLAN.key,
+        docConfidentiality: 'INTERNAL',
+        docProjectCode: null,
+        docRevision: '1.0',
+        docPlanDate: new Date(),
+        docPreparedByName: 'Test Engineer',
+        docQaByName: 'QA Engineer',
+        docApprovedByName: 'Verification Lead',
+        docApprovedAt: null,
+        docPurpose: 'Define the qualification test strategy and detailed procedures for comms failsafe, navigation accuracy, and power/battery behaviors.',
+        docOverview: 'This test plan covers a combination of HIL and field validations and defines the tools, setup, and evidence capture requirements.',
+        docStatementOfConformity: 'The test cases herein demonstrate compliance to the linked requirements when executed with a controlled and approved setup.',
+        docChangesPolicy: 'Changes to this document shall be recorded in revision control and reviewed prior to execution.',
+        docDistribution: 'Internal distribution to engineering, QA, and verification stakeholders.',
+        docAcronymsNote: 'UAV: Unmanned Aerial Vehicle; GNSS: Global Navigation Satellite System; RTL: Return-To-Launch; HIL: Hardware-In-The-Loop.',
+        docApplicableDocuments: [
+          { title: 'Requirements Specification', revision: 'A', date: formatDate(new Date()) },
+          { title: 'Safety & Operations Manual', revision: '1.2' },
+        ] as any,
+        docGeneralPrecautions:
+          'Ensure a safety pilot is present for field testing. Verify geofence and kill switch. Maintain safe separation distance and clear the test area prior to arming.',
+        docTools: [
+          { name: 'Ground Control Station', manufacturer: 'QGC', partNumber: '', serialNumber: '', calibrationValidTill: '' },
+          { name: 'Telemetry Radio', manufacturer: 'Generic', partNumber: '', serialNumber: '', calibrationValidTill: '' },
+        ] as any,
+        docTestSetupNotes: 'Use the linked setup(s) for all executions unless an approved deviation is documented in the revision control.',
       },
       include: { planCases: true, planSetups: true },
     })
     console.log(`Created test plan: ${plan.key} - ${plan.name} (${plan.id})`)
   } else {
     console.log(`Test plan ${plan.key} already exists: ${plan.id}`)
+    // Backfill document metadata for existing plan (so exports look like the reference)
+    plan = await prisma.verTestPlan.update({
+      where: { id: plan.id },
+      data: {
+        docNumber: plan.docNumber ?? PLAN.key,
+        docConfidentiality: plan.docConfidentiality ?? 'INTERNAL',
+        docProjectCode: plan.docProjectCode ?? null,
+        docRevision: plan.docRevision ?? '1.0',
+        docPlanDate: plan.docPlanDate ?? new Date(),
+        docPreparedByName: plan.docPreparedByName ?? 'Test Engineer',
+        docQaByName: plan.docQaByName ?? 'QA Engineer',
+        docApprovedByName: plan.docApprovedByName ?? 'Verification Lead',
+        docPurpose:
+          plan.docPurpose ??
+          'Define the qualification test strategy and detailed procedures for comms failsafe, navigation accuracy, and power/battery behaviors.',
+        docOverview:
+          plan.docOverview ??
+          'This test plan covers a combination of HIL and field validations and defines the tools, setup, and evidence capture requirements.',
+        docStatementOfConformity:
+          plan.docStatementOfConformity ??
+          'The test cases herein demonstrate compliance to the linked requirements when executed with a controlled and approved setup.',
+        docChangesPolicy: plan.docChangesPolicy ?? 'Changes to this document shall be recorded in revision control and reviewed prior to execution.',
+        docDistribution: plan.docDistribution ?? 'Internal distribution to engineering, QA, and verification stakeholders.',
+        docAcronymsNote:
+          plan.docAcronymsNote ??
+          'UAV: Unmanned Aerial Vehicle; GNSS: Global Navigation Satellite System; RTL: Return-To-Launch; HIL: Hardware-In-The-Loop.',
+        docApplicableDocuments:
+          (plan.docApplicableDocuments as any) ??
+          ([
+            { title: 'Requirements Specification', revision: 'A', date: formatDate(new Date()) },
+            { title: 'Safety & Operations Manual', revision: '1.2' },
+          ] as any),
+        docGeneralPrecautions:
+          plan.docGeneralPrecautions ??
+          'Ensure a safety pilot is present for field testing. Verify geofence and kill switch. Maintain safe separation distance and clear the test area prior to arming.',
+        docTools:
+          (plan.docTools as any) ??
+          ([
+            { name: 'Ground Control Station', manufacturer: 'QGC', partNumber: '', serialNumber: '', calibrationValidTill: '' },
+            { name: 'Telemetry Radio', manufacturer: 'Generic', partNumber: '', serialNumber: '', calibrationValidTill: '' },
+          ] as any),
+        docTestSetupNotes:
+          plan.docTestSetupNotes ??
+          'Use the linked setup(s) for all executions unless an approved deviation is documented in the revision control.',
+      },
+      include: { planCases: true, planSetups: true },
+    })
+  }
+
+  // Ensure at least one revision control entry exists for export
+  const revExists = await prisma.verTestPlanRevision.findFirst({
+    where: { projectId, testPlanId: plan.id, revisionNumber: '1.0' },
+    select: { id: true },
+  })
+  if (!revExists) {
+    await prisma.verTestPlanRevision.create({
+      data: {
+        projectId,
+        testPlanId: plan.id,
+        revisionNumber: '1.0',
+        revisionDate: new Date(),
+        editedByName: 'Test Engineer',
+        approvedByName: '',
+        approvedAt: null,
+        summaryOfChanges: 'Initial release.',
+      },
+    })
   }
 
   // Link the chosen setup directly to the plan (requested).

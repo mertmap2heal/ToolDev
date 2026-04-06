@@ -10,6 +10,7 @@ import VerificationLifecycle from './VerificationLifecycle'
 import clsx from 'clsx'
 import RelationshipsPanel from './RelationshipsPanel'
 import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
+import ReportExporter from './ReportExporter'
 import ReactFlow, {
   type Node as ReactFlowNode,
   type Edge,
@@ -168,6 +169,8 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
   const [editComponents, setEditComponents] = useState<Component[]>([])
   const [editInterfaces, setEditInterfaces] = useState<Interface[]>([])
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false)
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [exportReport, setExportReport] = useState<any>(null)
   const statusDropdownRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
@@ -200,6 +203,15 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
   })
 
   const currentSetup = setupDetails || setup
+
+  const handleExport = async () => {
+    if (!currentSetup?.id) return
+    const res = await verificationService.getTestSetupReport(projectId, currentSetup.id)
+    if (res.success) {
+      setExportReport(res.data)
+      setShowExportModal(true)
+    }
+  }
 
   const { data: allPlans = [] } = useQuery({
     queryKey: ['test-plans', projectId],
@@ -482,6 +494,14 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
               </>
             )}
             <button
+              onClick={handleExport}
+              className="px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg transition-colors flex items-center gap-1"
+              title="Export setup report"
+            >
+              <FileText size={14} />
+              Export
+            </button>
+            <button
               onClick={onClose}
               className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
@@ -489,6 +509,14 @@ export default function TestSetupDetailDrawer({ setup, isOpen, onClose, projectI
             </button>
           </div>
         </div>
+
+        <ReportExporter
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          reportType="test-setup"
+          reportData={exportReport}
+          entityName={currentSetup?.name || 'Test Setup'}
+        />
 
         {/* Tabs */}
         <div className="border-b border-gray-200 dark:border-gray-700 px-6 flex-shrink-0">

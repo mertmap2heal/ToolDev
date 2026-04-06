@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react'
-import { X, Download, Trash2, Edit2, Link2, Unlink, Play } from 'lucide-react'
+import { X, Download, Trash2, Edit2, Link2, Unlink, Play, FileText } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
 import clsx from 'clsx'
 import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
 import RelationshipsPanel from './RelationshipsPanel'
+import ReportExporter from './ReportExporter'
 
 interface TestResultDetailDrawerProps {
   testResult: any
@@ -33,6 +34,8 @@ export default function TestResultDetailDrawer({
   projectId,
 }: TestResultDetailDrawerProps) {
   const [isEditing, setIsEditing] = useState(false)
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [exportReport, setExportReport] = useState<any>(null)
   const [editData, setEditData] = useState({
     title: '',
     description: '',
@@ -45,6 +48,15 @@ export default function TestResultDetailDrawer({
   })
   const queryClient = useQueryClient()
   const drawer = useVerificationDrawer()
+
+  const handleExport = async () => {
+    if (!testResult?.id) return
+    const res = await verificationService.getTestResultReport(projectId, testResult.id)
+    if (res.success) {
+      setExportReport(res.data)
+      setShowExportModal(true)
+    }
+  }
 
   // Fetch full test result details
   const { data: resultDetails } = useQuery<{ links?: Array<{ id: string; linkedEntityType: string; linkedEntityId: string }> } | null>({
@@ -260,6 +272,13 @@ export default function TestResultDetailDrawer({
             {!isEditing && (
               <>
                 <button
+                  onClick={handleExport}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  title="Export report"
+                >
+                  <FileText size={20} className="text-gray-600 dark:text-gray-400" />
+                </button>
+                <button
                   onClick={handleDownload}
                   className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                   title="Download file"
@@ -294,6 +313,14 @@ export default function TestResultDetailDrawer({
             </button>
           </div>
         </div>
+
+        <ReportExporter
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          reportType="test-result"
+          reportData={exportReport}
+          entityName={currentResult?.title || 'Test Result'}
+        />
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">

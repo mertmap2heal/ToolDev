@@ -34,7 +34,7 @@ async function loadDocx() {
 interface ReportExporterProps {
   isOpen: boolean
   onClose: () => void
-  reportType: 'test-case' | 'test-plan' | 'test-run'
+  reportType: 'test-case' | 'test-plan' | 'test-run' | 'test-setup' | 'test-result'
   reportData: any
   entityName: string
 }
@@ -127,7 +127,16 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
     // Header
     doc.setFontSize(18)
     doc.setFont('helvetica', 'bold')
-    const reportTitle = reportType === 'test-case' ? 'Test Case Report' : reportType === 'test-plan' ? 'Test Plan Report' : 'Test Run Report'
+    const reportTitle =
+      reportType === 'test-case'
+        ? 'Test Case Report'
+        : reportType === 'test-plan'
+          ? 'Test Plan Report'
+          : reportType === 'test-run'
+            ? 'Test Run Report'
+            : reportType === 'test-setup'
+              ? 'Test Setup Report'
+              : 'Test Result Report'
     doc.text(reportTitle, pageWidth / 2, yPos, { align: 'center' })
     yPos += 10
 
@@ -564,6 +573,132 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           margin: { left: 14 },
         })
       }
+    } else if (reportType === 'test-setup') {
+      const s = reportData.testSetup || {}
+      const linkedCases = Array.isArray(reportData.linkedTestCases) ? reportData.linkedTestCases : []
+      const linkedPlans = Array.isArray(reportData.linkedTestPlans) ? reportData.linkedTestPlans : []
+      const recentResults = Array.isArray(reportData.recentTestResults) ? reportData.recentTestResults : []
+
+      doc.setFontSize(14)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Test Setup Details', 14, yPos)
+      yPos += 8
+
+      const details = [
+        ['Name', s.name || 'N/A'],
+        ['Status', s.status || 'N/A'],
+        ['Environment Type', s.environmentType || 'N/A'],
+        ['Version', s.version || 'N/A'],
+        ['Description', s.description || 'N/A'],
+        ['Diagram export', s.diagramExportPath || 'N/A'],
+      ]
+
+      docAutoTable({
+        startY: yPos,
+        head: [],
+        body: details,
+        theme: 'plain',
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 45 }, 1: { cellWidth: 135 } },
+        margin: { left: 14 },
+      })
+      yPos = getLastAutoTableY() + 10
+
+      if (linkedCases.length) {
+        doc.setFontSize(12)
+        doc.setFont('helvetica', 'bold')
+        doc.text('Linked Test Cases', 14, yPos)
+        yPos += 6
+        docAutoTable({
+          startY: yPos,
+          head: [['Key', 'Title', 'Status']],
+          body: linkedCases.map((tc: any) => [tc.key || '', tc.title || '', tc.status || '']),
+          theme: 'striped',
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14 },
+        })
+        yPos = getLastAutoTableY() + 10
+      }
+
+      if (linkedPlans.length) {
+        doc.setFontSize(12)
+        doc.setFont('helvetica', 'bold')
+        doc.text('Linked Test Plans', 14, yPos)
+        yPos += 6
+        docAutoTable({
+          startY: yPos,
+          head: [['Key', 'Name', 'Status', 'Phase']],
+          body: linkedPlans.map((tp: any) => [tp.key || '', tp.name || '', tp.status || '', tp.phase || '']),
+          theme: 'striped',
+          headStyles: { fillColor: [31, 41, 55] },
+          margin: { left: 14 },
+        })
+        yPos = getLastAutoTableY() + 10
+      }
+
+      if (recentResults.length) {
+        doc.setFontSize(12)
+        doc.setFont('helvetica', 'bold')
+        doc.text('Recent Test Results', 14, yPos)
+        yPos += 6
+        docAutoTable({
+          startY: yPos,
+          head: [['Title', 'Status', 'Executed By', 'Executed At', 'Environment']],
+          body: recentResults.map((tr: any) => [
+            tr.title || '',
+            tr.resultStatus || '',
+            tr.executedByName || '',
+            formatDate(tr.executedAt),
+            tr.testEnvironment || '',
+          ]),
+          theme: 'striped',
+          headStyles: { fillColor: [34, 197, 94] },
+          margin: { left: 14 },
+        })
+      }
+    } else if (reportType === 'test-result') {
+      const tr = reportData.testResult || {}
+      const linked = Array.isArray(reportData.linkedEntities) ? reportData.linkedEntities : []
+
+      doc.setFontSize(14)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Test Result Details', 14, yPos)
+      yPos += 8
+
+      const details = [
+        ['Title', tr.title || 'N/A'],
+        ['Status', tr.resultStatus || 'N/A'],
+        ['Executed By', tr.executedByName || 'N/A'],
+        ['Executed At', formatDate(tr.executedAt)],
+        ['Environment', tr.testEnvironment || 'N/A'],
+        ['Setup', tr.setup?.name || 'N/A'],
+        ['File', tr.fileName || 'N/A'],
+        ['Notes', tr.notes || ''],
+      ]
+
+      docAutoTable({
+        startY: yPos,
+        head: [],
+        body: details,
+        theme: 'plain',
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 45 }, 1: { cellWidth: 135 } },
+        margin: { left: 14 },
+      })
+      yPos = getLastAutoTableY() + 10
+
+      if (linked.length) {
+        doc.setFontSize(12)
+        doc.setFont('helvetica', 'bold')
+        doc.text('Linked Entities', 14, yPos)
+        yPos += 6
+        docAutoTable({
+          startY: yPos,
+          head: [['Type', 'Key', 'Name', 'Relation']],
+          body: linked.map((e: any) => [e.type || '', e.key || '', e.name || e.id || '', e.relation || '']),
+          theme: 'striped',
+          headStyles: { fillColor: [59, 130, 246] },
+          margin: { left: 14 },
+        })
+      }
     } else if (reportType === 'test-run') {
       // Test Run Report
       const run = reportData.testRun || {}
@@ -844,6 +979,58 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
           rows.push([])
         })
       }
+    } else if (reportType === 'test-setup') {
+      const s = reportData.testSetup || {}
+      rows.push(['Test Setup Report'])
+      rows.push(['Generated', formatDate(reportData.metadata?.generatedAt)])
+      rows.push([])
+      rows.push(['Test Setup Details'])
+      rows.push(['Name', s.name || ''])
+      rows.push(['Status', s.status || ''])
+      rows.push(['Environment Type', s.environmentType || ''])
+      rows.push(['Version', s.version || ''])
+      rows.push(['Description', s.description || ''])
+      rows.push(['Diagram export', s.diagramExportPath || ''])
+      rows.push([])
+
+      const linkedCases = Array.isArray(reportData.linkedTestCases) ? reportData.linkedTestCases : []
+      if (linkedCases.length) {
+        rows.push(['Linked Test Cases'])
+        rows.push(['Key', 'Title', 'Status'])
+        linkedCases.forEach((tc: any) => rows.push([tc.key || '', tc.title || '', tc.status || '']))
+        rows.push([])
+      }
+
+      const linkedPlans = Array.isArray(reportData.linkedTestPlans) ? reportData.linkedTestPlans : []
+      if (linkedPlans.length) {
+        rows.push(['Linked Test Plans'])
+        rows.push(['Key', 'Name', 'Status', 'Phase'])
+        linkedPlans.forEach((tp: any) => rows.push([tp.key || '', tp.name || '', tp.status || '', tp.phase || '']))
+        rows.push([])
+      }
+    } else if (reportType === 'test-result') {
+      const tr = reportData.testResult || {}
+      rows.push(['Test Result Report'])
+      rows.push(['Generated', formatDate(reportData.metadata?.generatedAt)])
+      rows.push([])
+      rows.push(['Test Result Details'])
+      rows.push(['Title', tr.title || ''])
+      rows.push(['Status', tr.resultStatus || ''])
+      rows.push(['Executed By', tr.executedByName || ''])
+      rows.push(['Executed At', formatDate(tr.executedAt)])
+      rows.push(['Environment', tr.testEnvironment || ''])
+      rows.push(['Setup', tr.setup?.name || ''])
+      rows.push(['File', tr.fileName || ''])
+      rows.push(['Notes', tr.notes || ''])
+      rows.push([])
+
+      const linked = Array.isArray(reportData.linkedEntities) ? reportData.linkedEntities : []
+      if (linked.length) {
+        rows.push(['Linked Entities'])
+        rows.push(['Type', 'Key', 'Name', 'Relation'])
+        linked.forEach((e: any) => rows.push([e.type || '', e.key || '', e.name || e.id || '', e.relation || '']))
+        rows.push([])
+      }
     } else if (reportType === 'test-run') {
       const run = reportData.testRun || {}
       const results = reportData.results || []
@@ -957,7 +1144,16 @@ export default function ReportExporter({ isOpen, onClose, reportType, reportData
     }
 
     // Title
-    const wordTitle = reportType === 'test-case' ? 'Test Case Report' : reportType === 'test-plan' ? 'Test Plan Report' : 'Test Run Report'
+    const wordTitle =
+      reportType === 'test-case'
+        ? 'Test Case Report'
+        : reportType === 'test-plan'
+          ? 'Test Plan Report'
+          : reportType === 'test-run'
+            ? 'Test Run Report'
+            : reportType === 'test-setup'
+              ? 'Test Setup Report'
+              : 'Test Result Report'
     children.push(createParagraph(wordTitle, { heading: HeadingLevel.HEADING_1, size: 36 }))
     children.push(createParagraph(`Generated: ${formatDate(reportData.metadata?.generatedAt)}`, { size: 20 }))
     children.push(createParagraph(''))

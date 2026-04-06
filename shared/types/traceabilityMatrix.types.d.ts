@@ -4,6 +4,10 @@ export interface TraceabilityMatrixAxisItem {
     key: string;
     label: string;
     type: TraceabilityAxisType;
+    /** Optional long description for metadata-rich exports. */
+    description?: string;
+    /** Optional bag of metadata fields for export (e.g. owner, status). */
+    meta?: Record<string, string>;
 }
 export interface TraceabilityMatrixCellEntry {
     /** Display ID of the column-side entity (e.g. TEST-001). */

@@ -229,6 +229,28 @@ router.get('/reports/test-plan/:projectId/:id', async (req: AuthRequest, res: Re
   }
 })
 
+router.get('/reports/test-setup/:projectId/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id } = req.params
+    const report = await reportService.generateTestSetupReport(projectId, id)
+    res.json({ success: true, data: report })
+  } catch (error: any) {
+    console.error('Generate test setup report error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+})
+
+router.get('/reports/test-result/:projectId/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id } = req.params
+    const report = await reportService.generateTestResultReport(projectId, id)
+    res.json({ success: true, data: report })
+  } catch (error: any) {
+    console.error('Generate test result report error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+})
+
 router.get('/reports/test-run/:projectId/:id', async (req: AuthRequest, res: Response) => {
   try {
     const { projectId, id } = req.params
