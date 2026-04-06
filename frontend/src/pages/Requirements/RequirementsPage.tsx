@@ -88,6 +88,26 @@ function humanizeLinkType(linkType: string | undefined): string {
   return linkType.replace(/_/g, ' ')
 }
 
+function decodeHtmlEntities(input: string): string {
+  // Covers the common entities we see in stored rich-text; keeps it lightweight and SSR-safe.
+  const withNamed = input
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+  return withNamed.replace(/&#(\d+);/g, (m, code) => {
+    const n = Number(code)
+    return Number.isFinite(n) ? String.fromCharCode(n) : m
+  })
+}
+
+function plainTextFromRichText(input: string): string {
+  const decoded = decodeHtmlEntities(input)
+  return decoded.replace(/<[^>]*>/g, '').trim()
+}
+
 /** Normalize id token for matching titles like "Deleted test case (b531f48f)". */
 function linkedItemIdToken(targetId: string, displayId?: string): string {
   return (displayId ?? targetId.slice(0, 8)).replace(/-/g, '').toLowerCase()
@@ -1758,11 +1778,67 @@ export default function RequirementsPage() {
     return result
   }, [])
 
+  const pbsComponentMap = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; pbsCode?: string | null }>()
+    for (const c of flatComponents) {
+      map.set(c.id, { id: c.id, name: c.name, pbsCode: c.pbsCode ?? null })
+    }
+    return map
+  }, [flatComponents])
+
+  const getPBSDisplayId = useCallback((comp: { name: string; pbsCode?: string | null } | undefined, componentId: string): string => {
+    const code = comp?.pbsCode?.trim()
+    if (code) return code.startsWith('OPBS') ? code : code.startsWith('PBS') ? 'O' + code : code
+    return 'OPBS-' + componentId.slice(0, 8)
+  }, [])
+
+  const formatPBSComponentLabel = useCallback((comp: { name: string; pbsCode?: string | null } | undefined, componentId: string): string => {
+    const name = comp?.name?.trim() ?? ''
+    const idPart = getPBSDisplayId(comp, componentId)
+    return name ? `${idPart} - ${name}` : idPart
+  }, [getPBSDisplayId])
+
   /** Get links for a requirement (incoming + outgoing). Includes allocated_to for bidirectional visibility. */
   const getLinksForRequirement = useCallback((reqId: string): LinkType[] => {
     if (!LINKAGE_V1 || !effectiveLinks.length) return []
-    return (effectiveLinks as LinkType[]).filter((l) => l.sourceId === reqId || l.targetId === reqId)
-  }, [LINKAGE_V1, effectiveLinks])
+    const reqList = allRequirements.length > 0 ? allRequirements : requirements
+    const reqMap = new Map<string, Requirement>(reqList.map((r) => [r.id, r]))
+
+    const enrich = (l: any): any => {
+      let out = l
+      const isReqType = (t: string) => ['requirement', 'hazard', 'risk'].includes((t || '').toLowerCase())
+
+      if (isReqType(l.targetType) && !l.targetLabel && !l.targetTitle) {
+        const r = reqMap.get(l.targetId)
+        if (r) {
+          const displayId = r.requirementId || r.id.slice(0, 8)
+          out = { ...out, targetLabel: `${displayId} - ${r.title}`, targetTitle: r.title, targetDisplayId: displayId }
+        }
+      }
+      if (isReqType(l.sourceType) && !l.sourceLabel && !l.sourceTitle) {
+        const r = reqMap.get(l.sourceId)
+        if (r) {
+          const displayId = r.requirementId || r.id.slice(0, 8)
+          out = { ...out, sourceLabel: `${displayId} - ${r.title}`, sourceTitle: r.title, sourceDisplayId: displayId }
+        }
+      }
+      if (l.targetType === 'pbs_component' && !l.targetLabel && !l.targetTitle) {
+        const comp = pbsComponentMap.get(l.targetId)
+        const label = formatPBSComponentLabel(comp, l.targetId)
+        out = { ...out, targetLabel: label, targetTitle: label, targetDisplayId: getPBSDisplayId(comp, l.targetId) }
+      }
+      if (l.sourceType === 'pbs_component' && !l.sourceLabel && !l.sourceTitle) {
+        const comp = pbsComponentMap.get(l.sourceId)
+        const label = formatPBSComponentLabel(comp, l.sourceId)
+        out = { ...out, sourceLabel: label, sourceTitle: label, sourceDisplayId: getPBSDisplayId(comp, l.sourceId) }
+      }
+      return out
+    }
+
+    return (effectiveLinks as any[])
+      .filter((l) => l.sourceId === reqId || l.targetId === reqId)
+      .map(enrich) as LinkType[]
+  }, [LINKAGE_V1, effectiveLinks, allRequirements, requirements, pbsComponentMap, formatPBSComponentLabel, getPBSDisplayId])
 
   // Linked rows for expanded table + delete modal: bidirectional TraceLink + synthetic PBS (LINKAGE_V1).
   const getLinkedElements = useCallback(
@@ -2232,7 +2308,7 @@ export default function RequirementsPage() {
                         projectId && (req.description || '').includes('{{param:') ? (
                           <RequirementParameterText projectId={projectId} text={req.description} stripHtml />
                         ) : (
-                          <span>{req.description.replace(/<[^>]*>/g, '')}</span>
+                          <span>{plainTextFromRichText(req.description)}</span>
                         )
                       ) : (
                         <span className="text-gray-400">—</span>
@@ -2405,7 +2481,7 @@ export default function RequirementsPage() {
           )}
           {requirementColumns.has('verificationMethod') && (
             <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-              {req.verificationMethod || '—'}
+              {req.verificationMethod ? plainTextFromRichText(req.verificationMethod) : '—'}
             </td>
           )}
           {requirementColumns.has('verificationStatus') && (
@@ -2425,13 +2501,16 @@ export default function RequirementsPage() {
           )}
           {requirementColumns.has('acceptanceCriteria') && (
             <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-md">
-              <p className="line-clamp-2" title={req.acceptanceCriteria}>
-                {req.acceptanceCriteria ? (
-                  <span dangerouslySetInnerHTML={{ __html: req.acceptanceCriteria.replace(/<[^>]*>/g, '').substring(0, 100) + (req.acceptanceCriteria.length > 100 ? '...' : '') }} />
-                ) : (
-                  <span className="text-gray-400">—</span>
-                )}
-              </p>
+              {req.acceptanceCriteria ? (
+                <p
+                  className="line-clamp-2"
+                  title={plainTextFromRichText(req.acceptanceCriteria)}
+                >
+                  {plainTextFromRichText(req.acceptanceCriteria)}
+                </p>
+              ) : (
+                <span className="text-gray-400">—</span>
+              )}
             </td>
           )}
           {requirementColumns.has('stage') && (
@@ -2441,11 +2520,13 @@ export default function RequirementsPage() {
           )}
           {requirementColumns.has('rationale') && (
             <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-md">
-              <p className="line-clamp-2" title={req.rationale ? String(req.rationale).replace(/<[^>]*>/g, '') : undefined}>
-                {req.rationale
-                  ? `${String(req.rationale).replace(/<[^>]*>/g, '').substring(0, 100)}${String(req.rationale).length > 100 ? '...' : ''}`
-                  : '—'}
-              </p>
+              {req.rationale ? (
+                <p className="line-clamp-2" title={plainTextFromRichText(String(req.rationale))}>
+                  {plainTextFromRichText(String(req.rationale))}
+                </p>
+              ) : (
+                <span className="text-gray-400">—</span>
+              )}
             </td>
           )}
           {requirementColumns.has('component') && (
@@ -3493,7 +3574,7 @@ export default function RequirementsPage() {
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
                       <Columns size={16} className="text-gray-500 dark:text-gray-400" />
-                      Select Columns
+                      Visible fields
                     </button>
                     <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
                     {projectId && (
@@ -3514,7 +3595,7 @@ export default function RequirementsPage() {
                 {columnSelectorOpen && (
                   <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Select Columns</h3>
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Visible fields</h3>
                       <button
                         onClick={() => setColumnSelectorOpen(false)}
                         className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"

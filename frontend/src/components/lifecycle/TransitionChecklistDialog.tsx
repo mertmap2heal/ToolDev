@@ -26,6 +26,25 @@ import { transitionChecklistService } from '../../services/transitionChecklist.s
 import { useAuthStore } from '../../store/authStore'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
 
+function decodeHtmlEntities(input: string): string {
+  const withNamed = input
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+  return withNamed.replace(/&#(\d+);/g, (m, code) => {
+    const n = Number(code)
+    return Number.isFinite(n) ? String.fromCharCode(n) : m
+  })
+}
+
+function plainTextFromRichText(input: string): string {
+  const decoded = decodeHtmlEntities(input)
+  return decoded.replace(/<[^>]*>/g, '').trim()
+}
+
 interface TransitionChecklistDialogProps {
   requirement: Requirement
   projectId: string
@@ -391,19 +410,19 @@ export default function TransitionChecklistDialog({
               {requirement.acceptanceCriteria && (
                 <div>
                   <span className="text-xs text-gray-500 dark:text-gray-400">Acceptance Criteria</span>
-                  <p className="text-sm text-gray-700 dark:text-gray-300">{requirement.acceptanceCriteria}</p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300">{plainTextFromRichText(requirement.acceptanceCriteria)}</p>
                 </div>
               )}
               {requirement.verificationMethod && (
                 <div>
                   <span className="text-xs text-gray-500 dark:text-gray-400">Verification Method</span>
-                  <p className="text-sm text-gray-700 dark:text-gray-300">{requirement.verificationMethod}</p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300">{plainTextFromRichText(requirement.verificationMethod)}</p>
                 </div>
               )}
               {requirement.rationale && (
                 <div>
                   <span className="text-xs text-gray-500 dark:text-gray-400">Rationale</span>
-                  <p className="text-sm text-gray-700 dark:text-gray-300">{requirement.rationale}</p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300">{plainTextFromRichText(requirement.rationale)}</p>
                 </div>
               )}
             </div>

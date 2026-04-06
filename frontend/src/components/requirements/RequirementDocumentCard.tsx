@@ -55,6 +55,70 @@ function formatEntityType(type: string): string {
   return map[type] ?? type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+function decodeHtmlEntities(input: string): string {
+  const withNamed = input
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+  return withNamed.replace(/&#(\d+);/g, (m, code) => {
+    const n = Number(code)
+    return Number.isFinite(n) ? String.fromCharCode(n) : m
+  })
+}
+
+function plainTextFromRichText(input: string): string {
+  const decoded = decodeHtmlEntities(input)
+  return decoded.replace(/<[^>]*>/g, '').trim()
+}
+
+function shortId(id: string | undefined | null): string {
+  if (!id) return '—'
+  return String(id).slice(0, 8)
+}
+
+function looksLikeUuidishToken(s: string): boolean {
+  const t = s.trim()
+  if (!t) return false
+  // UUID v4-like or hex-with-dashes tokens; treat as non-human-friendly "name"
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t)) return true
+  // Very long hex-ish strings (ids), sometimes without dashes
+  if (/^[0-9a-f]{24,}$/i.test(t)) return true
+  return false
+}
+
+function stripTrailingIdSuffix(title: string, idShort: string): string {
+  const t = title.trim()
+  if (!t) return t
+  if (!/^[0-9a-f]{8}$/i.test(idShort)) return t
+  const re = new RegExp(`\\s*\\(${idShort}\\)\\s*$`, 'i')
+  const next = t.replace(re, '').trim()
+  return next || t
+}
+
+function typePrefix(entityType: string): string | null {
+  const t = entityType.toLowerCase().replace(/-/g, '_')
+  const map: Record<string, string> = {
+    requirement: 'REQ',
+    issue: 'ISS',
+    change_request: 'CR',
+    function: 'FUN',
+    pbs_component: 'PBS',
+    test_case: 'TC',
+    testcase: 'TC',
+    test_plan: 'TP',
+    verification: 'VER',
+    interface: 'IF',
+    parameter: 'PAR',
+    document: 'DOC',
+    safety: 'SAFE',
+    use_case: 'UC',
+  }
+  return map[t] ?? null
+}
+
 const inputClassName =
   'flex-1 px-2 py-1 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500'
 const textareaClassName =
@@ -103,7 +167,7 @@ export default function RequirementDocumentCard({
   const detailsAll: { key: string; label: string; value: string | undefined }[] = [
     { key: 'requirementId', label: 'ID', value: requirement.requirementId ?? undefined },
     { key: 'title', label: 'Title', value: requirement.title ?? undefined },
-    { key: 'description', label: 'Description', value: requirement.description || undefined },
+    { key: 'description', label: 'Description', value: requirement.description ? plainTextFromRichText(requirement.description) : undefined },
     { key: 'priority', label: 'Priority', value: requirement.priority ?? undefined },
     { key: 'status', label: 'Status', value: requirement.reviewStatus ?? requirement.status ?? undefined },
     { key: 'owner', label: 'Owner', value: requirement.owner ?? undefined },
@@ -113,13 +177,13 @@ export default function RequirementDocumentCard({
     { key: 'requirementLevel', label: 'Level', value: requirement.requirementLevel ?? undefined },
     { key: 'risk', label: 'Risk', value: requirement.risk ?? undefined },
     { key: 'complexity', label: 'Complexity', value: requirement.complexity ?? undefined },
-    { key: 'verificationMethod', label: 'Verification Method', value: requirement.verificationMethod || undefined },
+    { key: 'verificationMethod', label: 'Verification Method', value: requirement.verificationMethod ? plainTextFromRichText(requirement.verificationMethod) : undefined },
     { key: 'verificationStatus', label: 'Verification Status', value: requirement.verificationStatus || undefined },
     { key: 'verificationDate', label: 'Verification Date', value: requirement.verificationDate || undefined },
     { key: 'linkedMocCode', label: 'MoC', value: (requirement as any).linkedMocCode || undefined },
-    { key: 'acceptanceCriteria', label: 'Acceptance Criteria', value: requirement.acceptanceCriteria || undefined },
+    { key: 'acceptanceCriteria', label: 'Acceptance Criteria', value: requirement.acceptanceCriteria ? plainTextFromRichText(requirement.acceptanceCriteria) : undefined },
     { key: 'stage', label: 'Stage', value: requirement.stage || undefined },
-    { key: 'rationale', label: 'Rationale', value: requirement.rationale || undefined },
+    { key: 'rationale', label: 'Rationale', value: requirement.rationale ? plainTextFromRichText(requirement.rationale) : undefined },
     { key: 'component', label: 'Component', value: (requirement as any).component?.name ?? (requirement as any).componentName ?? undefined },
     { key: 'reviewStatus', label: 'Review Status', value: requirement.reviewStatus || undefined },
     { key: 'createdAt', label: 'Created', value: requirement.createdAt ? createdFormatted : undefined },
@@ -132,8 +196,28 @@ export default function RequirementDocumentCard({
   const relationshipRows = links.map((link) => {
     const isOutgoing = link.sourceType === 'requirement' && link.sourceId === requirement.id
     const direction = isOutgoing ? 'Downstream' : 'Upstream'
-    const itemId = isOutgoing ? (link.targetDisplayId ?? link.targetId?.slice(0, 8)) : (link.sourceDisplayId ?? link.sourceId?.slice(0, 8))
-    const name = isOutgoing ? (link.targetTitle ?? link.targetId) : (link.sourceTitle ?? link.sourceId)
+    const entityType = String(isOutgoing ? (link.targetType as string) : (link.sourceType as string))
+    const rawId = String(isOutgoing ? (link.targetId ?? '') : (link.sourceId ?? ''))
+    const idShort = shortId(rawId)
+    const preferredId = isOutgoing ? link.targetDisplayId : link.sourceDisplayId
+    const prefix = typePrefix(entityType)
+    const itemId = preferredId ?? (prefix ? `${prefix}-${idShort}` : idShort)
+
+    const rawName = String(
+      isOutgoing
+        ? ((link as any).targetLabel ?? link.targetTitle ?? link.targetDisplayId ?? link.targetId ?? '')
+        : ((link as any).sourceLabel ?? link.sourceTitle ?? link.sourceDisplayId ?? link.sourceId ?? '')
+    ).trim()
+
+    const fallbackName =
+      // If we already show the short id in the Item ID column, don't repeat it in Name.
+      !preferredId && prefix
+        ? formatEntityType(entityType)
+        : `${formatEntityType(entityType)} (${idShort})`
+    const name =
+      rawName && !looksLikeUuidishToken(rawName) && rawName !== rawId
+        ? stripTrailingIdSuffix(rawName, idShort)
+        : fallbackName
     const group = formatEntityType(isOutgoing ? (link.targetType as string) : (link.sourceType as string))
     const relationship = formatLinkType(link.linkType)
     return {
