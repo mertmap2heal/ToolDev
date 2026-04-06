@@ -145,6 +145,51 @@ test.describe('Requirements', () => {
     await expect(page.getByRole('heading', { name: /traceability matrix/i })).toBeVisible({ timeout: 15_000 })
   })
 
+  test('inline edit: description allows typing multiple characters', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/requirements`)
+    await page.waitForLoadState('domcontentloaded')
+    const token = await page.evaluate(() => localStorage.getItem('token'))
+    if (!token) throw new Error('No auth token — login must succeed before this test')
+
+    const seedTitle = `E2E inline-edit desc seed ${Date.now()}`
+    const createResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: {
+        title: seedTitle,
+        description: 'seed',
+      },
+    })
+    expect(createResp.ok(), await createResp.text()).toBeTruthy()
+
+    await page.evaluate(() => {
+      try {
+        localStorage.removeItem('requirements-columns')
+        localStorage.setItem('requirements-list-view', 'table')
+      } catch {
+        /* ignore */
+      }
+    })
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
+
+    const row = page.locator('tr').filter({ hasText: seedTitle }).first()
+    await expect(row).toBeVisible({ timeout: 15_000 })
+
+    const descCell = row.locator('div.group\\/desc[title="Double-click to edit"]').first()
+    await expect(descCell).toBeVisible()
+    await descCell.dblclick()
+
+    const textarea = row.locator('textarea').first()
+    await expect(textarea).toBeFocused({ timeout: 5_000 })
+
+    await textarea.type('abc')
+    await expect(textarea).toHaveValue('abc')
+
+    await textarea.press('Control+Enter')
+    await expect(row.locator('textarea')).toHaveCount(0, { timeout: 10_000 })
+    await expect(row).toContainText('abc', { timeout: 10_000 })
+  })
+
   test('add link dialog opens from expanded row', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')

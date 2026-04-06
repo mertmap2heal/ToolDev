@@ -231,6 +231,7 @@ export default function RequirementsPage() {
   const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null)
   const inlineInputRef = useRef<HTMLInputElement>(null)
   const inlineTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const lastInlineEditSessionKeyRef = useRef<string | null>(null)
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -1648,6 +1649,9 @@ export default function RequirementsPage() {
   // Focus input/textarea when inline editing starts
   useEffect(() => {
     if (!inlineEdit) return
+    const sessionKey = `${inlineEdit.requirementId}:${inlineEdit.field}`
+    if (lastInlineEditSessionKeyRef.current === sessionKey) return
+    lastInlineEditSessionKeyRef.current = sessionKey
     if (inlineEdit.field === 'description' && inlineTextareaRef.current) {
       inlineTextareaRef.current.focus()
       inlineTextareaRef.current.select()

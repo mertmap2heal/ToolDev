@@ -81,6 +81,7 @@ export default function RequirementsAuditLogModal({ projectId, onClose }: Props)
   const [actorQuery, setActorQuery] = useState('')
   const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [expandedTab, setExpandedTab] = useState<'changes' | 'before' | 'after'>('changes')
 
   const effectiveRange = useMemo(() => {
     if (datePreset !== 'custom') {
@@ -123,6 +124,68 @@ export default function RequirementsAuditLogModal({ projectId, onClose }: Props)
     () => (selectedRow ? computeObjectDiff(selectedRow.oldValue, selectedRow.newValue) : []),
     [selectedRow]
   )
+
+  const selectedSummary = useMemo(() => {
+    const r = selectedRow
+    if (!r) return null
+    const actor = r.performedBy?.name || r.performedBy?.email || (r.performedByUserId ? r.performedByUserId.slice(0, 8) : '—')
+    const ts = r.performedAt ? format(new Date(r.performedAt), 'yyyy-MM-dd HH:mm:ss') : '—'
+    const ov = isPlainObject(r.oldValue) ? (r.oldValue as any) : null
+    const nv = isPlainObject(r.newValue) ? (r.newValue as any) : null
+    const displayId =
+      (nv?.requirementId as string | undefined) ||
+      (ov?.requirementId as string | undefined) ||
+      (nv?.id as string | undefined) ||
+      (ov?.id as string | undefined) ||
+      r.entityId
+    const title = (nv?.title as string | undefined) || (ov?.title as string | undefined) || undefined
+    return { actor, ts, displayId, title }
+  }, [selectedRow])
+
+  const friendlyLabel = (key: string): string => {
+    const map: Record<string, string> = {
+      requirementId: 'Requirement ID',
+      title: 'Title',
+      description: 'Description',
+      status: 'Status',
+      owner: 'Owner',
+      priority: 'Priority',
+      stage: 'Stage',
+      source: 'Source',
+      category: 'Category',
+      requirementType: 'Requirement type',
+      requirementLevel: 'Requirement level',
+      parentId: 'Parent',
+      parent: 'Parent',
+      tags: 'Tags',
+      updatedAt: 'Updated at',
+      createdAt: 'Created at',
+      isLocked: 'Locked',
+      lockedAt: 'Locked at',
+      lockedByUserId: 'Locked by',
+      children: 'Children',
+    }
+    return map[key] ?? key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\b\w/g, (c) => c.toUpperCase())
+  }
+
+  const formatValue = (v: unknown): { kind: 'empty' | 'text' | 'json'; text: string } => {
+    if (v === null || v === undefined || v === '') return { kind: 'empty', text: '—' }
+    if (typeof v === 'string') {
+      const t = v.replace(/\r\n/g, '\n')
+      const short = t.length > 400 ? `${t.slice(0, 400)}…` : t
+      return { kind: 'text', text: short }
+    }
+    if (typeof v === 'number' || typeof v === 'boolean') return { kind: 'text', text: String(v) }
+    if (Array.isArray(v)) {
+      if (v.length === 0) return { kind: 'text', text: '[]' }
+      // small arrays as one-liners; otherwise JSON
+      if (v.length <= 6 && v.every((x) => typeof x === 'string' || typeof x === 'number' || typeof x === 'boolean' || x == null)) {
+        return { kind: 'text', text: `[${v.map((x) => (x == null ? 'null' : String(x))).join(', ')}]` }
+      }
+      return { kind: 'json', text: prettyJson(v) }
+    }
+    return { kind: 'json', text: prettyJson(v) }
+  }
 
   const toggleCategory = (c: AuditCategory) => {
     setPage(1)
@@ -348,41 +411,124 @@ export default function RequirementsAuditLogModal({ projectId, onClose }: Props)
                       {isExpanded && (
                         <tr className="border-b border-gray-100 dark:border-gray-700/60">
                           <td colSpan={5} className="px-4 py-3 bg-white dark:bg-gray-800">
-                            <div className="grid grid-cols-12 gap-3">
-                              <div className="col-span-12 md:col-span-4">
-                                <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Field changes</div>
-                                {fieldDiff.length === 0 ? (
-                                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                                    No object-level diff available for this event.
-                                  </div>
-                                ) : (
-                                  <div className="space-y-2">
-                                    {fieldDiff.slice(0, 30).map((d) => (
-                                      <div key={d.key} className="rounded-md border border-gray-200 dark:border-gray-700 p-2">
-                                        <div className="text-xs font-mono text-gray-900 dark:text-gray-100">{d.key}</div>
-                                        <div className="mt-1 grid grid-cols-2 gap-2 text-[11px]">
-                                          <pre className="rounded bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 p-2 overflow-auto max-h-36">{prettyJson(d.before)}</pre>
-                                          <pre className="rounded bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 p-2 overflow-auto max-h-36">{prettyJson(d.after)}</pre>
-                                        </div>
-                                      </div>
-                                    ))}
-                                    {fieldDiff.length > 30 && (
-                                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                                        Showing first 30 changed fields (of {fieldDiff.length}).
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
+                            <div className="flex flex-wrap items-center gap-2 mb-3">
+                              <div className="text-xs text-gray-600 dark:text-gray-300">
+                                <span className="font-semibold">{humanizeAction(r.action)}</span>
+                                <span className="mx-2 text-gray-400">•</span>
+                                <span className="font-mono">{r.entityType}</span>
+                                <span className="mx-2 text-gray-400">•</span>
+                                <span className="font-mono">{r.entityId.slice(0, 12)}</span>
                               </div>
-                              <div className="col-span-12 md:col-span-4">
-                                <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">Before</div>
-                                <pre className="text-[11px] rounded bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 p-2 overflow-auto max-h-[360px]">{prettyJson(r.oldValue)}</pre>
-                              </div>
-                              <div className="col-span-12 md:col-span-4">
-                                <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">After</div>
-                                <pre className="text-[11px] rounded bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 p-2 overflow-auto max-h-[360px]">{prettyJson(r.newValue)}</pre>
+                              <div className="flex-1" />
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                {selectedSummary?.ts} by <span className="text-gray-700 dark:text-gray-200">{selectedSummary?.actor}</span>
                               </div>
                             </div>
+
+                            {(selectedSummary?.displayId || selectedSummary?.title) && (
+                              <div className="mb-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 px-3 py-2">
+                                <div className="text-xs text-gray-500 dark:text-gray-400">Subject</div>
+                                <div className="text-sm text-gray-900 dark:text-white">
+                                  <span className="font-mono text-xs mr-2">{selectedSummary.displayId?.slice(0, 24)}</span>
+                                  {selectedSummary.title ? <span className="font-medium">{selectedSummary.title}</span> : null}
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="flex items-center gap-2 mb-3">
+                              {([
+                                ['changes', 'Changes'],
+                                ['before', 'Before (raw)'],
+                                ['after', 'After (raw)'],
+                              ] as Array<[typeof expandedTab, string]>).map(([id, label]) => (
+                                <button
+                                  key={id}
+                                  type="button"
+                                  onClick={() => setExpandedTab(id)}
+                                  className={clsx(
+                                    'px-3 py-1.5 rounded-full text-xs border transition-colors',
+                                    expandedTab === id
+                                      ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-200'
+                                      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/40'
+                                  )}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                              <div className="flex-1" />
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                {fieldDiff.length ? `${fieldDiff.length} field change${fieldDiff.length === 1 ? '' : 's'}` : 'No structured diff'}
+                              </div>
+                            </div>
+
+                            {expandedTab === 'changes' && (
+                              <div className="grid grid-cols-12 gap-3">
+                                <div className="col-span-12">
+                                  {fieldDiff.length === 0 ? (
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                                      No structured field diff is available for this event. Use the raw tabs to review full snapshots.
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-2">
+                                      {fieldDiff
+                                        // hide very noisy fields unless they are the only changes
+                                        .filter((d) => !['updatedAt'].includes(d.key) || fieldDiff.length <= 2)
+                                        .slice(0, 40)
+                                        .map((d) => {
+                                          const before = formatValue(d.before)
+                                          const after = formatValue(d.after)
+                                          const mono = before.kind === 'json' || after.kind === 'json'
+                                          return (
+                                            <div key={d.key} className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                              <div className="px-3 py-2 bg-gray-50 dark:bg-gray-900/30 flex items-center justify-between">
+                                                <div className="text-xs font-semibold text-gray-800 dark:text-gray-100">
+                                                  {friendlyLabel(d.key)}
+                                                </div>
+                                                <div className="text-[11px] text-gray-500 dark:text-gray-400 font-mono">{d.key}</div>
+                                              </div>
+                                              <div className="grid grid-cols-12 gap-0">
+                                                <div className="col-span-12 md:col-span-6 border-t md:border-t-0 md:border-r border-gray-200 dark:border-gray-700">
+                                                  <div className="px-3 py-2 text-[11px] text-gray-500 dark:text-gray-400">Before</div>
+                                                  <div className={clsx('px-3 pb-3 text-sm text-gray-900 dark:text-white whitespace-pre-wrap break-words', mono && 'font-mono text-[12px]')}>
+                                                    {before.kind === 'json' ? (
+                                                      <pre className="text-[11px] rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-2 overflow-auto max-h-56">{before.text}</pre>
+                                                    ) : (
+                                                      <span>{before.text}</span>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                                <div className="col-span-12 md:col-span-6 border-t border-gray-200 dark:border-gray-700">
+                                                  <div className="px-3 py-2 text-[11px] text-gray-500 dark:text-gray-400">After</div>
+                                                  <div className={clsx('px-3 pb-3 text-sm text-gray-900 dark:text-white whitespace-pre-wrap break-words', mono && 'font-mono text-[12px]')}>
+                                                    {after.kind === 'json' ? (
+                                                      <pre className="text-[11px] rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-2 overflow-auto max-h-56">{after.text}</pre>
+                                                    ) : (
+                                                      <span>{after.text}</span>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          )
+                                        })}
+                                      {fieldDiff.length > 40 && (
+                                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                                          Showing first 40 changed fields (of {fieldDiff.length}).
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {expandedTab === 'before' && (
+                              <pre className="text-[11px] rounded bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 p-3 overflow-auto max-h-[420px]">{prettyJson(r.oldValue)}</pre>
+                            )}
+
+                            {expandedTab === 'after' && (
+                              <pre className="text-[11px] rounded bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 p-3 overflow-auto max-h-[420px]">{prettyJson(r.newValue)}</pre>
+                            )}
                           </td>
                         </tr>
                       )}
