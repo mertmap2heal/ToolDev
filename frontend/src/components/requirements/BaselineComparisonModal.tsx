@@ -467,11 +467,20 @@ function ComparisonContent({
                   <h4 className="text-sm font-medium text-green-700 dark:text-green-400 mb-2">Added ({linksAdded.length})</h4>
                   <div className="border border-green-200 dark:border-green-800 rounded-lg overflow-hidden bg-green-50/50 dark:bg-green-900/10 max-h-48 overflow-y-auto">
                     <div className="divide-y divide-green-200 dark:divide-green-800">
-                      {linksAdded.map((link) => (
-                        <div key={link.id} className="p-2 text-sm font-mono">
-                          {link.sourceType}:{link.sourceId?.slice(0, 8)} → {link.targetType}:{link.targetId?.slice(0, 8)} [{link.linkType}]
-                        </div>
-                      ))}
+                      {linksAdded.map((link) => {
+                        const sId = (link as any).sourceDisplayId || link.sourceId?.slice(0, 8)
+                        const tId = (link as any).targetDisplayId || link.targetId?.slice(0, 8)
+                        const sLabel = (link as any).sourceLabel || (link as any).sourceTitle
+                        const tLabel = (link as any).targetLabel || (link as any).targetTitle
+                        const line = `${link.sourceType}:${sId} → ${link.targetType}:${tId} [${link.linkType}]`
+                        const detail = [sLabel ? `From: ${sLabel}` : null, tLabel ? `To: ${tLabel}` : null].filter(Boolean).join(' • ')
+                        return (
+                          <div key={link.id} className="p-2 text-sm font-mono" title={detail || line}>
+                            <div>{line}</div>
+                            {detail && <div className="mt-0.5 text-[11px] font-sans text-gray-600 dark:text-gray-300 truncate">{detail}</div>}
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 </div>
@@ -481,11 +490,20 @@ function ComparisonContent({
                   <h4 className="text-sm font-medium text-red-700 dark:text-red-400 mb-2">Removed ({linksRemoved.length})</h4>
                   <div className="border border-red-200 dark:border-red-800 rounded-lg overflow-hidden bg-red-50/50 dark:bg-red-900/10 max-h-48 overflow-y-auto">
                     <div className="divide-y divide-red-200 dark:divide-red-800">
-                      {linksRemoved.map((link) => (
-                        <div key={link.id} className="p-2 text-sm font-mono">
-                          {link.sourceType}:{link.sourceId?.slice(0, 8)} → {link.targetType}:{link.targetId?.slice(0, 8)} [{link.linkType}]
-                        </div>
-                      ))}
+                      {linksRemoved.map((link) => {
+                        const sId = (link as any).sourceDisplayId || link.sourceId?.slice(0, 8)
+                        const tId = (link as any).targetDisplayId || link.targetId?.slice(0, 8)
+                        const sLabel = (link as any).sourceLabel || (link as any).sourceTitle
+                        const tLabel = (link as any).targetLabel || (link as any).targetTitle
+                        const line = `${link.sourceType}:${sId} → ${link.targetType}:${tId} [${link.linkType}]`
+                        const detail = [sLabel ? `From: ${sLabel}` : null, tLabel ? `To: ${tLabel}` : null].filter(Boolean).join(' • ')
+                        return (
+                          <div key={link.id} className="p-2 text-sm font-mono" title={detail || line}>
+                            <div>{line}</div>
+                            {detail && <div className="mt-0.5 text-[11px] font-sans text-gray-600 dark:text-gray-300 truncate">{detail}</div>}
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 </div>
@@ -495,11 +513,20 @@ function ComparisonContent({
                   <h4 className="text-sm font-medium text-amber-700 dark:text-amber-400 mb-2">Suspect changed ({linksSuspectChanged.length})</h4>
                   <div className="border border-amber-200 dark:border-amber-800 rounded-lg overflow-hidden bg-amber-50/50 dark:bg-amber-900/10 max-h-48 overflow-y-auto">
                     <div className="divide-y divide-amber-200 dark:divide-amber-800">
-                      {linksSuspectChanged.map((link) => (
-                        <div key={link.id} className="p-2 text-sm font-mono">
-                          {link.sourceType}:{link.sourceId?.slice(0, 8)} → {link.targetType}:{link.targetId?.slice(0, 8)} [{link.linkType}]
-                        </div>
-                      ))}
+                      {linksSuspectChanged.map((link) => {
+                        const sId = (link as any).sourceDisplayId || link.sourceId?.slice(0, 8)
+                        const tId = (link as any).targetDisplayId || link.targetId?.slice(0, 8)
+                        const sLabel = (link as any).sourceLabel || (link as any).sourceTitle
+                        const tLabel = (link as any).targetLabel || (link as any).targetTitle
+                        const line = `${link.sourceType}:${sId} → ${link.targetType}:${tId} [${link.linkType}]`
+                        const detail = [sLabel ? `From: ${sLabel}` : null, tLabel ? `To: ${tLabel}` : null].filter(Boolean).join(' • ')
+                        return (
+                          <div key={link.id} className="p-2 text-sm font-mono" title={detail || line}>
+                            <div>{line}</div>
+                            {detail && <div className="mt-0.5 text-[11px] font-sans text-gray-600 dark:text-gray-300 truncate">{detail}</div>}
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 </div>

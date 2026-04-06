@@ -863,7 +863,9 @@ export default function RequirementDetailDrawer({
     // Invert the relationship type
     linkType: INVERSE_LINK_TYPES[link.linkType] || `inverse_${link.linkType}`,
     // Pass original Source Title as Target Title for display
-    targetTitle: (link as any).sourceTitle || `Source ${link.sourceId.substring(0, 8)}`, // Fallback if sourceTitle missing
+    targetTitle:
+      (link as any).sourceTitle ||
+      ((link as any).sourceDisplayId ? `Source ${(link as any).sourceDisplayId}` : `Source ${link.sourceId.substring(0, 8)}`), // Fallback if sourceTitle missing
     targetDisplayId: (link as any).sourceDisplayId || (link as any).sourceId,
   }))
   const seenIds = new Set(links.map((l: any) => l.id))
