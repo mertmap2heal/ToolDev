@@ -2,6 +2,7 @@ import React from 'react'
 import { format } from 'date-fns'
 import type { Requirement } from 'shared/types/engineering.types'
 import type { Link } from 'shared/types/linkage.types'
+import type { LinkedElementClickPayload } from './RequirementsPBSTree'
 import clsx from 'clsx'
 
 /** Inline edit state when document view reuses page-level edit (optional). Accepts page InlineEditState; card only uses title/description. */
@@ -16,6 +17,8 @@ interface RequirementDocumentCardProps {
   links: Link[]
   /** Visible column keys (from Requirements table column selector). When provided, the details section will be filtered accordingly. */
   visibleColumnKeys?: string[] | Set<string>
+  /** Optional handler to open a linked element preview/details. */
+  onLinkedElementClick?: (payload: LinkedElementClickPayload) => void
   projectName?: string
   onRequirementClick?: (req: Requirement) => void
   draggable?: boolean
@@ -99,7 +102,12 @@ function stripTrailingIdSuffix(title: string, idShort: string): string {
 }
 
 function typePrefix(entityType: string): string | null {
-  const t = entityType.toLowerCase().replace(/-/g, '_')
+  const t = String(entityType || '')
+    .trim()
+    .toLowerCase()
+    // normalize any separators (spaces, dashes, slashes, etc.) to underscores
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
   const map: Record<string, string> = {
     requirement: 'REQ',
     issue: 'ISS',
@@ -128,6 +136,7 @@ export default function RequirementDocumentCard({
   requirement,
   links,
   visibleColumnKeys,
+  onLinkedElementClick,
   projectName,
   onRequirementClick,
   draggable: isDraggable,
@@ -201,7 +210,7 @@ export default function RequirementDocumentCard({
     const idShort = shortId(rawId)
     const preferredId = isOutgoing ? link.targetDisplayId : link.sourceDisplayId
     const prefix = typePrefix(entityType)
-    const itemId = preferredId ?? (prefix ? `${prefix}-${idShort}` : idShort)
+    const itemId = preferredId ?? (prefix ? `${prefix}-${idShort}` : `ID-${idShort}`)
 
     const rawName = String(
       isOutgoing
@@ -209,11 +218,7 @@ export default function RequirementDocumentCard({
         : ((link as any).sourceLabel ?? link.sourceTitle ?? link.sourceDisplayId ?? link.sourceId ?? '')
     ).trim()
 
-    const fallbackName =
-      // If we already show the short id in the Item ID column, don't repeat it in Name.
-      !preferredId && prefix
-        ? formatEntityType(entityType)
-        : `${formatEntityType(entityType)} (${idShort})`
+    const fallbackName = !preferredId ? formatEntityType(entityType) : `${formatEntityType(entityType)} (${idShort})`
     const name =
       rawName && !looksLikeUuidishToken(rawName) && rawName !== rawId
         ? stripTrailingIdSuffix(rawName, idShort)
@@ -221,12 +226,14 @@ export default function RequirementDocumentCard({
     const group = formatEntityType(isOutgoing ? (link.targetType as string) : (link.sourceType as string))
     const relationship = formatLinkType(link.linkType)
     return {
+      link,
       itemId,
       name,
       direction,
       project: projectName ?? '—',
       group,
       relationship,
+      isOutgoing,
     }
   })
 
@@ -392,7 +399,39 @@ export default function RequirementDocumentCard({
                 {relationshipRows.map((row, idx) => (
                   <tr
                     key={idx}
-                    className="border-b border-gray-200 dark:border-gray-600 last:border-b-0 hover:bg-gray-50/50 dark:hover:bg-gray-900/20"
+                    onClick={() => {
+                      if (!onLinkedElementClick) return
+                      const l = row.link as any
+                      const st = (l.linkSourceType ?? l.sourceType ?? 'requirement') as any
+                      const sid = (l.linkSourceId ?? l.sourceId ?? requirement.id) as string
+                      const tt = (l.linkTargetType ?? l.targetType) as any
+                      const tid = (l.linkTargetId ?? l.targetId) as string
+                      const outgoing = row.isOutgoing !== false
+                      onLinkedElementClick({
+                        sourceType: st,
+                        sourceId: sid,
+                        targetType: tt,
+                        targetId: tid,
+                        isOutgoing: outgoing,
+                        contextRequirementId: requirement.id,
+                        link: {
+                          sourceType: st,
+                          sourceId: sid,
+                          targetType: tt,
+                          targetId: tid,
+                          targetDisplayId: outgoing ? (l.targetDisplayId ?? row.itemId) : undefined,
+                          targetTitle: outgoing ? (l.targetTitle ?? row.name) : undefined,
+                          targetLabel: outgoing ? (l.targetLabel ?? row.name) : undefined,
+                          sourceDisplayId: !outgoing ? (l.sourceDisplayId ?? row.itemId) : undefined,
+                          sourceTitle: !outgoing ? (l.sourceTitle ?? row.name) : undefined,
+                          linkType: l.linkType,
+                        },
+                      })
+                    }}
+                    className={clsx(
+                      "border-b border-gray-200 dark:border-gray-600 last:border-b-0 hover:bg-gray-50/50 dark:hover:bg-gray-900/20",
+                      onLinkedElementClick && "cursor-pointer"
+                    )}
                   >
                     <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300">
                       {row.itemId}

@@ -4045,6 +4045,7 @@ export default function RequirementsPage() {
                               requirement={req}
                               links={getLinksForRequirement(req.id)}
                               visibleColumnKeys={requirementColumns}
+                              onLinkedElementClick={setLinkedElementPreview}
                               onRequirementClick={setDetailRequirement}
                               draggable={leftPanelTab === 'functions' || leftPanelTab === 'verification'}
                               onDragStart={(e) => handleRequirementDragStart(e, req)}
@@ -4097,6 +4098,7 @@ export default function RequirementsPage() {
                       requirement={req}
                       links={getLinksForRequirement(req.id)}
                       visibleColumnKeys={requirementColumns}
+                      onLinkedElementClick={setLinkedElementPreview}
                       onRequirementClick={setDetailRequirement}
                       inlineEdit={inlineEdit?.field === 'title' || inlineEdit?.field === 'description' ? inlineEdit : null}
                       onStartInlineEdit={startInlineEdit}
