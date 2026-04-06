@@ -454,6 +454,10 @@ export default function RequirementsPage() {
   const persistDensity = useCallback((d: 'comfortable' | 'compact') => {
     setDensity(d)
     try { localStorage.setItem('requirements-density', d) } catch { /* ignore */ }
+    if (d === 'compact') {
+      // Compact density is meant for scanning lots of items: collapse heavy sections by default.
+      try { localStorage.setItem('requirements-doc-collapsed', JSON.stringify({ details: true, relationships: true })) } catch { /* ignore */ }
+    }
   }, [])
 
   // Document outline (document view only)
@@ -4114,7 +4118,12 @@ export default function RequirementsPage() {
           {/* Requirements Table / Document View */}
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden flex-1 min-h-0">
             {listViewStyle === 'document' ? (
-              <div className="overflow-y-auto h-full p-4 space-y-6">
+              <div
+                className={clsx(
+                  'overflow-y-auto h-full',
+                  density === 'compact' ? 'p-1 space-y-1' : 'p-4 space-y-6'
+                )}
+              >
                 {isLoading ? (
                   <div className="space-y-4">
                     {Array.from({ length: 3 }).map((_, i) => (

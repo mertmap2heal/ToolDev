@@ -307,10 +307,10 @@ export default function RequirementDocumentCard({
       <div
         className={clsx(
           'border-b border-gray-100 dark:border-gray-700/50',
-          density === 'compact' ? 'px-4 py-3' : 'px-5 py-4'
+          density === 'compact' ? 'px-2 py-1' : 'px-5 py-4'
         )}
       >
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+        <h2 className={clsx(density === 'compact' ? 'text-base' : 'text-lg', 'font-semibold text-gray-900 dark:text-white')}>
           <span className="font-mono text-gray-600 dark:text-gray-400 mr-2">
             {requirement.requirementId ?? '—'}
           </span>
@@ -346,8 +346,8 @@ export default function RequirementDocumentCard({
             </button>
           )}
         </h2>
-        {showCreatedUpdatedLine && (
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+        {showCreatedUpdatedLine && density !== 'compact' && (
+          <p className={clsx(density === 'compact' ? 'mt-0.5 text-[11px]' : 'mt-1 text-xs', 'text-gray-500 dark:text-gray-400')}>
             {isVisible('createdAt') && <span>Created: {createdFormatted}</span>}
             {isVisible('createdAt') && isVisible('updatedAt') && <span> · </span>}
             {isVisible('updatedAt') && <span>Updated: {updatedFormatted}</span>}
@@ -356,12 +356,14 @@ export default function RequirementDocumentCard({
       </div>
 
       {/* Details section */}
-      <div className={clsx(density === 'compact' ? 'px-4 py-3' : 'px-5 py-4')}>
+      <div className={clsx(density === 'compact' ? 'px-2 py-1' : 'px-5 py-4')}>
         <button
           type="button"
           onClick={onToggleDetails}
           className={clsx(
-            'w-full flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3',
+            'w-full flex items-center justify-between font-semibold text-gray-700 dark:text-gray-300',
+            density === 'compact' ? 'text-xs' : 'text-sm',
+            density === 'compact' ? 'mb-2' : 'mb-3',
             onToggleDetails && 'hover:text-gray-900 dark:hover:text-white'
           )}
           title={collapsedDetails ? 'Expand details' : 'Collapse details'}
@@ -373,7 +375,7 @@ export default function RequirementDocumentCard({
           </span>
         </button>
         {!collapsedDetails && (
-          <table className="w-full text-sm border-collapse border border-gray-200 dark:border-gray-600">
+          <table className={clsx('w-full border-collapse border border-gray-200 dark:border-gray-600', density === 'compact' ? 'text-xs' : 'text-sm')}>
             <tbody>
               {details.map(({ key, label, value }) => {
                 const isTitleRow = key === 'title'
@@ -383,10 +385,16 @@ export default function RequirementDocumentCard({
 
                 return (
                   <tr key={key} className="border-b border-gray-200 dark:border-gray-600 last:border-b-0">
-                    <td className="px-3 py-2 w-1/3 font-medium text-gray-600 dark:text-gray-400 bg-gray-50/50 dark:bg-gray-900/30">
+                    <td className={clsx(
+                      'w-1/3 font-medium text-gray-600 dark:text-gray-400 bg-gray-50/50 dark:bg-gray-900/30',
+                      density === 'compact' ? 'px-2 py-1.5' : 'px-3 py-2'
+                    )}>
                       {label}
                     </td>
-                    <td className="px-3 py-2 text-gray-900 dark:text-gray-100">
+                    <td className={clsx(
+                      'text-gray-900 dark:text-gray-100',
+                      density === 'compact' ? 'px-2 py-1.5' : 'px-3 py-2'
+                    )}>
                       {showDescriptionTextarea ? (
                         <textarea
                           ref={inlineTextareaRef as React.RefObject<HTMLTextAreaElement>}
@@ -440,12 +448,14 @@ export default function RequirementDocumentCard({
       </div>
 
       {/* Relationships section */}
-      <div className={clsx(density === 'compact' ? 'px-4 py-3' : 'px-5 py-4', 'border-t border-gray-100 dark:border-gray-700/50')}>
+      <div className={clsx(density === 'compact' ? 'px-2 py-1' : 'px-5 py-4', 'border-t border-gray-100 dark:border-gray-700/50')}>
         <button
           type="button"
           onClick={onToggleRelationships}
           className={clsx(
-            'w-full flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3',
+            'w-full flex items-center justify-between font-semibold text-gray-700 dark:text-gray-300',
+            density === 'compact' ? 'text-xs' : 'text-sm',
+            density === 'compact' ? 'mb-2' : 'mb-3',
             onToggleRelationships && 'hover:text-gray-900 dark:hover:text-white'
           )}
           title={collapsedRelationships ? 'Expand relationships' : 'Collapse relationships'}
@@ -458,7 +468,7 @@ export default function RequirementDocumentCard({
         </button>
         {!collapsedRelationships && (
           <>
-            <div className="flex flex-wrap items-center gap-2 mb-3">
+            <div className={clsx('flex flex-wrap items-center gap-2', density === 'compact' ? 'mb-2' : 'mb-3')}>
               <div className="inline-flex rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
                 {(['all', 'upstream', 'downstream'] as const).map((d) => (
                   <button
@@ -507,7 +517,7 @@ export default function RequirementDocumentCard({
               <p className="text-sm text-gray-500 dark:text-gray-400 italic">No relationships</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm border-collapse border border-gray-200 dark:border-gray-600">
+                <table className={clsx('w-full border-collapse border border-gray-200 dark:border-gray-600', density === 'compact' ? 'text-xs' : 'text-sm')}>
                   <thead>
                     <tr className="bg-gray-50 dark:bg-gray-900/50">
                       <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-600">
@@ -568,10 +578,10 @@ export default function RequirementDocumentCard({
                           onLinkedElementClick && "cursor-pointer"
                         )}
                       >
-                        <td className="px-3 py-2 font-mono text-gray-700 dark:text-gray-300">
+                        <td className={clsx('font-mono text-gray-700 dark:text-gray-300', density === 'compact' ? 'px-2 py-1.5' : 'px-3 py-2')}>
                           {row.itemId}
                         </td>
-                        <td className="px-3 py-2 text-gray-900 dark:text-gray-100">
+                        <td className={clsx('text-gray-900 dark:text-gray-100', density === 'compact' ? 'px-2 py-1.5' : 'px-3 py-2')}>
                           <span className="inline-flex items-center gap-1 group/name">
                             <span className={clsx(onLinkedElementClick && 'group-hover/name:underline')}>
                               {row.name}
@@ -579,10 +589,10 @@ export default function RequirementDocumentCard({
                             {onLinkedElementClick && <ChevronRight size={14} className="opacity-0 group-hover/name:opacity-60 transition-opacity" />}
                           </span>
                         </td>
-                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{row.direction}</td>
-                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{row.project}</td>
-                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{row.group}</td>
-                        <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
+                        <td className={clsx('text-gray-600 dark:text-gray-400', density === 'compact' ? 'px-2 py-1.5' : 'px-3 py-2')}>{row.direction}</td>
+                        <td className={clsx('text-gray-600 dark:text-gray-400', density === 'compact' ? 'px-2 py-1.5' : 'px-3 py-2')}>{row.project}</td>
+                        <td className={clsx('text-gray-600 dark:text-gray-400', density === 'compact' ? 'px-2 py-1.5' : 'px-3 py-2')}>{row.group}</td>
+                        <td className={clsx('text-gray-700 dark:text-gray-300', density === 'compact' ? 'px-2 py-1.5' : 'px-3 py-2')}>
                           {row.relationship}
                         </td>
                       </tr>
