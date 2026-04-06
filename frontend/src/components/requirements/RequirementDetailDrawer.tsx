@@ -708,6 +708,32 @@ export default function RequirementDetailDrawer({
     return () => clearTimeout(timeout)
   }, [toastMessage])
 
+  useEffect(() => {
+    if (!isOpen) return
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return
+      if (e.key !== 'Escape') return
+
+      // If a nested modal is open, don't close the whole drawer.
+      if (isImpactAnalysisOpen || isVersionHistoryOpen || breakLinkModal) return
+
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName?.toLowerCase()
+      const isEditable =
+        tag === 'input' ||
+        tag === 'textarea' ||
+        tag === 'select' ||
+        target?.isContentEditable === true
+      if (isEditable) return
+
+      onClose()
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isOpen, onClose, isImpactAnalysisOpen, isVersionHistoryOpen, breakLinkModal])
+
   const lockMutation = useMutation({
     mutationFn: () => {
       if (!requirement) throw new Error('Requirement not found')
