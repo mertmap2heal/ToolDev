@@ -172,18 +172,13 @@ export default function TestRunDetailDrawer({ run, isOpen, onClose, projectId, o
     ]
   }, [r, drawer])
 
-  if (!isOpen) return null
-
   return (
-    <>
-      <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} aria-hidden="true" />
-      <div
-        className={clsx(
-          'fixed right-0 top-0 h-full w-full max-w-2xl bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 shadow-xl z-50 flex flex-col',
-          'transition-transform duration-200',
-          isOpen ? 'translate-x-0' : 'translate-x-full'
-        )}
-      >
+    <div
+      className={clsx(
+        'h-full bg-white dark:bg-gray-900 shadow-2xl border-l border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out overflow-hidden',
+        isOpen ? 'w-full max-w-2xl min-w-[32rem]' : 'w-0 min-w-0'
+      )}
+    >
         <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
             {r?.runName || 'Test Run'}
@@ -445,8 +440,6 @@ export default function TestRunDetailDrawer({ run, isOpen, onClose, projectId, o
             </>
           )}
         </div>
-      </div>
-
       {showReportModal && projectId && run?.id && (
         <FullReportModal
           isOpen={showReportModal}
@@ -466,6 +459,6 @@ export default function TestRunDetailDrawer({ run, isOpen, onClose, projectId, o
           entityName={runDetails?.runName || run?.runName || 'Test Run'}
         />
       )}
-    </>
+    </div>
   )
 }
