@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useRef, useMemo, useState } from 'react'
 import { Outlet, useParams, useNavigate, useLocation, Link, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import { FileCode, Settings, ChevronLeft, ChevronRight, FolderTree } from 'lucide-react'
+import { FileCode, Settings, ChevronRight, ClipboardCheck, ExternalLink, GripVertical, PanelLeft, PanelLeftClose } from 'lucide-react'
 
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import { VerificationDrawerProvider, useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
@@ -49,8 +49,8 @@ function VerificationLayoutInner() {
   const selectedNode = focusType && focusId ? { type: focusType, id: focusId } : null
 
   const [isTreePanelOpen, setIsTreePanelOpen] = useState(true)
-  const PANEL_MIN = 260
-  const PANEL_MAX = 520
+  const PANEL_MIN = 200
+  const PANEL_MAX = 500
   const PANEL_DEFAULT = 340
   const [leftPanelWidth, setLeftPanelWidth] = useState(PANEL_DEFAULT)
   const resizeContainerRef = useRef<HTMLDivElement>(null)
@@ -435,67 +435,88 @@ function VerificationLayoutInner() {
         <>
           {isTreePanelOpen ? (
             <>
-              <div style={{ width: leftPanelWidth }} className="flex-shrink-0 overflow-hidden flex flex-col">
-                <VerificationTreePanel
-                  projectId={projectId!}
-                  plans={plans}
-                  testCases={testCases}
-                  testSetups={testSetups}
-                  runsByPlanId={runsByPlanId}
-                  selectedNode={selectedNode}
-                  onSelect={handleTreeSelect}
-                  onCreatePlan={handleCreatePlan}
-                  onCreateCase={handleCreateCase}
-                  onCreateSetup={handleCreateSetup}
-                  onCreateRun={handleCreateRun}
-                  onDeletePlan={(id) => { if (confirm('Delete this test plan?')) deletePlanMutation.mutate(id) }}
-                  onDeleteCase={(id) => { if (confirm('Delete this test case?')) deleteCaseMutation.mutate(id) }}
-                  onDeleteSetup={(id) => { if (confirm('Delete this test setup?')) deleteSetupMutation.mutate(id) }}
-                  onDeleteRun={(id) => { if (confirm('Delete this test run?')) deleteRunMutation.mutate(id) }}
-                  onRemoveCaseFromPlan={handleRemoveCaseFromPlan}
-                  onAddCaseToPlan={handleAddCaseToPlan}
-                  onAddSetupToPlan={handleAddSetupToPlan}
-                  onRemoveSetupFromPlan={handleRemoveSetupFromPlan}
-                  requirementTestCaseLinks={requirementTestCaseLinks}
-                  requirements={requirementsForTree}
-                  onAddRequirementToTestCase={(caseId) => {
-                    navigate(`/projects/${projectId}/requirements?tree=verification&linkToCase=${caseId}`)
-                  }}
-                  onRemoveRequirementFromTestCase={(reqId, caseId) => {
-                    removeRequirementFromTestCaseMutation.mutate({ reqId, caseId })
-                  }}
-                  onRequirementClick={(reqId) => {
-                    navigate(`/projects/${projectId}/requirements?requirementId=${reqId}`)
-                  }}
-                  onOpenTraceabilityMatrix={(focusReqId) => {
-                    const qs = new URLSearchParams()
-                    qs.set('tab', 'traceability')
-                    if (focusReqId) qs.set('matrixReqId', focusReqId)
-                    navigate(`/projects/${projectId}/verification?${qs.toString()}`, { replace: true })
-                  }}
-                  onOpenTraceabilityMatrixForCase={(caseId) => {
-                    const qs = new URLSearchParams()
-                    qs.set('tab', 'traceability')
-                    qs.set('matrixCaseId', caseId)
-                    navigate(`/projects/${projectId}/verification?${qs.toString()}`, { replace: true })
-                  }}
-                />
+              <div style={{ width: leftPanelWidth, minWidth: PANEL_MIN }} className="flex-shrink-0 h-full flex flex-col">
+                {/* Match Requirements left panel: tab strip (Verification) */}
+                <div className="relative shrink-0 border-b border-gray-200 dark:border-gray-700">
+                  <Link
+                    to={`/projects/${projectId}/requirements?panel=1&panelTab=verification`}
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    title="Open the same structure tree under Requirements → Structure panel (Verification tab)"
+                  >
+                    <span className="flex items-center gap-1.5 text-teal-600 dark:text-teal-400">
+                      <ClipboardCheck size={14} />
+                      <span>Verification</span>
+                    </span>
+                    <ExternalLink size={14} className="text-gray-400 shrink-0" aria-hidden />
+                  </Link>
+                </div>
+                <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+                  <VerificationTreePanel
+                    projectId={projectId!}
+                    plans={plans}
+                    testCases={testCases}
+                    testSetups={testSetups}
+                    runsByPlanId={runsByPlanId}
+                    selectedNode={selectedNode}
+                    onSelect={handleTreeSelect}
+                    onCreatePlan={handleCreatePlan}
+                    onCreateCase={handleCreateCase}
+                    onCreateSetup={handleCreateSetup}
+                    onCreateRun={handleCreateRun}
+                    onDeletePlan={(id) => { if (confirm('Delete this test plan?')) deletePlanMutation.mutate(id) }}
+                    onDeleteCase={(id) => { if (confirm('Delete this test case?')) deleteCaseMutation.mutate(id) }}
+                    onDeleteSetup={(id) => { if (confirm('Delete this test setup?')) deleteSetupMutation.mutate(id) }}
+                    onDeleteRun={(id) => { if (confirm('Delete this test run?')) deleteRunMutation.mutate(id) }}
+                    onRemoveCaseFromPlan={handleRemoveCaseFromPlan}
+                    onAddCaseToPlan={handleAddCaseToPlan}
+                    onAddSetupToPlan={handleAddSetupToPlan}
+                    onRemoveSetupFromPlan={handleRemoveSetupFromPlan}
+                    requirementTestCaseLinks={requirementTestCaseLinks}
+                    requirements={requirementsForTree}
+                    onAddRequirementToTestCase={(caseId) => {
+                      navigate(`/projects/${projectId}/requirements?tree=verification&linkToCase=${caseId}`)
+                    }}
+                    onRemoveRequirementFromTestCase={(reqId, caseId) => {
+                      removeRequirementFromTestCaseMutation.mutate({ reqId, caseId })
+                    }}
+                    onRequirementClick={(reqId) => {
+                      navigate(`/projects/${projectId}/requirements?requirementId=${reqId}`)
+                    }}
+                    onOpenTraceabilityMatrix={(focusReqId) => {
+                      const qs = new URLSearchParams()
+                      qs.set('tab', 'traceability')
+                      if (focusReqId) qs.set('matrixReqId', focusReqId)
+                      navigate(`/projects/${projectId}/verification?${qs.toString()}`, { replace: true })
+                    }}
+                    onOpenTraceabilityMatrixForCase={(caseId) => {
+                      const qs = new URLSearchParams()
+                      qs.set('tab', 'traceability')
+                      qs.set('matrixCaseId', caseId)
+                      navigate(`/projects/${projectId}/verification?${qs.toString()}`, { replace: true })
+                    }}
+                  />
+                </div>
               </div>
               <div
                 role="separator"
-                aria-label="Resize tree panel"
+                aria-label="Resize structure panel"
+                className="w-2 cursor-col-resize hover:bg-blue-400/50 active:bg-blue-500 transition-colors flex-shrink-0 relative group"
                 onMouseDown={handleResizeStart}
-                className="w-1 flex-shrink-0 cursor-col-resize bg-gray-100 dark:bg-gray-700 hover:bg-blue-300 dark:hover:bg-blue-600 transition-colors"
-              />
+              >
+                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[1px] bg-gray-200 dark:bg-gray-700 group-hover:bg-blue-400 transition-colors" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 text-gray-400 border border-gray-200 dark:border-gray-700 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
+                  <GripVertical size={12} />
+                </div>
+              </div>
             </>
           ) : (
             <div className="shrink-0 w-8 flex flex-col items-center py-2 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
               <button
                 type="button"
                 onClick={() => setIsTreePanelOpen(true)}
-                className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
-                title="Expand tree"
-                aria-label="Expand tree"
+                className="p-1.5 rounded-md border border-transparent hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
+                title="Open left panel (Verification structure)"
+                aria-label="Open left panel"
               >
                 <ChevronRight size={18} />
               </button>
@@ -512,17 +533,11 @@ function VerificationLayoutInner() {
             <button
               type="button"
               onClick={() => setIsTreePanelOpen((o) => !o)}
-              className={clsx(
-                'inline-flex gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors',
-                isTreePanelOpen
-                  ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
-                  : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-              )}
-              title={isTreePanelOpen ? 'Hide tree' : 'Show tree'}
+              className="p-1.5 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              title={isTreePanelOpen ? 'Close left panel' : 'Open left panel (Verification structure)'}
+              aria-label={isTreePanelOpen ? 'Close left panel' : 'Open left panel'}
             >
-              {isTreePanelOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-              <FolderTree size={16} />
-              Tree
+              {isTreePanelOpen ? <PanelLeftClose size={16} className="text-gray-500 dark:text-gray-400" /> : <PanelLeft size={16} className="text-gray-500 dark:text-gray-400" />}
             </button>
           )}
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Verification</h2>

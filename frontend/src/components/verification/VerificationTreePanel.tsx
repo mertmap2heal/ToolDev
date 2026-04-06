@@ -1067,7 +1067,7 @@ export default function VerificationTreePanel({
             placeholder="Search plans, cases..."
             className="w-full pl-9 pr-9 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl
               bg-white dark:bg-gray-700/50 text-gray-900 dark:text-white
-              focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500
+              focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500
               placeholder-gray-400 dark:placeholder-gray-500 transition-all"
           />
           {searchQuery && (

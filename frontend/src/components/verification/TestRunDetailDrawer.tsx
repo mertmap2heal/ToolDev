@@ -175,8 +175,10 @@ export default function TestRunDetailDrawer({ run, isOpen, onClose, projectId, o
   return (
     <div
       className={clsx(
-        'h-full flex-shrink-0 bg-white dark:bg-gray-900 shadow-2xl border-l border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out overflow-hidden',
-        isOpen && run ? 'w-full max-w-2xl min-w-[32rem]' : 'w-0 min-w-0'
+        'flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out overflow-hidden relative',
+        isOpen && run
+          ? 'h-[calc(100%-1rem)] m-2 w-full max-w-2xl min-w-[32rem] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm'
+          : 'w-0 min-w-0 h-full m-0 border-0 shadow-none rounded-none'
       )}
     >
         <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
