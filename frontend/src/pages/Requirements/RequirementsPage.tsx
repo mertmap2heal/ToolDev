@@ -214,12 +214,14 @@ export default function RequirementsPage() {
   const [viewDropdownOpen, setViewDropdownOpen] = useState(false)
   const [analysisDropdownOpen, setAnalysisDropdownOpen] = useState(false)
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false)
+  const [panelTabDropdownOpen, setPanelTabDropdownOpen] = useState(false)
   const traceabilityDropdownRef = useRef<HTMLDivElement>(null)
   const dataDropdownRef = useRef<HTMLDivElement>(null)
   /** View menu + column selector share one container for outside-click detection. */
   const viewColumnDropdownRef = useRef<HTMLDivElement>(null)
   const analysisDropdownRef = useRef<HTMLDivElement>(null)
   const sortDropdownRef = useRef<HTMLDivElement>(null)
+  const panelTabDropdownRef = useRef<HTMLDivElement>(null)
 
   // Inline editing state
   const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null)
@@ -718,6 +720,9 @@ export default function RequirementsPage() {
       }
       if (sortDropdownRef.current && !sortDropdownRef.current.contains(event.target as Node)) {
         setSortDropdownOpen(false)
+      }
+      if (panelTabDropdownRef.current && !panelTabDropdownRef.current.contains(event.target as Node)) {
+        setPanelTabDropdownOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -2880,6 +2885,12 @@ export default function RequirementsPage() {
     setLinkedElementPreview(null)
   }, [projectId, linkedElementPreview, allRequirements, navigate])
 
+  const LEFT_PANEL_TAB_META: Record<RequirementsLeftPanelTabId, { icon: React.ReactNode; color: string }> = {
+    pbs:          { icon: <Grid3X3 size={14} />,      color: 'text-blue-600 dark:text-blue-400' },
+    functions:    { icon: <Network size={14} />,      color: 'text-indigo-600 dark:text-indigo-400' },
+    verification: { icon: <ClipboardCheck size={14} />, color: 'text-teal-600 dark:text-teal-400' },
+  }
+
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col">
       <div className="flex-shrink-0 pr-6">
@@ -2890,20 +2901,47 @@ export default function RequirementsPage() {
         {isPBSPanelOpen && projectId && (
           <>
             <div style={{ width: pbsPanelWidth, minWidth: 200 }} className="flex-shrink-0 h-full flex flex-col">
-              <div className="flex border-b border-gray-200 dark:border-gray-700 shrink-0">
-                {REQUIREMENTS_LEFT_PANEL_TABS.map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setLeftPanelTab(tab.id)}
-                    className={clsx(
-                      'flex-1 px-3 py-2 text-sm font-medium transition-colors',
-                      leftPanelTab === tab.id ? tab.activeClass : tab.inactiveClass
-                    )}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
+              {/* Panel tab dropdown selector */}
+              <div ref={panelTabDropdownRef} className="relative shrink-0 border-b border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setPanelTabDropdownOpen((o) => !o)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                >
+                  <span className={clsx('flex items-center gap-1.5', LEFT_PANEL_TAB_META[leftPanelTab].color)}>
+                    {LEFT_PANEL_TAB_META[leftPanelTab].icon}
+                    <span>{REQUIREMENTS_LEFT_PANEL_TABS.find((t) => t.id === leftPanelTab)?.label}</span>
+                  </span>
+                  <ChevronDown
+                    size={14}
+                    className={clsx('text-gray-400 transition-transform duration-200', panelTabDropdownOpen && 'rotate-180')}
+                  />
+                </button>
+                {panelTabDropdownOpen && (
+                  <div className="absolute left-0 right-0 top-full z-50 bg-white dark:bg-gray-800 border-x border-b border-gray-200 dark:border-gray-700 rounded-b-md shadow-lg">
+                    {REQUIREMENTS_LEFT_PANEL_TABS.map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => { setLeftPanelTab(tab.id); setPanelTabDropdownOpen(false) }}
+                        className={clsx(
+                          'w-full flex items-center justify-between px-3 py-2 text-sm transition-colors',
+                          leftPanelTab === tab.id
+                            ? 'bg-gray-50 dark:bg-gray-700/50 font-medium'
+                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/30'
+                        )}
+                      >
+                        <span className={clsx('flex items-center gap-2', leftPanelTab === tab.id ? LEFT_PANEL_TAB_META[tab.id].color : '')}>
+                          {LEFT_PANEL_TAB_META[tab.id].icon}
+                          {tab.label}
+                        </span>
+                        {leftPanelTab === tab.id && (
+                          <Check size={13} className={LEFT_PANEL_TAB_META[tab.id].color} />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
                 <div className="flex-1 min-h-0 overflow-hidden">

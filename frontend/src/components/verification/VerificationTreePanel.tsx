@@ -943,15 +943,8 @@ export default function VerificationTreePanel({
 
   return (
     <div className="flex flex-col h-[calc(100%-1rem)] m-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm overflow-hidden">
-      <div className="px-4 py-4 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <div className="p-1.5 bg-teal-100 dark:bg-teal-900/30 rounded-lg text-teal-600 dark:text-teal-400">
-              <FolderTree className="w-4 h-4" />
-            </div>
-            Verification
-          </h3>
-          <div className="flex items-center gap-1">
+      <div className="px-3 py-3 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm">
+        <div className="flex items-center gap-1 justify-end mb-2">
             <button
               onClick={toggleAll}
               className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
@@ -967,7 +960,6 @@ export default function VerificationTreePanel({
               <Plus size={14} />
             </button>
           </div>
-        </div>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
