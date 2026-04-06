@@ -85,12 +85,16 @@ function deepEqual(a: unknown, b: unknown): boolean {
 }
 
 function computeObjectDiff(oldValue: unknown, newValue: unknown): Array<{ key: string; before: unknown; after: unknown }> {
-  if (!isPlainObject(oldValue) || !isPlainObject(newValue)) return []
-  const keys = new Set([...Object.keys(oldValue), ...Object.keys(newValue)])
+  // Support add/remove-style audit rows where one side is missing:
+  // treat missing side as empty object so we still show meaningful key changes.
+  const oldObj = isPlainObject(oldValue) ? oldValue : (isEmptyish(oldValue) ? {} : null)
+  const newObj = isPlainObject(newValue) ? newValue : (isEmptyish(newValue) ? {} : null)
+  if (!oldObj || !newObj) return []
+  const keys = new Set([...Object.keys(oldObj), ...Object.keys(newObj)])
   const out: Array<{ key: string; before: unknown; after: unknown }> = []
   for (const k of Array.from(keys).sort()) {
-    const before = (oldValue as any)[k]
-    const after = (newValue as any)[k]
+    const before = (oldObj as any)[k]
+    const after = (newObj as any)[k]
     // Only include true changes (stable deep comparison; avoids object key-order false positives)
     if (!deepEqual(before, after)) out.push({ key: k, before, after })
   }
@@ -102,6 +106,60 @@ function humanizeAction(action: string): string {
     .toLowerCase()
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function buildEntityLabel(r: AuditRow): { primary: string; secondary?: string } {
+  const ov = isPlainObject(r.oldValue) ? (r.oldValue as any) : null
+  const nv = isPlainObject(r.newValue) ? (r.newValue as any) : null
+
+  const sourceType = (nv?.sourceType as string | undefined) || (ov?.sourceType as string | undefined)
+  const sourceId = (nv?.sourceId as string | undefined) || (ov?.sourceId as string | undefined)
+  const targetType = (nv?.targetType as string | undefined) || (ov?.targetType as string | undefined)
+  const targetId = (nv?.targetId as string | undefined) || (ov?.targetId as string | undefined)
+  const linkType = (nv?.linkType as string | undefined) || (ov?.linkType as string | undefined)
+  const sourceDisplayId = (nv?.sourceDisplayId as string | undefined) || (ov?.sourceDisplayId as string | undefined)
+  const targetDisplayId = (nv?.targetDisplayId as string | undefined) || (ov?.targetDisplayId as string | undefined)
+  const sourceLabel = (nv?.sourceLabel as string | undefined) || (ov?.sourceLabel as string | undefined)
+  const targetLabel = (nv?.targetLabel as string | undefined) || (ov?.targetLabel as string | undefined)
+
+  if (sourceType && sourceId && targetType && targetId) {
+    const fmtType = (t: string) => String(t).toUpperCase().replace(/-/g, '_')
+    const sId = sourceDisplayId || String(sourceId).slice(0, 8)
+    const tId = targetDisplayId || String(targetId).slice(0, 8)
+    const s = `${fmtType(sourceType)}:${sId}`
+    const t = `${fmtType(targetType)}:${tId}`
+    const primary = `${s} → ${t}${linkType ? ` (${linkType})` : ''}`
+    return {
+      primary,
+      secondary:
+        sourceLabel || targetLabel
+          ? [sourceLabel ? `From: ${sourceLabel}` : null, targetLabel ? `To: ${targetLabel}` : null].filter(Boolean).join(' • ')
+          : undefined,
+    }
+  }
+
+  const displayId =
+    (nv?.requirementId as string | undefined) ||
+    (ov?.requirementId as string | undefined) ||
+    (nv?.displayId as string | undefined) ||
+    (ov?.displayId as string | undefined) ||
+    (nv?.id as string | undefined) ||
+    (ov?.id as string | undefined) ||
+    r.entityId
+
+  const title =
+    (nv?.title as string | undefined) ||
+    (ov?.title as string | undefined) ||
+    (nv?.name as string | undefined) ||
+    (ov?.name as string | undefined) ||
+    undefined
+
+  const primary = typeof displayId === 'string' && displayId.trim()
+    ? displayId.trim()
+    : `${r.entityType}:${r.entityId.slice(0, 12)}`
+
+  const secondary = title && typeof title === 'string' && title.trim() ? title.trim() : undefined
+  return { primary, secondary }
 }
 
 function csvEscape(v: unknown): string {
@@ -157,10 +215,52 @@ export default function RequirementsAuditLogModal({ projectId, onClose }: Props)
   })
 
   const rows: AuditRow[] = (query.data?.items ?? []) as any
+  const dedupedRows: AuditRow[] = useMemo(() => {
+    // De-dupe mirrored link audit events that represent the same physical unlink.
+    // Example: LINK_REMOVED + REQUIREMENT_TRACE_LINK_REMOVED for same source/target/linkType.
+    const norm = (v: any) => String(v ?? '').toLowerCase().replace(/-/g, '_')
+    const keyFor = (r: AuditRow): string | null => {
+      const ov = isPlainObject(r.oldValue) ? (r.oldValue as any) : null
+      const nv = isPlainObject(r.newValue) ? (r.newValue as any) : null
+      const v = nv ?? ov
+      const st = v?.sourceType
+      const sid = v?.sourceId
+      const tt = v?.targetType
+      const tid = v?.targetId
+      const lt = v?.linkType
+      if (!st || !sid || !tt || !tid) return null
+      const timeBucket = r.performedAt ? new Date(r.performedAt).toISOString().slice(0, 19) : '' // second precision
+      return `${timeBucket}|${norm(st)}:${sid}|${norm(tt)}:${tid}|${norm(lt)}`
+    }
+
+    const byKey = new Map<string, AuditRow>()
+    const passthrough: AuditRow[] = []
+    for (const r of rows) {
+      const k = keyFor(r)
+      if (!k) {
+        passthrough.push(r)
+        continue
+      }
+      const prev = byKey.get(k)
+      if (!prev) {
+        byKey.set(k, r)
+        continue
+      }
+      // Prefer requirement-scoped action names for readability
+      const prevIsReq = String(prev.action).startsWith('REQUIREMENT_TRACE_LINK_')
+      const curIsReq = String(r.action).startsWith('REQUIREMENT_TRACE_LINK_')
+      if (curIsReq && !prevIsReq) byKey.set(k, r)
+    }
+    return [...Array.from(byKey.values()), ...passthrough].sort((a, b) => {
+      const ta = a.performedAt ? new Date(a.performedAt).getTime() : 0
+      const tb = b.performedAt ? new Date(b.performedAt).getTime() : 0
+      return tb - ta
+    })
+  }, [rows])
   const total = query.data?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
-  const selectedRow = useMemo(() => rows.find((r) => r.id === expandedId) ?? null, [rows, expandedId])
+  const selectedRow = useMemo(() => dedupedRows.find((r) => r.id === expandedId) ?? null, [dedupedRows, expandedId])
   const fieldDiff = useMemo(
     () => (selectedRow ? computeObjectDiff(selectedRow.oldValue, selectedRow.newValue) : []),
     [selectedRow]
@@ -418,7 +518,7 @@ export default function RequirementsAuditLogModal({ projectId, onClose }: Props)
                 return raw
               })()}
             </div>
-          ) : rows.length === 0 ? (
+          ) : dedupedRows.length === 0 ? (
             <div className="p-10 text-sm text-gray-600 dark:text-gray-400">
               No audit events found for the selected filters.
             </div>
@@ -434,10 +534,11 @@ export default function RequirementsAuditLogModal({ projectId, onClose }: Props)
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {dedupedRows.map((r) => {
                   const actor = r.performedBy?.name || r.performedBy?.email || (r.performedByUserId ? r.performedByUserId.slice(0, 8) : '—')
                   const ts = r.performedAt ? format(new Date(r.performedAt), 'yyyy-MM-dd HH:mm:ss') : '—'
                   const isExpanded = expandedId === r.id
+                  const entityLabel = buildEntityLabel(r)
                   return (
                     <>
                       <tr
@@ -453,9 +554,22 @@ export default function RequirementsAuditLogModal({ projectId, onClose }: Props)
                         <td className="px-4 py-2.5 text-gray-800 dark:text-gray-100">{actor}</td>
                         <td className="px-4 py-2.5 text-gray-800 dark:text-gray-100">{humanizeAction(r.action)}</td>
                         <td className="px-4 py-2.5 text-gray-700 dark:text-gray-200">
-                          <span className="font-mono text-xs">{r.entityType}</span>
-                          <span className="mx-2 text-gray-400">/</span>
-                          <span className="font-mono text-xs">{r.entityId?.slice(0, 12)}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-[11px] px-2 py-0.5 rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 text-gray-700 dark:text-gray-200">
+                              {r.entityType}
+                            </span>
+                            <span
+                              className="font-mono text-xs text-gray-900 dark:text-white truncate max-w-[520px]"
+                              title={entityLabel.primary}
+                            >
+                              {entityLabel.primary}
+                            </span>
+                          </div>
+                          {entityLabel.secondary && (
+                            <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate max-w-[520px]" title={entityLabel.secondary}>
+                              {entityLabel.secondary}
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-2.5 font-mono text-xs text-gray-600 dark:text-gray-300">
                           {r.correlationId ? r.correlationId.slice(0, 16) : '—'}

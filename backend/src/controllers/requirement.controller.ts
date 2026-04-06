@@ -1124,11 +1124,88 @@ export const getProjectAuditEvents = async (req: AuthRequest, res: Response) => 
         : []
     const actorById = new Map(actors.map((u) => [u.id, u]))
 
-    const items = events.map((e) => ({
-      ...e,
-      performedBy: e.performedByUserId ? actorById.get(e.performedByUserId) ?? null : null,
-      correlationId: null as any, // reserved for future (not on VerAuditEvent schema yet)
-    }))
+    const normType = (t: any) => String(t ?? '').toLowerCase().replace(/-/g, '_')
+    type LinkLike = { sourceType?: string; sourceId?: string; targetType?: string; targetId?: string; linkType?: string }
+    const linkPayloadFor = (e: any): LinkLike | null => {
+      const v = (e.newValue ?? e.oldValue) as any
+      if (!v || typeof v !== 'object') return null
+      const st = v.sourceType
+      const sid = v.sourceId
+      const tt = v.targetType
+      const tid = v.targetId
+      if (!st || !sid || !tt || !tid) return null
+      return { sourceType: String(st), sourceId: String(sid), targetType: String(tt), targetId: String(tid), linkType: v.linkType ? String(v.linkType) : undefined }
+    }
+
+    // Enrich link-like audit payloads with display IDs / titles (so UI can avoid UUID fragments)
+    const reqIds = new Set<string>()
+    const paramIds = new Set<string>()
+    for (const e of events as any[]) {
+      const p = linkPayloadFor(e)
+      if (!p) continue
+      if (normType(p.sourceType) === 'requirement') reqIds.add(p.sourceId!)
+      if (normType(p.targetType) === 'requirement') reqIds.add(p.targetId!)
+      if (normType(p.sourceType) === 'parameter') paramIds.add(p.sourceId!)
+      if (normType(p.targetType) === 'parameter') paramIds.add(p.targetId!)
+    }
+
+    const [reqs, params] = await Promise.all([
+      reqIds.size
+        ? prisma.requirement.findMany({
+            where: { id: { in: Array.from(reqIds) }, projectId },
+            select: { id: true, requirementId: true, title: true },
+          })
+        : Promise.resolve([]),
+      paramIds.size
+        ? prisma.parameter.findMany({
+            where: { id: { in: Array.from(paramIds) }, projectId },
+            select: { id: true, parameterId: true, name: true },
+          })
+        : Promise.resolve([]),
+    ])
+
+    const reqById = new Map(reqs.map((r) => [r.id, r]))
+    const paramById = new Map(params.map((p) => [p.id, p]))
+
+    const enrichSide = (t: string | undefined, id: string | undefined) => {
+      const nt = normType(t)
+      if (!id) return null
+      if (nt === 'requirement') {
+        const r = reqById.get(id)
+        if (!r) return { displayId: id.slice(0, 8), label: null }
+        return { displayId: r.requirementId || r.id.slice(0, 8), label: r.title || null }
+      }
+      if (nt === 'parameter') {
+        const p = paramById.get(id)
+        if (!p) return { displayId: id.slice(0, 8), label: null }
+        return { displayId: p.parameterId || p.id.slice(0, 8), label: p.name || null }
+      }
+      return { displayId: id.slice(0, 8), label: null }
+    }
+
+    const items = events.map((e: any) => {
+      const payload = linkPayloadFor(e)
+      if (payload) {
+        const s = enrichSide(payload.sourceType, payload.sourceId)
+        const t = enrichSide(payload.targetType, payload.targetId)
+        const into = (v: any) =>
+          v && typeof v === 'object'
+            ? {
+                ...v,
+                sourceDisplayId: s?.displayId ?? null,
+                sourceLabel: s?.label ?? null,
+                targetDisplayId: t?.displayId ?? null,
+                targetLabel: t?.label ?? null,
+              }
+            : v
+        e = { ...e, newValue: into(e.newValue), oldValue: into(e.oldValue) }
+      }
+      return {
+        ...e,
+        performedBy: e.performedByUserId ? actorById.get(e.performedByUserId) ?? null : null,
+        correlationId: null as any, // reserved for future (not on VerAuditEvent schema yet)
+      }
+    })
 
     res.json({
       success: true,
