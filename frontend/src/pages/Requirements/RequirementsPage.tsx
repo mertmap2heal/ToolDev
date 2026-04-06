@@ -3616,9 +3616,6 @@ export default function RequirementsPage() {
                 >
                   <Eye size={16} />
                   <span className="text-sm font-medium">View</span>
-                  <span className="ml-1 text-[11px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-500">
-                    Fields: {requirementColumns.size}
-                  </span>
                   <ChevronDown size={12} className={clsx('transition-transform', (viewDropdownOpen || columnSelectorOpen) && 'rotate-180')} />
                 </button>
                 {viewDropdownOpen && (
@@ -3652,6 +3649,23 @@ export default function RequirementsPage() {
                     >
                       <Columns size={16} className="text-gray-500 dark:text-gray-400" />
                       Visible fields
+                    </button>
+                    <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
+                    <button
+                      onClick={() => { persistDensity('comfortable'); setViewDropdownOpen(false) }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <span className={clsx(density === 'comfortable' ? 'text-blue-500' : 'text-gray-500 dark:text-gray-400')}>Aa</span>
+                      Comfortable density
+                      {density === 'comfortable' && <Check size={13} className="ml-auto text-blue-500" />}
+                    </button>
+                    <button
+                      onClick={() => { persistDensity('compact'); setViewDropdownOpen(false) }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <span className={clsx(density === 'compact' ? 'text-blue-500' : 'text-gray-500 dark:text-gray-400')}>Aa</span>
+                      Compact density
+                      {density === 'compact' && <Check size={13} className="ml-auto text-blue-500" />}
                     </button>
                     <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
                     {projectId && (
@@ -3737,35 +3751,6 @@ export default function RequirementsPage() {
                     </div>
                   </div>
                 )}
-              </div>
-              {/* Density toggle */}
-              <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden bg-white dark:bg-gray-700">
-                <button
-                  type="button"
-                  onClick={() => persistDensity('comfortable')}
-                  className={clsx(
-                    'px-2.5 py-2 text-sm font-medium transition-colors',
-                    density === 'comfortable'
-                      ? 'bg-gray-100 dark:bg-gray-600 text-gray-900 dark:text-white'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
-                  )}
-                  title="Comfortable density"
-                >
-                  Comfortable
-                </button>
-                <button
-                  type="button"
-                  onClick={() => persistDensity('compact')}
-                  className={clsx(
-                    'px-2.5 py-2 text-sm font-medium transition-colors border-l border-gray-300 dark:border-gray-600',
-                    density === 'compact'
-                      ? 'bg-gray-100 dark:bg-gray-600 text-gray-900 dark:text-white'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
-                  )}
-                  title="Compact density"
-                >
-                  Compact
-                </button>
               </div>
               <Link
                 to={`/projects/${projectId}/requirements/settings`}
@@ -4129,84 +4114,7 @@ export default function RequirementsPage() {
           {/* Requirements Table / Document View */}
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden flex-1 min-h-0">
             {listViewStyle === 'document' ? (
-              <div className="h-full flex">
-                {docOutlineOpen && (
-                  <aside className="w-72 shrink-0 border-r border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-900/30">
-                    <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-2">
-                      <div className="text-sm font-semibold text-gray-900 dark:text-white">Outline</div>
-                      <button
-                        type="button"
-                        onClick={() => persistDocOutlineOpen(false)}
-                        className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
-                        title="Hide outline"
-                      >
-                        Hide
-                      </button>
-                    </div>
-                    <div className="p-3">
-                      <input
-                        value={docOutlineSearch}
-                        onChange={(e) => setDocOutlineSearch(e.target.value)}
-                        placeholder="Search ID/title…"
-                        className="w-full px-2 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div className="overflow-y-auto h-[calc(100%-88px)] px-2 pb-3">
-                      {(() => {
-                        const q = docOutlineSearch.trim().toLowerCase()
-                        const items = groupByType
-                          ? (() => {
-                              const { groups, orderedKeys } = groupedRequirements
-                              const flat: Requirement[] = []
-                              orderedKeys.forEach((k) => {
-                                const list = groups[k] ?? []
-                                flat.push(...flattenReqs(list))
-                              })
-                              return flat
-                            })()
-                          : documentViewRequirements
-                        const filtered = q
-                          ? items.filter((r) => `${r.requirementId ?? ''} ${r.title ?? ''}`.toLowerCase().includes(q))
-                          : items
-                        return filtered.length === 0 ? (
-                          <div className="px-2 py-6 text-sm text-gray-500 dark:text-gray-400">No matches</div>
-                        ) : (
-                          <div className="space-y-1">
-                            {filtered.map((r) => {
-                              const displayId = r.requirementId ?? r.id.slice(0, 8)
-                              return (
-                                <button
-                                  key={r.id}
-                                  type="button"
-                                  onClick={() => {
-                                    const el = docCardElsRef.current[r.id]
-                                    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                                  }}
-                                  className="w-full text-left px-2 py-1.5 rounded hover:bg-white/70 dark:hover:bg-gray-800/60 transition-colors"
-                                  title={r.title ?? ''}
-                                >
-                                  <div className="text-xs font-mono text-gray-600 dark:text-gray-400">{displayId}</div>
-                                  <div className="text-sm text-gray-900 dark:text-gray-100 line-clamp-2">{r.title ?? '—'}</div>
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )
-                      })()}
-                    </div>
-                  </aside>
-                )}
-                {!docOutlineOpen && (
-                  <button
-                    type="button"
-                    onClick={() => persistDocOutlineOpen(true)}
-                    className="absolute left-3 top-[160px] z-20 text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white/90 dark:bg-gray-900/80 hover:bg-white dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300"
-                    title="Show outline"
-                  >
-                    Show outline
-                  </button>
-                )}
-                <div className="overflow-y-auto h-full p-4 space-y-6 flex-1 min-w-0">
+              <div className="overflow-y-auto h-full p-4 space-y-6">
                 {isLoading ? (
                   <div className="space-y-4">
                     {Array.from({ length: 3 }).map((_, i) => (
@@ -4337,7 +4245,6 @@ export default function RequirementsPage() {
                     </div>
                   ))
                 )}
-                </div>
               </div>
             ) : (
             <div className="overflow-x-auto h-full">
