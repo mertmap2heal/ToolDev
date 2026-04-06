@@ -504,8 +504,9 @@ function VerificationLayoutInner() {
         </>
       )}
 
-      {/* Main column: title, tabs, content */}
-      <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden pr-6 gap-6">
+      {/* Main column + detail drawers share one flex row so the panel squeezes content (like Requirements). */}
+      <div className="flex flex-1 min-h-0 min-w-0">
+        <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden pr-6 gap-6">
         <div className="flex-shrink-0 flex items-center justify-between gap-2">
           {showTreePanel && (
             <button
@@ -600,10 +601,9 @@ function VerificationLayoutInner() {
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           <Outlet />
         </div>
-      </div>
+        </div>
 
-      {/* Drawers - sibling of left column, full height from top (like Requirements) */}
-      {projectId && (
+        {projectId && (
         <>
           <TestPlanDetailDrawer
             plan={drawer.selectedPlan}
@@ -636,7 +636,8 @@ function VerificationLayoutInner() {
             projectId={projectId}
           />
         </>
-      )}
+        )}
+      </div>
     </div>
   )
 }

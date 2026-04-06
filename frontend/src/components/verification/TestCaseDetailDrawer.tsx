@@ -498,7 +498,7 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
   return (
     <div
       className={clsx(
-        'h-full bg-white dark:bg-gray-800 shadow-2xl border-l border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out overflow-hidden',
+        'h-full flex-shrink-0 bg-white dark:bg-gray-800 shadow-2xl border-l border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out overflow-hidden',
         isOpen && testCase ? 'w-full max-w-2xl min-w-[32rem]' : 'w-0 min-w-0'
       )}
     >
