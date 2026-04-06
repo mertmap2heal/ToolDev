@@ -48,12 +48,28 @@ function VerificationLayoutInner() {
   const focusId = searchParams.get('focusId')
   const selectedNode = focusType && focusId ? { type: focusType, id: focusId } : null
 
-  const [isTreePanelOpen, setIsTreePanelOpen] = useState(true)
+  // Match Requirements: left side panel is collapsed by default.
+  const [isTreePanelOpen, setIsTreePanelOpen] = useState(false)
   const PANEL_MIN = 200
   const PANEL_MAX = 500
   const PANEL_DEFAULT = 340
   const [leftPanelWidth, setLeftPanelWidth] = useState(PANEL_DEFAULT)
   const resizeContainerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showTreePanel) return
+    try {
+      const stored = localStorage.getItem(`verification::panel-open::${projectId ?? 'default'}`)
+      if (stored != null) setIsTreePanelOpen(stored === '1')
+    } catch { /* ignore */ }
+  }, [projectId, showTreePanel])
+
+  useEffect(() => {
+    if (!showTreePanel) return
+    try {
+      localStorage.setItem(`verification::panel-open::${projectId ?? 'default'}`, isTreePanelOpen ? '1' : '0')
+    } catch { /* ignore */ }
+  }, [isTreePanelOpen, projectId, showTreePanel])
 
   useEffect(() => {
     if (!showTreePanel) return
@@ -438,17 +454,22 @@ function VerificationLayoutInner() {
               <div style={{ width: leftPanelWidth, minWidth: PANEL_MIN }} className="flex-shrink-0 h-full flex flex-col">
                 {/* Match Requirements left panel: tab strip (Verification) */}
                 <div className="relative shrink-0 border-b border-gray-200 dark:border-gray-700">
-                  <Link
-                    to={`/projects/${projectId}/requirements?panel=1&panelTab=verification`}
-                    className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                    title="Open the same structure tree under Requirements → Structure panel (Verification tab)"
-                  >
-                    <span className="flex items-center gap-1.5 text-teal-600 dark:text-teal-400">
-                      <ClipboardCheck size={14} />
-                      <span>Verification</span>
-                    </span>
-                    <ExternalLink size={14} className="text-gray-400 shrink-0" aria-hidden />
-                  </Link>
+                  <div className="px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        <ClipboardCheck size={14} className="text-teal-600 dark:text-teal-400" />
+                        Verification
+                      </div>
+                      <Link
+                        to={`/projects/${projectId}/requirements?panel=1&panelTab=verification`}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200"
+                        title="Open the same structure tree in Requirements (left panel → Verification tab)"
+                      >
+                        <ExternalLink size={14} className="text-gray-400" aria-hidden />
+                        Open in Requirements
+                      </Link>
+                    </div>
+                  </div>
                 </div>
                 <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
                   <VerificationTreePanel
@@ -510,17 +531,8 @@ function VerificationLayoutInner() {
               </div>
             </>
           ) : (
-            <div className="shrink-0 w-8 flex flex-col items-center py-2 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-              <button
-                type="button"
-                onClick={() => setIsTreePanelOpen(true)}
-                className="p-1.5 rounded-md border border-transparent hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
-                title="Open left panel (Verification structure)"
-                aria-label="Open left panel"
-              >
-                <ChevronRight size={18} />
-              </button>
-            </div>
+            // Match Requirements: when closed, the panel takes zero space (toggle lives in the header).
+            null
           )}
         </>
       )}

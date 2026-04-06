@@ -9,9 +9,9 @@ import {
   Home,
   ChevronDown,
   ChevronRight,
-  Hammer,
-  Atom,
-  ListChecks,
+  Code2,
+  Boxes,
+  ShieldCheck,
   X,
   Sun,
   Moon,
@@ -477,19 +477,19 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
               active={location.pathname === `/projects/${projectId}`}
             />
             <CategoryIcon
-              icon={Hammer}
+              icon={Code2}
               label={CATEGORIES.find(c => c.id === 'development')?.label ?? 'Development'}
               active={activeCategory === 'development'}
               onClick={() => expandToSection('development')}
             />
             <CategoryIcon
-              icon={Atom}
+              icon={Boxes}
               label={CATEGORIES.find(c => c.id === 'system')?.label ?? 'System Definition'}
               active={activeCategory === 'system'}
               onClick={() => expandToSection('system')}
             />
             <CategoryIcon
-              icon={ListChecks}
+              icon={ShieldCheck}
               label={CATEGORIES.find(c => c.id === 'assurance')?.label ?? 'Assurance'}
               active={activeCategory === 'assurance'}
               onClick={() => expandToSection('assurance')}

@@ -307,9 +307,10 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
       plans.push({
         id: 'plans-more',
         label: `+${remainingPlans} more`,
+        subLabel: undefined,
         icon: FileText,
         onClick: () => {},
-        disabled: true,
+        title: 'More plans available',
       })
     }
 
@@ -330,7 +331,7 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
         label: `+${remainingReqs} more`,
         icon: Link2,
         onClick: () => {},
-        disabled: true,
+        title: 'More requirements available',
       })
     }
 

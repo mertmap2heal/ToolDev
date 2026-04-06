@@ -139,12 +139,13 @@ export default function RequirementDocumentCard({
   onInlineKeyDown,
   onDescriptionKeyDown,
   isBaselineView,
-  density = 'comfortable',
+  density: densityProp,
   collapsedDetails: collapsedDetailsProp,
   collapsedRelationships: collapsedRelationshipsProp,
   onToggleDetails: onToggleDetailsProp,
   onToggleRelationships: onToggleRelationshipsProp,
 }: RequirementDocumentCardProps) {
+  const density: NonNullable<RequirementDocumentCardProps['density']> = densityProp ?? 'comfortable'
   const [collapsed, setCollapsed] = React.useState<{ details: boolean; relationships: boolean }>(() => {
     try {
       const stored = localStorage.getItem('requirements-doc-collapsed')
@@ -346,7 +347,7 @@ export default function RequirementDocumentCard({
             </button>
           )}
         </h2>
-        {showCreatedUpdatedLine && density !== 'compact' && (
+        {showCreatedUpdatedLine && (
           <p className={clsx(density === 'compact' ? 'mt-0.5 text-[11px]' : 'mt-1 text-xs', 'text-gray-500 dark:text-gray-400')}>
             {isVisible('createdAt') && <span>Created: {createdFormatted}</span>}
             {isVisible('createdAt') && isVisible('updatedAt') && <span> · </span>}
@@ -364,7 +365,7 @@ export default function RequirementDocumentCard({
             'w-full flex items-center justify-between font-semibold text-gray-700 dark:text-gray-300',
             density === 'compact' ? 'text-xs' : 'text-sm',
             density === 'compact' ? 'mb-2' : 'mb-3',
-            onToggleDetails && 'hover:text-gray-900 dark:hover:text-white'
+            onToggleDetailsProp && 'hover:text-gray-900 dark:hover:text-white'
           )}
           title={collapsedDetails ? 'Expand details' : 'Collapse details'}
         >
@@ -456,7 +457,7 @@ export default function RequirementDocumentCard({
             'w-full flex items-center justify-between font-semibold text-gray-700 dark:text-gray-300',
             density === 'compact' ? 'text-xs' : 'text-sm',
             density === 'compact' ? 'mb-2' : 'mb-3',
-            onToggleRelationships && 'hover:text-gray-900 dark:hover:text-white'
+            onToggleRelationshipsProp && 'hover:text-gray-900 dark:hover:text-white'
           )}
           title={collapsedRelationships ? 'Expand relationships' : 'Collapse relationships'}
         >

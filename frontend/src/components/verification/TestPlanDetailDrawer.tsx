@@ -260,6 +260,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
       cases.push({
         id: 'cases-more',
         label: `+${remainingCases} more`,
+        subLabel: undefined,
         icon: FileText,
         onClick: () => setActiveTab('cases'),
         title: 'View all cases in this plan',
@@ -287,6 +288,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
     const runs = (Array.isArray(planTestRuns) ? planTestRuns : []).slice(0, 6).map((r: any) => ({
       id: `run-${r.id}`,
       label: r.runName ?? 'Run',
+      subLabel: undefined,
       icon: Play,
       onClick: () => drawer.openRun?.(r),
       title: 'Open test run',
