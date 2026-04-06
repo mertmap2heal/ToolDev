@@ -3963,6 +3963,7 @@ export default function RequirementsPage() {
                               key={req.id}
                               requirement={req}
                               links={getLinksForRequirement(req.id)}
+                              visibleColumnKeys={requirementColumns}
                               onRequirementClick={setDetailRequirement}
                               draggable={leftPanelTab === 'functions' || leftPanelTab === 'verification'}
                               onDragStart={(e) => handleRequirementDragStart(e, req)}
@@ -4014,6 +4015,7 @@ export default function RequirementsPage() {
                       key={req.id}
                       requirement={req}
                       links={getLinksForRequirement(req.id)}
+                      visibleColumnKeys={requirementColumns}
                       onRequirementClick={setDetailRequirement}
                       inlineEdit={inlineEdit?.field === 'title' || inlineEdit?.field === 'description' ? inlineEdit : null}
                       onStartInlineEdit={startInlineEdit}

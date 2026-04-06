@@ -14,6 +14,8 @@ export type InlineEditStateForCard = {
 interface RequirementDocumentCardProps {
   requirement: Requirement
   links: Link[]
+  /** Visible column keys (from Requirements table column selector). When provided, the details section will be filtered accordingly. */
+  visibleColumnKeys?: string[] | Set<string>
   projectName?: string
   onRequirementClick?: (req: Requirement) => void
   draggable?: boolean
@@ -61,6 +63,7 @@ const textareaClassName =
 export default function RequirementDocumentCard({
   requirement,
   links,
+  visibleColumnKeys,
   projectName,
   onRequirementClick,
   draggable: isDraggable,
@@ -85,23 +88,46 @@ export default function RequirementDocumentCard({
     ? format(new Date(requirement.updatedAt), 'MM/dd/yyyy hh:mm:ss a O')
     : '—'
 
-  const details: { label: string; value: string | undefined }[] = [
-    { label: 'Project ID', value: requirement.requirementId ?? undefined },
-    { label: 'Global ID', value: requirement.id ? `GID-${requirement.id.slice(-5)}` : undefined },
-    { label: 'Name', value: requirement.title },
-    { label: 'Description', value: requirement.description || undefined },
-    {
-      label: 'Requirement Category',
-      value: requirement.category ?? requirement.requirementType?.replace(/_/g, ' '),
-    },
-    { label: 'Rationale', value: requirement.rationale || undefined },
-    { label: 'Verification Method', value: requirement.verificationMethod || undefined },
-    {
-      label: 'Status',
-      value: requirement.reviewStatus ?? requirement.status ?? undefined,
-    },
-    { label: 'Derived?', value: requirement.source === 'Derived' ? 'Yes' : 'No' },
+  const visibleSet: Set<string> | null = React.useMemo(() => {
+    if (!visibleColumnKeys) return null
+    if (visibleColumnKeys instanceof Set) return visibleColumnKeys
+    if (Array.isArray(visibleColumnKeys)) return new Set(visibleColumnKeys)
+    return null
+  }, [visibleColumnKeys])
+
+  const isVisible = React.useCallback(
+    (key: string) => (visibleSet ? visibleSet.has(key) : true),
+    [visibleSet]
+  )
+
+  const detailsAll: { key: string; label: string; value: string | undefined }[] = [
+    { key: 'requirementId', label: 'ID', value: requirement.requirementId ?? undefined },
+    { key: 'title', label: 'Title', value: requirement.title ?? undefined },
+    { key: 'description', label: 'Description', value: requirement.description || undefined },
+    { key: 'priority', label: 'Priority', value: requirement.priority ?? undefined },
+    { key: 'status', label: 'Status', value: requirement.reviewStatus ?? requirement.status ?? undefined },
+    { key: 'owner', label: 'Owner', value: requirement.owner ?? undefined },
+    { key: 'category', label: 'Category', value: requirement.category ?? undefined },
+    { key: 'source', label: 'Source', value: requirement.source ?? undefined },
+    { key: 'requirementType', label: 'Type', value: requirement.requirementType?.replace(/_/g, ' ') ?? undefined },
+    { key: 'requirementLevel', label: 'Level', value: requirement.requirementLevel ?? undefined },
+    { key: 'risk', label: 'Risk', value: requirement.risk ?? undefined },
+    { key: 'complexity', label: 'Complexity', value: requirement.complexity ?? undefined },
+    { key: 'verificationMethod', label: 'Verification Method', value: requirement.verificationMethod || undefined },
+    { key: 'verificationStatus', label: 'Verification Status', value: requirement.verificationStatus || undefined },
+    { key: 'verificationDate', label: 'Verification Date', value: requirement.verificationDate || undefined },
+    { key: 'linkedMocCode', label: 'MoC', value: (requirement as any).linkedMocCode || undefined },
+    { key: 'acceptanceCriteria', label: 'Acceptance Criteria', value: requirement.acceptanceCriteria || undefined },
+    { key: 'stage', label: 'Stage', value: requirement.stage || undefined },
+    { key: 'rationale', label: 'Rationale', value: requirement.rationale || undefined },
+    { key: 'component', label: 'Component', value: (requirement as any).component?.name ?? (requirement as any).componentName ?? undefined },
+    { key: 'reviewStatus', label: 'Review Status', value: requirement.reviewStatus || undefined },
+    { key: 'createdAt', label: 'Created', value: requirement.createdAt ? createdFormatted : undefined },
+    { key: 'updatedAt', label: 'Updated', value: requirement.updatedAt ? updatedFormatted : undefined },
   ]
+
+  const details = detailsAll.filter((d) => isVisible(d.key))
+  const showCreatedUpdatedLine = isVisible('createdAt') || isVisible('updatedAt')
 
   const relationshipRows = links.map((link) => {
     const isOutgoing = link.sourceType === 'requirement' && link.sourceId === requirement.id
@@ -167,9 +193,13 @@ export default function RequirementDocumentCard({
             </button>
           )}
         </h2>
-        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          Created: {createdFormatted} · Updated: {updatedFormatted}
-        </p>
+        {showCreatedUpdatedLine && (
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {isVisible('createdAt') && <span>Created: {createdFormatted}</span>}
+            {isVisible('createdAt') && isVisible('updatedAt') && <span> · </span>}
+            {isVisible('updatedAt') && <span>Updated: {updatedFormatted}</span>}
+          </p>
+        )}
       </div>
 
       {/* Details section */}
@@ -179,14 +209,14 @@ export default function RequirementDocumentCard({
         </h3>
         <table className="w-full text-sm border-collapse border border-gray-200 dark:border-gray-600">
           <tbody>
-            {details.map(({ label, value }) => {
-              const isNameRow = label === 'Name'
-              const isDescriptionRow = label === 'Description'
+            {details.map(({ key, label, value }) => {
+              const isTitleRow = key === 'title'
+              const isDescriptionRow = key === 'description'
               const showDescriptionTextarea =
                 isDescriptionRow && isEditingDescription && inlineTextareaRef && onDescriptionKeyDown && onSaveInlineEdit
 
               return (
-                <tr key={label} className="border-b border-gray-200 dark:border-gray-600 last:border-b-0">
+                <tr key={key} className="border-b border-gray-200 dark:border-gray-600 last:border-b-0">
                   <td className="px-3 py-2 w-1/3 font-medium text-gray-600 dark:text-gray-400 bg-gray-50/50 dark:bg-gray-900/30">
                     {label}
                   </td>
@@ -201,9 +231,9 @@ export default function RequirementDocumentCard({
                         rows={3}
                         className={textareaClassName}
                       />
-                    ) : isNameRow && isEditingTitle ? (
+                    ) : isTitleRow && isEditingTitle ? (
                       inlineEdit?.value ?? '—'
-                    ) : isNameRow && canInlineEdit ? (
+                    ) : isTitleRow && canInlineEdit ? (
                       <span
                         role="button"
                         tabIndex={0}
