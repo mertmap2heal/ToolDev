@@ -1,4 +1,5 @@
-import { X, Edit2, FileText, History, Link2, FunctionSquare } from 'lucide-react'
+import { useState } from 'react'
+import { X, Edit2, FileText, History, Link2, FunctionSquare, ChevronDown, ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
@@ -15,6 +16,43 @@ interface ParameterDetailDrawerProps {
   onEdit: (parameter: Parameter) => void
   /** Full parameter list for resolving {{param:ID}} formula references */
   allParameters?: Parameter[]
+}
+
+// Human-readable labels for snapshot fields
+const FIELD_LABELS: Record<string, string> = {
+  name: 'Name',
+  description: 'Description',
+  defaultValue: 'Value',
+  unit: 'Unit',
+  tolerance: 'Tolerance',
+  minValue: 'Min',
+  maxValue: 'Max',
+  status: 'Status',
+  formula: 'Formula',
+  dataType: 'Data type',
+  tags: 'Tags',
+}
+
+// Fields to compare between versions (ordered for display)
+const TRACKED_FIELDS = ['name', 'description', 'defaultValue', 'unit', 'tolerance', 'minValue', 'maxValue', 'status', 'formula', 'dataType', 'tags']
+
+interface FieldDiff {
+  field: string
+  label: string
+  prev: string
+  next: string
+}
+
+function computeDiff(prev: Record<string, unknown> | null, next: Record<string, unknown>): FieldDiff[] {
+  const diffs: FieldDiff[] = []
+  for (const field of TRACKED_FIELDS) {
+    const prevVal = prev != null ? String(prev[field] ?? '') : ''
+    const nextVal = String(next[field] ?? '')
+    if (prevVal !== nextVal) {
+      diffs.push({ field, label: FIELD_LABELS[field] ?? field, prev: prevVal, next: nextVal })
+    }
+  }
+  return diffs
 }
 
 function snapshotSummary(snapshot: Record<string, unknown>): string {
@@ -37,6 +75,8 @@ export default function ParameterDetailDrawer({
   onEdit,
   allParameters = [],
 }: ParameterDetailDrawerProps) {
+  const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null)
+
   const { data: impact, isLoading: impactLoading } = useQuery({
     queryKey: ['parameter-impact', projectId, parameter?.id],
     queryFn: async () => {
@@ -284,39 +324,92 @@ export default function ParameterDetailDrawer({
             <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
               <History size={16} />
               Change history
+              {versions.length > 0 && (
+                <span className="ml-1 text-xs text-gray-400 dark:text-gray-500 font-normal">
+                  ({versions.length} version{versions.length !== 1 ? 's' : ''})
+                </span>
+              )}
             </h3>
             {versionsLoading ? (
               <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>
             ) : versions.length === 0 ? (
-              <p className="text-sm text-gray-500 dark:text-gray-400">No version history.</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">No version history yet.</p>
             ) : (
-              <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 dark:bg-gray-900/50">
-                    <tr>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Version</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Date</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Changed by</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Summary</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {versions.map((v) => (
-                      <tr key={v.id} className="bg-white dark:bg-gray-800">
-                        <td className="px-3 py-2 font-medium text-gray-900 dark:text-white">{v.version}</td>
-                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden divide-y divide-gray-200 dark:divide-gray-700">
+                {versions.map((v, idx) => {
+                  const prevSnapshot = idx < versions.length - 1 ? (versions[idx + 1].snapshot as Record<string, unknown>) : null
+                  const diffs = computeDiff(prevSnapshot, v.snapshot as Record<string, unknown>)
+                  const isExpanded = expandedVersionId === v.id
+                  const summary = snapshotSummary(v.snapshot as Record<string, unknown>)
+
+                  return (
+                    <div key={v.id} className="bg-white dark:bg-gray-800">
+                      {/* Version row — clickable header */}
+                      <button
+                        type="button"
+                        onClick={() => setExpandedVersionId(isExpanded ? null : v.id)}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      >
+                        {isExpanded
+                          ? <ChevronDown size={14} className="text-gray-400 flex-shrink-0" />
+                          : <ChevronRight size={14} className="text-gray-400 flex-shrink-0" />
+                        }
+                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-14 flex-shrink-0">
+                          v{v.version}.{String((v as unknown as Record<string, unknown>).minorVersion ?? 0)}
+                        </span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
                           {format(new Date(v.createdAt), 'MMM d, yyyy HH:mm')}
-                        </td>
-                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">
-                          {v.createdBy?.name ?? '—'}
-                        </td>
-                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">
-                          {snapshotSummary(v.snapshot)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500 mx-1">·</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
+                          {v.createdBy?.name ?? 'Unknown'}
+                        </span>
+                        <span className="flex-1 text-right text-xs text-gray-400 dark:text-gray-500 truncate ml-2">
+                          {diffs.length > 0
+                            ? diffs.map(d => d.label).join(', ')
+                            : summary
+                          }
+                        </span>
+                      </button>
+
+                      {/* Expanded diff panel */}
+                      {isExpanded && (
+                        <div className="px-3 pb-3 pt-1 bg-gray-50 dark:bg-gray-900/30 border-t border-gray-100 dark:border-gray-700">
+                          {diffs.length === 0 ? (
+                            <p className="text-xs text-gray-400 dark:text-gray-500 italic pl-6">
+                              {idx === versions.length - 1 ? 'Initial version — no previous version to compare.' : 'No tracked field changes detected.'}
+                            </p>
+                          ) : (
+                            <div className="space-y-2 pl-6">
+                              {diffs.map(diff => (
+                                <div key={diff.field} className="text-xs">
+                                  <span className="font-medium text-gray-700 dark:text-gray-300">{diff.label}</span>
+                                  <div className="mt-0.5 flex items-start gap-2 flex-wrap">
+                                    {diff.prev !== '' ? (
+                                      <span className="inline-block px-2 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 line-through font-mono text-xs max-w-[200px] truncate" title={diff.prev}>
+                                        {diff.prev}
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-400 dark:text-gray-500 italic">—</span>
+                                    )}
+                                    <span className="text-gray-400">→</span>
+                                    {diff.next !== '' ? (
+                                      <span className="inline-block px-2 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 font-mono text-xs max-w-[200px] truncate" title={diff.next}>
+                                        {diff.next}
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-400 dark:text-gray-500 italic">—</span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </section>

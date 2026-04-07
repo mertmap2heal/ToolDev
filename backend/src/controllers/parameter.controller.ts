@@ -93,15 +93,34 @@ function buildParameterWhere(projectId: string, query: Record<string, string | u
 }
 
 /**
- * Auto-increment the minor version for approved parameters when substantive
- * fields change. Format: "X.Y" → "X.Y+1". Falls back gracefully for other formats.
+ * Increment the MINOR part of a version string. "1.0" -> "1.1", "1.999" -> "1.1000".
+ * Used for all non-approval changes (draft edits, imports).
  */
 function incrementMinorVersion(version: string): string {
   const match = version.match(/^(\d+)\.(\d+)$/)
   if (match) return `${match[1]}.${parseInt(match[2], 10) + 1}`
   const intMatch = version.match(/^(\d+)$/)
   if (intMatch) return `${parseInt(intMatch[1], 10)}.1`
-  return `${version}.1` // unknown format — append suffix
+  return `${version}.1`
+}
+
+/**
+ * Increment the MAJOR part of a version string and reset minor to 0.
+ * "1.2" -> "2.0", "1.0" -> "2.0". Used when a parameter is approved.
+ */
+function incrementMajorVersion(version: string): string {
+  const match = version.match(/^(\d+)/)
+  const major = match ? parseInt(match[1], 10) : 1
+  return `${major + 1}.0`
+}
+
+/** Extract major and minor integers from a version string like "1.2". */
+function parseVersionParts(version: string): { major: number; minor: number } {
+  const match = version.match(/^(\d+)\.(\d+)$/)
+  if (match) return { major: parseInt(match[1], 10), minor: parseInt(match[2], 10) }
+  const intMatch = version.match(/^(\d+)$/)
+  if (intMatch) return { major: parseInt(intMatch[1], 10), minor: 0 }
+  return { major: 1, minor: 0 }
 }
 
 /** Fields whose change on an approved parameter triggers a version bump. */
@@ -313,11 +332,14 @@ export const updateParameter = async (req: AuthRequest, res: Response) => {
     if (sourceFunctionId !== undefined) updateData.sourceFunctionId = sourceFunctionId === '' ? null : sourceFunctionId
     if (name !== undefined) updateData.name = name
 
-    // Auto-increment minor version whenever a substantive field changes,
-    // regardless of status (draft, approved, or obsolete).
-    // Metadata-only changes (tags, folder, ownerType, status, etc.) do NOT bump.
+    // Version bump logic:
+    // - Approving (status -> approved): bump MAJOR, reset minor -> "2.0"
+    // - Any other substantive change: bump MINOR only -> "1.1", "1.2"
     const substantiveChange = Object.keys(updateData).some(k => VERSION_BUMP_FIELDS.has(k))
-    if (substantiveChange) {
+    const isApproving = status === 'approved' && parameter.status !== 'approved'
+    if (isApproving) {
+      updateData.version = incrementMajorVersion(parameter.version)
+    } else if (substantiveChange) {
       updateData.version = incrementMinorVersion(parameter.version)
     }
 
@@ -334,13 +356,14 @@ export const updateParameter = async (req: AuthRequest, res: Response) => {
     const lastVersion = await prisma.parameterVersion.findFirst({
       where: { parameterId: id },
       orderBy: { version: 'desc' },
-      select: { version: true },
+      select: { version: true, minorVersion: true },
     })
-    const nextVersion = (lastVersion?.version ?? 0) + 1
+    const { major: newMajor, minor: newMinor } = parseVersionParts(updatedParameter.version)
     await prisma.parameterVersion.create({
       data: {
         parameterId: id,
-        version: nextVersion,
+        version: newMajor,
+        minorVersion: newMinor,
         snapshot: snapshot as object,
         createdById: req.userId ?? undefined,
       },
@@ -450,6 +473,7 @@ export const createParameter = async (req: AuthRequest, res: Response) => {
       data: {
         parameterId: parameter.id,
         version: 1,
+        minorVersion: 0,
         snapshot: snapshot as object,
         createdById: req.userId ?? undefined,
       },
@@ -819,30 +843,82 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
         })
 
         if (existing) {
-          // Update only fields that differ
-          const updatePayload: Record<string, unknown> = {
-            description:  p.description  ?? existing.description,
-            dataType:     p.dataType     ?? existing.dataType,
-            defaultValue: p.defaultValue ?? existing.defaultValue,
-            unit:         p.unit         ?? existing.unit,
-            tolerance:    p.tolerance    ?? existing.tolerance,
-            minValue:     p.minValue     ?? existing.minValue,
-            maxValue:     p.maxValue     ?? existing.maxValue,
-            formula:      p.formula      ?? existing.formula,
+          // Compute new field values
+          const newDesc     = p.description  ?? existing.description
+          const newType     = p.dataType     ?? existing.dataType
+          const newValue    = p.defaultValue ?? existing.defaultValue
+          const newUnit     = p.unit         ?? existing.unit
+          const newTol      = p.tolerance    ?? existing.tolerance
+          const newMin      = p.minValue     ?? existing.minValue
+          const newMax      = p.maxValue     ?? existing.maxValue
+          const newFormula  = p.formula      ?? existing.formula
+          const newStatus   = p.status       ?? existing.status
+          const newTags     = p.tags         ?? (existing.tags as string[] | null)
+
+          // Skip if nothing changed
+          const unchanged =
+            newDesc    === existing.description &&
+            newType    === existing.dataType &&
+            newValue   === existing.defaultValue &&
+            newUnit    === existing.unit &&
+            newTol     === existing.tolerance &&
+            newMin     === existing.minValue &&
+            newMax     === existing.maxValue &&
+            newFormula === existing.formula &&
+            newStatus  === existing.status &&
+            JSON.stringify(newTags) === JSON.stringify(existing.tags)
+
+          if (unchanged) {
+            skipped++
+            continue
           }
-          if (p.tags) updatePayload.tags = p.tags
-          await prisma.parameter.update({
+
+          // CSV import is never an approval action — force draft to protect
+          // the approval workflow (only authorised users should approve).
+          const wasApproved = existing.status === 'approved'
+          const effectiveStatus = wasApproved ? 'draft' : (newStatus ?? existing.status)
+
+          // Compute new version string: bump minor (imports are non-approval changes)
+          const newVersionStr = incrementMinorVersion(existing.version)
+          const { major: newMajor, minor: newMinor } = parseVersionParts(newVersionStr)
+
+          const updatedParameter = await prisma.parameter.update({
             where: { id: existing.id },
-            data: updatePayload,
+            data: {
+              description:  newDesc,
+              dataType:     newType,
+              defaultValue: newValue,
+              unit:         newUnit,
+              tolerance:    newTol,
+              minValue:     newMin,
+              maxValue:     newMax,
+              formula:      newFormula,
+              status:       effectiveStatus,
+              version:      newVersionStr,
+              ...(newTags != null && { tags: newTags }),
+            },
           })
+
+          // Create version record with major.minor parts
+          const snapshot = buildParameterVersionSnapshot(updatedParameter)
+          await prisma.parameterVersion.create({
+            data: {
+              parameterId: existing.id,
+              version: newMajor,
+              minorVersion: newMinor,
+              snapshot,
+              createdById: req.user!.userId,
+            },
+          })
+
           skipped++ // counted as "updated"
         } else {
           const newParameterId = await generateParameterId(projectId)
-          await prisma.parameter.create({
+          const created = await prisma.parameter.create({
             data: {
               projectId,
               parameterId: newParameterId,
-              name: p.name,
+              name:         p.name,
               description:  p.description,
               dataType:     p.dataType,
               defaultValue: p.defaultValue,
@@ -852,9 +928,22 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
               maxValue:     p.maxValue,
               formula:      p.formula,
               tags:         p.tags ?? [],
-              status:       'draft',
+              status:       p.status ?? 'draft',
             },
           })
+
+          // Create initial version record (1.0)
+          const snapshot = buildParameterVersionSnapshot(created)
+          await prisma.parameterVersion.create({
+            data: {
+              parameterId: created.id,
+              version: 1,
+              minorVersion: 0,
+              snapshot,
+              createdById: req.user!.userId,
+            },
+          })
+
           imported++
         }
       } catch (err) {

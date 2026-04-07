@@ -2,6 +2,7 @@
  * Parameters page — list, create, CRUD, search/filter, export, settings
  */
 import { test, expect } from './helpers/fixtures'
+import { generateUniqueCsv, writeTempCsvPath } from './helpers/csvGenerator'
 
 // Modals in this app use fixed overlay, not role="dialog"
 const MODAL = '.fixed.inset-0'
@@ -417,5 +418,69 @@ test.describe('Parameters — Settings', () => {
     const unitRow = page.locator('div').filter({ hasText: unitSymbol }).filter({ has: page.getByRole('button') }).first()
     await unitRow.locator('button').last().click()
     await expect(page.getByText(unitSymbol)).not.toBeVisible({ timeout: 5_000 })
+// CSV Import tests
+// ---------------------------------------------------------------------------
+test.describe('Parameters — CSV Import', () => {
+  test('Import button opens the import modal', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/parameters`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: /^import$/i }).click()
+    const modal = page.locator(MODAL)
+    await expect(modal).toBeVisible({ timeout: 5_000 })
+    await expect(modal.getByText(/import parameters/i)).toBeVisible()
+    // Step 1 should be active
+    await expect(modal.getByText(/upload/i).first()).toBeVisible()
+    await modal.getByRole('button', { name: /cancel/i }).click()
+    await expect(modal).not.toBeVisible({ timeout: 3_000 })
+  })
+
+  test('upload CSV and reach preview step', async ({ page, projectId }) => {
+    const csv = generateUniqueCsv(3, 'e2e_csv_upload')
+    const csvPath = writeTempCsvPath(csv, 'e2e_upload_test.csv')
+
+    await page.goto(`/projects/${projectId}/parameters`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: /^import$/i }).click()
+
+    const modal = page.locator(MODAL)
+    await expect(modal).toBeVisible({ timeout: 5_000 })
+
+    // Upload the generated CSV file
+    await modal.locator('input[type="file"]').setInputFiles(csvPath)
+    await expect(modal.getByText(/row/i)).toBeVisible({ timeout: 5_000 })
+
+    // Advance to preview
+    await modal.getByRole('button', { name: /next.*preview/i }).click()
+    await expect(modal.getByText(/column mappings/i)).toBeVisible({ timeout: 5_000 })
+
+    // All 3 rows should show 'New' badge (they have unique timestamp names)
+    const newBadges = modal.locator('text=New')
+    await expect(newBadges.first()).toBeVisible({ timeout: 3_000 })
+  })
+
+  test('import CSV creates new parameters', async ({ page, projectId }) => {
+    const prefix = `e2e_import_${Date.now()}`
+    const csv = generateUniqueCsv(2, prefix)
+    const csvPath = writeTempCsvPath(csv, 'e2e_import_create.csv')
+
+    await page.goto(`/projects/${projectId}/parameters`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: /^import$/i }).click()
+
+    const modal = page.locator(MODAL)
+    await expect(modal).toBeVisible({ timeout: 5_000 })
+    await modal.locator('input[type="file"]').setInputFiles(csvPath)
+    await expect(modal.getByText(/row/i)).toBeVisible({ timeout: 5_000 })
+    await modal.getByRole('button', { name: /next.*preview/i }).click()
+    await modal.getByRole('button', { name: /^import$/i }).click()
+
+    // Step 3: result should show created count
+    await expect(modal.getByText(/import complete/i)).toBeVisible({ timeout: 15_000 })
+    await expect(modal.getByText(/created/i)).toBeVisible()
+    await modal.getByRole('button', { name: /done/i }).click()
+
+    // Newly imported params should appear in the table
+    await expect(page.locator('table')).toBeVisible({ timeout: 5_000 })
+    await expect(page.locator('table').getByText(new RegExp(`${prefix}_`))).toBeVisible({ timeout: 8_000 })
   })
 })

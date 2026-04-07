@@ -30,6 +30,7 @@ import CreateParameterModal from '../../components/parameters/CreateParameterMod
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import PublishToGitModal, { type GitPublishStoredConfig } from '../../components/parameters/PublishToGitModal'
 import ParameterDependencyGraph from '../../components/parameters/ParameterDependencyGraph'
+import ImportParameterModal from '../../components/parameters/ImportParameterModal'
 import CommunicationsTab from './CommunicationsTab'
 import type { Parameter, ParameterFolder } from 'shared/types/engineering.types'
 import clsx from 'clsx'
@@ -218,6 +219,9 @@ export default function ParametersPage() {
   const [importFilename, setImportFilename] = useState('')
   const [importResult, setImportResult] = useState<{ imported: number; updated: number; errors: string[]; warnings: string[] } | null>(null)
   const [isImporting, setIsImporting] = useState(false)
+
+  // CSV import modal state
+  const [isCsvImportOpen, setIsCsvImportOpen] = useState(false)
 
   // Git publish state
   const gitPublishKey = projectId ? `git-publish-config-${projectId}` : null
@@ -683,9 +687,9 @@ export default function ParametersPage() {
             {storedGitConfig && <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: isStale ? '#f59e0b' : '#22c55e', marginLeft: 2 }} />}
           </button>
 
-          {/* Import */}
+          {/* Import — opens the guided CSV import modal */}
           <button
-            onClick={() => { resetImport(); setIsImportOpen(true) }}
+            onClick={() => setIsCsvImportOpen(true)}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
@@ -1579,6 +1583,14 @@ export default function ParametersPage() {
             />
           )}
         </>
+      )}
+
+      {projectId && (
+        <ImportParameterModal
+          isOpen={isCsvImportOpen}
+          onClose={() => setIsCsvImportOpen(false)}
+          projectId={projectId}
+        />
       )}
 
       {projectId && (
