@@ -1,4 +1,4 @@
-import type { Node, Edge } from 'reactflow'
+import type { Node, Edge, MarkerType } from 'reactflow'
 import type { Parameter } from 'shared/types/engineering.types'
 
 const FORMULA_REF_RE = /\{\{param:([a-z0-9_-]+)\}\}/gi
@@ -55,7 +55,7 @@ export function buildParameterGraph(
         target: param.id,
         animated: true,
         style: { stroke: '#6366f1', strokeWidth: 1.5 },
-        markerEnd: { type: 'arrowclosed' as const, color: '#6366f1' },
+        markerEnd: { type: 'arrowclosed' as MarkerType, color: '#6366f1' },
       })
     }
   }
