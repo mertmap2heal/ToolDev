@@ -152,6 +152,27 @@ function detectMappings(headers: string[]): Record<string, string | null> {
 }
 
 // ---------------------------------------------------------------------------
+// Format helpers
+// ---------------------------------------------------------------------------
+type ImportFormat = 'csv' | 'json' | 'c_header' | 'matlab'
+
+const FORMAT_LABELS: Record<ImportFormat, string> = {
+  csv:      'CSV (.csv)',
+  json:     'JSON (.json)',
+  c_header: 'C Header (.h / .hpp)',
+  matlab:   'MATLAB script (.m)',
+}
+
+function detectFormatFromFile(filename: string): ImportFormat | null {
+  const ext = filename.split('.').pop()?.toLowerCase()
+  if (ext === 'csv')  return 'csv'
+  if (ext === 'json') return 'json'
+  if (ext === 'h' || ext === 'hpp') return 'c_header'
+  if (ext === 'm')    return 'matlab'
+  return null
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 type Step = 1 | 2 | 3
@@ -191,6 +212,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
   const [step, setStep] = useState<Step>(1)
   const [csvContent, setCsvContent] = useState('')
   const [filename, setFilename] = useState('')
+  const [detectedFormat, setDetectedFormat] = useState<ImportFormat | null>(null)
   const [rowCount, setRowCount] = useState<number | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [showPaste, setShowPaste] = useState(false)
@@ -206,7 +228,11 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
 
   const importMutation = useMutation({
     mutationFn: (content: string) =>
-      parameterService.importParameters(projectId, { content, format: 'csv' }),
+      parameterService.importParameters(projectId, {
+        content,
+        format: detectedFormat ?? 'csv',
+        filename,
+      }),
     onSuccess: (res) => {
       if (res.success && res.data) {
         setImportResult(res.data)
@@ -232,6 +258,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
     setStep(1)
     setCsvContent('')
     setFilename('')
+    setDetectedFormat(null)
     setRowCount(null)
     setIsDragging(false)
     setShowPaste(false)
@@ -248,22 +275,38 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
 
   const loadCsvContent = useCallback((content: string, name: string) => {
     setParseError(null)
-    const { headers, rows } = parseCsv(content)
-    if (headers.length === 0) {
-      setParseError('Could not parse CSV — file appears to be empty.')
+    const fmt = detectFormatFromFile(name)
+    if (!fmt) {
+      setParseError('Unsupported file type. Accepted: .csv, .json, .h, .hpp, .m')
       return
     }
+    setDetectedFormat(fmt)
     setCsvContent(content)
     setFilename(name)
-    setRowCount(rows.length)
-    setPreviewHeaders(headers)
-    setPreviewRows(rows.slice(0, 5))
-    setColumnMappings(detectMappings(headers))
+
+    if (fmt === 'csv') {
+      const { headers, rows } = parseCsv(content)
+      if (headers.length === 0) {
+        setParseError('Could not parse CSV — file appears to be empty.')
+        return
+      }
+      setRowCount(rows.length)
+      setPreviewHeaders(headers)
+      setPreviewRows(rows.slice(0, 5))
+      setColumnMappings(detectMappings(headers))
+    } else {
+      // For JSON / C header / MATLAB: server handles parsing; no client-side preview
+      setRowCount(null)
+      setPreviewHeaders([])
+      setPreviewRows([])
+      setColumnMappings({})
+    }
   }, [])
 
   const handleFile = (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.csv')) {
-      setParseError('Only .csv files are supported.')
+    const fmt = detectFormatFromFile(file.name)
+    if (!fmt) {
+      setParseError('Unsupported file type. Accepted: .csv, .json, .h, .hpp, .m')
       return
     }
     const reader = new FileReader()
@@ -296,7 +339,13 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
   }
 
   const handleNext = () => {
-    if (csvContent) setStep(2)
+    if (!csvContent) return
+    if (detectedFormat === 'csv') {
+      setStep(2)
+    } else {
+      // Non-CSV: no column-mapping step — import directly
+      importMutation.mutate(csvContent)
+    }
   }
 
   const handleImport = () => {
@@ -330,6 +379,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
     setStep(1)
     setCsvContent('')
     setFilename('')
+    setDetectedFormat(null)
     setRowCount(null)
     setShowPaste(false)
     setPasteText('')
@@ -484,9 +534,9 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
               {/* Download template */}
               <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                 <div>
-                  <p className="text-sm font-medium text-blue-800 dark:text-blue-200">Need a template?</p>
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-200">Supported formats</p>
                   <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
-                    Download a sample CSV with all supported column headers.
+                    CSV (with column mapping), JSON, C Header (.h/.hpp), MATLAB script (.m)
                   </p>
                 </div>
                 <button
@@ -494,7 +544,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                   className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors"
                 >
                   <Download size={13} />
-                  Download template
+                  CSV template
                 </button>
               </div>
 
@@ -514,7 +564,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".csv"
+                    accept=".csv,.json,.h,.hpp,.m"
                     onChange={handleFileInput}
                     className="hidden"
                   />
@@ -524,7 +574,8 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                       <div className="text-center">
                         <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{filename}</p>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          {rowCount !== null ? `${rowCount} row${rowCount !== 1 ? 's' : ''} detected` : ''}
+                          {detectedFormat ? FORMAT_LABELS[detectedFormat] : ''}
+                          {rowCount !== null ? ` · ${rowCount} row${rowCount !== 1 ? 's' : ''} detected` : ''}
                         </p>
                       </div>
                       <p className="text-xs text-gray-400 dark:text-gray-500">Click or drop to replace</p>
@@ -534,24 +585,26 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                       <Upload size={32} className="text-gray-400 dark:text-gray-500" />
                       <div className="text-center">
                         <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                          Drop a CSV file here
+                          Drop a parameter file here
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">or click to browse</p>
                       </div>
-                      <p className="text-xs text-gray-400 dark:text-gray-500">Accepts .csv files only</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                        Accepts .csv &middot; .json &middot; .h / .hpp &middot; .m
+                      </p>
                     </>
                   )}
                 </div>
               )}
 
-              {/* Toggle: Paste CSV */}
+              {/* Toggle: Paste CSV (CSV only) */}
               <div>
                 <button
                   type="button"
                   onClick={() => setShowPaste(!showPaste)}
                   className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
                 >
-                  {showPaste ? 'Hide paste area' : 'Or paste CSV content instead'}
+                  {showPaste ? 'Hide paste area' : 'Or paste CSV text directly'}
                 </button>
               </div>
 
@@ -950,10 +1003,16 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
               <button
                 type="button"
                 onClick={handleNext}
-                disabled={!csvContent}
-                className="px-5 py-2 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!csvContent || importMutation.isPending}
+                className="flex items-center gap-2 px-5 py-2 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Next: Preview
+                {importMutation.isPending ? (
+                  'Importing...'
+                ) : detectedFormat === 'csv' ? (
+                  'Next: Preview'
+                ) : (
+                  <><Upload size={14} />Import</>
+                )}
               </button>
             )}
 
