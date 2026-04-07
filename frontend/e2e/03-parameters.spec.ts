@@ -201,9 +201,10 @@ test.describe('Parameters — CRUD', () => {
     await expect(page.locator('table').first()).toBeVisible({ timeout: 10_000 })
 
     // Find the row and click the delete (trash) button
-    const paramRow = page.locator('tr').filter({ hasText: deleteTargetName })
+    // Scope to table > tbody > tr to avoid strict-mode violations with nested rows
+    const paramRow = page.locator('table tbody tr').filter({ hasText: deleteTargetName }).first()
     await expect(paramRow).toBeVisible({ timeout: 8_000 })
-    await paramRow.getByTitle(/delete/i).click()
+    await paramRow.getByRole('button', { name: 'Delete' }).first().click()
 
     // Confirm the delete dialog
     // DeleteConfirmationModal renders a confirmation dialog
@@ -213,7 +214,7 @@ test.describe('Parameters — CRUD', () => {
     await confirmDialog.getByRole('button', { name: /delete|confirm/i }).last().click()
 
     // Row should be gone
-    await expect(page.locator('tr').filter({ hasText: deleteTargetName })).not.toBeVisible({ timeout: 8_000 })
+    await expect(page.locator('table tbody tr').filter({ hasText: deleteTargetName })).not.toBeVisible({ timeout: 8_000 })
   })
 })
 
@@ -381,9 +382,10 @@ test.describe('Parameters — Settings', () => {
     await expect(page.getByText(typeName)).toBeVisible({ timeout: 8_000 })
 
     // Cleanup: delete the type we just created
-    const typeRow = page.locator('div').filter({ hasText: typeName }).filter({ has: page.getByRole('button') }).first()
-    // Click the trash/delete button next to the type
-    await typeRow.locator('button').last().click()
+    // Find the span containing exactly the type name and click its sibling delete button
+    const typeItem = page.locator('span.flex-1').filter({ hasText: typeName })
+    await expect(typeItem).toBeVisible({ timeout: 5_000 })
+    await typeItem.locator('..').getByRole('button').last().click()
     await expect(page.getByText(typeName)).not.toBeVisible({ timeout: 5_000 })
   })
 

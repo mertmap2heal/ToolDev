@@ -57,7 +57,6 @@ export function evaluateFormula(
   }
 
   try {
-    // eslint-disable-next-line no-new-func
     const result = new Function(`return (${expr})`)() as number
     if (typeof result !== 'number' || !isFinite(result)) {
       return { result: null, error: 'Result is not a finite number', usedParamIds }
