@@ -478,7 +478,7 @@ export default function ListExporter({ isOpen, onClose, exportType, items, proje
         doc.text('Setup Diagram', 14, startY)
         try {
           // Place below header; jsPDF will keep aspect ratio when width/height provided but image exceeds; we choose fixed box.
-          ;(doc as any).addImage(img.dataUrl, fmt, 14, startY + 4, maxW, maxH)
+          (doc as any).addImage(img.dataUrl, fmt, 14, startY + 4, maxW, maxH)
         } catch {
           setPlaceholderStyle()
           doc.text(placeholder('Unable to render setup diagram image'), 14, startY + 14)
