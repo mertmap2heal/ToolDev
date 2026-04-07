@@ -10,5 +10,4 @@ Full documentation lives in `.claude/` — imported below.
 @.claude/database.md
 @.claude/git-workflow.md
 @.claude/development.md
-
-- Always create, maintain unit tests using the frontend folder ./frontend/e2e/ -> all pages have to be checked thoroughly
+@.claude/testing.md
