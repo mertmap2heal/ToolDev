@@ -544,6 +544,33 @@ export interface Parameter {
     createdAt: string;
     updatedAt: string;
 }
+export interface ParameterFolder {
+    id: string;
+    name: string;
+    description?: string | null;
+    color?: string | null;
+    projectId: string;
+    parentId?: string | null;
+    order: number;
+    createdAt: string;
+    updatedAt: string;
+    children?: ParameterFolder[];
+    _count?: { parameters: number };
+}
+export interface CreateParameterFolderDto {
+    name: string;
+    description?: string;
+    color?: string;
+    parentId?: string | null;
+    order?: number;
+}
+export interface UpdateParameterFolderDto {
+    name?: string;
+    description?: string;
+    color?: string | null;
+    parentId?: string | null;
+    order?: number;
+}
 export interface CreateParameterDto {
     parameterId?: string | null;
     name: string;

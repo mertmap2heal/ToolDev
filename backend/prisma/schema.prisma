@@ -220,6 +220,7 @@ model Project {
   projectUnits          ProjectUnit[]
   commBuses             CommBus[]
   projectUserEngineeringRoles ProjectUserEngineeringRole[]
+  parameterFolders      ParameterFolder[]
 }
 
 // Requirements export templates (ExportBuilder) - enterprise export wizard presets.
@@ -787,6 +788,7 @@ model Parameter {
   derivedParameters Parameter[]    @relation("DerivedParameter")
   versions        ParameterVersion[]
   commFields      CommField[]
+  folder          ParameterFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
   @@unique([projectId, name])
   @@unique([projectId, parameterId])
@@ -843,6 +845,26 @@ model ProjectUnit {
 
   @@unique([projectId, symbol])
   @@index([projectId])
+}
+
+model ParameterFolder {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  color       String?
+  projectId   String
+  parentId    String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project    Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent     ParameterFolder? @relation("ParameterFolderChildren", fields: [parentId], references: [id])
+  children   ParameterFolder[] @relation("ParameterFolderChildren")
+  parameters Parameter[]
+
+  @@index([projectId])
+  @@index([projectId, parentId])
 }
 
 // ── Communication Models ─────────────────────────────────────────────────────

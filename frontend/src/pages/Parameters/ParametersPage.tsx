@@ -3,9 +3,22 @@ import { useParams, Link } from 'react-router-dom'
 import {
   Search, X, Trash2, Edit2, Plus, Filter, ChevronDown, ChevronUp,
   FileText, Upload, Download, GitBranch, RefreshCw, CheckCircle,
-  AlertTriangle, Settings, Radio,
+  AlertTriangle, Settings, Radio, List, Share2,
+  Folder, FolderOpen, MoreHorizontal, Layers,
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+} from '@dnd-kit/core'
 
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import { parameterService, type ParameterWithUsage } from '../../services/parameter.service'
@@ -16,10 +29,69 @@ import SourceDetailsModal from '../../components/parameters/SourceDetailsModal'
 import CreateParameterModal from '../../components/parameters/CreateParameterModal'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
 import PublishToGitModal, { type GitPublishStoredConfig } from '../../components/parameters/PublishToGitModal'
+import ParameterDependencyGraph from '../../components/parameters/ParameterDependencyGraph'
 import CommunicationsTab from './CommunicationsTab'
-import type { Parameter } from 'shared/types/engineering.types'
+import type { Parameter, ParameterFolder } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
+
+// ---------------------------------------------------------------------------
+// Preset folder colors
+// ---------------------------------------------------------------------------
+const FOLDER_COLORS = ['#6366f1', '#0ea5e9', '#22c55e', '#f59e0b', '#ef4444', '#ec4899']
+
+// ---------------------------------------------------------------------------
+// DraggableRow — wraps a parameter row so it can be dragged onto a folder
+// ---------------------------------------------------------------------------
+function DraggableRow({
+  parameterId,
+  children,
+}: {
+  parameterId: string
+  children: React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `param-${parameterId}` })
+  return (
+    <tr
+      ref={setNodeRef}
+      style={{ opacity: isDragging ? 0.4 : 1, cursor: 'grab', borderBottom: '1px solid var(--theme-border)' }}
+      onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
+      onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </tr>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// DroppableFolder — folder row in sidebar that accepts dragged parameters
+// ---------------------------------------------------------------------------
+function DroppableFolder({
+  folderId,
+  isOver,
+  children,
+}: {
+  folderId: string
+  isOver: boolean
+  children: React.ReactNode
+}) {
+  const { setNodeRef } = useDroppable({ id: `folder-${folderId}` })
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        outline: isOver ? '2px solid var(--theme-accent)' : 'none',
+        outlineOffset: -2,
+        borderRadius: 6,
+        transition: 'outline 0.1s',
+      }}
+    >
+      {children}
+    </div>
+  )
+}
 
 // ---------------------------------------------------------------------------
 // Export format groups
@@ -108,7 +180,31 @@ export default function ParametersPage() {
   const [unitFilter, setUnitFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [paramViewMode, setParamViewMode] = useState<'list' | 'graph'>('list')
   const queryClient = useQueryClient()
+
+  // Folder sidebar state
+  // null = All Parameters; '__none__' = Ungrouped; <id> = specific folder
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
+  const [isFolderSidebarOpen, setIsFolderSidebarOpen] = useState(true)
+  const [createFolderName, setCreateFolderName] = useState('')
+  const [createFolderColor, setCreateFolderColor] = useState(FOLDER_COLORS[0])
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false)
+  const [folderMenuOpen, setFolderMenuOpen] = useState<string | null>(null)
+  const [renamingFolder, setRenamingFolder] = useState<{ id: string; name: string } | null>(null)
+  const [renamingColor, setRenamingColor] = useState<string>('#6366f1')
+  const [overFolderId, setOverFolderId] = useState<string | null>(null)
+  const [activeDragParamId, setActiveDragParamId] = useState<string | null>(null)
+  const folderMenuRef = useRef<HTMLDivElement>(null)
+
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  )
+
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   // Export state
   const [isExportOpen, setIsExportOpen] = useState(false)
@@ -198,6 +294,108 @@ export default function ParametersPage() {
     enabled: !!projectId,
   })
 
+  // Folder queries and mutations
+  const { data: foldersData } = useQuery({
+    queryKey: ['parameter-folders', projectId],
+    queryFn: async () => {
+      if (!projectId) throw new Error('Project ID required')
+      const response = await parameterService.getFolders(projectId)
+      if (response.success && response.data) return response.data
+      throw new Error(response.error || 'Failed to load folders')
+    },
+    enabled: !!projectId,
+  })
+  const folders: ParameterFolder[] = foldersData ?? []
+
+  const createFolderMutation = useMutation({
+    mutationFn: (name: string) => {
+      if (!projectId) throw new Error('Project ID required')
+      return parameterService.createFolder(projectId, { name, color: createFolderColor })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
+      setCreateFolderName('')
+      setCreateFolderColor(FOLDER_COLORS[0])
+      setIsCreatingFolder(false)
+    },
+  })
+
+  const updateFolderMutation = useMutation({
+    mutationFn: ({ folderId, data }: { folderId: string; data: { name?: string; color?: string | null } }) => {
+      if (!projectId) throw new Error('Project ID required')
+      return parameterService.updateFolder(projectId, folderId, data)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
+      setRenamingFolder(null)
+    },
+  })
+
+  const deleteFolderMutation = useMutation({
+    mutationFn: (folderId: string) => {
+      if (!projectId) throw new Error('Project ID required')
+      return parameterService.deleteFolder(projectId, folderId)
+    },
+    onSuccess: (_data, folderId) => {
+      queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
+      if (selectedFolderId === folderId) setSelectedFolderId(null)
+    },
+  })
+
+  const moveToFolderMutation = useMutation({
+    mutationFn: ({ parameterId, folderId }: { parameterId: string; folderId: string | null }) => {
+      if (!projectId) throw new Error('Project ID required')
+      return parameterService.moveParameterToFolder(projectId, parameterId, folderId)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
+    },
+  })
+
+  // Close folder context menu on outside click
+  useEffect(() => {
+    if (!folderMenuOpen) return
+    const handler = (e: MouseEvent) => {
+      if (folderMenuRef.current && !folderMenuRef.current.contains(e.target as Node)) {
+        setFolderMenuOpen(null)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [folderMenuOpen])
+
+  // DnD handlers
+  const handleDragStart = (event: DragStartEvent) => {
+    const id = String(event.active.id)
+    if (id.startsWith('param-')) setActiveDragParamId(id.replace('param-', ''))
+  }
+
+  const handleDragOver = (event: DragOverEvent) => {
+    if (!event.over) { setOverFolderId(null); return }
+    const overId = String(event.over.id)
+    if (!overId.startsWith('folder-')) { setOverFolderId(null); return }
+    // overId is "folder-<actualId>" or "folder-ungrouped"
+    setOverFolderId(overId.replace('folder-', ''))
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDragParamId(null)
+    setOverFolderId(null)
+    const { active, over } = event
+    if (!over) return
+    const paramId = String(active.id).replace('param-', '')
+    const overId = String(over.id)
+    if (overId === 'folder-ungrouped') {
+      // Drop on ungrouped zone — remove from any folder
+      moveToFolderMutation.mutate({ parameterId: paramId, folderId: null })
+    } else if (overId.startsWith('folder-')) {
+      const targetFolderId = overId.replace('folder-', '')
+      moveToFolderMutation.mutate({ parameterId: paramId, folderId: targetFolderId })
+    }
+  }
+
   const deleteParameterMutation = useMutation({
     mutationFn: (parameterId: string) => {
       if (!projectId) throw new Error('Project ID required')
@@ -214,6 +412,50 @@ export default function ParametersPage() {
     },
   })
 
+  // Bulk update mutation (status changes)
+  const bulkUpdateMutation = useMutation({
+    mutationFn: ({ ids, updates }: { ids: string[]; updates: Record<string, unknown> }) => {
+      if (!projectId) throw new Error('Project ID required')
+      return parameterService.bulkUpdate(projectId, ids, updates)
+    },
+    onSuccess: (_data, { ids, updates }) => {
+      queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
+      setSelectedIds(new Set())
+      const statusLabel = updates.status as string
+      setToastMessage(`${ids.length} parameter${ids.length > 1 ? 's' : ''} set to ${statusLabel}`)
+    },
+    onError: (error: any) => {
+      console.error('Bulk update error:', error)
+      alert(error?.error || 'Bulk update failed')
+    },
+  })
+
+  // Bulk delete mutation
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) => {
+      if (!projectId) throw new Error('Project ID required')
+      return parameterService.bulkDelete(projectId, ids)
+    },
+    onSuccess: (_data, ids) => {
+      queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
+      setSelectedIds(new Set())
+      setBulkDeleteConfirm(false)
+      setToastMessage(`${ids.length} parameter${ids.length > 1 ? 's' : ''} deleted`)
+    },
+    onError: (error: any) => {
+      console.error('Bulk delete error:', error)
+      alert(error?.error || 'Bulk delete failed')
+      setBulkDeleteConfirm(false)
+    },
+  })
+
+  // Auto-dismiss toast after 3 s
+  useEffect(() => {
+    if (!toastMessage) return
+    const t = setTimeout(() => setToastMessage(null), 3000)
+    return () => clearTimeout(t)
+  }, [toastMessage])
+
   // Staleness: consider only tag-filtered parameters (if configured)
   const relevantForStaleness = storedGitConfig?.selectedTags?.length
     ? parameters.filter(p => (p.tags as string[] | null)?.some(t => storedGitConfig.selectedTags!.includes(t)))
@@ -222,7 +464,15 @@ export default function ParametersPage() {
     p => new Date(p.updatedAt) > new Date(storedGitConfig.lastSyncedAt)
   )
 
-  const filteredParameters = parameters.filter((param) => {
+  // Apply folder filter first, then search/column filters
+  const folderFilteredParameters =
+    selectedFolderId === null
+      ? parameters
+      : selectedFolderId === '__none__'
+        ? parameters.filter(p => !p.folderId)
+        : parameters.filter(p => p.folderId === selectedFolderId)
+
+  const filteredParameters = folderFilteredParameters.filter((param) => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
       const matchesSearch =
@@ -513,6 +763,39 @@ export default function ParametersPage() {
             )}
           </div>
 
+          {/* View toggle: List / Graph */}
+          <div style={{ display: 'flex', border: '1px solid var(--theme-border)', borderRadius: 6, overflow: 'hidden' }}>
+            <button
+              onClick={() => setParamViewMode('list')}
+              title="List view"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '5px 10px', fontSize: 12, fontWeight: 500,
+                border: 'none', cursor: 'pointer',
+                backgroundColor: paramViewMode === 'list' ? 'var(--theme-accent)' : 'var(--theme-surface)',
+                color: paramViewMode === 'list' ? '#fff' : 'var(--theme-text-muted)',
+                borderRight: '1px solid var(--theme-border)',
+              }}
+            >
+              <List size={13} />
+              List
+            </button>
+            <button
+              onClick={() => setParamViewMode('graph')}
+              title="Dependency graph view"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '5px 10px', fontSize: 12, fontWeight: 500,
+                border: 'none', cursor: 'pointer',
+                backgroundColor: paramViewMode === 'graph' ? 'var(--theme-accent)' : 'var(--theme-surface)',
+                color: paramViewMode === 'graph' ? '#fff' : 'var(--theme-text-muted)',
+              }}
+            >
+              <Share2 size={13} />
+              Graph
+            </button>
+          </div>
+
           {/* Create */}
           <button
             onClick={() => setIsCreateModalOpen(true)}
@@ -613,6 +896,268 @@ export default function ParametersPage() {
       </div>
 
 
+      {/* ── Folders + content layout ── */}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+
+        {/* ── Folder sidebar ── */}
+        {isFolderSidebarOpen ? (
+          <div style={{
+            width: 200, flexShrink: 0,
+            borderRadius: 8, border: '1px solid var(--theme-border)',
+            backgroundColor: 'var(--theme-surface)',
+            overflow: 'hidden',
+          }}>
+            {/* Sidebar header */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '8px 10px', borderBottom: '1px solid var(--theme-border)',
+              backgroundColor: 'var(--theme-bg)',
+            }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--theme-text-muted)' }}>Folders</span>
+              <button
+                onClick={() => setIsFolderSidebarOpen(false)}
+                title="Collapse sidebar"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-text-muted)', padding: 2, display: 'flex', alignItems: 'center' }}
+              >
+                <ChevronDown size={12} style={{ transform: 'rotate(90deg)' }} />
+              </button>
+            </div>
+            <div style={{ padding: '4px 4px' }}>
+              {/* All Parameters */}
+              <button
+                onClick={() => setSelectedFolderId(null)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '6px 8px', borderRadius: 5, fontSize: 12, fontWeight: 500,
+                  border: 'none', cursor: 'pointer', textAlign: 'left',
+                  backgroundColor: selectedFolderId === null ? 'var(--theme-sidebar-item-active)' : 'transparent',
+                  color: selectedFolderId === null ? 'var(--theme-accent)' : 'var(--theme-text)',
+                }}
+              >
+                <Layers size={13} style={{ flexShrink: 0, color: selectedFolderId === null ? 'var(--theme-accent)' : 'var(--theme-text-muted)' }} />
+                <span style={{ flex: 1 }}>All Parameters</span>
+                <span style={{ fontSize: 10, color: 'var(--theme-text-muted)' }}>{parameters.length}</span>
+              </button>
+              {/* Ungrouped — droppable zone */}
+              <DroppableFolder folderId="ungrouped" isOver={overFolderId === 'ungrouped'}>
+                <button
+                  onClick={() => setSelectedFolderId('__none__')}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '6px 8px', borderRadius: 5, fontSize: 12, fontWeight: 500,
+                    border: 'none', cursor: 'pointer', textAlign: 'left',
+                    backgroundColor: selectedFolderId === '__none__' ? 'var(--theme-sidebar-item-active)' : 'transparent',
+                    color: selectedFolderId === '__none__' ? 'var(--theme-accent)' : 'var(--theme-text-muted)',
+                  }}
+                >
+                  <Folder size={13} style={{ flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>Ungrouped</span>
+                  <span style={{ fontSize: 10 }}>{parameters.filter(p => !p.folderId).length}</span>
+                </button>
+              </DroppableFolder>
+              {/* Named folders */}
+              {folders.map(folder => {
+                const isSelected = selectedFolderId === folder.id
+                const isMenuOpen = folderMenuOpen === folder.id
+                const isRenaming = renamingFolder?.id === folder.id
+                return (
+                  <DroppableFolder key={folder.id} folderId={folder.id} isOver={overFolderId === folder.id}>
+                    <div
+                      style={{
+                        display: 'flex', alignItems: 'center',
+                        borderRadius: 5,
+                        backgroundColor: isSelected ? 'var(--theme-sidebar-item-active)' : 'transparent',
+                      }}
+                      onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'var(--theme-sidebar-item-hover)' }}
+                      onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'transparent' }}
+                    >
+                      {isRenaming ? (
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4, padding: '4px 6px' }}>
+                          {/* Color picker */}
+                          <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', width: 90 }}>
+                            {FOLDER_COLORS.map(c => (
+                              <button key={c} onClick={() => setRenamingColor(c)}
+                                style={{ width: 12, height: 12, borderRadius: '50%', border: renamingColor === c ? '2px solid var(--theme-text)' : '1px solid transparent', backgroundColor: c, cursor: 'pointer', padding: 0 }} />
+                            ))}
+                          </div>
+                          <input
+                            autoFocus
+                            value={renamingFolder?.name ?? ''}
+                            onChange={e => setRenamingFolder({ id: folder.id, name: e.target.value })}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' && renamingFolder) {
+                                updateFolderMutation.mutate({ folderId: folder.id, data: { name: renamingFolder.name, color: renamingColor } })
+                              }
+                              if (e.key === 'Escape') setRenamingFolder(null)
+                            }}
+                            style={{
+                              flex: 1, fontSize: 11, padding: '2px 5px',
+                              border: '1px solid var(--theme-border)', borderRadius: 4,
+                              backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)',
+                            }}
+                          />
+                          <button onClick={() => setRenamingFolder(null)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-text-muted)', padding: 1 }}>
+                            <X size={11} />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => setSelectedFolderId(folder.id)}
+                            style={{
+                              flex: 1, display: 'flex', alignItems: 'center', gap: 6,
+                              padding: '6px 8px', fontSize: 12, fontWeight: 500,
+                              border: 'none', cursor: 'pointer', textAlign: 'left', background: 'none',
+                              color: isSelected ? 'var(--theme-accent)' : 'var(--theme-text)',
+                            }}
+                          >
+                            <FolderOpen size={13} style={{ flexShrink: 0, color: folder.color ?? '#6366f1' }} />
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {folder.name}
+                            </span>
+                            <span style={{ fontSize: 10, color: 'var(--theme-text-muted)' }}>
+                              {folder._count?.parameters ?? 0}
+                            </span>
+                          </button>
+                          {/* Context menu trigger */}
+                          <div style={{ position: 'relative' }} ref={folderMenuOpen === folder.id ? folderMenuRef : undefined}>
+                            <button
+                              onClick={e => { e.stopPropagation(); setFolderMenuOpen(isMenuOpen ? null : folder.id); setRenamingColor(folder.color ?? FOLDER_COLORS[0]) }}
+                              style={{
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                padding: '4px 5px', color: 'var(--theme-text-muted)',
+                                opacity: isMenuOpen ? 1 : 0,
+                                borderRadius: 4,
+                              }}
+                              className="folder-menu-btn"
+                              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1' }}
+                              onMouseLeave={e => { if (!isMenuOpen) (e.currentTarget as HTMLButtonElement).style.opacity = '0' }}
+                            >
+                              <MoreHorizontal size={12} />
+                            </button>
+                            {isMenuOpen && (
+                              <div style={{
+                                position: 'absolute', right: 0, top: '100%', zIndex: 300,
+                                width: 140, borderRadius: 6,
+                                border: '1px solid var(--theme-border)',
+                                backgroundColor: 'var(--theme-surface)',
+                                boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                                overflow: 'hidden',
+                              }}>
+                                <button
+                                  onClick={() => { setRenamingFolder({ id: folder.id, name: folder.name }); setFolderMenuOpen(null) }}
+                                  style={{
+                                    width: '100%', display: 'flex', alignItems: 'center', gap: 7,
+                                    padding: '7px 10px', fontSize: 12, border: 'none', cursor: 'pointer',
+                                    backgroundColor: 'transparent', color: 'var(--theme-text)', textAlign: 'left',
+                                  }}
+                                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
+                                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                >
+                                  <Edit2 size={11} /> Rename
+                                </button>
+                                <button
+                                  onClick={() => { deleteFolderMutation.mutate(folder.id); setFolderMenuOpen(null) }}
+                                  style={{
+                                    width: '100%', display: 'flex', alignItems: 'center', gap: 7,
+                                    padding: '7px 10px', fontSize: 12, border: 'none', cursor: 'pointer',
+                                    backgroundColor: 'transparent', color: '#ef4444', textAlign: 'left',
+                                  }}
+                                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.06)')}
+                                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                >
+                                  <Trash2 size={11} /> Delete
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </DroppableFolder>
+                )
+              })}
+              {/* New folder */}
+              {isCreatingFolder ? (
+                <div style={{ padding: '6px 6px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                    {FOLDER_COLORS.map(c => (
+                      <button key={c} onClick={() => setCreateFolderColor(c)}
+                        style={{ width: 14, height: 14, borderRadius: '50%', border: createFolderColor === c ? '2px solid var(--theme-text)' : '1px solid transparent', backgroundColor: c, cursor: 'pointer', padding: 0 }} />
+                    ))}
+                  </div>
+                  <input
+                    autoFocus
+                    value={createFolderName}
+                    onChange={e => setCreateFolderName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && createFolderName.trim()) createFolderMutation.mutate(createFolderName.trim())
+                      if (e.key === 'Escape') { setIsCreatingFolder(false); setCreateFolderName('') }
+                    }}
+                    placeholder="Folder name"
+                    style={{
+                      width: '100%', fontSize: 11, padding: '4px 7px',
+                      border: '1px solid var(--theme-border)', borderRadius: 4,
+                      backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button
+                      onClick={() => { if (createFolderName.trim()) createFolderMutation.mutate(createFolderName.trim()) }}
+                      disabled={!createFolderName.trim()}
+                      style={{ flex: 1, padding: '3px 0', fontSize: 11, fontWeight: 600, borderRadius: 4, border: 'none', backgroundColor: 'var(--theme-accent)', color: '#fff', cursor: createFolderName.trim() ? 'pointer' : 'not-allowed', opacity: createFolderName.trim() ? 1 : 0.5 }}
+                    >
+                      Create
+                    </button>
+                    <button
+                      onClick={() => { setIsCreatingFolder(false); setCreateFolderName('') }}
+                      style={{ padding: '3px 7px', fontSize: 11, borderRadius: 4, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', color: 'var(--theme-text)', cursor: 'pointer' }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setIsCreatingFolder(true)}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 5,
+                    padding: '5px 8px', borderRadius: 5, fontSize: 11, fontWeight: 500,
+                    border: 'none', cursor: 'pointer', textAlign: 'left',
+                    backgroundColor: 'transparent', color: 'var(--theme-text-muted)',
+                    marginTop: 2,
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
+                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  <Plus size={11} />
+                  New folder
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* Collapsed sidebar toggle */
+          <button
+            onClick={() => setIsFolderSidebarOpen(true)}
+            title="Expand folder sidebar"
+            style={{
+              flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 24, minHeight: 40, borderRadius: 6,
+              border: '1px solid var(--theme-border)',
+              backgroundColor: 'var(--theme-surface)',
+              cursor: 'pointer', color: 'var(--theme-text-muted)',
+            }}
+          >
+            <Folder size={13} />
+          </button>
+        )}
+
+        {/* ── Right: tip / graph / bulk bar / table ── */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+
       {/* ── Info / tip ── */}
       {parameters.length === 0 && !isLoading && (
         <div style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', fontSize: 12, color: 'var(--theme-text-muted)' }}>
@@ -621,12 +1166,107 @@ export default function ParametersPage() {
         </div>
       )}
 
+      {/* ── Dependency Graph view ── */}
+      {paramViewMode === 'graph' && (
+        <div style={{ borderRadius: 8, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', overflow: 'hidden' }}>
+          <ParameterDependencyGraph parameters={filteredParameters} />
+        </div>
+      )}
+
+      {/* ── Bulk action toolbar ── */}
+      {selectedIds.size > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+          padding: '8px 12px', borderRadius: 8,
+          border: '1px solid var(--theme-accent)',
+          backgroundColor: 'var(--theme-accent-subtle)',
+        }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--theme-text)', marginRight: 4 }}>
+            {selectedIds.size} selected
+          </span>
+          <button
+            onClick={() => bulkUpdateMutation.mutate({ ids: Array.from(selectedIds), updates: { status: 'approved' } })}
+            disabled={bulkUpdateMutation.isPending}
+            style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: '1px solid rgba(34,197,94,0.4)', backgroundColor: 'rgba(34,197,94,0.12)', color: '#15803d' }}
+          >
+            Approve
+          </button>
+          <button
+            onClick={() => bulkUpdateMutation.mutate({ ids: Array.from(selectedIds), updates: { status: 'draft' } })}
+            disabled={bulkUpdateMutation.isPending}
+            style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: '1px solid rgba(245,158,11,0.4)', backgroundColor: 'rgba(245,158,11,0.12)', color: '#b45309' }}
+          >
+            Set Draft
+          </button>
+          <button
+            onClick={() => bulkUpdateMutation.mutate({ ids: Array.from(selectedIds), updates: { status: 'obsolete' } })}
+            disabled={bulkUpdateMutation.isPending}
+            style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', color: 'var(--theme-text-muted)' }}
+          >
+            Obsolete
+          </button>
+          {!bulkDeleteConfirm ? (
+            <button
+              onClick={() => setBulkDeleteConfirm(true)}
+              style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: '1px solid rgba(239,68,68,0.4)', backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444' }}
+            >
+              Delete
+            </button>
+          ) : (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, color: '#ef4444', fontWeight: 500 }}>Are you sure?</span>
+              <button
+                onClick={() => bulkDeleteMutation.mutate(Array.from(selectedIds))}
+                disabled={bulkDeleteMutation.isPending}
+                style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', backgroundColor: '#ef4444', color: '#fff' }}
+              >
+                Confirm
+              </button>
+              <button
+                onClick={() => setBulkDeleteConfirm(false)}
+                style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', color: 'var(--theme-text)' }}
+              >
+                Cancel
+              </button>
+            </span>
+          )}
+          <span style={{ flex: 1 }} />
+          <button
+            onClick={() => { setSelectedIds(new Set()); setBulkDeleteConfirm(false) }}
+            title="Clear selection"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-text-muted)', padding: 2, display: 'flex', alignItems: 'center' }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* ── Table ── */}
+      {paramViewMode === 'list' && <DndContext
+        sensors={dndSensors}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
       <div style={{ borderRadius: 8, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ backgroundColor: 'var(--theme-bg)', borderBottom: '1px solid var(--theme-border)' }}>
+                <th style={{ padding: '8px 12px', width: 32 }}>
+                  <input
+                    type="checkbox"
+                    checked={filteredParameters.length > 0 && filteredParameters.every(p => selectedIds.has(p.id))}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        setSelectedIds(new Set(filteredParameters.map(p => p.id)))
+                      } else {
+                        setSelectedIds(new Set())
+                      }
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  />
+                </th>
                 {['Parameter', 'Description', 'Type', 'Value', 'Unit', 'Source', 'Status', 'Used in', 'Created', ''].map(h => (
                   <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--theme-text-muted)', whiteSpace: 'nowrap' }}>
                     {h}
@@ -636,16 +1276,28 @@ export default function ParametersPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={10} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>Loading parameters…</td></tr>
+                <tr><td colSpan={11} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>Loading parameters…</td></tr>
               ) : filteredParameters.length === 0 ? (
-                <tr><td colSpan={10} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>
+                <tr><td colSpan={11} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>
                   {parameters.length === 0 ? 'No parameters yet. Create one or import a file.' : 'No parameters match your filters.'}
                 </td></tr>
               ) : filteredParameters.map((param) => (
-                <tr key={param.id} style={{ borderBottom: '1px solid var(--theme-border)' }}
-                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
-                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                >
+                <DraggableRow key={param.id} parameterId={param.id}>
+                  <td style={{ padding: '8px 12px', width: 32 }} onClick={e => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(param.id)}
+                      onChange={() => {
+                        setSelectedIds(prev => {
+                          const next = new Set(prev)
+                          if (next.has(param.id)) next.delete(param.id)
+                          else next.add(param.id)
+                          return next
+                        })
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </td>
                   <td style={{ padding: '8px 12px' }}>
                     <button type="button" onClick={() => setDetailParameter(param)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-accent)', fontWeight: 600, fontSize: 12, padding: 0 }}>
@@ -658,7 +1310,28 @@ export default function ParametersPage() {
                     </span>
                   </td>
                   <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)' }}>{param.dataType || '—'}</td>
-                  <td style={{ padding: '8px 12px', fontFamily: 'monospace', color: 'var(--theme-text)' }}>{param.defaultValue || '—'}</td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'monospace', color: 'var(--theme-text)' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <span>{param.defaultValue || '—'}</span>
+                      {param.formula && (
+                        <span
+                          title={param.formula}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            padding: '1px 5px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                            fontFamily: 'serif', fontStyle: 'italic',
+                            backgroundColor: 'rgba(245,158,11,0.12)',
+                            color: '#b45309',
+                            border: '1px solid rgba(245,158,11,0.3)',
+                            cursor: 'default',
+                            flexShrink: 0,
+                          }}
+                        >
+                          f
+                        </span>
+                      )}
+                    </span>
+                  </td>
                   <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)' }}>{param.unit || '—'}</td>
                   <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)' }}>
                     {param.sourceFunction ? (
@@ -711,12 +1384,28 @@ export default function ParametersPage() {
                       </button>
                     </div>
                   </td>
-                </tr>
+                </DraggableRow>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+      <DragOverlay>
+        {activeDragParamId ? (
+          <div style={{
+            padding: '6px 12px', borderRadius: 6,
+            backgroundColor: 'var(--theme-accent)', color: '#fff',
+            fontSize: 12, fontWeight: 600, opacity: 0.9,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          }}>
+            {parameters.find(p => p.id === activeDragParamId)?.name ?? 'Parameter'}
+          </div>
+        ) : null}
+      </DragOverlay>
+      </DndContext>}
+
+        </div>{/* end right column */}
+      </div>{/* end folders + content layout */}
 
       {/* ── Import Modal ── */}
       {isImportOpen && (
@@ -861,6 +1550,7 @@ export default function ParametersPage() {
             projectId={projectId}
             parameter={detailParameter}
             onEdit={setEditingParameter}
+            allParameters={parameters}
           />
           <EditParameterModal
             isOpen={!!editingParameter}
@@ -902,6 +1592,21 @@ export default function ParametersPage() {
       )}
 
       </> /* end parameters tab */}
+
+      {/* ── Toast notification ── */}
+      {toastMessage && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 2000,
+          padding: '10px 18px', borderRadius: 8,
+          backgroundColor: 'var(--theme-text)', color: 'var(--theme-bg)',
+          fontSize: 13, fontWeight: 500,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+          pointerEvents: 'none',
+        }}>
+          {toastMessage}
+        </div>
+      )}
     </div>
   )
 }

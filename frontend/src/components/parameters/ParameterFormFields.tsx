@@ -4,14 +4,15 @@
  * Validates values in real-time against the type's format definition.
  */
 import { useState, useCallback, useEffect } from 'react'
-import { Plus, Trash2, Settings, Ruler, AlertCircle, Info } from 'lucide-react'
+import { Plus, Trash2, Settings, Ruler, AlertCircle, Info, CheckCircle } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import UnitPicker from './UnitPicker'
 import { TypeCombobox } from './TypeCombobox'
 import { validateParameterValue } from './validateParameterValue'
+import { evaluateFormula } from './evaluateFormula'
 import { parameterTypeService } from '../../services/parameterType.service'
 import { projectUnitService } from '../../services/projectUnit.service'
-import type { ParameterValueFormat } from 'shared/types/engineering.types'
+import type { Parameter, ParameterValueFormat } from 'shared/types/engineering.types'
 
 export interface ParameterFormValues {
   dataType: string
@@ -37,6 +38,16 @@ interface Props {
   onManageUnits?: () => void
   /** External validation error for value field (e.g. from form submit attempt) */
   valueError?: string | null
+  /**
+   * The current formula string ({{param:ID}} syntax). When provided together
+   * with allParameters, a live evaluation preview is shown below the form.
+   */
+  formula?: string
+  /**
+   * Full list of parameters in the project. Used to resolve {{param:ID}}
+   * references in the formula preview and to display referenced parameter names.
+   */
+  allParameters?: Parameter[]
 }
 
 // ── type category detection ────────────────────────────────────────────────
@@ -174,13 +185,69 @@ function FormatHint({ fmt }: { fmt: ParameterValueFormat }) {
   )
 }
 
+// ── formula live preview ───────────────────────────────────────────────────
+
+function FormulaPreview({
+  formula,
+  allParameters,
+}: {
+  formula: string
+  allParameters: Parameter[]
+}) {
+  const paramValues = allParameters.reduce<Record<string, number>>((acc, p) => {
+    const v = parseFloat(p.defaultValue ?? '')
+    if (!isNaN(v)) acc[p.id] = v
+    return acc
+  }, {})
+
+  const { result, error, usedParamIds } = evaluateFormula(formula, paramValues)
+
+  const referencedParams = usedParamIds
+    .map(id => allParameters.find(p => p.id === id))
+    .filter((p): p is Parameter => p !== undefined)
+
+  return (
+    <div className="rounded-lg border p-3 space-y-2 bg-gray-50 dark:bg-gray-900/40 border-gray-200 dark:border-gray-700">
+      <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Formula preview</p>
+
+      {error ? (
+        <div className="flex items-center gap-1.5">
+          <AlertCircle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+          <span className="text-xs text-amber-700 dark:text-amber-400">{error}</span>
+        </div>
+      ) : result !== null ? (
+        <div className="flex items-center gap-1.5">
+          <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+          <span className="text-xs font-mono font-semibold text-green-700 dark:text-green-400">
+            = {result}
+          </span>
+        </div>
+      ) : null}
+
+      {referencedParams.length > 0 && (
+        <div className="flex flex-wrap gap-1 pt-0.5">
+          {referencedParams.map(p => (
+            <span
+              key={p.id}
+              className="px-1.5 py-0.5 rounded text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-mono"
+              title={p.defaultValue ? `value: ${p.defaultValue}` : 'no default value'}
+            >
+              {p.name}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── main component ─────────────────────────────────────────────────────────
 
 const INPUT_CLS = 'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm'
 const INPUT_ERR_CLS = 'w-full px-4 py-2 border border-red-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm'
 const LABEL_CLS = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left'
 
-export function ParameterFormFields({ projectId, values, onChange, onManageTypes, onManageUnits, valueError }: Props) {
+export function ParameterFormFields({ projectId, values, onChange, onManageTypes, onManageUnits, valueError, formula, allParameters }: Props) {
   const [valueValidationError, setValueValidationError] = useState<string | null>(null)
 
   // Fetch type definitions to get valueFormat for the current type
@@ -430,6 +497,9 @@ export function ParameterFormFields({ projectId, values, onChange, onManageTypes
           </div>
         </div>
       )}
+
+      {/* Formula live preview */}
+      {formula && allParameters && <FormulaPreview formula={formula} allParameters={allParameters} />}
     </div>
   )
 }

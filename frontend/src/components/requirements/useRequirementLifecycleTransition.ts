@@ -92,9 +92,7 @@ export function useRequirementLifecycleTransition({
         if (!cancelled) setTransitionsLoading(false)
       }
     })()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [
     requirement.id,
     requirement.lifecycleId,

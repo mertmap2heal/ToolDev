@@ -400,7 +400,7 @@ export default function VerificationPage() {
   const plansCountByCaseId = useMemo(() => {
     const m = new Map<string, number>()
     ;(Array.isArray(testPlans) ? testPlans : []).forEach((p: any) => {
-      ;(p.planCases ?? []).forEach((pc: any) => {
+      (p.planCases ?? []).forEach((pc: any) => {
         const caseId = pc?.testCase?.id ?? pc?.testCaseId ?? pc?.id ?? pc
         if (!caseId) return
         m.set(caseId, (m.get(caseId) ?? 0) + 1)
