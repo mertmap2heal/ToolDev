@@ -13,6 +13,71 @@ export interface FormulaEvalResult {
   usedParamIds: string[]
 }
 
+// ---------------------------------------------------------------------------
+// Cycle detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract all {{param:ID}} references from a formula string.
+ */
+export function extractParamRefs(formula: string): string[] {
+  const ids: string[] = []
+  const re = /\{\{param:([a-z0-9]+)\}\}/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(formula)) !== null) {
+    if (!ids.includes(m[1])) ids.push(m[1])
+  }
+  return ids
+}
+
+/**
+ * Detect circular formula dependencies across a set of parameters.
+ *
+ * @param params  Array of objects with `id` and optional `formula`.
+ *                Accepts any shape that has those two fields.
+ * @returns Array of cycle descriptions, e.g. ["A → B → A"].
+ *          Empty array means no cycles.
+ */
+export function detectCycles(
+  params: Array<{ id: string; formula?: string | null }>
+): string[] {
+  // Build adjacency map: id -> list of referenced param ids
+  const deps = new Map<string, string[]>()
+  const idToName = new Map<string, string>()
+  for (const p of params) {
+    const refs = p.formula ? extractParamRefs(p.formula) : []
+    deps.set(p.id, refs)
+    idToName.set(p.id, (p as { id: string; name?: string }).name ?? p.id)
+  }
+
+  const cycles: string[] = []
+  const visited = new Set<string>()
+  const inStack = new Set<string>()
+
+  function dfs(id: string, path: string[]): void {
+    if (inStack.has(id)) {
+      // Found a cycle — extract the loop portion
+      const cycleStart = path.indexOf(id)
+      const loop = path.slice(cycleStart).concat(id)
+      const label = loop.map(i => idToName.get(i) ?? i).join(' → ')
+      if (!cycles.some(c => c === label)) cycles.push(label)
+      return
+    }
+    if (visited.has(id)) return
+    visited.add(id)
+    inStack.add(id)
+    for (const dep of deps.get(id) ?? []) {
+      dfs(dep, [...path, id])
+    }
+    inStack.delete(id)
+  }
+
+  for (const id of deps.keys()) {
+    dfs(id, [])
+  }
+  return cycles
+}
+
 /**
  * Evaluate a formula string that may contain {{param:ID}} references.
  *

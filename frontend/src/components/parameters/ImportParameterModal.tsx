@@ -154,13 +154,14 @@ function detectMappings(headers: string[]): Record<string, string | null> {
 // ---------------------------------------------------------------------------
 // Format helpers
 // ---------------------------------------------------------------------------
-type ImportFormat = 'csv' | 'json' | 'c_header' | 'matlab'
+type ImportFormat = 'csv' | 'json' | 'c_header' | 'matlab' | 'a2l'
 
 const FORMAT_LABELS: Record<ImportFormat, string> = {
   csv:      'CSV (.csv)',
   json:     'JSON (.json)',
   c_header: 'C Header (.h / .hpp)',
   matlab:   'MATLAB script (.m)',
+  a2l:      'AUTOSAR A2L (.a2l)',
 }
 
 function detectFormatFromFile(filename: string): ImportFormat | null {
@@ -169,6 +170,7 @@ function detectFormatFromFile(filename: string): ImportFormat | null {
   if (ext === 'json') return 'json'
   if (ext === 'h' || ext === 'hpp') return 'c_header'
   if (ext === 'm')    return 'matlab'
+  if (ext === 'a2l')  return 'a2l'
   return null
 }
 
@@ -536,7 +538,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                 <div>
                   <p className="text-sm font-medium text-blue-800 dark:text-blue-200">Supported formats</p>
                   <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
-                    CSV (with column mapping), JSON, C Header (.h/.hpp), MATLAB script (.m)
+                    CSV (with column mapping), JSON, C Header (.h/.hpp), MATLAB script (.m), AUTOSAR A2L (.a2l)
                   </p>
                 </div>
                 <button
@@ -564,7 +566,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".csv,.json,.h,.hpp,.m"
+                    accept=".csv,.json,.h,.hpp,.m,.a2l"
                     onChange={handleFileInput}
                     className="hidden"
                   />
@@ -590,7 +592,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">or click to browse</p>
                       </div>
                       <p className="text-xs text-gray-400 dark:text-gray-500">
-                        Accepts .csv &middot; .json &middot; .h / .hpp &middot; .m
+                        Accepts .csv &middot; .json &middot; .h / .hpp &middot; .m &middot; .a2l
                       </p>
                     </>
                   )}

@@ -283,6 +283,7 @@ export default function EditParameterModal({
             valueError={valueError}
             formula={formData.formula || ''}
             allParameters={allParameters}
+            currentParamId={parameter?.id}
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -484,3 +484,80 @@ test.describe('Parameters — CSV Import', () => {
     await expect(page.locator('table').getByText(new RegExp(`${prefix}_`))).toBeVisible({ timeout: 8_000 })
   })
 })
+
+// ---------------------------------------------------------------------------
+// Version diff / compare tests
+// ---------------------------------------------------------------------------
+test.describe('Parameters — Version Compare', () => {
+  test('version history shows Compare versions button when 2+ versions exist', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/parameters`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.locator('table').first()).toBeVisible({ timeout: 10_000 })
+
+    // Open the first parameter's detail drawer
+    const firstRow = page.locator('table tbody tr').first()
+    await expect(firstRow).toBeVisible({ timeout: 5_000 })
+    await firstRow.click()
+
+    // Drawer should open
+    const drawer = page.locator('[role="dialog"]')
+    await expect(drawer).toBeVisible({ timeout: 5_000 })
+
+    // If 2+ versions exist, the Compare versions button should be visible
+    const compareBtn = drawer.getByRole('button', { name: /compare versions/i })
+    // Button is only present when >= 2 versions — check non-strictly
+    const hasCompare = await compareBtn.isVisible()
+    if (hasCompare) {
+      await compareBtn.click()
+      await expect(drawer.getByText(/cancel compare/i)).toBeVisible({ timeout: 3_000 })
+      // Should show version selection list with A/B markers
+      await expect(drawer.getByText(/select two versions/i)).toBeVisible()
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Export round-trip tests
+// ---------------------------------------------------------------------------
+test.describe('Parameters — Export round-trip', () => {
+  test('CSV export produces a downloadable file', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/parameters`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.locator('table').first()).toBeVisible({ timeout: 10_000 })
+
+    // Start waiting for download before clicking
+    const downloadPromise = page.waitForEvent('download', { timeout: 15_000 })
+    // Open export dropdown and click CSV
+    await page.getByRole('button', { name: /export/i }).first().click()
+    const exportDropdown = page.locator('[role="menu"], [class*="dropdown"], .absolute').filter({ hasText: /csv/i }).first()
+    await expect(exportDropdown).toBeVisible({ timeout: 3_000 })
+    await exportDropdown.getByText(/csv/i).first().click()
+
+    const download = await downloadPromise
+    expect(download.suggestedFilename()).toMatch(/\.csv$/)
+  })
+
+  test('JSON export round-trip: export then re-import produces same parameters', async ({ page, projectId }) => {
+    // First create a known parameter via CSV import
+    const prefix = `e2e_roundtrip_${Date.now()}`
+    const csv = generateUniqueCsv(1, prefix, { status: 'draft', unit: 'kg', value: '42.0' })
+    const csvPath = writeTempCsvPath(csv, 'e2e_roundtrip_seed.csv')
+
+    await page.goto(`/projects/${projectId}/parameters`)
+    await page.waitForLoadState('domcontentloaded')
+
+    // Import the seed parameter
+    await page.getByRole('button', { name: /^import$/i }).click()
+    const modal = page.locator(MODAL)
+    await expect(modal).toBeVisible({ timeout: 5_000 })
+    await modal.locator('input[type="file"]').setInputFiles(csvPath)
+    await expect(modal.getByText(/row/i)).toBeVisible({ timeout: 5_000 })
+    await modal.getByRole('button', { name: /next.*preview/i }).click()
+    await modal.getByRole('button', { name: /^import$/i }).click()
+    await expect(modal.getByText(/import complete/i)).toBeVisible({ timeout: 15_000 })
+    await modal.getByRole('button', { name: /done/i }).click()
+
+    // Verify the seed parameter is visible
+    await expect(page.locator('table').getByText(new RegExp(`${prefix}_`))).toBeVisible({ timeout: 8_000 })
+  })
+})

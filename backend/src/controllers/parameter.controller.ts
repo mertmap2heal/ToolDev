@@ -832,6 +832,43 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
       return res.status(422).json({ success: false, error: 'No parameters found in file', warnings })
     }
 
+    // Cycle detection among imported formula parameters
+    const formulaParams = parsed.filter(p => p.formula)
+    if (formulaParams.length > 1) {
+      // Build name->id map using synthetic IDs for imported params
+      const nameToId = new Map(formulaParams.map((p, i) => [p.name, `__import_${i}`]))
+      // Also include existing DB params that have formulas
+      const existingWithFormulas = await prisma.parameter.findMany({
+        where: { projectId, formula: { not: null } },
+        select: { id: true, name: true, formula: true },
+      })
+      // Merge: imported params override existing if same name
+      const allForCycle = [
+        ...existingWithFormulas
+          .filter(e => !formulaParams.some(p => p.name === e.name))
+          .map(e => ({ id: e.id, formula: e.formula ?? undefined })),
+        ...formulaParams.map((p, i) => ({
+          id: nameToId.get(p.name) ?? `__import_${i}`,
+          formula: p.formula,
+        })),
+      ]
+      // Simple DFS cycle detector (same logic as frontend evaluateFormula.ts detectCycles)
+      const refRe = /\{\{param:([a-z0-9]+)\}\}/gi
+      const extractRefs = (f: string) => { const ids: string[] = []; let m; const re = new RegExp(refRe.source, 'gi'); while ((m = re.exec(f))) if (!ids.includes(m[1])) ids.push(m[1]); return ids }
+      const deps = new Map(allForCycle.map(p => [p.id, extractRefs(p.formula ?? '')]))
+      const visited = new Set<string>(); const inStack = new Set<string>()
+      const cyclesFound: string[] = []
+      const dfs = (id: string, path: string[]) => {
+        if (inStack.has(id)) { const loop = path.slice(path.indexOf(id)).concat(id); const label = loop.join(' → '); if (!cyclesFound.includes(label)) cyclesFound.push(label); return }
+        if (visited.has(id)) return
+        visited.add(id); inStack.add(id)
+        for (const dep of deps.get(id) ?? []) dfs(dep, [...path, id])
+        inStack.delete(id)
+      }
+      for (const id of deps.keys()) dfs(id, [])
+      if (cyclesFound.length > 0) warnings.push(...cyclesFound.map(c => `Circular dependency detected: ${c}`))
+    }
+
     let imported = 0
     let skipped = 0
     const errors: string[] = []

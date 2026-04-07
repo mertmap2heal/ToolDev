@@ -165,6 +165,10 @@ export function parseJSON(content: string): ImportResult {
       p.maxValue = String(item.maxValue ?? item.max_value ?? item.max)
     if (item.formula)      p.formula      = String(item.formula)
     if (Array.isArray(item.tags)) p.tags  = (item.tags as unknown[]).map(String)
+    if (item.status) {
+      const s = String(item.status).toLowerCase()
+      if (['draft', 'approved', 'obsolete', 'review'].includes(s)) p.status = s
+    }
 
     parsed.push(p)
   }
@@ -316,20 +320,84 @@ export function parseMATLAB(content: string): ImportResult {
 }
 
 // ---------------------------------------------------------------------------
+// AUTOSAR A2L / ASAP2 parser (.a2l)
+// Extracts CHARACTERISTIC and MEASUREMENT blocks.
+// Recognised fields: name (first word after /begin CHARACTERISTIC),
+//   LONG_IDENTIFIER (description), PHYS_UNIT, LOWER_LIMIT, UPPER_LIMIT,
+//   DEFAULT_VALUE
+// ---------------------------------------------------------------------------
+export function parseA2L(content: string): ImportResult {
+  const warnings: string[] = []
+  const parsed: ParsedParam[] = []
+
+  // Match /begin CHARACTERISTIC ... /end CHARACTERISTIC blocks
+  // Also handle /begin MEASUREMENT blocks (read-only signals, but useful)
+  const blockRe = /\/begin\s+(CHARACTERISTIC|MEASUREMENT)\s+([\s\S]*?)\/end\s+\1/gi
+  let blockMatch: RegExpExecArray | null
+
+  while ((blockMatch = blockRe.exec(content)) !== null) {
+    const blockBody = blockMatch[2]
+
+    // First token of the block body is the identifier
+    const firstLineMatch = blockBody.match(/^\s*(\S+)/)
+    if (!firstLineMatch) continue
+    const rawName = firstLineMatch[1].replace(/"/g, '').trim()
+    if (!rawName) continue
+
+    // Convert UPPER_CASE_IDENTIFIER to a readable name
+    const name = rawName
+      .split('_')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ')
+      .trim()
+
+    const p: ParsedParam = { name }
+
+    // LONG_IDENTIFIER "description text"
+    const descMatch = blockBody.match(/LONG_IDENTIFIER\s+"([^"]*)"/)
+    if (descMatch) p.description = descMatch[1].trim()
+
+    // PHYS_UNIT "unit"
+    const unitMatch = blockBody.match(/PHYS_UNIT\s+"([^"]*)"/)
+    if (unitMatch) p.unit = unitMatch[1].trim()
+
+    // DEFAULT_VALUE value  or  DEFAULT_VALUE "value"
+    const defValMatch = blockBody.match(/DEFAULT_VALUE\s+"?([^"\s]+)"?/)
+    if (defValMatch) p.defaultValue = defValMatch[1].trim()
+
+    // LOWER_LIMIT value
+    const lowerMatch = blockBody.match(/LOWER_LIMIT\s+([-\d.eE+]+)/)
+    if (lowerMatch) p.minValue = lowerMatch[1].trim()
+
+    // UPPER_LIMIT value
+    const upperMatch = blockBody.match(/UPPER_LIMIT\s+([-\d.eE+]+)/)
+    if (upperMatch) p.maxValue = upperMatch[1].trim()
+
+    parsed.push(p)
+  }
+
+  if (parsed.length === 0) warnings.push('No CHARACTERISTIC or MEASUREMENT blocks found in A2L file')
+
+  return { parsed, warnings }
+}
+
+// ---------------------------------------------------------------------------
 // Format auto-detector (by file extension or content sniffing)
 // ---------------------------------------------------------------------------
-export function detectFormat(filename: string, content: string): 'csv' | 'json' | 'c_header' | 'matlab' | null {
+export function detectFormat(filename: string, content: string): 'csv' | 'json' | 'c_header' | 'matlab' | 'a2l' | null {
   const ext = filename.split('.').pop()?.toLowerCase()
   if (ext === 'csv') return 'csv'
   if (ext === 'json') return 'json'
   if (ext === 'h' || ext === 'hpp') return 'c_header'
   if (ext === 'm') return 'matlab'
+  if (ext === 'a2l') return 'a2l'
 
   // Sniff content
   const trimmed = content.trimStart()
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) return 'json'
   if (trimmed.startsWith('#ifndef') || trimmed.startsWith('#define') || trimmed.includes('#define ')) return 'c_header'
   if (trimmed.startsWith('%')) return 'matlab'
+  if (trimmed.includes('/begin PROJECT') || trimmed.includes('/begin CHARACTERISTIC')) return 'a2l'
 
   // CSV heuristic: first line contains commas and looks like headers
   const firstLine = trimmed.split('\n')[0]
@@ -347,6 +415,7 @@ export function importParameters(format: string, content: string): ImportResult 
     case 'json':     return parseJSON(content)
     case 'c_header': return parseCHeader(content)
     case 'matlab':   return parseMATLAB(content)
+    case 'a2l':      return parseA2L(content)
     default:
       return { parsed: [], warnings: [`Unknown import format: ${format}`] }
   }

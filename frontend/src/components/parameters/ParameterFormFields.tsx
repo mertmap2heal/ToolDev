@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query'
 import UnitPicker from './UnitPicker'
 import { TypeCombobox } from './TypeCombobox'
 import { validateParameterValue } from './validateParameterValue'
-import { evaluateFormula } from './evaluateFormula'
+import { evaluateFormula, detectCycles, extractParamRefs } from './evaluateFormula'
 import { parameterTypeService } from '../../services/parameterType.service'
 import { projectUnitService } from '../../services/projectUnit.service'
 import type { Parameter, ParameterValueFormat } from 'shared/types/engineering.types'
@@ -48,6 +48,8 @@ interface Props {
    * references in the formula preview and to display referenced parameter names.
    */
   allParameters?: Parameter[]
+  /** ID of the parameter being edited — used for cycle detection in formula preview */
+  currentParamId?: string
 }
 
 // ── type category detection ────────────────────────────────────────────────
@@ -190,9 +192,11 @@ function FormatHint({ fmt }: { fmt: ParameterValueFormat }) {
 function FormulaPreview({
   formula,
   allParameters,
+  currentParamId,
 }: {
   formula: string
   allParameters: Parameter[]
+  currentParamId?: string
 }) {
   const paramValues = allParameters.reduce<Record<string, number>>((acc, p) => {
     const v = parseFloat(p.defaultValue ?? '')
@@ -206,16 +210,45 @@ function FormulaPreview({
     .map(id => allParameters.find(p => p.id === id))
     .filter((p): p is Parameter => p !== undefined)
 
+  // Cycle detection: build a temporary param list with the current formula applied
+  const cycleWarnings = (() => {
+    const refs = extractParamRefs(formula)
+    if (refs.length === 0) return []
+    // Build snapshot: replace or add the current param's formula
+    const snapshot = allParameters.map(p =>
+      p.id === currentParamId ? { ...p, formula } : p
+    )
+    // If editing a new parameter (no ID yet), add a synthetic entry
+    if (currentParamId && !allParameters.some(p => p.id === currentParamId)) {
+      snapshot.push({ id: currentParamId, formula } as Parameter)
+    }
+    return detectCycles(snapshot)
+  })()
+
   return (
-    <div className="rounded-lg border p-3 space-y-2 bg-gray-50 dark:bg-gray-900/40 border-gray-200 dark:border-gray-700">
+    <div className={`rounded-lg border p-3 space-y-2 ${cycleWarnings.length > 0 ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700' : 'bg-gray-50 dark:bg-gray-900/40 border-gray-200 dark:border-gray-700'}`}>
       <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Formula preview</p>
+
+      {/* Cycle warning — shown above eval result */}
+      {cycleWarnings.length > 0 && (
+        <div className="space-y-1">
+          {cycleWarnings.map((w, i) => (
+            <div key={i} className="flex items-start gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+              <span className="text-xs text-red-700 dark:text-red-400">
+                <strong>Circular dependency:</strong> {w}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {error ? (
         <div className="flex items-center gap-1.5">
           <AlertCircle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
           <span className="text-xs text-amber-700 dark:text-amber-400">{error}</span>
         </div>
-      ) : result !== null ? (
+      ) : result !== null && cycleWarnings.length === 0 ? (
         <div className="flex items-center gap-1.5">
           <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
           <span className="text-xs font-mono font-semibold text-green-700 dark:text-green-400">
@@ -247,7 +280,7 @@ const INPUT_CLS = 'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 
 const INPUT_ERR_CLS = 'w-full px-4 py-2 border border-red-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm'
 const LABEL_CLS = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left'
 
-export function ParameterFormFields({ projectId, values, onChange, onManageTypes, onManageUnits, valueError, formula, allParameters }: Props) {
+export function ParameterFormFields({ projectId, values, onChange, onManageTypes, onManageUnits, valueError, formula, allParameters, currentParamId }: Props) {
   const [valueValidationError, setValueValidationError] = useState<string | null>(null)
 
   // Fetch type definitions to get valueFormat for the current type
@@ -499,7 +532,7 @@ export function ParameterFormFields({ projectId, values, onChange, onManageTypes
       )}
 
       {/* Formula live preview */}
-      {formula && allParameters && <FormulaPreview formula={formula} allParameters={allParameters} />}
+      {formula && allParameters && <FormulaPreview formula={formula} allParameters={allParameters} currentParamId={currentParamId} />}
     </div>
   )
 }
