@@ -154,14 +154,15 @@ function detectMappings(headers: string[]): Record<string, string | null> {
 // ---------------------------------------------------------------------------
 // Format helpers
 // ---------------------------------------------------------------------------
-type ImportFormat = 'csv' | 'json' | 'c_header' | 'matlab' | 'a2l'
+type ImportFormat = 'csv' | 'json' | 'c_header' | 'matlab' | 'a2l' | 'sysml_xmi'
 
 const FORMAT_LABELS: Record<ImportFormat, string> = {
-  csv:      'CSV (.csv)',
-  json:     'JSON (.json)',
-  c_header: 'C Header (.h / .hpp)',
-  matlab:   'MATLAB script (.m)',
-  a2l:      'AUTOSAR A2L (.a2l)',
+  csv:       'CSV (.csv)',
+  json:      'JSON (.json)',
+  c_header:  'C Header (.h / .hpp)',
+  matlab:    'MATLAB script (.m)',
+  a2l:       'AUTOSAR A2L (.a2l)',
+  sysml_xmi: 'SysML / XMI (.xmi, .xml)',
 }
 
 function detectFormatFromFile(filename: string): ImportFormat | null {
@@ -171,6 +172,8 @@ function detectFormatFromFile(filename: string): ImportFormat | null {
   if (ext === 'h' || ext === 'hpp') return 'c_header'
   if (ext === 'm')    return 'matlab'
   if (ext === 'a2l')  return 'a2l'
+  if (ext === 'xmi')  return 'sysml_xmi'
+  if (ext === 'xml')  return 'sysml_xmi'  // assumed SysML if .xml chosen
   return null
 }
 
@@ -538,7 +541,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                 <div>
                   <p className="text-sm font-medium text-blue-800 dark:text-blue-200">Supported formats</p>
                   <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
-                    CSV (with column mapping), JSON, C Header (.h/.hpp), MATLAB script (.m), AUTOSAR A2L (.a2l)
+                    CSV (with column mapping), JSON, C Header (.h/.hpp), MATLAB (.m), AUTOSAR A2L (.a2l), SysML/XMI (.xmi/.xml)
                   </p>
                 </div>
                 <button
@@ -566,7 +569,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".csv,.json,.h,.hpp,.m,.a2l"
+                    accept=".csv,.json,.h,.hpp,.m,.a2l,.xmi,.xml"
                     onChange={handleFileInput}
                     className="hidden"
                   />
@@ -592,7 +595,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">or click to browse</p>
                       </div>
                       <p className="text-xs text-gray-400 dark:text-gray-500">
-                        Accepts .csv &middot; .json &middot; .h / .hpp &middot; .m &middot; .a2l
+                        Accepts .csv &middot; .json &middot; .h/.hpp &middot; .m &middot; .a2l &middot; .xmi/.xml
                       </p>
                     </>
                   )}

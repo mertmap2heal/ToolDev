@@ -561,3 +561,34 @@ test.describe('Parameters — Export round-trip', () => {
     await expect(page.locator('table').getByText(new RegExp(`${prefix}_`))).toBeVisible({ timeout: 8_000 })
   })
 })
+
+// ---------------------------------------------------------------------------
+// SysML / XMI import tests
+// ---------------------------------------------------------------------------
+test.describe('Parameters — SysML/XMI Import', () => {
+  test('XMI file is accepted and imports parameters', async ({ page, projectId }) => {
+    const xmiPath = 'C:/Users/chris/Downloads/import_test_sysml.xmi'
+
+    await page.goto(`/projects/${projectId}/parameters`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: /^import$/i }).click()
+
+    const modal = page.locator('.fixed.inset-0')
+    await expect(modal).toBeVisible({ timeout: 5_000 })
+
+    // Upload the XMI file
+    await modal.locator('input[type="file"]').setInputFiles(xmiPath)
+
+    // Should detect SysML/XMI format and show Import button (no preview step)
+    await expect(modal.getByText(/sysml.*xmi|xmi.*sysml/i)).toBeVisible({ timeout: 5_000 })
+    await modal.getByRole('button', { name: /^import$/i }).click()
+
+    // Should complete successfully
+    await expect(modal.getByText(/import complete/i)).toBeVisible({ timeout: 15_000 })
+    await expect(modal.getByText(/created/i)).toBeVisible()
+    await modal.getByRole('button', { name: /done/i }).click()
+
+    // At least one imported parameter should appear in the table
+    await expect(page.locator('table').getByText(/max_torque|wheel_radius|nominal_voltage/i)).toBeVisible({ timeout: 8_000 })
+  })
+})
