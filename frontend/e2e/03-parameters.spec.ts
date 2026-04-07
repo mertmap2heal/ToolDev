@@ -418,6 +418,10 @@ test.describe('Parameters — Settings', () => {
     const unitRow = page.locator('div').filter({ hasText: unitSymbol }).filter({ has: page.getByRole('button') }).first()
     await unitRow.locator('button').last().click()
     await expect(page.getByText(unitSymbol)).not.toBeVisible({ timeout: 5_000 })
+  })
+})
+
+// ---------------------------------------------------------------------------
 // CSV Import tests
 // ---------------------------------------------------------------------------
 test.describe('Parameters — CSV Import', () => {
