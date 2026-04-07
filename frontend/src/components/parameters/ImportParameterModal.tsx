@@ -361,6 +361,13 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
   const nameColIndex = previewHeaders.findIndex(h => columnMappings[h] === 'name')
   const formulaColIndex = previewHeaders.findIndex(h => columnMappings[h] === 'formula')
 
+  // Only show columns in the data preview that have at least one non-empty value
+  // across the preview rows. Hides empty formula/tolerance/etc. columns.
+  const visiblePreviewHeaders = useMemo(
+    () => previewHeaders.filter((_, ci) => previewRows.some(row => (row[ci] ?? '').trim() !== '')),
+    [previewHeaders, previewRows]
+  )
+
   // For all rows (not just preview), count how many would be updates
   const { allRows } = useMemo(() => {
     const { rows } = parseCsv(csvContent)
@@ -701,9 +708,13 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                           <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">
                             Status
                           </th>
-                          {previewHeaders.map(h => (
+                          {visiblePreviewHeaders.map(h => (
                             <th key={h} className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap">
-                              {h}
+                              {columnMappings[h] ? (
+                                <span className="text-green-700 dark:text-green-400">{CANONICAL_LABELS[columnMappings[h]!] ?? columnMappings[h]}</span>
+                              ) : (
+                                <span className="text-gray-400 line-through">{h}</span>
+                              )}
                             </th>
                           ))}
                         </tr>
@@ -756,7 +767,8 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                                 </div>
                               </td>
 
-                              {previewHeaders.map((h, ci) => {
+                              {visiblePreviewHeaders.map((h) => {
+                                const ci = previewHeaders.indexOf(h)
                                 const canonical = columnMappings[h]
                                 const cellValue = row[ci] ?? ''
 

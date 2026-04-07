@@ -687,25 +687,9 @@ export default function ParametersPage() {
             {storedGitConfig && <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: isStale ? '#f59e0b' : '#22c55e', marginLeft: 2 }} />}
           </button>
 
-          {/* Import CSV (dedicated modal with preview) */}
+          {/* Import — opens the guided CSV import modal */}
           <button
             onClick={() => setIsCsvImportOpen(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
-              border: '1px solid var(--theme-border)',
-              backgroundColor: 'var(--theme-surface)',
-              color: 'var(--theme-text-muted)',
-              cursor: 'pointer',
-            }}
-          >
-            <Upload size={13} />
-            Import CSV
-          </button>
-
-          {/* Import (all formats) */}
-          <button
-            onClick={() => { resetImport(); setIsImportOpen(true) }}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
