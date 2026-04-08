@@ -188,11 +188,27 @@ export default function ParametersPage() {
   // Debounced search — 300 ms delay before filtering
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const handleSearchChange = (value: string) => {
     setSearchQuery(value)
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
     searchTimerRef.current = setTimeout(() => setDebouncedSearch(value), 300)
   }
+
+  // Ctrl+F / Cmd+F focuses search and prevents browser find dialog
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        if (searchInputRef.current) {
+          e.preventDefault()
+          searchInputRef.current.focus()
+          searchInputRef.current.select()
+        }
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [])
 
   // Table sort state — sort and order are passed to the backend query
   const [sortField, setSortField] = useState<'name' | 'createdAt' | 'updatedAt'>('updatedAt')
@@ -823,7 +839,16 @@ export default function ParametersPage() {
 
       {/* ── Toolbar ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h2 className="text-lg font-bold" style={{ color: 'var(--theme-text)' }}>Parameters</h2>
+        <h2 className="text-lg font-bold" style={{ color: 'var(--theme-text)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          Parameters
+          {!isLoading && (
+            <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--theme-text-muted)', background: 'var(--theme-sidebar-item-active)', padding: '2px 7px', borderRadius: 10 }}>
+              {filteredParameters.length !== parameters.length
+                ? `${filteredParameters.length} / ${parameters.length}`
+                : parameters.length}
+            </span>
+          )}
+        </h2>
         <div className="flex flex-wrap items-center gap-2">
           {projectId && <SafetyLinkPanel variant="relevance" count={1} />}
 
@@ -1079,8 +1104,9 @@ export default function ParametersPage() {
         <div style={{ position: 'relative' }}>
           <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--theme-text-muted)' }} />
           <input
+            ref={searchInputRef}
             type="text"
-            placeholder="Search parameters…"
+            placeholder="Search parameters… (Ctrl+F)"
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
             style={{
