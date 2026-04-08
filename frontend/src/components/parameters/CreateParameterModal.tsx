@@ -1,5 +1,6 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { X } from 'lucide-react'
+import { evaluateFormula } from './evaluateFormula'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
@@ -205,6 +206,18 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
     }
   }
 
+  // Live formula evaluation — re-runs whenever formula text or parameter list changes
+  const liveFormulaResult = useMemo(() => {
+    const formula = formData.formula?.trim()
+    if (!formula) return null
+    const paramValues: Record<string, number> = {}
+    for (const p of allParameters) {
+      const v = parseFloat(p.defaultValue ?? '')
+      if (!isNaN(v)) paramValues[p.id] = v
+    }
+    return evaluateFormula(formula, paramValues)
+  }, [formData.formula, allParameters])
+
   if (!isOpen) return null
 
   return (
@@ -342,6 +355,17 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 Reference other parameters using <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{'{{param:ID}}'}</code> syntax.
               </p>
+            )}
+            {!formulaError && liveFormulaResult && (
+              liveFormulaResult.result !== null ? (
+                <p className="mt-1 text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                  Live result: {liveFormulaResult.result.toPrecision(6).replace(/\.?0+$/, '')}
+                </p>
+              ) : liveFormulaResult.error && !liveFormulaResult.error.includes('Unknown parameter') ? (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  {liveFormulaResult.error}
+                </p>
+              ) : null
             )}
           </div>
 
