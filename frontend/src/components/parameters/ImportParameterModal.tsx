@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react'
 import { X, Upload, Download, CheckCircle, AlertTriangle, FileText, ChevronRight, FunctionSquare } from 'lucide-react'
+import { evaluateFormula } from './evaluateFormula'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
 
@@ -440,6 +441,16 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
     const map = new Map<string, (typeof existingParams)[0]>()
     for (const p of existingParams ?? []) {
       map.set(p.name.toLowerCase(), p)
+    }
+    return map
+  }, [existingParams])
+
+  // Numeric values of existing project parameters — used for live formula evaluation in preview
+  const existingParamValues = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const p of existingParams ?? []) {
+      const v = parseFloat(p.defaultValue ?? '')
+      if (!isNaN(v)) map[p.id] = v
     }
     return map
   }, [existingParams])
@@ -941,14 +952,20 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                                     </td>
                                   )
                                 }
-                                // Formula column: show with icon
+                                // Formula column: show with icon + live evaluation against existing params
                                 if (canonical === 'formula' && cellValue) {
+                                  const evalResult = evaluateFormula(cellValue, existingParamValues)
                                   return (
-                                    <td key={ci} className="px-3 py-1.5 whitespace-nowrap max-w-[160px]">
+                                    <td key={ci} className="px-3 py-1.5 whitespace-nowrap max-w-[200px]">
                                       <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 font-mono text-xs truncate">
                                         <FunctionSquare size={11} className="flex-shrink-0" />
                                         {cellValue}
                                       </span>
+                                      {evalResult.result !== null && (
+                                        <span className="ml-1 text-xs font-medium text-indigo-500 dark:text-indigo-400">
+                                          = {String(parseFloat(evalResult.result.toPrecision(6)))}
+                                        </span>
+                                      )}
                                     </td>
                                   )
                                 }
