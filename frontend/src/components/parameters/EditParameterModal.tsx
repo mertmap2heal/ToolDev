@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
-import { X } from 'lucide-react'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { X, Copy, Check } from 'lucide-react'
+import { evaluateFormula } from './evaluateFormula'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
@@ -30,6 +31,7 @@ export default function EditParameterModal({
   const [valueError, setValueError] = useState<string | null>(null)
   const [formulaError, setFormulaError] = useState<string | null>(null)
   const [platforms, setPlatforms] = useState<string[] | null>(null)
+  const [copiedField, setCopiedField] = useState<'id' | 'name' | null>(null)
 
   const { data: types } = useQuery({
     queryKey: ['parameter-types', projectId],
@@ -225,6 +227,24 @@ export default function EditParameterModal({
     }
   }
 
+  // Live formula evaluation — re-runs whenever formula text or parameter list changes
+  const liveFormulaResult = useMemo(() => {
+    const formula = formData.formula?.trim()
+    if (!formula) return null
+    const paramValues: Record<string, number> = {}
+    for (const p of allParameters) {
+      const v = parseFloat(p.defaultValue ?? '')
+      if (!isNaN(v)) paramValues[p.id] = v
+    }
+    return evaluateFormula(formula, paramValues)
+  }, [formData.formula, allParameters])
+
+  const handleCopy = (text: string, field: 'id' | 'name') => {
+    navigator.clipboard.writeText(text).catch(() => {})
+    setCopiedField(field)
+    setTimeout(() => setCopiedField(null), 1500)
+  }
+
   if (!isOpen || !parameter) return null
 
   return (
@@ -232,9 +252,35 @@ export default function EditParameterModal({
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Edit Parameter: @{parameter.name}@
-          </h2>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Edit Parameter: @{parameter.name}@
+            </h2>
+            <div className="flex items-center gap-3 mt-1">
+              <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
+                <span>ID: <code className="font-mono">{parameter.id.slice(0, 8)}…</code></span>
+                <button
+                  type="button"
+                  title="Copy full ID"
+                  onClick={() => handleCopy(parameter.id, 'id')}
+                  className="p-0.5 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                >
+                  {copiedField === 'id' ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+                </button>
+              </span>
+              <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
+                <span>Copy name</span>
+                <button
+                  type="button"
+                  title="Copy parameter name"
+                  onClick={() => handleCopy(parameter.name, 'name')}
+                  className="p-0.5 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                >
+                  {copiedField === 'name' ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+                </button>
+              </span>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             {draftBanner}
             <button
@@ -367,6 +413,17 @@ export default function EditParameterModal({
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 Reference other parameters using <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{'{{param:ID}}'}</code> syntax.
               </p>
+            )}
+            {!formulaError && liveFormulaResult && (
+              liveFormulaResult.result !== null ? (
+                <p className="mt-1 text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                  Live result: {liveFormulaResult.result.toPrecision(6).replace(/\.?0+$/, '')}
+                </p>
+              ) : liveFormulaResult.error && !liveFormulaResult.error.includes('Unknown parameter') ? (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  {liveFormulaResult.error}
+                </p>
+              ) : null
             )}
           </div>
 
