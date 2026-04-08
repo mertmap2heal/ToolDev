@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from 'react'
+import React, { useState, useRef, useCallback, useMemo } from 'react'
 import { X, Upload, Download, CheckCircle, AlertTriangle, FileText, ChevronRight, FunctionSquare } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
@@ -230,6 +230,8 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
   // Per-row overrides: rowIndex -> { skip?: boolean, rename?: string }
   const [rowOverrides, setRowOverrides] = useState<Record<number, { skip?: boolean; rename?: string }>>({})
   const [editingRename, setEditingRename] = useState<number | null>(null)
+  // Rows for which the diff panel is expanded
+  const [expandedDiffRows, setExpandedDiffRows] = useState<Set<number>>(new Set())
 
   const importMutation = useMutation({
     mutationFn: (content: string) =>
@@ -275,6 +277,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
     setImportResult(null)
     setRowOverrides({})
     setEditingRename(null)
+    setExpandedDiffRows(new Set())
     onClose()
   }
 
@@ -395,6 +398,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
     setImportResult(null)
     setRowOverrides({})
     setEditingRename(null)
+    setExpandedDiffRows(new Set())
   }
 
   // -------------------------------------------------------------------------
@@ -452,6 +456,25 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
     if (get('formula') && get('formula') !== (existing.formula ?? '')) return true
     if (get('status') && get('status') !== (existing.status ?? '')) return true
     return false
+  }, [canonicalToColIndex, existingParams])
+
+  // Build a list of changed fields for a given row vs existing param
+  const getRowDiff = useCallback((row: string[], existing: (typeof existingParams)[0]): Array<{ label: string; old: string; new: string }> => {
+    const get = (canon: string) => (row[canonicalToColIndex[canon] ?? -1] ?? '').trim()
+    const FIELDS: Array<{ canon: string; label: string; existing: string | null | undefined }> = [
+      { canon: 'description', label: 'Description',  existing: existing.description },
+      { canon: 'data_type',   label: 'Data type',    existing: existing.dataType },
+      { canon: 'value',       label: 'Value',        existing: existing.defaultValue },
+      { canon: 'unit',        label: 'Unit',         existing: existing.unit },
+      { canon: 'tolerance',   label: 'Tolerance',    existing: existing.tolerance },
+      { canon: 'min',         label: 'Min',          existing: existing.minValue },
+      { canon: 'max',         label: 'Max',          existing: existing.maxValue },
+      { canon: 'formula',     label: 'Formula',      existing: existing.formula },
+      { canon: 'status',      label: 'Status',       existing: existing.status },
+    ]
+    return FIELDS
+      .filter(f => get(f.canon) && get(f.canon) !== (f.existing ?? ''))
+      .map(f => ({ label: f.label, old: f.existing ?? '—', new: get(f.canon) }))
   }, [canonicalToColIndex, existingParams])
 
   const { overwriteCount, noChangeCount } = useMemo(() => {
@@ -788,9 +811,12 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                           const isUpdate = isExisting && rowHasChanges(row, existingParam!)
                           const isNoChange = isExisting && !isUpdate
                           const hasFormula = formulaColIndex >= 0 && !!(row[formulaColIndex] ?? '').trim()
+                          const isDiffExpanded = isUpdate && !isSkipped && expandedDiffRows.has(ri)
+                          const diffEntries = isDiffExpanded && existingParam ? getRowDiff(row, existingParam) : []
 
                           return (
-                            <tr key={ri} className={isSkipped ? 'opacity-40 bg-gray-50 dark:bg-gray-900/20' : isUpdate ? 'bg-amber-50 dark:bg-amber-900/10' : isNoChange ? 'bg-gray-50 dark:bg-gray-900/20 opacity-60' : 'bg-white dark:bg-gray-800'}>
+                            <React.Fragment key={ri}>
+                            <tr className={isSkipped ? 'opacity-40 bg-gray-50 dark:bg-gray-900/20' : isUpdate ? 'bg-amber-50 dark:bg-amber-900/10' : isNoChange ? 'bg-gray-50 dark:bg-gray-900/20 opacity-60' : 'bg-white dark:bg-gray-800'}>
                               {/* Status + actions column */}
                               <td className="px-3 py-1.5 whitespace-nowrap">
                                 <div className="flex items-center gap-1.5">
@@ -812,10 +838,19 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                                       — same
                                     </span>
                                   ) : isUpdate ? (
-                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                                    <button
+                                      type="button"
+                                      onClick={() => setExpandedDiffRows(prev => {
+                                        const next = new Set(prev)
+                                        if (next.has(ri)) next.delete(ri); else next.add(ri)
+                                        return next
+                                      })}
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors"
+                                      title="Click to see field-level diff"
+                                    >
                                       <AlertTriangle size={10} />
-                                      Update
-                                    </span>
+                                      Update {expandedDiffRows.has(ri) ? '▲' : '▼'}
+                                    </button>
                                   ) : (
                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
                                       <CheckCircle size={10} />
@@ -896,6 +931,35 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                                 )
                               })}
                             </tr>
+                            {/* Expandable diff panel for overwrite rows */}
+                            {diffEntries.length > 0 && (
+                              <tr className="bg-amber-50/60 dark:bg-amber-900/5 border-b border-amber-200 dark:border-amber-800">
+                                <td className="px-3 py-1" />
+                                <td colSpan={visiblePreviewHeaders.length} className="px-3 py-1.5">
+                                  <div className="overflow-x-auto">
+                                    <table className="min-w-full text-xs border-collapse">
+                                      <thead>
+                                        <tr className="text-gray-500 dark:text-gray-400">
+                                          <th className="pr-4 py-0.5 text-left font-medium w-24">Field</th>
+                                          <th className="pr-6 py-0.5 text-left font-medium text-red-600 dark:text-red-400">Before</th>
+                                          <th className="py-0.5 text-left font-medium text-green-600 dark:text-green-400">After</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {diffEntries.map(d => (
+                                          <tr key={d.label}>
+                                            <td className="pr-4 py-0.5 font-medium text-gray-600 dark:text-gray-300 whitespace-nowrap">{d.label}</td>
+                                            <td className="pr-6 py-0.5 text-red-700 dark:text-red-400 font-mono truncate max-w-[200px]" title={d.old}>{d.old}</td>
+                                            <td className="py-0.5 text-green-700 dark:text-green-400 font-mono truncate max-w-[200px]" title={d.new}>{d.new}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                            </React.Fragment>
                           )
                         })}
                       </tbody>
