@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query'
 import UnitPicker from './UnitPicker'
 import { TypeCombobox } from './TypeCombobox'
 import { validateParameterValue } from './validateParameterValue'
-import { evaluateFormula, detectCycles, extractParamRefs } from './evaluateFormula'
+import { evaluateFormula, detectCycles, extractParamRefs, FORMULA_CONSTANTS } from './evaluateFormula'
 import { parameterTypeService } from '../../services/parameterType.service'
 import { projectUnitService } from '../../services/projectUnit.service'
 import type { Parameter, ParameterValueFormat } from 'shared/types/engineering.types'
@@ -270,6 +270,24 @@ function FormulaPreview({
           ))}
         </div>
       )}
+
+      {/* Named constants cheatsheet */}
+      <details className="pt-0.5">
+        <summary className="text-xs text-gray-400 dark:text-gray-500 cursor-pointer select-none hover:text-gray-600 dark:hover:text-gray-300">
+          Available constants
+        </summary>
+        <div className="flex flex-wrap gap-1 pt-1">
+          {Object.entries(FORMULA_CONSTANTS).map(([name, value]) => (
+            <span
+              key={name}
+              className="px-1.5 py-0.5 rounded text-xs bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 font-mono border border-amber-200 dark:border-amber-700"
+              title={String(value)}
+            >
+              {name} = {value < 1e-3 || value > 1e6 ? value.toExponential(3) : value}
+            </span>
+          ))}
+        </div>
+      </details>
     </div>
   )
 }

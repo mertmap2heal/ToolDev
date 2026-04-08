@@ -239,6 +239,41 @@ export default function ParametersPage() {
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   )
 
+  // Column visibility — persisted in localStorage per project
+  const COL_STORAGE_KEY = projectId ? `param-cols-${projectId}` : null
+  type ColKey = 'description' | 'type' | 'value' | 'computed' | 'unit' | 'source' | 'status' | 'usedIn' | 'created'
+  const ALL_COLS: { key: ColKey; label: string }[] = [
+    { key: 'description', label: 'Description' },
+    { key: 'type',        label: 'Type' },
+    { key: 'value',       label: 'Value' },
+    { key: 'computed',    label: 'Computed' },
+    { key: 'unit',        label: 'Unit' },
+    { key: 'source',      label: 'Source' },
+    { key: 'status',      label: 'Status' },
+    { key: 'usedIn',      label: 'Used in' },
+    { key: 'created',     label: 'Created' },
+  ]
+  const DEFAULT_COLS: ColKey[] = ['description', 'type', 'value', 'computed', 'unit', 'source', 'status', 'usedIn', 'created']
+  const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(() => {
+    if (!COL_STORAGE_KEY) return new Set(DEFAULT_COLS)
+    try {
+      const stored = localStorage.getItem(COL_STORAGE_KEY)
+      if (stored) return new Set(JSON.parse(stored) as ColKey[])
+    } catch { /* ignore */ }
+    return new Set(DEFAULT_COLS)
+  })
+  const [isColMenuOpen, setIsColMenuOpen] = useState(false)
+  const colMenuRef = useRef<HTMLDivElement>(null)
+  const toggleCol = (key: ColKey) => {
+    setVisibleCols(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) { if (next.size > 1) next.delete(key) } // keep at least 1
+      else next.add(key)
+      if (COL_STORAGE_KEY) localStorage.setItem(COL_STORAGE_KEY, JSON.stringify([...next]))
+      return next
+    })
+  }
+
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
@@ -313,11 +348,14 @@ export default function ParametersPage() {
     }
   }
 
-  // Close export dropdown on outside click
+  // Close export dropdown and column menu on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
         setIsExportOpen(false)
+      }
+      if (colMenuRef.current && !colMenuRef.current.contains(e.target as Node)) {
+        setIsColMenuOpen(false)
       }
     }
     document.addEventListener('mousedown', handler)
@@ -844,6 +882,64 @@ export default function ParametersPage() {
             <Upload size={13} />
             Import
           </button>
+
+          {/* Column visibility toggle */}
+          <div ref={colMenuRef} style={{ position: 'relative' }}>
+            <button
+              onClick={() => setIsColMenuOpen(v => !v)}
+              title="Show / hide columns"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
+                border: '1px solid var(--theme-border)',
+                backgroundColor: 'var(--theme-surface)',
+                color: 'var(--theme-text-muted)',
+                cursor: 'pointer',
+              }}
+            >
+              <Layers size={13} />
+              Columns
+              {visibleCols.size < ALL_COLS.length && (
+                <span style={{ padding: '0 4px', borderRadius: 8, fontSize: 10, fontWeight: 700, backgroundColor: 'var(--theme-accent)', color: '#fff' }}>
+                  {ALL_COLS.length - visibleCols.size} hidden
+                </span>
+              )}
+            </button>
+            {isColMenuOpen && (
+              <div style={{
+                position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 200,
+                width: 180, borderRadius: 8, padding: '6px 0',
+                border: '1px solid var(--theme-border)',
+                backgroundColor: 'var(--theme-surface)',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+              }}>
+                <div style={{ padding: '4px 12px 6px', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--theme-text-muted)', borderBottom: '1px solid var(--theme-border)', marginBottom: 4 }}>
+                  Visible columns
+                </div>
+                {ALL_COLS.map(col => (
+                  <label key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', cursor: 'pointer', fontSize: 12, color: 'var(--theme-text)' }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  >
+                    <input type="checkbox" checked={visibleCols.has(col.key)} onChange={() => toggleCol(col.key)} style={{ cursor: 'pointer' }} />
+                    {col.label}
+                  </label>
+                ))}
+                <div style={{ borderTop: '1px solid var(--theme-border)', marginTop: 4, padding: '5px 12px' }}>
+                  <button
+                    onClick={() => {
+                      const all = new Set(DEFAULT_COLS)
+                      setVisibleCols(all)
+                      if (COL_STORAGE_KEY) localStorage.setItem(COL_STORAGE_KEY, JSON.stringify([...all]))
+                    }}
+                    style={{ fontSize: 11, color: 'var(--theme-accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                  >
+                    Reset to default
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Export dropdown */}
           <div ref={exportRef} style={{ position: 'relative' }}>
@@ -1414,18 +1510,20 @@ export default function ParametersPage() {
                   />
                 </th>
                 {([
-                  { label: 'Parameter', field: 'name' as const },
-                  { label: 'Description', field: null },
-                  { label: 'Type', field: null },
-                  { label: 'Value', field: null },
-                  { label: 'Computed', field: null },
-                  { label: 'Unit', field: null },
-                  { label: 'Source', field: null },
-                  { label: 'Status', field: null },
-                  { label: 'Used in', field: null },
-                  { label: 'Created', field: 'createdAt' as const },
-                  { label: '', field: null },
-                ] as Array<{ label: string; field: 'name' | 'createdAt' | 'updatedAt' | null }>).map(h => (
+                  { label: 'Parameter',   field: 'name' as const,     colKey: null },
+                  { label: 'Description', field: null,                 colKey: 'description' as ColKey },
+                  { label: 'Type',        field: null,                 colKey: 'type' as ColKey },
+                  { label: 'Value',       field: null,                 colKey: 'value' as ColKey },
+                  { label: 'Computed',    field: null,                 colKey: 'computed' as ColKey },
+                  { label: 'Unit',        field: null,                 colKey: 'unit' as ColKey },
+                  { label: 'Source',      field: null,                 colKey: 'source' as ColKey },
+                  { label: 'Status',      field: null,                 colKey: 'status' as ColKey },
+                  { label: 'Used in',     field: null,                 colKey: 'usedIn' as ColKey },
+                  { label: 'Created',     field: 'createdAt' as const, colKey: 'created' as ColKey },
+                  { label: '',            field: null,                 colKey: null },
+                ] as Array<{ label: string; field: 'name' | 'createdAt' | 'updatedAt' | null; colKey: ColKey | null }>)
+                .filter(h => h.colKey === null || visibleCols.has(h.colKey))
+                .map(h => (
                   <th
                     key={h.label || 'actions'}
                     onClick={h.field ? () => handleSortBy(h.field!) : undefined}
@@ -1453,9 +1551,9 @@ export default function ParametersPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={12} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>Loading parameters…</td></tr>
+                <tr><td colSpan={2 + visibleCols.size} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>Loading parameters…</td></tr>
               ) : filteredParameters.length === 0 ? (
-                <tr><td colSpan={12} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>
+                <tr><td colSpan={2 + visibleCols.size} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>
                   {parameters.length === 0 ? 'No parameters yet. Create one or import a file.' : 'No parameters match your filters.'}
                 </td></tr>
               ) : filteredParameters.map((param) => {
@@ -1485,95 +1583,113 @@ export default function ParametersPage() {
                       {param.name}
                     </button>
                   </td>
-                  <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)', maxWidth: 200 }}>
-                    <span style={{ overflow: 'hidden', display: 'block', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={param.description ?? ''}>
-                      {param.description || '—'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)' }}>{param.dataType || '—'}</td>
-                  <td
-                    style={{ padding: '8px 12px', fontFamily: 'monospace', color: 'var(--theme-text)', minWidth: 80 }}
-                    onClick={e => {
-                      if (!isInlineEditing) {
-                        e.stopPropagation()
-                        setInlineEditingId(param.id)
-                        setInlineEditValue(param.defaultValue ?? '')
-                      }
-                    }}
-                    title={isInlineEditing ? undefined : 'Click to edit value'}
-                  >
-                    {isInlineEditing ? (
-                      <input
-                        autoFocus
-                        value={inlineEditValue}
-                        onChange={e => setInlineEditValue(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') { e.stopPropagation(); saveInlineValue(param.id) }
-                          if (e.key === 'Escape') { e.stopPropagation(); setInlineEditingId(null) }
-                        }}
-                        onClick={e => e.stopPropagation()}
-                        style={{
-                          width: '100%', padding: '2px 5px', fontFamily: 'monospace', fontSize: 12,
-                          border: '1px solid var(--theme-accent)', borderRadius: 4,
-                          backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)',
-                          outline: 'none',
-                        }}
-                      />
-                    ) : (
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <span>{param.defaultValue || '—'}</span>
-                        {param.formula && (
-                          <span
-                            title={param.formula}
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                              padding: '1px 5px', borderRadius: 4, fontSize: 10, fontWeight: 700,
-                              fontFamily: 'serif', fontStyle: 'italic',
-                              backgroundColor: 'rgba(245,158,11,0.12)',
-                              color: '#b45309',
-                              border: '1px solid rgba(245,158,11,0.3)',
-                              cursor: 'default',
-                              flexShrink: 0,
-                            }}
-                          >
-                            f
-                          </span>
-                        )}
+                  {visibleCols.has('description') && (
+                    <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)', maxWidth: 200 }}>
+                      <span style={{ overflow: 'hidden', display: 'block', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={param.description ?? ''}>
+                        {param.description || '—'}
                       </span>
-                    )}
-                  </td>
-                  <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 11, color: computedVal ? 'var(--theme-accent)' : 'var(--theme-text-muted)' }}>
-                    {computedVal ?? (param.formula ? '…' : '—')}
-                  </td>
-                  <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)' }}>{param.unit || '—'}</td>
-                  <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)' }}>
-                    {param.sourceFunction ? (
-                      <button type="button" onClick={() => setViewingSource(param)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-accent)', fontSize: 12, padding: 0 }}>
-                        {param.sourceFunction.functionId || 'N/A'}: {param.sourceFunction.name}
-                      </button>
-                    ) : '—'}
-                  </td>
-                  <td style={{ padding: '8px 12px' }}>
-                    <span style={{
-                      padding: '2px 7px', borderRadius: 10, fontSize: 10, fontWeight: 600,
-                      backgroundColor: (param.status ?? 'draft') === 'approved' ? 'rgba(34,197,94,0.12)' : (param.status ?? 'draft') === 'obsolete' ? 'var(--theme-sidebar-item-active)' : 'rgba(245,158,11,0.12)',
-                      color: (param.status ?? 'draft') === 'approved' ? '#15803d' : (param.status ?? 'draft') === 'obsolete' ? 'var(--theme-text-muted)' : '#b45309',
-                    }}>
-                      {param.status ?? 'draft'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '8px 12px' }}>
-                    {(param as ParameterWithUsage).requirementCount != null ? (
-                      <button type="button" onClick={() => setDetailParameter(param)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-accent)', fontWeight: 600, fontSize: 12, padding: 0 }}>
-                        {(param as ParameterWithUsage).requirementCount}
-                      </button>
-                    ) : '—'}
-                  </td>
-                  <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)', whiteSpace: 'nowrap' }}>
-                    {format(new Date(param.createdAt), 'MMM dd, yyyy')}
-                  </td>
+                    </td>
+                  )}
+                  {visibleCols.has('type') && (
+                    <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)' }}>{param.dataType || '—'}</td>
+                  )}
+                  {visibleCols.has('value') && (
+                    <td
+                      style={{ padding: '8px 12px', fontFamily: 'monospace', color: 'var(--theme-text)', minWidth: 80 }}
+                      onClick={e => {
+                        if (!isInlineEditing) {
+                          e.stopPropagation()
+                          setInlineEditingId(param.id)
+                          setInlineEditValue(param.defaultValue ?? '')
+                        }
+                      }}
+                      title={isInlineEditing ? undefined : 'Click to edit value'}
+                    >
+                      {isInlineEditing ? (
+                        <input
+                          autoFocus
+                          value={inlineEditValue}
+                          onChange={e => setInlineEditValue(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') { e.stopPropagation(); saveInlineValue(param.id) }
+                            if (e.key === 'Escape') { e.stopPropagation(); setInlineEditingId(null) }
+                          }}
+                          onClick={e => e.stopPropagation()}
+                          style={{
+                            width: '100%', padding: '2px 5px', fontFamily: 'monospace', fontSize: 12,
+                            border: '1px solid var(--theme-accent)', borderRadius: 4,
+                            backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)',
+                            outline: 'none',
+                          }}
+                        />
+                      ) : (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <span>{param.defaultValue || '—'}</span>
+                          {param.formula && (
+                            <span
+                              title={param.formula}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                padding: '1px 5px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                                fontFamily: 'serif', fontStyle: 'italic',
+                                backgroundColor: 'rgba(245,158,11,0.12)',
+                                color: '#b45309',
+                                border: '1px solid rgba(245,158,11,0.3)',
+                                cursor: 'default',
+                                flexShrink: 0,
+                              }}
+                            >
+                              f
+                            </span>
+                          )}
+                        </span>
+                      )}
+                    </td>
+                  )}
+                  {visibleCols.has('computed') && (
+                    <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 11, color: computedVal ? 'var(--theme-accent)' : 'var(--theme-text-muted)' }}>
+                      {computedVal ?? (param.formula ? '…' : '—')}
+                    </td>
+                  )}
+                  {visibleCols.has('unit') && (
+                    <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)' }}>{param.unit || '—'}</td>
+                  )}
+                  {visibleCols.has('source') && (
+                    <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)' }}>
+                      {param.sourceFunction ? (
+                        <button type="button" onClick={() => setViewingSource(param)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-accent)', fontSize: 12, padding: 0 }}>
+                          {param.sourceFunction.functionId || 'N/A'}: {param.sourceFunction.name}
+                        </button>
+                      ) : '—'}
+                    </td>
+                  )}
+                  {visibleCols.has('status') && (
+                    <td style={{ padding: '8px 12px' }}>
+                      <span style={{
+                        padding: '2px 7px', borderRadius: 10, fontSize: 10, fontWeight: 600,
+                        backgroundColor: (param.status ?? 'draft') === 'approved' ? 'rgba(34,197,94,0.12)' : (param.status ?? 'draft') === 'obsolete' ? 'var(--theme-sidebar-item-active)' : 'rgba(245,158,11,0.12)',
+                        color: (param.status ?? 'draft') === 'approved' ? '#15803d' : (param.status ?? 'draft') === 'obsolete' ? 'var(--theme-text-muted)' : '#b45309',
+                      }}>
+                        {param.status ?? 'draft'}
+                      </span>
+                    </td>
+                  )}
+                  {visibleCols.has('usedIn') && (
+                    <td style={{ padding: '8px 12px' }}>
+                      {(param as ParameterWithUsage).requirementCount != null ? (
+                        <button type="button" onClick={() => setDetailParameter(param)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-accent)', fontWeight: 600, fontSize: 12, padding: 0 }}>
+                          {(param as ParameterWithUsage).requirementCount}
+                        </button>
+                      ) : '—'}
+                    </td>
+                  )}
+                  {visibleCols.has('created') && (
+                    <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)', whiteSpace: 'nowrap' }}>
+                      {format(new Date(param.createdAt), 'MMM dd, yyyy')}
+                    </td>
+                  )}
                   <td style={{ padding: '8px 12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <button onClick={(e) => { e.stopPropagation(); setChangeRequestModal({ isOpen: true, sourceId: param.id, sourceName: param.name }) }}

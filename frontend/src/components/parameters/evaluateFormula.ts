@@ -78,10 +78,39 @@ export function detectCycles(
   return cycles
 }
 
+// ---------------------------------------------------------------------------
+// Named engineering constants — available in every formula
+// ---------------------------------------------------------------------------
+export const FORMULA_CONSTANTS: Record<string, number> = {
+  pi:    Math.PI,
+  PI:    Math.PI,
+  e:     Math.E,
+  E:     Math.E,
+  g:     9.80665,   // standard gravity (m/s²)
+  G:     6.674e-11, // gravitational constant (N·m²/kg²)
+  c:     299792458, // speed of light (m/s)
+  R:     8.314462,  // ideal gas constant (J/(mol·K))
+  k:     1.380649e-23, // Boltzmann constant (J/K)
+  h:     6.626070e-34, // Planck constant (J·s)
+  eps0:  8.854188e-12, // vacuum permittivity (F/m)
+  mu0:   1.256637e-6,  // vacuum permeability (H/m)
+  N_A:   6.022141e23,  // Avogadro constant (mol⁻¹)
+  atm:   101325,    // standard atmosphere (Pa)
+  deg:   Math.PI / 180, // 1 degree in radians
+  rad:   180 / Math.PI, // 1 radian in degrees
+}
+
+/** Pattern that matches a named constant in a formula expression */
+const CONSTANT_RE = new RegExp(
+  `\\b(${Object.keys(FORMULA_CONSTANTS).join('|')})\\b`,
+  'g'
+)
+
 /**
- * Evaluate a formula string that may contain {{param:ID}} references.
+ * Evaluate a formula string that may contain {{param:ID}} references
+ * and named engineering constants (pi, g, R, c, …).
  *
- * @param formula    The raw formula string, e.g. "{{param:abc123}} * 2 + 1"
+ * @param formula    The raw formula string, e.g. "{{param:abc123}} * 2 * pi"
  * @param paramValues  Map of parameter ID -> numeric value
  * @returns FormulaEvalResult with result, error, and the list of referenced IDs
  */
@@ -92,14 +121,14 @@ export function evaluateFormula(
   const usedParamIds: string[] = []
 
   // Collect all referenced param IDs
-  const refPattern = /\{\{param:([a-z0-9]+)\}\}/gi
+  const refPattern = /\{\{param:([a-z0-9-]+)\}\}/gi
   let match: RegExpExecArray | null
   while ((match = refPattern.exec(formula)) !== null) {
     const id = match[1]
     if (!usedParamIds.includes(id)) usedParamIds.push(id)
   }
 
-  // Substitute references with numeric values
+  // Substitute {{param:ID}} references with numeric values
   let expr = formula
   for (const id of usedParamIds) {
     if (!(id in paramValues)) {
@@ -111,12 +140,15 @@ export function evaluateFormula(
     )
   }
 
+  // Substitute named constants (pi, g, R, …) with their numeric values
+  expr = expr.replace(CONSTANT_RE, (name) => String(FORMULA_CONSTANTS[name]))
+
   // Sanitise: only allow digits, arithmetic operators, parens, dots, spaces,
-  // and e/E for scientific notation
+  // and e/E for scientific notation (constants are already substituted to numbers)
   if (!/^[\d\s+\-*/^%().eE]+$/.test(expr)) {
     return {
       result: null,
-      error: 'Invalid formula: unsupported characters',
+      error: 'Invalid formula: unsupported characters after constant substitution',
       usedParamIds,
     }
   }
