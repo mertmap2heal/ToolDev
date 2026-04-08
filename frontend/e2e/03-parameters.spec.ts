@@ -718,3 +718,129 @@ test.describe('Parameters — Computed Column', () => {
     await expect(page.locator('th').filter({ hasText: /computed/i }).first()).toBeVisible({ timeout: 8_000 })
   })
 })
+
+// ---------------------------------------------------------------------------
+// Ctrl+F search shortcut
+// ---------------------------------------------------------------------------
+test.describe('Parameters — Ctrl+F shortcut', () => {
+  test('Ctrl+F focuses the search input', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/parameters`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 10_000 })
+
+    // Press Ctrl+F and verify the search input receives focus
+    await page.keyboard.press('Control+f')
+    const searchInput = page.getByPlaceholder(/search.*ctrl\+f/i)
+    await expect(searchInput).toBeFocused({ timeout: 3_000 })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Parameter count badge
+// ---------------------------------------------------------------------------
+test.describe('Parameters — count badge', () => {
+  test('badge shows total count and filtered count when searching', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/parameters`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 10_000 })
+
+    // The badge should be visible and contain a number
+    const badge = page.locator('h2 span').first()
+    await expect(badge).toBeVisible({ timeout: 8_000 })
+    const totalText = await badge.innerText()
+    const totalCount = parseInt(totalText, 10)
+
+    // Only run the filtered count assertion if there are parameters to filter
+    if (totalCount > 0) {
+      const searchInput = page.getByPlaceholder(/search.*ctrl\+f/i)
+      await searchInput.fill('__nonexistent_xyz__')
+      // Badge should now show "0 / N" format
+      await expect(badge).toHaveText(/0\s*\/\s*\d+/, { timeout: 5_000 })
+
+      // Clear search — badge returns to plain number
+      await searchInput.fill('')
+      await expect(badge).toHaveText(String(totalCount), { timeout: 5_000 })
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Excel / PDF export
+// ---------------------------------------------------------------------------
+test.describe('Parameters — Excel and PDF export', () => {
+  test('Excel export triggers a .xlsx download', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/parameters`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 10_000 })
+
+    // Open the export dropdown
+    const exportBtn = page.getByRole('button', { name: /export/i }).first()
+    await exportBtn.click()
+
+    // Expect a download when clicking Excel
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 15_000 }),
+      page.getByRole('menuitem', { name: /excel/i }).click(),
+    ])
+    expect(download.suggestedFilename()).toMatch(/\.xlsx$/)
+  })
+
+  test('PDF export triggers a .pdf download', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/parameters`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 10_000 })
+
+    const exportBtn = page.getByRole('button', { name: /export/i }).first()
+    await exportBtn.click()
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 15_000 }),
+      page.getByRole('menuitem', { name: /pdf/i }).click(),
+    ])
+    expect(download.suggestedFilename()).toMatch(/\.pdf$/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Import dry-run
+// ---------------------------------------------------------------------------
+test.describe('Parameters — Import dry-run', () => {
+  test('Dry Run button shows step 3 result with no-write banner', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/parameters`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 10_000 })
+
+    // Open the import modal
+    const importBtn = page.getByRole('button', { name: /import/i }).first()
+    await importBtn.click()
+    await expect(page.locator(MODAL)).toBeVisible({ timeout: 5_000 })
+
+    // Generate and upload a small valid CSV
+    const csvPath = writeTempCsvPath(generateUniqueCsv(2))
+    const fileInput = page.locator('input[type="file"]')
+    await fileInput.setInputFiles(csvPath)
+
+    // Advance to preview (step 2)
+    const nextBtn = page.getByRole('button', { name: /next|preview/i })
+    await expect(nextBtn).toBeVisible({ timeout: 8_000 })
+    await nextBtn.click()
+
+    // Step 2 should show the preview table — now click Dry Run
+    const dryRunBtn = page.getByRole('button', { name: /dry run/i })
+    await expect(dryRunBtn).toBeVisible({ timeout: 8_000 })
+    await dryRunBtn.click()
+
+    // Step 3 dry-run banner should mention no changes / simulation
+    await expect(
+      page.getByText(/no changes.*written|simulation|dry.?run/i)
+    ).toBeVisible({ timeout: 8_000 })
+
+    // A "Back to preview" button should be visible
+    await expect(
+      page.getByRole('button', { name: /back.*preview|back.*import/i })
+    ).toBeVisible({ timeout: 5_000 })
+
+    // Close
+    await page.getByRole('button', { name: /close|cancel/i }).first().click()
+  })
+})
