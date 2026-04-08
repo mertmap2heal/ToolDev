@@ -140,6 +140,13 @@ const EXPORT_GROUPS = [
       { key: 'xml',  label: 'XML (.xml)' },
     ],
   },
+  {
+    label: 'Reports',
+    formats: [
+      { key: 'excel', label: 'Excel workbook (.xlsx)' },
+      { key: 'pdf',   label: 'PDF report (.pdf)' },
+    ],
+  },
 ]
 
 const FORMAT_EXTENSIONS: Record<string, string> = {
@@ -148,6 +155,7 @@ const FORMAT_EXTENSIONS: Record<string, string> = {
   xtce: 'parameters.xtce', autosar: 'parameters.arxml', ros: 'parameters_ros.yaml',
   dds: 'parameters.idl', json: 'parameters.json', yaml: 'parameters.yaml',
   csv: 'parameters.csv', xml: 'parameters.xml',
+  excel: 'parameters.xlsx', pdf: 'parameters.pdf',
 }
 
 const IMPORT_FORMATS = [

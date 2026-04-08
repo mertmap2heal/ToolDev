@@ -4,8 +4,10 @@ import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
 import {
   exportParameters as formatExport,
+  exportParametersBinary,
   getExportMeta,
   SUPPORTED_EXPORT_FORMATS,
+  BINARY_EXPORT_FORMATS,
   ExportParameter,
 } from '../services/parameterExport.service'
 import {
@@ -795,7 +797,10 @@ export async function exportParametersHandler(req: AuthRequest, res: Response) {
     }))
 
     const meta = getExportMeta(format)
-    const content = formatExport(format, params)
+    const isBinary = (BINARY_EXPORT_FORMATS as readonly string[]).includes(format)
+    const content = isBinary
+      ? await exportParametersBinary(format, params)
+      : formatExport(format, params)
     res.setHeader('Content-Type', meta.contentType)
     res.setHeader('Content-Disposition', `attachment; filename="${meta.filename}"`)
     res.send(content)

@@ -2,6 +2,10 @@
  * Parameter Export Service
  * Generates parameter sets in aerospace/embedded engineering formats.
  */
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+const PDFDocument: any = require('pdfkit')
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import ExcelJS from 'exceljs'
 
 
 export interface ExportParameter {
@@ -770,13 +774,192 @@ export function getExportMeta(format: string): ExportMeta {
     autosar:       { filename: 'parameters.arxml',        contentType: 'application/xml' },
     ros:           { filename: 'parameters_ros.yaml',     contentType: 'application/x-yaml' },
     dds:           { filename: 'parameters.idl',          contentType: 'text/plain' },
+    excel:         { filename: 'parameters.xlsx',         contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+    pdf:           { filename: 'parameters.pdf',          contentType: 'application/pdf' },
   }
   return map[format] ?? { filename: `parameters.${format}`, contentType: 'text/plain' }
 }
 
 // ---------------------------------------------------------------------------
-// Dispatcher — call the right formatter for a given format key
+// Excel export
 // ---------------------------------------------------------------------------
+
+async function formatExcel(params: ExportParameter[]): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook()
+  workbook.creator = 'Engineering Tool'
+  workbook.created = new Date()
+
+  const sheet = workbook.addWorksheet('Parameters', {
+    views: [{ state: 'frozen', ySplit: 1 }],
+  })
+
+  sheet.columns = [
+    { header: 'Parameter ID', key: 'parameterId', width: 20 },
+    { header: 'Name',         key: 'name',         width: 32 },
+    { header: 'Description',  key: 'description',  width: 48 },
+    { header: 'Data Type',    key: 'dataType',      width: 14 },
+    { header: 'Value',        key: 'defaultValue',  width: 16 },
+    { header: 'Unit',         key: 'unit',          width: 10 },
+    { header: 'Tolerance',    key: 'tolerance',     width: 12 },
+    { header: 'Min',          key: 'minValue',      width: 10 },
+    { header: 'Max',          key: 'maxValue',      width: 10 },
+    { header: 'Formula',      key: 'formula',       width: 36 },
+    { header: 'Tags',         key: 'tags',          width: 20 },
+    { header: 'Status',       key: 'status',        width: 12 },
+    { header: 'Version',      key: 'version',       width: 10 },
+  ]
+
+  // Style header row
+  const headerRow = sheet.getRow(1)
+  headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } }
+  headerRow.alignment = { vertical: 'middle', horizontal: 'center' }
+  headerRow.height = 22
+
+  for (const p of params) {
+    const row = sheet.addRow({
+      parameterId:  p.parameterId ?? '',
+      name:         p.name,
+      description:  p.description ?? '',
+      dataType:     p.dataType ?? '',
+      defaultValue: p.defaultValue ?? '',
+      unit:         p.unit ?? '',
+      tolerance:    p.tolerance ?? '',
+      minValue:     p.minValue ?? '',
+      maxValue:     p.maxValue ?? '',
+      formula:      p.formula ?? '',
+      tags:         Array.isArray(p.tags) ? p.tags.join('; ') : '',
+      status:       p.status ?? 'draft',
+      version:      p.version ?? '',
+    })
+
+    // Colour-code status cell
+    const statusCell = row.getCell('status')
+    if (p.status === 'approved') {
+      statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } }
+      statusCell.font = { color: { argb: 'FF065F46' } }
+    } else if (p.status === 'obsolete') {
+      statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } }
+      statusCell.font = { color: { argb: 'FF6B7280' } }
+    } else {
+      statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } }
+      statusCell.font = { color: { argb: 'FF92400E' } }
+    }
+
+    // Formula cell — italic purple
+    if (p.formula) {
+      row.getCell('formula').font = { italic: true, color: { argb: 'FF7C3AED' } }
+    }
+  }
+
+  // Auto-filter on header row
+  sheet.autoFilter = { from: 'A1', to: { row: 1, column: sheet.columns.length } }
+
+  return workbook.xlsx.writeBuffer() as unknown as Promise<Buffer>
+}
+
+// ---------------------------------------------------------------------------
+// PDF report export
+// ---------------------------------------------------------------------------
+
+async function formatPDF(params: ExportParameter[]): Promise<Buffer> {
+  return new Promise<Buffer>((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 50, info: { Title: 'Parameters Report' } })
+    const chunks: Buffer[] = []
+    doc.on('data', (chunk: Buffer) => chunks.push(chunk))
+    doc.on('end', () => resolve(Buffer.concat(chunks)))
+    doc.on('error', reject)
+
+    const ACCENT = '#4F46E5'
+    const MUTED  = '#6B7280'
+    const TEXT   = '#111827'
+    const BORDER = '#E5E7EB'
+
+    // ── Title ──
+    doc.fillColor(ACCENT).fontSize(20).font('Helvetica-Bold')
+       .text('Parameters Report', 50, 50)
+    doc.fillColor(MUTED).fontSize(10).font('Helvetica')
+       .text(`Generated: ${new Date().toISOString().slice(0, 19).replace('T', ' ')} · ${params.length} parameter${params.length !== 1 ? 's' : ''}`, 50, 76)
+
+    doc.moveTo(50, 96).lineTo(545, 96).strokeColor(ACCENT).lineWidth(1.5).stroke()
+    doc.y = 104
+
+    const statusColors: Record<string, string> = {
+      approved: '#065F46',
+      obsolete: '#6B7280',
+      draft:    '#92400E',
+    }
+
+    for (let i = 0; i < params.length; i++) {
+      const p = params[i]
+
+      // Avoid orphan headings — start new page if near bottom
+      if (doc.y > 720) doc.addPage()
+
+      const startY = doc.y
+
+      // Parameter name + ID
+      doc.fillColor(TEXT).fontSize(12).font('Helvetica-Bold')
+         .text(p.name, 50, startY, { continued: false })
+
+      if (p.parameterId) {
+        doc.fillColor(MUTED).fontSize(9).font('Helvetica')
+           .text(`ID: ${p.parameterId}`, 50)
+      }
+
+      if (p.description) {
+        doc.fillColor(MUTED).fontSize(10).font('Helvetica')
+           .text(p.description, 50, doc.y, { width: 495 })
+      }
+
+      // Key-value pairs
+      const fields: Array<[string, string | undefined | null]> = [
+        ['Type',      p.dataType],
+        ['Value',     p.defaultValue],
+        ['Unit',      p.unit],
+        ['Tolerance', p.tolerance],
+        ['Min / Max', p.minValue || p.maxValue ? `${p.minValue ?? '—'} / ${p.maxValue ?? '—'}` : null],
+        ['Formula',   p.formula],
+        ['Tags',      Array.isArray(p.tags) && p.tags.length ? p.tags.join(', ') : null],
+      ]
+
+      for (const [label, value] of fields) {
+        if (!value) continue
+        doc.fillColor(MUTED).fontSize(9).font('Helvetica-Bold')
+           .text(`${label}: `, 60, doc.y, { continued: true })
+        doc.fillColor(TEXT).font('Helvetica')
+           .text(value, { continued: false, width: 435 })
+      }
+
+      // Status badge
+      const statusColor = statusColors[p.status ?? 'draft'] ?? MUTED
+      doc.fillColor(statusColor).fontSize(8).font('Helvetica-Bold')
+         .text(`[${(p.status ?? 'DRAFT').toUpperCase()}]`, 50)
+
+      // Separator line between parameters
+      if (i < params.length - 1) {
+        doc.moveTo(50, doc.y + 4).lineTo(545, doc.y + 4)
+           .strokeColor(BORDER).lineWidth(0.5).stroke()
+        doc.y += 10
+      }
+    }
+
+    doc.end()
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Dispatcher — text formats (sync), binary formats (async)
+// ---------------------------------------------------------------------------
+
+/** Binary-only formats that need async handling */
+export const BINARY_EXPORT_FORMATS = ['excel', 'pdf'] as const
+export type BinaryExportFormat = typeof BINARY_EXPORT_FORMATS[number]
+
+/**
+ * Export to a text-based format. Returns a string synchronously.
+ * Use exportParametersBinary for Excel and PDF.
+ */
 export function exportParameters(format: string, params: ExportParameter[]): string {
   switch (format) {
     case 'matlab':    return formatMATLAB(params)
@@ -793,11 +976,28 @@ export function exportParameters(format: string, params: ExportParameter[]): str
     case 'autosar':   return formatAUTOSAR(params)
     case 'ros':       return formatROSYAML(params)
     case 'dds':       return formatDDSIDL(params)
-    default:          throw new Error(`Unknown export format: ${format}`)
+    default:          throw new Error(`Unknown text export format: ${format}`)
+  }
+}
+
+/**
+ * Export to a binary format (Excel, PDF). Returns a Buffer asynchronously.
+ */
+export async function exportParametersBinary(format: string, params: ExportParameter[]): Promise<Buffer> {
+  switch (format) {
+    case 'excel': return formatExcel(params)
+    case 'pdf':   return formatPDF(params)
+    default:      throw new Error(`Unknown binary export format: ${format}`)
   }
 }
 
 export const SUPPORTED_EXPORT_FORMATS = [
+  'matlab', 'simulink', 'mat', 'python', 'c_header', 'ada',
+  'json', 'yaml', 'csv', 'xml', 'xtce', 'autosar', 'ros', 'dds',
+  'excel', 'pdf',
+] as const
+
+export const TEXT_EXPORT_FORMATS = [
   'matlab', 'simulink', 'mat', 'python', 'c_header', 'ada',
   'json', 'yaml', 'csv', 'xml', 'xtce', 'autosar', 'ros', 'dds',
 ] as const
