@@ -295,6 +295,16 @@ export default function ParametersPage() {
   // CSV import modal state
   const [isCsvImportOpen, setIsCsvImportOpen] = useState(false)
 
+  // Collapsed folder groups in table (set of folder IDs; '__none__' = ungrouped)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const toggleGroup = (groupId: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(groupId)) next.delete(groupId); else next.add(groupId)
+      return next
+    })
+  }
+
   // Git publish state
   const gitPublishKey = projectId ? `git-publish-config-${projectId}` : null
   const [storedGitConfig, setStoredGitConfig] = useState<GitPublishStoredConfig | null>(null)
@@ -1556,12 +1566,57 @@ export default function ParametersPage() {
                 <tr><td colSpan={2 + visibleCols.size} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>
                   {parameters.length === 0 ? 'No parameters yet. Create one or import a file.' : 'No parameters match your filters.'}
                 </td></tr>
-              ) : filteredParameters.map((param) => {
+              ) : (() => {
+                // Build groups only when showing All Parameters; otherwise flat list
+                const showGroups = selectedFolderId === null && folders.length > 0
+                type Group = { id: string; label: string; color: string | null; params: typeof filteredParameters }
+                const groups: Group[] = []
+                if (showGroups) {
+                  // Ungrouped parameters first, then each named folder
+                  const ungrouped = filteredParameters.filter(p => !p.folderId)
+                  if (ungrouped.length > 0) groups.push({ id: '__none__', label: 'Ungrouped', color: null, params: ungrouped })
+                  for (const folder of folders) {
+                    const inFolder = filteredParameters.filter(p => p.folderId === folder.id)
+                    if (inFolder.length > 0) groups.push({ id: folder.id, label: folder.name, color: folder.color ?? null, params: inFolder })
+                  }
+                } else {
+                  groups.push({ id: '__all__', label: '', color: null, params: filteredParameters })
+                }
+
+                return groups.flatMap(group => {
+                  const isCollapsed = collapsedGroups.has(group.id)
+                  const groupHeaderRow = showGroups ? (
+                    <tr key={`group-${group.id}`} style={{ backgroundColor: 'var(--theme-bg)', borderBottom: '1px solid var(--theme-border)' }}>
+                      <td colSpan={2 + visibleCols.size} style={{ padding: '5px 12px' }}>
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(group.id)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                            fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
+                            color: 'var(--theme-text-muted)',
+                          }}
+                        >
+                          {group.color && <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: group.color, display: 'inline-block', flexShrink: 0 }} />}
+                          {isCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+                          {group.label}
+                          <span style={{ fontSize: 10, color: 'var(--theme-text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>
+                            ({group.params.length})
+                          </span>
+                        </button>
+                      </td>
+                    </tr>
+                  ) : null
+
+                  if (isCollapsed) return groupHeaderRow ? [groupHeaderRow] : []
+
+                  const dataRows = group.params.map((param) => {
                 const folder = folders.find(f => f.id === param.folderId)
                 const computedVal = formulaResults.get(param.id)
                 const isInlineEditing = inlineEditingId === param.id
                 return (
-                <DraggableRow key={param.id} parameterId={param.id} folderColor={folder?.color}>
+                <DraggableRow key={param.id} parameterId={param.id} folderColor={showGroups ? null : folder?.color}>
                   <td style={{ padding: '8px 12px', width: 32 }} onClick={e => e.stopPropagation()}>
                     <input
                       type="checkbox"
@@ -1715,7 +1770,10 @@ export default function ParametersPage() {
                   </td>
                 </DraggableRow>
                 )
-              })}
+              })
+              return groupHeaderRow ? [groupHeaderRow, ...dataRows] : dataRows
+            })
+          })()}
             </tbody>
           </table>
         </div>
