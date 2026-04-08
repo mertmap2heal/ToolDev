@@ -1505,7 +1505,7 @@ export default function ParametersPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ backgroundColor: 'var(--theme-bg)', borderBottom: '1px solid var(--theme-border)' }}>
-                <th style={{ padding: '8px 12px', width: 32 }}>
+                <th style={{ padding: '8px 12px', width: 32, position: 'sticky', left: 0, zIndex: 2, backgroundColor: 'var(--theme-bg)' }}>
                   <input
                     type="checkbox"
                     checked={filteredParameters.length > 0 && filteredParameters.every(p => selectedIds.has(p.id))}
@@ -1520,18 +1520,18 @@ export default function ParametersPage() {
                   />
                 </th>
                 {([
-                  { label: 'Parameter',   field: 'name' as const,     colKey: null },
-                  { label: 'Description', field: null,                 colKey: 'description' as ColKey },
-                  { label: 'Type',        field: null,                 colKey: 'type' as ColKey },
-                  { label: 'Value',       field: null,                 colKey: 'value' as ColKey },
-                  { label: 'Computed',    field: null,                 colKey: 'computed' as ColKey },
-                  { label: 'Unit',        field: null,                 colKey: 'unit' as ColKey },
-                  { label: 'Source',      field: null,                 colKey: 'source' as ColKey },
-                  { label: 'Status',      field: null,                 colKey: 'status' as ColKey },
-                  { label: 'Used in',     field: null,                 colKey: 'usedIn' as ColKey },
-                  { label: 'Created',     field: 'createdAt' as const, colKey: 'created' as ColKey },
-                  { label: '',            field: null,                 colKey: null },
-                ] as Array<{ label: string; field: 'name' | 'createdAt' | 'updatedAt' | null; colKey: ColKey | null }>)
+                  { label: 'Parameter',   field: 'name' as const,     colKey: null,                       sticky: true },
+                  { label: 'Description', field: null,                 colKey: 'description' as ColKey, sticky: false },
+                  { label: 'Type',        field: null,                 colKey: 'type' as ColKey,        sticky: false },
+                  { label: 'Value',       field: null,                 colKey: 'value' as ColKey,       sticky: false },
+                  { label: 'Computed',    field: null,                 colKey: 'computed' as ColKey,    sticky: false },
+                  { label: 'Unit',        field: null,                 colKey: 'unit' as ColKey,        sticky: false },
+                  { label: 'Source',      field: null,                 colKey: 'source' as ColKey,      sticky: false },
+                  { label: 'Status',      field: null,                 colKey: 'status' as ColKey,      sticky: false },
+                  { label: 'Used in',     field: null,                 colKey: 'usedIn' as ColKey,      sticky: false },
+                  { label: 'Created',     field: 'createdAt' as const, colKey: 'created' as ColKey,     sticky: false },
+                  { label: '',            field: null,                 colKey: null,                    sticky: false },
+                ] as Array<{ label: string; field: 'name' | 'createdAt' | 'updatedAt' | null; colKey: ColKey | null; sticky: boolean }>)
                 .filter(h => h.colKey === null || visibleCols.has(h.colKey))
                 .map(h => (
                   <th
@@ -1542,6 +1542,7 @@ export default function ParametersPage() {
                       letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--theme-text-muted)',
                       whiteSpace: 'nowrap', cursor: h.field ? 'pointer' : 'default',
                       userSelect: 'none',
+                      ...(h.sticky ? { position: 'sticky', left: 32, zIndex: 2, backgroundColor: 'var(--theme-bg)', boxShadow: '2px 0 4px rgba(0,0,0,0.06)' } : {}),
                     }}
                     title={h.field ? `Sort by ${h.label}` : undefined}
                   >
@@ -1617,7 +1618,7 @@ export default function ParametersPage() {
                 const isInlineEditing = inlineEditingId === param.id
                 return (
                 <DraggableRow key={param.id} parameterId={param.id} folderColor={showGroups ? null : folder?.color}>
-                  <td style={{ padding: '8px 12px', width: 32 }} onClick={e => e.stopPropagation()}>
+                  <td style={{ padding: '8px 12px', width: 32, position: 'sticky', left: 0, zIndex: 1, backgroundColor: 'var(--theme-surface)' }} onClick={e => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selectedIds.has(param.id)}
@@ -1632,9 +1633,9 @@ export default function ParametersPage() {
                       style={{ cursor: 'pointer' }}
                     />
                   </td>
-                  <td style={{ padding: '8px 12px' }}>
+                  <td style={{ padding: '8px 12px', position: 'sticky', left: 32, zIndex: 1, backgroundColor: 'var(--theme-surface)', boxShadow: '2px 0 4px rgba(0,0,0,0.06)' }}>
                     <button type="button" onClick={() => setDetailParameter(param)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-accent)', fontWeight: 600, fontSize: 12, padding: 0 }}>
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-accent)', fontWeight: 600, fontSize: 12, padding: 0, whiteSpace: 'nowrap' }}>
                       {param.name}
                     </button>
                   </td>

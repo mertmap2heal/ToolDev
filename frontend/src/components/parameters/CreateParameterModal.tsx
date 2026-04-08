@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
-import { ParameterFormFields, runValueValidation } from './ParameterFormFields'
+import { ParameterFormFields, runValueValidation, runFormulaValidation } from './ParameterFormFields'
 import { ParameterTypesPanel } from './ParameterTypesPanel'
 import { ProjectUnitsPanel } from './ProjectUnitsPanel'
 import { PlatformPicker } from './PlatformPicker'
@@ -27,6 +27,7 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
   const [showTypesPanel, setShowTypesPanel] = useState(false)
   const [showUnitsPanel, setShowUnitsPanel] = useState(false)
   const [valueError, setValueError] = useState<string | null>(null)
+  const [formulaError, setFormulaError] = useState<string | null>(null)
 
   const { data: types } = useQuery({
     queryKey: ['parameter-types', projectId],
@@ -152,6 +153,19 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
       newErrors.defaultValue = valErr
     } else {
       setValueError(null)
+    }
+
+    // Formula validation (cycles + syntax)
+    if (formData.formula?.trim()) {
+      const fErr = runFormulaValidation(formData.formula.trim(), allParameters)
+      if (fErr) {
+        setFormulaError(fErr)
+        newErrors.formula = fErr
+      } else {
+        setFormulaError(null)
+      }
+    } else {
+      setFormulaError(null)
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -318,13 +332,17 @@ export default function CreateParameterModal({ isOpen, onClose, projectId, onCre
             <input
               type="text"
               value={formData.formula || ''}
-              onChange={(e) => handleChange('formula', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              onChange={(e) => { handleChange('formula', e.target.value); setFormulaError(null) }}
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${formulaError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 dark:border-gray-600'}`}
               placeholder="e.g., {{param:id1}} * 2 + {{param:id2}}"
             />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Reference other parameters using <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{'{{param:ID}}'}</code> syntax.
-            </p>
+            {formulaError ? (
+              <p className="mt-1 text-xs text-red-600 dark:text-red-400">{formulaError}</p>
+            ) : (
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Reference other parameters using <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{'{{param:ID}}'}</code> syntax.
+              </p>
+            )}
           </div>
 
           <div>

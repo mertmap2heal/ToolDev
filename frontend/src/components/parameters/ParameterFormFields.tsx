@@ -571,3 +571,42 @@ export function runValueValidation(
     valueFormat
   )
 }
+
+/**
+ * Validate a formula string before saving.
+ * Returns an error message string, or null if valid (or empty).
+ */
+export function runFormulaValidation(
+  formula: string,
+  allParameters: Parameter[],
+  currentParamId?: string
+): string | null {
+  if (!formula.trim()) return null
+
+  // Build param value map
+  const paramValues: Record<string, number> = {}
+  for (const p of allParameters) {
+    const v = parseFloat(p.defaultValue ?? '')
+    if (!isNaN(v)) paramValues[p.id] = v
+  }
+
+  const { error } = evaluateFormula(formula, paramValues)
+  if (error && !error.includes('Unknown parameter')) {
+    // Unknown parameter references are OK at save time (they may be created later)
+    return `Formula error: ${error}`
+  }
+
+  // Check cycle detection
+  const snapshot = allParameters.map(p =>
+    p.id === currentParamId ? { ...p, formula } : p
+  )
+  if (currentParamId && !allParameters.some(p => p.id === currentParamId)) {
+    snapshot.push({ id: currentParamId, formula } as Parameter)
+  }
+  const cycles = detectCycles(snapshot)
+  if (cycles.length > 0) {
+    return `Circular dependency detected: ${cycles[0]}`
+  }
+
+  return null
+}
