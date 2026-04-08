@@ -47,7 +47,7 @@ describe('Parameter API', () => {
       },
     })
     parameterDbId = param.id
-    parameterId = param.parameterId
+    parameterId = param.parameterId ?? parameterDbId
 
     const ver = await prisma.parameterVersion.create({
       data: {

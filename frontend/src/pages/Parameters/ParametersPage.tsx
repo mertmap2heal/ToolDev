@@ -4,7 +4,7 @@ import {
   Search, X, Trash2, Edit2, Plus, Filter, ChevronDown, ChevronUp,
   FileText, Upload, Download, GitBranch, RefreshCw, CheckCircle,
   AlertTriangle, Settings, Radio, List, Share2,
-  Folder, FolderOpen, MoreHorizontal, Layers,
+  Folder, FolderOpen, MoreHorizontal, Layers, ArrowUpDown, ArrowUp, ArrowDown,
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -186,6 +186,18 @@ export default function ParametersPage() {
     searchTimerRef.current = setTimeout(() => setDebouncedSearch(value), 300)
   }
 
+  // Table sort state — sort and order are passed to the backend query
+  const [sortField, setSortField] = useState<'name' | 'createdAt' | 'updatedAt'>('updatedAt')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const handleSortBy = (field: 'name' | 'createdAt' | 'updatedAt') => {
+    if (sortField === field) {
+      setSortOrder(o => o === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortOrder('asc')
+    }
+  }
+
   // Inline value editing state
   const [inlineEditingId, setInlineEditingId] = useState<string | null>(null)
   const [inlineEditValue, setInlineEditValue] = useState('')
@@ -313,10 +325,14 @@ export default function ParametersPage() {
   }, [])
 
   const { data: parameters = [], isLoading } = useQuery({
-    queryKey: ['parameters', projectId, true],
+    queryKey: ['parameters', projectId, true, sortField, sortOrder],
     queryFn: async () => {
       if (!projectId) throw new Error('Project ID required')
-      const response = await parameterService.getParameters(projectId, { includeUsageCounts: true })
+      const response = await parameterService.getParameters(projectId, {
+        includeUsageCounts: true,
+        sort: sortField,
+        order: sortOrder,
+      })
       if (response.success && response.data) return response.data as ParameterWithUsage[]
       throw new Error(response.error || 'Failed to load parameters')
     },
@@ -337,9 +353,11 @@ export default function ParametersPage() {
   const folders: ParameterFolder[] = foldersData ?? []
 
   const createFolderMutation = useMutation({
-    mutationFn: (name: string) => {
+    mutationFn: async (name: string) => {
       if (!projectId) throw new Error('Project ID required')
-      return parameterService.createFolder(projectId, { name, color: createFolderColor })
+      const res = await parameterService.createFolder(projectId, { name, color: createFolderColor })
+      if (!res.success) throw new Error(res.error ?? 'Failed to create folder')
+      return res
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
@@ -347,28 +365,41 @@ export default function ParametersPage() {
       setCreateFolderColor(FOLDER_COLORS[0])
       setIsCreatingFolder(false)
     },
+    onError: (err: Error) => {
+      setToastMessage(`Error: ${err.message}`)
+    },
   })
 
   const updateFolderMutation = useMutation({
-    mutationFn: ({ folderId, data }: { folderId: string; data: { name?: string; color?: string | null } }) => {
+    mutationFn: async ({ folderId, data }: { folderId: string; data: { name?: string; color?: string | null } }) => {
       if (!projectId) throw new Error('Project ID required')
-      return parameterService.updateFolder(projectId, folderId, data)
+      const res = await parameterService.updateFolder(projectId, folderId, data)
+      if (!res.success) throw new Error(res.error ?? 'Failed to update folder')
+      return res
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
       setRenamingFolder(null)
     },
+    onError: (err: Error) => {
+      setToastMessage(`Error: ${err.message}`)
+    },
   })
 
   const deleteFolderMutation = useMutation({
-    mutationFn: (folderId: string) => {
+    mutationFn: async (folderId: string) => {
       if (!projectId) throw new Error('Project ID required')
-      return parameterService.deleteFolder(projectId, folderId)
+      const res = await parameterService.deleteFolder(projectId, folderId)
+      if (!res.success) throw new Error(res.error ?? 'Failed to delete folder')
+      return { folderId }
     },
     onSuccess: (_data, folderId) => {
       queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
       queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
       if (selectedFolderId === folderId) setSelectedFolderId(null)
+    },
+    onError: (err: Error) => {
+      setToastMessage(`Error: ${err.message}`)
     },
   })
 
@@ -1382,9 +1413,40 @@ export default function ParametersPage() {
                     style={{ cursor: 'pointer' }}
                   />
                 </th>
-                {['Parameter', 'Description', 'Type', 'Value', 'Computed', 'Unit', 'Source', 'Status', 'Used in', 'Created', ''].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--theme-text-muted)', whiteSpace: 'nowrap' }}>
-                    {h}
+                {([
+                  { label: 'Parameter', field: 'name' as const },
+                  { label: 'Description', field: null },
+                  { label: 'Type', field: null },
+                  { label: 'Value', field: null },
+                  { label: 'Computed', field: null },
+                  { label: 'Unit', field: null },
+                  { label: 'Source', field: null },
+                  { label: 'Status', field: null },
+                  { label: 'Used in', field: null },
+                  { label: 'Created', field: 'createdAt' as const },
+                  { label: '', field: null },
+                ] as Array<{ label: string; field: 'name' | 'createdAt' | 'updatedAt' | null }>).map(h => (
+                  <th
+                    key={h.label || 'actions'}
+                    onClick={h.field ? () => handleSortBy(h.field!) : undefined}
+                    style={{
+                      padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700,
+                      letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--theme-text-muted)',
+                      whiteSpace: 'nowrap', cursor: h.field ? 'pointer' : 'default',
+                      userSelect: 'none',
+                    }}
+                    title={h.field ? `Sort by ${h.label}` : undefined}
+                  >
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      {h.label}
+                      {h.field && (
+                        sortField === h.field
+                          ? sortOrder === 'asc'
+                            ? <ArrowUp size={10} style={{ color: 'var(--theme-accent)' }} />
+                            : <ArrowDown size={10} style={{ color: 'var(--theme-accent)' }} />
+                          : <ArrowUpDown size={10} style={{ opacity: 0.4 }} />
+                      )}
+                    </span>
                   </th>
                 ))}
               </tr>
