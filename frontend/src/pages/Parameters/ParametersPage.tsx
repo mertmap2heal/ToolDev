@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
   Search, X, Trash2, Edit2, Plus, Filter, ChevronDown, ChevronUp,
@@ -22,6 +22,7 @@ import {
 
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import { parameterService, type ParameterWithUsage } from '../../services/parameter.service'
+import { evaluateFormula } from '../../components/parameters/evaluateFormula'
 import DeleteConfirmationModal from '../../components/projects/DeleteConfirmationModal'
 import EditParameterModal from '../../components/parameters/EditParameterModal'
 import ParameterDetailDrawer from '../../components/parameters/ParameterDetailDrawer'
@@ -46,16 +47,23 @@ const FOLDER_COLORS = ['#6366f1', '#0ea5e9', '#22c55e', '#f59e0b', '#ef4444', '#
 // ---------------------------------------------------------------------------
 function DraggableRow({
   parameterId,
+  folderColor,
   children,
 }: {
   parameterId: string
+  folderColor?: string | null
   children: React.ReactNode
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `param-${parameterId}` })
   return (
     <tr
       ref={setNodeRef}
-      style={{ opacity: isDragging ? 0.4 : 1, cursor: 'grab', borderBottom: '1px solid var(--theme-border)' }}
+      style={{
+        opacity: isDragging ? 0.4 : 1,
+        cursor: 'grab',
+        borderBottom: '1px solid var(--theme-border)',
+        borderLeft: folderColor ? `3px solid ${folderColor}` : '3px solid transparent',
+      }}
       onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
       onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
       {...attributes}
@@ -169,6 +177,23 @@ function triggerDownload(blob: Blob, filename: string) {
 export default function ParametersPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [searchQuery, setSearchQuery] = useState('')
+  // Debounced search — 300 ms delay before filtering
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value)
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    searchTimerRef.current = setTimeout(() => setDebouncedSearch(value), 300)
+  }
+
+  // Inline value editing state
+  const [inlineEditingId, setInlineEditingId] = useState<string | null>(null)
+  const [inlineEditValue, setInlineEditValue] = useState('')
+
+  // Git pull state
+  const [isPulling, setIsPulling] = useState(false)
+  const [pullResult, setPullResult] = useState<{ imported: number; updated: number; errors: string[]; warnings: string[] } | null>(null)
+
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string; name: string } | null>(null)
   const [editingParameter, setEditingParameter] = useState<Parameter | null>(null)
   const [detailParameter, setDetailParameter] = useState<Parameter | null>(null)
@@ -477,8 +502,8 @@ export default function ParametersPage() {
         : parameters.filter(p => p.folderId === selectedFolderId)
 
   const filteredParameters = folderFilteredParameters.filter((param) => {
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
+    if (debouncedSearch) {
+      const query = debouncedSearch.toLowerCase()
       const matchesSearch =
         param.name.toLowerCase().includes(query) ||
         param.description?.toLowerCase().includes(query) ||
@@ -501,6 +526,71 @@ export default function ParametersPage() {
     if (statusFilter !== 'all' && (param.status ?? 'draft') !== statusFilter) return false
     return true
   })
+
+  // Precompute formula results (memoized) — only for parameters with formulas
+  const formulaResults = useMemo(() => {
+    const results = new Map<string, string>()
+    // Build a param-id -> numeric value map from current parameters
+    const paramValueMap: Record<string, number> = {}
+    for (const p of parameters) {
+      const num = parseFloat(p.defaultValue ?? '')
+      if (!isNaN(num)) paramValueMap[p.id] = num
+    }
+    for (const p of parameters) {
+      if (p.formula) {
+        try {
+          const { result } = evaluateFormula(p.formula, paramValueMap)
+          if (result !== null && isFinite(result)) {
+            results.set(p.id, String(parseFloat(result.toFixed(6))))
+          }
+        } catch { /* ignore unevaluable formulas */ }
+      }
+    }
+    return results
+  }, [parameters])
+
+  // Inline value save
+  const saveInlineValue = async (parameterId: string) => {
+    if (!projectId) return
+    try {
+      await parameterService.updateParameter(projectId, parameterId, { defaultValue: inlineEditValue })
+      queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
+    } catch (err) {
+      alert(`Save failed: ${(err as Error).message}`)
+    }
+    setInlineEditingId(null)
+    setInlineEditValue('')
+  }
+
+  // Git pull handler
+  const handleGitPull = async () => {
+    if (!projectId || !storedGitConfig || isPulling) return
+    setIsPulling(true)
+    setPullResult(null)
+    try {
+      const res = await parameterService.gitPull(projectId, {
+        platform: storedGitConfig.platform,
+        baseUrl: storedGitConfig.baseUrl,
+        token: storedGitConfig.token,
+        repoId: storedGitConfig.repoId,
+        branch: storedGitConfig.defaultBranch,
+        username: storedGitConfig.username,
+        workspace: storedGitConfig.workspace,
+        org: storedGitConfig.org,
+        project: storedGitConfig.project,
+      })
+      if (res.success && res.data) {
+        setPullResult(res.data)
+        queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
+      } else {
+        alert(res.error ?? 'Pull failed')
+      }
+    } catch (err) {
+      alert(`Pull failed: ${(err as Error).message}`)
+    } finally {
+      setIsPulling(false)
+    }
+  }
 
   const handleDeleteClick = (e: React.MouseEvent, id: string, name: string) => {
     e.stopPropagation()
@@ -687,6 +777,27 @@ export default function ParametersPage() {
             {storedGitConfig && <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: isStale ? '#f59e0b' : '#22c55e', marginLeft: 2 }} />}
           </button>
 
+          {/* Pull from Git — import round-trip */}
+          {storedGitConfig && (
+            <button
+              onClick={handleGitPull}
+              disabled={isPulling}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
+                border: '1px solid var(--theme-border)',
+                backgroundColor: 'var(--theme-surface)',
+                color: isPulling ? 'var(--theme-text-muted)' : 'var(--theme-accent)',
+                cursor: isPulling ? 'not-allowed' : 'pointer',
+                opacity: isPulling ? 0.7 : 1,
+              }}
+              title={`Pull latest parameters.json from ${storedGitConfig.platform}`}
+            >
+              <RefreshCw size={13} style={isPulling ? { animation: 'spin 1s linear infinite' } : undefined} />
+              {isPulling ? 'Pulling…' : 'Pull from Git'}
+            </button>
+          )}
+
           {/* Import — opens the guided CSV import modal */}
           <button
             onClick={() => setIsCsvImportOpen(true)}
@@ -826,7 +937,7 @@ export default function ParametersPage() {
             type="text"
             placeholder="Search parameters…"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             style={{
               width: '100%', paddingLeft: 32, paddingRight: searchQuery ? 32 : 10,
               paddingTop: 6, paddingBottom: 6,
@@ -837,7 +948,7 @@ export default function ParametersPage() {
           />
           {searchQuery && (
             <button
-              onClick={() => setSearchQuery('')}
+              onClick={() => { setSearchQuery(''); setDebouncedSearch('') }}
               style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-text-muted)', padding: 0 }}
             >
               <X size={13} />
@@ -1271,7 +1382,7 @@ export default function ParametersPage() {
                     style={{ cursor: 'pointer' }}
                   />
                 </th>
-                {['Parameter', 'Description', 'Type', 'Value', 'Unit', 'Source', 'Status', 'Used in', 'Created', ''].map(h => (
+                {['Parameter', 'Description', 'Type', 'Value', 'Computed', 'Unit', 'Source', 'Status', 'Used in', 'Created', ''].map(h => (
                   <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--theme-text-muted)', whiteSpace: 'nowrap' }}>
                     {h}
                   </th>
@@ -1280,13 +1391,17 @@ export default function ParametersPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={11} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>Loading parameters…</td></tr>
+                <tr><td colSpan={12} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>Loading parameters…</td></tr>
               ) : filteredParameters.length === 0 ? (
-                <tr><td colSpan={11} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>
+                <tr><td colSpan={12} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>
                   {parameters.length === 0 ? 'No parameters yet. Create one or import a file.' : 'No parameters match your filters.'}
                 </td></tr>
-              ) : filteredParameters.map((param) => (
-                <DraggableRow key={param.id} parameterId={param.id}>
+              ) : filteredParameters.map((param) => {
+                const folder = folders.find(f => f.id === param.folderId)
+                const computedVal = formulaResults.get(param.id)
+                const isInlineEditing = inlineEditingId === param.id
+                return (
+                <DraggableRow key={param.id} parameterId={param.id} folderColor={folder?.color}>
                   <td style={{ padding: '8px 12px', width: 32 }} onClick={e => e.stopPropagation()}>
                     <input
                       type="checkbox"
@@ -1314,27 +1429,59 @@ export default function ParametersPage() {
                     </span>
                   </td>
                   <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)' }}>{param.dataType || '—'}</td>
-                  <td style={{ padding: '8px 12px', fontFamily: 'monospace', color: 'var(--theme-text)' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <span>{param.defaultValue || '—'}</span>
-                      {param.formula && (
-                        <span
-                          title={param.formula}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                            padding: '1px 5px', borderRadius: 4, fontSize: 10, fontWeight: 700,
-                            fontFamily: 'serif', fontStyle: 'italic',
-                            backgroundColor: 'rgba(245,158,11,0.12)',
-                            color: '#b45309',
-                            border: '1px solid rgba(245,158,11,0.3)',
-                            cursor: 'default',
-                            flexShrink: 0,
-                          }}
-                        >
-                          f
-                        </span>
-                      )}
-                    </span>
+                  <td
+                    style={{ padding: '8px 12px', fontFamily: 'monospace', color: 'var(--theme-text)', minWidth: 80 }}
+                    onClick={e => {
+                      if (!isInlineEditing) {
+                        e.stopPropagation()
+                        setInlineEditingId(param.id)
+                        setInlineEditValue(param.defaultValue ?? '')
+                      }
+                    }}
+                    title={isInlineEditing ? undefined : 'Click to edit value'}
+                  >
+                    {isInlineEditing ? (
+                      <input
+                        autoFocus
+                        value={inlineEditValue}
+                        onChange={e => setInlineEditValue(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') { e.stopPropagation(); saveInlineValue(param.id) }
+                          if (e.key === 'Escape') { e.stopPropagation(); setInlineEditingId(null) }
+                        }}
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                          width: '100%', padding: '2px 5px', fontFamily: 'monospace', fontSize: 12,
+                          border: '1px solid var(--theme-accent)', borderRadius: 4,
+                          backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)',
+                          outline: 'none',
+                        }}
+                      />
+                    ) : (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span>{param.defaultValue || '—'}</span>
+                        {param.formula && (
+                          <span
+                            title={param.formula}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              padding: '1px 5px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                              fontFamily: 'serif', fontStyle: 'italic',
+                              backgroundColor: 'rgba(245,158,11,0.12)',
+                              color: '#b45309',
+                              border: '1px solid rgba(245,158,11,0.3)',
+                              cursor: 'default',
+                              flexShrink: 0,
+                            }}
+                          >
+                            f
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 11, color: computedVal ? 'var(--theme-accent)' : 'var(--theme-text-muted)' }}>
+                    {computedVal ?? (param.formula ? '…' : '—')}
                   </td>
                   <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)' }}>{param.unit || '—'}</td>
                   <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)' }}>
@@ -1389,7 +1536,8 @@ export default function ParametersPage() {
                     </div>
                   </td>
                 </DraggableRow>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -1617,6 +1765,26 @@ export default function ParametersPage() {
           pointerEvents: 'none',
         }}>
           {toastMessage}
+        </div>
+      )}
+
+      {/* ── Pull from Git result ── */}
+      {pullResult && (
+        <div style={{
+          position: 'fixed', bottom: 24, right: 24, zIndex: 2000,
+          padding: '12px 16px', borderRadius: 8, maxWidth: 340,
+          backgroundColor: 'var(--theme-surface)', color: 'var(--theme-text)',
+          border: '1px solid var(--theme-border)',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+          fontSize: 12,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <strong>Pull from Git complete</strong>
+            <button onClick={() => setPullResult(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-text-muted)', padding: 2 }}><X size={13} /></button>
+          </div>
+          <div>Created: {pullResult.imported} | Updated: {pullResult.updated}</div>
+          {pullResult.errors.length > 0 && <div style={{ color: '#ef4444', marginTop: 4 }}>{pullResult.errors.length} errors</div>}
+          {pullResult.warnings.length > 0 && <div style={{ color: '#f59e0b', marginTop: 4 }}>{pullResult.warnings.length} warnings</div>}
         </div>
       )}
     </div>

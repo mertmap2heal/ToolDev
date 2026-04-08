@@ -381,3 +381,22 @@ function buildReadme(paramCount: number, formats: string[]): string {
     '```',
   ].join('\n')
 }
+
+
+// ---------------------------------------------------------------------------
+// Fetch raw file content from a GitHub repository
+// ---------------------------------------------------------------------------
+export async function fetchFileFromGitHub(
+  config: GitHubConfig,
+  owner: string,
+  repo: string,
+  filePath: string,
+  branch = 'main'
+): Promise<string> {
+  const url = `${apiBase(config)}/repos/${owner}/${repo}/contents/${filePath}?ref=${encodeURIComponent(branch)}`
+  const data = await ghFetch(url, config.token, 'GET') as Record<string, unknown>
+  if (data.encoding === 'base64' && typeof data.content === 'string') {
+    return Buffer.from(data.content.replace(/\s/g, ''), 'base64').toString('utf-8')
+  }
+  throw new Error(`GitHub: unexpected encoding "${data.encoding}" for ${filePath}`)
+}

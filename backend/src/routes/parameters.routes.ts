@@ -33,6 +33,8 @@ import {
   gitPublishSyncHandler,
   gitPublishStatusHandler,
   gitValidateTokenHandler,
+  gitPullHandler,
+  restoreParameterVersionHandler,
 } from '../controllers/parameter.controller'
 import {
   getFolders,
@@ -74,9 +76,11 @@ router.get('/:projectId/versions/:id', getParameterVersions)
 router.get('/:projectId/export/:format', exportParametersHandler)
 router.get('/:projectId/git/status', gitPublishStatusHandler)
 router.post('/:projectId/git/validate-token', gitValidateTokenHandler)
+router.post('/:projectId/git/pull', gitPullHandler)
 router.post('/:projectId/import', importParametersHandler)
 router.post('/:projectId/git/setup', gitPublishSetupHandler)
 router.post('/:projectId/git/sync', gitPublishSyncHandler)
+router.post('/:projectId/:id/restore/:versionId', restoreParameterVersionHandler)
 router.get('/:projectId', getParameters)
 router.get('/:projectId/:id', getParameter)
 router.post('/:projectId', createParameter)

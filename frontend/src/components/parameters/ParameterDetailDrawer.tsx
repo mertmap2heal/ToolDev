@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { X, Edit2, FileText, History, Link2, FunctionSquare, ChevronDown, ChevronRight, GitCompare } from 'lucide-react'
+import { X, Edit2, FileText, History, Link2, FunctionSquare, ChevronDown, ChevronRight, GitCompare, Copy, RotateCcw } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
 import { evaluateFormula } from './evaluateFormula'
 import type { Parameter } from 'shared/types/engineering.types'
@@ -78,6 +78,30 @@ export default function ParameterDetailDrawer({
   const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null)
   // Compare mode: null = timeline view, otherwise two version IDs are selected
   const [compareMode, setCompareMode] = useState(false)
+  const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [restoringVersionId, setRestoringVersionId] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedField(field)
+      setTimeout(() => setCopiedField(null), 1500)
+    }).catch(() => { /* ignore */ })
+  }
+
+  const handleRestoreVersion = async (versionId: string) => {
+    if (!parameter?.id) return
+    setRestoringVersionId(versionId)
+    try {
+      const res = await parameterService.restoreVersion(projectId, parameter.id, versionId)
+      if (res.success) {
+        queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
+        queryClient.invalidateQueries({ queryKey: ['parameter-versions', projectId, parameter.id] })
+      }
+    } catch { /* ignore */ } finally {
+      setRestoringVersionId(null)
+    }
+  }
   const [compareA, setCompareA] = useState<string | null>(null)  // older
   const [compareB, setCompareB] = useState<string | null>(null)  // newer
 
@@ -159,12 +183,40 @@ export default function ParameterDetailDrawer({
             <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 space-y-3 text-sm">
               <div>
                 <span className="text-gray-500 dark:text-gray-400">Name</span>
-                <p className="font-medium text-gray-900 dark:text-white">{parameter.name}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-medium text-gray-900 dark:text-white flex-1">{parameter.name}</p>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(parameter.name, 'name')}
+                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Copy name"
+                  >
+                    {copiedField === 'name' ? <span style={{ fontSize: 10, color: '#22c55e' }}>Copied!</span> : <Copy size={13} />}
+                  </button>
+                </div>
               </div>
               {parameter.parameterId && (
                 <div>
                   <span className="text-gray-500 dark:text-gray-400">Parameter ID</span>
-                  <p className="font-medium text-gray-900 dark:text-white">{parameter.parameterId}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-gray-900 dark:text-white flex-1 font-mono">{parameter.parameterId}</p>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(parameter.parameterId!, 'parameterId')}
+                      className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 transition-colors"
+                      title="Copy parameter ID"
+                    >
+                      {copiedField === 'parameterId' ? <span style={{ fontSize: 10, color: '#22c55e' }}>Copied!</span> : <Copy size={13} />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(parameter.id, 'dbId')}
+                      className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 transition-colors"
+                      title="Copy database UUID"
+                    >
+                      {copiedField === 'dbId' ? <span style={{ fontSize: 10, color: '#22c55e' }}>Copied!</span> : <span style={{ fontSize: 9, fontFamily: 'monospace', color: 'var(--theme-text-muted)' }}>UUID</span>}
+                    </button>
+                  </div>
                 </div>
               )}
               {parameter.description && (
@@ -491,6 +543,18 @@ export default function ParameterDetailDrawer({
                         <span className="flex-1 text-right text-xs text-gray-400 dark:text-gray-500 truncate ml-2">
                           {diffs.length > 0 ? diffs.map(d => d.label).join(', ') : summary}
                         </span>
+                        {idx > 0 && (
+                          <button
+                            type="button"
+                            onClick={e => { e.stopPropagation(); handleRestoreVersion(v.id) }}
+                            disabled={restoringVersionId === v.id}
+                            className="ml-2 flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded text-xs border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 transition-colors"
+                            title="Restore to this version"
+                          >
+                            <RotateCcw size={10} />
+                            Restore
+                          </button>
+                        )}
                       </button>
                       {isExpanded && (
                         <div className="px-3 pb-3 pt-1 bg-gray-50 dark:bg-gray-900/30 border-t border-gray-100 dark:border-gray-700">

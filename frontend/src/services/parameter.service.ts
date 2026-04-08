@@ -232,6 +232,33 @@ export const parameterService = {
     return apiClient.post(`/parameters/${projectId}/git/validate-token`, payload)
   },
 
+  async gitPull(
+    projectId: string,
+    payload: {
+      platform: 'gitlab' | 'github' | 'bitbucket' | 'azuredevops'
+      baseUrl: string
+      token: string
+      repoId: string
+      branch?: string
+      format?: string
+      filePath?: string
+      username?: string
+      workspace?: string
+      org?: string
+      project?: string
+    }
+  ): Promise<ApiResponse<{ imported: number; updated: number; errors: string[]; warnings: string[]; filePath: string; format: string }>> {
+    return apiClient.post(`/parameters/${projectId}/git/pull`, payload)
+  },
+
+  async restoreVersion(
+    projectId: string,
+    parameterId: string,
+    versionId: string
+  ): Promise<ApiResponse<Parameter>> {
+    return apiClient.post<Parameter>(`/parameters/${projectId}/${parameterId}/restore/${versionId}`, {})
+  },
+
   // ---------------------------------------------------------------------------
   // Parameter Folders
   // ---------------------------------------------------------------------------

@@ -385,3 +385,23 @@ function buildReadme(paramCount: number, formats: string[]): string {
     '```',
   ].join('\n')
 }
+
+// ---------------------------------------------------------------------------
+// Fetch raw file content from an Azure DevOps repository
+// ---------------------------------------------------------------------------
+export async function fetchFileFromAzure(
+  config: AzureDevOpsConfig,
+  repoId: string,
+  filePath: string,
+  branch = 'main'
+): Promise<string> {
+  const base = apiBase(config)
+  const url = `${base}/repositories/${encodeURIComponent(repoId)}/items?path=${encodeURIComponent(filePath)}&versionDescriptor.version=${encodeURIComponent(branch)}&versionDescriptor.versionType=Branch&$format=text&api-version=${API_VERSION}`
+  const res = await fetch(url, { headers: authHeaders(config.token) })
+  if (!res.ok) {
+    let msg = res.statusText
+    try { const d = await res.json() as Record<string, unknown>; msg = (d.message as string) ?? msg } catch { /* ignore */ }
+    throw new Error(`Azure DevOps: could not fetch ${filePath} (HTTP ${res.status}): ${msg}`)
+  }
+  return res.text()
+}
