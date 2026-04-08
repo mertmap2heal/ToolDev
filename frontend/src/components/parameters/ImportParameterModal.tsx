@@ -232,6 +232,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
   const [editingRename, setEditingRename] = useState<number | null>(null)
   // Rows for which the diff panel is expanded
   const [expandedDiffRows, setExpandedDiffRows] = useState<Set<number>>(new Set())
+  const [isDryRunResult, setIsDryRunResult] = useState(false)
 
   const importMutation = useMutation({
     mutationFn: (content: string) =>
@@ -278,6 +279,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
     setRowOverrides({})
     setEditingRename(null)
     setExpandedDiffRows(new Set())
+    setIsDryRunResult(false)
     onClose()
   }
 
@@ -383,6 +385,31 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
     handleClose()
   }
 
+  const handleDryRun = () => {
+    // Simulate the import result client-side without writing to the DB
+    const skippedCount = Object.values(rowOverrides).filter(o => o.skip).length
+    const activeRows = allRows.filter((_, ri) => !rowOverrides[ri]?.skip)
+    let willCreate = 0
+    let willUpdate = 0
+    let willSkip = 0
+    for (const row of activeRows) {
+      if (nameColIndex < 0) continue
+      const name = (row[nameColIndex] ?? '').toLowerCase()
+      const existing = existingByName.get(name)
+      if (!existing) { willCreate++; continue }
+      if (rowHasChanges(row, existing)) willUpdate++
+      else willSkip++
+    }
+    setImportResult({
+      imported: willCreate,
+      updated: willUpdate,
+      warnings: skippedCount > 0 ? [`${skippedCount} row${skippedCount !== 1 ? 's' : ''} manually skipped`] : [],
+      errors: [],
+    })
+    setIsDryRunResult(true)
+    setStep(3)
+  }
+
   const handleReset = () => {
     setStep(1)
     setCsvContent('')
@@ -399,6 +426,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
     setRowOverrides({})
     setEditingRename(null)
     setExpandedDiffRows(new Set())
+    setIsDryRunResult(false)
   }
 
   // -------------------------------------------------------------------------
@@ -973,6 +1001,13 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
           {/* ── Step 3: Result ── */}
           {step === 3 && importResult && (
             <div className="space-y-4">
+              {/* Dry run banner */}
+              {isDryRunResult && (
+                <div className="flex items-center gap-2 p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+                  <span className="text-sm font-semibold text-purple-700 dark:text-purple-300">Dry run — no changes were written</span>
+                  <span className="text-xs text-purple-600 dark:text-purple-400">This is a simulation based on client-side analysis.</span>
+                </div>
+              )}
               {/* Summary */}
               {importResult.errors.length === 0 || importResult.imported > 0 || importResult.updated > 0 ? (
                 <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg">
@@ -1046,13 +1081,24 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
               </button>
             )}
             {step === 3 && (
-              <button
-                type="button"
-                onClick={handleReset}
-                className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
-              >
-                Import another file
-              </button>
+              <div className="flex items-center gap-2">
+                {isDryRunResult && (
+                  <button
+                    type="button"
+                    onClick={() => { setStep(2); setIsDryRunResult(false); setImportResult(null) }}
+                    className="px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg transition-colors border border-blue-200 dark:border-blue-700"
+                  >
+                    Back to preview &amp; Import
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                >
+                  Import another file
+                </button>
+              </div>
             )}
           </div>
 
@@ -1086,15 +1132,26 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
             )}
 
             {step === 2 && (
-              <button
-                type="button"
-                onClick={handleImport}
-                disabled={hasMissingName || importMutation.isPending}
-                className="flex items-center gap-2 px-5 py-2 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Upload size={14} />
-                {importMutation.isPending ? 'Importing...' : 'Import'}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleDryRun}
+                  disabled={hasMissingName || importMutation.isPending}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Simulate the import and see expected results without writing to the database"
+                >
+                  Dry Run
+                </button>
+                <button
+                  type="button"
+                  onClick={handleImport}
+                  disabled={hasMissingName || importMutation.isPending}
+                  className="flex items-center gap-2 px-5 py-2 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Upload size={14} />
+                  {importMutation.isPending ? 'Importing...' : 'Import'}
+                </button>
+              </>
             )}
 
             {step === 3 && (
