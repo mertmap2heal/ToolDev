@@ -426,7 +426,7 @@ export default function ParameterDetailDrawer({
                 </p>
                 {/* Version selection list */}
                 <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden divide-y divide-gray-200 dark:divide-gray-700">
-                  {versions.map((v) => {
+                  {[...versions].reverse().map((v) => {
                     const vLabel = `v${v.version}.${String((v as unknown as Record<string, unknown>).minorVersion ?? 0)}`
                     const isA = compareA === v.id
                     const isB = compareB === v.id
@@ -511,13 +511,16 @@ export default function ParameterDetailDrawer({
                 })()}
               </div>
             ) : (
-              // ── Timeline mode ─────────────────────────────────────────────
+              // ── Timeline mode — newest first ───────────────────────────────
               <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden divide-y divide-gray-200 dark:divide-gray-700">
-                {versions.map((v, idx) => {
-                  const prevSnapshot = idx < versions.length - 1 ? (versions[idx + 1].snapshot as Record<string, unknown>) : null
+                {[...versions].reverse().map((v, displayIdx) => {
+                  // origIdx: position in the ascending (oldest-first) versions array
+                  const origIdx = versions.length - 1 - displayIdx
+                  // Diff against the immediately preceding version (one step older)
+                  const prevSnapshot = origIdx > 0 ? (versions[origIdx - 1].snapshot as Record<string, unknown>) : null
                   const diffs = computeDiff(prevSnapshot, v.snapshot as Record<string, unknown>)
                   const isExpanded = expandedVersionId === v.id
-                  const summary = snapshotSummary(v.snapshot as Record<string, unknown>)
+                  const isCurrentVersion = displayIdx === 0
 
                   return (
                     <div key={v.id} className="bg-white dark:bg-gray-800">
@@ -530,8 +533,9 @@ export default function ParameterDetailDrawer({
                           ? <ChevronDown size={14} className="text-gray-400 flex-shrink-0" />
                           : <ChevronRight size={14} className="text-gray-400 flex-shrink-0" />
                         }
-                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-14 flex-shrink-0">
+                        <span className={`text-xs font-semibold w-14 flex-shrink-0 ${isCurrentVersion ? 'text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'}`}>
                           v{v.version}.{String((v as unknown as Record<string, unknown>).minorVersion ?? 0)}
+                          {isCurrentVersion && <span className="ml-1 text-blue-400 dark:text-blue-500 font-normal text-[10px]">current</span>}
                         </span>
                         <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
                           {format(new Date(v.createdAt), 'MMM d, yyyy HH:mm')}
@@ -541,9 +545,9 @@ export default function ParameterDetailDrawer({
                           {v.createdBy?.name ?? 'Unknown'}
                         </span>
                         <span className="flex-1 text-right text-xs text-gray-400 dark:text-gray-500 truncate ml-2">
-                          {diffs.length > 0 ? diffs.map(d => d.label).join(', ') : summary}
+                          {diffs.length > 0 ? diffs.map(d => d.label).join(', ') : (origIdx === 0 ? 'Initial version' : 'No tracked changes')}
                         </span>
-                        {idx > 0 && (
+                        {!isCurrentVersion && (
                           <button
                             type="button"
                             onClick={e => { e.stopPropagation(); handleRestoreVersion(v.id) }}
@@ -560,7 +564,7 @@ export default function ParameterDetailDrawer({
                         <div className="px-3 pb-3 pt-1 bg-gray-50 dark:bg-gray-900/30 border-t border-gray-100 dark:border-gray-700">
                           {diffs.length === 0 ? (
                             <p className="text-xs text-gray-400 dark:text-gray-500 italic pl-6">
-                              {idx === versions.length - 1 ? 'Initial version — no previous version to compare.' : 'No tracked field changes detected.'}
+                              {origIdx === 0 ? 'Initial version — no previous version to compare.' : 'No tracked field changes detected.'}
                             </p>
                           ) : (
                             <div className="space-y-2 pl-6">
