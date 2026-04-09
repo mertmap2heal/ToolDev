@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { X, ChevronDown, Plus, Trash2, GripVertical, Search, Download, FileCode, FileText, CheckSquare, Square, Play, Settings } from 'lucide-react'
+import { X, ChevronDown, Plus, Trash2, GripVertical, Search, Download, FileCode, FileText, CheckSquare, Square, Play, Settings, RefreshCw } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ApiResponse } from 'shared/types/api.types'
 import { verificationService } from '../../services/verification.service'
@@ -146,6 +146,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
       queryClient.invalidateQueries({ queryKey: ['test-plan', projectId, plan.id] })
       queryClient.invalidateQueries({ queryKey: ['test-plans', projectId] })
       queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-entity-audit', projectId, 'TEST_PLAN', plan.id] })
       setIsEditing(false)
     },
   })
@@ -155,6 +156,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['test-plan', projectId, plan.id] })
       queryClient.invalidateQueries({ queryKey: ['test-plans', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-entity-audit', projectId, 'TEST_PLAN', plan.id] })
     },
   })
 
@@ -163,6 +165,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['test-plan', projectId, plan.id] })
       queryClient.invalidateQueries({ queryKey: ['test-plans', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-entity-audit', projectId, 'TEST_PLAN', plan.id] })
     },
   })
 
@@ -180,6 +183,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['test-plan', projectId, plan.id] })
       queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-entity-audit', projectId, 'TEST_PLAN', plan.id] })
     },
   })
 
@@ -187,6 +191,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
     mutationFn: (testCaseId: string) => verificationService.removeCaseFromPlan(projectId, plan.id, testCaseId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['test-plan', projectId, plan.id] })
+      queryClient.invalidateQueries({ queryKey: ['verification-entity-audit', projectId, 'TEST_PLAN', plan.id] })
     },
   })
 
@@ -879,7 +884,8 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
           )}
 
           {activeTab === 'activity' && (
-            <div className="space-y-4">
+            <div className="space-y-6">
+              <PlanAuditTrailSection projectId={projectId} planId={plan?.id} planKey={currentPlan?.key} planName={currentPlan?.name} />
               <LinkedTestResultsSection testPlanId={plan?.id} projectId={projectId} />
             </div>
           )}
@@ -1161,6 +1167,145 @@ function VerifiesElementsSection({ testPlanId, projectId }: { testPlanId?: strin
       <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
         Link this test plan to requirements or functions it verifies
       </p>
+    </div>
+  )
+}
+
+function csvEscapeCell(value: string): string {
+  if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`
+  return value
+}
+
+function downloadBlob(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.rel = 'noopener'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+type PlanAuditEventRow = {
+  id: string
+  action: string
+  performedAt: string
+  performedByUserId: string | null
+  summary: string
+}
+
+function PlanAuditTrailSection({
+  projectId,
+  planId,
+  planKey,
+  planName,
+}: {
+  projectId: string
+  planId?: string
+  planKey?: string
+  planName?: string
+}) {
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+    queryKey: ['verification-entity-audit', projectId, 'TEST_PLAN', planId],
+    queryFn: async () => {
+      const res = await verificationService.getVerificationEntityAudit(projectId, 'TEST_PLAN', planId!, {
+        limit: 200,
+      })
+      if (!res.success || !Array.isArray(res.data)) return [] as PlanAuditEventRow[]
+      return res.data as PlanAuditEventRow[]
+    },
+    enabled: !!projectId && !!planId,
+  })
+
+  const rows = Array.isArray(data) ? data : []
+
+  const safeFileBase = `${planKey ?? 'plan'}-${planName ?? planId ?? 'audit'}`
+    .replace(/[^\w.\-]+/g, '_')
+    .slice(0, 120)
+
+  const exportCsv = () => {
+    const header = ['performedAt', 'action', 'summary', 'performedByUserId', 'id']
+    const lines = [header.join(',')]
+    for (const r of rows) {
+      lines.push(
+        [r.performedAt, r.action, r.summary, r.performedByUserId ?? '', r.id]
+          .map((c) => csvEscapeCell(String(c ?? '')))
+          .join(',')
+      )
+    }
+    downloadBlob(`${safeFileBase}-audit.csv`, new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' }))
+  }
+
+  const exportJson = () => {
+    downloadBlob(`${safeFileBase}-audit.json`, new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' }))
+  }
+
+  if (!planId) return null
+
+  return (
+    <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Audit trail</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+          >
+            <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={rows.length === 0}
+            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+          >
+            Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={exportJson}
+            disabled={rows.length === 0}
+            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+          >
+            Export JSON
+          </button>
+        </div>
+      </div>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+        Compliance log for this test plan (updates, status, case changes, and related actions).
+      </p>
+      {isLoading && <p className="text-sm text-gray-500 dark:text-gray-400">Loading audit events…</p>}
+      {isError && (
+        <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+          {error instanceof Error ? error.message : 'Could not load audit trail.'}
+        </p>
+      )}
+      {!isLoading && !isError && rows.length === 0 && (
+        <p className="text-sm text-gray-500 dark:text-gray-400">No audit events recorded for this plan yet.</p>
+      )}
+      {!isLoading && !isError && rows.length > 0 && (
+        <ul className="space-y-3 max-h-72 overflow-y-auto pr-1" aria-label="Plan audit events">
+          {rows.map((r) => (
+            <li key={r.id} className="text-sm border-b border-gray-100 dark:border-gray-700 pb-3 last:border-0">
+              <div className="font-medium text-gray-900 dark:text-white">{r.summary}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <time dateTime={r.performedAt}>{new Date(r.performedAt).toLocaleString()}</time>
+                <span className="mx-1">·</span>
+                <span>{r.action}</span>
+                {r.performedByUserId ? (
+                  <>
+                    <span className="mx-1">·</span>
+                    <span>{r.performedByUserId}</span>
+                  </>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

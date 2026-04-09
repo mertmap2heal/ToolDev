@@ -299,6 +299,19 @@ export const addCaseToPlan = async (req: AuthRequest, res: Response) => {
       },
       include: { testCase: true },
     })
+    await auditService.logEvent({
+      projectId,
+      entityType: 'TEST_PLAN',
+      entityId: id,
+      action: AuditAction.UPDATE,
+      newValue: {
+        testCaseId,
+        testCaseKey: planCase.testCase?.key,
+        orderIndex: planCase.orderIndex,
+        isMandatory: planCase.isMandatory,
+      },
+      performedByUserId: req.userId,
+    })
     res.json({ success: true, data: planCase })
   } catch (error: any) {
     console.error('Add case to plan error:', error)
@@ -310,8 +323,24 @@ export const removeCaseFromPlan = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId, id } = req.params
     const { testCaseId } = req.body
+    const existingCase = await prisma.verTestCase.findFirst({
+      where: { id: testCaseId, projectId },
+      select: { id: true, key: true, title: true },
+    })
     await prisma.verTestPlanCase.deleteMany({
       where: { testPlanId: id, testCaseId },
+    })
+    await auditService.logEvent({
+      projectId,
+      entityType: 'TEST_PLAN',
+      entityId: id,
+      action: AuditAction.UPDATE,
+      newValue: {
+        removedTestCaseId: testCaseId,
+        testCaseKey: existingCase?.key,
+        testCaseTitle: existingCase?.title,
+      },
+      performedByUserId: req.userId,
     })
     res.json({ success: true, message: 'Test case removed from plan' })
   } catch (error: any) {
@@ -399,6 +428,19 @@ export const reorderCases = async (req: AuthRequest, res: Response) => {
         data: { orderIndex },
       })
     }
+    await auditService.logEvent({
+      projectId,
+      entityType: 'TEST_PLAN',
+      entityId: id,
+      action: AuditAction.UPDATE,
+      newValue: {
+        caseOrders: caseOrders.map((c: { testCaseId: string; orderIndex: number }) => ({
+          testCaseId: c.testCaseId,
+          orderIndex: c.orderIndex,
+        })),
+      },
+      performedByUserId: req.userId,
+    })
     res.json({ success: true, message: 'Cases reordered' })
   } catch (error: any) {
     console.error('Reorder cases error:', error)

@@ -121,4 +121,65 @@ export const auditService = {
 
     return events as VerAuditEvent[]
   },
+
+  /**
+   * Paginated entity audit trail (newest first).
+   */
+  async listEntityAuditTrail(params: {
+    projectId: string
+    entityType: string
+    entityId: string
+    limit?: number
+    offset?: number
+    actions?: string[]
+  }): Promise<VerAuditEvent[]> {
+    const limit = Math.min(Math.max(params.limit ?? 100, 1), 500)
+    const offset = Math.max(params.offset ?? 0, 0)
+    const where: any = {
+      projectId: params.projectId,
+      entityType: params.entityType,
+      entityId: params.entityId,
+    }
+    if (params.actions?.length) {
+      where.action = { in: params.actions }
+    }
+    const events = await prisma.verAuditEvent.findMany({
+      where,
+      orderBy: [{ performedAt: 'desc' }, { id: 'desc' }],
+      take: limit,
+      skip: offset,
+    })
+    return events as VerAuditEvent[]
+  },
+
+  /**
+   * Paginated project audit trail with optional filters.
+   */
+  async listProjectAuditTrail(params: {
+    projectId: string
+    limit?: number
+    offset?: number
+    entityType?: string
+    actions?: string[]
+    performedAtGte?: Date
+    performedAtLte?: Date
+  }): Promise<VerAuditEvent[]> {
+    const limit = Math.min(Math.max(params.limit ?? 100, 1), 500)
+    const offset = Math.max(params.offset ?? 0, 0)
+    const where: any = { projectId: params.projectId }
+    if (params.entityType) where.entityType = params.entityType
+    if (params.actions?.length) where.action = { in: params.actions }
+    if (params.performedAtGte || params.performedAtLte) {
+      where.performedAt = {}
+      if (params.performedAtGte) where.performedAt.gte = params.performedAtGte
+      if (params.performedAtLte) where.performedAt.lte = params.performedAtLte
+    }
+    const events = await prisma.verAuditEvent.findMany({
+      where,
+      orderBy: [{ performedAt: 'desc' }, { id: 'desc' }],
+      take: limit,
+      skip: offset,
+    })
+    return events as VerAuditEvent[]
+  },
 }

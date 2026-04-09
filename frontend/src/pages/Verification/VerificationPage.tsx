@@ -17,6 +17,12 @@ import {
   Square,
   FileCode,
   LayoutList,
+  MoreVertical,
+  BookmarkPlus,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  AlignJustify,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { verificationService } from '../../services/verification.service'
@@ -157,6 +163,86 @@ const saveColumnPreferences = (entityType: string, visibleColumns: Set<ColumnKey
   }
 }
 
+const PLAN_STATUS_CHIPS = ['', 'DRAFT', 'REVIEWED', 'APPROVED', 'ACTIVE', 'CLOSED'] as const
+
+const defaultPlanColumnOrder = () => TEST_PLAN_COLUMNS.map((c) => c.key)
+
+function loadPlanColumnOrder(projectId?: string): string[] {
+  try {
+    const raw = localStorage.getItem(`verification-plan-column-order::${projectId ?? 'default'}`)
+    if (raw) {
+      const parsed = JSON.parse(raw) as string[]
+      if (Array.isArray(parsed) && parsed.length) {
+        const known = new Set(TEST_PLAN_COLUMNS.map((c) => c.key))
+        const head = parsed.filter((k) => known.has(k))
+        const tail = defaultPlanColumnOrder().filter((k) => !head.includes(k))
+        return [...head, ...tail]
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return defaultPlanColumnOrder()
+}
+
+function savePlanColumnOrder(projectId: string | undefined, order: string[]) {
+  try {
+    localStorage.setItem(`verification-plan-column-order::${projectId ?? 'default'}`, JSON.stringify(order))
+  } catch {
+    /* ignore */
+  }
+}
+
+export type SavedPlanView = {
+  id: string
+  name: string
+  planQ: string
+  planStatus: string
+  planSort: string
+  planDir: string
+  planUpdatedFrom: string
+  planUpdatedTo: string
+}
+
+function loadSavedPlanViews(projectId?: string): SavedPlanView[] {
+  try {
+    const raw = localStorage.getItem(`verification-plan-saved-views::${projectId ?? 'default'}`)
+    if (raw) {
+      const arr = JSON.parse(raw) as SavedPlanView[]
+      return Array.isArray(arr) ? arr : []
+    }
+  } catch {
+    /* ignore */
+  }
+  return []
+}
+
+function saveSavedPlanViews(projectId: string | undefined, views: SavedPlanView[]) {
+  try {
+    localStorage.setItem(`verification-plan-saved-views::${projectId ?? 'default'}`, JSON.stringify(views))
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadPlansDensity(projectId?: string): 'comfortable' | 'compact' {
+  try {
+    const v = localStorage.getItem(`verification-plans-density::${projectId ?? 'default'}`)
+    if (v === 'compact' || v === 'comfortable') return v
+  } catch {
+    /* ignore */
+  }
+  return 'comfortable'
+}
+
+function persistPlansDensity(projectId: string | undefined, d: 'comfortable' | 'compact') {
+  try {
+    localStorage.setItem(`verification-plans-density::${projectId ?? 'default'}`, d)
+  } catch {
+    /* ignore */
+  }
+}
+
 export default function VerificationPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
@@ -178,6 +264,12 @@ export default function VerificationPage() {
   const statusFilter = searchParams.get('status') || ''
   const mocFilter = searchParams.get('moc') || ''
   const quickFilter = searchParams.get('quick') || ''
+  const planQParam = searchParams.get('planQ') ?? ''
+  const planStatusParam = searchParams.get('planStatus') ?? ''
+  const planSortParam = searchParams.get('planSort') ?? 'updatedAt'
+  const planDirParam = (searchParams.get('planDir') ?? 'desc') as 'asc' | 'desc'
+  const planUpdatedFromParam = searchParams.get('planUpdatedFrom') ?? ''
+  const planUpdatedToParam = searchParams.get('planUpdatedTo') ?? ''
   const [searchQuery, setSearchQuery] = useState('')
 
   // Modal states
@@ -190,7 +282,6 @@ export default function VerificationPage() {
   const queryClient = useQueryClient()
 
   const traceLinksData = queryClient.getQueryData(LINKAGE_V1 ? ['links', projectId] : ['trace-links', projectId]) as any[] | undefined
-  const runsData = queryClient.getQueryData(['test-runs', projectId]) as any[] | undefined
 
   const requirementsCountByCaseId = useMemo(() => {
     const links = Array.isArray(traceLinksData) ? traceLinksData : []
@@ -210,16 +301,6 @@ export default function VerificationPage() {
     }
     return m
   }, [traceLinksData])
-
-  const runsCountByPlanId = useMemo(() => {
-    const m = new Map<string, number>()
-    ;(Array.isArray(runsData) ? runsData : []).forEach((r: any) => {
-      const planId = r.testPlanId ?? r.testPlan?.id
-      if (!planId) return
-      m.set(planId, (m.get(planId) ?? 0) + 1)
-    })
-    return m
-  }, [runsData])
 
   // Open create modal when navigating from Templates "Use" (useTemplateId in URL)
   useEffect(() => {
@@ -324,6 +405,31 @@ export default function VerificationPage() {
     } catch (e) { /* ignore */ }
   }
 
+  const [selectedPlanIds, setSelectedPlanIds] = useState<Set<string>>(new Set())
+  const [planRowMenuId, setPlanRowMenuId] = useState<string | null>(null)
+  const [planColumnOrder, setPlanColumnOrder] = useState<string[]>(() => defaultPlanColumnOrder())
+  const [plansDensity, setPlansDensity] = useState<'comfortable' | 'compact'>(() => loadPlansDensity(undefined))
+  const [savedPlanViews, setSavedPlanViews] = useState<SavedPlanView[]>([])
+  const [savePlanViewName, setSavePlanViewName] = useState('')
+  const [savePlanViewOpen, setSavePlanViewOpen] = useState(false)
+
+  useEffect(() => {
+    setPlanColumnOrder(loadPlanColumnOrder(projectId))
+    setPlansDensity(loadPlansDensity(projectId))
+    setSavedPlanViews(loadSavedPlanViews(projectId))
+    setSelectedPlanIds(new Set())
+  }, [projectId])
+
+  useEffect(() => {
+    const close = (e: MouseEvent) => {
+      const el = e.target as HTMLElement | null
+      if (el?.closest?.('[data-plan-row-menu]')) return
+      setPlanRowMenuId(null)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [])
+
   // Close column selector when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -387,7 +493,13 @@ export default function VerificationPage() {
   })
 
   // Fetch test plans (always when on Verification so tree and tabs have data)
-  const { data: testPlans = [], isLoading: loadingPlans } = useQuery({
+  const {
+    data: testPlans = [],
+    isLoading: loadingPlans,
+    isError: plansLoadError,
+    error: plansError,
+    refetch: refetchPlans,
+  } = useQuery({
     queryKey: ['test-plans', projectId],
     queryFn: async () => {
       if (!projectId) return []
@@ -462,6 +574,28 @@ export default function VerificationPage() {
     },
     enabled: !!projectId,
   })
+
+  // Test runs (for plan "Runs" column counts; shares query key with other consumers)
+  const { data: testRunsList = [] } = useQuery({
+    queryKey: ['test-runs', projectId],
+    queryFn: async () => {
+      if (!projectId) return []
+      const res = await verificationService.getTestRuns(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    enabled: !!projectId,
+  })
+
+  const runsCountByPlanId = useMemo(() => {
+    const m = new Map<string, number>()
+    const runs = Array.isArray(testRunsList) ? testRunsList : []
+    runs.forEach((r: any) => {
+      const pid = r.testPlanId ?? r.testPlan?.id
+      if (!pid) return
+      m.set(pid, (m.get(pid) ?? 0) + 1)
+    })
+    return m
+  }, [testRunsList])
 
   // Fetch single run when focus is test-run (for opening run drawer from tree)
   const { data: focusedRun } = useQuery({
@@ -587,6 +721,21 @@ export default function VerificationPage() {
       queryClient.invalidateQueries({ queryKey: ['test-plans', projectId] })
       queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
       setDeleteConfirmation(null)
+    },
+  })
+
+  const bulkDeletePlansMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      for (const id of ids) {
+        const res = (await verificationService.deleteTestPlan(projectId!, id)) as { success?: boolean; error?: string }
+        if (!res?.success) throw new Error(res?.error || 'Failed to delete plan')
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['test-plans', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
+      setSelectedPlanIds(new Set())
+      setPlanRowMenuId(null)
     },
   })
 
@@ -724,10 +873,246 @@ export default function VerificationPage() {
     }
   }
 
-  const filteredPlans = testPlans.filter((plan: any) =>
-    plan.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    plan.key?.toLowerCase().includes(searchQuery.toLowerCase())
+  const processedPlans = useMemo(() => {
+    const rows = Array.isArray(testPlans) ? [...testPlans] : []
+    const q = planQParam.trim().toLowerCase()
+    const fromMs = planUpdatedFromParam ? new Date(planUpdatedFromParam).setHours(0, 0, 0, 0) : null
+    const toMs = planUpdatedToParam ? new Date(planUpdatedToParam).setHours(23, 59, 59, 999) : null
+    const filtered = rows.filter((plan: any) => {
+      if (q) {
+        const name = String(plan.name ?? '').toLowerCase()
+        const key = String(plan.key ?? '').toLowerCase()
+        if (!name.includes(q) && !key.includes(q)) return false
+      }
+      if (planStatusParam && String(plan.status ?? '') !== planStatusParam) return false
+      if (fromMs != null && !Number.isNaN(fromMs)) {
+        const u = plan.updatedAt ? new Date(plan.updatedAt).getTime() : 0
+        if (u < fromMs) return false
+      }
+      if (toMs != null && !Number.isNaN(toMs)) {
+        const u = plan.updatedAt ? new Date(plan.updatedAt).getTime() : 0
+        if (u > toMs) return false
+      }
+      return true
+    })
+    const dir = planDirParam === 'asc' ? 1 : -1
+    const sortKey = planSortParam
+    const cmp = (a: any, b: any) => {
+      let va: string | number = ''
+      let vb: string | number = ''
+      switch (sortKey) {
+        case 'key':
+          va = String(a.key ?? '').toLowerCase()
+          vb = String(b.key ?? '').toLowerCase()
+          break
+        case 'name':
+          va = String(a.name ?? '').toLowerCase()
+          vb = String(b.name ?? '').toLowerCase()
+          break
+        case 'status':
+          va = String(a.status ?? '').toLowerCase()
+          vb = String(b.status ?? '').toLowerCase()
+          break
+        case 'phase':
+          va = String(a.phase ?? '').toLowerCase()
+          vb = String(b.phase ?? '').toLowerCase()
+          break
+        case 'createdAt':
+          va = a.createdAt ? new Date(a.createdAt).getTime() : 0
+          vb = b.createdAt ? new Date(b.createdAt).getTime() : 0
+          break
+        case 'updatedAt':
+        default:
+          va = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
+          vb = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
+      }
+      if (typeof va === 'number' && typeof vb === 'number') return va === vb ? 0 : va < vb ? -dir : dir
+      if (va < vb) return -dir
+      if (va > vb) return dir
+      return 0
+    }
+    filtered.sort(cmp)
+    return filtered
+  }, [
+    testPlans,
+    planQParam,
+    planStatusParam,
+    planSortParam,
+    planDirParam,
+    planUpdatedFromParam,
+    planUpdatedToParam,
+  ])
+
+  const hasActivePlanFilters =
+    !!planQParam.trim() ||
+    !!planStatusParam ||
+    !!planUpdatedFromParam ||
+    !!planUpdatedToParam ||
+    planSortParam !== 'updatedAt' ||
+    planDirParam !== 'desc'
+
+  const clearPlanFilters = useCallback(() => {
+    setSearchParams(
+      (p) => {
+        const n = new URLSearchParams(p)
+        n.delete('planQ')
+        n.delete('planStatus')
+        n.delete('planSort')
+        n.delete('planDir')
+        n.delete('planUpdatedFrom')
+        n.delete('planUpdatedTo')
+        return n
+      },
+      { replace: true }
+    )
+  }, [setSearchParams])
+
+  const setPlanParams = useCallback(
+    (patch: Record<string, string | undefined>) => {
+      setSearchParams(
+        (p) => {
+          const n = new URLSearchParams(p)
+          Object.entries(patch).forEach(([k, v]) => {
+            if (v === undefined || v === '') n.delete(k)
+            else n.set(k, v)
+          })
+          return n
+        },
+        { replace: true }
+      )
+    },
+    [setSearchParams]
   )
+
+  const togglePlansDensity = useCallback(() => {
+    const next = plansDensity === 'comfortable' ? 'compact' : 'comfortable'
+    setPlansDensity(next)
+    persistPlansDensity(projectId, next)
+  }, [plansDensity, projectId])
+
+  const movePlanColumn = useCallback(
+    (columnKey: string, direction: -1 | 1) => {
+      setPlanColumnOrder((prev) => {
+        const idx = prev.indexOf(columnKey)
+        if (idx < 0) return prev
+        const j = idx + direction
+        if (j < 0 || j >= prev.length) return prev
+        const next = [...prev]
+        ;[next[idx], next[j]] = [next[j], next[idx]]
+        savePlanColumnOrder(projectId, next)
+        return next
+      })
+    },
+    [projectId]
+  )
+
+  const resetPlanColumnOrder = useCallback(() => {
+    const next = defaultPlanColumnOrder()
+    setPlanColumnOrder(next)
+    savePlanColumnOrder(projectId, next)
+  }, [projectId])
+
+  const planCellPad = plansDensity === 'compact' ? 'px-3 py-2' : 'px-4 py-3'
+  const planHeadPad = plansDensity === 'compact' ? 'px-3 py-2' : 'px-4 py-3'
+
+  const orderedPlanDataColumns = useMemo(
+    () => planColumnOrder.filter((k) => planColumns.has(k) && k !== 'description'),
+    [planColumnOrder, planColumns]
+  )
+
+  const planColumnLabel = useMemo(
+    () => Object.fromEntries(TEST_PLAN_COLUMNS.map((c) => [c.key, c.label])) as Record<string, string>,
+    []
+  )
+
+  const renderPlanDataCell = (colKey: string, plan: any) => {
+    const textCls = 'text-sm text-gray-600 dark:text-gray-400'
+    switch (colKey) {
+      case 'key':
+        return (
+          <td key={colKey} className={planCellPad}>
+            <span className="font-mono text-sm text-gray-600 dark:text-gray-400">{plan.key}</span>
+          </td>
+        )
+      case 'name':
+        return (
+          <td key={colKey} className={planCellPad}>
+            <div className="font-medium text-gray-900 dark:text-white">{plan.name}</div>
+            {planColumns.has('description') && plan.description && (
+              <div className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-1">{plan.description}</div>
+            )}
+          </td>
+        )
+      case 'status':
+        return (
+          <td key={colKey} className={planCellPad}>
+            <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(plan.status)}`} title={plan.status}>
+              {plan.status}
+            </span>
+          </td>
+        )
+      case 'phase':
+        return (
+          <td key={colKey} className={clsx(planCellPad, textCls)}>
+            {plan.phase || '—'}
+          </td>
+        )
+      case 'testCases':
+        return (
+          <td key={colKey} className={clsx(planCellPad, textCls)}>
+            {plan.planCases?.length || 0}
+          </td>
+        )
+      case 'setups':
+        return (
+          <td key={colKey} className={clsx(planCellPad, textCls)}>
+            {(Array.isArray(plan.linkedSetups) ? plan.linkedSetups.length : Array.isArray(plan.planSetups) ? plan.planSetups.length : 0) || 0}
+          </td>
+        )
+      case 'runs':
+        return (
+          <td key={colKey} className={clsx(planCellPad, textCls)}>
+            {runsCountByPlanId.get(plan.id) ?? 0}
+          </td>
+        )
+      case 'testResults':
+        return (
+          <td key={colKey} className={clsx(planCellPad, textCls)}>
+            {plan.linkedTestResultsCount > 0 ? (
+              <div className="text-xs text-blue-600 dark:text-blue-400">
+                {formatTestResultsSummary(plan.linkedTestResultsStatusSummary)}
+              </div>
+            ) : (
+              '—'
+            )}
+          </td>
+        )
+      case 'owner':
+        return (
+          <td key={colKey} className={clsx(planCellPad, textCls)} title={plan.ownerUserId || undefined}>
+            {plan.ownerUserId || '—'}
+          </td>
+        )
+      case 'createdAt':
+        return (
+          <td key={colKey} className={clsx(planCellPad, textCls)}>
+            {plan.createdAt ? new Date(plan.createdAt).toLocaleDateString() : '—'}
+          </td>
+        )
+      case 'updatedAt':
+        return (
+          <td key={colKey} className={clsx(planCellPad, textCls)}>
+            {plan.updatedAt ? new Date(plan.updatedAt).toLocaleDateString() : '—'}
+          </td>
+        )
+      default:
+        return null
+    }
+  }
+
+  const allPlanRowsSelected =
+    processedPlans.length > 0 && processedPlans.every((p: any) => selectedPlanIds.has(p.id))
+  const somePlanRowsSelected = processedPlans.some((p: any) => selectedPlanIds.has(p.id))
 
   const filteredCases = (Array.isArray(testCases) ? testCases : []).filter((case_: any) => {
     const matchesSearch =
@@ -797,16 +1182,44 @@ export default function VerificationPage() {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
           <input
-            type="text"
-            placeholder={`Search ${activeTab}...`}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            type="search"
+            aria-label={activeTab === 'plans' ? 'Search test plans' : `Search ${activeTab}`}
+            placeholder={activeTab === 'plans' ? 'Search plans by name or key (URL: planQ)' : `Search ${activeTab}...`}
+            value={activeTab === 'plans' ? planQParam : searchQuery}
+            onChange={(e) => {
+              const v = e.target.value
+              if (activeTab === 'plans') {
+                setSearchParams(
+                  (p) => {
+                    const n = new URLSearchParams(p)
+                    if (!v.trim()) n.delete('planQ')
+                    else n.set('planQ', v)
+                    return n
+                  },
+                  { replace: true }
+                )
+              } else {
+                setSearchQuery(v)
+              }
+            }}
             className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           />
-          {searchQuery && (
+          {(activeTab === 'plans' ? planQParam : searchQuery) && (
             <button
-              onClick={() => setSearchQuery('')}
+              type="button"
+              onClick={() => {
+                if (activeTab === 'plans') {
+                  setSearchParams((p) => {
+                    const n = new URLSearchParams(p)
+                    n.delete('planQ')
+                    return n
+                  }, { replace: true })
+                } else {
+                  setSearchQuery('')
+                }
+              }}
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              aria-label="Clear search"
             >
               <X size={16} />
             </button>
@@ -934,6 +1347,224 @@ export default function VerificationPage() {
 
       {activeTab === 'plans' && (
         <div className="space-y-4">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3">
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide w-full sm:w-auto">Status</span>
+              <div className="flex flex-wrap gap-2">
+                {PLAN_STATUS_CHIPS.map((st) => {
+                  const active = (planStatusParam || '') === st
+                  return (
+                    <button
+                      key={st || 'all'}
+                      type="button"
+                      onClick={() => setPlanParams({ planStatus: st || undefined })}
+                      className={clsx(
+                        'px-3 py-1.5 text-sm rounded-full border transition-colors',
+                        active
+                          ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+                          : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      )}
+                    >
+                      {st || 'All'}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3 items-end">
+              <label className="flex flex-col gap-1 text-xs text-gray-600 dark:text-gray-400">
+                Sort by
+                <select
+                  value={planSortParam}
+                  onChange={(e) => setPlanParams({ planSort: e.target.value })}
+                  className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-2 py-1.5"
+                  aria-label="Sort plans by"
+                >
+                  <option value="updatedAt">Updated</option>
+                  <option value="createdAt">Created</option>
+                  <option value="key">Key</option>
+                  <option value="name">Name</option>
+                  <option value="status">Status</option>
+                  <option value="phase">Phase</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-gray-600 dark:text-gray-400">
+                Direction
+                <select
+                  value={planDirParam}
+                  onChange={(e) => setPlanParams({ planDir: e.target.value })}
+                  className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-2 py-1.5"
+                  aria-label="Sort direction"
+                >
+                  <option value="desc">Newest first</option>
+                  <option value="asc">Oldest first</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-gray-600 dark:text-gray-400">
+                Updated from
+                <input
+                  type="date"
+                  value={planUpdatedFromParam}
+                  onChange={(e) => setPlanParams({ planUpdatedFrom: e.target.value || undefined })}
+                  className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-2 py-1.5"
+                  aria-label="Filter plans updated on or after"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-gray-600 dark:text-gray-400">
+                Updated to
+                <input
+                  type="date"
+                  value={planUpdatedToParam}
+                  onChange={(e) => setPlanParams({ planUpdatedTo: e.target.value || undefined })}
+                  className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-2 py-1.5"
+                  aria-label="Filter plans updated on or before"
+                />
+              </label>
+              {hasActivePlanFilters && (
+                <button
+                  type="button"
+                  onClick={clearPlanFilters}
+                  className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Clear filters
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={togglePlansDensity}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                title={plansDensity === 'compact' ? 'Comfortable density' : 'Compact density'}
+                aria-label={plansDensity === 'compact' ? 'Switch to comfortable row density' : 'Switch to compact row density'}
+              >
+                <AlignJustify size={16} />
+                {plansDensity === 'compact' ? 'Compact' : 'Comfortable'}
+              </button>
+              <div className="flex flex-col gap-1 text-xs text-gray-600 dark:text-gray-400 min-w-[10rem]">
+                <span>Saved view</span>
+                <div className="flex gap-1">
+                  <select
+                    className="flex-1 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-2 py-1.5"
+                    aria-label="Apply saved plan view"
+                    defaultValue=""
+                    onChange={(e) => {
+                      const id = e.target.value
+                      e.target.value = ''
+                      if (!id) return
+                      const v = savedPlanViews.find((x) => x.id === id)
+                      if (!v) return
+                      setPlanParams({
+                        planQ: v.planQ || undefined,
+                        planStatus: v.planStatus || undefined,
+                        planSort: v.planSort || 'updatedAt',
+                        planDir: v.planDir || 'desc',
+                        planUpdatedFrom: v.planUpdatedFrom || undefined,
+                        planUpdatedTo: v.planUpdatedTo || undefined,
+                      })
+                    }}
+                  >
+                    <option value="">Apply saved view…</option>
+                    {savedPlanViews.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSavePlanViewOpen((o) => !o)
+                  setSavePlanViewName('')
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                <BookmarkPlus size={16} />
+                Save view
+              </button>
+            </div>
+            {savePlanViewOpen && (
+              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-gray-200 dark:border-gray-700">
+                <input
+                  type="text"
+                  value={savePlanViewName}
+                  onChange={(e) => setSavePlanViewName(e.target.value)}
+                  placeholder="View name"
+                  className="flex-1 min-w-[12rem] text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2"
+                  aria-label="Saved view name"
+                />
+                <button
+                  type="button"
+                  disabled={!savePlanViewName.trim()}
+                  onClick={() => {
+                    const name = savePlanViewName.trim()
+                    if (!name) return
+                    const id =
+                      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+                        ? crypto.randomUUID()
+                        : `v-${Date.now()}`
+                    const v: SavedPlanView = {
+                      id,
+                      name,
+                      planQ: planQParam,
+                      planStatus: planStatusParam,
+                      planSort: planSortParam,
+                      planDir: planDirParam,
+                      planUpdatedFrom: planUpdatedFromParam,
+                      planUpdatedTo: planUpdatedToParam,
+                    }
+                    const next = [...savedPlanViews, v]
+                    setSavedPlanViews(next)
+                    saveSavedPlanViews(projectId, next)
+                    setSavePlanViewOpen(false)
+                    setSavePlanViewName('')
+                  }}
+                  className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSavePlanViewOpen(false)
+                    setSavePlanViewName('')
+                  }}
+                  className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+
+          {selectedPlanIds.size > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <span className="text-sm text-gray-800 dark:text-gray-200">
+                {selectedPlanIds.size} plan{selectedPlanIds.size !== 1 ? 's' : ''} selected
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPlanIds(new Set())}
+                  className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
+                >
+                  Clear selection
+                </button>
+                <button
+                  type="button"
+                  disabled={bulkDeletePlansMutation.isPending}
+                  onClick={() => {
+                    if (!confirm(`Delete ${selectedPlanIds.size} test plan(s)? This cannot be undone.`)) return
+                    bulkDeletePlansMutation.mutate(Array.from(selectedPlanIds))
+                  }}
+                  className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50"
+                >
+                  Delete selected
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 flex-wrap">
             <button
               onClick={() => persistListViewStyle(listViewStyle === 'document' ? 'table' : 'document')}
@@ -944,6 +1575,7 @@ export default function VerificationPage() {
                   : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
               )}
               title="Document View"
+              aria-label={listViewStyle === 'document' ? 'Switch to table view' : 'Switch to document view'}
             >
               <LayoutList size={16} />
             </button>
@@ -956,25 +1588,29 @@ export default function VerificationPage() {
                 Columns
               </button>
               {columnSelectorOpen.type === 'plans' && (
-                <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Select Columns</h3>
+                <div className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 p-4 max-h-[min(80vh,32rem)] flex flex-col">
+                  <div className="flex items-center justify-between mb-3 flex-shrink-0">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Columns</h3>
                     <button
+                      type="button"
                       onClick={() => setColumnSelectorOpen({ type: null })}
                       className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                      aria-label="Close column menu"
                     >
                       <X size={16} />
                     </button>
                   </div>
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                  <div className="space-y-2 max-h-48 overflow-y-auto flex-shrink-0">
                     {TEST_PLAN_COLUMNS.map((col) => (
                       <label
                         key={col.key}
                         className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded cursor-pointer"
                       >
                         <button
+                          type="button"
                           onClick={() => toggleColumn('plans', col.key)}
                           className="text-gray-600 dark:text-gray-400"
+                          aria-label={planColumns.has(col.key) ? `Hide ${col.label}` : `Show ${col.label}`}
                         >
                           {planColumns.has(col.key) ? (
                             <CheckSquare size={16} className="text-blue-600" />
@@ -985,6 +1621,52 @@ export default function VerificationPage() {
                         <span className="text-sm text-gray-700 dark:text-gray-300">{col.label}</span>
                       </label>
                     ))}
+                  </div>
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mt-3 min-h-0 flex flex-col">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Order</span>
+                      <button
+                        type="button"
+                        onClick={resetPlanColumnOrder}
+                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        Reset order
+                      </button>
+                    </div>
+                    <div className="space-y-1 overflow-y-auto max-h-40 pr-1">
+                      {planColumnOrder.map((key, ordIdx) => {
+                        const col = TEST_PLAN_COLUMNS.find((c) => c.key === key)
+                        if (!col) return null
+                        return (
+                          <div
+                            key={key}
+                            className="flex items-center justify-between gap-1 py-1 px-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700/40"
+                          >
+                            <span className="text-xs text-gray-700 dark:text-gray-300 truncate flex-1">{col.label}</span>
+                            <div className="flex gap-0.5 flex-shrink-0">
+                              <button
+                                type="button"
+                                disabled={ordIdx === 0}
+                                onClick={() => movePlanColumn(key, -1)}
+                                className="p-1 rounded border border-gray-200 dark:border-gray-600 disabled:opacity-40 text-gray-600 dark:text-gray-400"
+                                aria-label={`Move ${col.label} up`}
+                              >
+                                <ChevronUp size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={ordIdx >= planColumnOrder.length - 1}
+                                onClick={() => movePlanColumn(key, 1)}
+                                className="p-1 rounded border border-gray-200 dark:border-gray-600 disabled:opacity-40 text-gray-600 dark:text-gray-400"
+                                aria-label={`Move ${col.label} down`}
+                              >
+                                <ChevronDown size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1005,14 +1687,34 @@ export default function VerificationPage() {
               Create Test Plan
             </button>
           </div>
-          {loadingPlans ? (
-            <div className="flex items-center justify-center p-12">
-              <RefreshCw className="animate-spin text-gray-400" size={24} />
+          {plansLoadError && !loadingPlans ? (
+            <div
+              className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
+              role="alert"
+            >
+              <p className="text-sm text-red-800 dark:text-red-200">
+                {plansError instanceof Error ? plansError.message : 'Could not load test plans.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => refetchPlans()}
+                className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium bg-white dark:bg-gray-800 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200 hover:bg-red-100/50 dark:hover:bg-red-900/30"
+              >
+                <RefreshCw size={16} />
+                Retry
+              </button>
+            </div>
+          ) : loadingPlans ? (
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3 animate-pulse" aria-busy="true" aria-label="Loading test plans">
+              <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded" />
+              <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded" />
+              <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded" />
+              <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
             </div>
           ) : listViewStyle === 'document' ? (
-            filteredPlans.length > 0 ? (
+            processedPlans.length > 0 ? (
               <div className="overflow-y-auto space-y-6 p-1">
-                {filteredPlans.map((plan: any) => (
+                {processedPlans.map((plan: any) => (
                   <TestPlanDocumentCard key={plan.id} plan={plan} onClick={() => selectPlanFromList(plan)} />
                 ))}
               </div>
@@ -1021,182 +1723,158 @@ export default function VerificationPage() {
                 <p className="text-gray-600 dark:text-gray-400">No test plans found</p>
               </div>
             )
-          ) : filteredPlans.length > 0 ? (
+          ) : processedPlans.length > 0 ? (
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-900">
-                  <tr>
-                    {planColumns.has('key') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Key</th>
-                    )}
-                    {planColumns.has('name') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Name</th>
-                    )}
-                    {planColumns.has('status') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Status</th>
-                    )}
-                    {planColumns.has('phase') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Phase</th>
-                    )}
-                    {planColumns.has('testCases') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Test Cases</th>
-                    )}
-                    {planColumns.has('setups') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Setups</th>
-                    )}
-                    {planColumns.has('runs') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Runs</th>
-                    )}
-                    {planColumns.has('testResults') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Test Results</th>
-                    )}
-                    {planColumns.has('owner') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Owner</th>
-                    )}
-                    {planColumns.has('createdAt') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Created</th>
-                    )}
-                    {planColumns.has('updatedAt') && (
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Updated</th>
-                    )}
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {filteredPlans.map((plan: any) => (
-                    <tr
-                      key={plan.id}
-                      onClick={() => selectPlanFromList(plan)}
-                      className={clsx(
-                        'cursor-pointer group',
-                        plan.id === selectedPlanId
-                          ? 'bg-blue-50/70 dark:bg-blue-900/20'
-                          : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                      )}
-                    >
-                      {planColumns.has('key') && (
-                        <td className="px-4 py-3">
-                          <span className="font-mono text-sm text-gray-600 dark:text-gray-400">{plan.key}</span>
+              <div className="overflow-x-auto max-h-[min(70vh,52rem)] overflow-y-auto">
+                <table className="w-full min-w-[640px]">
+                  <thead className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 shadow-[0_1px_0_0_rgb(229_231_235)] dark:shadow-[0_1px_0_0_rgb(55_65_81)]">
+                    <tr>
+                      <th scope="col" className={`${planHeadPad} w-10 text-left`}>
+                        <input
+                          type="checkbox"
+                          className="rounded border-gray-300 dark:border-gray-600"
+                          checked={allPlanRowsSelected}
+                          ref={(el) => {
+                            if (el) el.indeterminate = somePlanRowsSelected && !allPlanRowsSelected
+                          }}
+                          onChange={() => {
+                            if (allPlanRowsSelected) setSelectedPlanIds(new Set())
+                            else setSelectedPlanIds(new Set(processedPlans.map((p: any) => p.id)))
+                          }}
+                          aria-label="Select all plans on this page"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </th>
+                      {orderedPlanDataColumns.map((colKey) => (
+                        <th
+                          key={colKey}
+                          scope="col"
+                          className={`${planHeadPad} text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide`}
+                        >
+                          {planColumnLabel[colKey] ?? colKey}
+                        </th>
+                      ))}
+                      <th
+                        scope="col"
+                        className={`${planHeadPad} text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-12`}
+                      >
+                        <span className="sr-only">Row actions</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {processedPlans.map((plan: any) => (
+                      <tr
+                        key={plan.id}
+                        onClick={() => selectPlanFromList(plan)}
+                        className={clsx(
+                          'cursor-pointer group',
+                          plan.id === selectedPlanId
+                            ? 'bg-blue-50/70 dark:bg-blue-900/20'
+                            : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                        )}
+                      >
+                        <td className={planCellPad} onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            className="rounded border-gray-300 dark:border-gray-600"
+                            checked={selectedPlanIds.has(plan.id)}
+                            onChange={() => {
+                              setSelectedPlanIds((prev) => {
+                                const next = new Set(prev)
+                                if (next.has(plan.id)) next.delete(plan.id)
+                                else next.add(plan.id)
+                                return next
+                              })
+                            }}
+                            aria-label={`Select plan ${plan.key ?? plan.name ?? plan.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                          />
                         </td>
-                      )}
-                      {planColumns.has('name') && (
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-gray-900 dark:text-white">{plan.name}</div>
-                          {planColumns.has('description') && plan.description && (
-                            <div className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-1">{plan.description}</div>
-                          )}
-                        </td>
-                      )}
-                      {planColumns.has('status') && (
-                        <td className="px-4 py-3">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(plan.status)}`}>
-                            {plan.status}
-                          </span>
-                        </td>
-                      )}
-                      {planColumns.has('phase') && (
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                          {plan.phase || '—'}
-                        </td>
-                      )}
-                      {planColumns.has('testCases') && (
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                          {plan.planCases?.length || 0}
-                        </td>
-                      )}
-                      {planColumns.has('setups') && (
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                          {(Array.isArray(plan.linkedSetups) ? plan.linkedSetups.length : Array.isArray(plan.planSetups) ? plan.planSetups.length : 0) || 0}
-                        </td>
-                      )}
-                      {planColumns.has('runs') && (
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                          {runsCountByPlanId.get(plan.id) ?? 0}
-                        </td>
-                      )}
-                      {planColumns.has('testResults') && plan.linkedTestResultsCount > 0 && (
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                          <div className="text-xs text-blue-600 dark:text-blue-400">
-                            {formatTestResultsSummary(plan.linkedTestResultsStatusSummary)}
+                        {orderedPlanDataColumns.map((colKey) => renderPlanDataCell(colKey, plan))}
+                        <td className={`${planCellPad} text-right relative`} onClick={(e) => e.stopPropagation()}>
+                          <div className="inline-flex justify-end" data-plan-row-menu>
+                            <button
+                              type="button"
+                              className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
+                              aria-expanded={planRowMenuId === plan.id}
+                              aria-haspopup="menu"
+                              aria-label={`More actions for ${plan.name ?? plan.key ?? 'plan'}`}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setPlanRowMenuId((id) => (id === plan.id ? null : plan.id))
+                              }}
+                            >
+                              <MoreVertical size={18} />
+                            </button>
+                            {planRowMenuId === plan.id && (
+                              <div
+                                className="absolute right-2 top-full mt-1 w-52 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-20 text-left"
+                                role="menu"
+                              >
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="w-full px-3 py-2 text-left text-sm text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
+                                  onClick={() => {
+                                    setPlanRowMenuId(null)
+                                    drawer.openPlan(plan)
+                                  }}
+                                >
+                                  <Edit2 size={14} /> Edit in drawer
+                                </button>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="w-full px-3 py-2 text-left text-sm text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
+                                  onClick={() => {
+                                    setPlanRowMenuId(null)
+                                    setChangeRequestModal({
+                                      isOpen: true,
+                                      sourceType: 'test-plan',
+                                      sourceId: plan.id,
+                                      sourceName: plan.name,
+                                    })
+                                  }}
+                                >
+                                  <GitBranch size={14} /> Change request
+                                </button>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="w-full px-3 py-2 text-left text-sm text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
+                                  onClick={() => {
+                                    setPlanRowMenuId(null)
+                                    setExportTemplateModal({
+                                      isOpen: true,
+                                      entityType: 'TEST_PLAN',
+                                      entityId: plan.id,
+                                      entityName: plan.name,
+                                    })
+                                  }}
+                                >
+                                  <FileCode size={14} /> Export with template
+                                </button>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                                  onClick={() => {
+                                    setPlanRowMenuId(null)
+                                    setDeleteConfirmation({ type: 'test-plan', id: plan.id, name: plan.name })
+                                  }}
+                                >
+                                  <Trash2 size={14} /> Delete
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </td>
-                      )}
-                      {planColumns.has('testResults') && (!plan.linkedTestResultsCount || plan.linkedTestResultsCount === 0) && (
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">—</td>
-                      )}
-                      {planColumns.has('owner') && (
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                          {plan.ownerUserId || '—'}
-                        </td>
-                      )}
-                      {planColumns.has('createdAt') && (
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                          {plan.createdAt ? new Date(plan.createdAt).toLocaleDateString() : '—'}
-                        </td>
-                      )}
-                      {planColumns.has('updatedAt') && (
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
-                          {plan.updatedAt ? new Date(plan.updatedAt).toLocaleDateString() : '—'}
-                        </td>
-                      )}
-                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setChangeRequestModal({
-                                isOpen: true,
-                                sourceType: 'test-plan',
-                                sourceId: plan.id,
-                                sourceName: plan.name,
-                              })
-                            }}
-                            className="p-1.5 text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
-                            title="Create change request"
-                          >
-                            <GitBranch size={16} />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setExportTemplateModal({
-                                isOpen: true,
-                                entityType: 'TEST_PLAN',
-                                entityId: plan.id,
-                                entityName: plan.name,
-                              })
-                            }}
-                            className="p-1.5 text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
-                            title="Export using template…"
-                          >
-                            <FileCode size={16} />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              drawer.openPlan(plan)
-                            }}
-                            className="p-1.5 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                            title="Edit"
-                          >
-                            <Edit2 size={16} />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setDeleteConfirmation({ type: 'test-plan', id: plan.id, name: plan.name })
-                            }}
-                            className="p-1.5 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                            title="Delete"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center">

@@ -84,6 +84,34 @@ export const verificationService = {
   getTemplate: (projectId: string, templateId: string) => apiClient.get(`/templates/${projectId}/${templateId}`),
   updateTemplate: (projectId: string, templateId: string, payload: unknown) => apiClient.patch(`/templates/${projectId}/${templateId}`, payload),
   getOverview: (projectId: string) => apiClient.get(`/verification/overview/${projectId}`),
+  getVerificationEntityAudit: (
+    projectId: string,
+    entityType: string,
+    entityId: string,
+    opts?: { limit?: number; offset?: number; includeRaw?: boolean; actions?: string }
+  ) =>
+    apiClient.get(`/verification/audit/${projectId}/entity/${entityType}/${entityId}`, {
+      params: {
+        ...(opts?.limit != null ? { limit: String(opts.limit) } : {}),
+        ...(opts?.offset != null ? { offset: String(opts.offset) } : {}),
+        ...(opts?.includeRaw ? { includeRaw: '1' } : {}),
+        ...(opts?.actions ? { actions: opts.actions } : {}),
+      },
+    }),
+  getVerificationProjectAudit: (
+    projectId: string,
+    opts?: { limit?: number; offset?: number; entityType?: string; from?: string; to?: string; includeRaw?: boolean }
+  ) =>
+    apiClient.get(`/verification/audit/${projectId}`, {
+      params: {
+        ...(opts?.limit != null ? { limit: String(opts.limit) } : {}),
+        ...(opts?.offset != null ? { offset: String(opts.offset) } : {}),
+        ...(opts?.entityType ? { entityType: opts.entityType } : {}),
+        ...(opts?.from ? { from: opts.from } : {}),
+        ...(opts?.to ? { to: opts.to } : {}),
+        ...(opts?.includeRaw ? { includeRaw: '1' } : {}),
+      },
+    }),
   getTestPlans: (projectId: string) => apiClient.get<any[]>(`/verification/test-plans/${projectId}`),
   getTestCases: (projectId: string) => apiClient.get<any[]>(`/verification/test-cases/${projectId}`),
   getSetups: (projectId: string) => apiClient.get(`/verification/setups/${projectId}`),
