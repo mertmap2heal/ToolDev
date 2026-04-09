@@ -80,6 +80,8 @@ export default function ParameterDetailDrawer({
   const [compareMode, setCompareMode] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [restoringVersionId, setRestoringVersionId] = useState<string | null>(null)
+  // Pending restore confirmation: versionId waiting for user to confirm
+  const [pendingRestoreId, setPendingRestoreId] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
   const copyToClipboard = (text: string, field: string) => {
@@ -92,6 +94,7 @@ export default function ParameterDetailDrawer({
   const handleRestoreVersion = async (versionId: string) => {
     if (!parameter?.id) return
     setRestoringVersionId(versionId)
+    setPendingRestoreId(null)
     try {
       const res = await parameterService.restoreVersion(projectId, parameter.id, versionId)
       if (res.success) {
@@ -556,16 +559,38 @@ export default function ParameterDetailDrawer({
                           {diffs.length > 0 ? diffs.map(d => d.label).join(', ') : (origIdx === 0 ? 'Initial version' : 'No tracked changes')}
                         </span>
                         {!isCurrentVersion && (
-                          <button
-                            type="button"
-                            onClick={e => { e.stopPropagation(); handleRestoreVersion(v.id) }}
-                            disabled={restoringVersionId === v.id}
-                            className="ml-2 flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded text-xs border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 transition-colors"
-                            title="Restore to this version"
-                          >
-                            <RotateCcw size={10} />
-                            Restore
-                          </button>
+                          pendingRestoreId === v.id ? (
+                            <span className="ml-2 flex-shrink-0 flex items-center gap-1">
+                              <span className="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">Restore this version?</span>
+                              <button
+                                type="button"
+                                onClick={e => { e.stopPropagation(); handleRestoreVersion(v.id) }}
+                                disabled={restoringVersionId === v.id}
+                                className="flex items-center gap-1 px-2 py-0.5 rounded text-xs border border-amber-400 bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 font-semibold transition-colors"
+                              >
+                                <RotateCcw size={10} />
+                                {restoringVersionId === v.id ? 'Restoring…' : 'Yes, restore'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={e => { e.stopPropagation(); setPendingRestoreId(null) }}
+                                className="flex items-center px-2 py-0.5 rounded text-xs border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); setPendingRestoreId(v.id) }}
+                              disabled={restoringVersionId === v.id}
+                              className="ml-2 flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded text-xs border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 transition-colors"
+                              title="Restore to this version"
+                            >
+                              <RotateCcw size={10} />
+                              Restore
+                            </button>
+                          )
                         )}
                       </button>
                       {isExpanded && (
