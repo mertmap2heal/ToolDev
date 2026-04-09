@@ -41,6 +41,7 @@ import {
   createFolder,
   updateFolder,
   deleteFolder,
+  reorderFolders,
   moveParameterToFolder,
 } from '../controllers/parameterFolder.controller'
 
@@ -66,6 +67,7 @@ router.get('/:projectId/units/:symbol/usage', getProjectUnitUsage)
 // Parameter folders
 router.get('/:projectId/folders', getFolders)
 router.post('/:projectId/folders', createFolder)
+router.patch('/:projectId/folders/reorder', reorderFolders)
 router.patch('/:projectId/folders/:folderId', updateFolder)
 router.delete('/:projectId/folders/:folderId', deleteFolder)
 

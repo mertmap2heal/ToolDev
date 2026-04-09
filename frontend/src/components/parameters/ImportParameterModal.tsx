@@ -961,11 +961,15 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                                         <FunctionSquare size={11} className="flex-shrink-0" />
                                         {cellValue}
                                       </span>
-                                      {evalResult.result !== null && (
+                                      {evalResult.result !== null ? (
                                         <span className="ml-1 text-xs font-medium text-indigo-500 dark:text-indigo-400">
                                           = {String(parseFloat(evalResult.result.toPrecision(6)))}
                                         </span>
-                                      )}
+                                      ) : evalResult.error ? (
+                                        <span className="ml-1 text-xs text-red-500 dark:text-red-400" title={evalResult.error}>
+                                          ⚠ {evalResult.error.length > 40 ? evalResult.error.slice(0, 40) + '…' : evalResult.error}
+                                        </span>
+                                      ) : null}
                                     </td>
                                   )
                                 }

@@ -285,6 +285,13 @@ export const parameterService = {
     return apiClient.delete<void>(`/parameters/${projectId}/folders/${folderId}`)
   },
 
+  async reorderFolders(
+    projectId: string,
+    items: Array<{ id: string; order: number }>
+  ): Promise<ApiResponse<null>> {
+    return apiClient.patch(`/parameters/${projectId}/folders/reorder`, { items })
+  },
+
   async moveParameterToFolder(
     projectId: string,
     parameterId: string,

@@ -11,6 +11,19 @@ import { PlatformPicker } from './PlatformPicker'
 import { parameterTypeService } from '../../services/parameterType.service'
 import type { Parameter, UpdateParameterDto } from 'shared/types/engineering.types'
 
+// Build flat list of folders for a dropdown, with sub-folder indentation labels
+function buildFolderOptions(folders: Array<{ id: string; name: string; parentId?: string | null }>): Array<{ value: string; label: string }> {
+  const roots = folders.filter(f => !f.parentId)
+  const result: Array<{ value: string; label: string }> = []
+  for (const root of roots) {
+    result.push({ value: root.id, label: root.name })
+    for (const sub of folders.filter(f => f.parentId === root.id)) {
+      result.push({ value: sub.id, label: `  └ ${sub.name}` })
+    }
+  }
+  return result
+}
+
 interface EditParameterModalProps {
   isOpen: boolean
   onClose: () => void
@@ -32,6 +45,8 @@ export default function EditParameterModal({
   const [formulaError, setFormulaError] = useState<string | null>(null)
   const [platforms, setPlatforms] = useState<string[] | null>(null)
   const [copiedField, setCopiedField] = useState<'id' | 'name' | null>(null)
+  // Folder assignment — tracked separately from UpdateParameterDto
+  const [editFolderId, setEditFolderId] = useState<string | null | undefined>(undefined)
 
   const { data: types } = useQuery({
     queryKey: ['parameter-types', projectId],
@@ -78,6 +93,7 @@ export default function EditParameterModal({
         sourceParameterId: parameter.sourceParameterId ?? null,
       })
       setPlatforms((parameter.platforms as string[] | null | undefined) ?? null)
+      setEditFolderId(parameter.folderId ?? null)
     } else {
       setFormDataBase({
         description: '',
@@ -96,6 +112,7 @@ export default function EditParameterModal({
         sourceParameterId: null,
       })
       setPlatforms(null)
+      setEditFolderId(null)
     }
     setErrors({})
     setValueError(null)
@@ -112,6 +129,16 @@ export default function EditParameterModal({
     enabled: isOpen && !!projectId,
   })
   const otherParameters = allParameters.filter((p) => p.id !== parameter?.id)
+
+  const { data: foldersData } = useQuery({
+    queryKey: ['parameter-folders', projectId],
+    queryFn: async () => {
+      const res = await parameterService.getFolders(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    enabled: isOpen && !!projectId,
+  })
+  const folders = foldersData ?? []
 
   useEffect(() => {
     if (parameter) {
@@ -133,6 +160,7 @@ export default function EditParameterModal({
         sourceParameterId: parameter.sourceParameterId ?? null,
       })
       setPlatforms((parameter.platforms as string[] | null | undefined) ?? null)
+      setEditFolderId(parameter.folderId ?? null)
       setErrors({})
     }
   }, [parameter])
@@ -142,8 +170,14 @@ export default function EditParameterModal({
       if (!parameter) throw new Error('Parameter not found')
       return parameterService.updateParameter(projectId, parameter.id, data)
     },
-    onSuccess: (response) => {
+    onSuccess: async (response) => {
       if (response.success) {
+        // Also update folder assignment if it changed
+        const currentFolderId = parameter?.folderId ?? null
+        if (editFolderId !== undefined && editFolderId !== currentFolderId) {
+          await parameterService.moveParameterToFolder(projectId, parameter!.id, editFolderId)
+          queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
+        }
         queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
         resetDirty()
         onClose()
@@ -383,6 +417,22 @@ export default function EditParameterModal({
               placeholder="e.g., performance, safety"
             />
           </div>
+
+          {folders.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">Folder</label>
+              <select
+                value={editFolderId ?? ''}
+                onChange={e => { setEditFolderId(e.target.value || null); markDirty() }}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="">— No folder (ungrouped)</option>
+                {buildFolderOptions(folders).map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">Derived from (parameter)</label>
