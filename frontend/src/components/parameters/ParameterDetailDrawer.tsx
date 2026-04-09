@@ -461,10 +461,10 @@ export default function ParameterDetailDrawer({
                   const vB = versions.find(v => v.id === compareB)
                   if (!vA || !vB) return null
 
-                  // Determine which is older (lower index = more recent in desc order)
+                  // versions is ascending (oldest-first): lower index = older, higher index = newer
                   const idxA = versions.findIndex(v => v.id === compareA)
                   const idxB = versions.findIndex(v => v.id === compareB)
-                  const [older, newer] = idxA > idxB ? [vA, vB] : [vB, vA]
+                  const [older, newer] = idxA < idxB ? [vA, vB] : [vB, vA]
                   const olderLabel = `v${older.version}.${String((older as unknown as Record<string, unknown>).minorVersion ?? 0)}`
                   const newerLabel = `v${newer.version}.${String((newer as unknown as Record<string, unknown>).minorVersion ?? 0)}`
 
