@@ -2,9 +2,8 @@
  * Parameter Export Service
  * Generates parameter sets in aerospace/embedded engineering formats.
  */
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-const PDFDocument: any = require('pdfkit')
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+// @ts-ignore
+import PDFDocument from 'pdfkit'
 import ExcelJS from 'exceljs'
 
 
