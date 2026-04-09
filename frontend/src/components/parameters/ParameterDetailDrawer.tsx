@@ -461,14 +461,16 @@ export default function ParameterDetailDrawer({
                   const vB = versions.find(v => v.id === compareB)
                   if (!vA || !vB) return null
 
-                  // versions is ascending (oldest-first): lower index = older, higher index = newer
+                  // A is always left (orange), B is always right (blue) — matching the selection list colours.
+                  // Add a small chronological hint in the header without reordering columns.
                   const idxA = versions.findIndex(v => v.id === compareA)
                   const idxB = versions.findIndex(v => v.id === compareB)
-                  const [older, newer] = idxA < idxB ? [vA, vB] : [vB, vA]
-                  const olderLabel = `v${older.version}.${String((older as unknown as Record<string, unknown>).minorVersion ?? 0)}`
-                  const newerLabel = `v${newer.version}.${String((newer as unknown as Record<string, unknown>).minorVersion ?? 0)}`
+                  const aIsOlder = idxA < idxB
+                  const labelA = `A · v${vA.version}.${String((vA as unknown as Record<string, unknown>).minorVersion ?? 0)}`
+                  const labelB = `B · v${vB.version}.${String((vB as unknown as Record<string, unknown>).minorVersion ?? 0)}`
 
-                  const diffs = computeDiff(older.snapshot as Record<string, unknown>, newer.snapshot as Record<string, unknown>)
+                  // Diff direction: always from A → B so changed cells show what B introduced
+                  const diffs = computeDiff(vA.snapshot as Record<string, unknown>, vB.snapshot as Record<string, unknown>)
                   const allFields = TRACKED_FIELDS
 
                   return (
@@ -477,24 +479,30 @@ export default function ParameterDetailDrawer({
                         <thead className="bg-gray-50 dark:bg-gray-700/50">
                           <tr>
                             <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 w-24">Field</th>
-                            <th className="px-3 py-2 text-left font-semibold text-orange-600 dark:text-orange-400">{olderLabel} (older)</th>
-                            <th className="px-3 py-2 text-left font-semibold text-blue-600 dark:text-blue-400">{newerLabel} (newer)</th>
+                            <th className="px-3 py-2 text-left font-semibold text-orange-600 dark:text-orange-400">
+                              {labelA}
+                              <span className="ml-1 font-normal text-orange-400 dark:text-orange-500 text-[10px]">({aIsOlder ? 'older' : 'newer'})</span>
+                            </th>
+                            <th className="px-3 py-2 text-left font-semibold text-blue-600 dark:text-blue-400">
+                              {labelB}
+                              <span className="ml-1 font-normal text-blue-400 dark:text-blue-500 text-[10px]">({aIsOlder ? 'newer' : 'older'})</span>
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                           {allFields.map(field => {
-                            const olderVal = String((older.snapshot as Record<string, unknown>)[field] ?? '')
-                            const newerVal = String((newer.snapshot as Record<string, unknown>)[field] ?? '')
-                            const changed = olderVal !== newerVal
-                            if (!olderVal && !newerVal) return null
+                            const valA = String((vA.snapshot as Record<string, unknown>)[field] ?? '')
+                            const valB = String((vB.snapshot as Record<string, unknown>)[field] ?? '')
+                            const changed = valA !== valB
+                            if (!valA && !valB) return null
                             return (
                               <tr key={field} className={changed ? 'bg-amber-50 dark:bg-amber-900/10' : 'bg-white dark:bg-gray-800'}>
                                 <td className="px-3 py-2 font-medium text-gray-600 dark:text-gray-400">{FIELD_LABELS[field] ?? field}</td>
-                                <td className={`px-3 py-2 font-mono max-w-[160px] truncate ${changed ? 'text-red-700 dark:text-red-300 line-through opacity-70' : 'text-gray-700 dark:text-gray-300'}`} title={olderVal}>
-                                  {olderVal || <span className="italic text-gray-400">—</span>}
+                                <td className={`px-3 py-2 font-mono max-w-[160px] truncate ${changed ? 'text-red-700 dark:text-red-300 line-through opacity-70' : 'text-gray-700 dark:text-gray-300'}`} title={valA}>
+                                  {valA || <span className="italic text-gray-400">—</span>}
                                 </td>
-                                <td className={`px-3 py-2 font-mono max-w-[160px] truncate ${changed ? 'text-green-700 dark:text-green-300 font-semibold' : 'text-gray-700 dark:text-gray-300'}`} title={newerVal}>
-                                  {newerVal || <span className="italic text-gray-400">—</span>}
+                                <td className={`px-3 py-2 font-mono max-w-[160px] truncate ${changed ? 'text-green-700 dark:text-green-300 font-semibold' : 'text-gray-700 dark:text-gray-300'}`} title={valB}>
+                                  {valB || <span className="italic text-gray-400">—</span>}
                                 </td>
                               </tr>
                             )
