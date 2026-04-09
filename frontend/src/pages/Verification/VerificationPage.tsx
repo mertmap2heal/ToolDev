@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -499,16 +499,26 @@ export default function VerificationPage() {
       if (testPlans.length > 0) {
         const plan = testPlans.find((p: any) => p.id === effectiveFocusId)
         if (plan) {
-          setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'plans'); n.delete('focusType'); n.delete('focusId'); n.delete('caseId'); return n }, { replace: true })
-          drawer.openPlan(plan)
+          setSearchParams((p) => {
+            const n = new URLSearchParams(p)
+            n.set('tab', 'plans')
+            n.delete('caseId')
+            return n
+          }, { replace: true })
+          if (drawer.selectedPlan?.id !== plan.id || !drawer.isPlanDrawerOpen) drawer.openPlan(plan)
         }
       }
     } else if (effectiveFocusType === 'test_case' || effectiveFocusType === 'test-case') {
       if (testCases.length > 0) {
         const tc = testCases.find((c: any) => c.id === effectiveFocusId)
         if (tc) {
-          setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'cases'); n.delete('focusType'); n.delete('focusId'); n.delete('caseId'); return n }, { replace: true })
-          drawer.openCase(tc)
+          setSearchParams((p) => {
+            const n = new URLSearchParams(p)
+            n.set('tab', 'cases')
+            n.delete('caseId')
+            return n
+          }, { replace: true })
+          if (drawer.selectedCase?.id !== tc.id || !drawer.isCaseDrawerOpen) drawer.openCase(tc)
         }
       }
     } else if (effectiveFocusType === 'test_setup' || effectiveFocusType === 'test-setup') {
@@ -516,8 +526,13 @@ export default function VerificationPage() {
       if (setupsArr.length > 0) {
         const setup = setupsArr.find((s: any) => s.id === effectiveFocusId)
         if (setup) {
-          setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'setups'); n.delete('focusType'); n.delete('focusId'); n.delete('caseId'); return n }, { replace: true })
-          drawer.openSetup(setup)
+          setSearchParams((p) => {
+            const n = new URLSearchParams(p)
+            n.set('tab', 'setups')
+            n.delete('caseId')
+            return n
+          }, { replace: true })
+          if (drawer.selectedSetup?.id !== setup.id || !drawer.isSetupDrawerOpen) drawer.openSetup(setup)
         }
       }
     } else if (effectiveFocusType === 'test_result' || effectiveFocusType === 'test-result') {
@@ -525,17 +540,45 @@ export default function VerificationPage() {
       if (resultsArr.length > 0) {
         const result = resultsArr.find((r: any) => r.id === effectiveFocusId)
         if (result) {
-          setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'results'); n.delete('focusType'); n.delete('focusId'); n.delete('caseId'); return n }, { replace: true })
-          drawer.openResult(result)
+          setSearchParams((p) => {
+            const n = new URLSearchParams(p)
+            n.set('tab', 'results')
+            n.delete('caseId')
+            return n
+          }, { replace: true })
+          if (drawer.selectedResult?.id !== result.id || !drawer.isResultDrawerOpen) drawer.openResult(result)
         }
       }
     } else if (effectiveFocusType === 'test_run' || effectiveFocusType === 'test-run') {
       if (focusedRun) {
-        setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'runs'); n.delete('focusType'); n.delete('focusId'); n.delete('caseId'); return n }, { replace: true })
-        drawer.openRun(focusedRun)
+        setSearchParams((p) => {
+          const n = new URLSearchParams(p)
+          n.set('tab', 'runs')
+          n.delete('caseId')
+          return n
+        }, { replace: true })
+        if (drawer.selectedRun?.id !== focusedRun.id || !drawer.isRunDrawerOpen) drawer.openRun(focusedRun)
       }
     }
   }, [focusType, focusId, caseId, projectId, testPlans, testCases, testSetups, testResults, focusedRun, drawer, setSearchParams])
+
+  const selectPlanFromList = useCallback((plan: any) => {
+    if (!plan?.id) return
+    setSearchParams((p) => {
+      const n = new URLSearchParams(p)
+      n.set('tab', 'plans')
+      n.set('focusType', 'test-plan')
+      n.set('focusId', plan.id)
+      n.delete('caseId')
+      return n
+    })
+    drawer.openPlan(plan)
+  }, [drawer, setSearchParams])
+
+  const selectedPlanId =
+    (focusType === 'test-plan' || focusType === 'test_plan') && focusId
+      ? focusId
+      : drawer.selectedPlan?.id ?? null
 
   // Delete mutations
   const deleteTestPlanMutation = useMutation({
@@ -970,7 +1013,7 @@ export default function VerificationPage() {
             filteredPlans.length > 0 ? (
               <div className="overflow-y-auto space-y-6 p-1">
                 {filteredPlans.map((plan: any) => (
-                  <TestPlanDocumentCard key={plan.id} plan={plan} onClick={() => drawer.openPlan(plan)} />
+                  <TestPlanDocumentCard key={plan.id} plan={plan} onClick={() => selectPlanFromList(plan)} />
                 ))}
               </div>
             ) : (
@@ -1023,8 +1066,13 @@ export default function VerificationPage() {
                   {filteredPlans.map((plan: any) => (
                     <tr
                       key={plan.id}
-                      onClick={() => drawer.openPlan(plan)}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer group"
+                      onClick={() => selectPlanFromList(plan)}
+                      className={clsx(
+                        'cursor-pointer group',
+                        plan.id === selectedPlanId
+                          ? 'bg-blue-50/70 dark:bg-blue-900/20'
+                          : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                      )}
                     >
                       {planColumns.has('key') && (
                         <td className="px-4 py-3">
