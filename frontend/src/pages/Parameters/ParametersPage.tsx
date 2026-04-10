@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
-  Search, X, Trash2, Edit2, Plus, Filter, ChevronDown, ChevronUp,
+  Search, X, Check, Trash2, Edit2, Plus, Filter, ChevronDown, ChevronUp,
   FileText, Upload, Download, GitBranch, RefreshCw, CheckCircle,
   AlertTriangle, Settings, Radio, List, Share2,
   Folder, FolderOpen, MoreHorizontal, Layers, ArrowUpDown, ArrowUp, ArrowDown,
@@ -311,12 +311,16 @@ export default function ParametersPage() {
   const [overFolderId, setOverFolderId] = useState<string | null>(null)
   const [activeDragParamId, setActiveDragParamId] = useState<string | null>(null)
   const [activeDragFolderId, setActiveDragFolderId] = useState<string | null>(null)
-  // Optimistic folder order for smooth drag-to-reorder (root folders only)
-  const [folderOrder, setFolderOrder] = useState<string[]>([])
+  // Optimistic folder order per parent level (null = root)
+  const [folderOrderByParent, setFolderOrderByParent] = useState<Map<string | null, string[]>>(new Map())
   // Subfolder confirmation prompt: { childId, parentId }
   const [pendingSubfolder, setPendingSubfolder] = useState<{ childId: string; parentId: string } | null>(null)
   // Which parent folders have their sub-folders expanded in the sidebar
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set())
+  // Which folder is getting a new sub-folder created inline
+  const [creatingSubFolderIn, setCreatingSubFolderIn] = useState<string | null>(null)
+  const [subFolderName, setSubFolderName] = useState('')
+  const [subFolderColor, setSubFolderColor] = useState(FOLDER_COLORS[0])
   // Nest-intent detection: track when a folder is held over another for >600ms
   const nestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [nestTargetId, setNestTargetId] = useState<string | null>(null)
@@ -505,6 +509,26 @@ export default function ParametersPage() {
     },
   })
 
+  const createSubFolderMutation = useMutation({
+    mutationFn: async ({ name, parentId, color }: { name: string; parentId: string; color: string }) => {
+      if (!projectId) throw new Error('Project ID required')
+      const res = await parameterService.createFolder(projectId, { name, color, parentId })
+      if (!res.success) throw new Error(res.error ?? 'Failed to create sub-folder')
+      return res
+    },
+    onSuccess: (_data, { parentId }) => {
+      queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
+      setCreatingSubFolderIn(null)
+      setSubFolderName('')
+      setSubFolderColor(FOLDER_COLORS[0])
+      // Auto-expand the parent to show the new sub-folder
+      setExpandedParents(prev => new Set([...prev, parentId]))
+    },
+    onError: (err: Error) => {
+      setToastMessage(`Error: ${err.message}`)
+    },
+  })
+
   const updateFolderMutation = useMutation({
     mutationFn: async ({ folderId, data }: { folderId: string; data: { name?: string; color?: string | null; parentId?: string | null } }) => {
       if (!projectId) throw new Error('Project ID required')
@@ -578,11 +602,21 @@ export default function ParametersPage() {
     },
   })
 
-  // Sync folderOrder from server data (root folders only, in server order)
+  // Sync folderOrderByParent from server data (all levels)
   useEffect(() => {
     if (!foldersData) return
-    const rootFolders = foldersData.filter(f => !f.parentId).sort((a, b) => a.order - b.order)
-    setFolderOrder(rootFolders.map(f => f.id))
+    const grouped = new Map<string | null, typeof foldersData>()
+    for (const f of foldersData) {
+      const key = f.parentId ?? null
+      if (!grouped.has(key)) grouped.set(key, [])
+      grouped.get(key)!.push(f)
+    }
+    const map = new Map<string | null, string[]>()
+    for (const [key, children] of grouped.entries()) {
+      children.sort((a, b) => a.order - b.order)
+      map.set(key, children.map(f => f.id))
+    }
+    setFolderOrderByParent(map)
   }, [foldersData])
 
   // Close folder context menu on outside click
@@ -661,17 +695,26 @@ export default function ParametersPage() {
       }
       setNestTargetId(null)
 
-      // Otherwise it's a reorder
+      // Otherwise it's a reorder within the same level
       const overId = String(over.id)
       const targetId = overId.startsWith('sortfolder-') ? overId.replace('sortfolder-', '') : null
       if (!targetId || targetId === activeFolder) return
 
-      const oldIdx = folderOrder.indexOf(activeFolder)
-      const newIdx = folderOrder.indexOf(targetId)
+      // Find which parent level this folder belongs to
+      const activeFolderData = folders.find(f => f.id === activeFolder)
+      const parentId = activeFolderData?.parentId ?? null
+      const levelOrder = folderOrderByParent.get(parentId) ?? []
+
+      const oldIdx = levelOrder.indexOf(activeFolder)
+      const newIdx = levelOrder.indexOf(targetId)
       if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return
 
-      const newOrder = arrayMove(folderOrder, oldIdx, newIdx)
-      setFolderOrder(newOrder)
+      const newOrder = arrayMove(levelOrder, oldIdx, newIdx)
+      setFolderOrderByParent(prev => {
+        const next = new Map(prev)
+        next.set(parentId, newOrder)
+        return next
+      })
       reorderFolderMutation.mutate(newOrder.map((id, idx) => ({ id, order: idx })))
       return
     }
@@ -952,6 +995,272 @@ export default function ParametersPage() {
     setImportFilename('')
     setImportFormat('')
     setImportResult(null)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Build a flat ordered list of folder options for dropdowns (any depth)
+  // ---------------------------------------------------------------------------
+  const buildAllFolderOptions = (): Array<{ value: string; label: string }> => {
+    const result: Array<{ value: string; label: string }> = []
+    const visit = (parentId: string | null, depth: number) => {
+      const ids = folderOrderByParent.get(parentId) ?? []
+      for (const id of ids) {
+        const f = folders.find(x => x.id === id)
+        if (!f) continue
+        const prefix = depth === 0 ? '' : '\u00a0\u00a0'.repeat(depth) + '\u2514 '
+        result.push({ value: f.id, label: prefix + f.name })
+        visit(f.id, depth + 1)
+      }
+    }
+    visit(null, 0)
+    return result
+  }
+
+  // ---------------------------------------------------------------------------
+  // Recursive folder tree rendering — arbitrary depth, sortable at every level
+  // ---------------------------------------------------------------------------
+  const renderFolderTree = (parentId: string | null, depth: number): React.ReactNode => {
+    const levelIds = folderOrderByParent.get(parentId) ?? []
+    if (levelIds.length === 0) return null
+    return (
+      <SortableContext items={levelIds.map(id => `sortfolder-${id}`)} strategy={verticalListSortingStrategy}>
+        {levelIds.map(folderId => {
+          const folder = folders.find(f => f.id === folderId)
+          if (!folder) return null
+          const isSelected = selectedFolderId === folder.id
+          const isMenuOpen = folderMenuOpen === folder.id
+          const isRenaming = renamingFolder?.id === folder.id
+          const isNestTarget = nestTargetId === folder.id
+          const childIds = folderOrderByParent.get(folder.id) ?? []
+          const hasChildren = childIds.length > 0
+          const isExpanded = expandedParents.has(folder.id)
+          const isCreatingChild = creatingSubFolderIn === folder.id
+          const paddingLeft = depth * 12
+          return (
+            <div key={folder.id}>
+              <SortableFolderWrapper folderId={folder.id} isOver={overFolderId === folder.id && !isNestTarget}>
+                {(dragHandleProps) => (
+                  <div
+                    style={{
+                      display: 'flex', alignItems: 'center',
+                      paddingLeft,
+                      borderRadius: 5,
+                      backgroundColor: isSelected
+                        ? 'var(--theme-sidebar-item-active)'
+                        : isNestTarget
+                          ? 'rgba(99,102,241,0.12)'
+                          : 'transparent',
+                      outline: isNestTarget ? '2px dashed var(--theme-accent)' : undefined,
+                      outlineOffset: -2,
+                    }}
+                    onMouseEnter={e => { if (!isSelected && !isNestTarget) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'var(--theme-sidebar-item-hover)' }}
+                    onMouseLeave={e => { if (!isSelected && !isNestTarget) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'transparent' }}
+                  >
+                    {isRenaming ? (
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 3, padding: '4px 4px' }}>
+                        <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', flexShrink: 0 }}>
+                          {FOLDER_COLORS.map(c => (
+                            <button key={c} onClick={() => setRenamingColor(c)}
+                              style={{ width: 11, height: 11, borderRadius: '50%', border: renamingColor === c ? '2px solid var(--theme-text)' : '1px solid transparent', backgroundColor: c, cursor: 'pointer', padding: 0 }} />
+                          ))}
+                        </div>
+                        <input
+                          autoFocus
+                          value={renamingFolder?.name ?? ''}
+                          onChange={e => setRenamingFolder({ id: folder.id, name: e.target.value })}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && renamingFolder?.name.trim()) {
+                              updateFolderMutation.mutate({ folderId: folder.id, data: { name: renamingFolder.name, color: renamingColor } })
+                            }
+                            if (e.key === 'Escape') setRenamingFolder(null)
+                          }}
+                          style={{
+                            flex: 1, minWidth: 0, fontSize: 11, padding: '2px 4px',
+                            border: '1px solid var(--theme-border)', borderRadius: 4,
+                            backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)',
+                          }}
+                        />
+                        <button
+                          onClick={() => { if (renamingFolder?.name.trim()) updateFolderMutation.mutate({ folderId: folder.id, data: { name: renamingFolder.name, color: renamingColor } }) }}
+                          title="Save"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-accent)', padding: 1, flexShrink: 0 }}
+                        >
+                          <Check size={11} />
+                        </button>
+                        <button
+                          onClick={() => setRenamingFolder(null)}
+                          title="Cancel"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-text-muted)', padding: 1, flexShrink: 0 }}
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <span
+                          {...dragHandleProps}
+                          style={{ cursor: 'grab', padding: '4px 2px 4px 4px', color: 'var(--theme-text-muted)', opacity: 0.4, display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                          title="Drag to reorder; hold 650ms over another folder to nest"
+                        >
+                          ⠿
+                        </span>
+                        {hasChildren ? (
+                          <button
+                            onClick={e => {
+                              e.stopPropagation()
+                              setExpandedParents(prev => {
+                                const next = new Set(prev)
+                                if (next.has(folder.id)) next.delete(folder.id)
+                                else next.add(folder.id)
+                                return next
+                              })
+                            }}
+                            title={isExpanded ? 'Collapse' : 'Expand'}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--theme-text-muted)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                          >
+                            <ChevronDown size={10} style={!isExpanded ? { transform: 'rotate(-90deg)' } : undefined} />
+                          </button>
+                        ) : (
+                          <span style={{ width: 14, flexShrink: 0 }} />
+                        )}
+                        <button
+                          onClick={() => setSelectedFolderId(folder.id)}
+                          style={{
+                            flex: 1, display: 'flex', alignItems: 'center', gap: 5, minWidth: 0,
+                            padding: '5px 3px', fontSize: depth === 0 ? 12 : 11, fontWeight: depth === 0 ? 500 : 400,
+                            border: 'none', cursor: 'pointer', textAlign: 'left', background: 'none',
+                            color: isSelected ? 'var(--theme-accent)' : 'var(--theme-text)',
+                          }}
+                        >
+                          <FolderOpen size={depth === 0 ? 13 : 11} style={{ flexShrink: 0, color: folder.color ?? '#6366f1', opacity: depth === 0 ? 1 : 0.8 }} />
+                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {folder.name}
+                          </span>
+                          <span style={{ fontSize: 10, color: 'var(--theme-text-muted)', flexShrink: 0 }}>
+                            {folder._count?.parameters ?? 0}
+                          </span>
+                        </button>
+                        <div style={{ position: 'relative' }} ref={folderMenuOpen === folder.id ? folderMenuRef : undefined}>
+                          <button
+                            onClick={e => { e.stopPropagation(); setFolderMenuOpen(isMenuOpen ? null : folder.id); setRenamingColor(folder.color ?? FOLDER_COLORS[0]) }}
+                            style={{
+                              background: 'none', border: 'none', cursor: 'pointer',
+                              padding: '4px 4px', color: 'var(--theme-text-muted)',
+                              opacity: isMenuOpen ? 1 : 0,
+                              borderRadius: 4, flexShrink: 0,
+                            }}
+                            className="folder-menu-btn"
+                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1' }}
+                            onMouseLeave={e => { if (!isMenuOpen) (e.currentTarget as HTMLButtonElement).style.opacity = '0' }}
+                          >
+                            <MoreHorizontal size={11} />
+                          </button>
+                          {isMenuOpen && (
+                            <div style={{
+                              position: 'absolute', right: 0, top: '100%', zIndex: 300,
+                              width: 158, borderRadius: 6,
+                              border: '1px solid var(--theme-border)',
+                              backgroundColor: 'var(--theme-surface)',
+                              boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                              overflow: 'hidden',
+                            }}>
+                              <button
+                                onClick={() => { setRenamingFolder({ id: folder.id, name: folder.name }); setFolderMenuOpen(null) }}
+                                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', fontSize: 12, border: 'none', cursor: 'pointer', backgroundColor: 'transparent', color: 'var(--theme-text)', textAlign: 'left' }}
+                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
+                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                              >
+                                <Edit2 size={11} /> Rename
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setCreatingSubFolderIn(folder.id)
+                                  setSubFolderName('')
+                                  setSubFolderColor(folder.color ?? FOLDER_COLORS[0])
+                                  setExpandedParents(prev => new Set([...prev, folder.id]))
+                                  setFolderMenuOpen(null)
+                                }}
+                                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', fontSize: 12, border: 'none', cursor: 'pointer', backgroundColor: 'transparent', color: 'var(--theme-text)', textAlign: 'left' }}
+                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
+                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                              >
+                                <Plus size={11} /> New sub-folder
+                              </button>
+                              {folder.parentId && (
+                                <button
+                                  onClick={() => { updateFolderMutation.mutate({ folderId: folder.id, data: { parentId: null } }); setFolderMenuOpen(null) }}
+                                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', fontSize: 12, border: 'none', cursor: 'pointer', backgroundColor: 'transparent', color: 'var(--theme-text)', textAlign: 'left' }}
+                                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
+                                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                >
+                                  <FolderOpen size={11} /> Move to root
+                                </button>
+                              )}
+                              <button
+                                onClick={() => { deleteFolderMutation.mutate(folder.id); setFolderMenuOpen(null) }}
+                                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', fontSize: 12, border: 'none', cursor: 'pointer', backgroundColor: 'transparent', color: '#ef4444', textAlign: 'left' }}
+                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.06)')}
+                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                              >
+                                <Trash2 size={11} /> Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </SortableFolderWrapper>
+              {/* Inline sub-folder creation form */}
+              {isCreatingChild && (
+                <div style={{ paddingLeft: (depth + 1) * 12 + 8, paddingRight: 6, paddingTop: 4, paddingBottom: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                    {FOLDER_COLORS.map(c => (
+                      <button key={c} onClick={() => setSubFolderColor(c)}
+                        style={{ width: 12, height: 12, borderRadius: '50%', border: subFolderColor === c ? '2px solid var(--theme-text)' : '1px solid transparent', backgroundColor: c, cursor: 'pointer', padding: 0 }} />
+                    ))}
+                  </div>
+                  <input
+                    autoFocus
+                    value={subFolderName}
+                    onChange={e => setSubFolderName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && subFolderName.trim()) createSubFolderMutation.mutate({ name: subFolderName.trim(), parentId: folder.id, color: subFolderColor })
+                      if (e.key === 'Escape') setCreatingSubFolderIn(null)
+                    }}
+                    placeholder="Sub-folder name"
+                    style={{
+                      width: '100%', fontSize: 11, padding: '3px 6px',
+                      border: '1px solid var(--theme-border)', borderRadius: 4,
+                      backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 3 }}>
+                    <button
+                      onClick={() => { if (subFolderName.trim()) createSubFolderMutation.mutate({ name: subFolderName.trim(), parentId: folder.id, color: subFolderColor }) }}
+                      disabled={!subFolderName.trim()}
+                      style={{ flex: 1, padding: '2px 0', fontSize: 11, fontWeight: 600, borderRadius: 4, border: 'none', backgroundColor: 'var(--theme-accent)', color: '#fff', cursor: subFolderName.trim() ? 'pointer' : 'not-allowed', opacity: subFolderName.trim() ? 1 : 0.5 }}
+                    >
+                      Create
+                    </button>
+                    <button
+                      onClick={() => setCreatingSubFolderIn(null)}
+                      style={{ padding: '2px 6px', fontSize: 11, borderRadius: 4, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', color: 'var(--theme-text)', cursor: 'pointer' }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+              {/* Recursively render children when expanded */}
+              {isExpanded && hasChildren && renderFolderTree(folder.id, depth + 1)}
+            </div>
+          )
+        })}
+      </SortableContext>
+    )
   }
 
   // ============================================================
@@ -1428,291 +1737,8 @@ export default function ParametersPage() {
                   <span style={{ fontSize: 10 }}>{parameters.filter(p => !p.folderId).length}</span>
                 </button>
               </DroppableFolder>
-              {/* Named folders — sortable, reorderable, supports subfolders */}
-              <SortableContext items={folderOrder.map(id => `sortfolder-${id}`)} strategy={verticalListSortingStrategy}>
-                {folderOrder.map(folderId => {
-                  const folder = folders.find(f => f.id === folderId)
-                  if (!folder) return null
-                  const isSelected = selectedFolderId === folder.id
-                  const isMenuOpen = folderMenuOpen === folder.id
-                  const isRenaming = renamingFolder?.id === folder.id
-                  const isNestTarget = nestTargetId === folder.id
-                  // Sub-folders of this folder
-                  const subFolders = folders.filter(f => f.parentId === folder.id)
-                  const hasSubFolders = subFolders.length > 0
-                  const isParentExpanded = expandedParents.has(folder.id)
-                  return (
-                    <div key={folder.id}>
-                      <SortableFolderWrapper folderId={folder.id} isOver={overFolderId === folder.id && !isNestTarget}>
-                        {(dragHandleProps) => (
-                          <div
-                            style={{
-                              display: 'flex', alignItems: 'center',
-                              borderRadius: 5,
-                              backgroundColor: isSelected
-                                ? 'var(--theme-sidebar-item-active)'
-                                : isNestTarget
-                                  ? 'rgba(99,102,241,0.12)'
-                                  : 'transparent',
-                              outline: isNestTarget ? '2px dashed var(--theme-accent)' : undefined,
-                              outlineOffset: -2,
-                            }}
-                            onMouseEnter={e => { if (!isSelected && !isNestTarget) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'var(--theme-sidebar-item-hover)' }}
-                            onMouseLeave={e => { if (!isSelected && !isNestTarget) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'transparent' }}
-                          >
-                            {isRenaming ? (
-                              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4, padding: '4px 6px' }}>
-                                <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', width: 90 }}>
-                                  {FOLDER_COLORS.map(c => (
-                                    <button key={c} onClick={() => setRenamingColor(c)}
-                                      style={{ width: 12, height: 12, borderRadius: '50%', border: renamingColor === c ? '2px solid var(--theme-text)' : '1px solid transparent', backgroundColor: c, cursor: 'pointer', padding: 0 }} />
-                                  ))}
-                                </div>
-                                <input
-                                  autoFocus
-                                  value={renamingFolder?.name ?? ''}
-                                  onChange={e => setRenamingFolder({ id: folder.id, name: e.target.value })}
-                                  onKeyDown={e => {
-                                    if (e.key === 'Enter' && renamingFolder) {
-                                      updateFolderMutation.mutate({ folderId: folder.id, data: { name: renamingFolder.name, color: renamingColor } })
-                                    }
-                                    if (e.key === 'Escape') setRenamingFolder(null)
-                                  }}
-                                  style={{
-                                    flex: 1, fontSize: 11, padding: '2px 5px',
-                                    border: '1px solid var(--theme-border)', borderRadius: 4,
-                                    backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)',
-                                  }}
-                                />
-                                <button onClick={() => setRenamingFolder(null)}
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-text-muted)', padding: 1 }}>
-                                  <X size={11} />
-                                </button>
-                              </div>
-                            ) : (
-                              <>
-                                {/* Drag handle */}
-                                <span
-                                  {...dragHandleProps}
-                                  style={{ cursor: 'grab', padding: '4px 2px 4px 5px', color: 'var(--theme-text-muted)', opacity: 0.4, display: 'flex', alignItems: 'center' }}
-                                  title="Drag to reorder or hold to nest inside another folder"
-                                >
-                                  ⠿
-                                </span>
-                                {/* Sub-folder expand/collapse toggle */}
-                                {hasSubFolders && (
-                                  <button
-                                    onClick={e => {
-                                      e.stopPropagation()
-                                      setExpandedParents(prev => {
-                                        const next = new Set(prev)
-                                        if (next.has(folder.id)) next.delete(folder.id)
-                                        else next.add(folder.id)
-                                        return next
-                                      })
-                                    }}
-                                    title={isParentExpanded ? 'Collapse sub-folders' : 'Expand sub-folders'}
-                                    style={{
-                                      background: 'none', border: 'none', cursor: 'pointer',
-                                      padding: '4px 2px 4px 4px',
-                                      color: 'var(--theme-text-muted)',
-                                      display: 'flex', alignItems: 'center', flexShrink: 0,
-                                    }}
-                                  >
-                                    {isParentExpanded
-                                      ? <ChevronDown size={11} />
-                                      : <ChevronDown size={11} style={{ transform: 'rotate(-90deg)' }} />
-                                    }
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => setSelectedFolderId(folder.id)}
-                                  style={{
-                                    flex: 1, display: 'flex', alignItems: 'center', gap: 5,
-                                    padding: '5px 4px', fontSize: 12, fontWeight: 500,
-                                    border: 'none', cursor: 'pointer', textAlign: 'left', background: 'none',
-                                    color: isSelected ? 'var(--theme-accent)' : 'var(--theme-text)',
-                                  }}
-                                >
-                                  <FolderOpen size={13} style={{ flexShrink: 0, color: folder.color ?? '#6366f1' }} />
-                                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {folder.name}
-                                  </span>
-                                  <span style={{ fontSize: 10, color: 'var(--theme-text-muted)' }}>
-                                    {folder._count?.parameters ?? 0}
-                                  </span>
-                                </button>
-                                {/* Context menu */}
-                                <div style={{ position: 'relative' }} ref={folderMenuOpen === folder.id ? folderMenuRef : undefined}>
-                                  <button
-                                    onClick={e => { e.stopPropagation(); setFolderMenuOpen(isMenuOpen ? null : folder.id); setRenamingColor(folder.color ?? FOLDER_COLORS[0]) }}
-                                    style={{
-                                      background: 'none', border: 'none', cursor: 'pointer',
-                                      padding: '4px 5px', color: 'var(--theme-text-muted)',
-                                      opacity: isMenuOpen ? 1 : 0,
-                                      borderRadius: 4,
-                                    }}
-                                    className="folder-menu-btn"
-                                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1' }}
-                                    onMouseLeave={e => { if (!isMenuOpen) (e.currentTarget as HTMLButtonElement).style.opacity = '0' }}
-                                  >
-                                    <MoreHorizontal size={12} />
-                                  </button>
-                                  {isMenuOpen && (
-                                    <div style={{
-                                      position: 'absolute', right: 0, top: '100%', zIndex: 300,
-                                      width: 140, borderRadius: 6,
-                                      border: '1px solid var(--theme-border)',
-                                      backgroundColor: 'var(--theme-surface)',
-                                      boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-                                      overflow: 'hidden',
-                                    }}>
-                                      <button
-                                        onClick={() => { setRenamingFolder({ id: folder.id, name: folder.name }); setFolderMenuOpen(null) }}
-                                        style={{
-                                          width: '100%', display: 'flex', alignItems: 'center', gap: 7,
-                                          padding: '7px 10px', fontSize: 12, border: 'none', cursor: 'pointer',
-                                          backgroundColor: 'transparent', color: 'var(--theme-text)', textAlign: 'left',
-                                        }}
-                                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
-                                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                                      >
-                                        <Edit2 size={11} /> Rename
-                                      </button>
-                                      <button
-                                        onClick={() => { deleteFolderMutation.mutate(folder.id); setFolderMenuOpen(null) }}
-                                        style={{
-                                          width: '100%', display: 'flex', alignItems: 'center', gap: 7,
-                                          padding: '7px 10px', fontSize: 12, border: 'none', cursor: 'pointer',
-                                          backgroundColor: 'transparent', color: '#ef4444', textAlign: 'left',
-                                        }}
-                                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.06)')}
-                                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                                      >
-                                        <Trash2 size={11} /> Delete
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </SortableFolderWrapper>
-                      {/* Sub-folders — shown only when parent is expanded */}
-                      {isParentExpanded && subFolders.map(sub => {
-                        const isSubSelected = selectedFolderId === sub.id
-                        const isSubRenaming = renamingFolder?.id === sub.id
-                        return (
-                          <DroppableFolder key={sub.id} folderId={sub.id} isOver={overFolderId === sub.id}>
-                            <div
-                              style={{
-                                display: 'flex', alignItems: 'center', paddingLeft: 14,
-                                borderRadius: 5,
-                                backgroundColor: isSubSelected ? 'var(--theme-sidebar-item-active)' : 'transparent',
-                              }}
-                              onMouseEnter={e => { if (!isSubSelected) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'var(--theme-sidebar-item-hover)' }}
-                              onMouseLeave={e => { if (!isSubSelected) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'transparent' }}
-                            >
-                              {isSubRenaming ? (
-                                <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4, padding: '4px 4px' }}>
-                                  <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                                    {FOLDER_COLORS.map(c => (
-                                      <button key={c} onClick={() => setRenamingColor(c)}
-                                        style={{ width: 10, height: 10, borderRadius: '50%', border: renamingColor === c ? '2px solid var(--theme-text)' : '1px solid transparent', backgroundColor: c, cursor: 'pointer', padding: 0 }} />
-                                    ))}
-                                  </div>
-                                  <input
-                                    autoFocus
-                                    value={renamingFolder?.name ?? ''}
-                                    onChange={e => setRenamingFolder({ id: sub.id, name: e.target.value })}
-                                    onKeyDown={e => {
-                                      if (e.key === 'Enter' && renamingFolder) {
-                                        updateFolderMutation.mutate({ folderId: sub.id, data: { name: renamingFolder.name, color: renamingColor } })
-                                      }
-                                      if (e.key === 'Escape') setRenamingFolder(null)
-                                    }}
-                                    style={{ flex: 1, fontSize: 10, padding: '2px 4px', border: '1px solid var(--theme-border)', borderRadius: 4, backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)' }}
-                                  />
-                                  <button onClick={() => setRenamingFolder(null)}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-text-muted)', padding: 1 }}>
-                                    <X size={10} />
-                                  </button>
-                                </div>
-                              ) : (
-                                <>
-                                  <button
-                                    onClick={() => setSelectedFolderId(sub.id)}
-                                    style={{
-                                      flex: 1, display: 'flex', alignItems: 'center', gap: 5,
-                                      padding: '5px 4px', fontSize: 11, fontWeight: 400,
-                                      border: 'none', cursor: 'pointer', textAlign: 'left', background: 'none',
-                                      color: isSubSelected ? 'var(--theme-accent)' : 'var(--theme-text-muted)',
-                                    }}
-                                  >
-                                    <Folder size={11} style={{ flexShrink: 0, color: sub.color ?? '#6366f1', opacity: 0.8 }} />
-                                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                      {sub.name}
-                                    </span>
-                                    <span style={{ fontSize: 10, color: 'var(--theme-text-muted)' }}>
-                                      {sub._count?.parameters ?? 0}
-                                    </span>
-                                  </button>
-                                  <div style={{ position: 'relative' }} ref={folderMenuOpen === sub.id ? folderMenuRef : undefined}>
-                                    <button
-                                      onClick={e => { e.stopPropagation(); setFolderMenuOpen(folderMenuOpen === sub.id ? null : sub.id); setRenamingColor(sub.color ?? FOLDER_COLORS[0]) }}
-                                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 5px', color: 'var(--theme-text-muted)', opacity: folderMenuOpen === sub.id ? 1 : 0, borderRadius: 4 }}
-                                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1' }}
-                                      onMouseLeave={e => { if (folderMenuOpen !== sub.id) (e.currentTarget as HTMLButtonElement).style.opacity = '0' }}
-                                    >
-                                      <MoreHorizontal size={11} />
-                                    </button>
-                                    {folderMenuOpen === sub.id && (
-                                      <div style={{
-                                        position: 'absolute', right: 0, top: '100%', zIndex: 300,
-                                        width: 150, borderRadius: 6,
-                                        border: '1px solid var(--theme-border)',
-                                        backgroundColor: 'var(--theme-surface)',
-                                        boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-                                        overflow: 'hidden',
-                                      }}>
-                                        <button
-                                          onClick={() => { setRenamingFolder({ id: sub.id, name: sub.name }); setFolderMenuOpen(null) }}
-                                          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', fontSize: 12, border: 'none', cursor: 'pointer', backgroundColor: 'transparent', color: 'var(--theme-text)', textAlign: 'left' }}
-                                          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
-                                          onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                                        >
-                                          <Edit2 size={11} /> Rename
-                                        </button>
-                                        <button
-                                          onClick={() => { updateFolderMutation.mutate({ folderId: sub.id, data: { parentId: null } }); setFolderMenuOpen(null) }}
-                                          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', fontSize: 12, border: 'none', cursor: 'pointer', backgroundColor: 'transparent', color: 'var(--theme-text)', textAlign: 'left' }}
-                                          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
-                                          onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                                        >
-                                          <FolderOpen size={11} /> Move to root
-                                        </button>
-                                        <button
-                                          onClick={() => { deleteFolderMutation.mutate(sub.id); setFolderMenuOpen(null) }}
-                                          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', fontSize: 12, border: 'none', cursor: 'pointer', backgroundColor: 'transparent', color: '#ef4444', textAlign: 'left' }}
-                                          onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.06)')}
-                                          onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                                        >
-                                          <Trash2 size={11} /> Delete
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          </DroppableFolder>
-                        )
-                      })}
-                    </div>
-                  )
-                })}
-              </SortableContext>
+              {/* Named folders — recursive tree, sortable at every depth level */}
+              {renderFolderTree(null, 0)}
               {/* New folder */}
               {isCreatingFolder ? (
                 <div style={{ padding: '6px 6px', display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -1845,12 +1871,9 @@ export default function ParametersPage() {
             >
               <option value="">Move to folder…</option>
               <option value="">— Root (ungrouped)</option>
-              {folders.filter(f => !f.parentId).flatMap(f => [
-                <option key={f.id} value={f.id}>{f.name}</option>,
-                ...folders.filter(sf => sf.parentId === f.id).map(sf => (
-                  <option key={sf.id} value={sf.id}>  └ {sf.name}</option>
-                ))
-              ])}
+              {buildAllFolderOptions().map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
             </select>
           )}
           <button

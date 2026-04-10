@@ -841,6 +841,46 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
       return res.status(422).json({ success: false, error: 'No parameters found in file', warnings })
     }
 
+    // -------------------------------------------------------------------------
+    // Resolve bare parameter-name references in formulas to {{param:ID}} syntax.
+    // e.g.  "base_mass * 9.81"  →  "{{param:abc123}} * 9.81"
+    // This makes formulas portable and evaluable after import.
+    // -------------------------------------------------------------------------
+    const hasFormulaWithNames = parsed.some(p => {
+      if (!p.formula) return false
+      // Check if the formula contains any word character sequences (bare names)
+      // that are NOT already in {{param:ID}} format
+      return /\b[a-zA-Z_][a-zA-Z0-9_]*\b/.test(p.formula.replace(/\{\{param:[^}]+\}\}/g, ''))
+    })
+    if (hasFormulaWithNames) {
+      // Fetch all project parameters for name→id resolution
+      const allProjectParams = await prisma.parameter.findMany({
+        where: { projectId },
+        select: { id: true, name: true },
+      })
+      // Also include params being imported (synthetic IDs for forward refs within batch)
+      const nameToId = new Map<string, string>()
+      for (const ep of allProjectParams) nameToId.set(ep.name, ep.id)
+      // Imported params that don't exist yet use synthetic IDs (will be resolved post-create)
+      // We leave those for now — only resolve against existing params in this pass
+
+      for (const p of parsed) {
+        if (!p.formula) continue
+        // Sort names by descending length to avoid partial matches
+        const sortedNames = [...nameToId.keys()].sort((a, b) => b.length - a.length)
+        let formula = p.formula
+        for (const name of sortedNames) {
+          const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          // Only replace bare identifiers (not inside {{param:...}} already)
+          formula = formula.replace(
+            new RegExp(`(?<!\\{\\{param:[^}]*)\\b${escaped}\\b`, 'g'),
+            `{{param:${nameToId.get(name)}}}`
+          )
+        }
+        p.formula = formula
+      }
+    }
+
     // Cycle detection among imported formula parameters
     const formulaParams = parsed.filter(p => p.formula)
     if (formulaParams.length > 1) {

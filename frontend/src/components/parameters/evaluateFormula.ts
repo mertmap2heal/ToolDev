@@ -107,16 +107,19 @@ const CONSTANT_RE = new RegExp(
 )
 
 /**
- * Evaluate a formula string that may contain {{param:ID}} references
- * and named engineering constants (pi, g, R, c, …).
+ * Evaluate a formula string that may contain:
+ * - {{param:ID}} references (canonical form stored in DB)
+ * - bare parameter names (e.g. base_mass * 2) when paramValuesByName is provided
+ * - named engineering constants (pi, g, R, c, …)
  *
- * @param formula    The raw formula string, e.g. "{{param:abc123}} * 2 * pi"
- * @param paramValues  Map of parameter ID -> numeric value
- * @returns FormulaEvalResult with result, error, and the list of referenced IDs
+ * @param formula          The raw formula string
+ * @param paramValues      Map of parameter ID -> numeric value
+ * @param paramValuesByName  Optional map of parameter NAME -> numeric value (for name-based refs)
  */
 export function evaluateFormula(
   formula: string,
-  paramValues: Record<string, number>
+  paramValues: Record<string, number>,
+  paramValuesByName?: Record<string, number>
 ): FormulaEvalResult {
   const usedParamIds: string[] = []
 
@@ -143,14 +146,29 @@ export function evaluateFormula(
   // Substitute named constants (pi, g, R, …) with their numeric values
   expr = expr.replace(CONSTANT_RE, (name) => String(FORMULA_CONSTANTS[name]))
 
+  // Substitute bare parameter name references if a name→value map is provided.
+  // Sort by descending length to avoid partial replacement (e.g. "mass" inside "total_mass").
+  if (paramValuesByName && Object.keys(paramValuesByName).length > 0) {
+    const sortedNames = Object.keys(paramValuesByName).sort((a, b) => b.length - a.length)
+    for (const pName of sortedNames) {
+      const escaped = pName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const nameRe = new RegExp(`\\b${escaped}\\b`, 'g')
+      if (nameRe.test(expr)) {
+        expr = expr.replace(new RegExp(`\\b${escaped}\\b`, 'g'), String(paramValuesByName[pName]))
+        // Track that this was referenced (we don't have the ID, so skip ID tracking)
+      }
+    }
+  }
+
   // Sanitise: only allow digits, arithmetic operators, parens, dots, spaces,
   // and e/E for scientific notation (constants are already substituted to numbers)
   if (!/^[\d\s+\-*/^%().eE]+$/.test(expr)) {
-    return {
-      result: null,
-      error: 'Invalid formula: unsupported characters after constant substitution',
-      usedParamIds,
-    }
+    // Provide a more helpful error if identifiers remain (unresolved names)
+    const unresolvedMatch = expr.match(/\b[a-zA-Z_][a-zA-Z0-9_]*\b/)
+    const error = unresolvedMatch
+      ? `Unknown identifier: "${unresolvedMatch[0]}" — use {{param:ID}} or a recognised constant (pi, g, R…)`
+      : 'Invalid formula: unsupported characters after constant substitution'
+    return { result: null, error, usedParamIds }
   }
 
   try {

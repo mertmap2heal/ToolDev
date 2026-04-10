@@ -445,7 +445,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
     return map
   }, [existingParams])
 
-  // Numeric values of existing project parameters — used for live formula evaluation in preview
+  // Numeric values of existing project parameters — by ID (for {{param:ID}} refs)
   const existingParamValues = useMemo(() => {
     const map: Record<string, number> = {}
     for (const p of existingParams ?? []) {
@@ -454,6 +454,27 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
     }
     return map
   }, [existingParams])
+
+  // Numeric values of existing project parameters — by NAME (for bare name refs like base_mass * 2)
+  const existingParamValuesByName = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const p of existingParams ?? []) {
+      const v = parseFloat(p.defaultValue ?? '')
+      if (!isNaN(v)) map[p.name] = v
+    }
+    // Also include preview rows themselves so forward-references within the import batch work
+    // (use the 'value' column if available)
+    const valueColIndex = previewHeaders.findIndex(h => columnMappings[h] === 'value')
+    const nameColIdx = previewHeaders.findIndex(h => columnMappings[h] === 'name')
+    if (nameColIdx >= 0 && valueColIndex >= 0) {
+      for (const row of previewRows) {
+        const name = (row[nameColIdx] ?? '').trim()
+        const val = parseFloat((row[valueColIndex] ?? '').trim())
+        if (name && !isNaN(val)) map[name] = val
+      }
+    }
+    return map
+  }, [existingParams, previewHeaders, previewRows, columnMappings])
 
   // Determine which preview rows would overwrite an existing parameter
   const nameColIndex = previewHeaders.findIndex(h => columnMappings[h] === 'name')
@@ -954,7 +975,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                                 }
                                 // Formula column: show with icon + live evaluation against existing params
                                 if (canonical === 'formula' && cellValue) {
-                                  const evalResult = evaluateFormula(cellValue, existingParamValues)
+                                  const evalResult = evaluateFormula(cellValue, existingParamValues, existingParamValuesByName)
                                   return (
                                     <td key={ci} className="px-3 py-1.5 whitespace-nowrap max-w-[200px]">
                                       <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 font-mono text-xs truncate">
