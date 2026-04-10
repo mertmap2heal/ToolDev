@@ -241,8 +241,8 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
         onClick={guardClose}
         aria-hidden
       />
-      <div className="relative w-full max-w-2xl min-w-[28rem] h-full bg-white dark:bg-gray-800 shadow-2xl border-l border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+      <div className="relative w-full max-w-2xl min-w-[28rem] h-[calc(100%-1rem)] my-2 mr-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm flex-shrink-0">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             Edit User
           </h2>

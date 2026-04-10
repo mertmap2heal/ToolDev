@@ -144,12 +144,12 @@ export default function ParameterDetailDrawer({
     <>
       <div className="fixed inset-0 bg-black/30 z-40" aria-hidden onClick={onClose} />
       <div
-        className="fixed right-0 top-0 bottom-0 w-full max-w-2xl bg-white dark:bg-gray-800 shadow-xl z-50 flex flex-col overflow-hidden"
+        className="fixed right-2 top-2 bottom-2 w-full max-w-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm z-50 flex flex-col overflow-hidden"
         role="dialog"
         aria-label="Parameter details"
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
+        <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm shrink-0">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white truncate pr-2">
             {parameter.parameterId || parameter.name}
           </h2>
