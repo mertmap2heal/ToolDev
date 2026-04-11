@@ -7,18 +7,13 @@
  *  3) Export smoke: triggers export button (CSV) without crashing.
  */
 import { test, expect } from './helpers/fixtures'
-
-async function ensureAuthToken(page: { evaluate: Function }) {
-  const token = await page.evaluate(() => localStorage.getItem('token'))
-  if (!token) throw new Error('No auth token found in localStorage')
-  return token as string
-}
+import { readAuthToken } from './helpers/requirementsUi'
 
 test.describe('Saved Traceability Views', () => {
   test('open saved view and export smoke', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements/traceability-views`)
     await page.waitForLoadState('domcontentloaded')
-    const token = await ensureAuthToken(page)
+    const token = await readAuthToken(page)
 
     // Create folder via API (avoids window.prompt in UI for folder creation)
     const folderResp = await page.request.post(`http://localhost:5000/api/v1/traceability-views/${projectId}/folders`, {
@@ -68,7 +63,8 @@ test.describe('Saved Traceability Views', () => {
     const modalRoot = page
       .getByRole('heading', { name: /Traceability Matrix/i })
       .locator('xpath=ancestor::div[contains(@class,\"shadow-xl\")]')
-    const targetSelect = modalRoot.locator('select').first()
+    // Saved-view modal: first select is baseline context; linkage target is the next select.
+    const targetSelect = modalRoot.locator('select').nth(1)
     await expect(targetSelect).toHaveValue('pbs_component')
 
     // Export smoke (CSV)

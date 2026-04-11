@@ -23,3 +23,18 @@ export async function openTraceabilityMatrixFromToolbar(
     timeout: opts?.headingTimeout ?? 15_000,
   })
 }
+
+/** Left panel uses a dropdown (current tab) + menu rows, not three separate tab buttons. */
+export async function selectRequirementsLeftPanelTab(
+  page: Page,
+  tab: 'pbs' | 'functions' | 'verification',
+): Promise<void> {
+  await page.getByRole('button', { name: /^(PBS|Functions|Verification)$/ }).first().click()
+  const subtitle =
+    tab === 'pbs'
+      ? 'Product Breakdown Structure'
+      : tab === 'functions'
+        ? 'Functional architecture'
+        : 'Test plans, cases, and runs'
+  await page.locator('div.absolute.left-0.right-0.top-full').getByRole('button').filter({ hasText: subtitle }).click()
+}

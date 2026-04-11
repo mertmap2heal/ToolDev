@@ -2,9 +2,8 @@
  * Requirements page — list, create, modal guard (unsaved changes)
  */
 import { test, expect } from './helpers/fixtures'
+import { MODAL_OVERLAY, openTraceabilityMatrixFromToolbar, readAuthToken } from './helpers/requirementsUi'
 
-// Modals in this app use fixed overlay, not role="dialog"
-const MODAL = '.fixed.inset-0'
 // Suppression window in useUnsavedChanges: 500ms after open, markDirty is ignored
 const AFTER_OPEN_WAIT = 600
 
@@ -20,15 +19,15 @@ test.describe('Requirements', () => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /create requirement/i }).click()
-    await expect(page.locator(MODAL)).toBeVisible({ timeout: 5_000 })
-    await expect(page.locator(MODAL)).toContainText(/requirement/i)
+    await expect(page.locator(MODAL_OVERLAY)).toBeVisible({ timeout: 5_000 })
+    await expect(page.locator(MODAL_OVERLAY)).toContainText(/requirement/i)
   })
 
   test('create modal: Traceability tab shows structured sections', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /create requirement/i }).click()
-    const modal = page.locator(MODAL)
+    const modal = page.locator(MODAL_OVERLAY)
     await expect(modal).toBeVisible({ timeout: 5_000 })
     await modal.getByRole('button', { name: /traceability/i }).click()
     await expect(modal.getByRole('button', { name: /sources and context/i })).toBeVisible({ timeout: 5_000 })
@@ -44,9 +43,9 @@ test.describe('Requirements', () => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /create requirement/i }).click()
-    await expect(page.locator(MODAL)).toBeVisible({ timeout: 5_000 })
+    await expect(page.locator(MODAL_OVERLAY)).toBeVisible({ timeout: 5_000 })
     // Submit without filling anything
-    await page.locator(MODAL).getByRole('button', { name: /^create/i }).click()
+    await page.locator(MODAL_OVERLAY).getByRole('button', { name: /^create/i }).click()
     // An error message should appear
     await expect(page.locator('[class*="red"], [class*="error"]').first()).toBeVisible({ timeout: 5_000 })
   })
@@ -55,9 +54,9 @@ test.describe('Requirements', () => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /create requirement/i }).click()
-    await expect(page.locator(MODAL)).toBeVisible({ timeout: 5_000 })
+    await expect(page.locator(MODAL_OVERLAY)).toBeVisible({ timeout: 5_000 })
     // Cancel immediately without typing — guardClose should just close
-    await page.locator(MODAL).getByRole('button', { name: /cancel/i }).click()
+    await page.locator(MODAL_OVERLAY).getByRole('button', { name: /cancel/i }).click()
     // Unsaved-changes warning should NOT appear
     await page.waitForTimeout(500)
     await expect(page.getByText(/keep for later|continue editing/i)).not.toBeVisible()
@@ -67,7 +66,7 @@ test.describe('Requirements', () => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /create requirement/i }).click()
-    const modal = page.locator(MODAL)
+    const modal = page.locator(MODAL_OVERLAY)
     await expect(modal).toBeVisible({ timeout: 5_000 })
     // Wait for suppression window to expire before typing
     await page.waitForTimeout(AFTER_OPEN_WAIT)
@@ -84,7 +83,7 @@ test.describe('Requirements', () => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /create requirement/i }).click()
-    const modal = page.locator(MODAL)
+    const modal = page.locator(MODAL_OVERLAY)
     await expect(modal).toBeVisible({ timeout: 5_000 })
     // Wait for suppression window before typing
     await page.waitForTimeout(AFTER_OPEN_WAIT)
@@ -97,7 +96,7 @@ test.describe('Requirements', () => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /create requirement/i }).click()
-    const modal = page.locator(MODAL)
+    const modal = page.locator(MODAL_OVERLAY)
     await expect(modal).toBeVisible({ timeout: 5_000 })
     await page.waitForTimeout(AFTER_OPEN_WAIT)
     await modal.locator('input[placeholder*="title" i], input[name="title"]').first().fill('Kept draft')
@@ -106,7 +105,7 @@ test.describe('Requirements', () => {
     await page.getByRole('button', { name: /keep for later/i }).click()
     // Reopen — isDirty was preserved → Clear all should appear immediately
     await page.getByRole('button', { name: /create requirement/i }).click()
-    await expect(page.locator(MODAL).getByRole('button', { name: /clear all/i })).toBeVisible({ timeout: 5_000 })
+    await expect(page.locator(MODAL_OVERLAY).getByRole('button', { name: /clear all/i })).toBeVisible({ timeout: 5_000 })
   })
 
   test('requirements settings page loads', async ({ page, projectId }) => {
@@ -121,7 +120,7 @@ test.describe('Requirements', () => {
     await expect(page).toHaveURL(/requirements\/dashboard/)
   })
 
-  test('Visible fields affects both Table and Document views', async ({ page, projectId }) => {
+  test('Columns picker affects both Table and Document views', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
 
@@ -181,7 +180,7 @@ test.describe('Requirements', () => {
     await page.getByRole('button', { name: /^manage$/i }).click()
     await page.getByRole('button', { name: /audit log/i }).click()
 
-    const modal = page.locator(MODAL)
+    const modal = page.locator(MODAL_OVERLAY)
     await expect(modal).toBeVisible({ timeout: 10_000 })
     await expect(modal).toContainText(/audit log/i)
 
@@ -192,17 +191,88 @@ test.describe('Requirements', () => {
   test('traceability matrix opens from requirements page', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    // Traceability toolbar opens a menu; matrix is opened from "Traceability Matrix".
-    await page.getByRole('button', { name: 'Traceability', exact: true }).click()
-    await page.getByRole('button', { name: /traceability matrix/i }).click()
-    await expect(page.getByRole('heading', { name: /traceability matrix/i })).toBeVisible({ timeout: 15_000 })
+    await openTraceabilityMatrixFromToolbar(page)
+  })
+
+  test('UI: create requirement then move to trash', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/requirements`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.evaluate(() => {
+      try {
+        localStorage.removeItem('requirements-columns')
+        localStorage.setItem('requirements-list-view', 'table')
+      } catch {
+        /* ignore */
+      }
+    })
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
+
+    const uniq = `e2e_ui_${Date.now()}`
+    await page.getByRole('button', { name: /create requirement/i }).click()
+    const modal = page.locator(MODAL_OVERLAY)
+    await expect(modal).toBeVisible({ timeout: 5_000 })
+    await page.waitForTimeout(AFTER_OPEN_WAIT)
+
+    const form = page.locator('form#create-req-form')
+    const lifecycleSelect = form.locator('label').filter({ hasText: /Lifecycle Model/ }).locator('..').locator('select').first()
+    await expect(lifecycleSelect).toBeVisible({ timeout: 15_000 })
+    const lifeOptCount = await lifecycleSelect.locator('option').count()
+    test.skip(
+      lifeOptCount <= 1,
+      'No requirement lifecycles in project — configure Lifecycle Management to run UI create/delete',
+    )
+    await lifecycleSelect.selectOption({ index: 1 })
+
+    await form.locator('input[placeholder*="title" i], input[name="title"]').first().fill(uniq)
+
+    const descEd = form.locator('.ProseMirror').first()
+    await descEd.click()
+    await descEd.pressSequentially('E2E UI description body', { delay: 5 })
+
+    const mocSelect = form.locator('label').filter({ hasText: /Means of Compliance/ }).locator('..').locator('select').first()
+    await expect(mocSelect).toBeVisible({ timeout: 10_000 })
+    const mocOptCount = await mocSelect.locator('option').count()
+    expect(mocOptCount, 'MoC options missing — seed backend mocs if this fails').toBeGreaterThan(1)
+
+    const pickedNonTest = await mocSelect.evaluate((el: HTMLSelectElement) => {
+      for (let i = 0; i < el.options.length; i++) {
+        const opt = el.options[i]
+        if (!opt.value) continue
+        const text = opt.text || ''
+        const afterColon = text.split(':')[1]?.trim() ?? ''
+        const mocName = afterColon.split('-')[0]?.trim() ?? ''
+        if (/^test$/i.test(mocName)) continue
+        el.selectedIndex = i
+        el.dispatchEvent(new Event('change', { bubbles: true }))
+        return true
+      }
+      return false
+    })
+    if (!pickedNonTest) {
+      await mocSelect.selectOption({ index: 1 })
+      const verSelect = form.locator('label').filter({ hasText: /Verification Method/ }).locator('..').locator('select').first()
+      const verOpts = await verSelect.locator('option').count()
+      expect(verOpts, 'Verification method options when MoC is Test').toBeGreaterThan(1)
+      await verSelect.selectOption({ index: 1 })
+    }
+
+    await modal.getByRole('button', { name: 'Create Requirement' }).click()
+    await expect(page.locator('form#create-req-form')).toHaveCount(0, { timeout: 30_000 })
+
+    const row = page.locator('table tbody tr').filter({ hasText: uniq }).first()
+    await expect(row).toBeVisible({ timeout: 25_000 })
+
+    await row.getByTitle('Delete requirement').click()
+    await expect(page.getByRole('heading', { name: /move to trash/i })).toBeVisible({ timeout: 10_000 })
+    await page.getByRole('button', { name: /^Move to Trash$/ }).click()
+    await expect(page.locator('table tbody tr').filter({ hasText: uniq })).toHaveCount(0, { timeout: 20_000 })
   })
 
   test('inline edit: description allows typing multiple characters', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    const token = await page.evaluate(() => localStorage.getItem('token'))
-    if (!token) throw new Error('No auth token — login must succeed before this test')
+    const token = await readAuthToken(page)
 
     const seedTitle = `E2E inline-edit desc seed ${Date.now()}`
     const createResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
@@ -225,7 +295,7 @@ test.describe('Requirements', () => {
     await page.reload({ waitUntil: 'domcontentloaded' })
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
 
-    const row = page.locator('tr').filter({ hasText: seedTitle }).first()
+    const row = page.locator('table tbody tr').filter({ hasText: seedTitle }).first()
     await expect(row).toBeVisible({ timeout: 15_000 })
 
     const descCell = row.locator('div.group\\/desc[title="Double-click to edit"]').first()
@@ -246,8 +316,7 @@ test.describe('Requirements', () => {
   test('add link dialog opens from expanded row', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    const token = await page.evaluate(() => localStorage.getItem('token'))
-    if (!token) throw new Error('No auth token — login must succeed before this test')
+    const token = await readAuthToken(page)
 
     const listResp = await page.request.get(
       `http://localhost:5000/api/v1/requirements/${projectId}?page=1&pageSize=1`,
@@ -282,7 +351,7 @@ test.describe('Requirements', () => {
     const expandBtn = page.getByRole('button', { name: /expand linked items/i }).first()
     await expect(expandBtn).toBeVisible({ timeout: 15_000 })
     await expandBtn.click()
-    const linkedRow = page.locator('tr').filter({ hasText: /Linked Items\s*\(/ })
+    const linkedRow = page.locator('table tbody tr').filter({ hasText: /Linked Items\s*\(/ })
     await expect(linkedRow).toBeVisible({ timeout: 5_000 })
     await linkedRow.getByRole('button', { name: /add link/i }).click()
 
@@ -298,8 +367,7 @@ test.describe('Requirements', () => {
   test('child requirements: /all API endpoint includes requirements with parentId', async ({ page, projectId }) => {
     await page.goto('/')
     await page.waitForLoadState('domcontentloaded')
-    const token = await page.evaluate(() => localStorage.getItem('token'))
-    if (!token) throw new Error('No auth token found')
+    const token = await readAuthToken(page)
 
     // /all returns every requirement; paginated / only returns root requirements (parentId: null)
     const [allResp, rootResp] = await Promise.all([

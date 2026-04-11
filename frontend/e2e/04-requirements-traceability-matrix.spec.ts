@@ -6,21 +6,14 @@
  *  2) Baseline view disables the Traceability control (read-only snapshot; no matrix edits).
  */
 import { test, expect } from './helpers/fixtures'
-
-async function ensureAuthToken(page: { evaluate: Function }) {
-  const token = await page.evaluate(() => localStorage.getItem('token'))
-  if (!token) throw new Error('No auth token found in localStorage')
-  return token as string
-}
+import { openTraceabilityMatrixFromToolbar, readAuthToken } from './helpers/requirementsUi'
 
 test.describe('Requirements / Traceability matrix', () => {
   test('opens modal: title, target selector, and matrix area', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
 
-    await page.getByRole('button', { name: /^Traceability$/ }).click()
-
-    await expect(page.getByRole('heading', { name: 'Traceability Matrix' })).toBeVisible()
+    await openTraceabilityMatrixFromToolbar(page)
     const modalRoot = page
       .getByRole('heading', { name: 'Traceability Matrix' })
       .locator('xpath=ancestor::div[contains(@class,"shadow-xl")]')
@@ -41,7 +34,7 @@ test.describe('Requirements / Traceability matrix', () => {
   test('baseline view: Traceability button is disabled', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    const token = await ensureAuthToken(page)
+    const token = await readAuthToken(page)
 
     const reqResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -74,7 +67,10 @@ test.describe('Requirements / Traceability matrix', () => {
     await page.waitForLoadState('domcontentloaded')
 
     const traceBtn = page.getByRole('button', { name: /^Traceability$/ })
-    await expect(traceBtn).toBeDisabled()
-    await expect(traceBtn).toHaveAttribute('title', /unavailable in baseline view/i)
+    await expect(traceBtn).toBeEnabled()
+    await traceBtn.click()
+    const matrixItem = page.getByRole('button', { name: /traceability matrix/i })
+    await expect(matrixItem).toBeDisabled()
+    await expect(matrixItem).toHaveAttribute('title', /unavailable in baseline view/i)
   })
 })

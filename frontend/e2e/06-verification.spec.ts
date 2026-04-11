@@ -2,14 +2,27 @@
  * Verification — main layout, test cases, test plans, test runs, settings
  */
 import { test, expect } from './helpers/fixtures'
+import type { Page } from '@playwright/test'
 
 // Modals in this app use fixed overlay, not role="dialog"
 const MODAL = '.fixed.inset-0'
 
-async function forceVerificationPlansTableView(page: import('@playwright/test').Page) {
+async function forceVerificationTableListView(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem('verification-list-view', 'table')
   })
+}
+
+function createPlanModal(page: Page) {
+  return page.locator(MODAL).filter({ has: page.locator('#create-plan-form') })
+}
+
+function createCaseModal(page: Page) {
+  return page.locator(MODAL).filter({ has: page.locator('#create-case-form') })
+}
+
+function confirmDeleteDialog(page: Page) {
+  return page.locator(MODAL).filter({ has: page.getByRole('heading', { name: 'Confirm Delete' }) })
 }
 
 test.describe('Verification', () => {
@@ -43,30 +56,101 @@ test.describe('Verification', () => {
     await expect(page.getByRole('heading', { name: 'Templates', exact: true })).toBeVisible()
   })
 
+  test('Overview tab updates URL', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=plans`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: /overview/i }).click()
+    await expect(page).toHaveURL(/tab=overview/)
+  })
+
+  /** Main tab strip uses labels like "Test Plans (3)"; Overview cards also expose buttons with similar text. */
   test('Test Plans tab updates URL', async ({ page, projectId }) => {
-    await forceVerificationPlansTableView(page)
+    await forceVerificationTableListView(page)
     await page.goto(`/projects/${projectId}/verification`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /test plans/i }).click()
+    await page.getByRole('button', { name: /^Test Plans \(\d+\)$/ }).click()
     await expect(page).toHaveURL(/tab=plans/)
   })
 
+  test('Test Cases tab updates URL', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: /^Test Cases \(\d+\)$/ }).click()
+    await expect(page).toHaveURL(/tab=cases/)
+  })
+
+  test('Test Runs tab updates URL', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: /^Test Runs \(\d+\)$/ }).click()
+    await expect(page).toHaveURL(/tab=runs/)
+  })
+
+  test('Test Setups tab updates URL', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: /^Test Setups \(\d+\)$/ }).click()
+    await expect(page).toHaveURL(/tab=setups/)
+  })
+
+  test('Test Runs tab: list shell loads', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=runs`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByRole('heading', { name: /automated test runs/i })).toBeVisible({ timeout: 15_000 })
+    await expect(
+      page
+        .getByRole('heading', { name: /no test runs found/i })
+        .or(page.getByRole('columnheader', { name: /^run name$/i })),
+    ).toBeVisible({ timeout: 10_000 })
+  })
+
+  test('Test Results tab: shell and Create Test Result action', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=results`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByRole('button', { name: /create test result/i })).toBeVisible({ timeout: 15_000 })
+  })
+
+  test('Traceability Matrix tab: filters load after data', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=traceability`)
+    await page.waitForLoadState('domcontentloaded')
+    // Requirement and Test case filters share the same placeholder copy
+    await expect(page.getByPlaceholder(/search key\/title/i).first()).toBeVisible({ timeout: 15_000 })
+  })
+
   test('open Create Test Plan modal', async ({ page, projectId }) => {
-    await forceVerificationPlansTableView(page)
+    await forceVerificationTableListView(page)
     await page.goto(`/projects/${projectId}/verification?tab=plans`)
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /create test plan/i }).click()
-    const modal = page.locator(MODAL)
+    const modal = createPlanModal(page)
     await expect(modal).toBeVisible({ timeout: 5_000 })
     await expect(modal.getByRole('heading', { name: /create test plan/i })).toBeVisible()
   })
 
-  test('Create Test Plan modal: required name validation', async ({ page, projectId }) => {
-    await forceVerificationPlansTableView(page)
+  test('Create Test Plan modal: Cancel closes modal', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
     await page.goto(`/projects/${projectId}/verification?tab=plans`)
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /create test plan/i }).click()
-    const modal = page.locator(MODAL)
+    const modal = createPlanModal(page)
+    await expect(modal).toBeVisible({ timeout: 5_000 })
+    await modal.getByRole('button', { name: /^cancel$/i }).click()
+    await expect(modal).not.toBeVisible({ timeout: 5_000 })
+  })
+
+  test('Create Test Plan modal: required name validation', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=plans`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: /create test plan/i }).click()
+    const modal = createPlanModal(page)
     await expect(modal).toBeVisible({ timeout: 5_000 })
     await modal.getByRole('button', { name: /^create test plan$/i }).click()
     await expect(modal).toBeVisible()
@@ -75,16 +159,96 @@ test.describe('Verification', () => {
   })
 
   test('Create Test Plan: submit adds row to plans table', async ({ page, projectId }) => {
-    await forceVerificationPlansTableView(page)
+    await forceVerificationTableListView(page)
     await page.goto(`/projects/${projectId}/verification?tab=plans`)
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /create test plan/i }).click()
-    const modal = page.locator(MODAL)
+    const modal = createPlanModal(page)
     await expect(modal).toBeVisible({ timeout: 5_000 })
     const planName = `E2E Plan ${Date.now()}`
     await modal.getByPlaceholder(/master verification plan/i).fill(planName)
     await modal.getByRole('button', { name: /^create test plan$/i }).click()
     await expect(modal).not.toBeVisible({ timeout: 15_000 })
     await expect(page.locator('table tbody tr').filter({ hasText: planName }).first()).toBeVisible({ timeout: 15_000 })
+  })
+
+  test('Delete Test Plan: kebab menu and confirm removes row', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=plans`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: /create test plan/i }).click()
+    const planModal = createPlanModal(page)
+    await expect(planModal).toBeVisible({ timeout: 5_000 })
+    const planName = `E2E Plan Delete ${Date.now()}`
+    await planModal.getByPlaceholder(/master verification plan/i).fill(planName)
+    await planModal.getByRole('button', { name: /^create test plan$/i }).click()
+    await expect(planModal).not.toBeVisible({ timeout: 15_000 })
+    const row = page.locator('table tbody tr').filter({ hasText: planName }).first()
+    await expect(row).toBeVisible({ timeout: 15_000 })
+    await row.getByRole('button', { name: /more actions for/i }).click()
+    await page.getByRole('menuitem', { name: /^delete$/i }).click()
+    const confirmDlg = confirmDeleteDialog(page)
+    await expect(confirmDlg).toBeVisible({ timeout: 5_000 })
+    await expect(confirmDlg.getByText(planName)).toBeVisible()
+    await confirmDlg.getByRole('button', { name: /^delete$/i }).click()
+    await expect(confirmDlg).not.toBeVisible({ timeout: 15_000 })
+    await expect(row).not.toBeVisible({ timeout: 10_000 })
+  })
+
+  test('open Create Test Case modal', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=cases`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: /create test case/i }).click()
+    const modal = createCaseModal(page)
+    await expect(modal).toBeVisible({ timeout: 5_000 })
+    await expect(modal.getByRole('heading', { name: /create test case/i })).toBeVisible()
+  })
+
+  test('Create Test Case modal: title required validation', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=cases`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: /create test case/i }).click()
+    const modal = createCaseModal(page)
+    await expect(modal).toBeVisible({ timeout: 5_000 })
+    await modal.getByRole('button', { name: /^create test case$/i }).click()
+    await expect(modal.getByText(/title is required/i)).toBeVisible({ timeout: 5_000 })
+  })
+
+  test('Create Test Case: submit adds row to cases table', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=cases`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: /create test case/i }).click()
+    const modal = createCaseModal(page)
+    await expect(modal).toBeVisible({ timeout: 5_000 })
+    const caseTitle = `E2E Case ${Date.now()}`
+    await modal.getByPlaceholder(/enter test case title/i).fill(caseTitle)
+    await modal.getByRole('button', { name: /^create test case$/i }).click()
+    await expect(modal).not.toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('table tbody tr').filter({ hasText: caseTitle }).first()).toBeVisible({ timeout: 15_000 })
+  })
+
+  test('Delete Test Case: row delete and confirm removes row', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=cases`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: /create test case/i }).click()
+    const caseModal = createCaseModal(page)
+    await expect(caseModal).toBeVisible({ timeout: 5_000 })
+    const caseTitle = `E2E Case Delete ${Date.now()}`
+    await caseModal.getByPlaceholder(/enter test case title/i).fill(caseTitle)
+    await caseModal.getByRole('button', { name: /^create test case$/i }).click()
+    await expect(caseModal).not.toBeVisible({ timeout: 15_000 })
+    const row = page.locator('table tbody tr').filter({ hasText: caseTitle }).first()
+    await expect(row).toBeVisible({ timeout: 15_000 })
+    await row.locator('button[title="Delete"]').click()
+    const confirmDlg = confirmDeleteDialog(page)
+    await expect(confirmDlg).toBeVisible({ timeout: 5_000 })
+    await expect(confirmDlg.getByText(caseTitle)).toBeVisible()
+    await confirmDlg.getByRole('button', { name: /^delete$/i }).click()
+    await expect(confirmDlg).not.toBeVisible({ timeout: 15_000 })
+    await expect(row).not.toBeVisible({ timeout: 10_000 })
   })
 })
