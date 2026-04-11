@@ -1220,7 +1220,7 @@ function PlanAuditTrailSection({
   const rows = Array.isArray(data) ? data : []
 
   const safeFileBase = `${planKey ?? 'plan'}-${planName ?? planId ?? 'audit'}`
-    .replace(/[^\w.\-]+/g, '_')
+    .replace(/[^\w.-]+/g, '_')
     .slice(0, 120)
 
   const exportCsv = () => {

@@ -25,6 +25,10 @@ function confirmDeleteDialog(page: Page) {
   return page.locator(MODAL).filter({ has: page.getByRole('heading', { name: 'Confirm Delete' }) })
 }
 
+function startNewRunModal(page: Page) {
+  return page.locator(MODAL).filter({ has: page.getByRole('heading', { name: /start new run/i }) })
+}
+
 test.describe('Verification', () => {
   test('verification page loads', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/verification`)
@@ -122,6 +126,32 @@ test.describe('Verification', () => {
     await page.waitForLoadState('domcontentloaded')
     // Requirement and Test case filters share the same placeholder copy
     await expect(page.getByPlaceholder(/search key\/title/i).first()).toBeVisible({ timeout: 15_000 })
+  })
+
+  test('Test Runs: Start New Run modal opens and Cancel closes', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=runs`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByRole('heading', { name: /automated test runs/i })).toBeVisible({ timeout: 15_000 })
+    // Toolbar and empty-state both expose "Start New Run"
+    await page.getByRole('button', { name: /^start new run$/i }).first().click()
+    const modal = startNewRunModal(page)
+    await expect(modal).toBeVisible({ timeout: 5_000 })
+    await expect(modal.getByRole('heading', { name: /start new run/i })).toBeVisible()
+    await modal.getByRole('button', { name: /^cancel$/i }).click()
+    await expect(modal).not.toBeVisible({ timeout: 5_000 })
+  })
+
+  test('Reviews tab: shell loads', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=reviews`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(
+      page
+        .getByText(/no reviews yet/i)
+        .or(page.getByRole('columnheader', { name: /^title$/i }))
+        .or(page.getByRole('columnheader', { name: /^type$/i })),
+    ).toBeVisible({ timeout: 15_000 })
   })
 
   test('open Create Test Plan modal', async ({ page, projectId }) => {

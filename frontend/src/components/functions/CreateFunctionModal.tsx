@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { X, ChevronRight, Wand2, ClipboardList, TestTube2 } from 'lucide-react'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import { functionService } from '../../services/function.service'
 import { verificationService } from '../../services/verification.service'
-import type { CreateSystemFunctionDto, SystemFunction, FunctionCriticality } from 'shared/types/engineering.types'
+import type { CreateSystemFunctionDto, SystemFunction } from 'shared/types/engineering.types'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 interface CreateFunctionModalProps {
@@ -30,7 +30,15 @@ export default function CreateFunctionModal({ isOpen, onClose, projectId, parent
     pbsComponentId: null,
     allocatedTo: null,
   })
-  const setFormData = (v: CreateSystemFunctionDto | ((prev: CreateSystemFunctionDto) => CreateSystemFunctionDto)) => { setFormDataBase(v as any); markDirty() }
+  const markDirtyRef = useRef(markDirty)
+  markDirtyRef.current = markDirty
+  const setFormData = useCallback(
+    (v: CreateSystemFunctionDto | ((prev: CreateSystemFunctionDto) => CreateSystemFunctionDto)) => {
+      setFormDataBase((prev) => (typeof v === 'function' ? v(prev) : v))
+      markDirtyRef.current()
+    },
+    [],
+  )
   const formData = formDataBase
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [useAutoId, setUseAutoId] = useState(true)
@@ -97,16 +105,18 @@ export default function CreateFunctionModal({ isOpen, onClose, projectId, parent
         setErrors({ submit: response.error || 'Failed to create function' })
       }
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('Create function error:', error)
       let errorMessage = 'Failed to create function.'
-
-      if (error?.error) {
-        errorMessage = error.error
-      } else if (error?.message) {
-        errorMessage = error.message
-      } else if (error?.response?.data?.error) {
-        errorMessage = error.response.data.error
+      if (error && typeof error === 'object') {
+        const e = error as {
+          error?: unknown
+          message?: unknown
+          response?: { data?: { error?: unknown } }
+        }
+        if (typeof e.error === 'string') errorMessage = e.error
+        else if (typeof e.message === 'string') errorMessage = e.message
+        else if (typeof e.response?.data?.error === 'string') errorMessage = e.response.data.error
       }
 
       if (errorMessage.includes('Unknown arg') || errorMessage.includes('status') || errorMessage.includes('owner') || errorMessage.includes('verificationMethod')) {
@@ -120,9 +130,9 @@ export default function CreateFunctionModal({ isOpen, onClose, projectId, parent
   // When parentId prop changes, update formData
   useEffect(() => {
     if (parentId !== undefined) {
-      setFormData(prev => ({ ...prev, parentId: parentId || null }))
+      setFormData((prev) => ({ ...prev, parentId: parentId || null }))
     }
-  }, [parentId])
+  }, [parentId, setFormData])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -333,7 +343,7 @@ export default function CreateFunctionModal({ isOpen, onClose, projectId, parent
                 </optgroup>
                 {testPlans.length > 0 && (
                   <optgroup label="Test Plans">
-                    {testPlans.map((tp: any) => (
+                    {testPlans.map((tp) => (
                       <option key={tp.id} value={`TP::${tp.id}::${tp.key}`}>
                         {tp.key} — {tp.name}
                       </option>
@@ -342,7 +352,7 @@ export default function CreateFunctionModal({ isOpen, onClose, projectId, parent
                 )}
                 {testCases.length > 0 && (
                   <optgroup label="Test Cases">
-                    {testCases.map((tc: any) => (
+                    {testCases.map((tc) => (
                       <option key={tc.id} value={`TC::${tc.id}::${tc.key}`}>
                         {tc.key} — {tc.title}
                       </option>

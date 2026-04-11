@@ -1,0 +1,279 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - link "Engineering Tool Logo Engineering Tool Project Development" [ref=e6] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e7]:
+          - img "Engineering Tool Logo" [ref=e8]
+          - generic [ref=e9]:
+            - generic [ref=e10]: Engineering Tool
+            - generic [ref=e11]: Project Development
+      - button "Collapse sidebar (Ctrl+B)" [ref=e12] [cursor=pointer]:
+        - img [ref=e13]
+    - generic [ref=e16]:
+      - link "Overview" [ref=e17] [cursor=pointer]:
+        - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4
+        - img [ref=e18]
+        - generic [ref=e21]: Overview
+      - generic [ref=e22]:
+        - button "Development & Control" [ref=e23] [cursor=pointer]:
+          - generic [ref=e24]: Development & Control
+          - img [ref=e25]
+        - link "Requirements" [ref=e27] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/requirements
+          - img [ref=e28]
+          - generic [ref=e32]: Requirements
+        - link "Tasks" [ref=e33] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/tasks
+          - img [ref=e34]
+          - generic [ref=e37]: Tasks
+        - link "Change Requests" [ref=e38] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/change-requests
+          - img [ref=e39]
+          - generic [ref=e43]: Change Requests
+        - link "Issues" [ref=e44] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/issues
+          - img [ref=e45]
+          - generic [ref=e47]: Issues
+        - link "Documentation" [ref=e48] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/documentation
+          - img [ref=e49]
+          - generic [ref=e52]: Documentation
+        - link "Lifecycle Status" [ref=e53] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/lifecycle-status
+          - img [ref=e54]
+          - generic [ref=e56]: Lifecycle Status
+        - link "Configuration Management" [ref=e57] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/configuration-management
+          - img [ref=e58]
+          - generic [ref=e62]: Configuration Management
+        - link "Archive" [ref=e63] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/archive
+          - img [ref=e64]
+          - generic [ref=e67]: Archive
+      - generic [ref=e68]:
+        - button "System Definition" [ref=e69] [cursor=pointer]:
+          - generic [ref=e70]: System Definition
+          - img [ref=e71]
+        - link "Stakeholder" [ref=e73] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/stakeholder
+          - img [ref=e74]
+          - generic [ref=e79]: Stakeholder
+        - link "Product Breakdown Structure" [ref=e80] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/product-breakdown-structure
+          - img [ref=e81]
+          - generic [ref=e86]: Product Breakdown Structure
+        - link "MBSE Models" [ref=e87] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/mbse-models
+          - img [ref=e88]
+          - generic [ref=e98]: MBSE Models
+        - link "Functions" [ref=e99] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/functions
+          - img [ref=e100]
+          - generic [ref=e102]: Functions
+        - link "Interface Management" [ref=e103] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/interface-management
+          - img [ref=e104]
+          - generic [ref=e109]: Interface Management
+        - link "Parameters" [ref=e110] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/parameters
+          - img [ref=e111]
+          - generic [ref=e112]: Parameters
+      - generic [ref=e113]:
+        - button "Assurance" [ref=e114] [cursor=pointer]:
+          - generic [ref=e115]: Assurance
+          - img [ref=e116]
+        - link "Verification" [ref=e118] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/verification
+          - img [ref=e119]
+          - generic [ref=e122]: Verification
+        - link "Validation" [ref=e123] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/validation
+          - img [ref=e124]
+          - generic [ref=e126]: Validation
+        - link "Safety Analysis" [ref=e127] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/safety-analysis
+          - img [ref=e128]
+          - generic [ref=e130]: Safety Analysis
+        - link "Risk Management" [ref=e131] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/risk-management
+          - img [ref=e132]
+          - generic [ref=e134]: Risk Management
+        - link "Compliance Check" [ref=e135] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/compliance-check
+          - img [ref=e136]
+          - generic [ref=e139]: Compliance Check
+        - link "Certification" [ref=e140] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/certification
+          - img [ref=e141]
+          - generic [ref=e144]: Certification
+        - link "Audit Log" [ref=e145] [cursor=pointer]:
+          - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/audit
+          - img [ref=e146]
+          - generic [ref=e150]: Audit Log
+    - generic [ref=e151]:
+      - link "Settings" [ref=e152] [cursor=pointer]:
+        - /url: /settings
+        - img [ref=e153]
+        - generic [ref=e156]: Settings
+      - generic [ref=e157]:
+        - generic [ref=e158]: C
+        - generic [ref=e159]: Christian Mandle
+  - generic [ref=e160]:
+    - banner [ref=e161]:
+      - navigation [ref=e163]:
+        - generic [ref=e164]:
+          - link "Home" [ref=e165] [cursor=pointer]:
+            - /url: /
+          - generic [ref=e166]: /
+        - generic [ref=e167]:
+          - link "Test Project" [ref=e168] [cursor=pointer]:
+            - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4
+          - generic [ref=e169]: /
+        - generic [ref=e171]: Parameters
+      - button "Search... Ctrl K" [ref=e172]:
+        - img [ref=e173]
+        - generic [ref=e176]: Search...
+        - generic [ref=e177]: Ctrl K
+      - generic [ref=e178]:
+        - button "AI Guide" [ref=e179] [cursor=pointer]:
+          - img [ref=e180]
+        - button "Notifications" [ref=e183] [cursor=pointer]:
+          - img [ref=e184]
+        - button "CM" [ref=e188] [cursor=pointer]:
+          - generic [ref=e189]: CM
+    - main [ref=e191]:
+      - generic [ref=e192]:
+        - generic [ref=e193]:
+          - button "Parameters" [ref=e194] [cursor=pointer]
+          - button "Communications" [ref=e195] [cursor=pointer]:
+            - img [ref=e196]
+            - text: Communications
+        - generic [ref=e202]:
+          - heading "Parameters" [level=2] [ref=e203]
+          - generic [ref=e204]:
+            - button "Safety Relevance 1" [ref=e205] [cursor=pointer]:
+              - img [ref=e206]
+              - generic [ref=e208]: Safety Relevance
+              - generic [ref=e209]: "1"
+              - img [ref=e210]
+            - link "Settings" [ref=e214] [cursor=pointer]:
+              - /url: /projects/71e4b8cf-46ef-4b30-81bc-8faf64f8faf4/parameters/settings
+              - img [ref=e215]
+              - text: Settings
+            - button "Publish to Git" [ref=e218] [cursor=pointer]:
+              - img [ref=e219]
+              - text: Publish to Git
+            - button "Import" [ref=e223] [cursor=pointer]:
+              - img [ref=e224]
+              - text: Import
+            - button "Export" [ref=e228] [cursor=pointer]:
+              - img [ref=e229]
+              - text: Export
+              - img [ref=e232]
+            - generic [ref=e234]:
+              - button "List" [ref=e235] [cursor=pointer]:
+                - img [ref=e236]
+                - text: List
+              - button "Graph" [ref=e237] [cursor=pointer]:
+                - img [ref=e238]
+                - text: Graph
+            - button "New Parameter" [ref=e244] [cursor=pointer]:
+              - img [ref=e245]
+              - text: New Parameter
+        - generic [ref=e247]:
+          - img [ref=e248]
+          - textbox "Search parameters…" [ref=e251]
+        - button "Filters" [ref=e253] [cursor=pointer]:
+          - generic [ref=e254]:
+            - img [ref=e255]
+            - generic [ref=e257]: Filters
+          - img [ref=e258]
+        - generic [ref=e260]:
+          - generic [ref=e261]:
+            - generic [ref=e262]:
+              - generic [ref=e263]: Folders
+              - button "Collapse sidebar" [ref=e264] [cursor=pointer]:
+                - img [ref=e265]
+            - generic [ref=e267]:
+              - button "All Parameters 2" [ref=e268] [cursor=pointer]:
+                - img [ref=e269]
+                - generic [ref=e273]: All Parameters
+                - generic [ref=e274]: "2"
+              - button "Ungrouped 2" [ref=e276] [cursor=pointer]:
+                - img [ref=e277]
+                - generic [ref=e279]: Ungrouped
+                - generic [ref=e280]: "2"
+              - button "New folder" [ref=e281] [cursor=pointer]:
+                - img [ref=e282]
+                - text: New folder
+          - generic [ref=e283]:
+            - table [ref=e286]:
+              - rowgroup [ref=e287]:
+                - row "Parameter Description Type Value Unit Source Status Used in Created" [ref=e288]:
+                  - columnheader [ref=e289]:
+                    - checkbox [ref=e290] [cursor=pointer]
+                  - columnheader "Parameter" [ref=e291]
+                  - columnheader "Description" [ref=e292]
+                  - columnheader "Type" [ref=e293]
+                  - columnheader "Value" [ref=e294]
+                  - columnheader "Unit" [ref=e295]
+                  - columnheader "Source" [ref=e296]
+                  - columnheader "Status" [ref=e297]
+                  - columnheader "Used in" [ref=e298]
+                  - columnheader "Created" [ref=e299]
+                  - columnheader [ref=e300]
+              - rowgroup [ref=e301]:
+                - button "e2e_param_1775904393057 Updated by E2E test — — — — draft 0 Apr 11, 2026" [ref=e302]:
+                  - cell [ref=e303]:
+                    - checkbox [ref=e304] [cursor=pointer]
+                  - cell "e2e_param_1775904393057" [ref=e305]:
+                    - button "e2e_param_1775904393057" [ref=e306] [cursor=pointer]
+                  - cell "Updated by E2E test" [ref=e307]:
+                    - generic "Updated by E2E test" [ref=e308]
+                  - cell "—" [ref=e309]
+                  - cell "—" [ref=e310]:
+                    - generic [ref=e312]: —
+                  - cell "—" [ref=e313]
+                  - cell "—" [ref=e314]
+                  - cell "draft" [ref=e315]
+                  - cell "0" [ref=e316]:
+                    - button "0" [ref=e317] [cursor=pointer]
+                  - cell "Apr 11, 2026" [ref=e318]
+                  - cell [ref=e319]:
+                    - generic [ref=e320]:
+                      - button "Change Request" [ref=e321] [cursor=pointer]:
+                        - img [ref=e322]
+                      - button "Edit" [ref=e325] [cursor=pointer]:
+                        - img [ref=e326]
+                      - button "Delete" [ref=e328] [cursor=pointer]:
+                        - img [ref=e329]
+                - button "e2e_param_1775904353025 E2E test parameter description — — — — draft 0 Apr 11, 2026" [ref=e332]:
+                  - cell [ref=e333]:
+                    - checkbox [ref=e334] [cursor=pointer]
+                  - cell "e2e_param_1775904353025" [ref=e335]:
+                    - button "e2e_param_1775904353025" [ref=e336] [cursor=pointer]
+                  - cell "E2E test parameter description" [ref=e337]:
+                    - generic "E2E test parameter description" [ref=e338]
+                  - cell "—" [ref=e339]
+                  - cell "—" [ref=e340]:
+                    - generic [ref=e342]: —
+                  - cell "—" [ref=e343]
+                  - cell "—" [ref=e344]
+                  - cell "draft" [ref=e345]
+                  - cell "0" [ref=e346]:
+                    - button "0" [ref=e347] [cursor=pointer]
+                  - cell "Apr 11, 2026" [ref=e348]
+                  - cell [ref=e349]:
+                    - generic [ref=e350]:
+                      - button "Change Request" [ref=e351] [cursor=pointer]:
+                        - img [ref=e352]
+                      - button "Edit" [ref=e355] [cursor=pointer]:
+                        - img [ref=e356]
+                      - button "Delete" [ref=e358] [cursor=pointer]:
+                        - img [ref=e359]
+            - status [ref=e362]
+```

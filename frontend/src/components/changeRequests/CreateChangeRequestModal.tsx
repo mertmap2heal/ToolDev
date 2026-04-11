@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { X, Search, Check, Upload, File, Trash2 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -9,7 +9,7 @@ import { parameterService } from '../../services/parameter.service'
 import { requirementService } from '../../services/requirement.service'
 import { authService } from '../../services/auth.service'
 import { invalidateLinkCaches } from '../../utils/invalidateLinkCaches'
-import type { CreateChangeRequestDto, Parameter, Requirement } from 'shared/types/engineering.types'
+import type { CreateChangeRequestDto, Requirement } from 'shared/types/engineering.types'
 
 interface CreateChangeRequestModalProps {
   isOpen: boolean
@@ -55,7 +55,15 @@ export default function CreateChangeRequestModal({
     justification: '',
     impactedRequirementIds: [],
   })
-  const setFormData = (v: CreateChangeRequestDto | ((prev: CreateChangeRequestDto) => CreateChangeRequestDto)) => { setFormDataBase(v as any); markDirty() }
+  const markDirtyRef = useRef(markDirty)
+  markDirtyRef.current = markDirty
+  const setFormData = useCallback(
+    (v: CreateChangeRequestDto | ((prev: CreateChangeRequestDto) => CreateChangeRequestDto)) => {
+      setFormDataBase((prev) => (typeof v === 'function' ? v(prev) : v))
+      markDirtyRef.current()
+    },
+    [],
+  )
   const formData = formDataBase
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [sourceSearchQuery, setSourceSearchQuery] = useState('')
@@ -148,9 +156,15 @@ export default function CreateChangeRequestModal({
   })
 
   useEffect(() => {
-    if (userData?.success && userData?.data && !formData.requestedBy) {
-      setFormData(prev => ({ ...prev, requestedBy: userData.data!.name }))
-    }
+    if (!userData?.success || !userData?.data || !isOpen) return
+    const name = userData.data.name
+    let applied = false
+    setFormDataBase((prev) => {
+      if (prev.requestedBy) return prev
+      applied = true
+      return { ...prev, requestedBy: name }
+    })
+    if (applied) markDirtyRef.current()
   }, [userData, isOpen])
 
   // Combine all sources into a unified list
@@ -228,7 +242,7 @@ export default function CreateChangeRequestModal({
           name: initialSourceName || initialSourceTitle || '',
           requirementId: initialSourceType === 'requirement' ? initialSourceId : undefined,
         })
-        setFormData(prev => ({
+        setFormDataBase((prev) => ({
           ...prev,
           title: initialSourceTitle || '',
           description: initialSourceDescription || '',
@@ -241,7 +255,7 @@ export default function CreateChangeRequestModal({
         }))
       } else {
         setSelectedSource(null)
-        setFormData(prev => ({
+        setFormDataBase((prev) => ({
           ...prev,
           title: '',
           description: '',
@@ -260,7 +274,7 @@ export default function CreateChangeRequestModal({
       setUploadingFiles(false)
       setImpactedSearchQuery('')
       setShowImpactedDropdown(false)
-      setFormData((prev) => ({ ...prev, impactedRequirementIds: [] }))
+      setFormDataBase((prev) => ({ ...prev, impactedRequirementIds: [] }))
     }
   }, [isOpen, initialSourceType, initialSourceId, initialSourceName, initialSourceTitle, initialSourceDescription])
 
@@ -313,9 +327,15 @@ export default function CreateChangeRequestModal({
       resetDirty()
       onClose()
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('Create change request error:', error)
-      setErrors({ submit: error?.error || error?.message || 'Failed to create change request' })
+      let submit = 'Failed to create change request'
+      if (error && typeof error === 'object') {
+        const e = error as { error?: unknown; message?: unknown }
+        if (typeof e.error === 'string') submit = e.error
+        else if (typeof e.message === 'string') submit = e.message
+      }
+      setErrors({ submit })
     },
   })
 

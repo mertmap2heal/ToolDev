@@ -2,7 +2,12 @@
  * Requirements page — list, create, modal guard (unsaved changes)
  */
 import { test, expect } from './helpers/fixtures'
-import { MODAL_OVERLAY, openTraceabilityMatrixFromToolbar, readAuthToken } from './helpers/requirementsUi'
+import {
+  MODAL_OVERLAY,
+  installE2eLifecycleAndStatusStorage,
+  openTraceabilityMatrixFromToolbar,
+  readAuthToken,
+} from './helpers/requirementsUi'
 
 // Suppression window in useUnsavedChanges: 500ms after open, markDirty is ignored
 const AFTER_OPEN_WAIT = 600
@@ -195,6 +200,7 @@ test.describe('Requirements', () => {
   })
 
   test('UI: create requirement then move to trash', async ({ page, projectId }) => {
+    await installE2eLifecycleAndStatusStorage(page)
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
     await page.evaluate(() => {
