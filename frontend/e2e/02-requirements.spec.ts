@@ -136,11 +136,11 @@ test.describe('Requirements', () => {
     })
     await page.reload({ waitUntil: 'domcontentloaded' })
 
-    // Hide Description in Visible fields
+    // Hide Description via View → Columns (column picker)
     await page.getByRole('button', { name: /^view/i }).click()
-    await page.getByRole('button', { name: /visible fields/i }).click()
+    await page.getByRole('button', { name: /^columns$/i }).click()
     const popover = page
-      .getByRole('heading', { name: /visible fields/i })
+      .getByRole('heading', { name: /^columns$/i })
       .locator('..')
       .locator('..')
     await popover.getByPlaceholder(/search fields/i).fill('Description')
@@ -173,13 +173,13 @@ test.describe('Requirements', () => {
     await expect(page.locator('div.shadow-sm').first().getByText(/^Priority$/)).toHaveCount(0)
   })
 
-  test('Data menu: Audit opens audit log modal', async ({ page, projectId }) => {
+  test('Manage menu: Audit log opens audit log modal', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
 
-    // Open Data dropdown
-    await page.getByRole('button', { name: /^data$/i }).click()
-    await page.getByRole('button', { name: /^audit$/i }).click()
+    // Open Manage dropdown (formerly "Data")
+    await page.getByRole('button', { name: /^manage$/i }).click()
+    await page.getByRole('button', { name: /audit log/i }).click()
 
     const modal = page.locator(MODAL)
     await expect(modal).toBeVisible({ timeout: 10_000 })
@@ -192,8 +192,9 @@ test.describe('Requirements', () => {
   test('traceability matrix opens from requirements page', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    // Toolbar opens the matrix modal directly (no nested "Traceability matrix" menu item).
+    // Traceability toolbar opens a menu; matrix is opened from "Traceability Matrix".
     await page.getByRole('button', { name: 'Traceability', exact: true }).click()
+    await page.getByRole('button', { name: /traceability matrix/i }).click()
     await expect(page.getByRole('heading', { name: /traceability matrix/i })).toBeVisible({ timeout: 15_000 })
   })
 
