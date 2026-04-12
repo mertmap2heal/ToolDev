@@ -13,6 +13,7 @@ export interface TraceabilityMatrixRow {
     testCaseId: string
     testCaseKey: string
     testCaseTitle: string
+    traceLinkId: string
     testPlanIds: string[]
     testPlanKeys: string[]
     latestRunResult: {
@@ -75,6 +76,10 @@ export interface FullTraceabilityResponse {
   coverageSummary: FullTraceabilitySummary
   testPlans: TestPlanSummary[]
   testCaseColumns: TestCaseColumn[]
+  /** All test cases in the project (for grid cells where user can add/remove links) */
+  allTestCaseColumns: TestCaseColumn[]
+  /** Map of reqId -> tcId -> traceLinkId (for delete operations) */
+  linkMap: Record<string, Record<string, string>>
   unlinkedRequirements: UnlinkedRequirement[]
 }
 
@@ -157,16 +162,18 @@ export const traceabilityMatrixService = {
       }
     }
 
-    // Req -> TCs from trace links
+    // Req -> TCs from trace links, preserving linkId for each pair
     const linkedTcIds = new Set<string>()
     const linkedReqIds = new Set<string>()
     const reqToTcs = new Map<string, string[]>()
+    const reqTcToLinkId = new Map<string, string>()
     for (const link of links) {
       linkedReqIds.add(link.targetId)
       linkedTcIds.add(link.sourceId)
       const list = reqToTcs.get(link.targetId) ?? []
       if (!list.includes(link.sourceId)) list.push(link.sourceId)
       reqToTcs.set(link.targetId, list)
+      reqTcToLinkId.set(`${link.targetId}:${link.sourceId}`, link.id)
     }
 
     // Load run results for linked TCs
@@ -252,6 +259,7 @@ export const traceabilityMatrixService = {
           testCaseId: tc.id,
           testCaseKey: tc.key,
           testCaseTitle: tc.title,
+          traceLinkId: reqTcToLinkId.get(`${req.id}:${tcId}`) ?? '',
           testPlanIds: tcToPlanIds.get(tcId) ?? [],
           testPlanKeys: tcToPlanKeys.get(tcId) ?? [],
           latestRunResult: latest ? formatResult(latest) : null,
@@ -286,6 +294,21 @@ export const traceabilityMatrixService = {
       }
     }).sort((a, b) => a.key.localeCompare(b.key))
 
+    const allTestCaseColumns: TestCaseColumn[] = allTestCases.map((tc) => ({
+      id: tc.id,
+      key: tc.key,
+      title: tc.title,
+      planIds: tcToPlanIds.get(tc.id) ?? [],
+      planKeys: tcToPlanKeys.get(tc.id) ?? [],
+    }))
+
+    const linkMapObj: Record<string, Record<string, string>> = {}
+    for (const [compositeKey, linkId] of reqTcToLinkId) {
+      const [reqId, tcId] = compositeKey.split(':')
+      if (!linkMapObj[reqId]) linkMapObj[reqId] = {}
+      linkMapObj[reqId][tcId] = linkId
+    }
+
     const testPlanSummaries: TestPlanSummary[] = allPlans.map((p) => ({
       id: p.id,
       key: p.key,
@@ -313,6 +336,8 @@ export const traceabilityMatrixService = {
       },
       testPlans: testPlanSummaries,
       testCaseColumns,
+      allTestCaseColumns,
+      linkMap: linkMapObj,
       unlinkedRequirements,
     }
   },

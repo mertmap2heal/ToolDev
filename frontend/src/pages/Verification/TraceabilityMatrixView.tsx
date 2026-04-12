@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
+import { traceabilityService } from '../../services/traceability.service'
+import { invalidateLinkCaches } from '../../utils/invalidateLinkCaches'
 import {
   CheckCircle,
   XCircle,
@@ -17,9 +19,10 @@ import {
   ClipboardCheck,
   Play,
   LinkIcon,
-  Filter,
   Eye,
   EyeOff,
+  Plus,
+  Loader,
 } from 'lucide-react'
 import clsx from 'clsx'
 import * as XLSX from 'xlsx'
@@ -49,6 +52,7 @@ interface TestCaseEntry {
   testCaseId: string
   testCaseKey: string
   testCaseTitle: string
+  traceLinkId: string
   testPlanIds: string[]
   testPlanKeys: string[]
   latestRunResult: RunResult | null
@@ -103,6 +107,8 @@ interface FullTraceabilityData {
   coverageSummary: CoverageSummary
   testPlans: TestPlanSummary[]
   testCaseColumns: TestCaseColumn[]
+  allTestCaseColumns: TestCaseColumn[]
+  linkMap: Record<string, Record<string, string>>
   unlinkedRequirements: UnlinkedRequirement[]
 }
 
@@ -234,6 +240,7 @@ function flattenForExport(rows: MatrixRow[], unlinked: UnlinkedRequirement[]) {
 export default function TraceabilityMatrixView() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const matrixReqId = searchParams.get('matrixReqId') || ''
   const matrixCaseId = searchParams.get('matrixCaseId') || ''
@@ -251,6 +258,13 @@ export default function TraceabilityMatrixView() {
   const [gapsPanelOpen, setGapsPanelOpen] = useState(false)
   const [popover, setPopover] = useState<{ tcId: string; reqId: string; x: number; y: number } | null>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
+
+  // Link dialog state
+  const [showLinkDialog, setShowLinkDialog] = useState(false)
+  const [linkDialogReqId, setLinkDialogReqId] = useState<string | null>(null)
+  const [linkDialogTcId, setLinkDialogTcId] = useState<string | null>(null)
+  const [linkRationale, setLinkRationale] = useState('')
+  const [showLinkedOnly, setShowLinkedOnly] = useState(true)
 
   // Data fetching
   const { data, isLoading } = useQuery({
@@ -272,7 +286,18 @@ export default function TraceabilityMatrixView() {
   }
   const testPlans = data?.testPlans ?? []
   const testCaseColumns = data?.testCaseColumns ?? []
+  const allTestCaseColumns = data?.allTestCaseColumns ?? []
+  const serverLinkMap = data?.linkMap ?? {}
   const unlinkedRequirements = data?.unlinkedRequirements ?? []
+
+  // All requirements (linked + unlinked) for the grid
+  const allRequirements = useMemo(() => {
+    const linked = rows.map((r) => ({ id: r.requirementId, key: r.requirementKey, title: r.requirementTitle }))
+    const unlinked = unlinkedRequirements.map((u) => ({ id: u.id, key: u.key, title: u.title }))
+    const all = [...linked, ...unlinked]
+    all.sort((a, b) => a.key.localeCompare(b.key))
+    return all
+  }, [rows, unlinkedRequirements])
 
   // Deep-link sync
   useEffect(() => { if (matrixReqId) setReqSearch(matrixReqId) }, [matrixReqId])
@@ -287,6 +312,70 @@ export default function TraceabilityMatrixView() {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [popover])
+
+  // ─── Link mutations ───────────────────────────────────────────────────────
+
+  const createLinkMutation = useMutation({
+    mutationFn: async ({ reqId, tcId, rationale }: { reqId: string; tcId: string; rationale?: string }) => {
+      return traceabilityService.createTraceLink(projectId!, {
+        sourceType: 'test_case' as any,
+        sourceId: tcId,
+        targetType: 'requirement' as any,
+        targetId: reqId,
+        linkType: 'verifies' as any,
+        rationale,
+      })
+    },
+    onSuccess: () => {
+      invalidateLinkCaches(queryClient, projectId!)
+      queryClient.invalidateQueries({ queryKey: ['traceability-matrix-full', projectId] })
+      setShowLinkDialog(false)
+      setLinkDialogReqId(null)
+      setLinkDialogTcId(null)
+      setLinkRationale('')
+    },
+    onError: (error: any) => {
+      console.error('Create link error:', error)
+      alert(error?.error || 'Failed to create verifies link')
+    },
+  })
+
+  const deleteLinkMutation = useMutation({
+    mutationFn: async (linkId: string) => {
+      return traceabilityService.deleteTraceLink(projectId!, linkId)
+    },
+    onSuccess: () => {
+      invalidateLinkCaches(queryClient, projectId!)
+      queryClient.invalidateQueries({ queryKey: ['traceability-matrix-full', projectId] })
+    },
+    onError: (error: any) => {
+      console.error('Delete link error:', error)
+      alert(error?.error || 'Failed to delete verifies link')
+    },
+  })
+
+  const handleGridCellClick = (reqId: string, tcId: string) => {
+    const linkId = serverLinkMap[reqId]?.[tcId]
+    if (linkId) {
+      if (window.confirm('Do you want to remove this verifies link?')) {
+        deleteLinkMutation.mutate(linkId)
+      }
+    } else {
+      setLinkDialogReqId(reqId)
+      setLinkDialogTcId(tcId)
+      setLinkRationale('')
+      setShowLinkDialog(true)
+    }
+  }
+
+  const handleCreateLink = () => {
+    if (!linkDialogReqId || !linkDialogTcId) return
+    createLinkMutation.mutate({
+      reqId: linkDialogReqId,
+      tcId: linkDialogTcId,
+      rationale: linkRationale || undefined,
+    })
+  }
 
   // ─── Filtering ─────────────────────────────────────────────────────────────
 
@@ -328,16 +417,17 @@ export default function TraceabilityMatrixView() {
 
   // ─── Grid columns (filtered) ──────────────────────────────────────────────
 
+  const baseColumns = showLinkedOnly ? testCaseColumns : allTestCaseColumns
   const filteredColumns = useMemo(() => {
     const caseQ = caseSearch.trim().toLowerCase()
     const planSet = new Set(planFilter)
     const hasPlanFilter = planSet.size > 0
-    return testCaseColumns.filter((col) => {
+    return baseColumns.filter((col) => {
       if (caseQ && !col.key.toLowerCase().includes(caseQ) && !col.title.toLowerCase().includes(caseQ)) return false
       if (hasPlanFilter && !col.planIds.some((pid) => planSet.has(pid))) return false
       return true
     })
-  }, [testCaseColumns, caseSearch, planFilter])
+  }, [baseColumns, caseSearch, planFilter])
 
   // Group columns by plan for header spans
   const columnPlanGroups = useMemo(() => {
@@ -691,12 +781,39 @@ export default function TraceabilityMatrixView() {
       {/* ── Section 2a: Matrix Grid ─────────────────────────────────────────── */}
       {viewMode === 'grid' && (
         <div className={clsx(CARD, 'overflow-hidden')}>
-          {filteredColumns.length === 0 || sortedRows.length === 0 ? (
+          {/* Grid toolbar */}
+          <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
+            <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer select-none">
+              <input type="checkbox" checked={!showLinkedOnly} onChange={(e) => setShowLinkedOnly(!e.target.checked)}
+                className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded" />
+              Show all test cases
+            </label>
+            <span className="text-xs text-gray-400 ml-auto">
+              {(() => {
+                const gridReqs = showLinkedOnly ? sortedRows : allRequirements.filter((r) => {
+                  if (!reqSearch.trim()) return true
+                  const q = reqSearch.trim().toLowerCase()
+                  return r.key.toLowerCase().includes(q) || r.title.toLowerCase().includes(q)
+                })
+                return `${gridReqs.length} requirements × ${filteredColumns.length} test cases`
+              })()}
+            </span>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
+                <span className="w-3 h-3 bg-green-500 rounded-sm" /> Linked
+              </span>
+              <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
+                <span className="w-3 h-3 bg-gray-200 dark:bg-gray-600 rounded-sm" /> Not linked
+              </span>
+            </div>
+          </div>
+
+          {filteredColumns.length === 0 || (showLinkedOnly && sortedRows.length === 0) || (!showLinkedOnly && allRequirements.length === 0) ? (
             <div className="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
-              {rows.length === 0 ? 'No requirements linked to test cases. Create verifies links to populate the matrix.' : 'No matching data for current filters.'}
+              {allRequirements.length === 0 ? 'No requirements or test cases found.' : 'No matching data for current filters.'}
             </div>
           ) : (
-            <div className="overflow-auto max-h-[70vh]">
+            <div className="overflow-x-auto">
               <table className="border-collapse text-xs" style={{ minWidth: `${200 + filteredColumns.length * 48}px` }}>
                 {/* Plan group header */}
                 <thead className="sticky top-0 z-20">
@@ -729,30 +846,50 @@ export default function TraceabilityMatrixView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedRows.map((row) => {
-                    const rowCells = cellLookup.get(row.requirementId)
+                  {(showLinkedOnly ? sortedRows.map((r) => ({ id: r.requirementId, key: r.requirementKey, title: r.requirementTitle })) : allRequirements.filter((r) => {
+                    if (!reqSearch.trim()) return true
+                    const q = reqSearch.trim().toLowerCase()
+                    return r.key.toLowerCase().includes(q) || r.title.toLowerCase().includes(q)
+                  })).map((req) => {
+                    const rowCells = cellLookup.get(req.id)
                     return (
-                      <tr key={row.requirementId} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
+                      <tr key={req.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
                         <td className="sticky left-0 z-10 bg-white dark:bg-gray-800 px-3 py-2 border-r border-b border-gray-200 dark:border-gray-700 min-w-[200px] max-w-[280px]">
-                          <button type="button" onClick={() => openRequirement(row.requirementId)} className="text-left w-full group">
-                            <div className="font-mono text-gray-500 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 truncate">{row.requirementKey}</div>
-                            <div className="text-gray-700 dark:text-gray-300 truncate">{row.requirementTitle}</div>
+                          <button type="button" onClick={() => openRequirement(req.id)} className="text-left w-full group">
+                            <div className="font-mono text-gray-500 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 truncate">{req.key}</div>
+                            <div className="text-gray-700 dark:text-gray-300 truncate">{req.title}</div>
                           </button>
                         </td>
                         {filteredColumns.map((col) => {
                           const entry = rowCells?.get(col.id)
+                          const isLinked = !!entry
+                          const linkId = serverLinkMap[req.id]?.[col.id]
                           const reason = entry?.gapReason
-                          const hasLink = !!entry
+
+                          if (isLinked) {
+                            return (
+                              <td key={col.id} className="px-0 py-0 border-r border-b border-gray-200 dark:border-gray-700 text-center relative group/cell">
+                                <button type="button"
+                                  title={`${cellTooltip(reason, entry.latestRunResult)}\nClick for details • Right-click to remove link`}
+                                  onClick={(e) => setPopover({ tcId: col.id, reqId: req.id, x: e.clientX, y: e.clientY })}
+                                  onContextMenu={(e) => {
+                                    e.preventDefault()
+                                    if (linkId && window.confirm(`Remove verifies link between ${req.key} and ${col.key}?`)) {
+                                      deleteLinkMutation.mutate(linkId)
+                                    }
+                                  }}
+                                  className={clsx('w-full h-8 transition-colors hover:opacity-80', cellColor(reason))} />
+                              </td>
+                            )
+                          }
                           return (
                             <td key={col.id} className="px-0 py-0 border-r border-b border-gray-200 dark:border-gray-700 text-center">
-                              {hasLink ? (
-                                <button type="button"
-                                  title={cellTooltip(reason, entry.latestRunResult)}
-                                  onClick={(e) => setPopover({ tcId: col.id, reqId: row.requirementId, x: e.clientX, y: e.clientY })}
-                                  className={clsx('w-full h-8 transition-colors hover:opacity-80', cellColor(reason))} />
-                              ) : (
-                                <div className="w-full h-8" />
-                              )}
+                              <button type="button"
+                                title={`${req.key} → ${col.key}: Not linked\nClick to create verifies link`}
+                                onClick={() => handleGridCellClick(req.id, col.id)}
+                                className="w-full h-8 bg-white dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors group/add">
+                                <Plus size={12} className="mx-auto text-gray-300 dark:text-gray-600 group-hover/add:text-blue-500 dark:group-hover/add:text-blue-400 transition-colors" />
+                              </button>
                             </td>
                           )
                         })}
@@ -769,6 +906,7 @@ export default function TraceabilityMatrixView() {
             const rowData = rows.find((r) => r.requirementId === popover.reqId)
             const entry = rowData?.testCases.find((tc) => tc.testCaseId === popover.tcId)
             if (!entry) return null
+            const linkId = serverLinkMap[popover.reqId]?.[popover.tcId]
             return (
               <div ref={popoverRef}
                 className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl p-4 w-80"
@@ -804,6 +942,15 @@ export default function TraceabilityMatrixView() {
                     className="text-xs text-blue-600 dark:text-blue-400 hover:underline">Open Test Case</button>
                   <button type="button" onClick={() => { openRequirement(popover.reqId); setPopover(null) }}
                     className="text-xs text-blue-600 dark:text-blue-400 hover:underline">Open Requirement</button>
+                  {linkId && (
+                    <button type="button" onClick={() => {
+                      if (window.confirm('Remove this verifies link?')) {
+                        deleteLinkMutation.mutate(linkId)
+                        setPopover(null)
+                      }
+                    }}
+                      className="text-xs text-red-600 dark:text-red-400 hover:underline ml-auto">Remove Link</button>
+                  )}
                 </div>
               </div>
             )
@@ -815,7 +962,8 @@ export default function TraceabilityMatrixView() {
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-500" /> Fail</span>
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-400" /> Out of Sync</span>
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-300 dark:bg-gray-600" /> No Run</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600" /> No Link</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600" /> Not linked</span>
+            <span className="text-gray-400 ml-auto">Click empty cell = add link • Right-click linked cell = remove link</span>
           </div>
         </div>
       )}
@@ -833,7 +981,7 @@ export default function TraceabilityMatrixView() {
             </select>
             <span className="text-xs text-gray-400 ml-auto">{sortedRows.length} requirements, {sortedRows.reduce((s, r) => s + r.testCases.length, 0)} links</span>
           </div>
-          <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
+          <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-sm">
               <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0 z-10">
                 <tr>
@@ -896,7 +1044,7 @@ export default function TraceabilityMatrixView() {
                   {gapBadge(reason)}
                   <span className="text-gray-500 dark:text-gray-400">({items.length})</span>
                 </summary>
-                <div className="overflow-x-auto max-h-[30vh] overflow-y-auto">
+                <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
                     <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
                       <tr>
@@ -940,7 +1088,7 @@ export default function TraceabilityMatrixView() {
             Unlinked Requirements ({unlinkedRequirements.length})
             <span className="text-xs text-gray-500 dark:text-gray-400 font-normal ml-2">Requirements with no test case verifies link</span>
           </summary>
-          <div className="border-t border-gray-200 dark:border-gray-700 overflow-x-auto max-h-[30vh] overflow-y-auto">
+          <div className="border-t border-gray-200 dark:border-gray-700 overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
                 <tr>
@@ -964,6 +1112,88 @@ export default function TraceabilityMatrixView() {
             </table>
           </div>
         </details>
+      )}
+
+      {/* ── Create Link Dialog ──────────────────────────────────────────────── */}
+      {showLinkDialog && linkDialogReqId && linkDialogTcId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[500px] p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <LinkIcon size={18} />
+                Create Verifies Link
+              </h3>
+              <button
+                onClick={() => { setShowLinkDialog(false); setLinkDialogReqId(null); setLinkDialogTcId(null); setLinkRationale('') }}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+                <X size={20} className="text-gray-600 dark:text-gray-400" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Test Case (source)</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  {(() => {
+                    const tc = allTestCaseColumns.find((c) => c.id === linkDialogTcId)
+                    return tc ? `${tc.key} — ${tc.title}` : linkDialogTcId
+                  })()}
+                </p>
+              </div>
+
+              <div className="flex items-center justify-center text-gray-400">
+                <span className="text-xs">verifies →</span>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Requirement (target)</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  {(() => {
+                    const req = allRequirements.find((r) => r.id === linkDialogReqId)
+                    return req ? `${req.key} — ${req.title}` : linkDialogReqId
+                  })()}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Rationale (optional)
+                </label>
+                <textarea
+                  value={linkRationale}
+                  onChange={(e) => setLinkRationale(e.target.value)}
+                  placeholder="Explain why this test case verifies the requirement..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => { setShowLinkDialog(false); setLinkDialogReqId(null); setLinkDialogTcId(null); setLinkRationale('') }}
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-sm">
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateLink}
+                disabled={createLinkMutation.isPending}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg flex items-center gap-2 text-sm">
+                {createLinkMutation.isPending ? (
+                  <>
+                    <Loader size={14} className="animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <LinkIcon size={14} />
+                    Create Link
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

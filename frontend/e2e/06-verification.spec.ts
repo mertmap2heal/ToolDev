@@ -230,6 +230,68 @@ test.describe('Verification', () => {
     }
   })
 
+  test('Traceability Matrix tab: grid view shows linked/unlinked cells and "Show all test cases" toggle', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=traceability`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByPlaceholder(/search key\/title/i).first()).toBeVisible({ timeout: 15_000 })
+
+    const matrixBtn = page.getByRole('button', { name: 'Matrix', exact: true })
+    await matrixBtn.click()
+
+    // Grid toolbar should appear with "Show all test cases" checkbox
+    const showAllCheckbox = page.getByLabel(/show all test cases/i)
+    await expect(showAllCheckbox).toBeVisible({ timeout: 5_000 })
+
+    // Legend should show link/unlink states
+    await expect(page.getByText('Linked', { exact: true }).first()).toBeVisible()
+    await expect(page.getByText('Not linked', { exact: true }).first()).toBeVisible()
+
+    // Toggle show all test cases
+    if (!(await showAllCheckbox.isChecked())) {
+      await showAllCheckbox.check()
+      await page.waitForTimeout(500)
+    }
+
+    // After toggling, should still see the grid (table element)
+    await expect(page.locator('table.border-collapse').first()).toBeVisible({ timeout: 5_000 })
+  })
+
+  test('Traceability Matrix tab: grid cell click opens create link dialog', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=traceability`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByPlaceholder(/search key\/title/i).first()).toBeVisible({ timeout: 15_000 })
+
+    const matrixBtn = page.getByRole('button', { name: 'Matrix', exact: true })
+    await matrixBtn.click()
+
+    // Ensure "Show all test cases" is checked so we see unlinked cells too
+    const showAllCheckbox = page.getByLabel(/show all test cases/i)
+    await expect(showAllCheckbox).toBeVisible({ timeout: 5_000 })
+    if (!(await showAllCheckbox.isChecked())) {
+      await showAllCheckbox.check()
+      await page.waitForTimeout(500)
+    }
+
+    // Find an empty cell (one with the plus icon) and click it
+    const emptyCell = page.locator('table.border-collapse tbody td button').filter({ has: page.locator('svg.lucide-plus') }).first()
+    if (await emptyCell.isVisible({ timeout: 3_000 }).catch(() => false)) {
+      await emptyCell.click()
+
+      // Create Link Dialog should appear
+      const dialog = page.locator('.fixed.inset-0').filter({ hasText: /create verifies link/i })
+      await expect(dialog).toBeVisible({ timeout: 5_000 })
+      await expect(dialog.getByText(/test case \(source\)/i)).toBeVisible()
+      await expect(dialog.getByText(/requirement \(target\)/i)).toBeVisible()
+      await expect(dialog.getByRole('button', { name: /create link/i })).toBeVisible()
+
+      // Cancel closes dialog
+      await dialog.getByRole('button', { name: /cancel/i }).click()
+      await expect(dialog).not.toBeVisible({ timeout: 3_000 })
+    }
+  })
+
   test('Test Runs: Start New Run modal opens and Cancel closes', async ({ page, projectId }) => {
     await forceVerificationTableListView(page)
     await page.goto(`/projects/${projectId}/verification?tab=runs`)

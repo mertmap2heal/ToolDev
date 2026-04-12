@@ -512,7 +512,7 @@ function VerificationLayoutInner() {
   }, [drawer.closeRun, drawer.selectedRun?.id, setSearchParams])
 
   return (
-    <div ref={resizeContainerRef} className="flex h-[calc(100vh-4rem)]">
+    <div ref={resizeContainerRef} className="flex h-[calc(100vh-4rem-2rem)] max-h-[calc(100vh-4rem-2rem)]">
       {showTreePanel && (
         <>
           {isTreePanelOpen ? (
@@ -681,7 +681,7 @@ function VerificationLayoutInner() {
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
           <Outlet />
         </div>
         </div>

@@ -1259,7 +1259,7 @@ export default function VerificationPage() {
               : null
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto space-y-3">
+    <div className="flex-1 min-h-0 space-y-3">
       {/* Context bar: show when a drawer is open */}
       {viewingEntity && (
         <div className="flex items-center justify-between gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
