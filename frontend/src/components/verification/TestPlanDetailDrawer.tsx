@@ -3,15 +3,18 @@ import { X, ChevronDown, Plus, Trash2, GripVertical, Search, Download, FileCode,
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ApiResponse } from 'shared/types/api.types'
 import { verificationService } from '../../services/verification.service'
+import { projectService } from '../../services/project.service'
+import type { ProjectMember } from 'shared/types/project.types'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
-import ReportExporter from './ReportExporter'
+import ListExporter from './ListExporter'
 import ExportWithTemplateModal from './ExportWithTemplateModal'
 import FullReportModal from './FullReportModal'
 import VerificationLifecycle from './VerificationLifecycle'
 import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
 import clsx from 'clsx'
 import RelationshipsPanel from './RelationshipsPanel'
+import TestPlanDocumentTab from './TestPlanDocumentTab'
 
 interface TestPlanDetailDrawerProps {
   plan: any
@@ -20,8 +23,20 @@ interface TestPlanDetailDrawerProps {
   projectId: string
 }
 
+function ownerLabelFromProjectMembers(
+  ownerUserId: string | undefined | null,
+  members: ProjectMember[]
+): string {
+  if (!ownerUserId?.trim()) return '—'
+  const row = members.find((m) => m.userId === ownerUserId)
+  const u = row?.user
+  if (u?.name?.trim()) return u.name.trim()
+  if (u?.email?.trim()) return u.email.trim()
+  return `User ${ownerUserId.slice(0, 8)}…`
+}
+
 export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId }: TestPlanDetailDrawerProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'cases' | 'activity'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'document' | 'cases' | 'activity'>('overview')
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState<{
     name: string
@@ -75,6 +90,15 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
   const envOptions: { id: string; value: string }[] = environmentOptions?.success && environmentOptions?.data ? (environmentOptions.data as { id: string; value: string }[]) : []
   const toolOptions: { id: string; value: string }[] = testingToolOptions?.success && testingToolOptions?.data ? (testingToolOptions.data as { id: string; value: string }[]) : []
 
+  const { data: projectMembers = [] } = useQuery({
+    queryKey: ['project-members', projectId],
+    queryFn: async () => {
+      const res = await projectService.getProjectMembers(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    enabled: isOpen && !!projectId,
+  })
+
   // Fetch setups for default-setup selection
   const { data: allSetups = [] } = useQuery({
     queryKey: ['setups', projectId],
@@ -116,16 +140,6 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
       return response.success && response.data ? response.data : []
     },
     enabled: isOpen && activeTab === 'cases',
-  })
-
-  // Fetch report data when export modal opens
-  const { data: reportData } = useQuery({
-    queryKey: ['test-plan-report', projectId, plan?.id],
-    queryFn: async () => {
-      const response = await verificationService.getTestPlanReport(projectId, plan.id)
-      return response.success ? response.data : null
-    },
-    enabled: showExportModal && !!plan?.id,
   })
 
   // Fetch test runs for this plan
@@ -221,6 +235,10 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
 
   const currentPlan = planDetails || plan
   const planCases = currentPlan?.planCases || []
+  const ownerDisplayLabel = useMemo(
+    () => ownerLabelFromProjectMembers(currentPlan?.ownerUserId, projectMembers),
+    [currentPlan?.ownerUserId, projectMembers]
+  )
 
   const planCaseEntities = useMemo(() => {
     const raw = Array.isArray(planCases) ? planCases : []
@@ -500,17 +518,24 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
         {/* Tabs */}
         <div className="border-b border-gray-200 dark:border-gray-700 px-6 flex-shrink-0">
           <div className="flex gap-4">
-            {(['overview', 'cases', 'activity'] as const).map((tab) => (
+            {(
+              [
+                { id: 'overview' as const, label: 'Overview' },
+                { id: 'document' as const, label: 'Document' },
+                { id: 'cases' as const, label: 'Cases' },
+                { id: 'activity' as const, label: 'Activity' },
+              ] as const
+            ).map((tab) => (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
                 className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab
+                  activeTab === tab.id
                     ? 'border-blue-600 text-blue-600 dark:text-blue-400'
                     : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
                 }`}
               >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab.label}
               </button>
             ))}
           </div>
@@ -679,7 +704,12 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Owner
                 </label>
-                <p className="text-gray-900 dark:text-white">{currentPlan?.ownerUserId || '—'}</p>
+                <p
+                  className="text-gray-900 dark:text-white"
+                  title={currentPlan?.ownerUserId ? `User ID: ${currentPlan.ownerUserId}` : undefined}
+                >
+                  {ownerDisplayLabel}
+                </p>
               </div>
 
               {/* Testing Environment */}
@@ -779,6 +809,15 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
                 <VerifiesElementsSection testPlanId={currentPlan?.id} projectId={projectId} />
               )}
             </div>
+          )}
+
+          {activeTab === 'document' && currentPlan?.id && (
+            <TestPlanDocumentTab
+              projectId={projectId}
+              planId={currentPlan.id}
+              plan={currentPlan}
+              onOpenSetup={(s) => drawer.openSetup?.(s)}
+            />
           )}
 
           {activeTab === 'cases' && (
@@ -893,13 +932,14 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
         </div>
 
       {/* Export Modal */}
-      {showExportModal && reportData && (
-        <ReportExporter
+      {showExportModal && currentPlan && (
+        <ListExporter
           isOpen={showExportModal}
           onClose={() => setShowExportModal(false)}
-          reportType="test-plan"
-          reportData={reportData}
-          entityName={`${currentPlan?.key || ''} - ${currentPlan?.name || ''}`}
+          exportType="test-plans"
+          items={[currentPlan]}
+          projectId={projectId}
+          initialSelectedIds={[plan.id]}
         />
       )}
 

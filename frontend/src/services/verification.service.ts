@@ -130,6 +130,12 @@ export const verificationService = {
     apiClient.post(`/verification/test-plans/${projectId}/${planId}/link-setup`, { setupId }),
   unlinkSetupFromPlan: (projectId: string, planId: string, setupId: string) =>
     apiClient.delete(`/verification/test-plans/${projectId}/${planId}/link-setup/${setupId}`),
+  createTestPlanRevision: (projectId: string, planId: string, data: unknown) =>
+    apiClient.post(`/verification/test-plans/${projectId}/${planId}/revisions`, data),
+  updateTestPlanRevision: (projectId: string, planId: string, revisionId: string, data: unknown) =>
+    apiClient.patch(`/verification/test-plans/${projectId}/${planId}/revisions/${revisionId}`, data),
+  deleteTestPlanRevision: (projectId: string, planId: string, revisionId: string) =>
+    apiClient.delete(`/verification/test-plans/${projectId}/${planId}/revisions/${revisionId}`),
   getTestPlanReport: (projectId: string, planId: string) => apiClient.get(`/verification/reports/test-plan/${projectId}/${planId}`),
   getTestSetupReport: (projectId: string, setupId: string) => apiClient.get(`/verification/reports/test-setup/${projectId}/${setupId}`),
   getTestResultReport: (projectId: string, resultId: string) => apiClient.get(`/verification/reports/test-result/${projectId}/${resultId}`),
@@ -207,6 +213,13 @@ export const verificationService = {
     apiClient.post(`/verification/test-runs/${projectId}/${runId}/results/${resultId}/evidence`, data),
   getTraceabilityMatrix: (projectId: string, considerPassedWithErrors?: boolean) =>
     apiClient.get(`/verification/traceability-matrix/${projectId}`, considerPassedWithErrors === false ? { params: { considerPassedWithErrors: 'false' } } : undefined),
+  getFullTraceabilityMatrix: (projectId: string, considerPassedWithErrors?: boolean) =>
+    apiClient.get(`/verification/traceability-matrix/${projectId}`, {
+      params: {
+        full: 'true',
+        ...(considerPassedWithErrors === false ? { considerPassedWithErrors: 'false' } : {}),
+      },
+    }),
   getCoverageGaps: (projectId: string) => apiClient.get(`/verification/traceability-matrix/${projectId}/gaps`),
   createNonconformityFromFailedResult: (projectId: string, runResultId: string) =>
     apiClient.post(`/verification/nonconformities/${projectId}/from-failed-run-result/${runResultId}`),

@@ -2596,6 +2596,7 @@ model VerTestPlan {
   docGeneralConditions      Json? // free-form object/table data
   docTools                  Json? // Array<{ name: string; manufacturer?: string; partNumber?: string; serialNumber?: string; calibrationValidTill?: string }>
   docTestSetupNotes         String?  @db.Text
+  docAppendices             Json? // Array<{ title: string; content: string }>
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

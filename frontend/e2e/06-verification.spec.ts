@@ -51,6 +51,19 @@ test.describe('Verification', () => {
     await expect(page.getByRole('searchbox', { name: /search test plans/i })).toBeVisible({ timeout: 10_000 })
   })
 
+  /** Status is a pill <select> like Requirements (not chip buttons). */
+  test('Plans tab: plan status select syncs planStatus query param', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=plans`)
+    await page.waitForLoadState('domcontentloaded')
+    const statusSelect = page.getByRole('combobox', { name: /filter test plans by status/i })
+    await expect(statusSelect).toBeVisible({ timeout: 10_000 })
+    await statusSelect.selectOption({ value: 'DRAFT' })
+    await expect(page).toHaveURL(/planStatus=DRAFT/)
+    await statusSelect.selectOption({ value: 'all' })
+    await expect(page).not.toHaveURL(/planStatus=/)
+  })
+
   test('verification settings loads', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/verification/settings`)
     await page.waitForLoadState('domcontentloaded')
@@ -131,12 +144,90 @@ test.describe('Verification', () => {
     await expect(page.getByRole('button', { name: /create test result/i })).toBeVisible({ timeout: 15_000 })
   })
 
+  test('Traceability Matrix tab: dashboard loads with metric cards', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=traceability`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByText('Total Requirements')).toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('div').filter({ hasText: /^Verified$/ }).first()).toBeVisible()
+    await expect(page.getByText('Coverage Gaps', { exact: true })).toBeVisible()
+    await expect(page.getByText('Unlinked Reqs')).toBeVisible()
+  })
+
   test('Traceability Matrix tab: filters load after data', async ({ page, projectId }) => {
     await forceVerificationTableListView(page)
     await page.goto(`/projects/${projectId}/verification?tab=traceability`)
     await page.waitForLoadState('domcontentloaded')
-    // Requirement and Test case filters share the same placeholder copy
     await expect(page.getByPlaceholder(/search key\/title/i).first()).toBeVisible({ timeout: 15_000 })
+  })
+
+  test('Traceability Matrix tab: toggle between grid and table views', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=traceability`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByPlaceholder(/search key\/title/i).first()).toBeVisible({ timeout: 15_000 })
+
+    const matrixBtn = page.getByRole('button', { name: 'Matrix', exact: true })
+    const tableBtn = page.getByRole('button', { name: 'Table', exact: true })
+    await expect(matrixBtn).toBeVisible()
+    await expect(tableBtn).toBeVisible()
+
+    await matrixBtn.click()
+    // Matrix grid view becomes active — the "Group by" label disappears (table view hidden)
+    await expect(page.getByText(/group by/i)).not.toBeVisible({ timeout: 5_000 })
+
+    await tableBtn.click()
+    await expect(page.getByText(/group by/i)).toBeVisible({ timeout: 5_000 })
+  })
+
+  test('Traceability Matrix tab: export buttons are present', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=traceability`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByPlaceholder(/search key\/title/i).first()).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole('button', { name: /csv/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: /excel/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: /pdf/i })).toBeVisible()
+  })
+
+  test('Traceability Matrix tab: gap filter dropdown works', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=traceability`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByPlaceholder(/search key\/title/i).first()).toBeVisible({ timeout: 15_000 })
+    const gapSelect = page.locator('select').filter({ hasText: /all.*ok.*no run/i })
+    if (await gapSelect.isVisible()) {
+      await gapSelect.selectOption({ value: 'OK' })
+      await page.waitForTimeout(300)
+      await gapSelect.selectOption({ value: '' })
+    }
+  })
+
+  test('Traceability Matrix tab: clear all filters button', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=traceability`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByPlaceholder(/search key\/title/i).first()).toBeVisible({ timeout: 15_000 })
+
+    await page.getByPlaceholder(/search key\/title/i).first().fill('test-filter')
+    await expect(page.getByRole('button', { name: /clear all/i })).toBeVisible({ timeout: 3_000 })
+    await page.getByRole('button', { name: /clear all/i }).click()
+    await expect(page.getByPlaceholder(/search key\/title/i).first()).toHaveValue('')
+  })
+
+  test('Traceability Matrix tab: detail table grouping options', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=traceability`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByText(/group by/i)).toBeVisible({ timeout: 15_000 })
+    const groupSelect = page.locator('select').filter({ hasText: /flat.*requirement.*test plan/i })
+    if (await groupSelect.isVisible()) {
+      await groupSelect.selectOption({ value: 'requirement' })
+      await page.waitForTimeout(300)
+      await groupSelect.selectOption({ value: 'plan' })
+      await page.waitForTimeout(300)
+      await groupSelect.selectOption({ value: 'flat' })
+    }
   })
 
   test('Test Runs: Start New Run modal opens and Cancel closes', async ({ page, projectId }) => {
@@ -211,6 +302,51 @@ test.describe('Verification', () => {
     await modal.getByRole('button', { name: /^create test plan$/i }).click()
     await expect(modal).not.toBeVisible({ timeout: 15_000 })
     await expect(page.locator('table tbody tr').filter({ hasText: planName }).first()).toBeVisible({ timeout: 15_000 })
+  })
+
+  test('Test plan drawer: Document tab saves doc number', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=plans`)
+    await page.waitForLoadState('domcontentloaded')
+    await page.getByRole('button', { name: /create test plan/i }).click()
+    const planModal = createPlanModal(page)
+    await expect(planModal).toBeVisible({ timeout: 5_000 })
+    const planName = `E2E Doc Tab ${Date.now()}`
+    await planModal.getByPlaceholder(/master verification plan/i).fill(planName)
+    await planModal.getByRole('button', { name: /^create test plan$/i }).click()
+    await expect(planModal).not.toBeVisible({ timeout: 15_000 })
+    const row = page.locator('table tbody tr').filter({ hasText: planName }).first()
+    await expect(row).toBeVisible({ timeout: 15_000 })
+    await row.locator('td').nth(2).click()
+
+    await expect(page.getByRole('button', { name: /^document$/i })).toBeVisible({ timeout: 15_000 })
+    await page.getByRole('button', { name: /^document$/i }).click()
+
+    const docNum = `E2E-TPL-${Date.now()}`
+    const patchPromise = page.waitForResponse(
+      (res) =>
+        res.url().includes(`/verification/test-plans/${projectId}/`) &&
+        res.request().method() === 'PATCH' &&
+        res.ok(),
+      { timeout: 20_000 },
+    )
+    await page.getByPlaceholder(/e\.g\. TPL-/i).fill(docNum)
+    await page.getByRole('button', { name: /save document fields/i }).click()
+    await patchPromise
+  })
+
+  test('Plans export: PDF download filename includes project id', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=plans`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByRole('button', { name: 'Export' }).first()).toBeVisible({ timeout: 15_000 })
+    const downloadPromise = page.waitForEvent('download', { timeout: 120_000 })
+    await page.getByRole('button', { name: 'Export' }).first().click()
+    const exportModal = page.locator(MODAL).filter({ has: page.getByRole('heading', { name: /export test plans/i, exact: true }) })
+    await expect(exportModal).toBeVisible({ timeout: 10_000 })
+    await exportModal.getByRole('button', { name: /export pdf/i }).click()
+    const download = await downloadPromise
+    expect(download.suggestedFilename()).toMatch(new RegExp(`^Test_Plans_Export_${projectId}_\\d{4}-\\d{2}-\\d{2}_\\d{4}\\.pdf$`))
   })
 
   test('Delete Test Plan: kebab menu and confirm removes row', async ({ page, projectId }) => {

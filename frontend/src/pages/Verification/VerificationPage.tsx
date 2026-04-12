@@ -8,7 +8,7 @@ import {
   AlertCircle,
   AlertTriangle,
   RefreshCw,
-  Upload,
+  Download,
   Edit2,
   Trash2,
   GitBranch,
@@ -21,7 +21,6 @@ import {
   BookmarkPlus,
   ChevronDown,
   ChevronUp,
-  Download,
   AlignJustify,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -42,7 +41,11 @@ import TestCaseDocumentCard from '../../components/verification/TestCaseDocument
 import TestSetupDocumentCard from '../../components/verification/TestSetupDocumentCard'
 import TestResultDocumentCard from '../../components/verification/TestResultDocumentCard'
 import ReviewDocumentCard from '../../components/verification/ReviewDocumentCard'
-import { VERIFICATION_VALID_TAB_IDS, buildVerificationUrl } from '../../config/verificationTabs'
+import {
+  VERIFICATION_VALID_TAB_IDS,
+  buildVerificationUrl,
+  clearVerificationFocusForClosedEntity,
+} from '../../config/verificationTabs'
 import { LINKAGE_V1 } from '../../config/featureFlags'
 
 // Helper function to format test results status summary
@@ -164,6 +167,37 @@ const saveColumnPreferences = (entityType: string, visibleColumns: Set<ColumnKey
 }
 
 const PLAN_STATUS_CHIPS = ['', 'DRAFT', 'REVIEWED', 'APPROVED', 'ACTIVE', 'CLOSED'] as const
+
+/** Match Requirements page filter bar: pill selects and chips */
+function verificationFilterPillSelect(active: boolean) {
+  return clsx(
+    'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30 appearance-none',
+    active
+      ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+      : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+  )
+}
+
+function verificationFilterPillButton(active: boolean) {
+  return clsx(
+    'px-2.5 py-1.5 text-xs font-medium rounded-full border transition-colors',
+    active
+      ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+      : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+  )
+}
+
+function verificationFilterDateInputClass(hasValue: boolean) {
+  return clsx(
+    'px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+    hasValue
+      ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+      : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
+  )
+}
+
+const verificationFilterToolbarBtn =
+  'inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors'
 
 const defaultPlanColumnOrder = () => TEST_PLAN_COLUMNS.map((c) => c.key)
 
@@ -335,6 +369,7 @@ export default function VerificationPage() {
   // Export modal states
   const [showTestCasesExport, setShowTestCasesExport] = useState(false)
   const [showTestPlansExport, setShowTestPlansExport] = useState(false)
+  const [testPlansExportInitialIds, setTestPlansExportInitialIds] = useState<string[] | undefined>(undefined)
 
   // Delete confirmation state
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -708,6 +743,71 @@ export default function VerificationPage() {
     })
     drawer.openPlan(plan)
   }, [drawer, setSearchParams])
+
+  const handleClosePlanView = useCallback(() => {
+    const id = drawer.selectedPlan?.id
+    setSearchParams(
+      (p) => {
+        const n = new URLSearchParams(p)
+        clearVerificationFocusForClosedEntity(n, 'plan', id)
+        return n
+      },
+      { replace: true }
+    )
+    drawer.closePlan()
+  }, [drawer.closePlan, drawer.selectedPlan?.id, setSearchParams])
+
+  const handleCloseCaseView = useCallback(() => {
+    const id = drawer.selectedCase?.id
+    setSearchParams(
+      (p) => {
+        const n = new URLSearchParams(p)
+        clearVerificationFocusForClosedEntity(n, 'case', id)
+        return n
+      },
+      { replace: true }
+    )
+    drawer.closeCase()
+  }, [drawer.closeCase, drawer.selectedCase?.id, setSearchParams])
+
+  const handleCloseSetupView = useCallback(() => {
+    const id = drawer.selectedSetup?.id
+    setSearchParams(
+      (p) => {
+        const n = new URLSearchParams(p)
+        clearVerificationFocusForClosedEntity(n, 'setup', id)
+        return n
+      },
+      { replace: true }
+    )
+    drawer.closeSetup()
+  }, [drawer.closeSetup, drawer.selectedSetup?.id, setSearchParams])
+
+  const handleCloseResultView = useCallback(() => {
+    const id = drawer.selectedResult?.id
+    setSearchParams(
+      (p) => {
+        const n = new URLSearchParams(p)
+        clearVerificationFocusForClosedEntity(n, 'result', id)
+        return n
+      },
+      { replace: true }
+    )
+    drawer.closeResult()
+  }, [drawer.closeResult, drawer.selectedResult?.id, setSearchParams])
+
+  const handleCloseRunView = useCallback(() => {
+    const id = drawer.selectedRun?.id
+    setSearchParams(
+      (p) => {
+        const n = new URLSearchParams(p)
+        clearVerificationFocusForClosedEntity(n, 'run', id)
+        return n
+      },
+      { replace: true }
+    )
+    drawer.closeRun()
+  }, [drawer.closeRun, drawer.selectedRun?.id, setSearchParams])
 
   const selectedPlanId =
     (focusType === 'test-plan' || focusType === 'test_plan') && focusId
@@ -1147,15 +1247,15 @@ export default function VerificationPage() {
 
   const viewingEntity =
     drawer.isPlanDrawerOpen && drawer.selectedPlan
-      ? { type: 'Test Plan', key: drawer.selectedPlan.key, name: drawer.selectedPlan.name, onClose: drawer.closePlan }
+      ? { type: 'Test Plan', key: drawer.selectedPlan.key, name: drawer.selectedPlan.name, onClose: handleClosePlanView }
       : drawer.isCaseDrawerOpen && drawer.selectedCase
-        ? { type: 'Test Case', key: drawer.selectedCase.key, name: drawer.selectedCase.title, onClose: drawer.closeCase }
+        ? { type: 'Test Case', key: drawer.selectedCase.key, name: drawer.selectedCase.title, onClose: handleCloseCaseView }
         : drawer.isSetupDrawerOpen && drawer.selectedSetup
-          ? { type: 'Test Setup', key: null, name: drawer.selectedSetup.name, onClose: drawer.closeSetup }
+          ? { type: 'Test Setup', key: null, name: drawer.selectedSetup.name, onClose: handleCloseSetupView }
           : drawer.isResultDrawerOpen && drawer.selectedResult
-            ? { type: 'Test Result', key: null, name: drawer.selectedResult.title, onClose: drawer.closeResult }
+            ? { type: 'Test Result', key: null, name: drawer.selectedResult.title, onClose: handleCloseResultView }
             : drawer.isRunDrawerOpen && drawer.selectedRun
-              ? { type: 'Test Run', key: null, name: drawer.selectedRun.runName || 'Run', onClose: drawer.closeRun }
+              ? { type: 'Test Run', key: null, name: drawer.selectedRun.runName || 'Run', onClose: handleCloseRunView }
               : null
 
   return (
@@ -1345,150 +1445,134 @@ export default function VerificationPage() {
 
       {activeTab === 'plans' && (
         <div className="space-y-4">
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3">
-            <div className="flex flex-wrap gap-2 items-center">
-              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide w-full sm:w-auto">Status</span>
-              <div className="flex flex-wrap gap-2">
-                {PLAN_STATUS_CHIPS.map((st) => {
-                  const active = (planStatusParam || '') === st
-                  return (
-                    <button
-                      key={st || 'all'}
-                      type="button"
-                      onClick={() => setPlanParams({ planStatus: st || undefined })}
-                      className={clsx(
-                        'px-3 py-1.5 text-sm rounded-full border transition-colors',
-                        active
-                          ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
-                          : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                      )}
-                    >
-                      {st || 'All'}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-3 items-end">
-              <label className="flex flex-col gap-1 text-xs text-gray-600 dark:text-gray-400">
-                Sort by
-                <select
-                  value={planSortParam}
-                  onChange={(e) => setPlanParams({ planSort: e.target.value })}
-                  className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-2 py-1.5"
-                  aria-label="Sort plans by"
-                >
-                  <option value="updatedAt">Updated</option>
-                  <option value="createdAt">Created</option>
-                  <option value="key">Key</option>
-                  <option value="name">Name</option>
-                  <option value="status">Status</option>
-                  <option value="phase">Phase</option>
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-gray-600 dark:text-gray-400">
-                Direction
-                <select
-                  value={planDirParam}
-                  onChange={(e) => setPlanParams({ planDir: e.target.value })}
-                  className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-2 py-1.5"
-                  aria-label="Sort direction"
-                >
-                  <option value="desc">Newest first</option>
-                  <option value="asc">Oldest first</option>
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-gray-600 dark:text-gray-400">
-                Updated from
-                <input
-                  type="date"
-                  value={planUpdatedFromParam}
-                  onChange={(e) => setPlanParams({ planUpdatedFrom: e.target.value || undefined })}
-                  className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-2 py-1.5"
-                  aria-label="Filter plans updated on or after"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-gray-600 dark:text-gray-400">
-                Updated to
-                <input
-                  type="date"
-                  value={planUpdatedToParam}
-                  onChange={(e) => setPlanParams({ planUpdatedTo: e.target.value || undefined })}
-                  className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-2 py-1.5"
-                  aria-label="Filter plans updated on or before"
-                />
-              </label>
+          {/* Filter bar — match Requirements: flex-col gap-2, pill chips/selects, divider, clear all */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={planSortParam}
+                onChange={(e) => setPlanParams({ planSort: e.target.value })}
+                className={verificationFilterPillSelect(planSortParam !== 'updatedAt')}
+                aria-label="Sort plans by"
+              >
+                <option value="updatedAt">Sort: Updated</option>
+                <option value="createdAt">Sort: Created</option>
+                <option value="key">Sort: Key</option>
+                <option value="name">Sort: Name</option>
+                <option value="status">Sort: Status</option>
+                <option value="phase">Sort: Phase</option>
+              </select>
+              <select
+                value={planDirParam}
+                onChange={(e) => setPlanParams({ planDir: e.target.value })}
+                className={verificationFilterPillSelect(planDirParam !== 'desc')}
+                aria-label="Sort direction"
+              >
+                <option value="desc">Order: Newest first</option>
+                <option value="asc">Order: Oldest first</option>
+              </select>
+              <div className="w-px h-4 bg-gray-300 dark:bg-gray-600" aria-hidden />
+              <select
+                value={planStatusParam ? planStatusParam : 'all'}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setPlanParams({ planStatus: v === 'all' ? undefined : v })
+                }}
+                className={verificationFilterPillSelect(!!planStatusParam)}
+                aria-label="Filter test plans by status"
+              >
+                <option value="all">Status: All</option>
+                {PLAN_STATUS_CHIPS.filter((st) => st !== '').map((st) => (
+                  <option key={st} value={st}>
+                    {st}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="date"
+                value={planUpdatedFromParam}
+                onChange={(e) => setPlanParams({ planUpdatedFrom: e.target.value || undefined })}
+                className={verificationFilterDateInputClass(!!planUpdatedFromParam)}
+                aria-label="Filter plans updated on or after"
+              />
+              <input
+                type="date"
+                value={planUpdatedToParam}
+                onChange={(e) => setPlanParams({ planUpdatedTo: e.target.value || undefined })}
+                className={verificationFilterDateInputClass(!!planUpdatedToParam)}
+                aria-label="Filter plans updated on or before"
+              />
               {hasActivePlanFilters && (
                 <button
                   type="button"
                   onClick={clearPlanFilters}
-                  className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  className="px-2 py-1 text-xs font-medium text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors flex items-center gap-1"
+                  title="Clear all plan filters"
                 >
-                  Clear filters
+                  <X size={12} />
+                  Clear all
                 </button>
               )}
+              <div className="w-px h-4 bg-gray-300 dark:bg-gray-600" aria-hidden />
               <button
                 type="button"
                 onClick={togglePlansDensity}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                className={verificationFilterToolbarBtn}
                 title={plansDensity === 'compact' ? 'Comfortable density' : 'Compact density'}
                 aria-label={plansDensity === 'compact' ? 'Switch to comfortable row density' : 'Switch to compact row density'}
               >
-                <AlignJustify size={16} />
+                <AlignJustify size={14} />
                 {plansDensity === 'compact' ? 'Compact' : 'Comfortable'}
               </button>
-              <div className="flex flex-col gap-1 text-xs text-gray-600 dark:text-gray-400 min-w-[10rem]">
-                <span>Saved view</span>
-                <div className="flex gap-1">
-                  <select
-                    className="flex-1 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-2 py-1.5"
-                    aria-label="Apply saved plan view"
-                    defaultValue=""
-                    onChange={(e) => {
-                      const id = e.target.value
-                      e.target.value = ''
-                      if (!id) return
-                      const v = savedPlanViews.find((x) => x.id === id)
-                      if (!v) return
-                      setPlanParams({
-                        planQ: v.planQ || undefined,
-                        planStatus: v.planStatus || undefined,
-                        planSort: v.planSort || 'updatedAt',
-                        planDir: v.planDir || 'desc',
-                        planUpdatedFrom: v.planUpdatedFrom || undefined,
-                        planUpdatedTo: v.planUpdatedTo || undefined,
-                      })
-                    }}
-                  >
-                    <option value="">Apply saved view…</option>
-                    {savedPlanViews.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              <select
+                className={clsx(verificationFilterPillSelect(false), 'min-w-[10rem] max-w-[14rem]')}
+                aria-label="Apply saved plan view"
+                defaultValue=""
+                onChange={(e) => {
+                  const id = e.target.value
+                  e.target.value = ''
+                  if (!id) return
+                  const v = savedPlanViews.find((x) => x.id === id)
+                  if (!v) return
+                  setPlanParams({
+                    planQ: v.planQ || undefined,
+                    planStatus: v.planStatus || undefined,
+                    planSort: v.planSort || 'updatedAt',
+                    planDir: v.planDir || 'desc',
+                    planUpdatedFrom: v.planUpdatedFrom || undefined,
+                    planUpdatedTo: v.planUpdatedTo || undefined,
+                  })
+                }}
+              >
+                <option value="">Saved view…</option>
+                {savedPlanViews.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
               <button
                 type="button"
                 onClick={() => {
                   setSavePlanViewOpen((o) => !o)
                   setSavePlanViewName('')
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                className={clsx(
+                  verificationFilterToolbarBtn,
+                  savePlanViewOpen && 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300'
+                )}
               >
-                <BookmarkPlus size={16} />
+                <BookmarkPlus size={14} />
                 Save view
               </button>
             </div>
             {savePlanViewOpen && (
-              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex flex-wrap items-center gap-2 pl-2 border-l-2 border-gray-200 dark:border-gray-700">
                 <input
                   type="text"
                   value={savePlanViewName}
                   onChange={(e) => setSavePlanViewName(e.target.value)}
                   placeholder="View name"
-                  className="flex-1 min-w-[12rem] text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2"
+                  className="flex-1 min-w-[12rem] px-2.5 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                   aria-label="Saved view name"
                 />
                 <button
@@ -1517,7 +1601,7 @@ export default function VerificationPage() {
                     setSavePlanViewOpen(false)
                     setSavePlanViewName('')
                   }}
-                  className="px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50"
+                  className="px-2.5 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-full disabled:opacity-50"
                 >
                   Save
                 </button>
@@ -1527,7 +1611,7 @@ export default function VerificationPage() {
                     setSavePlanViewOpen(false)
                     setSavePlanViewName('')
                   }}
-                  className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
+                  className={verificationFilterToolbarBtn}
                 >
                   Cancel
                 </button>
@@ -1670,11 +1754,15 @@ export default function VerificationPage() {
               )}
             </div>
             <button
-              onClick={() => setShowTestPlansExport(true)}
-              disabled={testPlans.length === 0}
+              type="button"
+              onClick={() => {
+                setTestPlansExportInitialIds(selectedPlanIds.size > 0 ? [...selectedPlanIds] : undefined)
+                setShowTestPlansExport(true)
+              }}
+              disabled={processedPlans.length === 0}
               className="flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Upload size={16} />
+              <Download size={16} />
               Export
             </button>
             <button
@@ -1884,25 +1972,9 @@ export default function VerificationPage() {
 
       {activeTab === 'cases' && (
         <div className="space-y-4">
-          {(statusFilter || mocFilter) && (
-            <div className="flex items-center justify-between gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg">
-              <span className="text-sm text-gray-600 dark:text-gray-400">
-                Active filters:
-                {statusFilter && <span className="ml-1.5 font-medium text-gray-900 dark:text-white">Status: {statusFilter}</span>}
-                {statusFilter && mocFilter && <span className="mx-1.5 text-gray-400">·</span>}
-                {mocFilter && <span className="font-medium text-gray-900 dark:text-white">MoC: {mocFilter}</span>}
-              </span>
-              <button
-                type="button"
-                onClick={() => setSearchParams((p) => { const n = new URLSearchParams(p); n.delete('status'); n.delete('moc'); return n }, { replace: true })}
-                className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-              >
-                Clear filters
-              </button>
-            </div>
-          )}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap gap-2">
+          {/* Filter bar — match Requirements: primary row of pills + pill selects + clear all */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {[
                 { id: '', label: 'All' },
                 { id: 'unlinkedReqs', label: 'No requirements' },
@@ -1926,33 +1998,80 @@ export default function VerificationPage() {
                         { replace: true }
                       )
                     }
-                    className={clsx(
-                      'px-3 py-1.5 text-sm rounded-full border transition-colors',
-                      active
-                        ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
-                        : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                    )}
+                    className={verificationFilterPillButton(active)}
                   >
                     {opt.label}
                   </button>
                 )
               })}
-            </div>
-            {quickFilter && (
-              <button
-                type="button"
-                onClick={() =>
-                  setSearchParams((p) => {
-                    const n = new URLSearchParams(p)
-                    n.delete('quick')
-                    return n
-                  })
+              <div className="w-px h-4 bg-gray-300 dark:bg-gray-600" aria-hidden />
+              <select
+                value={statusFilter}
+                onChange={(e) =>
+                  setSearchParams(
+                    (p) => {
+                      const n = new URLSearchParams(p)
+                      const v = e.target.value
+                      if (v) n.set('status', v)
+                      else n.delete('status')
+                      return n
+                    },
+                    { replace: true }
+                  )
                 }
-                className="text-sm text-gray-600 dark:text-gray-300 hover:underline"
+                className={verificationFilterPillSelect(!!statusFilter)}
+                aria-label="Filter test cases by status"
               >
-                Clear quick filter
-              </button>
-            )}
+                <option value="">Status: All</option>
+                <option value="DRAFT">Draft</option>
+                <option value="REVIEWED">Reviewed</option>
+                <option value="APPROVED">Approved</option>
+                <option value="READY">Ready</option>
+              </select>
+              <select
+                value={mocFilter}
+                onChange={(e) =>
+                  setSearchParams(
+                    (p) => {
+                      const n = new URLSearchParams(p)
+                      const v = e.target.value
+                      if (v) n.set('moc', v)
+                      else n.delete('moc')
+                      return n
+                    },
+                    { replace: true }
+                  )
+                }
+                className={verificationFilterPillSelect(!!mocFilter)}
+                aria-label="Filter test cases by MoC"
+              >
+                <option value="">MoC: All</option>
+                {mocsList.map((m: any) => (
+                  <option key={m.code ?? m.id} value={String(m.code ?? m.id ?? '')}>
+                    MoC {m.code ?? m.id}: {m.name ?? '—'}
+                  </option>
+                ))}
+              </select>
+              {(statusFilter || mocFilter || quickFilter) && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSearchParams((p) => {
+                      const n = new URLSearchParams(p)
+                      n.delete('status')
+                      n.delete('moc')
+                      n.delete('quick')
+                      return n
+                    }, { replace: true })
+                  }
+                  className="px-2 py-1 text-xs font-medium text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors flex items-center gap-1"
+                  title="Clear all test case filters"
+                >
+                  <X size={12} />
+                  Clear all
+                </button>
+              )}
+            </div>
           </div>
           {selectedCaseIds.size > 0 && (
             <div className="flex items-center justify-between gap-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
@@ -1999,34 +2118,7 @@ export default function VerificationPage() {
               </div>
             </div>
           )}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm text-gray-500 dark:text-gray-400">Filters:</span>
-              <select
-                value={statusFilter}
-                onChange={(e) => setSearchParams((p) => { const n = new URLSearchParams(p); const v = e.target.value; if (v) n.set('status', v); else n.delete('status'); return n }, { replace: true })}
-                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              >
-                <option value="">All statuses</option>
-                <option value="DRAFT">Draft</option>
-                <option value="REVIEWED">Reviewed</option>
-                <option value="APPROVED">Approved</option>
-                <option value="READY">Ready</option>
-              </select>
-              <select
-                value={mocFilter}
-                onChange={(e) => setSearchParams((p) => { const n = new URLSearchParams(p); const v = e.target.value; if (v) n.set('moc', v); else n.delete('moc'); return n }, { replace: true })}
-                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-              >
-                <option value="">All MoCs</option>
-                {mocsList.map((m: any) => (
-                  <option key={m.code ?? m.id} value={String(m.code ?? m.id ?? '')}>
-                    MoC {m.code ?? m.id}: {m.name ?? '—'}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               onClick={() => persistListViewStyle(listViewStyle === 'document' ? 'table' : 'document')}
               className={clsx(
@@ -2086,7 +2178,7 @@ export default function VerificationPage() {
               disabled={testCases.length === 0}
               className="flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Upload size={16} />
+              <Download size={16} />
               Export
             </button>
             <button
@@ -2096,7 +2188,6 @@ export default function VerificationPage() {
               <Plus size={16} />
               Create Test Case
             </button>
-            </div>
           </div>
           {loadingCases ? (
             <div className="flex items-center justify-center p-12">
@@ -2942,10 +3033,14 @@ export default function VerificationPage() {
           />
           <ListExporter
             isOpen={showTestPlansExport}
-            onClose={() => setShowTestPlansExport(false)}
+            onClose={() => {
+              setShowTestPlansExport(false)
+              setTestPlansExportInitialIds(undefined)
+            }}
             exportType="test-plans"
-            items={testPlans}
+            items={processedPlans}
             projectId={projectId}
+            initialSelectedIds={testPlansExportInitialIds}
           />
         </>
       )}
