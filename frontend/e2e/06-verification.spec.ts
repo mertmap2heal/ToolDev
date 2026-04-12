@@ -40,6 +40,17 @@ test.describe('Verification', () => {
     await expect(page.getByRole('button', { name: /overview/i })).toBeVisible()
   })
 
+  /** UI parity with Requirements: primary search is not wrapped in an extra card on Plans tab. */
+  test('Plans tab: searchbox visible next to main heading', async ({ page, projectId }) => {
+    await forceVerificationTableListView(page)
+    await page.goto(`/projects/${projectId}/verification?tab=plans`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByRole('heading', { level: 2, name: 'Verification', exact: true })).toBeVisible({
+      timeout: 10_000,
+    })
+    await expect(page.getByRole('searchbox', { name: /search test plans/i })).toBeVisible({ timeout: 10_000 })
+  })
+
   test('verification settings loads', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/verification/settings`)
     await page.waitForLoadState('domcontentloaded')

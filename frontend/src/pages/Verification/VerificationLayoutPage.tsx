@@ -52,7 +52,7 @@ function VerificationLayoutInner() {
   const [isTreePanelOpen, setIsTreePanelOpen] = useState(false)
   const PANEL_MIN = 200
   const PANEL_MAX = 500
-  const PANEL_DEFAULT = 340
+  const PANEL_DEFAULT = 280
   const [leftPanelWidth, setLeftPanelWidth] = useState(PANEL_DEFAULT)
   const resizeContainerRef = useRef<HTMLDivElement>(null)
 
@@ -539,7 +539,7 @@ function VerificationLayoutInner() {
 
       {/* Main column + detail drawers share one flex row so the panel squeezes content (like Requirements). */}
       <div className="flex flex-1 min-h-0 min-w-0">
-        <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden pr-6 gap-6">
+        <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden pr-6 gap-3">
         <div className="flex-shrink-0 flex items-center gap-2">
           {showTreePanel && (
             <button
@@ -552,7 +552,7 @@ function VerificationLayoutInner() {
               {isTreePanelOpen ? <PanelLeftClose size={16} className="text-gray-500 dark:text-gray-400" /> : <PanelLeft size={16} className="text-gray-500 dark:text-gray-400" />}
             </button>
           )}
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Verification</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Verification</h2>
           {projectId && (
             <div className="ml-auto">
               <SafetyLinkPanel variant="evidence" count={2} />

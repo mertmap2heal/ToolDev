@@ -68,6 +68,18 @@ test.describe('Requirements', () => {
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
   })
 
+  /** Deep link parity with Verification shell: heading + primary search (no extra card). */
+  test('PBS panel deep link shows Requirements heading and search', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/requirements?panel=1&panelTab=pbs&tree=pbs`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByRole('heading', { level: 2, name: 'Requirements', exact: true })).toBeVisible({
+      timeout: 10_000,
+    })
+    await expect(
+      page.getByPlaceholder(/search requirements \(title, id, description/i),
+    ).toBeVisible({ timeout: 10_000 })
+  })
+
   test('open Create Requirement modal', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')

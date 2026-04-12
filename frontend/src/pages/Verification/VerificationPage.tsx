@@ -1159,7 +1159,7 @@ export default function VerificationPage() {
               : null
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto space-y-6">
+    <div className="flex-1 min-h-0 overflow-y-auto space-y-3">
       {/* Context bar: show when a drawer is open */}
       {viewingEntity && (
         <div className="flex items-center justify-between gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
@@ -1177,54 +1177,52 @@ export default function VerificationPage() {
         </div>
       )}
 
-      {/* Search */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-          <input
-            type="search"
-            aria-label={activeTab === 'plans' ? 'Search test plans' : `Search ${activeTab}`}
-            placeholder={activeTab === 'plans' ? 'Search plans by name or key (URL: planQ)' : `Search ${activeTab}...`}
-            value={activeTab === 'plans' ? planQParam : searchQuery}
-            onChange={(e) => {
-              const v = e.target.value
+      {/* Search (match Requirements page search row: no outer card) */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+        <input
+          type="search"
+          aria-label={activeTab === 'plans' ? 'Search test plans' : `Search ${activeTab}`}
+          placeholder={activeTab === 'plans' ? 'Search plans by name or key (URL: planQ)' : `Search ${activeTab}...`}
+          value={activeTab === 'plans' ? planQParam : searchQuery}
+          onChange={(e) => {
+            const v = e.target.value
+            if (activeTab === 'plans') {
+              setSearchParams(
+                (p) => {
+                  const n = new URLSearchParams(p)
+                  if (!v.trim()) n.delete('planQ')
+                  else n.set('planQ', v)
+                  return n
+                },
+                { replace: true }
+              )
+            } else {
+              setSearchQuery(v)
+            }
+          }}
+          className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+        />
+        {(activeTab === 'plans' ? planQParam : searchQuery) && (
+          <button
+            type="button"
+            onClick={() => {
               if (activeTab === 'plans') {
-                setSearchParams(
-                  (p) => {
-                    const n = new URLSearchParams(p)
-                    if (!v.trim()) n.delete('planQ')
-                    else n.set('planQ', v)
-                    return n
-                  },
-                  { replace: true }
-                )
+                setSearchParams((p) => {
+                  const n = new URLSearchParams(p)
+                  n.delete('planQ')
+                  return n
+                }, { replace: true })
               } else {
-                setSearchQuery(v)
+                setSearchQuery('')
               }
             }}
-            className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          />
-          {(activeTab === 'plans' ? planQParam : searchQuery) && (
-            <button
-              type="button"
-              onClick={() => {
-                if (activeTab === 'plans') {
-                  setSearchParams((p) => {
-                    const n = new URLSearchParams(p)
-                    n.delete('planQ')
-                    return n
-                  }, { replace: true })
-                } else {
-                  setSearchQuery('')
-                }
-              }}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-              aria-label="Clear search"
-            >
-              <X size={16} />
-            </button>
-          )}
-        </div>
+            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-full p-0.5"
+            aria-label="Clear search"
+          >
+            <X size={14} />
+          </button>
+        )}
       </div>
 
       {/* Content */}
