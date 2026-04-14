@@ -1,0 +1,26 @@
+{
+  "name": "Complete",
+  "modules": [
+    "requirements",
+    "tasks",
+    "issues",
+    "parameters",
+    "archive",
+    "change-requests",
+    "documentation",
+    "lifecycle-status",
+    "verification",
+    "risk-management",
+    "stakeholder",
+    "product-breakdown-structure",
+    "configuration-management",
+    "functions",
+    "interface-management",
+    "mbse-models",
+    "safety-analysis",
+    "compliance-check",
+    "certification",
+    "validation",
+    "audit"
+  ]
+}

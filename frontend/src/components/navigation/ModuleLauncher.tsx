@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ChevronDown, Pin, PinOff } from 'lucide-react'
 import clsx from 'clsx'
 import { MODULES, type ModuleCategory } from '../../config/ModuleConfiguration'
+import { useFeaturePackage } from '../../contexts/FeaturePackageContext'
 
 interface ModuleLauncherProps {
     activeCategory: ModuleCategory
@@ -13,7 +14,8 @@ interface ModuleLauncherProps {
 
 export default function ModuleLauncher({ activeCategory, projectId, pinnedIds, onTogglePin }: ModuleLauncherProps) {
     const navigate = useNavigate()
-    const modules = MODULES.filter((m) => m.category === activeCategory)
+    const { isEnabled } = useFeaturePackage()
+    const modules = MODULES.filter((m) => m.category === activeCategory && isEnabled(m.id))
 
     // Responsive overflow handling (simplified for this iteration)
     // In a real optimized version, we'd use ResizeObserver to determine how many fit.

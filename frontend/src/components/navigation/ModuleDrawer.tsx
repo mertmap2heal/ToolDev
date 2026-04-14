@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 import CategoryTabs from './CategoryTabs'
 import { MODULES, type ModuleCategory } from '../../config/ModuleConfiguration'
+import { useFeaturePackage } from '../../contexts/FeaturePackageContext'
 
 interface ModuleDrawerProps {
     isOpen: boolean
@@ -24,7 +25,8 @@ export default function ModuleDrawer({
     onTogglePin,
 }: ModuleDrawerProps) {
     const navigate = useNavigate()
-    const modules = MODULES.filter((m) => m.category === activeCategory)
+    const { isEnabled } = useFeaturePackage()
+    const modules = MODULES.filter((m) => m.category === activeCategory && isEnabled(m.id))
 
     if (!isOpen) return null
 

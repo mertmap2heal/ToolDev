@@ -1,0 +1,17 @@
+{
+  "name": "Advanced",
+  "modules": [
+    "requirements",
+    "tasks",
+    "issues",
+    "parameters",
+    "archive",
+    "change-requests",
+    "documentation",
+    "lifecycle-status",
+    "verification",
+    "risk-management",
+    "stakeholder",
+    "product-breakdown-structure"
+  ]
+}
