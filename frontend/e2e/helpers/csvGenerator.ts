@@ -2,6 +2,9 @@
  * CSV generator utilities for e2e import tests.
  * Generates in-memory CSV strings so tests don't rely on files on disk.
  */
+import os from 'os'
+import path from 'path'
+import fs from 'fs'
 
 export interface CsvParam {
   name: string
@@ -101,9 +104,6 @@ export function generateFormulaCsv(baseParams: CsvParam[], derivedDefs: { name: 
  * Note: This writes to the OS temp dir. The file is not auto-cleaned up.
  */
 export function writeTempCsvPath(csv: string, filename = 'e2e_import.csv'): string {
-  const os = require('os')
-  const path = require('path')
-  const fs = require('fs')
   const tmpPath = path.join(os.tmpdir(), filename)
   fs.writeFileSync(tmpPath, csv, 'utf8')
   return tmpPath
