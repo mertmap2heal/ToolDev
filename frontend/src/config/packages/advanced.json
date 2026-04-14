@@ -2,16 +2,19 @@
   "name": "Advanced",
   "modules": [
     "requirements",
-    "tasks",
-    "issues",
-    "parameters",
-    "archive",
     "change-requests",
-    "documentation",
+    "issues",
     "lifecycle-status",
-    "verification",
-    "risk-management",
+    "archive",
     "stakeholder",
-    "product-breakdown-structure"
+    "product-breakdown-structure",
+    "functions",
+    "interface-management",
+    "parameters",
+    "risk-management",
+    "audit",
+    "tasks",
+    "documentation",
+    "verification"
   ]
 }

@@ -2,9 +2,16 @@
   "name": "Core",
   "modules": [
     "requirements",
-    "tasks",
+    "change-requests",
     "issues",
+    "lifecycle-status",
+    "archive",
+    "stakeholder",
+    "product-breakdown-structure",
+    "functions",
+    "interface-management",
     "parameters",
-    "archive"
+    "risk-management",
+    "audit"
   ]
 }
