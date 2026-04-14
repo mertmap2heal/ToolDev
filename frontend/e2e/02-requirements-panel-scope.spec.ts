@@ -2,6 +2,7 @@
  * Requirements page — structure panel scope, URL hydration, dashboard-style deep links
  */
 import { test, expect } from './helpers/fixtures'
+import { selectRequirementsLeftPanelTab } from './helpers/requirementsUi'
 
 test.describe('Requirements panel scope & deep links', () => {
   test('openPanel=1 opens structure panel once and removes query param', async ({ page, projectId }) => {
@@ -69,7 +70,8 @@ test.describe('Requirements panel scope & deep links', () => {
     await page.waitForLoadState('domcontentloaded')
     await expect(page).toHaveURL(new RegExp(`projects/${projectId}/requirements`))
     await expect(page).toHaveURL(/functionId=/)
-    await expect(page.getByText(/^Scope:/)).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Scope', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText(/Function \(aaaaaaaa/)).toBeVisible({ timeout: 10_000 })
   })
 
   test('verification testCaseId deep link stays on requirements page', async ({ page, projectId }) => {
@@ -78,14 +80,15 @@ test.describe('Requirements panel scope & deep links', () => {
     await page.waitForLoadState('domcontentloaded')
     await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/requirements`))
     await expect(page).not.toHaveURL(/\/projects\/[^/]+\/verification/)
-    await expect(page.getByText(/^Scope:/)).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Scope', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText(/Test Case \(bbbbbbbb/)).toBeVisible({ timeout: 10_000 })
   })
 
   test('noTestCaseVerifiesLink deep link hydrates verification unassigned scope', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements?panel=1&noTestCaseVerifiesLink=1`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page).toHaveURL(/noTestCaseVerifiesLink=1/)
-    await expect(page.getByText('Verification · No test case link')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Verification: No test case link')).toBeVisible({ timeout: 10_000 })
   })
 
   test('URL search string stabilizes after load (no query thrash)', async ({ page, projectId }) => {
@@ -113,17 +116,7 @@ test.describe('Requirements panel scope & deep links', () => {
     await page.goto(`/projects/${projectId}/requirements?panel=1&panelTab=pbs`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.getByRole('heading', { name: /^Requirements$/i })).toBeVisible({ timeout: 15_000 })
-    // Tab buttons can detach during URL sync; use DOM click within the tab strip.
-    await page.evaluate(() => {
-      const strips = Array.from(document.querySelectorAll('div.flex.border-b'))
-      const strip = strips.find((d) => {
-        const t = (d.textContent || '').replace(/\s+/g, ' ').trim()
-        return t.includes('PBS') && t.includes('Functions') && t.includes('Verification')
-      })
-      const buttons = Array.from(strip?.querySelectorAll('button') ?? [])
-      const el = buttons.find((b) => (b.textContent || '').trim() === 'Functions') as HTMLElement | undefined
-      el?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
-    })
+    await selectRequirementsLeftPanelTab(page, 'functions')
     await page.waitForTimeout(800)
     const readSearch = () => {
       const u = new URL(page.url())
@@ -146,8 +139,13 @@ test.describe('Requirements panel scope & deep links', () => {
     await page.goto(`/projects/${projectId}/verification`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.getByRole('heading', { level: 2, name: /^Verification$/i })).toBeVisible({ timeout: 15_000 })
-    const reqLink = page.locator(`a[href="/projects/${projectId}/requirements?panel=1&panelTab=verification"]`)
+    const openTree = page.getByTitle(/Open left panel \(Verification structure\)/i)
+    if (await openTree.isVisible().catch(() => false)) {
+      await openTree.click()
+    }
+    const reqLink = page.getByRole('link', { name: /Open in Requirements/i })
     await expect(reqLink).toBeVisible({ timeout: 10_000 })
-    await expect(reqLink).toHaveText('Requirements')
+    await expect(reqLink).toHaveAttribute('href', new RegExp(`/projects/${projectId}/requirements`))
+    await expect(reqLink).toHaveAttribute('href', /panelTab=verification/)
   })
 })

@@ -77,6 +77,7 @@ export const getTestPlan = async (req: AuthRequest, res: Response) => {
       include: {
         planCases: { include: { testCase: true }, orderBy: { orderIndex: 'asc' } },
         planSetups: { include: { setup: true }, orderBy: { createdAt: 'asc' } },
+        revisions: { orderBy: { createdAt: 'asc' } },
       },
     })
     if (!plan) return res.status(404).json({ success: false, error: 'Test plan not found' })
@@ -119,6 +120,7 @@ export const createTestPlan = async (req: AuthRequest, res: Response) => {
       docGeneralConditions,
       docTools,
       docTestSetupNotes,
+      docAppendices,
     } = req.body
     if (!name) return res.status(400).json({ success: false, error: 'Name is required' })
     const planKey = key || await verificationService.generateTestPlanKey(projectId)
@@ -156,6 +158,7 @@ export const createTestPlan = async (req: AuthRequest, res: Response) => {
         docGeneralConditions: (docGeneralConditions && typeof docGeneralConditions === 'object') ? (docGeneralConditions as any) : null,
         docTools: (docTools && typeof docTools === 'object') ? (docTools as any) : null,
         docTestSetupNotes,
+        docAppendices: (docAppendices && typeof docAppendices === 'object') ? (docAppendices as any) : null,
         status: TestPlanStatus.DRAFT,
       },
     })
@@ -210,20 +213,20 @@ export const updateTestPlan = async (req: AuthRequest, res: Response) => {
       docGeneralConditions,
       docTools,
       docTestSetupNotes,
+      docAppendices,
     } = req.body
-    if (status && status !== existing.status) {
+    if (status !== undefined && status && status !== existing.status) {
       statusTransitionService.validateTransition('TEST_PLAN', existing.status, status)
     }
-    const updateData: Record<string, unknown> = {
-      name,
-      description,
-      scope,
-      entryCriteria,
-      exitCriteria,
-      phase,
-      ownerUserId,
-      status,
-    }
+    const updateData: Record<string, unknown> = {}
+    if (name !== undefined) updateData.name = name
+    if (description !== undefined) updateData.description = description
+    if (scope !== undefined) updateData.scope = scope
+    if (entryCriteria !== undefined) updateData.entryCriteria = entryCriteria
+    if (exitCriteria !== undefined) updateData.exitCriteria = exitCriteria
+    if (phase !== undefined) updateData.phase = phase
+    if (ownerUserId !== undefined) updateData.ownerUserId = ownerUserId
+    if (status !== undefined) updateData.status = status
     if (testingEnvironmentIds !== undefined) updateData.testingEnvironmentIds = Array.isArray(testingEnvironmentIds) ? testingEnvironmentIds : null
     if (testingToolIds !== undefined) updateData.testingToolIds = Array.isArray(testingToolIds) ? testingToolIds : null
     if (docNumber !== undefined) updateData.docNumber = docNumber
@@ -246,6 +249,7 @@ export const updateTestPlan = async (req: AuthRequest, res: Response) => {
     if (docGeneralConditions !== undefined) updateData.docGeneralConditions = (docGeneralConditions && typeof docGeneralConditions === 'object') ? (docGeneralConditions as any) : null
     if (docTools !== undefined) updateData.docTools = (docTools && typeof docTools === 'object') ? (docTools as any) : null
     if (docTestSetupNotes !== undefined) updateData.docTestSetupNotes = docTestSetupNotes
+    if (docAppendices !== undefined) updateData.docAppendices = (docAppendices && typeof docAppendices === 'object') ? (docAppendices as any) : null
     const updated = await prisma.verTestPlan.update({
       where: { id },
       data: updateData,
@@ -277,6 +281,109 @@ export const updateTestPlan = async (req: AuthRequest, res: Response) => {
   }
 }
 
+export const createTestPlanRevision = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id: planId } = req.params
+    const { revisionNumber, revisionDate, editedByName, approvedByName, approvedAt, summaryOfChanges } = req.body
+    if (!revisionNumber || String(revisionNumber).trim() === '') {
+      return res.status(400).json({ success: false, error: 'revisionNumber is required' })
+    }
+    const plan = await prisma.verTestPlan.findFirst({ where: { id: planId, projectId } })
+    if (!plan) return res.status(404).json({ success: false, error: 'Test plan not found' })
+    const rev = await prisma.verTestPlanRevision.create({
+      data: {
+        projectId,
+        testPlanId: planId,
+        revisionNumber: String(revisionNumber).trim(),
+        revisionDate: revisionDate ? new Date(revisionDate) : null,
+        editedByName: editedByName ?? null,
+        approvedByName: approvedByName ?? null,
+        approvedAt: approvedAt ? new Date(approvedAt) : null,
+        summaryOfChanges: summaryOfChanges ?? null,
+      },
+    })
+    await auditService.logEvent({
+      projectId,
+      entityType: 'TEST_PLAN',
+      entityId: planId,
+      action: AuditAction.UPDATE,
+      newValue: { revisionCreated: rev.id, revisionNumber: rev.revisionNumber },
+      performedByUserId: req.userId,
+    })
+    res.status(201).json({ success: true, data: rev })
+  } catch (error: any) {
+    if (error?.code === 'P2002') {
+      return res.status(400).json({ success: false, error: 'Revision number already exists for this plan' })
+    }
+    console.error('Create test plan revision error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+}
+
+export const updateTestPlanRevision = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id: planId, revisionId } = req.params
+    const { revisionNumber, revisionDate, editedByName, approvedByName, approvedAt, summaryOfChanges } = req.body
+    const existing = await prisma.verTestPlanRevision.findFirst({
+      where: { id: revisionId, testPlanId: planId, projectId },
+    })
+    if (!existing) return res.status(404).json({ success: false, error: 'Revision not found' })
+    const data: Record<string, unknown> = {}
+    if (revisionNumber !== undefined) data.revisionNumber = String(revisionNumber).trim()
+    if (revisionDate !== undefined) data.revisionDate = revisionDate ? new Date(revisionDate) : null
+    if (editedByName !== undefined) data.editedByName = editedByName
+    if (approvedByName !== undefined) data.approvedByName = approvedByName
+    if (approvedAt !== undefined) data.approvedAt = approvedAt ? new Date(approvedAt) : null
+    if (summaryOfChanges !== undefined) data.summaryOfChanges = summaryOfChanges
+    try {
+      const updated = await prisma.verTestPlanRevision.update({
+        where: { id: revisionId },
+        data: data as any,
+      })
+      await auditService.logEvent({
+        projectId,
+        entityType: 'TEST_PLAN',
+        entityId: planId,
+        action: AuditAction.UPDATE,
+        newValue: { revisionUpdated: revisionId },
+        performedByUserId: req.userId,
+      })
+      res.json({ success: true, data: updated })
+    } catch (error: any) {
+      if (error?.code === 'P2002') {
+        return res.status(400).json({ success: false, error: 'Revision number already exists for this plan' })
+      }
+      throw error
+    }
+  } catch (error: any) {
+    console.error('Update test plan revision error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+}
+
+export const deleteTestPlanRevision = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, id: planId, revisionId } = req.params
+    const existing = await prisma.verTestPlanRevision.findFirst({
+      where: { id: revisionId, testPlanId: planId, projectId },
+    })
+    if (!existing) return res.status(404).json({ success: false, error: 'Revision not found' })
+    await prisma.verTestPlanRevision.delete({ where: { id: revisionId } })
+    await auditService.logEvent({
+      projectId,
+      entityType: 'TEST_PLAN',
+      entityId: planId,
+      action: AuditAction.UPDATE,
+      newValue: { revisionDeleted: revisionId },
+      performedByUserId: req.userId,
+    })
+    res.json({ success: true, message: 'Revision deleted' })
+  } catch (error: any) {
+    console.error('Delete test plan revision error:', error)
+    res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
+  }
+}
+
 export const addCaseToPlan = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId, id } = req.params
@@ -299,6 +406,19 @@ export const addCaseToPlan = async (req: AuthRequest, res: Response) => {
       },
       include: { testCase: true },
     })
+    await auditService.logEvent({
+      projectId,
+      entityType: 'TEST_PLAN',
+      entityId: id,
+      action: AuditAction.UPDATE,
+      newValue: {
+        testCaseId,
+        testCaseKey: planCase.testCase?.key,
+        orderIndex: planCase.orderIndex,
+        isMandatory: planCase.isMandatory,
+      },
+      performedByUserId: req.userId,
+    })
     res.json({ success: true, data: planCase })
   } catch (error: any) {
     console.error('Add case to plan error:', error)
@@ -310,8 +430,24 @@ export const removeCaseFromPlan = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId, id } = req.params
     const { testCaseId } = req.body
+    const existingCase = await prisma.verTestCase.findFirst({
+      where: { id: testCaseId, projectId },
+      select: { id: true, key: true, title: true },
+    })
     await prisma.verTestPlanCase.deleteMany({
       where: { testPlanId: id, testCaseId },
+    })
+    await auditService.logEvent({
+      projectId,
+      entityType: 'TEST_PLAN',
+      entityId: id,
+      action: AuditAction.UPDATE,
+      newValue: {
+        removedTestCaseId: testCaseId,
+        testCaseKey: existingCase?.key,
+        testCaseTitle: existingCase?.title,
+      },
+      performedByUserId: req.userId,
     })
     res.json({ success: true, message: 'Test case removed from plan' })
   } catch (error: any) {
@@ -399,6 +535,19 @@ export const reorderCases = async (req: AuthRequest, res: Response) => {
         data: { orderIndex },
       })
     }
+    await auditService.logEvent({
+      projectId,
+      entityType: 'TEST_PLAN',
+      entityId: id,
+      action: AuditAction.UPDATE,
+      newValue: {
+        caseOrders: caseOrders.map((c: { testCaseId: string; orderIndex: number }) => ({
+          testCaseId: c.testCaseId,
+          orderIndex: c.orderIndex,
+        })),
+      },
+      performedByUserId: req.userId,
+    })
     res.json({ success: true, message: 'Cases reordered' })
   } catch (error: any) {
     console.error('Reorder cases error:', error)

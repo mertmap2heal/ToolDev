@@ -555,7 +555,9 @@ export interface ParameterFolder {
     createdAt: string;
     updatedAt: string;
     children?: ParameterFolder[];
-    _count?: { parameters: number };
+    _count?: {
+        parameters: number;
+    };
 }
 export interface CreateParameterFolderDto {
     name: string;

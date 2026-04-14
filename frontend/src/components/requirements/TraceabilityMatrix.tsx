@@ -485,9 +485,14 @@ export default function TraceabilityMatrix({ projectId, onClose, savedViewId }: 
     } else if (rowMode === 'filters') {
       base = applySavedRowFilters(requirements)
     } else {
-      // mixed: saved row filters + always include pinned requirement rows
-      // If there are pinned rows but no filters, users typically expect the matrix to be scoped to the pinned set.
-      base = rowDefinitionFilters ? applySavedRowFilters(requirements) : requirements.filter((r) => pinSet.has(r.id))
+      // mixed: apply saved row filters when set; else scope to pins when any; else show all requirements.
+      if (rowDefinitionFilters) {
+        base = applySavedRowFilters(requirements)
+      } else if (pinnedRequirementIds.length) {
+        base = requirements.filter((r) => pinSet.has(r.id))
+      } else {
+        base = requirements
+      }
       if (pinnedRequirementIds.length) {
         const byId = new Map(requirements.map((r) => [r.id, r]))
         for (const id of pinnedRequirementIds) {

@@ -19,6 +19,7 @@ import * as customSectionController from '../controllers/verification/customSect
 import * as templateController from '../controllers/verification/template.controller'
 import * as runIngestionController from '../controllers/verificationV2/runIngestion.controller'
 import * as testRunController from '../controllers/verification/testRun.controller'
+import * as auditController from '../controllers/verification/audit.controller'
 import { reportService } from '../services/verification/report.service'
 import { traceabilityMatrixService } from '../services/verification/TraceabilityMatrixService'
 import { exportTemplateService } from '../services/verification/exportTemplate.service'
@@ -103,6 +104,13 @@ router.post('/test-plans/:projectId/:id/close', testPlanController.closeTestPlan
 router.get('/test-plans/:projectId/:id/verification-links', testPlanController.getVerificationLinks)
 router.post('/test-plans/:projectId/:id/verification-links', testPlanController.linkVerificationElement)
 router.delete('/test-plans/:projectId/:id/verification-links/:linkId', testPlanController.unlinkVerificationElement)
+router.post('/test-plans/:projectId/:id/revisions', testPlanController.createTestPlanRevision)
+router.patch('/test-plans/:projectId/:id/revisions/:revisionId', testPlanController.updateTestPlanRevision)
+router.delete('/test-plans/:projectId/:id/revisions/:revisionId', testPlanController.deleteTestPlanRevision)
+
+// E.1) Verification audit trail (read-only)
+router.get('/audit/:projectId/entity/:entityType/:entityId', auditController.getEntityAuditTrail)
+router.get('/audit/:projectId', auditController.getProjectAuditTrail)
 
 // F) Evidence
 router.get('/evidence/:projectId', evidenceController.getEvidence)
@@ -120,8 +128,14 @@ router.get('/traceability-matrix/:projectId', async (req: AuthRequest, res: Resp
   try {
     const { projectId } = req.params
     const considerPassedWithErrors = req.query.considerPassedWithErrors !== 'false'
-    const data = await traceabilityMatrixService.getTraceabilityMatrix(projectId, { considerPassedWithErrors })
-    res.json({ success: true, data })
+    const full = req.query.full === 'true'
+    if (full) {
+      const data = await traceabilityMatrixService.getFullTraceabilityMatrix(projectId, { considerPassedWithErrors })
+      res.json({ success: true, data })
+    } else {
+      const data = await traceabilityMatrixService.getTraceabilityMatrix(projectId, { considerPassedWithErrors })
+      res.json({ success: true, data })
+    }
   } catch (error: any) {
     console.error('Traceability matrix error:', error)
     res.status(500).json({ success: false, error: error?.message || 'Internal server error' })

@@ -9,8 +9,16 @@ const MODAL = '.fixed.inset-0'
 // Suppression window in useUnsavedChanges: 500ms after open, markDirty is ignored
 const AFTER_OPEN_WAIT = 600
 
-// Unique name prefix to make test data identifiable and cleanable
-const TEST_PARAM_NAME = `e2e_param_${Date.now()}`
+/** Minimal API body so createParameter succeeds with current backend + version snapshot. */
+function apiCreateParameterBody(name: string, description: string) {
+  return {
+    name,
+    description,
+    dataType: 'float',
+    defaultValue: '1.0',
+    status: 'draft' as const,
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Existing baseline tests (fixed fragile selectors)
@@ -99,28 +107,34 @@ test.describe('Parameters — CRUD', () => {
   })
 
   test('create a parameter', async ({ page, projectId }) => {
+    const paramName = `e2e_param_${Date.now()}`
     await page.getByRole('button', { name: /new parameter/i }).click()
-    const modal = page.locator(MODAL)
+    const modal = page.locator(MODAL).filter({ has: page.getByRole('heading', { name: /Create New Parameter/i }) })
     await expect(modal).toBeVisible({ timeout: 5_000 })
     await page.waitForTimeout(AFTER_OPEN_WAIT)
 
     // Fill the name field (placeholder: "e.g., temperature, pressure")
-    await modal.getByPlaceholder(/temperature.*pressure|e\.g\., temperature/i).fill(TEST_PARAM_NAME)
+    await modal.getByPlaceholder(/temperature.*pressure|e\.g\., temperature/i).fill(paramName)
 
     // Fill description (placeholder: "Enter parameter description")
     await modal.getByPlaceholder(/enter parameter description/i).fill('E2E test parameter description')
+
+    // Data type + default value (required by form validation / UX for numeric types)
+    await modal.getByPlaceholder(/float32, int32, boolean/i).fill('float')
+    await modal.getByPlaceholder(/Enter default value/i).fill('1.0')
 
     // Submit
     await modal.getByRole('button', { name: /^create parameter$/i }).click()
 
     // Modal should close and parameter should appear in the table
-    await expect(page.locator(MODAL)).not.toBeVisible({ timeout: 8_000 })
-    await expect(page.getByRole('cell', { name: TEST_PARAM_NAME }).or(
-      page.locator(`button:has-text("${TEST_PARAM_NAME}")`)
+    await expect(modal).not.toBeVisible({ timeout: 8_000 })
+    await expect(page.getByRole('cell', { name: paramName }).or(
+      page.locator(`button:has-text("${paramName}")`)
     ).first()).toBeVisible({ timeout: 8_000 })
   })
 
   test('edit a parameter', async ({ page, projectId }) => {
+    const paramName = `e2e_param_edit_${Date.now()}`
     // Ensure the test parameter exists by creating it via API
     const token = await page.evaluate(() => localStorage.getItem('token'))
     if (!token) throw new Error('No auth token found')
@@ -134,7 +148,7 @@ test.describe('Parameters — CRUD', () => {
     if (listResp.ok()) {
       const body = await listResp.json()
       const params: Array<{ id: string; name: string }> = body?.data ?? []
-      const found = params.find(p => p.name === TEST_PARAM_NAME)
+      const found = params.find(p => p.name === paramName)
       if (found) paramId = found.id
     }
 
@@ -144,7 +158,7 @@ test.describe('Parameters — CRUD', () => {
         `http://localhost:5000/api/v1/parameters/${projectId}`,
         {
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          data: { name: TEST_PARAM_NAME, description: 'Original description', status: 'draft' },
+          data: { ...apiCreateParameterBody(paramName, 'Original description') },
         },
       )
       if (createResp.ok()) {
@@ -158,12 +172,12 @@ test.describe('Parameters — CRUD', () => {
     await expect(page.locator('table').first()).toBeVisible({ timeout: 10_000 })
 
     // Find the row for our parameter and click its edit (pencil) button
-    const paramRow = page.locator('table tbody tr').filter({ hasText: TEST_PARAM_NAME }).first()
+    const paramRow = page.locator('table tbody tr').filter({ hasText: paramName }).first()
     await expect(paramRow).toBeVisible({ timeout: 8_000 })
-    await paramRow.getByRole('button', { name: 'Edit' }).click()
+    await paramRow.locator('button[title="Edit"]').click()
 
     // Edit modal should open
-    const modal = page.locator(MODAL)
+    const modal = page.locator(MODAL).filter({ has: page.getByRole('heading', { name: /Edit Parameter:/i }) })
     await expect(modal).toBeVisible({ timeout: 5_000 })
     await page.waitForTimeout(AFTER_OPEN_WAIT)
 
@@ -192,7 +206,7 @@ test.describe('Parameters — CRUD', () => {
       `http://localhost:5000/api/v1/parameters/${projectId}`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        data: { name: deleteTargetName, description: 'To be deleted', status: 'draft' },
+        data: { ...apiCreateParameterBody(deleteTargetName, 'To be deleted') },
       },
     )
     expect(createResp.ok(), await createResp.text()).toBeTruthy()
@@ -219,7 +233,10 @@ test.describe('Parameters — CRUD', () => {
 // Search & Filter tests
 // ---------------------------------------------------------------------------
 test.describe('Parameters — Search & Filter', () => {
+  let searchSeedName = ''
+
   test.beforeEach(async ({ page, projectId }) => {
+    searchSeedName = `e2e_search_${Date.now()}`
     // Seed at least one parameter with a known name so search tests work
     const token = await page.evaluate(() => localStorage.getItem('token'))
     if (!token) return
@@ -231,13 +248,13 @@ test.describe('Parameters — Search & Filter', () => {
     if (listResp.ok()) {
       const body = await listResp.json()
       const params: Array<{ name: string }> = body?.data ?? []
-      const hasTestParam = params.some(p => p.name === TEST_PARAM_NAME)
+      const hasTestParam = params.some(p => p.name === searchSeedName)
       if (!hasTestParam) {
         await page.request.post(
           `http://localhost:5000/api/v1/parameters/${projectId}`,
           {
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            data: { name: TEST_PARAM_NAME, description: 'Search test param', status: 'draft' },
+            data: { ...apiCreateParameterBody(searchSeedName, 'Search test param') },
           },
         )
       }
@@ -250,7 +267,7 @@ test.describe('Parameters — Search & Filter', () => {
 
   test('search by name', async ({ page }) => {
     // Type the unique prefix into the search box
-    const searchPrefix = TEST_PARAM_NAME.substring(0, 12)
+    const searchPrefix = searchSeedName.substring(0, 12)
     await page.getByPlaceholder(/search parameters/i).fill(searchPrefix)
 
     // Only rows matching the search should be visible
@@ -425,7 +442,7 @@ test.describe('Parameters — CSV Import', () => {
     await page.goto(`/projects/${projectId}/parameters`)
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /^import$/i }).click()
-    const modal = page.locator(MODAL)
+    const modal = page.locator(MODAL).filter({ has: page.getByRole('heading', { name: /Import Parameters/i }) })
     await expect(modal).toBeVisible({ timeout: 5_000 })
     await expect(modal.getByText(/import parameters/i)).toBeVisible()
     // Step 1 should be active
@@ -442,7 +459,7 @@ test.describe('Parameters — CSV Import', () => {
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /^import$/i }).click()
 
-    const modal = page.locator(MODAL)
+    const modal = page.locator(MODAL).filter({ has: page.getByRole('heading', { name: /Import Parameters/i }) })
     await expect(modal).toBeVisible({ timeout: 5_000 })
 
     // Upload the generated CSV file
@@ -450,7 +467,7 @@ test.describe('Parameters — CSV Import', () => {
     await expect(modal.getByText(/row/i)).toBeVisible({ timeout: 5_000 })
 
     // Advance to preview
-    await modal.getByRole('button', { name: /next.*preview/i }).click()
+    await modal.getByRole('button', { name: /Next: Preview/i }).click()
     await expect(modal.getByText(/column mappings/i)).toBeVisible({ timeout: 5_000 })
 
     // All 3 rows should show 'New' badge (they have unique timestamp names)
@@ -467,12 +484,12 @@ test.describe('Parameters — CSV Import', () => {
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /^import$/i }).click()
 
-    const modal = page.locator(MODAL)
+    const modal = page.locator(MODAL).filter({ has: page.getByRole('heading', { name: /Import Parameters/i }) })
     await expect(modal).toBeVisible({ timeout: 5_000 })
     await modal.locator('input[type="file"]').setInputFiles(csvPath)
     await expect(modal.getByText(/row/i)).toBeVisible({ timeout: 5_000 })
-    await modal.getByRole('button', { name: /next.*preview/i }).click()
-    await modal.getByRole('button', { name: /^import$/i }).click()
+    await modal.getByRole('button', { name: /Next: Preview/i }).click()
+    await modal.getByRole('button', { name: 'Import' }).click()
 
     // Step 3: result should show created count
     await expect(modal.getByText(/import complete/i)).toBeVisible({ timeout: 15_000 })

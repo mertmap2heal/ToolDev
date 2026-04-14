@@ -1,17 +1,20 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { X, ChevronDown, Plus, Trash2, GripVertical, Search, Download, FileCode, FileText, CheckSquare, Square, Play, Settings } from 'lucide-react'
+import { X, ChevronDown, Plus, Trash2, GripVertical, Search, Download, FileCode, FileText, CheckSquare, Square, Play, Settings, RefreshCw } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ApiResponse } from 'shared/types/api.types'
 import { verificationService } from '../../services/verification.service'
+import { projectService } from '../../services/project.service'
+import type { ProjectMember } from 'shared/types/project.types'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
-import ReportExporter from './ReportExporter'
+import ListExporter from './ListExporter'
 import ExportWithTemplateModal from './ExportWithTemplateModal'
 import FullReportModal from './FullReportModal'
 import VerificationLifecycle from './VerificationLifecycle'
 import { useVerificationDrawer } from '../../contexts/VerificationDrawerContext'
 import clsx from 'clsx'
 import RelationshipsPanel from './RelationshipsPanel'
+import TestPlanDocumentTab from './TestPlanDocumentTab'
 
 interface TestPlanDetailDrawerProps {
   plan: any
@@ -20,8 +23,20 @@ interface TestPlanDetailDrawerProps {
   projectId: string
 }
 
+function ownerLabelFromProjectMembers(
+  ownerUserId: string | undefined | null,
+  members: ProjectMember[]
+): string {
+  if (!ownerUserId?.trim()) return '—'
+  const row = members.find((m) => m.userId === ownerUserId)
+  const u = row?.user
+  if (u?.name?.trim()) return u.name.trim()
+  if (u?.email?.trim()) return u.email.trim()
+  return `User ${ownerUserId.slice(0, 8)}…`
+}
+
 export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId }: TestPlanDetailDrawerProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'cases' | 'activity'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'document' | 'cases' | 'activity'>('overview')
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState<{
     name: string
@@ -75,6 +90,15 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
   const envOptions: { id: string; value: string }[] = environmentOptions?.success && environmentOptions?.data ? (environmentOptions.data as { id: string; value: string }[]) : []
   const toolOptions: { id: string; value: string }[] = testingToolOptions?.success && testingToolOptions?.data ? (testingToolOptions.data as { id: string; value: string }[]) : []
 
+  const { data: projectMembers = [] } = useQuery({
+    queryKey: ['project-members', projectId],
+    queryFn: async () => {
+      const res = await projectService.getProjectMembers(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    enabled: isOpen && !!projectId,
+  })
+
   // Fetch setups for default-setup selection
   const { data: allSetups = [] } = useQuery({
     queryKey: ['setups', projectId],
@@ -118,16 +142,6 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
     enabled: isOpen && activeTab === 'cases',
   })
 
-  // Fetch report data when export modal opens
-  const { data: reportData } = useQuery({
-    queryKey: ['test-plan-report', projectId, plan?.id],
-    queryFn: async () => {
-      const response = await verificationService.getTestPlanReport(projectId, plan.id)
-      return response.success ? response.data : null
-    },
-    enabled: showExportModal && !!plan?.id,
-  })
-
   // Fetch test runs for this plan
   const { data: planTestRuns = [] } = useQuery({
     queryKey: ['test-runs', projectId, plan?.id],
@@ -146,6 +160,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
       queryClient.invalidateQueries({ queryKey: ['test-plan', projectId, plan.id] })
       queryClient.invalidateQueries({ queryKey: ['test-plans', projectId] })
       queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-entity-audit', projectId, 'TEST_PLAN', plan.id] })
       setIsEditing(false)
     },
   })
@@ -155,6 +170,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['test-plan', projectId, plan.id] })
       queryClient.invalidateQueries({ queryKey: ['test-plans', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-entity-audit', projectId, 'TEST_PLAN', plan.id] })
     },
   })
 
@@ -163,6 +179,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['test-plan', projectId, plan.id] })
       queryClient.invalidateQueries({ queryKey: ['test-plans', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-entity-audit', projectId, 'TEST_PLAN', plan.id] })
     },
   })
 
@@ -180,6 +197,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['test-plan', projectId, plan.id] })
       queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-entity-audit', projectId, 'TEST_PLAN', plan.id] })
     },
   })
 
@@ -187,6 +205,7 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
     mutationFn: (testCaseId: string) => verificationService.removeCaseFromPlan(projectId, plan.id, testCaseId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['test-plan', projectId, plan.id] })
+      queryClient.invalidateQueries({ queryKey: ['verification-entity-audit', projectId, 'TEST_PLAN', plan.id] })
     },
   })
 
@@ -216,6 +235,10 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
 
   const currentPlan = planDetails || plan
   const planCases = currentPlan?.planCases || []
+  const ownerDisplayLabel = useMemo(
+    () => ownerLabelFromProjectMembers(currentPlan?.ownerUserId, projectMembers),
+    [currentPlan?.ownerUserId, projectMembers]
+  )
 
   const planCaseEntities = useMemo(() => {
     const raw = Array.isArray(planCases) ? planCases : []
@@ -495,17 +518,24 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
         {/* Tabs */}
         <div className="border-b border-gray-200 dark:border-gray-700 px-6 flex-shrink-0">
           <div className="flex gap-4">
-            {(['overview', 'cases', 'activity'] as const).map((tab) => (
+            {(
+              [
+                { id: 'overview' as const, label: 'Overview' },
+                { id: 'document' as const, label: 'Document' },
+                { id: 'cases' as const, label: 'Cases' },
+                { id: 'activity' as const, label: 'Activity' },
+              ] as const
+            ).map((tab) => (
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
                 className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab
+                  activeTab === tab.id
                     ? 'border-blue-600 text-blue-600 dark:text-blue-400'
                     : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
                 }`}
               >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab.label}
               </button>
             ))}
           </div>
@@ -674,7 +704,12 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Owner
                 </label>
-                <p className="text-gray-900 dark:text-white">{currentPlan?.ownerUserId || '—'}</p>
+                <p
+                  className="text-gray-900 dark:text-white"
+                  title={currentPlan?.ownerUserId ? `User ID: ${currentPlan.ownerUserId}` : undefined}
+                >
+                  {ownerDisplayLabel}
+                </p>
               </div>
 
               {/* Testing Environment */}
@@ -774,6 +809,15 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
                 <VerifiesElementsSection testPlanId={currentPlan?.id} projectId={projectId} />
               )}
             </div>
+          )}
+
+          {activeTab === 'document' && currentPlan?.id && (
+            <TestPlanDocumentTab
+              projectId={projectId}
+              planId={currentPlan.id}
+              plan={currentPlan}
+              onOpenSetup={(s) => drawer.openSetup?.(s)}
+            />
           )}
 
           {activeTab === 'cases' && (
@@ -879,7 +923,8 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
           )}
 
           {activeTab === 'activity' && (
-            <div className="space-y-4">
+            <div className="space-y-6">
+              <PlanAuditTrailSection projectId={projectId} planId={plan?.id} planKey={currentPlan?.key} planName={currentPlan?.name} />
               <LinkedTestResultsSection testPlanId={plan?.id} projectId={projectId} />
             </div>
           )}
@@ -887,13 +932,14 @@ export default function TestPlanDetailDrawer({ plan, isOpen, onClose, projectId 
         </div>
 
       {/* Export Modal */}
-      {showExportModal && reportData && (
-        <ReportExporter
+      {showExportModal && currentPlan && (
+        <ListExporter
           isOpen={showExportModal}
           onClose={() => setShowExportModal(false)}
-          reportType="test-plan"
-          reportData={reportData}
-          entityName={`${currentPlan?.key || ''} - ${currentPlan?.name || ''}`}
+          exportType="test-plans"
+          items={[currentPlan]}
+          projectId={projectId}
+          initialSelectedIds={[plan.id]}
         />
       )}
 
@@ -1161,6 +1207,145 @@ function VerifiesElementsSection({ testPlanId, projectId }: { testPlanId?: strin
       <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
         Link this test plan to requirements or functions it verifies
       </p>
+    </div>
+  )
+}
+
+function csvEscapeCell(value: string): string {
+  if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`
+  return value
+}
+
+function downloadBlob(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.rel = 'noopener'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+type PlanAuditEventRow = {
+  id: string
+  action: string
+  performedAt: string
+  performedByUserId: string | null
+  summary: string
+}
+
+function PlanAuditTrailSection({
+  projectId,
+  planId,
+  planKey,
+  planName,
+}: {
+  projectId: string
+  planId?: string
+  planKey?: string
+  planName?: string
+}) {
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+    queryKey: ['verification-entity-audit', projectId, 'TEST_PLAN', planId],
+    queryFn: async () => {
+      const res = await verificationService.getVerificationEntityAudit(projectId, 'TEST_PLAN', planId!, {
+        limit: 200,
+      })
+      if (!res.success || !Array.isArray(res.data)) return [] as PlanAuditEventRow[]
+      return res.data as PlanAuditEventRow[]
+    },
+    enabled: !!projectId && !!planId,
+  })
+
+  const rows = Array.isArray(data) ? data : []
+
+  const safeFileBase = `${planKey ?? 'plan'}-${planName ?? planId ?? 'audit'}`
+    .replace(/[^\w.-]+/g, '_')
+    .slice(0, 120)
+
+  const exportCsv = () => {
+    const header = ['performedAt', 'action', 'summary', 'performedByUserId', 'id']
+    const lines = [header.join(',')]
+    for (const r of rows) {
+      lines.push(
+        [r.performedAt, r.action, r.summary, r.performedByUserId ?? '', r.id]
+          .map((c) => csvEscapeCell(String(c ?? '')))
+          .join(',')
+      )
+    }
+    downloadBlob(`${safeFileBase}-audit.csv`, new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' }))
+  }
+
+  const exportJson = () => {
+    downloadBlob(`${safeFileBase}-audit.json`, new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' }))
+  }
+
+  if (!planId) return null
+
+  return (
+    <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Audit trail</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+          >
+            <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={rows.length === 0}
+            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+          >
+            Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={exportJson}
+            disabled={rows.length === 0}
+            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+          >
+            Export JSON
+          </button>
+        </div>
+      </div>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+        Compliance log for this test plan (updates, status, case changes, and related actions).
+      </p>
+      {isLoading && <p className="text-sm text-gray-500 dark:text-gray-400">Loading audit events…</p>}
+      {isError && (
+        <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+          {error instanceof Error ? error.message : 'Could not load audit trail.'}
+        </p>
+      )}
+      {!isLoading && !isError && rows.length === 0 && (
+        <p className="text-sm text-gray-500 dark:text-gray-400">No audit events recorded for this plan yet.</p>
+      )}
+      {!isLoading && !isError && rows.length > 0 && (
+        <ul className="space-y-3 max-h-72 overflow-y-auto pr-1" aria-label="Plan audit events">
+          {rows.map((r) => (
+            <li key={r.id} className="text-sm border-b border-gray-100 dark:border-gray-700 pb-3 last:border-0">
+              <div className="font-medium text-gray-900 dark:text-white">{r.summary}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <time dateTime={r.performedAt}>{new Date(r.performedAt).toLocaleString()}</time>
+                <span className="mx-1">·</span>
+                <span>{r.action}</span>
+                {r.performedByUserId ? (
+                  <>
+                    <span className="mx-1">·</span>
+                    <span>{r.performedByUserId}</span>
+                  </>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

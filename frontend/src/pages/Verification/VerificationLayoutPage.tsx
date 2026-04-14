@@ -24,6 +24,7 @@ import {
   VERIFICATION_NODE_TYPE_TO_TAB,
   VERIFICATION_VALID_TAB_IDS,
   buildVerificationUrl,
+  clearVerificationFocusForClosedEntity,
 } from '../../config/verificationTabs'
 import clsx from 'clsx'
 
@@ -52,7 +53,7 @@ function VerificationLayoutInner() {
   const [isTreePanelOpen, setIsTreePanelOpen] = useState(false)
   const PANEL_MIN = 200
   const PANEL_MAX = 500
-  const PANEL_DEFAULT = 340
+  const PANEL_DEFAULT = 280
   const [leftPanelWidth, setLeftPanelWidth] = useState(PANEL_DEFAULT)
   const resizeContainerRef = useRef<HTMLDivElement>(null)
 
@@ -445,8 +446,73 @@ function VerificationLayoutInner() {
     navigate(buildVerificationUrl(projectId!, { tab: tabId }), { replace: true })
   }
 
+  const handleClosePlanDrawer = useCallback(() => {
+    const id = drawer.selectedPlan?.id
+    setSearchParams(
+      (p) => {
+        const n = new URLSearchParams(p)
+        clearVerificationFocusForClosedEntity(n, 'plan', id)
+        return n
+      },
+      { replace: true }
+    )
+    drawer.closePlan()
+  }, [drawer.closePlan, drawer.selectedPlan?.id, setSearchParams])
+
+  const handleCloseCaseDrawer = useCallback(() => {
+    const id = drawer.selectedCase?.id
+    setSearchParams(
+      (p) => {
+        const n = new URLSearchParams(p)
+        clearVerificationFocusForClosedEntity(n, 'case', id)
+        return n
+      },
+      { replace: true }
+    )
+    drawer.closeCase()
+  }, [drawer.closeCase, drawer.selectedCase?.id, setSearchParams])
+
+  const handleCloseSetupDrawer = useCallback(() => {
+    const id = drawer.selectedSetup?.id
+    setSearchParams(
+      (p) => {
+        const n = new URLSearchParams(p)
+        clearVerificationFocusForClosedEntity(n, 'setup', id)
+        return n
+      },
+      { replace: true }
+    )
+    drawer.closeSetup()
+  }, [drawer.closeSetup, drawer.selectedSetup?.id, setSearchParams])
+
+  const handleCloseResultDrawer = useCallback(() => {
+    const id = drawer.selectedResult?.id
+    setSearchParams(
+      (p) => {
+        const n = new URLSearchParams(p)
+        clearVerificationFocusForClosedEntity(n, 'result', id)
+        return n
+      },
+      { replace: true }
+    )
+    drawer.closeResult()
+  }, [drawer.closeResult, drawer.selectedResult?.id, setSearchParams])
+
+  const handleCloseRunDrawer = useCallback(() => {
+    const id = drawer.selectedRun?.id
+    setSearchParams(
+      (p) => {
+        const n = new URLSearchParams(p)
+        clearVerificationFocusForClosedEntity(n, 'run', id)
+        return n
+      },
+      { replace: true }
+    )
+    drawer.closeRun()
+  }, [drawer.closeRun, drawer.selectedRun?.id, setSearchParams])
+
   return (
-    <div ref={resizeContainerRef} className="flex h-[calc(100vh-4rem)]">
+    <div ref={resizeContainerRef} className="flex h-[calc(100vh-4rem-2rem)] max-h-[calc(100vh-4rem-2rem)]">
       {showTreePanel && (
         <>
           {isTreePanelOpen ? (
@@ -539,7 +605,7 @@ function VerificationLayoutInner() {
 
       {/* Main column + detail drawers share one flex row so the panel squeezes content (like Requirements). */}
       <div className="flex flex-1 min-h-0 min-w-0">
-        <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden pr-6 gap-6">
+        <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden pr-6 gap-3">
         <div className="flex-shrink-0 flex items-center gap-2">
           {showTreePanel && (
             <button
@@ -552,7 +618,7 @@ function VerificationLayoutInner() {
               {isTreePanelOpen ? <PanelLeftClose size={16} className="text-gray-500 dark:text-gray-400" /> : <PanelLeft size={16} className="text-gray-500 dark:text-gray-400" />}
             </button>
           )}
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Verification</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Verification</h2>
           {projectId && (
             <div className="ml-auto">
               <SafetyLinkPanel variant="evidence" count={2} />
@@ -615,7 +681,7 @@ function VerificationLayoutInner() {
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
           <Outlet />
         </div>
         </div>
@@ -625,31 +691,31 @@ function VerificationLayoutInner() {
           <TestPlanDetailDrawer
             plan={drawer.selectedPlan}
             isOpen={drawer.isPlanDrawerOpen}
-            onClose={drawer.closePlan}
+            onClose={handleClosePlanDrawer}
             projectId={projectId}
           />
           <TestCaseDetailDrawer
             testCase={drawer.selectedCase}
             isOpen={drawer.isCaseDrawerOpen}
-            onClose={drawer.closeCase}
+            onClose={handleCloseCaseDrawer}
             projectId={projectId}
           />
           <TestSetupDetailDrawer
             setup={drawer.selectedSetup}
             isOpen={drawer.isSetupDrawerOpen}
-            onClose={drawer.closeSetup}
+            onClose={handleCloseSetupDrawer}
             projectId={projectId}
           />
           <TestResultDetailDrawer
             testResult={drawer.selectedResult}
             isOpen={drawer.isResultDrawerOpen}
-            onClose={drawer.closeResult}
+            onClose={handleCloseResultDrawer}
             projectId={projectId}
           />
           <TestRunDetailDrawer
             run={drawer.selectedRun}
             isOpen={drawer.isRunDrawerOpen}
-            onClose={drawer.closeRun}
+            onClose={handleCloseRunDrawer}
             projectId={projectId}
           />
         </>

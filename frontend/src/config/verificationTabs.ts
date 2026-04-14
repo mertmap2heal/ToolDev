@@ -106,3 +106,34 @@ export function buildVerificationUrl(
   const qs = params.toString()
   return `/projects/${projectId}/verification${qs ? `?${qs}` : ''}`
 }
+
+/** URL focus params drive VerificationPage's drawer open effect; clear them when dismissing a drawer so it does not immediately reopen. */
+export function clearVerificationFocusForClosedEntity(
+  params: URLSearchParams,
+  entity: 'plan' | 'case' | 'setup' | 'result' | 'run',
+  entityId: string | null | undefined
+): void {
+  if (!entityId) return
+  const ft = (params.get('focusType') ?? '').toLowerCase().replace(/-/g, '_')
+  const fid = params.get('focusId')
+  const caseId = params.get('caseId')
+
+  const normEntity =
+    entity === 'plan'
+      ? 'test_plan'
+      : entity === 'case'
+        ? 'test_case'
+        : entity === 'setup'
+          ? 'test_setup'
+          : entity === 'result'
+            ? 'test_result'
+            : 'test_run'
+
+  if (fid === entityId && ft === normEntity) {
+    params.delete('focusType')
+    params.delete('focusId')
+  }
+  if (entity === 'case' && caseId === entityId) {
+    params.delete('caseId')
+  }
+}

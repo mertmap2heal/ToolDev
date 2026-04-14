@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { verificationService } from '../../services/verification.service'
 import { requirementService } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
-import ReportExporter from './ReportExporter'
+import ListExporter from './ListExporter'
 import ExportWithTemplateModal from './ExportWithTemplateModal'
 import FullReportModal from './FullReportModal'
 import CustomSectionEditor from './CustomSectionEditor'
@@ -28,6 +28,7 @@ interface TestCaseDetailDrawerProps {
 export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projectId }: TestCaseDetailDrawerProps) {
   const navigate = useNavigate()
   const drawer = useVerificationDrawer()
+  const [activeTab, setActiveTab] = useState<'overview' | 'details' | 'activity'>('overview')
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState({
     title: '',
@@ -89,16 +90,6 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
       return response.success && response.data ? response.data : []
     },
     enabled: isOpen && !!projectId,
-  })
-
-  // Fetch report data when export modal opens
-  const { data: reportData } = useQuery({
-    queryKey: ['test-case-report', projectId, testCase?.id],
-    queryFn: async () => {
-      const response = await verificationService.getTestCaseReport(projectId, testCase.id)
-      return response.success ? response.data : null
-    },
-    enabled: showExportModal && !!testCase?.id,
   })
 
   // Fetch custom sections
@@ -632,8 +623,35 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
           </div>
         </div>
 
+        {/* Tabs */}
+        <div className="border-b border-gray-200 dark:border-gray-700 px-6 flex-shrink-0">
+          <div className="flex gap-4">
+            {(
+              [
+                { id: 'overview' as const, label: 'Overview' },
+                { id: 'details' as const, label: 'Details' },
+                { id: 'activity' as const, label: 'Activity' },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab.id
+                    ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Scrollable Content */}
         <div className="overflow-y-auto flex-1 px-6 py-4">
+          <div>
+          {activeTab === 'overview' && (
           <div className="space-y-6">
           <RelationshipsPanel sections={relationshipSections} dense />
 
@@ -726,7 +744,11 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
               </div>
             )}
           </div>
+          </div>
+          )}
 
+          {activeTab === 'details' && (
+          <div className="space-y-6">
           {/* Objective */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -990,17 +1012,32 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
               </p>
             )}
           </div>
-        </div>
+          </div>
+          )}
+
+          {activeTab === 'activity' && (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Activity Log</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Activity tracking for this test case will appear here.
+              </p>
+            </div>
+          </div>
+          )}
+
+          </div>
         </div>
 
       {/* Export Modal */}
-      {showExportModal && reportData && (
-        <ReportExporter
+      {showExportModal && currentCase && (
+        <ListExporter
           isOpen={showExportModal}
           onClose={() => setShowExportModal(false)}
-          reportType="test-case"
-          reportData={reportData}
-          entityName={`${currentCase?.key || ''} - ${currentCase?.title || ''}`}
+          exportType="test-cases"
+          items={[currentCase]}
+          projectId={projectId}
+          initialSelectedIds={[testCase.id]}
         />
       )}
 

@@ -399,6 +399,7 @@ export const reportService = {
         docGeneralConditions: plan.docGeneralConditions ?? undefined,
         docTools: plan.docTools ?? undefined,
         docTestSetupNotes: plan.docTestSetupNotes ?? undefined,
+        docAppendices: plan.docAppendices ?? undefined,
       },
       revisions: (plan.revisions ?? []).map((r) => ({
         revisionNumber: r.revisionNumber,

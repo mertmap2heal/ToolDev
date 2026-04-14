@@ -84,6 +84,34 @@ export const verificationService = {
   getTemplate: (projectId: string, templateId: string) => apiClient.get(`/templates/${projectId}/${templateId}`),
   updateTemplate: (projectId: string, templateId: string, payload: unknown) => apiClient.patch(`/templates/${projectId}/${templateId}`, payload),
   getOverview: (projectId: string) => apiClient.get(`/verification/overview/${projectId}`),
+  getVerificationEntityAudit: (
+    projectId: string,
+    entityType: string,
+    entityId: string,
+    opts?: { limit?: number; offset?: number; includeRaw?: boolean; actions?: string }
+  ) =>
+    apiClient.get(`/verification/audit/${projectId}/entity/${entityType}/${entityId}`, {
+      params: {
+        ...(opts?.limit != null ? { limit: String(opts.limit) } : {}),
+        ...(opts?.offset != null ? { offset: String(opts.offset) } : {}),
+        ...(opts?.includeRaw ? { includeRaw: '1' } : {}),
+        ...(opts?.actions ? { actions: opts.actions } : {}),
+      },
+    }),
+  getVerificationProjectAudit: (
+    projectId: string,
+    opts?: { limit?: number; offset?: number; entityType?: string; from?: string; to?: string; includeRaw?: boolean }
+  ) =>
+    apiClient.get(`/verification/audit/${projectId}`, {
+      params: {
+        ...(opts?.limit != null ? { limit: String(opts.limit) } : {}),
+        ...(opts?.offset != null ? { offset: String(opts.offset) } : {}),
+        ...(opts?.entityType ? { entityType: opts.entityType } : {}),
+        ...(opts?.from ? { from: opts.from } : {}),
+        ...(opts?.to ? { to: opts.to } : {}),
+        ...(opts?.includeRaw ? { includeRaw: '1' } : {}),
+      },
+    }),
   getTestPlans: (projectId: string) => apiClient.get<any[]>(`/verification/test-plans/${projectId}`),
   getTestCases: (projectId: string) => apiClient.get<any[]>(`/verification/test-cases/${projectId}`),
   getSetups: (projectId: string) => apiClient.get(`/verification/setups/${projectId}`),
@@ -102,6 +130,12 @@ export const verificationService = {
     apiClient.post(`/verification/test-plans/${projectId}/${planId}/link-setup`, { setupId }),
   unlinkSetupFromPlan: (projectId: string, planId: string, setupId: string) =>
     apiClient.delete(`/verification/test-plans/${projectId}/${planId}/link-setup/${setupId}`),
+  createTestPlanRevision: (projectId: string, planId: string, data: unknown) =>
+    apiClient.post(`/verification/test-plans/${projectId}/${planId}/revisions`, data),
+  updateTestPlanRevision: (projectId: string, planId: string, revisionId: string, data: unknown) =>
+    apiClient.patch(`/verification/test-plans/${projectId}/${planId}/revisions/${revisionId}`, data),
+  deleteTestPlanRevision: (projectId: string, planId: string, revisionId: string) =>
+    apiClient.delete(`/verification/test-plans/${projectId}/${planId}/revisions/${revisionId}`),
   getTestPlanReport: (projectId: string, planId: string) => apiClient.get(`/verification/reports/test-plan/${projectId}/${planId}`),
   getTestSetupReport: (projectId: string, setupId: string) => apiClient.get(`/verification/reports/test-setup/${projectId}/${setupId}`),
   getTestResultReport: (projectId: string, resultId: string) => apiClient.get(`/verification/reports/test-result/${projectId}/${resultId}`),
@@ -179,6 +213,13 @@ export const verificationService = {
     apiClient.post(`/verification/test-runs/${projectId}/${runId}/results/${resultId}/evidence`, data),
   getTraceabilityMatrix: (projectId: string, considerPassedWithErrors?: boolean) =>
     apiClient.get(`/verification/traceability-matrix/${projectId}`, considerPassedWithErrors === false ? { params: { considerPassedWithErrors: 'false' } } : undefined),
+  getFullTraceabilityMatrix: (projectId: string, considerPassedWithErrors?: boolean) =>
+    apiClient.get(`/verification/traceability-matrix/${projectId}`, {
+      params: {
+        full: 'true',
+        ...(considerPassedWithErrors === false ? { considerPassedWithErrors: 'false' } : {}),
+      },
+    }),
   getCoverageGaps: (projectId: string) => apiClient.get(`/verification/traceability-matrix/${projectId}/gaps`),
   createNonconformityFromFailedResult: (projectId: string, runResultId: string) =>
     apiClient.post(`/verification/nonconformities/${projectId}/from-failed-run-result/${runResultId}`),

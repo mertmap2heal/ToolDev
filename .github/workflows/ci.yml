@@ -10,10 +10,10 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: |
             shared/package-lock.json
@@ -47,10 +47,10 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
       - name: Install shared dependencies
@@ -87,11 +87,11 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: |
             shared/package-lock.json
@@ -182,6 +182,7 @@ jobs:
           name: playwright-report
           path: frontend/e2e/report/
           retention-days: 7
+          if-no-files-found: ignore
 
       - name: Upload test results on failure
         if: failure()
@@ -190,3 +191,4 @@ jobs:
           name: playwright-test-results
           path: frontend/test-results/
           retention-days: 7
+          if-no-files-found: ignore

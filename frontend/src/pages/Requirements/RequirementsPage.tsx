@@ -3413,7 +3413,7 @@ export default function RequirementsPage() {
                 className="p-1.5 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 title={isPBSPanelOpen ? 'Close left panel' : 'Open left panel (Structure & Verification)'}
               >
-                {isPBSPanelOpen ? <PanelLeftClose size={16} className="text-gray-500" /> : <PanelLeft size={16} className="text-gray-500" />}
+                {isPBSPanelOpen ? <PanelLeftClose size={16} className="text-gray-500 dark:text-gray-400" /> : <PanelLeft size={16} className="text-gray-500 dark:text-gray-400" />}
               </button>
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">Requirements</h2>
               <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
