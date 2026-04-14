@@ -11,3 +11,13 @@ Full documentation lives in `.claude/` — imported below.
 @.claude/git-workflow.md
 @.claude/development.md
 @.claude/testing.md
+
+## Knowledge Base
+
+Detailed reference guides for patterns, pitfalls, and conventions:
+
+@.claude/kb/playwright-e2e.md
+@.claude/kb/react-typescript.md
+@.claude/kb/backend-patterns.md
+@.claude/kb/infrastructure.md
+@.claude/kb/user-manual-standards.md
