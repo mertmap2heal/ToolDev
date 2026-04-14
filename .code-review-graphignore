@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Build outputs
+dist/
+build/
+frontend/dist/
+backend/dist/
+shared/dist/
+
+# Prisma generated client
+backend/node_modules/
+frontend/node_modules/
+shared/node_modules/
+
+# Test results & coverage
+coverage/
+backend/test-results/
+frontend/test-results/
+*.lcov
+
+# Uploads & generated files
+backend/uploads/
+.code-review-graph/
+
+# TypeScript declaration maps (generated)
+**/*.d.ts.map
+**/*.js.map
+
+# Logs
+*.log
+logs/
+
+# OS / editor
+.DS_Store
+Thumbs.db
