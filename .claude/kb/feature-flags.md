@@ -1,6 +1,6 @@
 ---
 name: Feature Flag & Subscription Package System
-description: Design decisions and patterns for the config-driven module visibility system (Basic/Pro/Enterprise packages)
+description: Design decisions and patterns for the config-driven module visibility system (Core/Advanced/Complete packages)
 type: project
 ---
 
@@ -19,11 +19,10 @@ type: project
 - `frontend/src/config/packages/core.json` — module ID array for Core tier
 - `frontend/src/config/packages/advanced.json` — Advanced tier
 - `frontend/src/config/packages/complete.json` — Complete (all modules)
-- `frontend/src/config/packageConfig.ts` — PackageId type, PACKAGE_CONFIGS map, getMinPackageForModule helper
-- `frontend/src/contexts/FeaturePackageContext.tsx` — provider + hook
-- `frontend/src/components/access/FeatureGuard.tsx` — route-level guard
-- `frontend/src/components/access/FeatureGuard.tsx` — route-level guard (redirects silently to project home, no upgrade screen)
-- `frontend/src/components/dev/PackageSwitcher.tsx` — dev-only runtime switcher
+- `frontend/src/config/packageConfig.ts` — `PackageId` type (`'core' | 'advanced' | 'complete'`), `PACKAGE_CONFIGS` map, `getMinPackageForModule` helper
+- `frontend/src/contexts/FeaturePackageContext.tsx` — provider + `useFeaturePackage()` hook
+- `frontend/src/components/access/FeatureGuard.tsx` — route-level guard; redirects silently to project home, no upgrade screen
+- `frontend/src/components/dev/PackageSwitcher.tsx` — dev-only runtime switcher (rendered only when `import.meta.env.DEV`)
 
 **Why:** Adding a new package = add one JSON file. Adding a new module = add its ID to the right JSON files. Zero component changes.
 
@@ -63,7 +62,7 @@ The sidebar, header mega-menu, module launcher, module drawer, quick access bar,
 />
 ```
 
-`FeatureGuard` redirects to `upgrade?module=<id>` when disabled.
+`FeatureGuard` redirects silently to `/projects/:projectId` when the module is disabled — no upgrade screen, no locked icon.
 
 **Why inside the element, not the route definition:** React Router always matches routes regardless. Keeping the route registered means `useNavigate`, deep links, and breadcrumbs still resolve. The guard intercepts at render time.
 
@@ -73,9 +72,9 @@ The sidebar, header mega-menu, module launcher, module drawer, quick access bar,
 
 | Tier | Modules |
 |------|---------|
-| Core | requirements, tasks, issues, parameters, archive |
-| Advanced | + change-requests, documentation, lifecycle-status, verification, risk-management, stakeholder, product-breakdown-structure |
-| Complete | + configuration-management, functions, interface-management, mbse-models, safety-analysis, compliance-check, certification, validation, audit |
+| Core | requirements, change-requests, issues, lifecycle-status, archive, stakeholder, product-breakdown-structure, functions, interface-management, parameters, risk-management, audit |
+| Advanced | Core + tasks, documentation, verification |
+| Complete | Advanced + configuration-management, mbse-models, validation, safety-analysis, compliance-check, certification |
 
 ---
 
@@ -83,9 +82,9 @@ The sidebar, header mega-menu, module launcher, module drawer, quick access bar,
 
 `PackageSwitcher` component (renders only when `import.meta.env.DEV`):
 - Floating panel, bottom-right corner
-- Three buttons: Basic | Pro | Enterprise
+- Three buttons: Core | Advanced | Complete
 - Calls `setDevPackage(id)` which writes to localStorage and triggers context re-render
-- **Do not render in production builds** — use `import.meta.env.DEV` guard
+- **Do not render in production builds** — the `import.meta.env.DEV` guard strips it entirely from production bundles
 
 ---
 
@@ -97,6 +96,8 @@ The sidebar, header mega-menu, module launcher, module drawer, quick access bar,
 - Do not enforce packages on the backend for first release — frontend-only gating is sufficient initially
 - Do NOT show "upgrade" prompts, locked icons, or any hint that hidden modules exist — disabled features are completely invisible
 
+---
+
 ## Key Design Principle: Hidden = Non-Existent
 
 When a module is disabled, it must not appear anywhere:
@@ -104,5 +105,54 @@ When a module is disabled, it must not appear anywhere:
 - Not in the header mega-menu, module launcher, module drawer, or quick access bar
 - Not on the project landing page
 - Direct URL access silently redirects to project home (no locked/upgrade screen)
+- Not referenced in dropdowns, panels, or cross-link sections inside **other** visible pages
 
 The user experience should be indistinguishable from those features never having existed.
+
+---
+
+## Auditing Core-Visible Pages for Hidden Module References
+
+When adding a new module or changing tier assignments, search for hard-coded module IDs
+in components that live inside always-visible pages (e.g. Requirements, Risk Management).
+
+**Components already audited and fixed:**
+
+| File | Issue | Fix |
+|------|-------|-----|
+| `frontend/src/pages/RiskManagement/RiskDetailDrawer.tsx` | `linkedArtifactKeys` statically included 'Verification Activities' and 'Configuration Baseline' | Wrapped in `useMemo` filtered by `isEnabled(ARTIFACT_MODULE_IDS[key])` |
+| `frontend/src/components/requirements/ExportBuilder.tsx` | `<option value="verification">` hard-coded in traceability matrix row/column selects; default `colType: 'verification'` | Conditionally render with `{isEnabled('verification') && <option ...>}`; fall back default to `'function'` |
+
+**Pattern for fixing — inline panel with cross-module links:**
+```tsx
+import { useFeaturePackage } from '../../contexts/FeaturePackageContext'
+import { useMemo } from 'react'
+
+const MODULE_ID_MAP: Record<string, string> = {
+  'Verification Activities': 'verification',
+  'Configuration Baseline':  'configuration-management',
+}
+
+const { isEnabled } = useFeaturePackage()
+
+const visibleKeys = useMemo(() =>
+  ALL_KEYS.filter(key => {
+    const moduleId = MODULE_ID_MAP[key]
+    return moduleId ? isEnabled(moduleId) : true  // keys without a mapped module always show
+  }),
+[isEnabled])
+```
+
+**Components determined safe (no action needed):**
+- `HazardDetailDrawer`, `ArtifactPickerModal`, `DocumentEditorView` — these components are inside modules that are hidden in Core, so they are unreachable when those modules are off.
+- `TopMegaNav DEFAULT_PINNED_IDS` — contains `'verification'` in default pins, but `QuickAccessBar` filters by `isEnabled()` before rendering, so stale pin entries are silently ignored.
+
+**Grep pattern to find future violations:**
+```bash
+# Find hard-coded module route strings in Core-visible tsx files
+grep -rn "'verification'\|'configuration-management'\|'mbse-models'\|'safety-analysis'\|'compliance-check'\|'certification'\|'validation'\|'tasks'\|'documentation'" \
+  frontend/src/pages/Requirements/ \
+  frontend/src/pages/RiskManagement/ \
+  frontend/src/pages/Parameters/ \
+  frontend/src/components/requirements/
+```
