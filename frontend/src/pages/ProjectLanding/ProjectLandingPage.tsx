@@ -1,6 +1,7 @@
 import { useNavigate, useParams } from 'react-router-dom'
 import { type LucideIcon } from 'lucide-react'
 import { MODULES, CATEGORIES } from '../../config/ModuleConfiguration'
+import { useFeaturePackage } from '../../contexts/FeaturePackageContext'
 import { useProjectStore } from '../../store/projectStore'
 
 // ---------------------------------------------------------------------------
@@ -185,11 +186,12 @@ function Column({ categoryId, label, modules, projectId, accent }: ColumnProps) 
 export default function ProjectLandingPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const { projects } = useProjectStore()
+  const { isEnabled } = useFeaturePackage()
   const project = projects.find(p => p.id === projectId)
 
-  const devModules       = MODULES.filter(m => m.category === 'development')
-  const systemModules    = MODULES.filter(m => m.category === 'system')
-  const assuranceModules = MODULES.filter(m => m.category === 'assurance')
+  const devModules       = MODULES.filter(m => m.category === 'development' && isEnabled(m.id))
+  const systemModules    = MODULES.filter(m => m.category === 'system' && isEnabled(m.id))
+  const assuranceModules = MODULES.filter(m => m.category === 'assurance' && isEnabled(m.id))
 
   const statusColors: Record<string, string> = {
     active:    '#22c55e',

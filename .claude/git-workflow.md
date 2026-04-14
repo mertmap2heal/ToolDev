@@ -3,15 +3,20 @@
 ## Branching strategy
 
 ```
-main          ← production-ready; protected; never commit directly
-master        ← integration branch; merges from feature branches
-feature/*     ← new features (branch from master)
-bugfix/*      ← bug fixes (branch from master)
-hotfix/*      ← urgent production fixes (branch from main)
-chore/*       ← dependency updates, config, tooling (branch from master)
-docs/*        ← documentation-only changes (branch from master)
-refactor/*    ← code restructuring with no behaviour change (branch from master)
+master        ← production-stable; protected; only merges from dev; all CI must pass
+dev           ← integration branch; protected; feature branches merge here first
+feature/*     ← new features (branch from dev)
+bugfix/*      ← bug fixes (branch from dev)
+hotfix/*      ← urgent production fixes (branch from master)
+chore/*       ← dependency updates, config, tooling (branch from dev)
+docs/*        ← documentation-only changes (branch from dev)
+refactor/*    ← code restructuring with no behaviour change (branch from dev)
 ```
+
+**Flow:** `feature/*` → PR → `dev` → PR → `master` (release)
+
+`dev` is always ahead of `master`. No direct commits to either protected branch.
+CI must pass on every PR before merge. `master` only receives merges from `dev` via PR.
 
 ## Branch naming
 
@@ -31,8 +36,8 @@ Rules:
 ## Creating a feature branch
 
 ```bash
-git checkout master
-git pull origin master
+git checkout dev
+git pull origin dev
 git checkout -b feature/your-feature-name
 ```
 
@@ -98,7 +103,7 @@ When Claude Code (or any AI agent) makes commits on behalf of the user:
 ## Pull Request process
 
 1. Push feature branch: `git push -u origin feature/your-feature-name`
-2. Open PR against `master` (not `main`) for day-to-day feature work
+2. Open PR against `dev` for day-to-day feature work
 3. PR title = commit message format: `feat(scope): short summary`
 4. PR body must include:
    - **Summary** — what changed and why (2–5 bullets)
@@ -107,9 +112,9 @@ When Claude Code (or any AI agent) makes commits on behalf of the user:
 5. Squash or rebase before merge to keep history clean
 6. Delete branch after merge
 
-## Merging to main
+## Merging to master (releasing)
 
-`main` receives merges from `master` only when a release is ready. Use a PR titled:
+`master` only receives merges from `dev` via PR, and only when all CI checks pass. Use a PR titled:
 ```
 chore(release): vX.Y.Z
 ```
@@ -139,17 +144,20 @@ git config alias.lg "log --oneline --graph --decorate --all"
 
 ```bash
 # Start new feature
-git checkout master && git pull && git checkout -b feature/my-feature
+git checkout dev && git pull && git checkout -b feature/my-feature
 
 # Commit
 git add src/specific/file.ts
 git commit -m "feat(scope): short description"
 
-# Push and open PR
+# Push and open PR (target: dev)
 git push -u origin feature/my-feature
-gh pr create --title "feat(scope): short description" --base master
+gh pr create --title "feat(scope): short description" --base dev
 
 # After PR merged, clean up
-git checkout master && git pull
+git checkout dev && git pull
 git branch -d feature/my-feature
+
+# Release to master (from dev, when ready)
+gh pr create --title "chore(release): vX.Y.Z" --base master --head dev
 ```

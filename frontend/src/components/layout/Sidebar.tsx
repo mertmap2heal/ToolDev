@@ -18,6 +18,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { MODULES, CATEGORIES } from '../../config/ModuleConfiguration'
+import { useFeaturePackage } from '../../contexts/FeaturePackageContext'
 import { useAuthStore } from '../../store/authStore'
 import { useProjectStore } from '../../store/projectStore'
 import { useThemeStore } from '../../store/themeStore'
@@ -270,6 +271,7 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       onMobileClose()
     }
   }, [location.pathname, onMobileClose])
+  const { isEnabled } = useFeaturePackage()
   const { user } = useAuthStore()
   const { projects } = useProjectStore()
   const { theme, toggleTheme } = useThemeStore()
@@ -331,9 +333,9 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
     location.pathname.includes(`/${m.route}`)
   )?.category ?? null
 
-  const systemModules  = MODULES.filter(m => m.category === 'system')
-  const devModules     = MODULES.filter(m => m.category === 'development')
-  const assuranceModules = MODULES.filter(m => m.category === 'assurance')
+  const systemModules  = MODULES.filter(m => m.category === 'system' && isEnabled(m.id))
+  const devModules     = MODULES.filter(m => m.category === 'development' && isEnabled(m.id))
+  const assuranceModules = MODULES.filter(m => m.category === 'assurance' && isEnabled(m.id))
 
   // On mobile the sidebar is always full expanded (no collapsed icon mode)
   const effectiveCollapsed = mobileOpen ? false : collapsed

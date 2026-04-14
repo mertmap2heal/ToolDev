@@ -1,0 +1,17 @@
+{
+  "name": "Core",
+  "modules": [
+    "requirements",
+    "change-requests",
+    "issues",
+    "lifecycle-status",
+    "archive",
+    "stakeholder",
+    "product-breakdown-structure",
+    "functions",
+    "interface-management",
+    "parameters",
+    "risk-management",
+    "audit"
+  ]
+}

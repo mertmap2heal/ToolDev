@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { PinOff } from 'lucide-react'
 import { MODULES } from '../../config/ModuleConfiguration'
+import { useFeaturePackage } from '../../contexts/FeaturePackageContext'
 
 interface QuickAccessBarProps {
     projectId: string | undefined
@@ -10,7 +11,8 @@ interface QuickAccessBarProps {
 
 export default function QuickAccessBar({ projectId, pinnedIds, onTogglePin }: QuickAccessBarProps) {
     const navigate = useNavigate()
-    const pinnedModules = MODULES.filter((m) => pinnedIds.has(m.id))
+    const { isEnabled } = useFeaturePackage()
+    const pinnedModules = MODULES.filter((m) => pinnedIds.has(m.id) && isEnabled(m.id))
 
     if (pinnedModules.length === 0) return null
 

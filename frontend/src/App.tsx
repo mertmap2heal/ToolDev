@@ -79,15 +79,19 @@ import AuditLogsPage from './pages/PlatformAdmin/AuditLogsPage'
 import DataFlowAdminPanel from './pages/PlatformAdmin/DataFlowAdminPanel'
 import OrganizationPage from './pages/Organization/OrganizationPage'
 import SettingsPage from './pages/Settings/SettingsPage'
+import { FeaturePackageProvider } from './contexts/FeaturePackageContext'
+import FeatureGuard from './components/access/FeatureGuard'
+import PackageSwitcher from './components/dev/PackageSwitcher'
 
 function App() {
   return (
     <BrowserRouter>
+      <FeaturePackageProvider>
       <Routes>
         {/* Login - public route */}
         <Route path="/login" element={<LoginPage />} />
         {/* MBSE Models - Full page experience outside MainLayout */}
-        <Route path="projects/:projectId/mbse-models" element={<MBSEModelsPage />} />
+        <Route path="projects/:projectId/mbse-models" element={<FeatureGuard moduleId="mbse-models"><MBSEModelsPage /></FeatureGuard>} />
         {/* Landing when unauthenticated, app when authenticated */}
         <Route path="/" element={<LandingOrApp />}>
           {/* Platform Admin - dedicated layout, no MainLayout sidebar */}
@@ -106,13 +110,13 @@ function App() {
             <Route path="organization" element={<OrganizationPage />} />
             <Route path="projects" element={<Navigate to="/" replace />} />
             <Route path="projects/:projectId" element={<ProjectLandingPage />} />
-            <Route path="projects/:projectId/stakeholder" element={<StakeholderPage />} />
-            <Route path="projects/:projectId/product-breakdown-structure" element={<PBSPage />} />
-            <Route path="projects/:projectId/requirements/settings" element={<RequirementsSettingsPage />} />
-            <Route path="projects/:projectId/requirements/dashboard" element={<RequirementsDashboardPage />} />
-            <Route path="projects/:projectId/requirements/traceability-views" element={<TraceabilityViewsPage />} />
-            <Route path="projects/:projectId/requirements" element={<RequirementsPage />} />
-            <Route path="projects/:projectId/tasks" element={<TasksPage />} />
+            <Route path="projects/:projectId/stakeholder" element={<FeatureGuard moduleId="stakeholder"><StakeholderPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/product-breakdown-structure" element={<FeatureGuard moduleId="product-breakdown-structure"><PBSPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/requirements/settings" element={<FeatureGuard moduleId="requirements"><RequirementsSettingsPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/requirements/dashboard" element={<FeatureGuard moduleId="requirements"><RequirementsDashboardPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/requirements/traceability-views" element={<FeatureGuard moduleId="requirements"><TraceabilityViewsPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/requirements" element={<FeatureGuard moduleId="requirements"><RequirementsPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/tasks" element={<FeatureGuard moduleId="tasks"><TasksPage /></FeatureGuard>} />
             <Route path="tasks">
             <Route index element={<TasksDashboardPage />} />
             <Route path="my-tasks" element={<MyTasksPage />} />
@@ -126,32 +130,32 @@ function App() {
             <Route path="notifications" element={<TaskNotificationsPage />} />
               <Route path="settings" element={<TaskSettingsPage />} />
             </Route>
-              <Route path="projects/:projectId/functions" element={<SystemFunctionsPage />} />
-            <Route path="projects/:projectId/parameters/settings" element={<ParameterSettingsPage />} />
-            <Route path="projects/:projectId/parameters" element={<ParametersPage />} />
-            <Route path="projects/:projectId/change-requests" element={<ChangeRequestsPage />} />
+              <Route path="projects/:projectId/functions" element={<FeatureGuard moduleId="functions"><SystemFunctionsPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/parameters/settings" element={<FeatureGuard moduleId="parameters"><ParameterSettingsPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/parameters" element={<FeatureGuard moduleId="parameters"><ParametersPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/change-requests" element={<FeatureGuard moduleId="change-requests"><ChangeRequestsPage /></FeatureGuard>} />
             <Route path="projects/:projectId/architecture" element={<ArchitecturePage />} />
             <Route path="projects/:projectId/reports" element={<ReportsPage />} />
-            <Route path="projects/:projectId/verification" element={<VerificationLayoutPage />}>
+            <Route path="projects/:projectId/verification" element={<FeatureGuard moduleId="verification"><VerificationLayoutPage /></FeatureGuard>}>
             <Route index element={<VerificationPage />} />
             <Route path="report/:entityType/:entityId" element={<VerificationReportPage />} />
             <Route path="settings" element={<VerificationSettingsPage />} />
             <Route path="templates" element={<TemplatesLandingPage />} />
               <Route path="templates/:templateId" element={<TemplateEditorPage />} />
             </Route>
-              <Route path="projects/:projectId/issues/:issueId" element={<IssueDetailPage />} />
-            <Route path="projects/:projectId/issues" element={<IssuesPage />} />
-            <Route path="projects/:projectId/documentation" element={<DocumentationPage />} />
-            <Route path="projects/:projectId/lifecycle-status" element={<LifecycleStatusPage />} />
-            <Route path="projects/:projectId/certification" element={<CertificationPage />} />
-            <Route path="projects/:projectId/validation" element={<ValidationPage />} />
-            <Route path="projects/:projectId/risk-management" element={<RiskManagementPage />} />
-            <Route path="projects/:projectId/interface-management" element={<InterfaceManagementPage />} />
-            <Route path="projects/:projectId/configuration-management" element={<ConfigurationManagementPage />} />
-            <Route path="projects/:projectId/archive" element={<ArchivePage />} />
-            <Route path="projects/:projectId/audit" element={<AuditLogPage />} />
-            <Route path="projects/:projectId/compliance-check" element={<ComplianceCheckPage />} />
-            <Route path="projects/:projectId/safety-analysis" element={<SafetyLayoutPage />}>
+              <Route path="projects/:projectId/issues/:issueId" element={<FeatureGuard moduleId="issues"><IssueDetailPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/issues" element={<FeatureGuard moduleId="issues"><IssuesPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/documentation" element={<FeatureGuard moduleId="documentation"><DocumentationPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/lifecycle-status" element={<FeatureGuard moduleId="lifecycle-status"><LifecycleStatusPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/certification" element={<FeatureGuard moduleId="certification"><CertificationPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/validation" element={<FeatureGuard moduleId="validation"><ValidationPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/risk-management" element={<FeatureGuard moduleId="risk-management"><RiskManagementPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/interface-management" element={<FeatureGuard moduleId="interface-management"><InterfaceManagementPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/configuration-management" element={<FeatureGuard moduleId="configuration-management"><ConfigurationManagementPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/archive" element={<FeatureGuard moduleId="archive"><ArchivePage /></FeatureGuard>} />
+            <Route path="projects/:projectId/audit" element={<FeatureGuard moduleId="audit"><AuditLogPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/compliance-check" element={<FeatureGuard moduleId="compliance-check"><ComplianceCheckPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/safety-analysis" element={<FeatureGuard moduleId="safety-analysis"><SafetyLayoutPage /></FeatureGuard>}>
             <Route index element={<Navigate to="overview" replace />} />
             <Route path="overview" element={<SafetyOverviewPage />} />
             <Route path="hazards" element={<HazardsPage />} />
@@ -186,6 +190,8 @@ function App() {
           </Route>
         </Route>
       </Routes>
+      <PackageSwitcher />
+      </FeaturePackageProvider>
     </BrowserRouter>
   )
 }
