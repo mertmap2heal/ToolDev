@@ -1877,29 +1877,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const updatedRequirement = await prisma.requirement.update({
-      where: { id: requirement.id },
-      data: updateData,
-      include: {
-        parent: {
-          select: {
-            id: true,
-            requirementId: true,
-            title: true,
-          },
-        },
-        children: {
-          select: {
-            id: true,
-            requirementId: true,
-            title: true,
-          },
-        },
-        moc: true,
-      },
-    })
-
-    // Mark downstream trace links as suspect when meaningful fields change
+    // Determine which meaningful fields are changing (depends only on request body)
     const changedFields: string[] = []
     if (title !== undefined) changedFields.push('title')
     if (description !== undefined) changedFields.push('description')
@@ -1922,6 +1900,65 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       changedFields.push('requirementId')
     }
 
+    // Atomic core: update the requirement and mark trace links suspect in one transaction
+    // so a mid-flight crash cannot leave traceability state inconsistent with the requirement.
+    const updatedRequirement = await prisma.$transaction(async (tx) => {
+      const updated = await tx.requirement.update({
+        where: { id: requirement.id },
+        data: updateData,
+        include: {
+          parent: {
+            select: {
+              id: true,
+              requirementId: true,
+              title: true,
+            },
+          },
+          children: {
+            select: {
+              id: true,
+              requirementId: true,
+              title: true,
+            },
+          },
+          moc: true,
+        },
+      })
+
+      if (changedFields.length > 0) {
+        // Mark all requirement-to-requirement trace links suspect
+        await tx.traceLink.updateMany({
+          where: {
+            projectId,
+            OR: [
+              { sourceId: requirement.id, sourceType: 'requirement' },
+              { targetId: requirement.id, targetType: 'requirement' },
+            ],
+          },
+          data: { isSuspect: true },
+        })
+
+        // DO-178C Impact Analysis: mark linked VerTestCases suspect
+        const testCaseLinks = await tx.traceLink.findMany({
+          where: {
+            projectId,
+            targetId: requirement.id,
+            targetType: 'requirement',
+            sourceType: 'test_case',
+          },
+          select: { sourceId: true },
+        })
+        if (testCaseLinks.length > 0) {
+          await tx.verTestCase.updateMany({
+            where: { id: { in: testCaseLinks.map(l => l.sourceId) }, projectId },
+            data: { isSuspect: true, invalidatedAt: new Date() },
+          })
+        }
+      }
+
+      return updated
+    })
+
     await syncRequirementParameterLinks(
       projectId,
       requirement.id,
@@ -1936,39 +1973,6 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
         requirement.id,
         changedFields
       )
-      // Also mark all requirement-to-requirement links (both directions) for full coverage
-      await prisma.traceLink.updateMany({
-        where: {
-          projectId,
-          OR: [
-            { sourceId: requirement.id, sourceType: 'requirement' },
-            { targetId: requirement.id, targetType: 'requirement' },
-          ],
-        },
-        data: { isSuspect: true },
-      })
-
-      // DO-178C Impact Analysis - Mark linked VerTestCases as suspect
-      const testCaseLinks = await prisma.traceLink.findMany({
-        where: {
-          projectId,
-          targetId: requirement.id,
-          targetType: 'requirement',
-          sourceType: 'test_case'
-        },
-        select: { sourceId: true }
-      })
-
-      if (testCaseLinks.length > 0) {
-        const testCaseIds = testCaseLinks.map(l => l.sourceId)
-        await prisma.verTestCase.updateMany({
-          where: { id: { in: testCaseIds }, projectId },
-          data: {
-            isSuspect: true,
-            invalidatedAt: new Date()
-          }
-        })
-      }
     }
 
     await linkageAuditService.log({
@@ -1994,7 +1998,8 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
     }
 
     const changes = buildRequirementChangeSummary(requirement, updatedRequirement as any)
-    await notifyRequirementSubscribers({
+    // Fire-and-forget: notification failure must not cause the update endpoint to return 500
+    notifyRequirementSubscribers({
       projectId,
       requirementId: requirement.id,
       actorUserId: req.userId,
@@ -2004,7 +2009,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
         requirementId: updatedRequirement.requirementId,
         title: updatedRequirement.title,
       },
-    })
+    }).catch(err => console.error('[updateRequirement] Notification failed (non-fatal):', err))
 
     res.json({
       success: true,
