@@ -2,6 +2,22 @@
 export const getProjectAuditLogs = async (req: AuthRequest, res: Response) => {
   try {
     const { id: projectId } = req.params;
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    // Verify the requesting user is a member (or owner) of the project
+    const project = await prisma.project.findFirst({
+      where: {
+        id: projectId,
+        OR: [
+          { userId },
+          { teamMembers: { some: { userId, status: 'accepted' } } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (!project) return res.status(403).json({ success: false, error: 'Forbidden' });
+
     const logs = await prisma.auditLog.findMany({
       where: { projectId },
       orderBy: { createdAt: 'desc' },
