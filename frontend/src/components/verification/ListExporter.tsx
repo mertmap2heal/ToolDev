@@ -1390,9 +1390,8 @@ export default function ListExporter({
                   if (yTc > h - 80) { doc.addPage(); yTc = 24 }
                   const maxImgW = contentW
                   const maxImgH = 80
-                  const ratio = Math.min(maxImgW / (imgData.width || maxImgW), maxImgH / (imgData.height || maxImgH))
-                  const imgW = (imgData.width || maxImgW) * ratio
-                  const imgH = (imgData.height || maxImgH) * ratio
+                  const imgW = maxImgW
+                  const imgH = maxImgH
                   doc.addImage(imgData.dataUrl, 'PNG', m, yTc, imgW, imgH)
                   yTc += imgH + 6
                 }
