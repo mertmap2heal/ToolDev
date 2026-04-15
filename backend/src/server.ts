@@ -9,7 +9,7 @@ import feedbackRoutes from './routes/feedback.routes.js'
 import http from 'http'
 import { setupRealtime } from './realtime/realtime.js'
 
-dotenv.config({ override: true })
+dotenv.config()
 
 console.log('Server: loading Prisma and routes...')
 
