@@ -22,3 +22,4 @@ Detailed reference guides for patterns, pitfalls, and conventions:
 @.claude/kb/infrastructure.md
 @.claude/kb/user-manual-standards.md
 @.claude/kb/feature-flags.md
+@.claude/kb/pre-launch-risks.md

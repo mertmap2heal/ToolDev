@@ -37,6 +37,9 @@ Thumbs.db
 coverage/
 .nyc_output/
 
+# Backups (produced at runtime by the backup sidecar)
+backups/
+
 # Misc
 *.pem
 .cache/
