@@ -9,9 +9,11 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
+// Canonical uploads root — all filesystem operations must stay within this directory
+const UPLOADS_BASE = path.resolve(__dirname, '../../uploads')
 
 // Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, '../../uploads/tasks')
+const uploadsDir = path.join(UPLOADS_BASE, 'tasks')
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true })
 }
@@ -142,7 +144,17 @@ export const deleteAttachment = async (req: AuthRequest, res: Response) => {
 
     // Delete file if it's stored on filesystem
     if (attachment.fileUrl && !attachment.fileUrl.startsWith('data:') && attachment.fileUrl.startsWith('/uploads/')) {
-      const filePath = path.join(__dirname, '../..', attachment.fileUrl)
+      // Strip the leading /uploads/ prefix so the remainder is relative to UPLOADS_BASE,
+      // then resolve to an absolute path and verify it stays within UPLOADS_BASE
+      // (defence-in-depth against traversal sequences stored in fileUrl)
+      const relativePath = attachment.fileUrl.slice('/uploads/'.length)
+      const filePath = path.resolve(UPLOADS_BASE, relativePath)
+      if (!filePath.startsWith(UPLOADS_BASE + path.sep)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid attachment path',
+        })
+      }
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath)
       }
