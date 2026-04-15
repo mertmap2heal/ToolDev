@@ -29,9 +29,9 @@ import {
 const router = Router()
 
 // Bulk actions (must be before :id routes)
-router.post('/bulk-update', bulkUpdateProjects)
-router.post('/import', importProjects)
-router.get('/export', exportProjects)
+router.post('/bulk-update', authenticateToken, bulkUpdateProjects)
+router.post('/import', authenticateToken, importProjects)
+router.get('/export', authenticateToken, exportProjects)
 
 // Project CRUD
 router.post('/', createProject)
@@ -81,7 +81,7 @@ router.post('/:id/invitations/accept', authenticateToken, resolveProjectParam, a
 router.post('/:id/invitations/decline', authenticateToken, resolveProjectParam, declineProjectInvitation)
 
 // Audit logs and analytics
-router.get('/:id/audit-logs', resolveProjectParam, getProjectAuditLogs)
+router.get('/:id/audit-logs', authenticateToken, resolveProjectParam, getProjectAuditLogs)
 router.get('/:id/analytics', resolveProjectParam, getProjectAnalytics)
 
 export default router

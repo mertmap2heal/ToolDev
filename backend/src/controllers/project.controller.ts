@@ -25,8 +25,24 @@ export const getProjectAnalytics = async (req: AuthRequest, res: Response) => {
 
 export const bulkUpdateProjects = async (req: AuthRequest, res: Response) => {
   try {
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
     const { ids, updates } = req.body;
     if (!Array.isArray(ids) || !updates) return res.status(400).json({ success: false, error: 'Invalid payload.' });
+    // Verify the requesting user is owner or accepted member of every project ID
+    const accessible = await prisma.project.findMany({
+      where: {
+        id: { in: ids },
+        OR: [
+          { userId },
+          { teamMembers: { some: { userId, status: 'accepted' } } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (accessible.length !== ids.length) {
+      return res.status(403).json({ success: false, error: 'Access denied to one or more projects.' });
+    }
     const result = await prisma.project.updateMany({ where: { id: { in: ids } }, data: updates });
     res.json({ success: true, data: result });
   } catch (error) {
@@ -36,7 +52,16 @@ export const bulkUpdateProjects = async (req: AuthRequest, res: Response) => {
 
 export const exportProjects = async (req: AuthRequest, res: Response) => {
   try {
-    const projects = await prisma.project.findMany();
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+    const projects = await prisma.project.findMany({
+      where: {
+        OR: [
+          { userId },
+          { teamMembers: { some: { userId, status: 'accepted' } } },
+        ],
+      },
+    });
     res.json({ success: true, data: projects });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Export failed.' });
@@ -45,14 +70,25 @@ export const exportProjects = async (req: AuthRequest, res: Response) => {
 
 export const importProjects = async (req: AuthRequest, res: Response) => {
   try {
-    const { projects } = req.body;
-    if (!Array.isArray(projects)) return res.status(400).json({ success: false, error: 'Invalid payload.' });
-    const created = await prisma.project.createMany({ data: projects });
-    res.json({ success: true, data: created });
+    const userId = req.userId
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' })
+
+    const { projects } = req.body
+    if (!Array.isArray(projects)) return res.status(400).json({ success: false, error: 'Invalid payload.' })
+
+    // Stamp the authenticated user's ID on every imported project so records
+    // are always owned by the caller and cannot be assigned to arbitrary users.
+    const projectsWithOwner = (projects as Record<string, unknown>[]).map(p => ({
+      ...p,
+      userId,
+    }))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const created = await prisma.project.createMany({ data: projectsWithOwner as any })
+    res.json({ success: true, data: created })
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Import failed.' });
+    res.status(500).json({ success: false, error: 'Import failed.' })
   }
-};
+}
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
