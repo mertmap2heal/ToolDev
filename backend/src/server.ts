@@ -26,7 +26,13 @@ app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ extended: true, limit: '50mb' }))
 
 // Serve static files from uploads directory
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
+// Force browser to download rather than execute/render uploaded content
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
+  setHeaders: (res) => {
+    res.setHeader('Content-Disposition', 'attachment')
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+  },
+}))
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' })
