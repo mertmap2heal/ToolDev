@@ -36,6 +36,14 @@ const SUPERIOR_ADMIN = {
  *   SEED_PASSWORD_ADMIN      - password for admin (platform admin)
  */
 async function seedUsers() {
+  // Fail fast if any seed password env var is missing — never seed with placeholder passwords
+  const missing = ['SEED_PASSWORD_MERT', 'SEED_PASSWORD_CHRISTIAN', 'SEED_PASSWORD_ADMIN']
+    .filter(key => !process.env[key])
+  if (missing.length > 0) {
+    console.error(`Error: required env var(s) not set: ${missing.join(', ')}`)
+    console.error('Set them in backend/.env or your shell before running seed:users')
+    process.exit(1)
+  }
   try {
     for (const u of USERS) {
       const hashedPassword = await bcrypt.hash(u.password, 10)
