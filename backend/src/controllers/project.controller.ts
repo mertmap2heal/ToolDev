@@ -70,14 +70,25 @@ export const exportProjects = async (req: AuthRequest, res: Response) => {
 
 export const importProjects = async (req: AuthRequest, res: Response) => {
   try {
-    const { projects } = req.body;
-    if (!Array.isArray(projects)) return res.status(400).json({ success: false, error: 'Invalid payload.' });
-    const created = await prisma.project.createMany({ data: projects });
-    res.json({ success: true, data: created });
+    const userId = req.userId
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' })
+
+    const { projects } = req.body
+    if (!Array.isArray(projects)) return res.status(400).json({ success: false, error: 'Invalid payload.' })
+
+    // Stamp the authenticated user's ID on every imported project so records
+    // are always owned by the caller and cannot be assigned to arbitrary users.
+    const projectsWithOwner = (projects as Record<string, unknown>[]).map(p => ({
+      ...p,
+      userId,
+    }))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const created = await prisma.project.createMany({ data: projectsWithOwner as any })
+    res.json({ success: true, data: created })
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Import failed.' });
+    res.status(500).json({ success: false, error: 'Import failed.' })
   }
-};
+}
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
