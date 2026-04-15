@@ -96,13 +96,24 @@ if (process.env.NODE_ENV !== 'test') {
 
     // Schedule cleanup job (daily)
     import('./services/cleanup.service.js').then(({ cleanupSoftDeletedRequirements }) => {
+      const runCleanup = (trigger: string) => {
+        cleanupSoftDeletedRequirements().catch((err: Error) => {
+          // Log as structured JSON so monitoring tools can alert on this event.
+          // Newlines are sanitized to prevent log-record splitting in aggregators.
+          console.error(JSON.stringify({
+            event: 'cleanup_job_failed',
+            trigger,
+            error: err.message.replace(/[\r\n]+/g, ' '),
+            timestamp: new Date().toISOString(),
+          }))
+        })
+      }
+
       // Run immediately on startup (for dev/demo purposes)
-      cleanupSoftDeletedRequirements().catch(err => console.error('Cleanup startup error:', err))
+      runCleanup('startup')
 
       // Schedule daily (86400000 ms)
-      setInterval(() => {
-        cleanupSoftDeletedRequirements().catch(err => console.error('Cleanup interval error:', err))
-      }, 24 * 60 * 60 * 1000)
+      setInterval(() => runCleanup('scheduled'), 24 * 60 * 60 * 1000)
     })
   }).on('error', (err: NodeJS.ErrnoException) => {
     console.error('Server failed to listen:', err.message)
