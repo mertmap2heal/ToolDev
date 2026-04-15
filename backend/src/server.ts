@@ -25,6 +25,17 @@ app.use(cors())
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ extended: true, limit: '50mb' }))
 
+// Security headers applied to every response (#29)
+// X-Frame-Options: DENY — prevents this API from being embedded in a foreign frame (no backend HTML pages exist)
+// X-Content-Type-Options: nosniff — browsers must use the declared Content-Type, not sniff
+// Referrer-Policy — prevents full URL paths (containing project IDs) leaking to third-party origins
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  next()
+})
+
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
 
