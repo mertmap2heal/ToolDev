@@ -42,6 +42,7 @@ import { resolveParameterPlaceholders, editorSpansToPlaceholders } from '../../u
 import { parameterService } from '../../services/parameter.service'
 import { definitionEntryService } from '../../services/definitionEntry.service'
 import { injectGlossaryTerms } from '../../utils/glossaryTerms'
+import DOMPurify from 'dompurify'
 import RequirementRichTextField from './RequirementRichTextField'
 
 interface RequirementDetailDrawerProps {
@@ -1133,7 +1134,12 @@ export default function RequirementDetailDrawer({
     enabled: isOpen && !!projectId,
   })
   const descriptionWithGlossary = useMemo(() => {
-    return injectGlossaryTerms(resolvedDescription, definitionEntries as { id: string; term: string; definition: string; notes?: string | null; type?: 'glossary' | 'abbreviation' }[])
+    // First pass: sanitize raw input before glossary injection
+    const sanitized = DOMPurify.sanitize(resolvedDescription ?? '')
+    // Inject glossary spans (adds <span data-definition-id> markup)
+    const withGlossary = injectGlossaryTerms(sanitized, definitionEntries as { id: string; term: string; definition: string; notes?: string | null; type?: 'glossary' | 'abbreviation' }[])
+    // Second pass: sanitize again after injection so injected attributes are safe
+    return DOMPurify.sanitize(withGlossary, { ADD_ATTR: ['data-definition-id'] })
   }, [resolvedDescription, definitionEntries])
 
   const showToast = (message: string) => setToastMessage(message)
@@ -2642,7 +2648,7 @@ export default function RequirementDetailDrawer({
 
                               <div
                                 className="prose prose-sm dark:prose-invert max-w-none border-none p-0 min-h-0 bg-transparent"
-                                dangerouslySetInnerHTML={{ __html: comment.content }}
+                                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(comment.content) }}
                               />
                             </div>
                           </div>
