@@ -25,8 +25,25 @@ app.use(cors())
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ extended: true, limit: '50mb' }))
 
+// Security headers applied to every response (#29)
+// X-Frame-Options: DENY — prevents this API from being embedded in a foreign frame (no backend HTML pages exist)
+// X-Content-Type-Options: nosniff — browsers must use the declared Content-Type, not sniff
+// Referrer-Policy — prevents full URL paths (containing project IDs) leaking to third-party origins
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  next()
+})
+
 // Serve static files from uploads directory
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
+// Force browser to download rather than execute/render uploaded content
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
+  setHeaders: (res) => {
+    res.setHeader('Content-Disposition', 'attachment')
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+  },
+}))
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' })
@@ -96,13 +113,24 @@ if (process.env.NODE_ENV !== 'test') {
 
     // Schedule cleanup job (daily)
     import('./services/cleanup.service.js').then(({ cleanupSoftDeletedRequirements }) => {
+      const runCleanup = (trigger: string) => {
+        cleanupSoftDeletedRequirements().catch((err: Error) => {
+          // Log as structured JSON so monitoring tools can alert on this event.
+          // Newlines are sanitized to prevent log-record splitting in aggregators.
+          console.error(JSON.stringify({
+            event: 'cleanup_job_failed',
+            trigger,
+            error: err.message.replace(/[\r\n]+/g, ' '),
+            timestamp: new Date().toISOString(),
+          }))
+        })
+      }
+
       // Run immediately on startup (for dev/demo purposes)
-      cleanupSoftDeletedRequirements().catch(err => console.error('Cleanup startup error:', err))
+      runCleanup('startup')
 
       // Schedule daily (86400000 ms)
-      setInterval(() => {
-        cleanupSoftDeletedRequirements().catch(err => console.error('Cleanup interval error:', err))
-      }, 24 * 60 * 60 * 1000)
+      setInterval(() => runCleanup('scheduled'), 24 * 60 * 60 * 1000)
     })
   }).on('error', (err: NodeJS.ErrnoException) => {
     console.error('Server failed to listen:', err.message)
