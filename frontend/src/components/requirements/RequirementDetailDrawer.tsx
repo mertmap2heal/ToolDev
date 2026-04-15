@@ -1134,8 +1134,12 @@ export default function RequirementDetailDrawer({
     enabled: isOpen && !!projectId,
   })
   const descriptionWithGlossary = useMemo(() => {
+    // First pass: sanitize raw input before glossary injection
     const sanitized = DOMPurify.sanitize(resolvedDescription ?? '')
-    return injectGlossaryTerms(sanitized, definitionEntries as { id: string; term: string; definition: string; notes?: string | null; type?: 'glossary' | 'abbreviation' }[])
+    // Inject glossary spans (adds <span data-definition-id> markup)
+    const withGlossary = injectGlossaryTerms(sanitized, definitionEntries as { id: string; term: string; definition: string; notes?: string | null; type?: 'glossary' | 'abbreviation' }[])
+    // Second pass: sanitize again after injection so injected attributes are safe
+    return DOMPurify.sanitize(withGlossary, { ADD_ATTR: ['data-definition-id'] })
   }, [resolvedDescription, definitionEntries])
 
   const showToast = (message: string) => setToastMessage(message)
