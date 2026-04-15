@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import DOMPurify from 'dompurify'
 import {
   ChevronDown,
   ChevronRight,
@@ -166,8 +167,11 @@ export default function IconLibrary({
       if (icon.svg.startsWith('data:')) {
         return <img src={icon.svg} alt={icon.name} width={size} height={size} />
       }
-      // Replace currentColor with a specific color for better visibility
-      const coloredSvg = icon.svg.replace(/currentColor/g, '#374151')
+      // Replace currentColor then sanitize before rendering — prevents stored XSS (#28)
+      const coloredSvg = DOMPurify.sanitize(
+        icon.svg.replace(/currentColor/g, '#374151'),
+        { USE_PROFILES: { svg: true, svgFilters: true } }
+      )
       return (
         <div
           dangerouslySetInnerHTML={{ __html: coloredSvg }}
@@ -280,8 +284,11 @@ export function renderIconSvg(icon: IconDefinition, size: number = 24, color?: s
     if (icon.svg.startsWith('data:')) {
       return <img src={icon.svg} alt={icon.name} width={size} height={size} />
     }
-    // Replace currentColor with a specific color for better visibility
-    const coloredSvg = icon.svg.replace(/currentColor/g, '#374151')
+    // Replace currentColor then sanitize before rendering — prevents stored XSS (#28)
+    const coloredSvg = DOMPurify.sanitize(
+      icon.svg.replace(/currentColor/g, '#374151'),
+      { USE_PROFILES: { svg: true, svgFilters: true } }
+    )
     return (
       <div
         dangerouslySetInnerHTML={{ __html: coloredSvg }}
