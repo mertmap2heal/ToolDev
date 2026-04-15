@@ -71,8 +71,27 @@ export const cleanupSoftDeletedRequirements = async () => {
                 })
                 deletedCount++
             } catch (err) {
+                const errMsg = err instanceof Error ? err.message : String(err)
                 console.error(`[Cleanup] Failed to delete requirement ${req.id}:`, err)
                 errorCount++
+                // Persist the failure as an audit event so operators can query it after a restart
+                await prisma.verAuditEvent.create({
+                    data: {
+                        projectId: req.projectId,
+                        entityType: 'REQUIREMENT',
+                        entityId: req.id,
+                        action: 'REQUIREMENT_CLEANUP_ERROR',
+                        oldValue: {
+                            requirementId: req.requirementId,
+                            title: req.title,
+                            error: errMsg,
+                        },
+                        performedByUserId: 'SYSTEM_CLEANUP',
+                    },
+                }).catch((auditErr: unknown) => {
+                    // Never let audit logging crash the outer loop
+                    console.error('[Cleanup] Failed to write audit error event:', auditErr)
+                })
             }
         }
 
@@ -84,6 +103,7 @@ export const cleanupSoftDeletedRequirements = async () => {
             errors: errorCount,
             errorRate: errorRate.toFixed(2),
             success: errorCount === 0,
+            timestamp: new Date().toISOString(),
         }))
 
         // Fail loudly if more than 10% of items errored — caller (scheduler) should alert
