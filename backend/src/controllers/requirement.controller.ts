@@ -1555,6 +1555,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       thresholdValue,
       objectiveValue,
       customAttributes,
+      version: clientVersion,
     } = req.body
 
     // Find the requirement
@@ -1572,6 +1573,15 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({
         success: false,
         error: 'Requirement not found',
+      })
+    }
+
+    // Optimistic locking: if client supplies a version, it must match the stored version
+    if (clientVersion !== undefined && clientVersion !== requirement.version) {
+      return res.status(409).json({
+        success: false,
+        error: 'Requirement was modified by another user. Please refresh and try again.',
+        currentVersion: requirement.version,
       })
     }
 
@@ -1688,6 +1698,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
 
     // Build update data object, conditionally including requirementId only when it should be updated
     const updateData: any = {
+      version: { increment: 1 },
       title,
       description,
       parentId: parentId !== undefined ? (parentId || null) : undefined,

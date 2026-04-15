@@ -452,6 +452,9 @@ model Requirement {
   restoredAt         DateTime?
   restoredById       String?
 
+  // Optimistic locking — increment on every write; client must echo current value
+  version            Int       @default(1)
+
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
