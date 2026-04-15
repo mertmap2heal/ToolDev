@@ -1486,7 +1486,13 @@ export const unlockRequirement = async (req: AuthRequest, res: Response) => {
       return res.json({ success: true, data: requirement })
     }
 
-    if (requirement.lockedByUserId !== userId) {
+    // Allow admins to force-unlock any requirement (prevents lock-based DoS)
+    const isAdmin = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    }).then(u => u?.role === 'SUPERIOR_ADMIN' || u?.role === 'COMPANY_ADMIN').catch(() => false)
+
+    if (requirement.lockedByUserId !== userId && !isAdmin) {
       return res.status(403).json({
         success: false,
         error: 'Only the user who locked the requirement can unlock it',
@@ -1914,8 +1920,11 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
     // Atomic core: update the requirement and mark trace links suspect in one transaction
     // so a mid-flight crash cannot leave traceability state inconsistent with the requirement.
     const updatedRequirement = await prisma.$transaction(async (tx) => {
+      // isLocked: false enforces the lock at the DB level — if a concurrent request
+      // locked the requirement between our fetch and this write, Prisma throws P2025
+      // instead of silently overwriting the locked record (#34).
       const updated = await tx.requirement.update({
-        where: { id: requirement.id },
+        where: { id: requirement.id, isLocked: false },
         data: updateData,
         include: {
           parent: {
@@ -2032,6 +2041,22 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
   } catch (error: any) {
     console.error('Update requirement error:', error)
 
+    // P2025 = Prisma record-not-found. Re-query to distinguish two cases (#34):
+    //   locked between fetch and write → 409 Conflict
+    //   deleted between fetch and write → 404 Not Found
+    // Guard on modelName to avoid misidentifying a nested-write P2025 as a lock failure.
+    if (error?.code === 'P2025' && (!error?.meta?.modelName || error?.meta?.modelName === 'Requirement')) {
+      const { projectId, requirementId } = req.params
+      const check = await prisma.requirement.findFirst({
+        where: { projectId, OR: [{ id: requirementId }, { requirementId }] },
+        select: { isLocked: true },
+      }).catch(() => null)
+      if (check?.isLocked) {
+        return res.status(409).json({ success: false, error: 'Requirement was locked by a concurrent request. Please refresh and try again.' })
+      }
+      return res.status(404).json({ success: false, error: 'Requirement not found' })
+    }
+
     let errorMessage = 'Internal server error'
     if (error?.message) {
       errorMessage = error.message
@@ -2090,12 +2115,13 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
     if (requirement.children.length > 0) {
       const childrenToDelete = req.body.childrenToDelete || [] // IDs of children to delete
 
-      // 1. Soft delete selected children
+      // 1. Soft delete selected children — skip any that are locked (#34)
       if (childrenToDelete.length > 0) {
         await prisma.requirement.updateMany({
           where: {
             id: { in: childrenToDelete },
-            parentId: requirement.id
+            parentId: requirement.id,
+            isLocked: false,
           },
           data: {
             deletedAt: new Date(),
@@ -2194,9 +2220,9 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Soft delete the requirement
+    // Soft delete the requirement — isLocked: false enforces the lock at DB level (#34)
     const deletedRequirement = await prisma.requirement.update({
-      where: { id: requirement.id },
+      where: { id: requirement.id, isLocked: false },
       data: {
         deletedAt: new Date(),
         deletedById: req.userId,
@@ -2236,8 +2262,19 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
       success: true,
       message: 'Requirement moved to trash successfully',
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Delete requirement error:', error)
+    if (error?.code === 'P2025' && (!error?.meta?.modelName || error?.meta?.modelName === 'Requirement')) {
+      const { projectId, requirementId } = req.params
+      const check = await prisma.requirement.findFirst({
+        where: { projectId, OR: [{ id: requirementId }, { requirementId }] },
+        select: { isLocked: true },
+      }).catch(() => null)
+      if (check?.isLocked) {
+        return res.status(409).json({ success: false, error: 'Requirement was locked by a concurrent request. Please refresh and try again.' })
+      }
+      return res.status(404).json({ success: false, error: 'Requirement not found' })
+    }
     res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -2626,7 +2663,7 @@ export const updateRequirementParent = async (req: AuthRequest, res: Response) =
     }
 
     const updatedRequirement = await prisma.requirement.update({
-      where: { id: requirement.id },
+      where: { id: requirement.id, isLocked: false },
       data: {
         parentId: newParentId || null,
       },
@@ -2668,6 +2705,17 @@ export const updateRequirementParent = async (req: AuthRequest, res: Response) =
     })
   } catch (error: any) {
     console.error('Update requirement parent error:', error)
+    if (error?.code === 'P2025' && (!error?.meta?.modelName || error?.meta?.modelName === 'Requirement')) {
+      const { projectId, requirementId } = req.params
+      const check = await prisma.requirement.findFirst({
+        where: { projectId, OR: [{ id: requirementId }, { requirementId }] },
+        select: { isLocked: true },
+      }).catch(() => null)
+      if (check?.isLocked) {
+        return res.status(409).json({ success: false, error: 'Requirement was locked by a concurrent request. Please refresh and try again.' })
+      }
+      return res.status(404).json({ success: false, error: 'Requirement not found' })
+    }
     res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -2708,12 +2756,14 @@ export const bulkUpdateRequirements = async (req: AuthRequest, res: Response) =>
       },
     })
 
+    // isLocked: false ensures locked requirements are silently skipped rather than overwritten (#34)
     const result = await prisma.requirement.updateMany({
       where: {
         projectId,
         id: {
           in: requirementIds,
         },
+        isLocked: false,
       },
       data: updateData,
     })
@@ -2745,10 +2795,13 @@ export const bulkUpdateRequirements = async (req: AuthRequest, res: Response) =>
       })
     )
 
+    const skippedDueToLock = beforeRequirements.filter(r => r.isLocked).length
+
     res.json({
       success: true,
-      message: `Updated ${result.count} requirement(s)`,
+      message: `Updated ${result.count} requirement(s)${skippedDueToLock > 0 ? `, ${skippedDueToLock} skipped (locked)` : ''}`,
       count: result.count,
+      skippedDueToLock,
     })
   } catch (error) {
     console.error('Bulk update requirements error:', error)
@@ -2973,9 +3026,9 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
             console.warn('Failed to create version snapshot:', versionError)
           }
 
-          // Update requirement
+          // Update requirement — isLocked: false prevents overwriting locked records (#34)
           const updatedRequirement = await prisma.requirement.update({
-            where: { id: existing.id },
+            where: { id: existing.id, isLocked: false },
             data: {
               title: updateData.title !== undefined ? updateData.title : existing.title,
               description: updateData.description !== undefined ? updateData.description : existing.description,
@@ -3019,10 +3072,14 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
 
           updatedCount++
         } catch (error: any) {
+          // P2025: requirement was locked between our findFirst and the update — skip gracefully
+          const errorMsg = error?.code === 'P2025'
+            ? `Requirement is locked and cannot be updated via import`
+            : (error.message || 'Failed to update requirement')
           console.error(`Error updating requirement at row ${i}:`, error)
           errors.push({
             row: create ? create.length + i : i,
-            errors: [error.message || 'Failed to update requirement'],
+            errors: [errorMsg],
           })
           skippedCount++
         }
@@ -3282,7 +3339,7 @@ export const updateRequirementComponent = async (req: AuthRequest, res: Response
     }
 
     const updated = await prisma.requirement.update({
-      where: { id: requirement.id },
+      where: { id: requirement.id, isLocked: false },
       data: {
         componentId: componentId || null,
       },
@@ -3356,8 +3413,19 @@ export const updateRequirementComponent = async (req: AuthRequest, res: Response
       success: true,
       data: updated,
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Update requirement component error:', error)
+    if (error?.code === 'P2025' && (!error?.meta?.modelName || error?.meta?.modelName === 'Requirement')) {
+      const { projectId, requirementId } = req.params
+      const check = await prisma.requirement.findFirst({
+        where: { projectId, OR: [{ id: requirementId }, { requirementId }] },
+        select: { isLocked: true },
+      }).catch(() => null)
+      if (check?.isLocked) {
+        return res.status(409).json({ success: false, error: 'Requirement was locked by a concurrent request. Please refresh and try again.' })
+      }
+      return res.status(404).json({ success: false, error: 'Requirement not found' })
+    }
     res.status(500).json({
       success: false,
       error: 'Internal server error',
