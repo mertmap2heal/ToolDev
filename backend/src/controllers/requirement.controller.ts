@@ -1680,21 +1680,6 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Create version snapshot before updating (for version history)
-    // Wrap in try-catch to prevent version creation from blocking updates
-    try {
-      await createVersionSnapshot(
-        requirement.id,
-        projectId,
-        req.userId,
-        undefined,
-        'Updated via API'
-      )
-    } catch (versionError) {
-      // Log but don't fail the update if version creation fails
-      console.warn('Failed to create version snapshot:', versionError)
-    }
-
     let transitionChecklistSubmissionResults:
       | Array<{
           assignmentId: string
@@ -1917,9 +1902,21 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       changedFields.push('requirementId')
     }
 
-    // Atomic core: update the requirement and mark trace links suspect in one transaction
-    // so a mid-flight crash cannot leave traceability state inconsistent with the requirement.
+    // Atomic core: snapshot + update + trace-link suspect-marking in one transaction
+    // so a mid-flight crash cannot leave a version snapshot for a change that never
+    // committed, and cannot leave traceability state inconsistent (#23).
     const updatedRequirement = await prisma.$transaction(async (tx) => {
+      // Capture the pre-update state inside the transaction so the snapshot is only
+      // written if the update itself succeeds (#23 fix — was previously outside the tx).
+      await createVersionSnapshot(
+        requirement.id,
+        projectId,
+        req.userId,
+        undefined,
+        'Updated via API',
+        tx
+      )
+
       // isLocked: false enforces the lock at the DB level — if a concurrent request
       // locked the requirement between our fetch and this write, Prisma throws P2025
       // instead of silently overwriting the locked record (#34).
