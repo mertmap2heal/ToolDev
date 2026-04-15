@@ -34,8 +34,8 @@ router.post('/import', authenticateToken, importProjects)
 router.get('/export', authenticateToken, exportProjects)
 
 // Project CRUD
-router.post('/', createProject)
-router.get('/', getProjects)
+router.post('/', authenticateToken, createProject)
+router.get('/', authenticateToken, getProjects)
 
 // Stakeholder / engineering roles (project-scoped) — auth required
 router.get(
@@ -69,9 +69,9 @@ router.post(
   unassignProjectEngineeringRole
 )
 
-router.get('/:id', resolveProjectParam, getProject)
-router.put('/:id', resolveProjectParam, updateProject)
-router.delete('/:id', resolveProjectParam, deleteProject)
+router.get('/:id', authenticateToken, resolveProjectParam, getProject)
+router.put('/:id', authenticateToken, resolveProjectParam, updateProject)
+router.delete('/:id', authenticateToken, resolveProjectParam, deleteProject)
 
 // Team management
 router.get('/:id/members', authenticateToken, resolveProjectParam, getProjectMembers)
@@ -82,6 +82,6 @@ router.post('/:id/invitations/decline', authenticateToken, resolveProjectParam, 
 
 // Audit logs and analytics
 router.get('/:id/audit-logs', authenticateToken, resolveProjectParam, getProjectAuditLogs)
-router.get('/:id/analytics', resolveProjectParam, getProjectAnalytics)
+router.get('/:id/analytics', authenticateToken, resolveProjectParam, getProjectAnalytics)
 
 export default router
