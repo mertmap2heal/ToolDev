@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { Pin, PinOff, ChevronRight } from 'lucide-react'
 import clsx from 'clsx'
 import { MODULES, type ModuleCategory } from '../../config/ModuleConfiguration'
+import { useFeaturePackage } from '../../contexts/FeaturePackageContext'
 
 interface HeaderMegaMenuProps {
     activeCategory: ModuleCategory | null
@@ -14,10 +15,11 @@ interface HeaderMegaMenuProps {
 
 export default function HeaderMegaMenu({ activeCategory, projectId, pinnedIds, onTogglePin, isOpen, onClose }: HeaderMegaMenuProps) {
     const navigate = useNavigate()
+    const { isEnabled } = useFeaturePackage()
 
     if (!isOpen || !activeCategory) return null
 
-    const modules = MODULES.filter((m) => m.category === activeCategory)
+    const modules = MODULES.filter((m) => m.category === activeCategory && isEnabled(m.id))
 
     const handleNavigation = (route: string) => {
         if (projectId) {

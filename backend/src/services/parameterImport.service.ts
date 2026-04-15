@@ -165,6 +165,10 @@ export function parseJSON(content: string): ImportResult {
       p.maxValue = String(item.maxValue ?? item.max_value ?? item.max)
     if (item.formula)      p.formula      = String(item.formula)
     if (Array.isArray(item.tags)) p.tags  = (item.tags as unknown[]).map(String)
+    if (item.status) {
+      const s = String(item.status).toLowerCase()
+      if (['draft', 'approved', 'obsolete', 'review'].includes(s)) p.status = s
+    }
 
     parsed.push(p)
   }
@@ -316,20 +320,188 @@ export function parseMATLAB(content: string): ImportResult {
 }
 
 // ---------------------------------------------------------------------------
+// SysML / XMI parser (.xmi, .xml)
+// Handles two common shapes:
+//   1. UML/SysML ownedAttribute elements inside packagedElement blocks
+//      <ownedAttribute xmi:id="..." name="mass" type="Real">
+//        <ownedComment><body>Total system mass</body></ownedComment>
+//        <defaultValue xmi:type="uml:LiteralReal" value="12.5"/>
+//        <lowerValue .../> <upperValue .../>
+//      </ownedAttribute>
+//   2. SysML 2.0 ParameterUsage / ValueProperty elements
+// ---------------------------------------------------------------------------
+export function parseSysMLXMI(content: string): ImportResult {
+  const warnings: string[] = []
+  const parsed: ParsedParam[] = []
+
+  // Helper: extract a single XML attribute value
+  const attr = (tag: string, attrName: string): string | null => {
+    const re = new RegExp(`${attrName}="([^"]*)"`, 'i')
+    const m = re.exec(tag)
+    return m ? m[1] : null
+  }
+
+  // Collect all ownedAttribute / ownedMember / ValueProperty blocks
+  // We use a broad regex then parse each block individually
+  const blockPattern = /<(?:ownedAttribute|ownedMember|ValueProperty|ParameterUsage)\b([^>]*)>([\s\S]*?)<\/(?:ownedAttribute|ownedMember|ValueProperty|ParameterUsage)>/gi
+  let blockMatch: RegExpExecArray | null
+
+  // Also handle self-closing ownedAttribute tags (no children)
+  const selfClosingPattern = /<(?:ownedAttribute|ownedMember)\b([^/]*)\s*\/>/gi
+
+  const processBlock = (attrs: string, body: string | null) => {
+    const name = attr(attrs, 'name')
+    if (!name || name.trim() === '') return
+
+    const p: ParsedParam = { name: name.trim() }
+
+    // Description from <ownedComment><body>...</body></ownedComment>
+    const commentMatch = body ? /<body[^>]*>([\s\S]*?)<\/body>/i.exec(body) : null
+    if (commentMatch) p.description = commentMatch[1].replace(/<[^>]+>/g, '').trim()
+
+    // Default value from <defaultValue .* value="N"/> or <defaultValue ...>N</defaultValue>
+    if (body) {
+      const dvAttr = /<defaultValue\b[^>]*\bvalue="([^"]*)"/.exec(body)
+      if (dvAttr) p.defaultValue = dvAttr[1].trim()
+      else {
+        const dvBody = /<defaultValue[^>]*>([\s\S]*?)<\/defaultValue>/i.exec(body)
+        if (dvBody) p.defaultValue = dvBody[1].replace(/<[^>]+>/g, '').trim()
+      }
+    }
+
+    // Lower / upper bounds
+    if (body) {
+      const lv = /<lowerValue\b[^>]*\bvalue="([^"]*)"/.exec(body)
+      if (lv) p.minValue = lv[1].trim()
+      const uv = /<upperValue\b[^>]*\bvalue="([^"]*)"/.exec(body)
+      if (uv) p.maxValue = uv[1].trim()
+    }
+
+    // Unit from <unit name="..."/> or xmi:type="sysml:ValueProperty" unit="..."
+    const unitAttr = attr(attrs, 'unit')
+    if (unitAttr) p.unit = unitAttr.trim()
+    if (body) {
+      const unitEl = /<unit\b[^>]*\bname="([^"]*)"/.exec(body)
+      if (unitEl) p.unit = unitEl[1].trim()
+    }
+
+    // Data type hint from type="Real|Integer|String|Boolean" attr
+    const typeAttr = attr(attrs, 'type')
+    if (typeAttr) {
+      const t = typeAttr.split(':').pop()?.toLowerCase() ?? ''
+      if (t === 'real' || t === 'float' || t === 'double') p.dataType = 'float'
+      else if (t === 'integer' || t === 'int') p.dataType = 'int'
+      else if (t === 'boolean' || t === 'bool') p.dataType = 'bool'
+      else if (t === 'string') p.dataType = 'string'
+    }
+
+    parsed.push(p)
+  }
+
+  while ((blockMatch = blockPattern.exec(content)) !== null) {
+    processBlock(blockMatch[1], blockMatch[2])
+  }
+
+  let scMatch: RegExpExecArray | null
+  while ((scMatch = selfClosingPattern.exec(content)) !== null) {
+    processBlock(scMatch[1], null)
+  }
+
+  // Deduplicate by name (keep first occurrence)
+  const seen = new Set<string>()
+  const deduped = parsed.filter(p => {
+    if (seen.has(p.name)) return false
+    seen.add(p.name)
+    return true
+  })
+
+  if (deduped.length === 0) warnings.push('No parameter elements found in XMI file. Expected ownedAttribute, ValueProperty, or ParameterUsage elements.')
+
+  return { parsed: deduped, warnings }
+}
+
+// ---------------------------------------------------------------------------
+// AUTOSAR A2L / ASAP2 parser (.a2l)
+// Extracts CHARACTERISTIC and MEASUREMENT blocks.
+// Recognised fields: name (first word after /begin CHARACTERISTIC),
+//   LONG_IDENTIFIER (description), PHYS_UNIT, LOWER_LIMIT, UPPER_LIMIT,
+//   DEFAULT_VALUE
+// ---------------------------------------------------------------------------
+export function parseA2L(content: string): ImportResult {
+  const warnings: string[] = []
+  const parsed: ParsedParam[] = []
+
+  // Match /begin CHARACTERISTIC ... /end CHARACTERISTIC blocks
+  // Also handle /begin MEASUREMENT blocks (read-only signals, but useful)
+  const blockRe = /\/begin\s+(CHARACTERISTIC|MEASUREMENT)\s+([\s\S]*?)\/end\s+\1/gi
+  let blockMatch: RegExpExecArray | null
+
+  while ((blockMatch = blockRe.exec(content)) !== null) {
+    const blockBody = blockMatch[2]
+
+    // First token of the block body is the identifier
+    const firstLineMatch = blockBody.match(/^\s*(\S+)/)
+    if (!firstLineMatch) continue
+    const rawName = firstLineMatch[1].replace(/"/g, '').trim()
+    if (!rawName) continue
+
+    // Convert UPPER_CASE_IDENTIFIER to a readable name
+    const name = rawName
+      .split('_')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ')
+      .trim()
+
+    const p: ParsedParam = { name }
+
+    // LONG_IDENTIFIER "description text"
+    const descMatch = blockBody.match(/LONG_IDENTIFIER\s+"([^"]*)"/)
+    if (descMatch) p.description = descMatch[1].trim()
+
+    // PHYS_UNIT "unit"
+    const unitMatch = blockBody.match(/PHYS_UNIT\s+"([^"]*)"/)
+    if (unitMatch) p.unit = unitMatch[1].trim()
+
+    // DEFAULT_VALUE value  or  DEFAULT_VALUE "value"
+    const defValMatch = blockBody.match(/DEFAULT_VALUE\s+"?([^"\s]+)"?/)
+    if (defValMatch) p.defaultValue = defValMatch[1].trim()
+
+    // LOWER_LIMIT value
+    const lowerMatch = blockBody.match(/LOWER_LIMIT\s+([-\d.eE+]+)/)
+    if (lowerMatch) p.minValue = lowerMatch[1].trim()
+
+    // UPPER_LIMIT value
+    const upperMatch = blockBody.match(/UPPER_LIMIT\s+([-\d.eE+]+)/)
+    if (upperMatch) p.maxValue = upperMatch[1].trim()
+
+    parsed.push(p)
+  }
+
+  if (parsed.length === 0) warnings.push('No CHARACTERISTIC or MEASUREMENT blocks found in A2L file')
+
+  return { parsed, warnings }
+}
+
+// ---------------------------------------------------------------------------
 // Format auto-detector (by file extension or content sniffing)
 // ---------------------------------------------------------------------------
-export function detectFormat(filename: string, content: string): 'csv' | 'json' | 'c_header' | 'matlab' | null {
+export function detectFormat(filename: string, content: string): 'csv' | 'json' | 'c_header' | 'matlab' | 'a2l' | 'sysml_xmi' | null {
   const ext = filename.split('.').pop()?.toLowerCase()
   if (ext === 'csv') return 'csv'
   if (ext === 'json') return 'json'
   if (ext === 'h' || ext === 'hpp') return 'c_header'
   if (ext === 'm') return 'matlab'
+  if (ext === 'a2l') return 'a2l'
+  if (ext === 'xmi') return 'sysml_xmi'
+  // .xml could be SysML XMI — sniff content below
 
   // Sniff content
   const trimmed = content.trimStart()
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) return 'json'
   if (trimmed.startsWith('#ifndef') || trimmed.startsWith('#define') || trimmed.includes('#define ')) return 'c_header'
   if (trimmed.startsWith('%')) return 'matlab'
+  if (trimmed.includes('/begin PROJECT') || trimmed.includes('/begin CHARACTERISTIC')) return 'a2l'
+  if (trimmed.includes('xmlns:uml') || trimmed.includes('xmlns:sysml') || trimmed.includes('xmi:type="uml:') || trimmed.includes('ownedAttribute')) return 'sysml_xmi'
 
   // CSV heuristic: first line contains commas and looks like headers
   const firstLine = trimmed.split('\n')[0]
@@ -343,10 +515,12 @@ export function detectFormat(filename: string, content: string): 'csv' | 'json' 
 // ---------------------------------------------------------------------------
 export function importParameters(format: string, content: string): ImportResult {
   switch (format) {
-    case 'csv':      return parseCSV(content)
-    case 'json':     return parseJSON(content)
-    case 'c_header': return parseCHeader(content)
-    case 'matlab':   return parseMATLAB(content)
+    case 'csv':       return parseCSV(content)
+    case 'json':      return parseJSON(content)
+    case 'c_header':  return parseCHeader(content)
+    case 'matlab':    return parseMATLAB(content)
+    case 'a2l':       return parseA2L(content)
+    case 'sysml_xmi': return parseSysMLXMI(content)
     default:
       return { parsed: [], warnings: [`Unknown import format: ${format}`] }
   }

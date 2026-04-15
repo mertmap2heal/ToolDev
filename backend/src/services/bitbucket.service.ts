@@ -419,3 +419,26 @@ function buildReadme(paramCount: number, formats: string[]): string {
     '```',
   ].join('\n')
 }
+
+// ---------------------------------------------------------------------------
+// Fetch raw file content from a Bitbucket repository
+// ---------------------------------------------------------------------------
+export async function fetchFileFromBitbucket(
+  config: BitbucketConfig,
+  workspace: string,
+  slug: string,
+  filePath: string,
+  branch = 'main'
+): Promise<string> {
+  const base = apiBase(config)
+  const url = `${base}/repositories/${workspace}/${slug}/src/${encodeURIComponent(branch)}/${filePath}`
+  const res = await fetch(url, {
+    headers: { Authorization: basicAuth(config.username, config.appPassword) },
+  })
+  if (!res.ok) {
+    let msg = res.statusText
+    try { const d = await res.json() as Record<string, unknown>; msg = (d.error as Record<string,unknown>)?.message as string ?? msg } catch { /* ignore */ }
+    throw new Error(`Bitbucket: could not fetch ${filePath} (HTTP ${res.status}): ${msg}`)
+  }
+  return res.text()
+}

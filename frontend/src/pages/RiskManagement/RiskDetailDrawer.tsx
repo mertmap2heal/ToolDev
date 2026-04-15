@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useFeaturePackage } from '../../contexts/FeaturePackageContext'
 import {
   X,
   ChevronDown,
@@ -43,9 +44,20 @@ interface RiskDetailDrawerProps {
   onDelete?: (risk: Risk) => void
 }
 
+/** Maps each artifact panel key to its feature package module ID */
+const ARTIFACT_MODULE_IDS: Record<string, string> = {
+  Requirements: 'requirements',
+  Interfaces: 'interface-management',
+  Issues: 'issues',
+  'Change Requests': 'change-requests',
+  'Verification Activities': 'verification',
+  'Configuration Baseline': 'configuration-management',
+}
+
 export default function RiskDetailDrawer({ isOpen, risk, onClose, onUpdate, onDelete }: RiskDetailDrawerProps) {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
+  const { isEnabled } = useFeaturePackage()
   const [description, setDescription] = useState('')
   const [likelihood, setLikelihood] = useState(3)
   const [impact, setImpact] = useState(3)
@@ -155,14 +167,17 @@ export default function RiskDetailDrawer({ isOpen, risk, onClose, onUpdate, onDe
     }
   }
 
-  const linkedArtifactKeys = [
+  const linkedArtifactKeys = useMemo(() => [
     'Requirements',
     'Interfaces',
     'Issues',
     'Change Requests',
     'Verification Activities',
     'Configuration Baseline',
-  ]
+  ].filter(key => {
+    const moduleId = ARTIFACT_MODULE_IDS[key]
+    return moduleId ? isEnabled(moduleId) : false
+  }), [isEnabled])
 
   if (!risk) return null
 

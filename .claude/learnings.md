@@ -150,3 +150,99 @@ console.log([...used].filter(p=>!declared.has(p)&&!fs.existsSync('node_modules/'
 **Symptom:** Git commit message appears corrupted or with replacement characters on Windows when the heredoc contains non-ASCII characters.
 
 **Rule:** Keep commit message heredocs plain ASCII. Use `-` not `—`, and avoid any typographic characters.
+
+---
+
+## Playwright: `getByRole('button', { name })` uses substring matching
+
+**Symptom:** Strict mode violation — "2 elements matched selector". One is the intended action button; the other is a row whose display text happens to contain the search word (e.g. a parameter named `e2e_param_edit_123` matching a search for `{ name: /edit/i }`).
+
+**Root cause:** Playwright's accessible name filter is case-insensitive substring by default. Any element whose accessible name *contains* the search string matches, not just exact matches.
+
+**Rule:** For icon-only action buttons that have a `title` attribute, use an exact CSS attribute selector:
+```ts
+// WRONG — partial match hits both the button and any row containing "edit"
+row.getByRole('button', { name: /edit/i })
+
+// CORRECT — exact title attribute match
+row.locator('button[title="Edit"]')
+row.locator('button[title="Delete"]')
+```
+
+---
+
+## Playwright: stale locator after React removes a conditional attribute
+
+**Symptom:** Locator `.locator('td[title="Click to edit value"]').locator('input')` times out after clicking the cell, even though the input is clearly visible.
+
+**Root cause:** React removes the `title` attribute from the `<td>` when it switches to editing mode. The parent locator becomes stale — it no longer matches any element — so the child `.locator('input')` also fails.
+
+**Rule:** After clicking an element that triggers a React state change that removes attributes from the clicked element, build a **new independent locator** for any subsequent interaction:
+```ts
+// WRONG — chains off the now-stale parent
+await cell.click()
+await cell.locator('input').fill('value')
+
+// CORRECT — fresh locator after the click
+await row.locator('td[title="Click to edit value"]').first().click()
+const input = row.locator('td input:not([type="checkbox"])').first()
+await input.fill('value')
+```
+
+---
+
+## Playwright: group header rows contaminate table row `.first()`
+
+**Symptom:** Test clicks the wrong row, or action buttons are not found, because `.first()` returned a group header row that has no interactive content.
+
+**Root cause:** Tables with folder/category grouping (Parameters page, etc.) render group header rows as `<tr>` elements inside `<tbody>` with a single `<td colSpan>`. A bare `table tbody tr` selector matches these, and `.first()` returns the header row instead of the first data row.
+
+**Rule:** Filter for rows that have a second column (data rows always do; group headers have only one `<td colSpan>`):
+```ts
+// CORRECT — only matches real data rows
+page.locator('table tbody tr').filter({ has: page.locator('td:nth-child(2)') }).first()
+```
+
+---
+
+## Playwright: ESM context — no `require()` in test helpers
+
+**Symptom:** `ReferenceError: require is not defined` at runtime, pointing to a line inside a `.ts` helper file imported by a spec.
+
+**Root cause:** Playwright runs `.ts` spec files and their imports in an ESM context. `require()` is a CommonJS API and does not exist in ESM.
+
+**Rule:** All helper files in `frontend/e2e/helpers/` must use ESM `import` statements at the top level, never inline `require()`:
+```ts
+// WRONG — fails at runtime
+const os = require('os')
+
+// CORRECT — top-level ESM import
+import { tmpdir } from 'os'
+```
+
+---
+
+## Playwright: export dropdown items are plain buttons, not role="menuitem"
+
+**Symptom:** `page.getByRole('menuitem', { name: /csv/i })` times out; `getByRole('menu')` also not found.
+
+**Root cause:** The export dropdown is a plain `<div>` with `position: absolute` styling. It does not use WAI-ARIA `role="menu"` or `role="menuitem"`. Its children are standard `<button>` elements.
+
+**Rule:** After opening the export trigger, target items directly by role + name:
+```ts
+await page.getByRole('button', { name: /export/i }).first().click()
+await page.getByRole('button', { name: /csv.*\.csv/i }).click()
+```
+
+---
+
+## Playwright: modal confirm button text is dynamic
+
+**Symptom:** `getByRole('button', { name: /confirm/i })` or `{ name: /^delete$/i }` times out on delete confirmation dialogs.
+
+**Root cause:** `DeleteConfirmationModal` generates button text from the `itemType` prop: `"Delete " + capitalise(itemType)`. The actual button text is `"Delete Parameter"`, `"Delete Requirement"`, etc.
+
+**Rule:** Always match the full dynamic text:
+```ts
+await page.getByRole('button', { name: /Delete Parameter/i }).click()
+```

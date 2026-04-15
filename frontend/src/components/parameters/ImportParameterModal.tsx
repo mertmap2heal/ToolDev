@@ -1,5 +1,6 @@
-import { useState, useRef, useCallback, useMemo } from 'react'
+import React, { useState, useRef, useCallback, useMemo } from 'react'
 import { X, Upload, Download, CheckCircle, AlertTriangle, FileText, ChevronRight, FunctionSquare } from 'lucide-react'
+import { evaluateFormula } from './evaluateFormula'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
 
@@ -154,13 +155,15 @@ function detectMappings(headers: string[]): Record<string, string | null> {
 // ---------------------------------------------------------------------------
 // Format helpers
 // ---------------------------------------------------------------------------
-type ImportFormat = 'csv' | 'json' | 'c_header' | 'matlab'
+type ImportFormat = 'csv' | 'json' | 'c_header' | 'matlab' | 'a2l' | 'sysml_xmi'
 
 const FORMAT_LABELS: Record<ImportFormat, string> = {
-  csv:      'CSV (.csv)',
-  json:     'JSON (.json)',
-  c_header: 'C Header (.h / .hpp)',
-  matlab:   'MATLAB script (.m)',
+  csv:       'CSV (.csv)',
+  json:      'JSON (.json)',
+  c_header:  'C Header (.h / .hpp)',
+  matlab:    'MATLAB script (.m)',
+  a2l:       'AUTOSAR A2L (.a2l)',
+  sysml_xmi: 'SysML / XMI (.xmi, .xml)',
 }
 
 function detectFormatFromFile(filename: string): ImportFormat | null {
@@ -169,6 +172,9 @@ function detectFormatFromFile(filename: string): ImportFormat | null {
   if (ext === 'json') return 'json'
   if (ext === 'h' || ext === 'hpp') return 'c_header'
   if (ext === 'm')    return 'matlab'
+  if (ext === 'a2l')  return 'a2l'
+  if (ext === 'xmi')  return 'sysml_xmi'
+  if (ext === 'xml')  return 'sysml_xmi'  // assumed SysML if .xml chosen
   return null
 }
 
@@ -225,6 +231,9 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
   // Per-row overrides: rowIndex -> { skip?: boolean, rename?: string }
   const [rowOverrides, setRowOverrides] = useState<Record<number, { skip?: boolean; rename?: string }>>({})
   const [editingRename, setEditingRename] = useState<number | null>(null)
+  // Rows for which the diff panel is expanded
+  const [expandedDiffRows, setExpandedDiffRows] = useState<Set<number>>(new Set())
+  const [isDryRunResult, setIsDryRunResult] = useState(false)
 
   const importMutation = useMutation({
     mutationFn: (content: string) =>
@@ -270,6 +279,8 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
     setImportResult(null)
     setRowOverrides({})
     setEditingRename(null)
+    setExpandedDiffRows(new Set())
+    setIsDryRunResult(false)
     onClose()
   }
 
@@ -375,6 +386,31 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
     handleClose()
   }
 
+  const handleDryRun = () => {
+    // Simulate the import result client-side without writing to the DB
+    const skippedCount = Object.values(rowOverrides).filter(o => o.skip).length
+    const activeRows = allRows.filter((_, ri) => !rowOverrides[ri]?.skip)
+    let willCreate = 0
+    let willUpdate = 0
+    let willSkip = 0
+    for (const row of activeRows) {
+      if (nameColIndex < 0) continue
+      const name = (row[nameColIndex] ?? '').toLowerCase()
+      const existing = existingByName.get(name)
+      if (!existing) { willCreate++; continue }
+      if (rowHasChanges(row, existing)) willUpdate++
+      else willSkip++
+    }
+    setImportResult({
+      imported: willCreate,
+      updated: willUpdate,
+      warnings: skippedCount > 0 ? [`${skippedCount} row${skippedCount !== 1 ? 's' : ''} manually skipped`] : [],
+      errors: [],
+    })
+    setIsDryRunResult(true)
+    setStep(3)
+  }
+
   const handleReset = () => {
     setStep(1)
     setCsvContent('')
@@ -390,6 +426,8 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
     setImportResult(null)
     setRowOverrides({})
     setEditingRename(null)
+    setExpandedDiffRows(new Set())
+    setIsDryRunResult(false)
   }
 
   // -------------------------------------------------------------------------
@@ -406,6 +444,37 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
     }
     return map
   }, [existingParams])
+
+  // Numeric values of existing project parameters — by ID (for {{param:ID}} refs)
+  const existingParamValues = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const p of existingParams ?? []) {
+      const v = parseFloat(p.defaultValue ?? '')
+      if (!isNaN(v)) map[p.id] = v
+    }
+    return map
+  }, [existingParams])
+
+  // Numeric values of existing project parameters — by NAME (for bare name refs like base_mass * 2)
+  const existingParamValuesByName = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const p of existingParams ?? []) {
+      const v = parseFloat(p.defaultValue ?? '')
+      if (!isNaN(v)) map[p.name] = v
+    }
+    // Also include preview rows themselves so forward-references within the import batch work
+    // (use the 'value' column if available)
+    const valueColIndex = previewHeaders.findIndex(h => columnMappings[h] === 'value')
+    const nameColIdx = previewHeaders.findIndex(h => columnMappings[h] === 'name')
+    if (nameColIdx >= 0 && valueColIndex >= 0) {
+      for (const row of previewRows) {
+        const name = (row[nameColIdx] ?? '').trim()
+        const val = parseFloat((row[valueColIndex] ?? '').trim())
+        if (name && !isNaN(val)) map[name] = val
+      }
+    }
+    return map
+  }, [existingParams, previewHeaders, previewRows, columnMappings])
 
   // Determine which preview rows would overwrite an existing parameter
   const nameColIndex = previewHeaders.findIndex(h => columnMappings[h] === 'name')
@@ -447,6 +516,25 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
     if (get('formula') && get('formula') !== (existing.formula ?? '')) return true
     if (get('status') && get('status') !== (existing.status ?? '')) return true
     return false
+  }, [canonicalToColIndex, existingParams])
+
+  // Build a list of changed fields for a given row vs existing param
+  const getRowDiff = useCallback((row: string[], existing: (typeof existingParams)[0]): Array<{ label: string; old: string; new: string }> => {
+    const get = (canon: string) => (row[canonicalToColIndex[canon] ?? -1] ?? '').trim()
+    const FIELDS: Array<{ canon: string; label: string; existing: string | null | undefined }> = [
+      { canon: 'description', label: 'Description',  existing: existing.description },
+      { canon: 'data_type',   label: 'Data type',    existing: existing.dataType },
+      { canon: 'value',       label: 'Value',        existing: existing.defaultValue },
+      { canon: 'unit',        label: 'Unit',         existing: existing.unit },
+      { canon: 'tolerance',   label: 'Tolerance',    existing: existing.tolerance },
+      { canon: 'min',         label: 'Min',          existing: existing.minValue },
+      { canon: 'max',         label: 'Max',          existing: existing.maxValue },
+      { canon: 'formula',     label: 'Formula',      existing: existing.formula },
+      { canon: 'status',      label: 'Status',       existing: existing.status },
+    ]
+    return FIELDS
+      .filter(f => get(f.canon) && get(f.canon) !== (f.existing ?? ''))
+      .map(f => ({ label: f.label, old: f.existing ?? '—', new: get(f.canon) }))
   }, [canonicalToColIndex, existingParams])
 
   const { overwriteCount, noChangeCount } = useMemo(() => {
@@ -536,7 +624,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                 <div>
                   <p className="text-sm font-medium text-blue-800 dark:text-blue-200">Supported formats</p>
                   <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
-                    CSV (with column mapping), JSON, C Header (.h/.hpp), MATLAB script (.m)
+                    CSV (with column mapping), JSON, C Header (.h/.hpp), MATLAB (.m), AUTOSAR A2L (.a2l), SysML/XMI (.xmi/.xml)
                   </p>
                 </div>
                 <button
@@ -564,7 +652,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".csv,.json,.h,.hpp,.m"
+                    accept=".csv,.json,.h,.hpp,.m,.a2l,.xmi,.xml"
                     onChange={handleFileInput}
                     className="hidden"
                   />
@@ -590,7 +678,7 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">or click to browse</p>
                       </div>
                       <p className="text-xs text-gray-400 dark:text-gray-500">
-                        Accepts .csv &middot; .json &middot; .h / .hpp &middot; .m
+                        Accepts .csv &middot; .json &middot; .h/.hpp &middot; .m &middot; .a2l &middot; .xmi/.xml
                       </p>
                     </>
                   )}
@@ -783,9 +871,12 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                           const isUpdate = isExisting && rowHasChanges(row, existingParam!)
                           const isNoChange = isExisting && !isUpdate
                           const hasFormula = formulaColIndex >= 0 && !!(row[formulaColIndex] ?? '').trim()
+                          const isDiffExpanded = isUpdate && !isSkipped && expandedDiffRows.has(ri)
+                          const diffEntries = isDiffExpanded && existingParam ? getRowDiff(row, existingParam) : []
 
                           return (
-                            <tr key={ri} className={isSkipped ? 'opacity-40 bg-gray-50 dark:bg-gray-900/20' : isUpdate ? 'bg-amber-50 dark:bg-amber-900/10' : isNoChange ? 'bg-gray-50 dark:bg-gray-900/20 opacity-60' : 'bg-white dark:bg-gray-800'}>
+                            <React.Fragment key={ri}>
+                            <tr className={isSkipped ? 'opacity-40 bg-gray-50 dark:bg-gray-900/20' : isUpdate ? 'bg-amber-50 dark:bg-amber-900/10' : isNoChange ? 'bg-gray-50 dark:bg-gray-900/20 opacity-60' : 'bg-white dark:bg-gray-800'}>
                               {/* Status + actions column */}
                               <td className="px-3 py-1.5 whitespace-nowrap">
                                 <div className="flex items-center gap-1.5">
@@ -807,10 +898,19 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                                       — same
                                     </span>
                                   ) : isUpdate ? (
-                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                                    <button
+                                      type="button"
+                                      onClick={() => setExpandedDiffRows(prev => {
+                                        const next = new Set(prev)
+                                        if (next.has(ri)) next.delete(ri); else next.add(ri)
+                                        return next
+                                      })}
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors"
+                                      title="Click to see field-level diff"
+                                    >
                                       <AlertTriangle size={10} />
-                                      Update
-                                    </span>
+                                      Update {expandedDiffRows.has(ri) ? '▲' : '▼'}
+                                    </button>
                                   ) : (
                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">
                                       <CheckCircle size={10} />
@@ -873,14 +973,24 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                                     </td>
                                   )
                                 }
-                                // Formula column: show with icon
+                                // Formula column: show with icon + live evaluation against existing params
                                 if (canonical === 'formula' && cellValue) {
+                                  const evalResult = evaluateFormula(cellValue, existingParamValues, existingParamValuesByName)
                                   return (
-                                    <td key={ci} className="px-3 py-1.5 whitespace-nowrap max-w-[160px]">
+                                    <td key={ci} className="px-3 py-1.5 whitespace-nowrap max-w-[200px]">
                                       <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 font-mono text-xs truncate">
                                         <FunctionSquare size={11} className="flex-shrink-0" />
                                         {cellValue}
                                       </span>
+                                      {evalResult.result !== null ? (
+                                        <span className="ml-1 text-xs font-medium text-indigo-500 dark:text-indigo-400">
+                                          = {String(parseFloat(evalResult.result.toPrecision(6)))}
+                                        </span>
+                                      ) : evalResult.error ? (
+                                        <span className="ml-1 text-xs text-red-500 dark:text-red-400" title={evalResult.error}>
+                                          ⚠ {evalResult.error.length > 40 ? evalResult.error.slice(0, 40) + '…' : evalResult.error}
+                                        </span>
+                                      ) : null}
                                     </td>
                                   )
                                 }
@@ -891,6 +1001,35 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
                                 )
                               })}
                             </tr>
+                            {/* Expandable diff panel for overwrite rows */}
+                            {diffEntries.length > 0 && (
+                              <tr className="bg-amber-50/60 dark:bg-amber-900/5 border-b border-amber-200 dark:border-amber-800">
+                                <td className="px-3 py-1" />
+                                <td colSpan={visiblePreviewHeaders.length} className="px-3 py-1.5">
+                                  <div className="overflow-x-auto">
+                                    <table className="min-w-full text-xs border-collapse">
+                                      <thead>
+                                        <tr className="text-gray-500 dark:text-gray-400">
+                                          <th className="pr-4 py-0.5 text-left font-medium w-24">Field</th>
+                                          <th className="pr-6 py-0.5 text-left font-medium text-red-600 dark:text-red-400">Before</th>
+                                          <th className="py-0.5 text-left font-medium text-green-600 dark:text-green-400">After</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {diffEntries.map(d => (
+                                          <tr key={d.label}>
+                                            <td className="pr-4 py-0.5 font-medium text-gray-600 dark:text-gray-300 whitespace-nowrap">{d.label}</td>
+                                            <td className="pr-6 py-0.5 text-red-700 dark:text-red-400 font-mono truncate max-w-[200px]" title={d.old}>{d.old}</td>
+                                            <td className="py-0.5 text-green-700 dark:text-green-400 font-mono truncate max-w-[200px]" title={d.new}>{d.new}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                            </React.Fragment>
                           )
                         })}
                       </tbody>
@@ -904,6 +1043,13 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
           {/* ── Step 3: Result ── */}
           {step === 3 && importResult && (
             <div className="space-y-4">
+              {/* Dry run banner */}
+              {isDryRunResult && (
+                <div className="flex items-center gap-2 p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+                  <span className="text-sm font-semibold text-purple-700 dark:text-purple-300">Dry run — no changes were written</span>
+                  <span className="text-xs text-purple-600 dark:text-purple-400">This is a simulation based on client-side analysis.</span>
+                </div>
+              )}
               {/* Summary */}
               {importResult.errors.length === 0 || importResult.imported > 0 || importResult.updated > 0 ? (
                 <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg">
@@ -977,13 +1123,24 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
               </button>
             )}
             {step === 3 && (
-              <button
-                type="button"
-                onClick={handleReset}
-                className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
-              >
-                Import another file
-              </button>
+              <div className="flex items-center gap-2">
+                {isDryRunResult && (
+                  <button
+                    type="button"
+                    onClick={() => { setStep(2); setIsDryRunResult(false); setImportResult(null) }}
+                    className="px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg transition-colors border border-blue-200 dark:border-blue-700"
+                  >
+                    Back to preview &amp; Import
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                >
+                  Import another file
+                </button>
+              </div>
             )}
           </div>
 
@@ -1017,15 +1174,26 @@ export default function ImportParameterModal({ isOpen, onClose, projectId }: Imp
             )}
 
             {step === 2 && (
-              <button
-                type="button"
-                onClick={handleImport}
-                disabled={hasMissingName || importMutation.isPending}
-                className="flex items-center gap-2 px-5 py-2 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Upload size={14} />
-                {importMutation.isPending ? 'Importing...' : 'Import'}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={handleDryRun}
+                  disabled={hasMissingName || importMutation.isPending}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Simulate the import and see expected results without writing to the database"
+                >
+                  Dry Run
+                </button>
+                <button
+                  type="button"
+                  onClick={handleImport}
+                  disabled={hasMissingName || importMutation.isPending}
+                  className="flex items-center gap-2 px-5 py-2 text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Upload size={14} />
+                  {importMutation.isPending ? 'Importing...' : 'Import'}
+                </button>
+              </>
             )}
 
             {step === 3 && (

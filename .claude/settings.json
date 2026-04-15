@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)"
+    ]
+  },
+  "enabledPlugins": {
+    "claude-mem@thedotmack": true,
+    "code-review@claude-plugins-official": true
+  },
+  "effortLevel": "high",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uvx code-review-graph update 2>&1 | tail -3",
+            "async": true,
+            "timeout": 120,
+            "statusMessage": "Updating code graph..."
+          }
+        ]
+      }
+    ]
+  }
+}

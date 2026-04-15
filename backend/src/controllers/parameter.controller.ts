@@ -4,8 +4,10 @@ import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
 import {
   exportParameters as formatExport,
+  exportParametersBinary,
   getExportMeta,
   SUPPORTED_EXPORT_FORMATS,
+  BINARY_EXPORT_FORMATS,
   ExportParameter,
 } from '../services/parameterExport.service'
 import {
@@ -21,6 +23,7 @@ import {
   validateGitLabToken,
   protectGitLabBranch,
   unprotectGitLabBranch,
+  fetchFileFromGitLab,
   GitLabConfig,
 } from '../services/gitlab.service'
 import {
@@ -31,6 +34,7 @@ import {
   generateSubmoduleInstructionsGitHub,
   validateGitHubToken,
   protectGitHubBranch,
+  fetchFileFromGitHub,
 } from '../services/github.service'
 import {
   createBitbucketRepo,
@@ -40,6 +44,7 @@ import {
   generateSubmoduleInstructionsBitbucket,
   validateBitbucketToken,
   protectBitbucketBranch,
+  fetchFileFromBitbucket,
   BitbucketConfig,
 } from '../services/bitbucket.service'
 import {
@@ -50,6 +55,7 @@ import {
   generateSubmoduleInstructionsAzure,
   validateAzureToken,
   protectAzureBranch,
+  fetchFileFromAzure,
   AzureDevOpsConfig,
 } from '../services/azuredevops.service'
 
@@ -791,7 +797,10 @@ export async function exportParametersHandler(req: AuthRequest, res: Response) {
     }))
 
     const meta = getExportMeta(format)
-    const content = formatExport(format, params)
+    const isBinary = (BINARY_EXPORT_FORMATS as readonly string[]).includes(format)
+    const content = isBinary
+      ? await exportParametersBinary(format, params)
+      : formatExport(format, params)
     res.setHeader('Content-Type', meta.contentType)
     res.setHeader('Content-Disposition', `attachment; filename="${meta.filename}"`)
     res.send(content)
@@ -830,6 +839,83 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
 
     if (parsed.length === 0) {
       return res.status(422).json({ success: false, error: 'No parameters found in file', warnings })
+    }
+
+    // -------------------------------------------------------------------------
+    // Resolve bare parameter-name references in formulas to {{param:ID}} syntax.
+    // e.g.  "base_mass * 9.81"  →  "{{param:abc123}} * 9.81"
+    // This makes formulas portable and evaluable after import.
+    // -------------------------------------------------------------------------
+    const hasFormulaWithNames = parsed.some(p => {
+      if (!p.formula) return false
+      // Check if the formula contains any word character sequences (bare names)
+      // that are NOT already in {{param:ID}} format
+      return /\b[a-zA-Z_][a-zA-Z0-9_]*\b/.test(p.formula.replace(/\{\{param:[^}]+\}\}/g, ''))
+    })
+    if (hasFormulaWithNames) {
+      // Fetch all project parameters for name→id resolution
+      const allProjectParams = await prisma.parameter.findMany({
+        where: { projectId },
+        select: { id: true, name: true },
+      })
+      // Also include params being imported (synthetic IDs for forward refs within batch)
+      const nameToId = new Map<string, string>()
+      for (const ep of allProjectParams) nameToId.set(ep.name, ep.id)
+      // Imported params that don't exist yet use synthetic IDs (will be resolved post-create)
+      // We leave those for now — only resolve against existing params in this pass
+
+      for (const p of parsed) {
+        if (!p.formula) continue
+        // Sort names by descending length to avoid partial matches
+        const sortedNames = [...nameToId.keys()].sort((a, b) => b.length - a.length)
+        let formula = p.formula
+        for (const name of sortedNames) {
+          const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          // Only replace bare identifiers (not inside {{param:...}} already)
+          formula = formula.replace(
+            new RegExp(`(?<!\\{\\{param:[^}]*)\\b${escaped}\\b`, 'g'),
+            `{{param:${nameToId.get(name)}}}`
+          )
+        }
+        p.formula = formula
+      }
+    }
+
+    // Cycle detection among imported formula parameters
+    const formulaParams = parsed.filter(p => p.formula)
+    if (formulaParams.length > 1) {
+      // Build name->id map using synthetic IDs for imported params
+      const nameToId = new Map(formulaParams.map((p, i) => [p.name, `__import_${i}`]))
+      // Also include existing DB params that have formulas
+      const existingWithFormulas = await prisma.parameter.findMany({
+        where: { projectId, formula: { not: null } },
+        select: { id: true, name: true, formula: true },
+      })
+      // Merge: imported params override existing if same name
+      const allForCycle = [
+        ...existingWithFormulas
+          .filter(e => !formulaParams.some(p => p.name === e.name))
+          .map(e => ({ id: e.id, formula: e.formula ?? undefined })),
+        ...formulaParams.map((p, i) => ({
+          id: nameToId.get(p.name) ?? `__import_${i}`,
+          formula: p.formula,
+        })),
+      ]
+      // Simple DFS cycle detector (same logic as frontend evaluateFormula.ts detectCycles)
+      const refRe = /\{\{param:([a-z0-9]+)\}\}/gi
+      const extractRefs = (f: string) => { const ids: string[] = []; let m; const re = new RegExp(refRe.source, 'gi'); while ((m = re.exec(f))) if (!ids.includes(m[1])) ids.push(m[1]); return ids }
+      const deps = new Map(allForCycle.map(p => [p.id, extractRefs(p.formula ?? '')]))
+      const visited = new Set<string>(); const inStack = new Set<string>()
+      const cyclesFound: string[] = []
+      const dfs = (id: string, path: string[]) => {
+        if (inStack.has(id)) { const loop = path.slice(path.indexOf(id)).concat(id); const label = loop.join(' → '); if (!cyclesFound.includes(label)) cyclesFound.push(label); return }
+        if (visited.has(id)) return
+        visited.add(id); inStack.add(id)
+        for (const dep of deps.get(id) ?? []) dfs(dep, [...path, id])
+        inStack.delete(id)
+      }
+      for (const id of deps.keys()) dfs(id, [])
+      if (cyclesFound.length > 0) warnings.push(...cyclesFound.map(c => `Circular dependency detected: ${c}`))
     }
 
     let imported = 0
@@ -1335,3 +1421,220 @@ export async function gitPublishStatusHandler(req: AuthRequest, res: Response) {
     res.status(500).json({ success: false, error: (error as Error).message ?? 'Internal server error' })
   }
 }
+
+// ---------------------------------------------------------------------------
+// Git Pull (Import from Git) -- POST /:projectId/git/pull
+// Fetches a parameter file from the connected git repo and imports it.
+// ---------------------------------------------------------------------------
+export async function gitPullHandler(req: AuthRequest, res: Response) {
+  try {
+    const { projectId } = req.params
+    const {
+      platform, baseUrl, token, repoId, branch,
+      format, filePath,
+      username, workspace, org, project,
+    } = req.body as {
+      platform: GitPlatform
+      baseUrl: string
+      token: string
+      repoId: string
+      branch?: string
+      format?: string
+      filePath?: string
+      username?: string
+      workspace?: string
+      org?: string
+      project?: string
+    }
+
+    if (!platform || !baseUrl || !token || !repoId) {
+      return res.status(400).json({ success: false, error: 'platform, baseUrl, token and repoId are required' })
+    }
+
+    const resolvedFormat = format ?? 'json'
+    const resolvedFilePath = filePath ?? 'parameters.json'
+    const resolvedBranch = branch ?? 'main'
+
+    let content: string
+
+    switch (platform) {
+      case 'gitlab': {
+        const numericId = parseInt(repoId, 10)
+        content = await fetchFileFromGitLab({ baseUrl, token }, numericId, resolvedFilePath, resolvedBranch)
+        break
+      }
+      case 'github': {
+        const [owner, repoName] = repoId.split('/')
+        content = await fetchFileFromGitHub({ baseUrl, token }, owner, repoName, resolvedFilePath, resolvedBranch)
+        break
+      }
+      case 'bitbucket': {
+        if (!username || !workspace) {
+          return res.status(400).json({ success: false, error: 'username and workspace are required for Bitbucket' })
+        }
+        const slug = repoId.includes('/') ? repoId.split('/')[1] : repoId
+        content = await fetchFileFromBitbucket({ baseUrl, username, appPassword: token }, workspace, slug, resolvedFilePath, resolvedBranch)
+        break
+      }
+      case 'azuredevops': {
+        if (!org || !project) {
+          return res.status(400).json({ success: false, error: 'org and project are required for Azure DevOps' })
+        }
+        content = await fetchFileFromAzure({ baseUrl, token, org, project }, repoId, resolvedFilePath, resolvedBranch)
+        break
+      }
+      default:
+        return res.status(400).json({ success: false, error: `Unknown platform: ${platform}` })
+    }
+
+    const { parsed, warnings } = parseImport(resolvedFormat, content)
+
+    if (parsed.length === 0) {
+      return res.status(422).json({ success: false, error: `No parameters found in ${resolvedFilePath}`, warnings })
+    }
+
+    let imported = 0
+    let updated = 0
+    const errors: string[] = []
+
+    for (const p of parsed) {
+      try {
+        const existing = await prisma.parameter.findFirst({ where: { projectId, name: p.name } })
+        if (existing) {
+          const newVersionStr = incrementMinorVersion(existing.version)
+          const { major: maj, minor: min } = parseVersionParts(newVersionStr)
+          const up = await prisma.parameter.update({
+            where: { id: existing.id },
+            data: {
+              description:  p.description  ?? existing.description,
+              dataType:     p.dataType     ?? existing.dataType,
+              defaultValue: p.defaultValue ?? existing.defaultValue,
+              unit:         p.unit         ?? existing.unit,
+              tolerance:    p.tolerance    ?? existing.tolerance,
+              minValue:     p.minValue     ?? existing.minValue,
+              maxValue:     p.maxValue     ?? existing.maxValue,
+              formula:      p.formula      ?? existing.formula,
+              status:       existing.status === 'approved' ? 'draft' : (p.status ?? existing.status),
+              version:      newVersionStr,
+              ...(p.tags != null && { tags: p.tags }),
+            },
+          })
+          await prisma.parameterVersion.create({
+            data: {
+              parameterId: existing.id,
+              version: maj,
+              minorVersion: min,
+              snapshot: buildParameterVersionSnapshot(up) as object,
+              createdById: req.user!.userId,
+            },
+          })
+          updated++
+        } else {
+          const newParameterId = await generateParameterId(projectId)
+          const created = await prisma.parameter.create({
+            data: {
+              projectId,
+              parameterId: newParameterId,
+              name: p.name,
+              description: p.description,
+              dataType: p.dataType,
+              defaultValue: p.defaultValue,
+              unit: p.unit,
+              tolerance: p.tolerance,
+              minValue: p.minValue,
+              maxValue: p.maxValue,
+              formula: p.formula,
+              tags: p.tags ?? [],
+              status: p.status ?? 'draft',
+            },
+          })
+          await prisma.parameterVersion.create({
+            data: {
+              parameterId: created.id,
+              version: 1,
+              minorVersion: 0,
+              snapshot: buildParameterVersionSnapshot(created) as object,
+              createdById: req.user!.userId,
+            },
+          })
+          imported++
+        }
+      } catch (err) {
+        errors.push(`"${p.name}": ${(err as Error).message}`)
+      }
+    }
+
+    res.json({
+      success: true,
+      data: { imported, updated, errors, warnings, filePath: resolvedFilePath, format: resolvedFormat },
+      message: `Pull complete: ${imported} created, ${updated} updated from ${platform}${errors.length ? `, ${errors.length} errors` : ''}`,
+    })
+  } catch (error) {
+    console.error('Git pull error:', error)
+    res.status(500).json({ success: false, error: (error as Error).message ?? 'Internal server error' })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Restore Parameter to a previous version -- POST /:projectId/:id/restore/:versionId
+// ---------------------------------------------------------------------------
+export async function restoreParameterVersionHandler(req: AuthRequest, res: Response) {
+  try {
+    const { projectId, id, versionId } = req.params
+
+    const parameter = await prisma.parameter.findFirst({ where: { id, projectId } })
+    if (!parameter) {
+      return res.status(404).json({ success: false, error: 'Parameter not found' })
+    }
+
+    const version = await prisma.parameterVersion.findFirst({ where: { id: versionId, parameterId: id } })
+    if (!version) {
+      return res.status(404).json({ success: false, error: 'Version not found' })
+    }
+
+    const snap = version.snapshot as Record<string, unknown>
+    const newVersionStr = incrementMinorVersion(parameter.version)
+    const { major: maj, minor: min } = parseVersionParts(newVersionStr)
+
+    const restored = await prisma.parameter.update({
+      where: { id },
+      data: {
+        name:         typeof snap.name         === 'string' ? snap.name         : parameter.name,
+        description:  typeof snap.description  === 'string' ? snap.description  : parameter.description,
+        dataType:     typeof snap.dataType     === 'string' ? snap.dataType     : parameter.dataType,
+        defaultValue: typeof snap.defaultValue === 'string' ? snap.defaultValue : parameter.defaultValue,
+        unit:         typeof snap.unit         === 'string' ? snap.unit         : parameter.unit,
+        tolerance:    typeof snap.tolerance    === 'string' ? snap.tolerance    : parameter.tolerance,
+        minValue:     typeof snap.minValue     === 'string' ? snap.minValue     : parameter.minValue,
+        maxValue:     typeof snap.maxValue     === 'string' ? snap.maxValue     : parameter.maxValue,
+        formula:      typeof snap.formula      === 'string' ? snap.formula      : parameter.formula,
+        status:       'draft',
+        version:      newVersionStr,
+      },
+      include: {
+        sourceFunction: { select: { id: true, functionId: true, name: true } },
+        sourceParameter: { select: { id: true, name: true } },
+      },
+    })
+
+    await prisma.parameterVersion.create({
+      data: {
+        parameterId: id,
+        version: maj,
+        minorVersion: min,
+        snapshot: buildParameterVersionSnapshot(restored) as object,
+        createdById: req.user!.userId,
+      },
+    })
+
+    res.json({
+      success: true,
+      data: restored,
+      message: `Parameter restored to version ${version.version}.${version.minorVersion}`,
+    })
+  } catch (error) {
+    console.error('Restore parameter version error:', error)
+    res.status(500).json({ success: false, error: (error as Error).message ?? 'Internal server error' })
+  }
+}
+

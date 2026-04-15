@@ -1,14 +1,28 @@
-import { useState, useEffect, useRef } from 'react'
-import { X } from 'lucide-react'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { X, Copy, Check } from 'lucide-react'
+import { evaluateFormula } from './evaluateFormula'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
-import { ParameterFormFields, runValueValidation } from './ParameterFormFields'
+import { ParameterFormFields, runValueValidation, runFormulaValidation } from './ParameterFormFields'
 import { ParameterTypesPanel } from './ParameterTypesPanel'
 import { ProjectUnitsPanel } from './ProjectUnitsPanel'
 import { PlatformPicker } from './PlatformPicker'
 import { parameterTypeService } from '../../services/parameterType.service'
 import type { Parameter, UpdateParameterDto } from 'shared/types/engineering.types'
+
+// Build flat list of folders for a dropdown, with sub-folder indentation labels
+function buildFolderOptions(folders: Array<{ id: string; name: string; parentId?: string | null }>): Array<{ value: string; label: string }> {
+  const roots = folders.filter(f => !f.parentId)
+  const result: Array<{ value: string; label: string }> = []
+  for (const root of roots) {
+    result.push({ value: root.id, label: root.name })
+    for (const sub of folders.filter(f => f.parentId === root.id)) {
+      result.push({ value: sub.id, label: `  └ ${sub.name}` })
+    }
+  }
+  return result
+}
 
 interface EditParameterModalProps {
   isOpen: boolean
@@ -28,7 +42,11 @@ export default function EditParameterModal({
   const [showTypesPanel, setShowTypesPanel] = useState(false)
   const [showUnitsPanel, setShowUnitsPanel] = useState(false)
   const [valueError, setValueError] = useState<string | null>(null)
+  const [formulaError, setFormulaError] = useState<string | null>(null)
   const [platforms, setPlatforms] = useState<string[] | null>(null)
+  const [copiedField, setCopiedField] = useState<'id' | 'name' | null>(null)
+  // Folder assignment — tracked separately from UpdateParameterDto
+  const [editFolderId, setEditFolderId] = useState<string | null | undefined>(undefined)
 
   const { data: types } = useQuery({
     queryKey: ['parameter-types', projectId],
@@ -75,6 +93,7 @@ export default function EditParameterModal({
         sourceParameterId: parameter.sourceParameterId ?? null,
       })
       setPlatforms((parameter.platforms as string[] | null | undefined) ?? null)
+      setEditFolderId(parameter.folderId ?? null)
     } else {
       setFormDataBase({
         description: '',
@@ -93,6 +112,7 @@ export default function EditParameterModal({
         sourceParameterId: null,
       })
       setPlatforms(null)
+      setEditFolderId(null)
     }
     setErrors({})
     setValueError(null)
@@ -109,6 +129,16 @@ export default function EditParameterModal({
     enabled: isOpen && !!projectId,
   })
   const otherParameters = allParameters.filter((p) => p.id !== parameter?.id)
+
+  const { data: foldersData } = useQuery({
+    queryKey: ['parameter-folders', projectId],
+    queryFn: async () => {
+      const res = await parameterService.getFolders(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    enabled: isOpen && !!projectId,
+  })
+  const folders = foldersData ?? []
 
   useEffect(() => {
     if (parameter) {
@@ -130,6 +160,7 @@ export default function EditParameterModal({
         sourceParameterId: parameter.sourceParameterId ?? null,
       })
       setPlatforms((parameter.platforms as string[] | null | undefined) ?? null)
+      setEditFolderId(parameter.folderId ?? null)
       setErrors({})
     }
   }, [parameter])
@@ -139,8 +170,14 @@ export default function EditParameterModal({
       if (!parameter) throw new Error('Parameter not found')
       return parameterService.updateParameter(projectId, parameter.id, data)
     },
-    onSuccess: (response) => {
+    onSuccess: async (response) => {
       if (response.success) {
+        // Also update folder assignment if it changed
+        const currentFolderId = parameter?.folderId ?? null
+        if (editFolderId !== undefined && editFolderId !== currentFolderId) {
+          await parameterService.moveParameterToFolder(projectId, parameter!.id, editFolderId)
+          queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
+        }
         queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
         resetDirty()
         onClose()
@@ -180,6 +217,17 @@ export default function EditParameterModal({
     }
     setValueError(null)
 
+    // Validate formula (cycles, syntax) before submitting
+    if (formData.formula?.trim()) {
+      const fErr = runFormulaValidation(formData.formula.trim(), otherParameters, parameter?.id)
+      if (fErr) {
+        setFormulaError(fErr)
+        setErrors(prev => ({ ...prev, formula: fErr }))
+        return
+      }
+    }
+    setFormulaError(null)
+
     const submitData: UpdateParameterDto = {
       description: formData.description?.trim() || '',
       dataType: formData.dataType?.trim() || '',
@@ -213,6 +261,24 @@ export default function EditParameterModal({
     }
   }
 
+  // Live formula evaluation — re-runs whenever formula text or parameter list changes
+  const liveFormulaResult = useMemo(() => {
+    const formula = formData.formula?.trim()
+    if (!formula) return null
+    const paramValues: Record<string, number> = {}
+    for (const p of allParameters) {
+      const v = parseFloat(p.defaultValue ?? '')
+      if (!isNaN(v)) paramValues[p.id] = v
+    }
+    return evaluateFormula(formula, paramValues)
+  }, [formData.formula, allParameters])
+
+  const handleCopy = (text: string, field: 'id' | 'name') => {
+    navigator.clipboard.writeText(text).catch(() => {})
+    setCopiedField(field)
+    setTimeout(() => setCopiedField(null), 1500)
+  }
+
   if (!isOpen || !parameter) return null
 
   return (
@@ -220,9 +286,35 @@ export default function EditParameterModal({
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Edit Parameter: @{parameter.name}@
-          </h2>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Edit Parameter: @{parameter.name}@
+            </h2>
+            <div className="flex items-center gap-3 mt-1">
+              <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
+                <span>ID: <code className="font-mono">{parameter.id.slice(0, 8)}…</code></span>
+                <button
+                  type="button"
+                  title="Copy full ID"
+                  onClick={() => handleCopy(parameter.id, 'id')}
+                  className="p-0.5 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                >
+                  {copiedField === 'id' ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+                </button>
+              </span>
+              <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
+                <span>Copy name</span>
+                <button
+                  type="button"
+                  title="Copy parameter name"
+                  onClick={() => handleCopy(parameter.name, 'name')}
+                  className="p-0.5 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                >
+                  {copiedField === 'name' ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+                </button>
+              </span>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             {draftBanner}
             <button
@@ -283,6 +375,7 @@ export default function EditParameterModal({
             valueError={valueError}
             formula={formData.formula || ''}
             allParameters={allParameters}
+            currentParamId={parameter?.id}
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -325,6 +418,22 @@ export default function EditParameterModal({
             />
           </div>
 
+          {folders.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">Folder</label>
+              <select
+                value={editFolderId ?? ''}
+                onChange={e => { setEditFolderId(e.target.value || null); markDirty() }}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="">— No folder (ungrouped)</option>
+                {buildFolderOptions(folders).map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">Derived from (parameter)</label>
             <select
@@ -344,13 +453,28 @@ export default function EditParameterModal({
             <input
               type="text"
               value={formData.formula || ''}
-              onChange={(e) => handleChange('formula', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              onChange={(e) => { handleChange('formula', e.target.value); setFormulaError(null) }}
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${formulaError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 dark:border-gray-600'}`}
               placeholder="e.g., {{param:id1}} * 2 + {{param:id2}}"
             />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Reference other parameters using <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{'{{param:ID}}'}</code> syntax.
-            </p>
+            {formulaError ? (
+              <p className="mt-1 text-xs text-red-600 dark:text-red-400">{formulaError}</p>
+            ) : (
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Reference other parameters using <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{'{{param:ID}}'}</code> syntax.
+              </p>
+            )}
+            {!formulaError && liveFormulaResult && (
+              liveFormulaResult.result !== null ? (
+                <p className="mt-1 text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                  Live result: {liveFormulaResult.result.toPrecision(6).replace(/\.?0+$/, '')}
+                </p>
+              ) : liveFormulaResult.error && !liveFormulaResult.error.includes('Unknown parameter') ? (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  {liveFormulaResult.error}
+                </p>
+              ) : null
+            )}
           </div>
 
           <div>

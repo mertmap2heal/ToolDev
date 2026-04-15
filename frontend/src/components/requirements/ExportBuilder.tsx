@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
+import { useFeaturePackage } from '../../contexts/FeaturePackageContext'
 import { useQuery } from '@tanstack/react-query'
 import { X, Download, FileSpreadsheet, FileText, File, CheckSquare, Square, Code, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Upload, AlertTriangle, Clock, Eye, Share2, Globe, Lock, Building2, Loader2, Check } from 'lucide-react'
 import * as XLSX from 'xlsx'
@@ -242,6 +243,7 @@ export default function ExportBuilder({
 
   // Traceability matrix configuration (for Excel/PDF/Word matrix exports)
   const [traceMatrixConfig, setTraceMatrixConfig] = useState<TraceabilityMatrixConfig | null>(null)
+  const { isEnabled } = useFeaturePackage()
 
   // Excel column mappings (Excel format)
   const [excelColumnMappings, setExcelColumnMappings] = useState<ExcelColumnMapping[]>([])
@@ -2046,7 +2048,7 @@ export default function ExportBuilder({
                     type="checkbox"
                     checked={!!traceMatrixConfig}
                     onChange={(e) => {
-                      if (e.target.checked) setTraceMatrixConfig({ rowType: 'requirement', colType: 'verification', includeFlatSheet: true })
+                      if (e.target.checked) setTraceMatrixConfig({ rowType: 'requirement', colType: isEnabled('verification') ? 'verification' : 'function', includeFlatSheet: true })
                       else setTraceMatrixConfig(null)
                     }}
                     className="w-4 h-4 text-blue-600 border-gray-300 rounded"
@@ -2067,7 +2069,7 @@ export default function ExportBuilder({
                         <option value="function">Functions</option>
                         <option value="parameter">Parameters</option>
                         <option value="architecture">Architectures</option>
-                        <option value="verification">Verification</option>
+                        {isEnabled('verification') && <option value="verification">Verification</option>}
                       </select>
                     </div>
                     <div>
@@ -2077,7 +2079,7 @@ export default function ExportBuilder({
                         onChange={(e) => setTraceMatrixConfig((prev) => prev ? { ...prev, colType: e.target.value } : prev)}
                         className="w-full px-2 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
                       >
-                        <option value="verification">Verification</option>
+                        {isEnabled('verification') && <option value="verification">Verification</option>}
                         <option value="architecture">Architectures</option>
                         <option value="function">Functions</option>
                         <option value="parameter">Parameters</option>

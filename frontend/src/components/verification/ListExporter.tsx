@@ -339,7 +339,7 @@ export default function ListExporter({
     }
     const getLastAutoTableY = () => (doc as any).lastAutoTable?.finalY ?? 20
     const pageWidth = doc.internal.pageSize.getWidth()
-    let yPos = 20
+    const yPos = 20
 
     const wrapText = (text: string, maxWidth: number) =>
       doc.splitTextToSize(normalizePdfText(text ?? ''), maxWidth) as string[]
@@ -719,7 +719,7 @@ export default function ListExporter({
         doc.setFontSize(AUTH_FONT_H3)
         doc.text('Setup Diagram', m, startY)
         try {
-          ;(doc as any).addImage(img.dataUrl, fmt, m, startY + 4, maxW, maxH)
+          (doc as any).addImage(img.dataUrl, fmt, m, startY + 4, maxW, maxH)
         } catch {
           setPlaceholderStyle()
           doc.text(placeholder('Unable to render setup diagram image'), m, startY + 14)
@@ -891,7 +891,7 @@ export default function ListExporter({
             doc.text(im.fileName || 'Image', m, y2)
             y2 += 4
             try {
-              ;(doc as any).addImage(img.dataUrl, fmt, m, y2, maxW, maxH)
+              (doc as any).addImage(img.dataUrl, fmt, m, y2, maxW, maxH)
               y2 += maxH + 8
             } catch {
               runCustomBlock('Image', String(url))

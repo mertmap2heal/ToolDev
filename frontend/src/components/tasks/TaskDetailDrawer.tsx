@@ -137,10 +137,10 @@ export default function TaskDetailDrawer({ task, isOpen, onClose, onUpdate }: Ta
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-end">
-      <div className="absolute inset-0 bg-black bg-opacity-50" onClick={onClose} />
-      <div className="relative bg-white dark:bg-gray-800 w-full max-w-2xl h-full overflow-y-auto shadow-xl">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 w-full max-w-2xl h-[calc(100%-1rem)] my-2 mr-2 rounded-2xl shadow-sm overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700/50 px-4 py-4 flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">{task.title}</h2>
           <button
             onClick={onClose}

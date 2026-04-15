@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { X, Edit2, FileText, History, Link2, FunctionSquare, ChevronDown, ChevronRight } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, Edit2, FileText, History, Link2, FunctionSquare, ChevronDown, ChevronRight, GitCompare, Copy, RotateCcw } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
 import { evaluateFormula } from './evaluateFormula'
 import type { Parameter } from 'shared/types/engineering.types'
@@ -76,6 +76,37 @@ export default function ParameterDetailDrawer({
   allParameters = [],
 }: ParameterDetailDrawerProps) {
   const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null)
+  // Compare mode: null = timeline view, otherwise two version IDs are selected
+  const [compareMode, setCompareMode] = useState(false)
+  const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [restoringVersionId, setRestoringVersionId] = useState<string | null>(null)
+  // Pending restore confirmation: versionId waiting for user to confirm
+  const [pendingRestoreId, setPendingRestoreId] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedField(field)
+      setTimeout(() => setCopiedField(null), 1500)
+    }).catch(() => { /* ignore */ })
+  }
+
+  const handleRestoreVersion = async (versionId: string) => {
+    if (!parameter?.id) return
+    setRestoringVersionId(versionId)
+    setPendingRestoreId(null)
+    try {
+      const res = await parameterService.restoreVersion(projectId, parameter.id, versionId)
+      if (res.success) {
+        queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
+        queryClient.invalidateQueries({ queryKey: ['parameter-versions', projectId, parameter.id] })
+      }
+    } catch { /* ignore */ } finally {
+      setRestoringVersionId(null)
+    }
+  }
+  const [compareA, setCompareA] = useState<string | null>(null)  // older
+  const [compareB, setCompareB] = useState<string | null>(null)  // newer
 
   const { data: impact, isLoading: impactLoading } = useQuery({
     queryKey: ['parameter-impact', projectId, parameter?.id],
@@ -97,6 +128,13 @@ export default function ParameterDetailDrawer({
     enabled: isOpen && !!projectId && !!parameter?.id,
   })
 
+  // Reset compare state when switching to a different parameter
+  useEffect(() => {
+    setCompareMode(false)
+    setCompareA(null)
+    setCompareB(null)
+  }, [parameter?.id])
+
   if (!isOpen) return null
   if (!parameter) return null
 
@@ -106,12 +144,12 @@ export default function ParameterDetailDrawer({
     <>
       <div className="fixed inset-0 bg-black/30 z-40" aria-hidden onClick={onClose} />
       <div
-        className="fixed right-0 top-0 bottom-0 w-full max-w-2xl bg-white dark:bg-gray-800 shadow-xl z-50 flex flex-col overflow-hidden"
+        className="fixed right-2 top-2 bottom-2 w-full max-w-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm z-50 flex flex-col overflow-hidden"
         role="dialog"
         aria-label="Parameter details"
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
+        <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm shrink-0">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white truncate pr-2">
             {parameter.parameterId || parameter.name}
           </h2>
@@ -148,12 +186,40 @@ export default function ParameterDetailDrawer({
             <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 space-y-3 text-sm">
               <div>
                 <span className="text-gray-500 dark:text-gray-400">Name</span>
-                <p className="font-medium text-gray-900 dark:text-white">{parameter.name}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-medium text-gray-900 dark:text-white flex-1">{parameter.name}</p>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(parameter.name, 'name')}
+                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Copy name"
+                  >
+                    {copiedField === 'name' ? <span style={{ fontSize: 10, color: '#22c55e' }}>Copied!</span> : <Copy size={13} />}
+                  </button>
+                </div>
               </div>
               {parameter.parameterId && (
                 <div>
                   <span className="text-gray-500 dark:text-gray-400">Parameter ID</span>
-                  <p className="font-medium text-gray-900 dark:text-white">{parameter.parameterId}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-gray-900 dark:text-white flex-1 font-mono">{parameter.parameterId}</p>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(parameter.parameterId!, 'parameterId')}
+                      className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 transition-colors"
+                      title="Copy parameter ID"
+                    >
+                      {copiedField === 'parameterId' ? <span style={{ fontSize: 10, color: '#22c55e' }}>Copied!</span> : <Copy size={13} />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(parameter.id, 'dbId')}
+                      className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 transition-colors"
+                      title="Copy database UUID"
+                    >
+                      {copiedField === 'dbId' ? <span style={{ fontSize: 10, color: '#22c55e' }}>Copied!</span> : <span style={{ fontSize: 9, fontFamily: 'monospace', color: 'var(--theme-text-muted)' }}>UUID</span>}
+                    </button>
+                  </div>
                 </div>
               )}
               {parameter.description && (
@@ -321,30 +387,154 @@ export default function ParameterDetailDrawer({
 
           {/* Change history */}
           <section>
-            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-              <History size={16} />
-              Change history
-              {versions.length > 0 && (
-                <span className="ml-1 text-xs text-gray-400 dark:text-gray-500 font-normal">
-                  ({versions.length} version{versions.length !== 1 ? 's' : ''})
-                </span>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                <History size={16} />
+                Change history
+                {versions.length > 0 && (
+                  <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">
+                    ({versions.length} version{versions.length !== 1 ? 's' : ''})
+                  </span>
+                )}
+              </h3>
+              {versions.length >= 2 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCompareMode(!compareMode)
+                    setCompareA(null)
+                    setCompareB(null)
+                  }}
+                  className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                    compareMode
+                      ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
+                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  <GitCompare size={13} />
+                  {compareMode ? 'Cancel compare' : 'Compare versions'}
+                </button>
               )}
-            </h3>
+            </div>
+
             {versionsLoading ? (
               <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>
             ) : versions.length === 0 ? (
               <p className="text-sm text-gray-500 dark:text-gray-400">No version history yet.</p>
+            ) : compareMode ? (
+              // ── Compare mode ──────────────────────────────────────────────
+              <div className="space-y-3">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Select two versions to compare. Click a version row to set it as A (older) or B (newer).
+                </p>
+                {/* Version selection list */}
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden divide-y divide-gray-200 dark:divide-gray-700">
+                  {[...versions].reverse().map((v) => {
+                    const vLabel = `v${v.version}.${String((v as unknown as Record<string, unknown>).minorVersion ?? 0)}`
+                    const isA = compareA === v.id
+                    const isB = compareB === v.id
+                    return (
+                      <div key={v.id} className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${
+                        isA ? 'bg-orange-50 dark:bg-orange-900/20' : isB ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                      }`}
+                        onClick={() => {
+                          if (isA) { setCompareA(null); return }
+                          if (isB) { setCompareB(null); return }
+                          if (!compareA) { setCompareA(v.id); return }
+                          if (!compareB) { setCompareB(v.id); return }
+                          // Both set: replace the one with older index
+                          setCompareA(v.id); setCompareB(null)
+                        }}
+                      >
+                        <span className={`text-xs font-bold w-5 text-center ${isA ? 'text-orange-600 dark:text-orange-400' : isB ? 'text-blue-600 dark:text-blue-400' : 'text-gray-300 dark:text-gray-600'}`}>
+                          {isA ? 'A' : isB ? 'B' : '○'}
+                        </span>
+                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-14 flex-shrink-0">{vLabel}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{format(new Date(v.createdAt), 'MMM d, yyyy HH:mm')}</span>
+                        <span className="text-xs text-gray-400 mx-1">·</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{v.createdBy?.name ?? 'Unknown'}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Side-by-side diff table */}
+                {compareA && compareB && (() => {
+                  const vA = versions.find(v => v.id === compareA)
+                  const vB = versions.find(v => v.id === compareB)
+                  if (!vA || !vB) return null
+
+                  // A is always left (orange), B is always right (blue) — matching the selection list colours.
+                  // Add a small chronological hint in the header without reordering columns.
+                  const idxA = versions.findIndex(v => v.id === compareA)
+                  const idxB = versions.findIndex(v => v.id === compareB)
+                  const aIsOlder = idxA < idxB
+                  const labelA = `A · v${vA.version}.${String((vA as unknown as Record<string, unknown>).minorVersion ?? 0)}`
+                  const labelB = `B · v${vB.version}.${String((vB as unknown as Record<string, unknown>).minorVersion ?? 0)}`
+
+                  // Diff direction: always from A → B so changed cells show what B introduced
+                  const diffs = computeDiff(vA.snapshot as Record<string, unknown>, vB.snapshot as Record<string, unknown>)
+                  const allFields = TRACKED_FIELDS
+
+                  return (
+                    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead className="bg-gray-50 dark:bg-gray-700/50">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300 w-24">Field</th>
+                            <th className="px-3 py-2 text-left font-semibold text-orange-600 dark:text-orange-400">
+                              {labelA}
+                              <span className="ml-1 font-normal text-orange-400 dark:text-orange-500 text-[10px]">({aIsOlder ? 'older' : 'newer'})</span>
+                            </th>
+                            <th className="px-3 py-2 text-left font-semibold text-blue-600 dark:text-blue-400">
+                              {labelB}
+                              <span className="ml-1 font-normal text-blue-400 dark:text-blue-500 text-[10px]">({aIsOlder ? 'newer' : 'older'})</span>
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                          {allFields.map(field => {
+                            const valA = String((vA.snapshot as Record<string, unknown>)[field] ?? '')
+                            const valB = String((vB.snapshot as Record<string, unknown>)[field] ?? '')
+                            const changed = valA !== valB
+                            if (!valA && !valB) return null
+                            return (
+                              <tr key={field} className={changed ? 'bg-amber-50 dark:bg-amber-900/10' : 'bg-white dark:bg-gray-800'}>
+                                <td className="px-3 py-2 font-medium text-gray-600 dark:text-gray-400">{FIELD_LABELS[field] ?? field}</td>
+                                <td className={`px-3 py-2 font-mono max-w-[160px] truncate ${changed ? 'text-red-700 dark:text-red-300 line-through opacity-70' : 'text-gray-700 dark:text-gray-300'}`} title={valA}>
+                                  {valA || <span className="italic text-gray-400">—</span>}
+                                </td>
+                                <td className={`px-3 py-2 font-mono max-w-[160px] truncate ${changed ? 'text-green-700 dark:text-green-300 font-semibold' : 'text-gray-700 dark:text-gray-300'}`} title={valB}>
+                                  {valB || <span className="italic text-gray-400">—</span>}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                      {diffs.length === 0 && (
+                        <p className="text-xs text-gray-400 dark:text-gray-500 italic p-3">
+                          No differences in tracked fields between these two versions.
+                        </p>
+                      )}
+                    </div>
+                  )
+                })()}
+              </div>
             ) : (
+              // ── Timeline mode — newest first ───────────────────────────────
               <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden divide-y divide-gray-200 dark:divide-gray-700">
-                {versions.map((v, idx) => {
-                  const prevSnapshot = idx < versions.length - 1 ? (versions[idx + 1].snapshot as Record<string, unknown>) : null
+                {[...versions].reverse().map((v, displayIdx) => {
+                  // origIdx: position in the ascending (oldest-first) versions array
+                  const origIdx = versions.length - 1 - displayIdx
+                  // Diff against the immediately preceding version (one step older)
+                  const prevSnapshot = origIdx > 0 ? (versions[origIdx - 1].snapshot as Record<string, unknown>) : null
                   const diffs = computeDiff(prevSnapshot, v.snapshot as Record<string, unknown>)
                   const isExpanded = expandedVersionId === v.id
-                  const summary = snapshotSummary(v.snapshot as Record<string, unknown>)
+                  const isCurrentVersion = displayIdx === 0
 
                   return (
                     <div key={v.id} className="bg-white dark:bg-gray-800">
-                      {/* Version row — clickable header */}
                       <button
                         type="button"
                         onClick={() => setExpandedVersionId(isExpanded ? null : v.id)}
@@ -354,8 +544,9 @@ export default function ParameterDetailDrawer({
                           ? <ChevronDown size={14} className="text-gray-400 flex-shrink-0" />
                           : <ChevronRight size={14} className="text-gray-400 flex-shrink-0" />
                         }
-                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-14 flex-shrink-0">
+                        <span className={`text-xs font-semibold w-14 flex-shrink-0 ${isCurrentVersion ? 'text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'}`}>
                           v{v.version}.{String((v as unknown as Record<string, unknown>).minorVersion ?? 0)}
+                          {isCurrentVersion && <span className="ml-1 text-blue-400 dark:text-blue-500 font-normal text-[10px]">current</span>}
                         </span>
                         <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
                           {format(new Date(v.createdAt), 'MMM d, yyyy HH:mm')}
@@ -365,19 +556,48 @@ export default function ParameterDetailDrawer({
                           {v.createdBy?.name ?? 'Unknown'}
                         </span>
                         <span className="flex-1 text-right text-xs text-gray-400 dark:text-gray-500 truncate ml-2">
-                          {diffs.length > 0
-                            ? diffs.map(d => d.label).join(', ')
-                            : summary
-                          }
+                          {diffs.length > 0 ? diffs.map(d => d.label).join(', ') : (origIdx === 0 ? 'Initial version' : 'No tracked changes')}
                         </span>
+                        {!isCurrentVersion && (
+                          pendingRestoreId === v.id ? (
+                            <span className="ml-2 flex-shrink-0 flex items-center gap-1">
+                              <span className="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">Restore this version?</span>
+                              <button
+                                type="button"
+                                onClick={e => { e.stopPropagation(); handleRestoreVersion(v.id) }}
+                                disabled={restoringVersionId === v.id}
+                                className="flex items-center gap-1 px-2 py-0.5 rounded text-xs border border-amber-400 bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 font-semibold transition-colors"
+                              >
+                                <RotateCcw size={10} />
+                                {restoringVersionId === v.id ? 'Restoring…' : 'Yes, restore'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={e => { e.stopPropagation(); setPendingRestoreId(null) }}
+                                className="flex items-center px-2 py-0.5 rounded text-xs border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); setPendingRestoreId(v.id) }}
+                              disabled={restoringVersionId === v.id}
+                              className="ml-2 flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded text-xs border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 transition-colors"
+                              title="Restore to this version"
+                            >
+                              <RotateCcw size={10} />
+                              Restore
+                            </button>
+                          )
+                        )}
                       </button>
-
-                      {/* Expanded diff panel */}
                       {isExpanded && (
                         <div className="px-3 pb-3 pt-1 bg-gray-50 dark:bg-gray-900/30 border-t border-gray-100 dark:border-gray-700">
                           {diffs.length === 0 ? (
                             <p className="text-xs text-gray-400 dark:text-gray-500 italic pl-6">
-                              {idx === versions.length - 1 ? 'Initial version — no previous version to compare.' : 'No tracked field changes detected.'}
+                              {origIdx === 0 ? 'Initial version — no previous version to compare.' : 'No tracked field changes detected.'}
                             </p>
                           ) : (
                             <div className="space-y-2 pl-6">

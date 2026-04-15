@@ -44,9 +44,9 @@ export default function ReceiptDetailDrawer({ receipt, isOpen, onClose }: Receip
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-end">
-      <div className="absolute inset-0 bg-black bg-opacity-50" onClick={onClose} />
-      <div className="relative bg-white dark:bg-gray-800 w-full max-w-4xl h-full shadow-xl overflow-y-auto">
-        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6 z-10">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 w-full max-w-4xl h-[calc(100%-1rem)] my-2 mr-2 rounded-2xl shadow-sm overflow-y-auto">
+        <div className="sticky top-0 bg-gray-50/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700/50 p-4 z-10">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">

@@ -1,3 +1,4 @@
+// Prisma client singleton — regenerated 2026-04-08 to include ParameterFolder
 import { PrismaClient } from '@prisma/client'
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient }

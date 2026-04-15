@@ -124,6 +124,32 @@ export const deleteFolder = async (req: AuthRequest, res: Response) => {
   }
 }
 
+// PATCH /parameters/:projectId/folders/reorder
+// Accepts [{ id, order }] and updates all folder orders in one transaction
+export const reorderFolders = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+    const { items } = req.body as { items: Array<{ id: string; order: number }> }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, error: 'items array is required' })
+    }
+
+    await prisma.$transaction(
+      items.map(({ id, order }) =>
+        prisma.parameterFolder.updateMany({
+          where: { id, projectId },
+          data: { order },
+        })
+      )
+    )
+
+    res.json({ success: true, data: null })
+  } catch (e) {
+    res.status(500).json({ success: false, error: (e as Error).message })
+  }
+}
+
 // PATCH /parameters/:projectId/:id/folder
 // Move a parameter to a folder (or root if folderId is null)
 export const moveParameterToFolder = async (req: AuthRequest, res: Response) => {

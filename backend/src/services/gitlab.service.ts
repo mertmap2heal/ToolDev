@@ -379,3 +379,23 @@ function buildReadme(paramCount: number): string {
     '```',
   ].join('\n')
 }
+
+// ---------------------------------------------------------------------------
+// Fetch raw file content from a GitLab repository
+// ---------------------------------------------------------------------------
+export async function fetchFileFromGitLab(
+  config: GitLabConfig,
+  repoId: number,
+  filePath: string,
+  branch = 'main'
+): Promise<string> {
+  const encoded = encodeURIComponent(filePath)
+  const url = `${apiBase(config)}/projects/${repoId}/repository/files/${encoded}/raw?ref=${encodeURIComponent(branch)}`
+  const res = await fetch(url, { headers: authHeaders(config.token) })
+  if (!res.ok) {
+    let msg = res.statusText
+    try { const d = await res.json() as Record<string, unknown>; msg = (d.message as string) ?? msg } catch { /* ignore */ }
+    throw new Error(`GitLab: could not fetch ${filePath} (HTTP ${res.status}): ${msg}`)
+  }
+  return res.text()
+}
