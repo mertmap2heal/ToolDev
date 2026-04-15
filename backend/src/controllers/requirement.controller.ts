@@ -2146,87 +2146,89 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    // 3. Process Linked Items (Issues, Change Requests)
-    // The frontend passes a list of items that the user explicitly selected for deletion.
-    // We will hard delete them to match the behavior of their respective controllers.
+    // 3. Process Linked Items atomically — collect IDs by type, then run a single
+    //    $transaction so either all deletes succeed or none do (#31).
     const { linkedItemsToDelete } = req.body
+
+    // Pre-fetch CR attachments outside the transaction (needed for filesystem cleanup)
+    const crAttachmentFiles: string[] = []
 
     if (linkedItemsToDelete && Array.isArray(linkedItemsToDelete) && linkedItemsToDelete.length > 0) {
       console.log(`[Delete Requirement] Processing ${linkedItemsToDelete.length} linked items for deletion`)
 
+      const issueIds: string[] = []
+      const crIds: string[] = []
+      const functionIds: string[] = []
+      const linkedReqIds: string[] = []
+      const testCaseIds: string[] = []
+      const pbsIds: string[] = []
+
       for (const item of linkedItemsToDelete) {
+        if (item.type === 'issue') issueIds.push(item.id)
+        else if (item.type === 'change_request') crIds.push(item.id)
+        else if (item.type === 'function') functionIds.push(item.id)
+        else if (item.type === 'requirement' || item.type === 'hazard' || item.type === 'risk') linkedReqIds.push(item.id)
+        else if (item.type === 'test_case') testCaseIds.push(item.id)
+        else if (item.type === 'pbs_component') pbsIds.push(item.id)
+      }
+
+      // Pre-fetch CR attachment file paths (best-effort — failure must not abort the delete)
+      if (crIds.length > 0) {
         try {
-          if (item.type === 'issue') {
-            // Hard delete issue
-            await prisma.issue.delete({ where: { id: item.id } }).catch(e => {
-              console.error(`Failed to delete linked issue ${item.id}:`, e)
-            })
-          } else if (item.type === 'change_request') {
-            // Find CR to delete attachments first
-            const cr = await prisma.changeRequest.findUnique({
-              where: { id: item.id },
-              include: { attachments: true }
-            })
-
-            if (cr) {
-              // Delete attachments from FS
-              const uploadsDir = path.join(__dirname, '../../uploads/change-requests')
-              for (const attachment of cr.attachments) {
-                if (attachment.fileUrl && !attachment.fileUrl.startsWith('data:')) {
-                  const filePath = path.join(uploadsDir, path.basename(attachment.fileUrl))
-                  if (fs.existsSync(filePath)) {
-                    try { fs.unlinkSync(filePath) } catch (e) { console.error('Failed to unlink file:', e) }
-                  }
-                }
+          const crs = await prisma.changeRequest.findMany({
+            where: { id: { in: crIds }, projectId },
+            include: { attachments: true },
+          })
+          const uploadsDir = path.join(__dirname, '../../uploads/change-requests')
+          for (const cr of crs) {
+            for (const att of cr.attachments) {
+              if (att.fileUrl && !att.fileUrl.startsWith('data:')) {
+                crAttachmentFiles.push(path.join(uploadsDir, path.basename(att.fileUrl)))
               }
-
-              // Hard delete CR
-              await prisma.changeRequest.delete({ where: { id: item.id } }).catch(e => {
-                console.error(`Failed to delete linked change request ${item.id}:`, e)
-              })
             }
-          } else if (item.type === 'function') {
-            // Hard delete function
-            await prisma.systemFunction.delete({ where: { id: item.id } }).catch(e => {
-              console.error(`Failed to delete linked function ${item.id}:`, e)
-            })
-          } else if (item.type === 'requirement' || item.type === 'hazard' || item.type === 'risk') {
-            // Soft delete linked requirement (or hazard/risk if they are requirements)
-            await prisma.requirement.update({
-              where: { id: item.id },
-              data: {
-                deletedAt: new Date(),
-                deletedById: req.userId,
-                deleteReason: `Deleted as linked item of ${requirement.requirementId || requirement.title}`,
-              }
-            }).catch(e => {
-              console.error(`Failed to delete linked requirement/item ${item.id}:`, e)
-            })
-          } else if (item.type === 'test_case') {
-            // Hard delete verification test case
-            await prisma.verTestCase.delete({ where: { id: item.id } }).catch(e => {
-              console.error(`Failed to delete linked test case ${item.id}:`, e)
-            })
-          } else if (item.type === 'pbs_component') {
-            // Hard delete PBS component
-            await prisma.component.delete({ where: { id: item.id } }).catch(e => {
-              console.error(`Failed to delete linked PBS component ${item.id}:`, e)
-            })
           }
-        } catch (error) {
-          console.error(`Error processing linked item deletion for ${item.type}:${item.id}`, error)
-          // Continue processing other items even if one fails
+        } catch (prefetchErr) {
+          console.error('[Delete Requirement] Failed to pre-fetch CR attachments; filesystem cleanup will be skipped:', prefetchErr)
+        }
+      }
+
+      // Execute all DB deletes atomically — if any step throws, all are rolled back.
+      // projectId is included in every where clause to prevent cross-project deletion (#31 security).
+      await prisma.$transaction(async (tx) => {
+        if (issueIds.length > 0) await tx.issue.deleteMany({ where: { id: { in: issueIds }, projectId } })
+        if (crIds.length > 0) await tx.changeRequest.deleteMany({ where: { id: { in: crIds }, projectId } })
+        if (functionIds.length > 0) await tx.systemFunction.deleteMany({ where: { id: { in: functionIds }, projectId } })
+        if (testCaseIds.length > 0) await tx.verTestCase.deleteMany({ where: { id: { in: testCaseIds }, projectId } })
+        if (pbsIds.length > 0) await tx.component.deleteMany({ where: { id: { in: pbsIds }, projectId } })
+        if (linkedReqIds.length > 0) {
+          await tx.requirement.updateMany({
+            where: { id: { in: linkedReqIds }, projectId },
+            data: {
+              deletedAt: new Date(),
+              deletedById: req.userId,
+              deleteReason: `Deleted as linked item of ${requirement.requirementId || requirement.title}`,
+            },
+          })
+        }
+      })
+
+      // Remove CR attachment files from filesystem (best-effort, after DB transaction committed)
+      for (const filePath of crAttachmentFiles) {
+        if (fs.existsSync(filePath)) {
+          try { fs.unlinkSync(filePath) } catch (e) { console.error('Failed to unlink CR attachment:', e) }
         }
       }
     }
 
     // Soft delete the requirement — isLocked: false enforces the lock at DB level (#34)
+    const softDeletedAt = new Date()
+    const softDeleteReason = req.body.reason || null
     const deletedRequirement = await prisma.requirement.update({
       where: { id: requirement.id, isLocked: false },
       data: {
-        deletedAt: new Date(),
+        deletedAt: softDeletedAt,
         deletedById: req.userId,
-        deleteReason: req.body.reason || null,
+        deleteReason: softDeleteReason,
       },
     })
 

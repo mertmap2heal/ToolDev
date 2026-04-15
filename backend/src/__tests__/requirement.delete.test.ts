@@ -167,13 +167,148 @@ describe('Requirement Soft Delete Workflow', () => {
             })
 
         expect(res.status).toBe(201)
+        // Cleanup handled by afterAll deleteMany
+    })
+})
 
-        // Cleanup this new one
-        await request(app)
-            .delete(`/api/v1/requirements/${projectId}/requirements/${res.body.data.id}/permanent`) // This path is actually wrong? 
-        // Regular delete route: /:projectId/:requirementId
-        // Permanent delete route: /:projectId/requirements/:requirementId/permanent
-        // Let's use regular delete for cleanup if permissions allow?
-        // Actually, my test setup deletes all at the end.
+describe('Requirement Delete — Linked Items (transaction path)', () => {
+    let projectId: string
+    let userId: string
+    let token: string
+
+    beforeAll(async () => {
+        const user = await prisma.user.create({
+            data: {
+                email: `test-linked-${Date.now()}@example.com`,
+                password: 'hashedpassword',
+                name: 'Linked Items Test User',
+            },
+        })
+        userId = user.id
+        token = jwt.sign({ userId }, process.env.JWT_SECRET || 'secret')
+
+        const slug = `test-linked-${Date.now()}`
+        const project = await prisma.project.create({
+            data: {
+                name: `Linked Items Test Project ${Date.now()}`,
+                domain: slug,
+                slug,
+                description: 'Test project for linked-item cascade delete',
+                userId,
+            },
+        })
+        projectId = project.id
+    })
+
+    afterAll(async () => {
+        // Delete in dependency order to avoid FK violations
+        await prisma.issue.deleteMany({ where: { projectId } })
+        await prisma.changeRequest.deleteMany({ where: { projectId } })
+        await prisma.requirement.deleteMany({ where: { projectId } })
+        await prisma.project.deleteMany({ where: { userId } })
+        await prisma.user.delete({ where: { id: userId } })
+    })
+
+    it('should delete linked issues atomically when deleting a requirement', async () => {
+        // Create the requirement
+        const reqRes = await request(app)
+            .post(`/api/v1/requirements/${projectId}`)
+            .set('Authorization', `Bearer ${token}`)
+            .send({
+                title: 'Req with linked issue',
+                description: 'Testing linked issue cascade delete',
+                requirementId: 'REQ-LINKED-001',
+                priority: 'High',
+                status: 'Draft',
+                stage: 'Analysis',
+            })
+        expect(reqRes.status).toBe(201)
+        const reqDbId = reqRes.body.data.id
+
+        // Create a linked issue directly via Prisma
+        const issue = await prisma.issue.create({
+            data: {
+                title: 'Linked issue for delete test',
+                description: 'Will be deleted when requirement is deleted',
+                projectId,
+                priority: 'medium',
+                status: 'open',
+            },
+        })
+
+        // Delete the requirement passing the linked issue
+        const deleteRes = await request(app)
+            .delete(`/api/v1/requirements/${projectId}/${reqDbId}`)
+            .set('Authorization', `Bearer ${token}`)
+            .send({
+                reason: 'Testing linked item delete',
+                linkedItemsToDelete: [{ type: 'issue', id: issue.id }],
+            })
+
+        expect(deleteRes.status).toBe(200)
+        expect(deleteRes.body.message).toContain('moved to trash')
+
+        // Verify the issue is gone from the database
+        const foundIssue = await prisma.issue.findUnique({ where: { id: issue.id } })
+        expect(foundIssue).toBeNull()
+    })
+
+    it('should not delete issues belonging to a different project (cross-project guard)', async () => {
+        // Create a second project
+        const slug2 = `test-other-${Date.now()}`
+        const otherProject = await prisma.project.create({
+            data: {
+                name: `Other Project ${Date.now()}`,
+                domain: slug2,
+                slug: slug2,
+                description: 'Should not be affected',
+                userId,
+            },
+        })
+
+        // Create an issue in the OTHER project
+        const foreignIssue = await prisma.issue.create({
+            data: {
+                title: 'Issue in other project',
+                description: 'Should not be deleted',
+                projectId: otherProject.id,
+                priority: 'low',
+                status: 'open',
+            },
+        })
+
+        // Create a requirement in THIS project
+        const reqRes = await request(app)
+            .post(`/api/v1/requirements/${projectId}`)
+            .set('Authorization', `Bearer ${token}`)
+            .send({
+                title: 'Req for cross-project test',
+                description: 'Testing cross-project guard',
+                requirementId: 'REQ-CROSS-001',
+                priority: 'High',
+                status: 'Draft',
+                stage: 'Analysis',
+            })
+        expect(reqRes.status).toBe(201)
+        const reqDbId = reqRes.body.data.id
+
+        // Attempt to delete the foreign issue via this project's delete endpoint
+        const deleteRes = await request(app)
+            .delete(`/api/v1/requirements/${projectId}/${reqDbId}`)
+            .set('Authorization', `Bearer ${token}`)
+            .send({
+                reason: 'Cross-project attack test',
+                linkedItemsToDelete: [{ type: 'issue', id: foreignIssue.id }],
+            })
+
+        // Endpoint should succeed (deleteMany silently ignores non-matching rows)
+        expect(deleteRes.status).toBe(200)
+
+        // But the foreign issue must still exist — projectId filter prevented cross-project delete
+        const stillExists = await prisma.issue.findUnique({ where: { id: foreignIssue.id } })
+        expect(stillExists).not.toBeNull()
+
+        // Cleanup the other project (cascade deletes the issue)
+        await prisma.project.delete({ where: { id: otherProject.id } })
     })
 })
