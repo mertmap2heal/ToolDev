@@ -21,7 +21,26 @@ const app = express()
 const PORT = process.env.PORT || 5000
 const server = http.createServer(app)
 
-app.use(cors())
+// CORS — restrict to the configured frontend origin (#35)
+// In dev, APP_URL defaults to localhost:3000.
+// In production, set APP_URL to the deployed frontend origin.
+const allowedOrigins = new Set<string>([
+  process.env.APP_URL || 'http://localhost:3000',
+  'http://localhost:3000', // always allow local dev
+])
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow same-origin requests (no Origin header) and known origins
+    if (!origin || allowedOrigins.has(origin)) {
+      callback(null, true)
+    } else {
+      callback(new Error(`CORS: origin '${origin}' not allowed`))
+    }
+  },
+  credentials: true,
+}))
+
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ extended: true, limit: '50mb' }))
 
