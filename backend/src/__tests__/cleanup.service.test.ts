@@ -68,7 +68,11 @@ describe('cleanupSoftDeletedRequirements', () => {
   it('deletes a requirement past the retention window and emits a cleanup_finished log', async () => {
     const req = await createExpiredRequirement('happy')
 
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const loggedLines: string[] = []
+    const logSpy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      loggedLines.push(typeof chunk === 'string' ? chunk : chunk.toString())
+      return true
+    })
 
     await cleanupSoftDeletedRequirements()
 
@@ -84,7 +88,6 @@ describe('cleanupSoftDeletedRequirements', () => {
     expect(auditEvent?.performedByUserId).toBe('SYSTEM_CLEANUP')
 
     // Structured JSON log must include required fields
-    const loggedLines = logSpy.mock.calls.map(args => args[0]).filter(s => typeof s === 'string')
     const summaryLine = loggedLines.find(line => {
       try { return JSON.parse(line).event === 'cleanup_finished' } catch { return false }
     })
