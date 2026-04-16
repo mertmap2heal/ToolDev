@@ -1,9 +1,11 @@
 import express from 'express'
 import cors from 'cors'
+import { randomUUID } from 'crypto'
 import dotenv from 'dotenv'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { prisma } from './lib/prisma'
+import { logger, setRequestId } from './lib/logger.js'
 import routes from './routes/index.js'
 import feedbackRoutes from './routes/feedback.routes.js'
 import http from 'http'
@@ -11,7 +13,7 @@ import { setupRealtime } from './realtime/realtime.js'
 
 dotenv.config()
 
-console.log('Server: loading Prisma and routes...')
+logger.info('server_loading', { message: 'Loading Prisma and routes' })
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -40,6 +42,15 @@ app.use(cors({
   },
   credentials: true,
 }))
+
+// Request ID middleware — attaches a unique ID to every request for log correlation (#42)
+app.use((req, res, next) => {
+  const id = (req.headers['x-request-id'] as string) || randomUUID()
+  res.setHeader('X-Request-Id', id)
+  setRequestId(id)
+  res.on('finish', () => setRequestId(undefined))
+  next()
+})
 
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ extended: true, limit: '50mb' }))
@@ -75,7 +86,7 @@ app.get('/api/health/db', async (_req, res) => {
     res.json({ ok: true, projectCount })
   } catch (e) {
     const err = e as Error
-    console.error('DB health check failed:', err.message)
+    logger.error('db_health_failed', { error: err.message })
     res.status(503).json({
       ok: false,
       error: err.message || 'Database connection failed',
@@ -105,18 +116,22 @@ app.use('/api/v1', routes)
 app.use('/api/v1/feedback', feedbackRoutes)
 
 // Global error handler: return JSON 500 for any unhandled errors
-app.use(async (err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('Unhandled error:', err)
+app.use(async (err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  logger.error('unhandled_error', {
+    error: err.message,
+    stack: err.stack,
+    method: req.method,
+    path: req.path,
+  })
 
-  // Log to file for debugging
+  // Also persist to error.log for post-mortem debugging
   const logPath = path.join(__dirname, '../error.log')
   const logMessage = `[${new Date().toISOString()}] ${err.stack || err.message}\n`
-  // Ensure fs is imported at top of file
   try {
-    const fs = await import('fs');
+    const fs = await import('fs')
     fs.default.appendFileSync(logPath, logMessage)
   } catch (e) {
-    console.error('Failed to write to log file:', e)
+    logger.error('error_log_write_failed', { error: (e as Error).message })
   }
 
   const message = process.env.NODE_ENV === 'production' ? 'Internal server error' : (err.message ?? 'Internal server error')
@@ -124,24 +139,17 @@ app.use(async (err: Error, _req: express.Request, res: express.Response, _next: 
 })
 
 if (process.env.NODE_ENV !== 'test') {
-  console.log('Server: binding to port', PORT, '...')
+  logger.info('server_starting', { port: PORT })
   // Start real-time server
   const io = setupRealtime(server, prisma)
   server.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`)
+    logger.info('server_ready', { port: PORT })
 
     // Schedule cleanup job (daily)
     import('./services/cleanup.service.js').then(({ cleanupSoftDeletedRequirements }) => {
       const runCleanup = (trigger: string) => {
         cleanupSoftDeletedRequirements().catch((err: Error) => {
-          // Log as structured JSON so monitoring tools can alert on this event.
-          // Newlines are sanitized to prevent log-record splitting in aggregators.
-          console.error(JSON.stringify({
-            event: 'cleanup_job_failed',
-            trigger,
-            error: err.message.replace(/[\r\n]+/g, ' '),
-            timestamp: new Date().toISOString(),
-          }))
+          logger.error('cleanup_job_failed', { trigger, error: err.message })
         })
       }
 
@@ -152,8 +160,8 @@ if (process.env.NODE_ENV !== 'test') {
       setInterval(() => runCleanup('scheduled'), 24 * 60 * 60 * 1000)
     })
   }).on('error', (err: NodeJS.ErrnoException) => {
-    console.error('Server failed to listen:', err.message)
-    if (err.code === 'EADDRINUSE') console.error('Port', PORT, 'is already in use.')
+    logger.error('server_listen_failed', { error: err.message, code: err.code })
+    if (err.code === 'EADDRINUSE') logger.error('port_in_use', { port: PORT })
   })
 }
 
