@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client'
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
+import { allocateParameterId } from '../lib/paramId'
 import {
   exportParameters as formatExport,
   exportParametersBinary,
@@ -60,23 +61,25 @@ import {
 } from '../services/azuredevops.service'
 
 
-async function generateParameterId(projectId: string): Promise<string> {
-  const prefix = 'PARAM'
-  const all = await prisma.parameter.findMany({
-    where: { projectId },
-    select: { parameterId: true },
-  })
-  let maxNumber = 0
-  for (const p of all) {
-    if (p.parameterId && /^PARAM-\d+$/.test(p.parameterId)) {
-      const m = p.parameterId.match(/-(\d+)$/)
-      if (m) {
-        const n = parseInt(m[1], 10)
-        if (n > maxNumber) maxNumber = n
-      }
-    }
+/**
+ * Allocates the next PARAM-NNN identifier for a project.
+ *
+ * Uses a per-project Postgres advisory lock so concurrent creates cannot
+ * read the same maximum and generate duplicate IDs.  Also avoids a full
+ * table scan: the new implementation is O(log N) instead of O(N).
+ *
+ * @param tx  Optional transaction client.  When provided, the allocation joins
+ *            the caller's transaction (advisory lock released at commit time).
+ *            When omitted, a new transaction is opened automatically.
+ */
+async function generateParameterId(
+  projectId: string,
+  tx?: Prisma.TransactionClient
+): Promise<string> {
+  if (tx) {
+    return allocateParameterId(tx, projectId)
   }
-  return `${prefix}-${(maxNumber + 1).toString().padStart(3, '0')}`
+  return prisma.$transaction((inner) => allocateParameterId(inner, projectId))
 }
 
 function buildParameterWhere(projectId: string, query: Record<string, string | undefined>) {
