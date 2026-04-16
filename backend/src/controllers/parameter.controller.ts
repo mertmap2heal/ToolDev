@@ -60,9 +60,10 @@ import {
 } from '../services/azuredevops.service'
 
 
-async function generateParameterId(projectId: string): Promise<string> {
+async function generateParameterId(projectId: string, tx?: Prisma.TransactionClient): Promise<string> {
   const prefix = 'PARAM'
-  const all = await prisma.parameter.findMany({
+  const client = tx ?? prisma
+  const all = await client.parameter.findMany({
     where: { projectId },
     select: { parameterId: true },
   })
@@ -918,13 +919,14 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
       if (cyclesFound.length > 0) warnings.push(...cyclesFound.map(c => `Circular dependency detected: ${c}`))
     }
 
-    let imported = 0
-    let skipped = 0
-    const errors: string[] = []
+    // Wrap all writes in a single transaction so that a mid-batch failure rolls
+    // back every row already processed — no partial-import state (#78).
+    const { imported, updated } = await prisma.$transaction(async (tx) => {
+      let imported = 0
+      let skipped = 0
 
-    for (const p of parsed) {
-      try {
-        const existing = await prisma.parameter.findFirst({
+      for (const p of parsed) {
+        const existing = await tx.parameter.findFirst({
           where: { projectId, name: p.name },
         })
 
@@ -968,7 +970,7 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
           const newVersionStr = incrementMinorVersion(existing.version)
           const { major: newMajor, minor: newMinor } = parseVersionParts(newVersionStr)
 
-          const updatedParameter = await prisma.parameter.update({
+          const updatedParameter = await tx.parameter.update({
             where: { id: existing.id },
             data: {
               description:  newDesc,
@@ -987,7 +989,7 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
 
           // Create version record with major.minor parts
           const snapshot = buildParameterVersionSnapshot(updatedParameter)
-          await prisma.parameterVersion.create({
+          await tx.parameterVersion.create({
             data: {
               parameterId: existing.id,
               version: newMajor,
@@ -999,8 +1001,8 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
 
           skipped++ // counted as "updated"
         } else {
-          const newParameterId = await generateParameterId(projectId)
-          const created = await prisma.parameter.create({
+          const newParameterId = await generateParameterId(projectId, tx)
+          const created = await tx.parameter.create({
             data: {
               projectId,
               parameterId: newParameterId,
@@ -1020,7 +1022,7 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
 
           // Create initial version record (1.0)
           const snapshot = buildParameterVersionSnapshot(created)
-          await prisma.parameterVersion.create({
+          await tx.parameterVersion.create({
             data: {
               parameterId: created.id,
               version: 1,
@@ -1032,15 +1034,15 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
 
           imported++
         }
-      } catch (err) {
-        errors.push(`"${p.name}": ${(err as Error).message}`)
       }
-    }
+
+      return { imported, updated: skipped }
+    }, { timeout: 30_000 })
 
     res.json({
       success: true,
-      data: { imported, updated: skipped, errors, warnings },
-      message: `Import complete: ${imported} created, ${skipped} updated${errors.length ? `, ${errors.length} errors` : ''}`,
+      data: { imported, updated, errors: [], warnings },
+      message: `Import complete: ${imported} created, ${updated} updated`,
     })
   } catch (error) {
     console.error('Import parameters error:', error)
@@ -1493,17 +1495,16 @@ export async function gitPullHandler(req: AuthRequest, res: Response) {
       return res.status(422).json({ success: false, error: `No parameters found in ${resolvedFilePath}`, warnings })
     }
 
-    let imported = 0
-    let updated = 0
-    const errors: string[] = []
+    const { imported, updated } = await prisma.$transaction(async (tx) => {
+      let imported = 0
+      let updated = 0
 
-    for (const p of parsed) {
-      try {
-        const existing = await prisma.parameter.findFirst({ where: { projectId, name: p.name } })
+      for (const p of parsed) {
+        const existing = await tx.parameter.findFirst({ where: { projectId, name: p.name } })
         if (existing) {
           const newVersionStr = incrementMinorVersion(existing.version)
           const { major: maj, minor: min } = parseVersionParts(newVersionStr)
-          const up = await prisma.parameter.update({
+          const up = await tx.parameter.update({
             where: { id: existing.id },
             data: {
               description:  p.description  ?? existing.description,
@@ -1519,7 +1520,7 @@ export async function gitPullHandler(req: AuthRequest, res: Response) {
               ...(p.tags != null && { tags: p.tags }),
             },
           })
-          await prisma.parameterVersion.create({
+          await tx.parameterVersion.create({
             data: {
               parameterId: existing.id,
               version: maj,
@@ -1530,8 +1531,8 @@ export async function gitPullHandler(req: AuthRequest, res: Response) {
           })
           updated++
         } else {
-          const newParameterId = await generateParameterId(projectId)
-          const created = await prisma.parameter.create({
+          const newParameterId = await generateParameterId(projectId, tx)
+          const created = await tx.parameter.create({
             data: {
               projectId,
               parameterId: newParameterId,
@@ -1548,7 +1549,7 @@ export async function gitPullHandler(req: AuthRequest, res: Response) {
               status: p.status ?? 'draft',
             },
           })
-          await prisma.parameterVersion.create({
+          await tx.parameterVersion.create({
             data: {
               parameterId: created.id,
               version: 1,
@@ -1559,15 +1560,15 @@ export async function gitPullHandler(req: AuthRequest, res: Response) {
           })
           imported++
         }
-      } catch (err) {
-        errors.push(`"${p.name}": ${(err as Error).message}`)
       }
-    }
+
+      return { imported, updated }
+    }, { timeout: 30_000 })
 
     res.json({
       success: true,
-      data: { imported, updated, errors, warnings, filePath: resolvedFilePath, format: resolvedFormat },
-      message: `Pull complete: ${imported} created, ${updated} updated from ${platform}${errors.length ? `, ${errors.length} errors` : ''}`,
+      data: { imported, updated, errors: [], warnings, filePath: resolvedFilePath, format: resolvedFormat },
+      message: `Pull complete: ${imported} created, ${updated} updated from ${platform}`,
     })
   } catch (error) {
     console.error('Git pull error:', error)
