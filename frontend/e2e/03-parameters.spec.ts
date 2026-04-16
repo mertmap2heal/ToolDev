@@ -3,6 +3,7 @@
  */
 import { test, expect } from './helpers/fixtures'
 import { generateUniqueCsv, writeTempCsvPath } from './helpers/csvGenerator'
+import { E2E_API_V1 } from './helpers/api'
 
 // Modals in this app use fixed overlay, not role="dialog"
 const MODAL = '.fixed.inset-0'
@@ -141,7 +142,7 @@ test.describe('Parameters — CRUD', () => {
 
     // Try to find an existing test parameter or create one
     const listResp = await page.request.get(
-      `http://localhost:5000/api/v1/parameters/${projectId}`,
+      `${E2E_API_V1}/parameters/${projectId}`,
       { headers: { Authorization: `Bearer ${token}` } },
     )
     let paramId: string | null = null
@@ -155,7 +156,7 @@ test.describe('Parameters — CRUD', () => {
     if (!paramId) {
       // Create via API for reliable setup
       const createResp = await page.request.post(
-        `http://localhost:5000/api/v1/parameters/${projectId}`,
+        `${E2E_API_V1}/parameters/${projectId}`,
         {
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
           data: { ...apiCreateParameterBody(paramName, 'Original description') },
@@ -203,7 +204,7 @@ test.describe('Parameters — CRUD', () => {
 
     const deleteTargetName = `e2e_delete_${Date.now()}`
     const createResp = await page.request.post(
-      `http://localhost:5000/api/v1/parameters/${projectId}`,
+      `${E2E_API_V1}/parameters/${projectId}`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: { ...apiCreateParameterBody(deleteTargetName, 'To be deleted') },
@@ -242,7 +243,7 @@ test.describe('Parameters — Search & Filter', () => {
     if (!token) return
 
     const listResp = await page.request.get(
-      `http://localhost:5000/api/v1/parameters/${projectId}`,
+      `${E2E_API_V1}/parameters/${projectId}`,
       { headers: { Authorization: `Bearer ${token}` } },
     )
     if (listResp.ok()) {
@@ -251,7 +252,7 @@ test.describe('Parameters — Search & Filter', () => {
       const hasTestParam = params.some(p => p.name === searchSeedName)
       if (!hasTestParam) {
         await page.request.post(
-          `http://localhost:5000/api/v1/parameters/${projectId}`,
+          `${E2E_API_V1}/parameters/${projectId}`,
           {
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
             data: { ...apiCreateParameterBody(searchSeedName, 'Search test param') },

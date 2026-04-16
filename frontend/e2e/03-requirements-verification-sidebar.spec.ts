@@ -7,6 +7,7 @@
  */
 import { test, expect } from './helpers/fixtures'
 import { readAuthToken } from './helpers/requirementsUi'
+import { E2E_API_V1 } from './helpers/api'
 
 test.describe('Requirements / Verification sidebar', () => {
   test.describe.configure({ timeout: 90_000 })
@@ -22,7 +23,7 @@ test.describe('Requirements / Verification sidebar', () => {
     const token = await readAuthToken(page)
 
     // Seed requirement
-    const reqResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+    const reqResp = await page.request.post(`${E2E_API_V1}/requirements/${projectId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: {
         title: requirementTitle,
@@ -36,7 +37,7 @@ test.describe('Requirements / Verification sidebar', () => {
     expect(requirementId, 'Requirement id').toBeTruthy()
 
     // Seed verification test plan + test case, then link case -> plan
-    const planResp = await page.request.post(`http://localhost:5000/api/v1/verification/test-plans/${projectId}`, {
+    const planResp = await page.request.post(`${E2E_API_V1}/verification/test-plans/${projectId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: {
         name: planName,
@@ -49,7 +50,7 @@ test.describe('Requirements / Verification sidebar', () => {
     const testPlanId: string = plan?.id
     expect(testPlanId, 'Test plan id').toBeTruthy()
 
-    const tcResp = await page.request.post(`http://localhost:5000/api/v1/verification/test-cases/${projectId}`, {
+    const tcResp = await page.request.post(`${E2E_API_V1}/verification/test-cases/${projectId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: {
         title: testCaseTitle,
@@ -62,7 +63,7 @@ test.describe('Requirements / Verification sidebar', () => {
     expect(testCaseId, 'Test case id').toBeTruthy()
 
     const addCaseResp = await page.request.post(
-      `http://localhost:5000/api/v1/verification/test-plans/${projectId}/${testPlanId}/add-case`,
+      `${E2E_API_V1}/verification/test-plans/${projectId}/${testPlanId}/add-case`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: { testCaseId },
@@ -71,7 +72,7 @@ test.describe('Requirements / Verification sidebar', () => {
     expect(addCaseResp.ok(), await addCaseResp.text()).toBeTruthy()
 
     // Create trace link requirement -> test_case
-    const linkResp = await page.request.post(`http://localhost:5000/api/v1/traceability/${projectId}`, {
+    const linkResp = await page.request.post(`${E2E_API_V1}/traceability/${projectId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: {
         sourceType: 'requirement',
@@ -128,7 +129,7 @@ test.describe('Requirements / Verification sidebar', () => {
     const token = await readAuthToken(page)
 
     // Seed requirement
-    const reqResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+    const reqResp = await page.request.post(`${E2E_API_V1}/requirements/${projectId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: {
         title: requirementTitle,
@@ -142,7 +143,7 @@ test.describe('Requirements / Verification sidebar', () => {
     expect(requirementId, 'Requirement id').toBeTruthy()
 
     // Seed verification test plan + test case, then link case -> plan
-    const planResp = await page.request.post(`http://localhost:5000/api/v1/verification/test-plans/${projectId}`, {
+    const planResp = await page.request.post(`${E2E_API_V1}/verification/test-plans/${projectId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: {
         name: planName,
@@ -155,7 +156,7 @@ test.describe('Requirements / Verification sidebar', () => {
     const testPlanId: string = plan?.id
     expect(testPlanId, 'Test plan id').toBeTruthy()
 
-    const tcResp = await page.request.post(`http://localhost:5000/api/v1/verification/test-cases/${projectId}`, {
+    const tcResp = await page.request.post(`${E2E_API_V1}/verification/test-cases/${projectId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: {
         title: testCaseTitle,
@@ -168,7 +169,7 @@ test.describe('Requirements / Verification sidebar', () => {
     expect(testCaseId, 'Test case id').toBeTruthy()
 
     const addCaseResp = await page.request.post(
-      `http://localhost:5000/api/v1/verification/test-plans/${projectId}/${testPlanId}/add-case`,
+      `${E2E_API_V1}/verification/test-plans/${projectId}/${testPlanId}/add-case`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: { testCaseId },
@@ -177,7 +178,7 @@ test.describe('Requirements / Verification sidebar', () => {
     expect(addCaseResp.ok(), await addCaseResp.text()).toBeTruthy()
 
     // Create trace link requirement -> test_case
-    const linkResp = await page.request.post(`http://localhost:5000/api/v1/traceability/${projectId}`, {
+    const linkResp = await page.request.post(`${E2E_API_V1}/traceability/${projectId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: {
         sourceType: 'requirement',
@@ -190,7 +191,7 @@ test.describe('Requirements / Verification sidebar', () => {
     expect(linkResp.ok(), await linkResp.text()).toBeTruthy()
 
     // Create baseline snapshot containing the requirement
-    const baselineResp = await page.request.post(`http://localhost:5000/api/v1/baselines/${projectId}`, {
+    const baselineResp = await page.request.post(`${E2E_API_V1}/baselines/${projectId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: {
         name: `E2E Baseline ${stamp}`,
