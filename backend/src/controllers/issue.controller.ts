@@ -1,7 +1,7 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
-import { formatIssueKey, getMaxIssueSequenceNumber, isIssueKeyUniqueViolation } from '../lib/issueKey'
+import { allocateIssueKey } from '../lib/issueKey'
 import { linkageAuditService } from '../services/linkageAudit.service'
 import { traceabilityService } from '../services/traceability.service'
 import fs from 'fs'
@@ -64,47 +64,32 @@ export const createIssue = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    // Generate unique issue key (ISS-0001). Use numeric MAX (not string sort: ISS-10000 < ISS-9999 lexically)
-    // and retry on P2002 for concurrent creates.
-    const maxAttempts = 12
-    let issue: Awaited<ReturnType<typeof prisma.issue.create>> | null = null
-    let lastKeyError: unknown
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const nextSeq = (await getMaxIssueSequenceNumber()) + 1
-      const issueKey = formatIssueKey(nextSeq)
-      try {
-        issue = await prisma.issue.create({
-          data: {
-            projectId,
-            issueKey,
-            title,
-            description,
-            priority: priority || 'medium',
-            issueType: issueType || null,
-            owner: owner || '',
-            assigneeId,
-            createdBy: req.userId,
-            updatedBy: req.userId,
-            relatedFunctionIds: relatedFunctionIds || [],
-            relatedParameterIds: relatedParameterIds || [],
-            labelIds: labelIds || [],
-            startDate: startDate ? new Date(startDate) : null,
-            dueDate: dueDate ? new Date(dueDate) : null,
-            estimatedTime,
-          },
-        })
-        break
-      } catch (e) {
-        if (isIssueKeyUniqueViolation(e)) {
-          lastKeyError = e
-          continue
-        }
-        throw e
-      }
-    }
-    if (!issue) {
-      throw lastKeyError ?? new Error('Could not allocate a unique issue key')
-    }
+    // Allocate a unique issue key atomically using a Postgres advisory lock (#38).
+    // pg_advisory_xact_lock serializes concurrent creates so every INSERT receives
+    // a unique sequence number — no retry loop needed.
+    const issue = await prisma.$transaction(async (tx) => {
+      const issueKey = await allocateIssueKey(tx)
+      return tx.issue.create({
+        data: {
+          projectId,
+          issueKey,
+          title,
+          description,
+          priority: priority || 'medium',
+          issueType: issueType || null,
+          owner: owner || '',
+          assigneeId,
+          createdBy: req.userId,
+          updatedBy: req.userId,
+          relatedFunctionIds: relatedFunctionIds || [],
+          relatedParameterIds: relatedParameterIds || [],
+          labelIds: labelIds || [],
+          startDate: startDate ? new Date(startDate) : null,
+          dueDate: dueDate ? new Date(dueDate) : null,
+          estimatedTime,
+        },
+      })
+    })
 
     // Subscribe creator automatically
     if (req.userId) {
