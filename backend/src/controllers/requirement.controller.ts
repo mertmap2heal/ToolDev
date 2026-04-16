@@ -2244,7 +2244,7 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
       performedByUserId: req.userId,
     })
 
-    await notifyRequirementSubscribers({
+    notifyRequirementSubscribers({
       projectId,
       requirementId: requirement.id,
       actorUserId: req.userId,
@@ -2255,7 +2255,7 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
         requirementId: requirement.requirementId,
         title: requirement.title,
       },
-    })
+    }).catch(console.error)
 
     res.json({
       success: true,
@@ -2686,7 +2686,7 @@ export const updateRequirementParent = async (req: AuthRequest, res: Response) =
     })
 
     const changes = buildRequirementChangeSummary(requirement, updatedRequirement as any)
-    await notifyRequirementSubscribers({
+    notifyRequirementSubscribers({
       projectId,
       requirementId: requirement.id,
       actorUserId: req.userId,
@@ -2696,7 +2696,7 @@ export const updateRequirementParent = async (req: AuthRequest, res: Response) =
         requirementId: updatedRequirement.requirementId,
         title: updatedRequirement.title,
       },
-    })
+    }).catch(console.error)
 
     res.json({
       success: true,
@@ -2775,24 +2775,22 @@ export const bulkUpdateRequirements = async (req: AuthRequest, res: Response) =>
     })
 
     const afterById = new Map(afterRequirements.map((req) => [req.id, req]))
-    await Promise.all(
-      beforeRequirements.map(async (before) => {
-        const after = afterById.get(before.id)
-        if (!after) return
-        const changes = buildRequirementChangeSummary(before, after)
-        await notifyRequirementSubscribers({
-          projectId,
-          requirementId: before.id,
-          actorUserId: req.userId,
-          changes,
-          requirementSnapshot: {
-            id: after.id,
-            requirementId: after.requirementId,
-            title: after.title,
-          },
-        })
-      })
-    )
+    beforeRequirements.forEach((before) => {
+      const after = afterById.get(before.id)
+      if (!after) return
+      const changes = buildRequirementChangeSummary(before, after)
+      notifyRequirementSubscribers({
+        projectId,
+        requirementId: before.id,
+        actorUserId: req.userId,
+        changes,
+        requirementSnapshot: {
+          id: after.id,
+          requirementId: after.requirementId,
+          title: after.title,
+        },
+      }).catch(console.error)
+    })
 
     const skippedDueToLock = beforeRequirements.filter(r => r.isLocked).length
 
@@ -3057,7 +3055,7 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
           })
 
           const changes = buildRequirementChangeSummary(existing, updatedRequirement as any)
-          await notifyRequirementSubscribers({
+          notifyRequirementSubscribers({
             projectId,
             requirementId: updatedRequirement.id,
             actorUserId: req.userId,
@@ -3067,7 +3065,7 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
               requirementId: updatedRequirement.requirementId,
               title: updatedRequirement.title,
             },
-          })
+          }).catch(console.error)
 
           updatedCount++
         } catch (error: any) {
@@ -3396,7 +3394,7 @@ export const updateRequirementComponent = async (req: AuthRequest, res: Response
     })
 
     const changes = buildRequirementChangeSummary(requirement, updated as any)
-    await notifyRequirementSubscribers({
+    notifyRequirementSubscribers({
       projectId,
       requirementId: requirement.id,
       actorUserId: req.userId,
@@ -3406,7 +3404,7 @@ export const updateRequirementComponent = async (req: AuthRequest, res: Response
         requirementId: updated.requirementId,
         title: updated.title,
       },
-    })
+    }).catch(console.error)
 
     res.json({
       success: true,
