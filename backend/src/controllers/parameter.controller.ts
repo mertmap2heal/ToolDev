@@ -1429,15 +1429,17 @@ export async function gitPublishSyncHandler(req: AuthRequest, res: Response) {
 }
 
 // ---------------------------------------------------------------------------
-// Git Publish Status — GET /:projectId/git/status
-// Query: platform, baseUrl, token, repoId, branch?, username?, workspace?, org?, project?
+// Git Publish Status — POST /:projectId/git/status
+// Body: platform, baseUrl, token, repoId, branch?, username?, workspace?, org?, project?
+// Changed from GET to POST so the git token travels in the encrypted request
+// body rather than the URL query string (which is logged by access logs).
 // ---------------------------------------------------------------------------
 export async function gitPublishStatusHandler(req: AuthRequest, res: Response) {
   try {
     const {
       platform, baseUrl, token, repoId, branch,
       username, workspace, org, project,
-    } = req.query as Record<string, string>
+    } = req.body as Record<string, string>
 
     if (!platform || !baseUrl || !token || !repoId) {
       return res.status(400).json({ success: false, error: 'platform, baseUrl, token and repoId are required' })
