@@ -34,6 +34,11 @@ describe('Parameter API', () => {
     })
     projectId = project.id
 
+    // Add the test user as a project member so requireProjectMember passes
+    await prisma.projectMember.create({
+      data: { projectId, userId, role: 'owner' },
+    })
+
     // Seed a parameter with a version
     const param = await prisma.parameter.create({
       data: {
@@ -70,17 +75,34 @@ describe('Parameter API', () => {
   afterAll(async () => {
     await prisma.parameterVersion.deleteMany({ where: { parameterId: parameterDbId } })
     await prisma.parameter.deleteMany({ where: { projectId } })
+    await prisma.projectMember.deleteMany({ where: { projectId } })
     await prisma.project.delete({ where: { id: projectId } })
     await prisma.user.delete({ where: { id: userId } })
     await prisma.$disconnect()
   })
 
   // ---------------------------------------------------------------------------
-  // Auth guard
+  // Auth guard and project membership
   // ---------------------------------------------------------------------------
   it('GET /parameters/:projectId returns 401 without auth', async () => {
     const res = await request(app).get(`/api/v1/parameters/${projectId}`)
     expect(res.status).toBe(401)
+  })
+
+  it('GET /parameters/:projectId returns 403 for non-member user', async () => {
+    const nonMember = await prisma.user.create({
+      data: {
+        email: `non-member-${Date.now()}@example.com`,
+        password: 'hashedpassword',
+        name: 'Non Member',
+      },
+    })
+    const nonMemberToken = jwt.sign({ userId: nonMember.id }, process.env.JWT_SECRET || 'secret')
+    const res = await request(app)
+      .get(`/api/v1/parameters/${projectId}`)
+      .set('Authorization', `Bearer ${nonMemberToken}`)
+    await prisma.user.delete({ where: { id: nonMember.id } })
+    expect(res.status).toBe(403)
   })
 
   // ---------------------------------------------------------------------------
