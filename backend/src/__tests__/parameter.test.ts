@@ -76,10 +76,52 @@ describe('Parameter API', () => {
   })
 
   // ---------------------------------------------------------------------------
-  // Auth guard
+  // Auth guard — every mutating and sensitive endpoint must reject unauthenticated
+  // requests with 401 (#79)
   // ---------------------------------------------------------------------------
   it('GET /parameters/:projectId returns 401 without auth', async () => {
     const res = await request(app).get(`/api/v1/parameters/${projectId}`)
+    expect(res.status).toBe(401)
+  })
+
+  it('POST /parameters/:projectId returns 401 without auth', async () => {
+    const res = await request(app)
+      .post(`/api/v1/parameters/${projectId}`)
+      .send({ name: 'NoAuth', dataType: 'string' })
+    expect(res.status).toBe(401)
+  })
+
+  it('PUT /parameters/:projectId/:id returns 401 without auth', async () => {
+    const res = await request(app)
+      .put(`/api/v1/parameters/${projectId}/${parameterDbId}`)
+      .send({ description: 'no auth' })
+    expect(res.status).toBe(401)
+  })
+
+  it('DELETE /parameters/:projectId/:id returns 401 without auth', async () => {
+    const res = await request(app)
+      .delete(`/api/v1/parameters/${projectId}/${parameterDbId}`)
+    expect(res.status).toBe(401)
+  })
+
+  it('PATCH /parameters/:projectId/bulk returns 401 without auth', async () => {
+    const res = await request(app)
+      .patch(`/api/v1/parameters/${projectId}/bulk`)
+      .send({ ids: [parameterDbId], updates: { status: 'review' } })
+    expect(res.status).toBe(401)
+  })
+
+  it('DELETE /parameters/:projectId/bulk returns 401 without auth', async () => {
+    const res = await request(app)
+      .delete(`/api/v1/parameters/${projectId}/bulk`)
+      .send({ ids: [parameterDbId] })
+    expect(res.status).toBe(401)
+  })
+
+  it('POST /parameters/:projectId/import returns 401 without auth', async () => {
+    const res = await request(app)
+      .post(`/api/v1/parameters/${projectId}/import`)
+      .send({ format: 'json', content: '[]' })
     expect(res.status).toBe(401)
   })
 
