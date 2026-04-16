@@ -582,8 +582,10 @@ test.describe('Parameters — Export round-trip', () => {
 // ---------------------------------------------------------------------------
 test.describe('Parameters — SysML/XMI Import', () => {
   test.skip('XMI file is accepted and imports parameters', async ({ page, projectId }) => {
-    // Skipped: requires a local XMI fixture at C:/Users/chris/Downloads/import_test_sysml.xmi
-    const xmiPath = 'C:/Users/chris/Downloads/import_test_sysml.xmi'
+    // SKIP: requires backend SysML/XMI parser in parameterImport.service.ts
+    // and a fixture file at frontend/e2e/fixtures/sample.xmi
+    // See GitHub issue #9
+    const xmiPath = 'frontend/e2e/fixtures/sample.xmi'
 
     await page.goto(`/projects/${projectId}/parameters`)
     await page.waitForLoadState('domcontentloaded')
