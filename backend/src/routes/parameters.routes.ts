@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
 import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
+import { requireProjectMember } from '../middleware/requireProjectMember.middleware'
 import {
   getParameterTypes,
   createParameterTypeHandler,
@@ -49,6 +50,7 @@ const router = Router()
 
 router.use(authenticateToken)
 router.param('projectId', projectIdParam)
+router.use('/:projectId', requireProjectMember)
 
 // Parameter type registry
 router.get('/:projectId/types', getParameterTypes)
