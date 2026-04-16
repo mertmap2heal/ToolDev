@@ -5,7 +5,7 @@ import { expect } from '@playwright/test'
 export const MODAL_OVERLAY = '.fixed.inset-0'
 
 /** Raw backend base URL for `page.request` (matches other requirements e2e helpers). */
-export const E2E_API_V1 = 'http://localhost:5000/api/v1'
+export { E2E_API_V1 } from './api'
 
 function bearerJsonHeaders(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }

@@ -2,6 +2,7 @@ import { Page, expect } from '@playwright/test'
 import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
+import { E2E_API_V1 } from './api'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -68,7 +69,7 @@ export async function getFirstProjectId(page: Page): Promise<string | null> {
   const token = await page.evaluate(() => localStorage.getItem('token'))
   if (!token) return null
 
-  const resp = await page.request.get('http://localhost:5000/api/v1/projects', {
+  const resp = await page.request.get('${E2E_API_V1}/projects', {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!resp.ok()) return null
@@ -89,7 +90,7 @@ export async function getOrCreateProjectId(page: Page): Promise<string> {
   if (!token) throw new Error('No auth token in localStorage — login must succeed before projectId fixture')
 
   // Try to find an existing project first
-  const listResp = await page.request.get('http://localhost:5000/api/v1/projects', {
+  const listResp = await page.request.get('${E2E_API_V1}/projects', {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (listResp.ok()) {
@@ -99,7 +100,7 @@ export async function getOrCreateProjectId(page: Page): Promise<string> {
   }
 
   // No project visible to this user — create one
-  const createResp = await page.request.post('http://localhost:5000/api/v1/projects', {
+  const createResp = await page.request.post('${E2E_API_V1}/projects', {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     data: { name: 'E2E Test Project', domain: 'E2E Testing', description: 'Auto-created by Playwright setup' },
   })
