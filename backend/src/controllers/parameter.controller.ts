@@ -248,10 +248,10 @@ export const getParameters = async (req: AuthRequest, res: Response) => {
 
 export const getParameter = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params
+    const { projectId, id } = req.params
 
-    const parameter = await prisma.parameter.findUnique({
-      where: { id },
+    const parameter = await prisma.parameter.findFirst({
+      where: { id, projectId },
       include: {
         sourceFunction: { select: { id: true, functionId: true, name: true } },
         sourceParameter: { select: { id: true, name: true } },
@@ -272,7 +272,7 @@ export const getParameter = async (req: AuthRequest, res: Response) => {
 
 export const updateParameter = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params
+    const { projectId, id } = req.params
     const body = req.body as Record<string, unknown>
     const {
       name,
@@ -296,7 +296,7 @@ export const updateParameter = async (req: AuthRequest, res: Response) => {
       parameterId: parameterIdFromBody,
     } = body
 
-    const parameter = await prisma.parameter.findUnique({ where: { id } })
+    const parameter = await prisma.parameter.findFirst({ where: { id, projectId } })
     if (!parameter) {
       return res.status(404).json({ success: false, error: 'Parameter not found' })
     }
@@ -731,10 +731,10 @@ export const bulkDeleteParameters = async (req: AuthRequest, res: Response) => {
 
 export const deleteParameter = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params
+    const { projectId, id } = req.params
 
-    const parameter = await prisma.parameter.findUnique({
-      where: { id },
+    const parameter = await prisma.parameter.findFirst({
+      where: { id, projectId },
     })
 
     if (!parameter) {
