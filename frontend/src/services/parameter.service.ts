@@ -197,7 +197,7 @@ export const parameterService = {
 
   async gitPublishStatus(
     projectId: string,
-    query: {
+    payload: {
       platform: string
       baseUrl: string
       token: string
@@ -212,10 +212,7 @@ export const parameterService = {
     latestCommit: { sha: string; createdAt: string; message: string; webUrl: string }
     repoInfo: { name: string; webUrl: string; httpUrl: string; sshUrl: string }
   }>> {
-    const params = new URLSearchParams(
-      Object.fromEntries(Object.entries(query).filter(([, v]) => v !== undefined)) as Record<string, string>
-    )
-    return apiClient.get(`/parameters/${projectId}/git/status?${params}`)
+    return apiClient.post(`/parameters/${projectId}/git/status`, payload)
   },
 
   async gitValidateToken(
