@@ -2522,6 +2522,21 @@ export const deleteRequirementComment = async (req: AuthRequest, res: Response) 
       })
     }
 
+    // Only the comment author or an admin may delete
+    if (comment.authorId && comment.authorId !== req.userId) {
+      const actor = await prisma.user.findUnique({
+        where: { id: req.userId! },
+        select: { role: true },
+      })
+      const isAdmin = actor?.role === 'SUPERIOR_ADMIN' || actor?.role === 'COMPANY_ADMIN'
+      if (!isAdmin) {
+        return res.status(403).json({
+          success: false,
+          error: 'You can only delete your own comments',
+        })
+      }
+    }
+
     await linkageAuditService.log({
       projectId,
       entityType: 'REQUIREMENT',
