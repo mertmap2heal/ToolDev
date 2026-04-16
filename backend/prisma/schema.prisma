@@ -245,6 +245,8 @@ model RequirementExportTemplate {
   @@index([projectId, format])
   @@index([projectId, visibility])
   @@index([deletedAt])
+  // Composite index for soft-delete list queries (#39)
+  @@index([projectId, deletedAt])
 }
 
 // Background export jobs – track client-initiated large exports (>500 reqs) for progress monitoring.
@@ -475,6 +477,13 @@ model Requirement {
   @@index([parentId])
   @@index([componentId])
   @@index([linkedMocCode])
+  // Composite index for soft-delete list queries (projectId always in WHERE) (#39)
+  @@index([projectId, deletedAt])
+  // FK fields without indexes — speeds up join/filter queries on these columns (#40)
+  @@index([lockedByUserId])
+  @@index([statusId])
+  @@index([statusChangedBy])
+  @@index([deletedById])
 }
 
 model RequirementSubscription {
