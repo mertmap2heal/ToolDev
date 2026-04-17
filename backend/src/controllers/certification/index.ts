@@ -1,7 +1,17 @@
 import { Response } from 'express'
+import bcrypt from 'bcryptjs'
 import { prisma } from '../../lib/prisma'
 import type { AuthRequest } from '../../middleware/auth.middleware'
 import * as certExport from '../../services/certificationExport.service'
+
+// Issue #163: confirm the authenticated user belongs to the project before
+// accepting an identity-bound action. Returns the ProjectMember row or null.
+async function assertProjectMember(userId: string, projectId: string) {
+  return prisma.projectMember.findFirst({
+    where: { projectId, userId },
+    select: { id: true },
+  })
+}
 
 
 // ----- Context -----
@@ -1732,24 +1742,80 @@ export async function updateChecklistItem(req: AuthRequest, res: Response) {
   }
 }
 
+// Issue #163: sign-off identity verification.
+// Signer identity is derived from the authenticated session; client-supplied
+// `signerId`, `userId`, `signedAt`, or `person` overrides are deliberately ignored.
+// A `confirmPassword` body field must match the caller's stored password hash.
 export async function addSignOff(req: AuthRequest, res: Response) {
   try {
     const { projectId, checklistId } = req.params
-    const { role, person, milestoneId } = req.body
+    const userId = req.user?.userId
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+    const { role, milestoneId, confirmPassword } = req.body as {
+      role?: string
+      milestoneId?: string | null
+      confirmPassword?: string
+    }
+    if (typeof confirmPassword !== 'string' || confirmPassword.length === 0) {
+      return res
+        .status(400)
+        .json({ success: false, error: 'confirmPassword is required to sign off' })
+    }
+    const member = await assertProjectMember(userId, projectId)
+    if (!member) {
+      return res
+        .status(403)
+        .json({ success: false, error: 'Access denied: not a member of this project' })
+    }
     const checklist = await prisma.certChecklist.findFirst({
       where: { id: checklistId, projectId },
     })
     if (!checklist) {
       return res.status(404).json({ success: false, error: 'Checklist not found' })
     }
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, password: true },
+    })
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+    const passwordOk = await bcrypt.compare(confirmPassword, user.password)
+    if (!passwordOk) {
+      return res
+        .status(401)
+        .json({ success: false, error: 'Password confirmation failed' })
+    }
+    // Prevent duplicate sign-off by the same user on the same checklist
+    const existing = await prisma.certSignOff.findFirst({
+      where: { checklistId, signerId: userId },
+      select: { id: true },
+    })
+    if (existing) {
+      return res.status(409).json({
+        success: false,
+        error: 'You have already signed off on this checklist',
+      })
+    }
+    const ipAddress =
+      (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ||
+      req.ip ||
+      null
+    const userAgent = (req.headers['user-agent'] as string | undefined) || null
     const s = await prisma.certSignOff.create({
       data: {
         projectId,
         checklistId,
         milestoneId: milestoneId ?? null,
         role: role ?? '',
-        person: person ?? '',
-        status: 'Pending',
+        person: user.name || user.email || '',
+        status: 'Signed',
+        signedAt: new Date(),
+        signerId: userId,
+        ipAddress: ipAddress || undefined,
+        userAgent: userAgent || undefined,
       },
     })
     res.status(201).json({
@@ -1759,6 +1825,8 @@ export async function addSignOff(req: AuthRequest, res: Response) {
         role: s.role,
         person: s.person,
         status: s.status,
+        signedAt: s.signedAt?.toISOString(),
+        signerId: s.signerId,
       },
     })
   } catch (e) {
@@ -1770,16 +1838,68 @@ export async function addSignOff(req: AuthRequest, res: Response) {
 export async function updateSignOff(req: AuthRequest, res: Response) {
   try {
     const { projectId, id } = req.params
-    const { status, signedAt } = req.body
+    const userId = req.user?.userId
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+    const { status, confirmPassword } = req.body as {
+      status?: string
+      confirmPassword?: string
+    }
+    if (typeof confirmPassword !== 'string' || confirmPassword.length === 0) {
+      return res
+        .status(400)
+        .json({ success: false, error: 'confirmPassword is required to update sign-off' })
+    }
+    const member = await assertProjectMember(userId, projectId)
+    if (!member) {
+      return res
+        .status(403)
+        .json({ success: false, error: 'Access denied: not a member of this project' })
+    }
     const s = await prisma.certSignOff.findFirst({ where: { id, projectId } })
     if (!s) {
       return res.status(404).json({ success: false, error: 'Sign-off not found' })
     }
+    // Only the original signer or a platform/company admin may update an existing sign-off
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true, email: true, password: true },
+    })
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+    const isAdmin =
+      user.role === 'SUPERIOR_ADMIN' || user.role === 'COMPANY_ADMIN'
+    const isAuthor = s.signerId != null && s.signerId === userId
+    if (!isAdmin && !isAuthor) {
+      return res.status(403).json({
+        success: false,
+        error: 'Only the original signer or an admin may modify this sign-off',
+      })
+    }
+    const passwordOk = await bcrypt.compare(confirmPassword, user.password)
+    if (!passwordOk) {
+      return res
+        .status(401)
+        .json({ success: false, error: 'Password confirmation failed' })
+    }
+    // Status changes transitioning to "Signed" must stamp a fresh server-side signedAt
+    const ipAddress =
+      (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ||
+      req.ip ||
+      null
+    const userAgent = (req.headers['user-agent'] as string | undefined) || null
+    const nextSignedAt =
+      status === 'Signed' ? new Date() : status != null && status !== 'Signed' ? null : s.signedAt
     const updated = await prisma.certSignOff.update({
       where: { id },
       data: {
         ...(status != null && { status }),
-        ...(signedAt !== undefined && { signedAt: signedAt ? new Date(signedAt) : null }),
+        signedAt: nextSignedAt,
+        ...(status === 'Signed' && !s.signerId ? { signerId: userId } : {}),
+        ipAddress: ipAddress || undefined,
+        userAgent: userAgent || undefined,
       },
     })
     res.json({
@@ -1788,6 +1908,7 @@ export async function updateSignOff(req: AuthRequest, res: Response) {
         id: updated.id,
         status: updated.status,
         signedAt: updated.signedAt?.toISOString(),
+        signerId: updated.signerId,
       },
     })
   } catch (e) {
