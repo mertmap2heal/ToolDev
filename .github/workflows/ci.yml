@@ -99,6 +99,31 @@ jobs:
             exit 1
           fi
 
+      - name: Verify Socket.IO enforces JWT auth on handshake (#170)
+        run: |
+          set -e
+          rtfile=backend/src/realtime/realtime.ts
+          # 1. An io.use(...) middleware must be installed.
+          if ! grep -q "io.use" "$rtfile"; then
+            echo "::error file=$rtfile::Socket.IO io.use() middleware missing (see issue #170)"
+            exit 1
+          fi
+          # 2. Handshake token verification must be invoked.
+          if ! grep -q "verifySocketToken" "$rtfile"; then
+            echo "::error file=$rtfile::verifySocketToken not referenced (see issue #170)"
+            exit 1
+          fi
+          # 3. CORS origin must not be wide-open '*'.
+          if grep -qE "origin:\s*'\*'" "$rtfile"; then
+            echo "::error file=$rtfile::Socket.IO CORS origin is wide-open '*' (see issue #170)"
+            exit 1
+          fi
+          # 4. Admin room must not be joined via a client query parameter.
+          if grep -q "handshake.query.admin" "$rtfile"; then
+            echo "::error file=$rtfile::admin room joined via handshake.query.admin — must gate on verified role (see issue #170)"
+            exit 1
+          fi
+
   e2e:
     runs-on: ubuntu-latest
     services:
