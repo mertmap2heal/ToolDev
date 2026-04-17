@@ -86,6 +86,19 @@ jobs:
           done
           exit $missing
 
+      - name: Guard against unconditional localhost CORS (#149)
+        run: |
+          set -e
+          # server.ts must not contain an UNCONDITIONAL 'http://localhost:3000' in CORS allowlist
+          if grep -nE "^\s*'http://localhost:3000'" backend/src/server.ts | grep -v "NODE_ENV"; then
+            echo "::error file=backend/src/server.ts::localhost:3000 must be gated on NODE_ENV !== 'production' (issue #149)"
+            exit 1
+          fi
+          if ! grep -q "buildCorsOrigins" backend/src/server.ts; then
+            echo "::error file=backend/src/server.ts::expected buildCorsOrigins env-driven allowlist (issue #149)"
+            exit 1
+          fi
+
   e2e:
     runs-on: ubuntu-latest
     services:
