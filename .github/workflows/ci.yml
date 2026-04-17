@@ -70,6 +70,20 @@ jobs:
           DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
           JWT_SECRET: ci-test-secret
 
+      - name: Guard against duplicated resolveIsAdmin + auth console.log (#146,#151)
+        run: |
+          set -e
+          # resolveIsAdmin must only live in backend/src/lib/adminAuth.ts
+          if grep -n "async function resolveIsAdmin" backend/src/middleware/auth.middleware.ts backend/src/controllers/auth.controller.ts; then
+            echo "::error::resolveIsAdmin must only be defined in backend/src/lib/adminAuth.ts (issue #151)"
+            exit 1
+          fi
+          # auth.middleware.ts must not contain console.log
+          if grep -n "console.log" backend/src/middleware/auth.middleware.ts; then
+            echo "::error file=backend/src/middleware/auth.middleware.ts::remove console.log (issue #146)"
+            exit 1
+          fi
+
   e2e:
     runs-on: ubuntu-latest
     services:
