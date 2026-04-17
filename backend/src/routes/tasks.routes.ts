@@ -1,6 +1,10 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
 import {
+  requireTaskProjectMember,
+  requireBodyProjectMember,
+} from '../middleware/requireTaskProjectMember.middleware'
+import {
   createTask,
   getTasks,
   getTask,
@@ -33,36 +37,41 @@ const router = Router()
 
 router.use(authenticateToken)
 
-// Core task routes
-router.post('/', createTask)
-router.get('/', getTasks)
-router.get('/:id', getTask)
-router.patch('/:id', updateTask)
-router.delete('/:id', deleteTask)
-router.post('/:id/duplicate', duplicateTask)
+// Project-scoped list / create — require membership via query/body project_id.
+// Calendar must come before /:id so "calendar" is not treated as a task id.
+router.get('/calendar', requireBodyProjectMember('query'), getCalendarTasks)
+router.get('/', requireBodyProjectMember('query'), getTasks)
+router.post('/', requireBodyProjectMember('body'), createTask)
 router.post('/bulk', bulkUpdateTasks)
 
+// Core task routes (resolve projectId from the task itself)
+router.get('/:id', requireTaskProjectMember('task'), getTask)
+router.patch('/:id', requireTaskProjectMember('task'), updateTask)
+router.delete('/:id', requireTaskProjectMember('task'), deleteTask)
+router.post('/:id/duplicate', requireTaskProjectMember('task'), duplicateTask)
+
 // Tag routes
-router.post('/:id/tags/:tagId', linkTagToTask)
-router.delete('/:id/tags/:tagId', unlinkTagFromTask)
+router.post('/:id/tags/:tagId', requireTaskProjectMember('task'), linkTagToTask)
+router.delete('/:id/tags/:tagId', requireTaskProjectMember('task'), unlinkTagFromTask)
 
 // Comment routes
-router.get('/:id/comments', getComments)
-router.post('/:id/comments', createComment)
+router.get('/:id/comments', requireTaskProjectMember('task'), getComments)
+router.post('/:id/comments', requireTaskProjectMember('task'), createComment)
 
 // Attachment routes
-router.get('/:id/attachments', getAttachments)
-router.post('/:id/attachments', uploadAttachment)
+router.get('/:id/attachments', requireTaskProjectMember('task'), getAttachments)
+router.post('/:id/attachments', requireTaskProjectMember('task'), uploadAttachment)
 
 // Relation routes
-router.get('/:id/relations', getRelations)
-router.post('/:id/relations', createRelation)
-router.get('/:id/dependency-warnings', getDependencyWarnings)
+router.get('/:id/relations', requireTaskProjectMember('task'), getRelations)
+router.post('/:id/relations', requireTaskProjectMember('task'), createRelation)
+router.get(
+  '/:id/dependency-warnings',
+  requireTaskProjectMember('task'),
+  getDependencyWarnings
+)
 
 // Activity route
-router.get('/:id/activity', getActivity)
-
-// Calendar route
-router.get('/calendar', getCalendarTasks)
+router.get('/:id/activity', requireTaskProjectMember('task'), getActivity)
 
 export default router

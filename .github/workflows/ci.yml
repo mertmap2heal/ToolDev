@@ -348,6 +348,27 @@ jobs:
           fi
           exit $fail
 
+      - name: Verify task subsystem enforces project membership (#159,#160)
+        run: |
+          set -e
+          missing=0
+          for f in \
+            backend/src/routes/tasks.routes.ts \
+            backend/src/routes/attachments.routes.ts \
+            backend/src/routes/relations.routes.ts \
+            backend/src/routes/board.routes.ts \
+            backend/src/routes/taskAnalytics.routes.ts; do
+            if ! grep -q "requireTaskProjectMember\|requireBodyProjectMember\|requireBodyTaskProjectMember" "$f"; then
+              echo "::error file=$f::missing task-project-membership middleware (see issue #159)"
+              missing=1
+            fi
+          done
+          if grep -E "authorName:\s*(author_name|req\.body\.author_name)" backend/src/controllers/comment.controller.ts; then
+            echo "::error file=backend/src/controllers/comment.controller.ts::author_name must be derived from req.user, not req.body (see issue #160)"
+            missing=1
+          fi
+          exit $missing
+
   e2e:
     runs-on: ubuntu-latest
     services:
