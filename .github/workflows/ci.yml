@@ -70,6 +70,55 @@ jobs:
           DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
           JWT_SECRET: ci-test-secret
 
+      - name: Verify projects.routes.ts enforces owner/admin + membership (#152, #153, #154)
+        run: |
+          set -e
+          f=backend/src/routes/projects.routes.ts
+          fail=0
+          # PUT and DELETE /:id must go through requireProjectOwnerOrAdmin
+          if ! grep -qE "router\.put\('/:id'.*requireProjectOwnerOrAdmin.*updateProject" "$f"; then
+            echo "::error file=$f::PUT /:id must use requireProjectOwnerOrAdmin (see #152)"
+            fail=1
+          fi
+          if ! grep -qE "router\.delete\('/:id'.*requireProjectOwnerOrAdmin.*deleteProject" "$f"; then
+            echo "::error file=$f::DELETE /:id must use requireProjectOwnerOrAdmin (see #152)"
+            fail=1
+          fi
+          # Analytics, members, and audit-logs must use requireProjectMember
+          for path in analytics members audit-logs; do
+            if ! grep -qE "router\.get\('/:id/$path'.*requireProjectMember" "$f"; then
+              echo "::error file=$f::GET /:id/$path must use requireProjectMember (see #153)"
+              fail=1
+            fi
+          done
+          # Import must require authenticateToken
+          if ! grep -qE "router\.post\('/import'.*authenticateToken" "$f"; then
+            echo "::error file=$f::POST /import must use authenticateToken (see #154)"
+            fail=1
+          fi
+          exit $fail
+
+      - name: SAST grep-guard - no spread of untrusted input in project controller (#154)
+        run: |
+          set -e
+          f=backend/src/controllers/project.controller.ts
+          fail=0
+          # No ...req.body anywhere in this file.
+          if grep -nE "\\.\\.\\.req\\.body" "$f"; then
+            echo "::error file=$f::do not spread req.body in project.controller (see #154)"
+            fail=1
+          fi
+          # No raw spread of user-supplied data inside prisma.project.create*(data: ...) arguments.
+          if grep -nE "prisma\\.project\\.createMany\\(\\s*\\{\\s*data:\\s*[^}]*\\.\\.\\." "$f"; then
+            echo "::error file=$f::prisma.project.createMany must not spread untrusted input (see #154)"
+            fail=1
+          fi
+          if grep -nE "projects\\.map\\([^)]*\\.\\.\\." "$f"; then
+            echo "::error file=$f::projects.map spread is the #154 exploit pattern - use explicit allowlist"
+            fail=1
+          fi
+          exit $fail
+
   e2e:
     runs-on: ubuntu-latest
     services:
