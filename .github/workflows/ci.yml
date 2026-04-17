@@ -30,6 +30,17 @@ jobs:
         run: cd backend && npm run build
         continue-on-error: true  # ~60 pre-existing TypeScript errors from merged branches; tracked separately
 
+      - name: Guard against body.signerId / body.userId in certification controllers (#163)
+        run: |
+          # Reject any reappearance of client-supplied signer identity in cert controllers.
+          # Matches body.signerId, body.userId, req.body.signerId, req.body.userId.
+          if grep -RnE "(req\\.)?body\\.(signerId|userId)" backend/src/controllers/certification/; then
+            echo "ERROR: body.signerId / body.userId found in certification controllers."
+            echo "Signer identity must come from req.user only (issue #163)."
+            exit 1
+          fi
+          echo "OK: certification controllers do not read signer identity from request body."
+
   test:
     runs-on: ubuntu-latest
     services:
