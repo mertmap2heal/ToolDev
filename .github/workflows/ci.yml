@@ -101,10 +101,34 @@ jobs:
           done
           exit $missing
 
+      - name: Verify upload handlers enforce MIME allowlist + size guard (#161, #27)
+        run: |
+          set -e
+          missing=0
+          for f in \
+            backend/src/controllers/issue.controller.ts; do
+            if ! grep -q "ALLOWED_MIME_TYPES" "$f"; then
+              echo "::error file=$f::upload handler missing MIME allowlist (see issue #161)"
+              missing=1
+            fi
+            if ! grep -q "SAFE_FILENAME_RE" "$f"; then
+              echo "::error file=$f::upload handler missing safe-filename regex (see issue #161)"
+              missing=1
+            fi
+            if ! grep -q "MAX_BASE64_CHARS" "$f"; then
+              echo "::error file=$f::upload handler missing pre-decode size guard (see issue #161)"
+              missing=1
+            fi
+            if grep -qE "path\.extname\(fileName\)" "$f"; then
+              echo "::error file=$f::upload handler still trusts path.extname(fileName) - double-extension bypass (see issue #161)"
+              missing=1
+            fi
+          done
+          exit $missing
+
       - name: Guard against unconditional localhost CORS (#149)
         run: |
           set -e
-          # server.ts must not contain an UNCONDITIONAL 'http://localhost:3000' in CORS allowlist
           if grep -nE "^\s*'http://localhost:3000'" backend/src/server.ts | grep -v "NODE_ENV"; then
             echo "::error file=backend/src/server.ts::localhost:3000 must be gated on NODE_ENV !== 'production' (issue #149)"
             exit 1
@@ -118,27 +142,22 @@ jobs:
         run: |
           set -e
           rtfile=backend/src/realtime/realtime.ts
-          # 1. An io.use(...) middleware must be installed.
           if ! grep -q "io.use" "$rtfile"; then
             echo "::error file=$rtfile::Socket.IO io.use() middleware missing (see issue #170)"
             exit 1
           fi
-          # 2. Handshake token verification must be invoked.
           if ! grep -q "verifySocketToken" "$rtfile"; then
             echo "::error file=$rtfile::verifySocketToken not referenced (see issue #170)"
             exit 1
           fi
-          # 3. CORS origin must not be wide-open '*'.
           if grep -qE "origin:\s*'\*'" "$rtfile"; then
             echo "::error file=$rtfile::Socket.IO CORS origin is wide-open '*' (see issue #170)"
             exit 1
           fi
-          # 4. Admin room must not be joined via a client query parameter.
           if grep -q "handshake.query.admin" "$rtfile"; then
             echo "::error file=$rtfile::admin room joined via handshake.query.admin — must gate on verified role (see issue #170)"
             exit 1
           fi
-
   e2e:
     runs-on: ubuntu-latest
     services:
