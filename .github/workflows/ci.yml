@@ -70,6 +70,32 @@ jobs:
           DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
           JWT_SECRET: ci-test-secret
 
+      - name: Run change-request concurrency regression suite (#162)
+        run: cd backend && npx vitest run src/__tests__/changeRequest.key.test.ts
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret
+
+      - name: Verify change-request controller uses atomic CR-ID allocator (#162)
+        run: |
+          set -e
+          ctrl=backend/src/controllers/changeRequest.controller.ts
+          # 1. The atomic allocator must be imported.
+          if ! grep -q "allocateChangeRequestId" "$ctrl"; then
+            echo "::error file=$ctrl::allocateChangeRequestId not referenced (see issue #162)"
+            exit 1
+          fi
+          # 2. The racy count()-based generator must be gone.
+          if grep -q "changeRequest.count" "$ctrl"; then
+            echo "::error file=$ctrl::racy 'changeRequest.count' still used for CR-ID generation (see issue #162)"
+            exit 1
+          fi
+          # 3. The allocator library must use pg_advisory_xact_lock.
+          if ! grep -q "pg_advisory_xact_lock" backend/src/lib/crId.ts; then
+            echo "::error file=backend/src/lib/crId.ts::allocator is missing pg_advisory_xact_lock (see issue #162)"
+            exit 1
+          fi
+
   e2e:
     runs-on: ubuntu-latest
     services:
