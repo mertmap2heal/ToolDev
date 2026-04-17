@@ -21,7 +21,31 @@ const app = express()
 const PORT = process.env.PORT || 5000
 const server = http.createServer(app)
 
-app.use(cors())
+export const buildCorsOrigins = (env: NodeJS.ProcessEnv = process.env): string[] => {
+  const configured = [
+    env.APP_URL,
+    ...(env.SOCKET_IO_ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()),
+  ].filter((v): v is string => Boolean(v))
+  if (env.NODE_ENV === 'production') {
+    if (configured.length === 0) {
+      throw new Error('CORS configuration error: set APP_URL (and/or SOCKET_IO_ALLOWED_ORIGINS) in production')
+    }
+    return configured
+  }
+  return [...configured, 'http://localhost:3000', 'http://127.0.0.1:3000']
+}
+
+const corsAllowlist = buildCorsOrigins()
+
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true)
+      return cb(null, corsAllowlist.includes(origin))
+    },
+    credentials: true,
+  }),
+)
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ extended: true, limit: '50mb' }))
 
