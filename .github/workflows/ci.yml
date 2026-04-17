@@ -47,14 +47,28 @@ jobs:
 
       - name: Guard against body.signerId / body.userId in certification controllers (#163)
         run: |
-          # Reject any reappearance of client-supplied signer identity in cert controllers.
-          # Matches body.signerId, body.userId, req.body.signerId, req.body.userId.
           if grep -RnE "(req\\.)?body\\.(signerId|userId)" backend/src/controllers/certification/; then
             echo "ERROR: body.signerId / body.userId found in certification controllers."
             echo "Signer identity must come from req.user only (issue #163)."
             exit 1
           fi
           echo "OK: certification controllers do not read signer identity from request body."
+
+      - name: Guard against unsanitized dangerouslySetInnerHTML (#169)
+        run: |
+          set -e
+          unsanitized=$(grep -rn "dangerouslySetInnerHTML" frontend/src || true)
+          if [ -z "$unsanitized" ]; then
+            exit 0
+          fi
+          fail=0
+          while IFS= read -r line; do
+            case "$line" in
+              *sanitizeHtml*|*sanitizeSvg*) ;;
+              *) echo "::error::unsanitized dangerouslySetInnerHTML (issue #169): $line"; fail=1 ;;
+            esac
+          done <<< "$unsanitized"
+          exit $fail
 
   test:
     runs-on: ubuntu-latest
