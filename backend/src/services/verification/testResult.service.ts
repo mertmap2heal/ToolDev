@@ -1,9 +1,9 @@
 import { prisma } from '../../lib/prisma'
-import { randomUUID } from 'crypto'
 import path from 'path'
 import fs from 'fs'
 import { createHash } from 'crypto'
 import { fileURLToPath } from 'url'
+import { validateUpload } from '../../lib/uploadValidation'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -23,41 +23,25 @@ export const testResultService = {
   /**
    * Handle file upload and storage
    */
-  async handleFileUpload(fileData: string, fileName: string): Promise<{
+  async handleFileUpload(fileData: string, fileName: string, mimeType: string): Promise<{
     storageRef: string
     fileSize: number
     checksum: string
   }> {
-    let buffer: Buffer
-    let fileSize: number
+    // Validate MIME + size BEFORE decoding (#131,#139). Throws UploadValidationError
+    // with HTTP status 400/413/415 on violation.
+    const validated = validateUpload({ fileData, fileName, mimeType })
 
-    // Parse base64 data
-    if (fileData.startsWith('data:')) {
-      const base64Data = fileData.split(',')[1]
-      buffer = Buffer.from(base64Data, 'base64')
-    } else {
-      buffer = Buffer.from(fileData, 'base64')
-    }
+    const checksum = createHash('sha256').update(validated.buffer).digest('hex')
 
-    fileSize = buffer.length
+    const filePath = path.join(uploadsDir, validated.uniqueFileName)
+    fs.writeFileSync(filePath, validated.buffer)
 
-    // Calculate checksum
-    const checksum = createHash('sha256').update(buffer).digest('hex')
-
-    // Generate unique filename
-    const fileExtension = path.extname(fileName)
-    const uniqueFileName = `${randomUUID()}${fileExtension}`
-    const filePath = path.join(uploadsDir, uniqueFileName)
-
-    // Save file to filesystem
-    fs.writeFileSync(filePath, buffer)
-
-    // Return storage reference (relative path)
-    const storageRef = `/uploads/verification/test-results/${uniqueFileName}`
+    const storageRef = `/uploads/verification/test-results/${validated.uniqueFileName}`
 
     return {
       storageRef,
-      fileSize,
+      fileSize: validated.fileSize,
       checksum,
     }
   },
