@@ -1,40 +1,9 @@
 import { apiClient } from './api'
 import type { User } from 'shared/types/project.types'
 import type { ApiResponse } from 'shared/types/api.types'
-import type { AdminUser, PermissionMap } from '../types/admin.types'
+import type { AdminUser } from '../types/admin.types'
 import { emptyPermissionMap } from '../types/admin.types'
-
-const ADMIN_PROFILES_KEY = 'adminUserProfiles'
-
-/** Stored per-user overrides (roles, projects, etc.) so they persist across sessions. */
-export type StoredAdminProfile = Partial<Pick<AdminUser, 'roles' | 'projects' | 'status' | 'authorities' | 'permissions'>>
-
-function getStoredAdminProfiles(): Record<string, StoredAdminProfile> {
-  try {
-    const raw = localStorage.getItem(ADMIN_PROFILES_KEY)
-    return raw ? JSON.parse(raw) : {}
-  } catch {
-    return {}
-  }
-}
-
-/** Persist admin profile overrides for a user (roles, projects, status, etc.). */
-export function setStoredAdminProfile(userId: string, profile: StoredAdminProfile): void {
-  const all = getStoredAdminProfiles()
-  all[userId] = profile
-  localStorage.setItem(ADMIN_PROFILES_KEY, JSON.stringify(all))
-}
-
-/** Read current stored profile for a user (for merging). */
-export function getStoredAdminProfile(userId: string): StoredAdminProfile {
-  return getStoredAdminProfiles()[userId] ?? {}
-}
-
-/** Update only the roles array for a user, preserving other stored fields. */
-export function updateStoredAdminProfileRoles(userId: string, newRoles: string[]): void {
-  const current = getStoredAdminProfile(userId)
-  setStoredAdminProfile(userId, { ...current, roles: newRoles })
-}
+import { listAssignments as listAdminUserRoleAssignments } from './adminUserRole.service'
 
 interface LoginDto {
   email: string
@@ -107,7 +76,11 @@ export const authService = {
     >('/auth/users')
   },
 
-  /** Admin: fetch real users from API and map to AdminUser[] (shared by Users tab and Roles tab). Merges stored profile overrides (roles, projects, etc.) from localStorage. */
+  /**
+   * Admin: fetch real users from API and map to AdminUser[] (shared by Users tab and
+   * Roles tab). Role assignments (AdminRole) are loaded from the backend via
+   * /admin/user-roles — no longer localStorage-based (see issue #166).
+   */
   async getUsersAsAdminUsers(): Promise<AdminUser[]> {
     const res = await apiClient.get<
       (Pick<User, 'id' | 'name' | 'email' | 'lastLoginAt'> & { inviteEmail?: string | null })[]
@@ -115,32 +88,33 @@ export const authService = {
     if (!res.success || !Array.isArray(res.data)) {
       throw new Error(res.error || 'Failed to load users')
     }
-    const stored = getStoredAdminProfiles()
-    return res.data.map((u) => {
-      const base: AdminUser = {
-        id: u.id,
-        username: u.email,
-        name: u.name ?? '',
-        inviteEmail: u.inviteEmail ?? undefined,
-        status: 'active',
-        projects: [],
-        roles: [],
-        authorities: [],
-        permissions: emptyPermissionMap(),
-        lastLoginAt: u.lastLoginAt ?? (u as { last_login_at?: string | null }).last_login_at ?? undefined,
-        createdAt: '',
-      }
-      const overrides = stored[u.id]
-      if (!overrides) return base
-      return {
-        ...base,
-        ...(overrides.roles !== undefined && { roles: overrides.roles }),
-        ...(overrides.projects !== undefined && { projects: overrides.projects }),
-        ...(overrides.status !== undefined && { status: overrides.status }),
-        ...(overrides.authorities !== undefined && { authorities: overrides.authorities }),
-        ...(overrides.permissions !== undefined && { permissions: overrides.permissions as PermissionMap }),
-      }
-    })
+    let assignments: { userId: string; adminRoleId: string }[] = []
+    try {
+      assignments = await listAdminUserRoleAssignments()
+    } catch {
+      // Fall back to empty assignments if the endpoint is unreachable — the UI
+      // surface has its own error state for the roles query.
+      assignments = []
+    }
+    const rolesByUser = new Map<string, string[]>()
+    for (const a of assignments) {
+      const list = rolesByUser.get(a.userId) ?? []
+      list.push(a.adminRoleId)
+      rolesByUser.set(a.userId, list)
+    }
+    return res.data.map((u) => ({
+      id: u.id,
+      username: u.email,
+      name: u.name ?? '',
+      inviteEmail: u.inviteEmail ?? undefined,
+      status: 'active',
+      projects: [],
+      roles: rolesByUser.get(u.id) ?? [],
+      authorities: [],
+      permissions: emptyPermissionMap(),
+      lastLoginAt: u.lastLoginAt ?? (u as { last_login_at?: string | null }).last_login_at ?? undefined,
+      createdAt: '',
+    }))
   },
 
   /** Admin only: create a new user with generated temporary password. Returns user + generatedPassword. */

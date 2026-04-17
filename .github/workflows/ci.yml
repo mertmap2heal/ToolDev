@@ -220,6 +220,22 @@ jobs:
             exit 1
           fi
 
+      - name: Verify admin user-role module files exist (#166)
+        run: |
+          set -euo pipefail
+          test -f backend/src/services/adminUserRole.service.ts
+          test -f backend/src/controllers/adminUserRole.controller.ts
+          test -f backend/src/routes/adminUserRole.routes.ts
+          test -f backend/src/__tests__/adminUserRole.test.ts
+          grep -q "adminUserRole" backend/src/routes/index.ts
+          grep -q "model UserAdminRole" backend/prisma/schema.prisma
+
+      - name: Run admin user-role integration tests (#166)
+        run: cd backend && npx vitest run src/__tests__/adminUserRole.test.ts
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret
+
   e2e:
     runs-on: ubuntu-latest
     services:
