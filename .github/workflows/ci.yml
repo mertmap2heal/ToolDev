@@ -70,6 +70,27 @@ jobs:
           DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
           JWT_SECRET: ci-test-secret
 
+      - name: Guard against unsafe verification upload regressions (#131,#139)
+        run: |
+          set -e
+          # Each verification upload site must use validateUpload / validateMulterUpload.
+          missing=0
+          for f in \
+            backend/src/services/verification/testResult.service.ts \
+            backend/src/services/verification/customSection.service.ts \
+            backend/src/controllers/verification/setup.controller.ts \
+            backend/src/controllers/verification/testRun.controller.ts; do
+            if ! grep -q "validateUpload\|validateMulterUpload" "$f"; then
+              echo "::error file=$f::must call validateUpload (issue #131,#139)"
+              missing=1
+            fi
+            if grep -n "path.extname(fileName)\|path.extname(name)" "$f" >/dev/null; then
+              echo "::error file=$f::do not derive extension from client-supplied filename (#131)"
+              missing=1
+            fi
+          done
+          exit $missing
+
   e2e:
     runs-on: ubuntu-latest
     services:
