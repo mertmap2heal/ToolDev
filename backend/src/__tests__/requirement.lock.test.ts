@@ -50,6 +50,15 @@ describe('Requirement Pessimistic Locking (#34)', () => {
     })
     projectId = project.id
 
+    // Both users must be project members so membership middleware lets them
+    // reach lock-conflict / authorship checks (added by #90, #152-154).
+    await prisma.projectMember.createMany({
+      data: [
+        { projectId, userId, role: 'owner' },
+        { projectId, userId: otherUserId, role: 'member' },
+      ],
+    })
+
     // Requirement 1 — used for lock/unlock/block tests
     const res1 = await request(app)
       .post(`/api/v1/requirements/${projectId}`)
@@ -83,6 +92,7 @@ describe('Requirement Pessimistic Locking (#34)', () => {
 
   afterAll(async () => {
     await prisma.requirement.deleteMany({ where: { projectId } })
+    await prisma.projectMember.deleteMany({ where: { projectId } })
     await prisma.project.delete({ where: { id: projectId } })
     await prisma.user.deleteMany({ where: { id: { in: [userId, otherUserId] } } })
     await prisma.$disconnect()

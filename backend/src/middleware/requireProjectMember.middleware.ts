@@ -25,8 +25,9 @@ export async function requireProjectMember(
       return
     }
 
+    // Only accept "accepted" memberships; pending invites do not grant access.
     const member = await prisma.projectMember.findFirst({
-      where: { projectId, userId },
+      where: { projectId, userId, status: 'accepted' },
       select: { id: true },
     })
 
