@@ -27,6 +27,7 @@ model User {
   ownedProjects    Project[] @relation("ownedProjects")
   notifications    Notification[]
   engineeringRoles UserEngineeringRole[]
+  userAdminRoles   UserAdminRole[] @relation("UserAdminRoleMember")
   projectUserEngineeringRoles     ProjectUserEngineeringRole[] @relation("ProjectUserEngRoleMember")
   assignedProjectUserEngineeringRoles ProjectUserEngineeringRole[] @relation("ProjectUserEngRoleAssigner")
   requirementSubscriptions RequirementSubscription[]
@@ -49,8 +50,26 @@ model AdminRole {
   createdAt          DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  userAdminRoles     UserAdminRole[]
+
   @@unique([companyKey, name])
   @@index([companyKey])
+}
+
+// Junction table: many-to-many User <-> AdminRole (admin permission role assignments).
+model UserAdminRole {
+  id          String   @id @default(cuid())
+  userId      String
+  adminRoleId String
+  assignedAt  DateTime @default(now())
+  assignedBy  String?
+
+  user      User      @relation("UserAdminRoleMember", fields: [userId], references: [id], onDelete: Cascade)
+  adminRole AdminRole @relation(fields: [adminRoleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, adminRoleId])
+  @@index([userId])
+  @@index([adminRoleId])
 }
 
 // Engineering roles: discipline-based roles (Systems Engineer, Test Engineer, etc.).
