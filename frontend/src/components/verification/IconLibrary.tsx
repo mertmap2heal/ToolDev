@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { sanitizeSvg } from '../../utils/richText'
 import {
   ChevronDown,
   ChevronRight,
@@ -170,7 +171,7 @@ export default function IconLibrary({
       const coloredSvg = icon.svg.replace(/currentColor/g, '#374151')
       return (
         <div
-          dangerouslySetInnerHTML={{ __html: coloredSvg }}
+          dangerouslySetInnerHTML={{ __html: sanitizeSvg(coloredSvg) }}
           style={{ width: size, height: size }}
           className="[&>svg]:w-full [&>svg]:h-full dark:[&>svg]:stroke-gray-200"
         />
@@ -284,7 +285,7 @@ export function renderIconSvg(icon: IconDefinition, size: number = 24, color?: s
     const coloredSvg = icon.svg.replace(/currentColor/g, '#374151')
     return (
       <div
-        dangerouslySetInnerHTML={{ __html: coloredSvg }}
+        dangerouslySetInnerHTML={{ __html: sanitizeSvg(coloredSvg) }}
         style={{ width: size, height: size }}
         className="[&>svg]:w-full [&>svg]:h-full"
       />
