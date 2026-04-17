@@ -70,6 +70,35 @@ jobs:
           DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
           JWT_SECRET: ci-test-secret
 
+      - name: Verify project-scoped routers declare requireProjectMember (#90)
+        run: |
+          set -e
+          missing=0
+          for f in \
+            backend/src/routes/requirements.routes.ts \
+            backend/src/routes/requirementReviews.routes.ts \
+            backend/src/routes/requirementValidation.routes.ts \
+            backend/src/routes/requirementsViewPreferences.routes.ts; do
+            if ! grep -q "requireProjectMember" "$f"; then
+              echo "::error file=$f::missing requireProjectMember middleware (see issue #90)"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Guard against unconditional localhost CORS (#149)
+        run: |
+          set -e
+          # server.ts must not contain an UNCONDITIONAL 'http://localhost:3000' in CORS allowlist
+          if grep -nE "^\s*'http://localhost:3000'" backend/src/server.ts | grep -v "NODE_ENV"; then
+            echo "::error file=backend/src/server.ts::localhost:3000 must be gated on NODE_ENV !== 'production' (issue #149)"
+            exit 1
+          fi
+          if ! grep -q "buildCorsOrigins" backend/src/server.ts; then
+            echo "::error file=backend/src/server.ts::expected buildCorsOrigins env-driven allowlist (issue #149)"
+            exit 1
+          fi
+
   e2e:
     runs-on: ubuntu-latest
     services:
