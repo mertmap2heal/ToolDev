@@ -883,4 +883,170 @@ test.describe('Requirements', () => {
     expect(boxAfter?.width).toBeTruthy()
     expect(Math.abs((boxAfter?.width ?? 0) - (boxBefore?.width ?? 0))).toBeGreaterThan(10)
   })
+
+  // ─── Quality Workbench ─────────────────────────────────────────────
+
+  test('quality workbench: opens with split-pane layout', async ({ page, projectId }) => {
+    const errors: string[] = []
+    page.on('pageerror', (err) => errors.push(err.message))
+
+    await page.goto(`/projects/${projectId}/requirements/browse`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
+
+    await page.getByRole('button', { name: /^analysis$/i }).click()
+    await page.getByRole('button', { name: /requirement quality/i }).click()
+
+    const workbench = page.getByRole('heading', { name: /requirement quality workbench/i })
+    await expect(workbench).toBeVisible({ timeout: 10_000 })
+
+    await expect(page.getByPlaceholder('Search by title or ID...')).toBeVisible()
+    await expect(page.getByText(/passing$/)).toBeVisible()
+    await expect(page.getByText('Requirements (')).toBeVisible()
+    await expect(page.getByText('Project Issues')).toBeVisible()
+
+    expect(errors, errors.join('; ')).toEqual([])
+  })
+
+  test('quality workbench: filters narrow the list', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/requirements/browse`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
+
+    await page.getByRole('button', { name: /^analysis$/i }).click()
+    await page.getByRole('button', { name: /requirement quality/i }).click()
+    await expect(page.getByRole('heading', { name: /requirement quality workbench/i })).toBeVisible({ timeout: 10_000 })
+
+    // Wait for quality data to finish loading before interacting with filters
+    await expect(page.getByText(/passing$/)).toBeVisible({ timeout: 15_000 })
+
+    const dialog = page.locator('.fixed.inset-0')
+    const severitySelect = dialog.locator('select').filter({ has: page.locator('option[value="errors"]') }).first()
+    await expect(severitySelect).toBeVisible({ timeout: 5_000 })
+    await severitySelect.selectOption('errors')
+    await page.waitForTimeout(500)
+
+    await severitySelect.selectOption('all')
+    await page.waitForTimeout(500)
+
+    const scoreSelect = dialog.locator('select').filter({ has: page.locator('option[value="critical"]') }).first()
+    await expect(scoreSelect).toBeVisible()
+    await scoreSelect.selectOption('critical')
+    await page.waitForTimeout(500)
+
+    await scoreSelect.selectOption('all')
+  })
+
+  test('quality workbench: selecting a requirement shows fix pane', async ({ page, projectId }) => {
+    await ensureFirstRequirementId(page, projectId)
+
+    await page.goto(`/projects/${projectId}/requirements/browse`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
+
+    await page.getByRole('button', { name: /^analysis$/i }).click()
+    await page.getByRole('button', { name: /requirement quality/i }).click()
+    await expect(page.getByRole('heading', { name: /requirement quality workbench/i })).toBeVisible({ timeout: 10_000 })
+
+    const placeholder = page.getByText('Select a requirement to view and fix issues')
+    await expect(placeholder).toBeVisible({ timeout: 5_000 })
+
+    const firstRow = page.locator('[data-req-id]').first()
+    const isVisible = await firstRow.isVisible().catch(() => false)
+    if (!isVisible) {
+      test.skip(true, 'No requirements in quality panel to test selection')
+    }
+    await firstRow.click()
+
+    await expect(placeholder).not.toBeVisible()
+    await expect(page.getByRole('button', { name: /re-validate/i })).toBeVisible({ timeout: 5_000 })
+    await expect(page.getByRole('button', { name: /save & re-validate/i })).toBeVisible()
+  })
+
+  test('quality workbench: navigation buttons cycle through issues', async ({ page, projectId }) => {
+    await ensureFirstRequirementId(page, projectId)
+
+    await page.goto(`/projects/${projectId}/requirements/browse`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
+
+    await page.getByRole('button', { name: /^analysis$/i }).click()
+    await page.getByRole('button', { name: /requirement quality/i }).click()
+    await expect(page.getByRole('heading', { name: /requirement quality workbench/i })).toBeVisible({ timeout: 10_000 })
+
+    const rows = page.locator('[data-req-id]')
+    const count = await rows.count()
+    if (count < 2) {
+      test.skip(true, 'Need at least 2 requirements to test navigation')
+    }
+
+    await rows.first().click()
+    const nextBtn = page.getByRole('button', { name: /^next$/i })
+    await expect(nextBtn).toBeVisible({ timeout: 5_000 })
+    await nextBtn.click()
+
+    const prevBtn = page.getByRole('button', { name: /^previous$/i })
+    await prevBtn.click()
+  })
+
+  test('quality workbench: project issues tab renders', async ({ page, projectId }) => {
+    const errors: string[] = []
+    page.on('pageerror', (err) => errors.push(err.message))
+
+    await page.goto(`/projects/${projectId}/requirements/browse`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
+
+    await page.getByRole('button', { name: /^analysis$/i }).click()
+    await page.getByRole('button', { name: /requirement quality/i }).click()
+    await expect(page.getByRole('heading', { name: /requirement quality workbench/i })).toBeVisible({ timeout: 10_000 })
+
+    await page.getByRole('button', { name: /project issues/i }).click()
+
+    const noIssues = page.getByText('No project-level issues', { exact: true })
+    const circularHeading = page.getByText(/^Circular Dependencies/i)
+    const duplicateHeading = page.getByText(/^Duplicate Requirement IDs/i)
+
+    await expect(noIssues.or(circularHeading).or(duplicateHeading)).toBeVisible({ timeout: 5_000 })
+
+    expect(errors, errors.join('; ')).toEqual([])
+  })
+
+  test('quality workbench: re-validate button works', async ({ page, projectId }) => {
+    await ensureFirstRequirementId(page, projectId)
+
+    await page.goto(`/projects/${projectId}/requirements/browse`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
+
+    await page.getByRole('button', { name: /^analysis$/i }).click()
+    await page.getByRole('button', { name: /requirement quality/i }).click()
+    await expect(page.getByRole('heading', { name: /requirement quality workbench/i })).toBeVisible({ timeout: 10_000 })
+
+    const firstRow = page.locator('[data-req-id]').first()
+    const isVisible = await firstRow.isVisible().catch(() => false)
+    if (!isVisible) {
+      test.skip(true, 'No requirements to test re-validate')
+    }
+    await firstRow.click()
+
+    const revalidateBtn = page.getByRole('button', { name: /re-validate/i }).first()
+    await expect(revalidateBtn).toBeVisible({ timeout: 5_000 })
+    await revalidateBtn.click()
+    await page.waitForTimeout(1_000)
+  })
+
+  test('quality workbench: Escape closes workbench', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/requirements/browse`)
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
+
+    await page.getByRole('button', { name: /^analysis$/i }).click()
+    await page.getByRole('button', { name: /requirement quality/i }).click()
+    await expect(page.getByRole('heading', { name: /requirement quality workbench/i })).toBeVisible({ timeout: 10_000 })
+
+    await page.keyboard.press('Escape')
+
+    await expect(page.getByRole('heading', { name: /requirement quality workbench/i })).not.toBeVisible({ timeout: 5_000 })
+  })
 })

@@ -3,17 +3,37 @@ import { prisma } from '../lib/prisma'
 import type { Requirement } from '../../../shared/types/engineering.types'
 
 
+export interface ValidationIssue {
+  message: string
+  severity: 'error' | 'warning'
+  fixType: 'field' | 'trace' | 'info'
+  fixField?: string
+  fixLinkType?: string
+}
+
 export interface ValidationResult {
   isValid: boolean
   errors: string[]
   warnings: string[]
+  issues: ValidationIssue[]
   score: number // Quality score 0-100
 }
 
 export interface RequirementQualityCheck {
   requirementId: string
+  displayId: string | null
   title: string
   validation: ValidationResult
+}
+
+export interface ProjectValidationResult {
+  requirements: RequirementQualityCheck[]
+  circularDependencies: string[][]
+  duplicateIds: string[]
+}
+
+function stripHtml(text: string): string {
+  return text.replace(/<[^>]*>/g, '')
 }
 
 /**
@@ -31,8 +51,7 @@ export const requirementValidationService = {
     requirement: Requirement & { moc?: { name: string } | null; projectId?: string },
     options?: { projectId?: string; strictLifecycleGates?: boolean }
   ): Promise<ValidationResult> {
-    const errors: string[] = []
-    const warnings: string[] = []
+    const issues: ValidationIssue[] = []
     let score = 100
 
     const projectId = options?.projectId ?? (requirement as any).projectId
@@ -41,84 +60,95 @@ export const requirementValidationService = {
     const isDraftOrProposed = /draft|proposed/i.test(status)
     const isInReviewOrBeyond = /in review|in_review|approved|baselined|verified/i.test(status)
 
-    // Helper: add as error or warning based on lifecycle
-    const addGateIssue = (check: boolean, msg: string, asErrorWhenStrict: boolean) => {
+    const descPlainText = requirement.description ? stripHtml(requirement.description) : ''
+
+    const addIssue = (
+      severity: 'error' | 'warning',
+      message: string,
+      fixType: 'field' | 'trace' | 'info',
+      fixField?: string,
+      fixLinkType?: string,
+    ) => {
+      issues.push({ message, severity, fixType, fixField, fixLinkType })
+    }
+
+    const addGateIssue = (
+      check: boolean,
+      msg: string,
+      asErrorWhenStrict: boolean,
+      fixType: 'field' | 'trace' | 'info' = 'field',
+      fixField?: string,
+      fixLinkType?: string,
+    ) => {
       if (check) return
       if (isDraftOrProposed) {
-        warnings.push(msg)
+        addIssue('warning', msg, fixType, fixField, fixLinkType)
       } else if (isInReviewOrBeyond && strictLifecycleGates && asErrorWhenStrict) {
-        errors.push(msg)
+        addIssue('error', msg, fixType, fixField, fixLinkType)
       } else {
-        warnings.push(msg)
+        addIssue('warning', msg, fixType, fixField, fixLinkType)
       }
     }
 
-    // Check for required fields
     if (!requirement.title || requirement.title.trim().length === 0) {
-      errors.push('Title is required')
+      addIssue('error', 'Title is required', 'field', 'title')
       score -= 20
     }
 
     if (!requirement.description || requirement.description.trim().length === 0) {
-      errors.push('Description is required')
+      addIssue('error', 'Description is required', 'field', 'description')
       score -= 20
     }
 
-    // SMART Criteria Checks
-    // Specific
     if (requirement.title && requirement.title.length < 10) {
-      warnings.push('Title may be too vague. Consider making it more specific.')
+      addIssue('warning', 'Title may be too vague. Consider making it more specific.', 'field', 'title')
       score -= 5
     }
 
-    // Measurable - use acceptance criteria as primary indicator
     const hasAcceptanceCriteria = !!(requirement.acceptanceCriteria && requirement.acceptanceCriteria.trim().length > 0)
     const hasMeasurableTerms = /(shall|must|should|will|may|can|number|amount|percentage|rate|time|duration|speed|distance|weight|size)/i.test(
-      requirement.description
+      descPlainText
     )
     if (!hasAcceptanceCriteria && !hasMeasurableTerms) {
-      warnings.push('Description may lack measurable criteria. Consider adding acceptance criteria or quantifiable terms.')
+      addIssue('warning', 'Description may lack measurable criteria. Consider adding acceptance criteria or quantifiable terms.', 'field', 'acceptanceCriteria')
       score -= 5
     }
 
-    // Achievable - check complexity and risk
     const hasComplexityRisk = !!(requirement.complexity || requirement.risk)
     if (!hasComplexityRisk && requirement.priority === 'critical') {
-      warnings.push('Critical priority without complexity/risk assessment. Consider documenting.')
+      addIssue('warning', 'Critical priority without complexity/risk assessment. Consider documenting.', 'field', 'complexity')
       score -= 3
     }
 
-    // Ambiguous language check
     const ambiguousTerms = /(maybe|perhaps|possibly|might|could|some|few|many|several|various)/i.test(
-      requirement.description
+      descPlainText
     )
     if (ambiguousTerms) {
-      warnings.push('Description contains ambiguous language. Consider being more specific.')
+      addIssue('warning', 'Description contains ambiguous language. Consider being more specific.', 'field', 'description')
       score -= 5
     }
 
-    // Time-bound - Check for temporal references
     const hasTimeReference = /(when|after|before|during|within|by|deadline|schedule|timeline)/i.test(
-      requirement.description
+      descPlainText
     )
     if (!hasTimeReference && !requirement.stage) {
-      warnings.push('Consider adding time-bound or stage information.')
+      addIssue('warning', 'Consider adding time-bound or stage information.', 'field', 'description')
       score -= 3
     }
 
-    // Check for requirement ID uniqueness (would need to check against all requirements)
     if (!requirement.requirementId) {
-      warnings.push('Requirement ID is missing. Auto-generated IDs may cause confusion.')
+      addIssue('warning', 'Requirement ID is missing. Auto-generated IDs may cause confusion.', 'info')
       score -= 2
     }
 
-    // MoC validation: if MoC=Test, verification method required (gate)
     const mocName = (requirement as any).moc?.name
     if (mocName && /^Test$/i.test(mocName)) {
       addGateIssue(
         !!(requirement.verificationMethod && requirement.verificationMethod.trim().length > 0),
         'Verification method is required when MoC is Test.',
-        true
+        true,
+        'field',
+        'verificationMethod',
       )
       if (!requirement.verificationMethod?.trim()) score -= 10
     }
@@ -127,30 +157,32 @@ export const requirementValidationService = {
       addGateIssue(
         !!(requirement.acceptanceCriteria && requirement.acceptanceCriteria.trim().length > 0),
         'Acceptance criteria recommended when MoC is Test or Analysis.',
-        true
+        true,
+        'field',
+        'acceptanceCriteria',
       )
       if (!requirement.acceptanceCriteria?.trim()) score -= 3
     }
 
     if (!requirement.verificationMethod && !mocName) {
-      addGateIssue(false, 'Verification method is not specified.', true)
+      addGateIssue(false, 'Verification method is not specified.', true, 'field', 'verificationMethod')
       score -= 5
     }
 
     if (!requirement.acceptanceCriteria?.trim() && !mocName) {
-      addGateIssue(false, 'Acceptance criteria are not defined.', true)
+      addGateIssue(false, 'Acceptance criteria are not defined.', true, 'field', 'acceptanceCriteria')
       score -= 5
     }
 
-    addGateIssue(!!requirement.owner?.trim(), 'No owner assigned to this requirement.', true)
+    addGateIssue(!!requirement.owner?.trim(), 'No owner assigned to this requirement.', true, 'field', 'owner')
     if (!requirement.owner) score -= 3
 
     if (!requirement.requirementType) {
-      addGateIssue(false, 'Requirement type is not classified (MBSE best practice).', true)
+      addGateIssue(false, 'Requirement type is not classified (MBSE best practice).', true, 'field', 'requirementType')
       score -= 2
     }
     if (!requirement.requirementLevel) {
-      addGateIssue(false, 'Requirement level is not specified (system, subsystem, component).', true)
+      addGateIssue(false, 'Requirement level is not specified (system, subsystem, component).', true, 'field', 'requirementLevel')
       score -= 1
     }
 
@@ -163,7 +195,7 @@ export const requirementValidationService = {
           linkType: { in: ['allocated_to', 'allocate'] },
         },
       })
-      addGateIssue(!!allocatedLink, 'Requirement has no allocation link (allocated_to). Consider linking to PBS component.', isInReviewOrBeyond)
+      addGateIssue(!!allocatedLink, 'Requirement has no allocation link (allocated_to). Consider linking to PBS component.', isInReviewOrBeyond, 'trace', undefined, 'allocated_to')
       if (!allocatedLink) score -= 5
     }
 
@@ -171,7 +203,9 @@ export const requirementValidationService = {
       addGateIssue(
         !!(requirement.stakeholders && requirement.stakeholders.length > 0),
         'Stakeholder(s) should be specified for Approved/Baselined requirements.',
-        true
+        true,
+        'field',
+        'stakeholders',
       )
     }
 
@@ -186,11 +220,10 @@ export const requirementValidationService = {
         },
       })
       if (!docLink) {
-        addGateIssue(false, 'Consider linking to document (documented_in) for traceability.', false)
+        addGateIssue(false, 'Consider linking to document (documented_in) for traceability.', false, 'trace', undefined, 'documented_in')
       }
     }
 
-    // Enterprise: has verification link if status beyond Proposed
     const isBeyondProposed = requirement.status && !/proposed|draft/i.test(requirement.status)
     if (projectId && requirement.id && isBeyondProposed) {
       const verificationLink = await prisma.traceLink.findFirst({
@@ -202,47 +235,45 @@ export const requirementValidationService = {
           ],
         },
       })
-      if (!verificationLink) {
-        warnings.push('Requirement status is beyond Proposed but has no verification link.')
-        score -= 5
-      }
+      addGateIssue(!!verificationLink, 'Requirement status is beyond Proposed but has no verification link.', true, 'trace', undefined, 'verified_by')
+      if (!verificationLink) score -= 5
     }
 
-    // Check for rationale
     if (!requirement.rationale) {
-      warnings.push('Rationale is missing. Consider documenting why this requirement exists.')
+      addIssue('warning', 'Rationale is missing. Consider documenting why this requirement exists.', 'field', 'rationale')
       score -= 2
     }
 
-    // Check for dependencies
     if (requirement.dependencies && requirement.dependencies.length > 0) {
-      warnings.push(`Requirement has ${requirement.dependencies.length} dependency/dependencies. Ensure all dependencies are valid.`)
+      addIssue('warning', `Requirement has ${requirement.dependencies.length} dependency/dependencies. Ensure all dependencies are valid.`, 'info')
     }
 
-    // Check for conflicts
     if (requirement.conflicts && requirement.conflicts.length > 0) {
-      errors.push(`Requirement has ${requirement.conflicts.length} conflict(s) with other requirements.`)
+      addIssue('error', `Requirement has ${requirement.conflicts.length} conflict(s) with other requirements.`, 'info')
       score -= 10
     }
 
-    // Check description length (too short or too long)
     if (requirement.description) {
-      const descLength = requirement.description.replace(/<[^>]*>/g, '').length
+      const descLength = descPlainText.length
       if (descLength < 20) {
-        warnings.push('Description is very short. Consider adding more detail.')
+        addIssue('warning', 'Description is very short. Consider adding more detail.', 'field', 'description')
         score -= 3
       } else if (descLength > 2000) {
-        warnings.push('Description is very long. Consider breaking into multiple requirements.')
+        addIssue('warning', 'Description is very long. Consider breaking into multiple requirements.', 'field', 'description')
         score -= 2
       }
     }
 
     score = Math.max(0, Math.min(100, score))
 
+    const errors = issues.filter(i => i.severity === 'error').map(i => i.message)
+    const warnings = issues.filter(i => i.severity === 'warning').map(i => i.message)
+
     return {
       isValid: errors.length === 0,
       errors,
       warnings,
+      issues,
       score,
     }
   },
@@ -319,7 +350,7 @@ export const requirementValidationService = {
    * Validates all requirements in a project.
    * Lifecycle-aware: Draft/Proposed → warnings only for gates; In Review+ with strictLifecycleGates → missing gates as errors.
    */
-  async validateProjectRequirements(projectId: string): Promise<RequirementQualityCheck[]> {
+  async validateProjectRequirements(projectId: string): Promise<ProjectValidationResult> {
     const [requirements, project] = await Promise.all([
       prisma.requirement.findMany({
         where: { projectId },
@@ -335,15 +366,36 @@ export const requirementValidationService = {
     const results: RequirementQualityCheck[] = []
 
     for (const req of requirements) {
-      const validation = await this.validateRequirement(req as any, { projectId, strictLifecycleGates })
-      results.push({
-        requirementId: req.id,
-        title: req.title,
-        validation,
-      })
+      try {
+        const validation = await this.validateRequirement(req as any, { projectId, strictLifecycleGates })
+        results.push({
+          requirementId: req.id,
+          displayId: req.requirementId,
+          title: req.title,
+          validation,
+        })
+      } catch (_err) {
+        results.push({
+          requirementId: req.id,
+          displayId: req.requirementId,
+          title: req.title,
+          validation: {
+            isValid: false,
+            errors: ['Validation failed: internal error'],
+            warnings: [],
+            issues: [{ message: 'Validation failed: internal error', severity: 'error', fixType: 'info' }],
+            score: 0,
+          },
+        })
+      }
     }
 
-    return results
+    const [circularDependencies, duplicateIds] = await Promise.all([
+      this.checkCircularDependencies(projectId).catch(() => [] as string[][]),
+      this.checkDuplicateIds(projectId).catch(() => [] as string[]),
+    ])
+
+    return { requirements: results, circularDependencies, duplicateIds }
   },
 
   /**

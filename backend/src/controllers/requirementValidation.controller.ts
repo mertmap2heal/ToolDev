@@ -8,15 +8,19 @@ export const validateRequirement = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId, requirementId } = req.params
 
-    // Get requirement from database
-
-    const requirement = await prisma.requirement.findFirst({
-      where: {
-        projectId,
-        OR: [{ id: requirementId }, { requirementId: requirementId }],
-      },
-      include: { moc: true },
-    })
+    const [requirement, project] = await Promise.all([
+      prisma.requirement.findFirst({
+        where: {
+          projectId,
+          OR: [{ id: requirementId }, { requirementId: requirementId }],
+        },
+        include: { moc: true },
+      }),
+      prisma.project.findUnique({
+        where: { id: projectId },
+        select: { strictLifecycleGates: true },
+      }),
+    ])
 
     if (!requirement) {
       return res.status(404).json({
@@ -25,7 +29,11 @@ export const validateRequirement = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    const validation = await requirementValidationService.validateRequirement(requirement as any)
+    const strictLifecycleGates = project?.strictLifecycleGates ?? false
+    const validation = await requirementValidationService.validateRequirement(
+      requirement as any,
+      { projectId, strictLifecycleGates }
+    )
 
     res.json({
       success: true,
