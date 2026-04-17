@@ -38,6 +38,8 @@ model User {
   parameterVersions ParameterVersion[]
   checklistItemResponses TransitionChecklistItemResponse[] @relation("ChecklistItemResponder")
   checklistItemComments  ChecklistItemComment[]
+  certSignOffs          CertSignOff[] @relation("CertSignOffSigner")
+  certSignOffAssignments CertSignOff[] @relation("CertSignOffAssignedTo")
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -3487,15 +3489,24 @@ model CertSignOff {
   person      String   @default("")
   signedAt    DateTime?
   status      String   @default("Pending") // Pending | Signed | Delegated
+  // Identity verification (issue #163): server-derived from authenticated session, never from client body
+  signerId         String?
+  assignedToUserId String?
+  ipAddress        String?
+  userAgent        String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  checklist CertChecklist? @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  checklist    CertChecklist? @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  signer       User?          @relation("CertSignOffSigner", fields: [signerId], references: [id], onDelete: SetNull)
+  assignedTo   User?          @relation("CertSignOffAssignedTo", fields: [assignedToUserId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
   @@index([checklistId])
   @@index([milestoneId])
+  @@index([signerId])
+  @@index([assignedToUserId])
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
