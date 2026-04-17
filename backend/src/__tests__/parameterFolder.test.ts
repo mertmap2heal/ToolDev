@@ -34,6 +34,10 @@ describe('Parameter Folder API (#81)', () => {
     })
     projectId = project.id
 
+    await prisma.projectMember.create({
+      data: { projectId, userId, role: 'owner' },
+    })
+
     // Seed one parameter to use in move-to-folder tests
     const param = await prisma.parameter.create({
       data: {
@@ -53,6 +57,7 @@ describe('Parameter Folder API (#81)', () => {
     await prisma.parameterVersion.deleteMany({ where: { parameter: { projectId } } })
     await prisma.parameter.deleteMany({ where: { projectId } })
     await prisma.parameterFolder.deleteMany({ where: { projectId } })
+    await prisma.projectMember.deleteMany({ where: { projectId } })
     await prisma.project.delete({ where: { id: projectId } })
     await prisma.user.delete({ where: { id: userId } })
   })

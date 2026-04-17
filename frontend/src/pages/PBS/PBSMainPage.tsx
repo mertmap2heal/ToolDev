@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { FolderTree, Loader2, Box, Save } from 'lucide-react'
-import { useComponentContext } from '../../components/layout/ProjectLayout'
+import { useComponentContext } from '../../components/layout/projectComponentContext'
 import { componentService } from '../../services/component.service'
 import type { Component } from 'shared/types/project.types'
 

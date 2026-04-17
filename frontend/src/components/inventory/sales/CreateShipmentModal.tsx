@@ -1,8 +1,45 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { X } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { inventoryService } from '../../../services/inventory.service'
+import { inventoryService, type Item } from '../../../services/inventory.service'
 import { useUnsavedChanges } from '../../../hooks/useUnsavedChanges'
+
+type ShipmentLineForm = {
+  soLineId: string
+  qtyShipped: number
+  fromLocationId: string
+  lotId?: string
+  serialId?: string
+}
+
+type ShipmentFormState = {
+  salesOrderId: string
+  shippedAt: string
+  notes: string
+  lines: ShipmentLineForm[]
+}
+
+type SalesOrderLineResponse = {
+  id: string
+  qtyOrdered?: number | string
+  qtyShipped?: number | string
+  item?: Pick<Item, 'sku' | 'name'>
+}
+
+type SalesOrderResponse = {
+  id: string
+  lines?: SalesOrderLineResponse[]
+}
+
+type WarehouseLocationRow = { id: string; code: string; name?: string }
+type WarehouseRow = {
+  id: string
+  name: string
+  code: string
+  locations?: WarehouseLocationRow[]
+}
+
+type LocationOption = WarehouseLocationRow & { warehouseName: string; warehouseCode: string }
 
 interface CreateShipmentModalProps {
   isOpen: boolean
@@ -19,19 +56,18 @@ export default function CreateShipmentModal({
 }: CreateShipmentModalProps) {
   const onDiscardRef = useRef<() => void>()
   const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
-  const [formData, setFormDataBase] = useState({
+  const [formData, setFormDataBase] = useState<ShipmentFormState>({
     salesOrderId: salesOrderId || '',
     shippedAt: new Date().toISOString().split('T')[0],
     notes: '',
-    lines: [] as Array<{
-      soLineId: string
-      qtyShipped: number
-      fromLocationId: string
-      lotId?: string
-      serialId?: string
-    }>,
+    lines: [],
   })
-  const setFormData = (v: typeof formData | ((prev: typeof formData) => typeof formData)) => { setFormDataBase(v as any); markDirty() }
+  const markDirtyRef = useRef(markDirty)
+  markDirtyRef.current = markDirty
+  const setFormData = useCallback((v: ShipmentFormState | ((prev: ShipmentFormState) => ShipmentFormState)) => {
+    setFormDataBase((prev) => (typeof v === 'function' ? v(prev) : v))
+    markDirtyRef.current()
+  }, [])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -57,27 +93,29 @@ export default function CreateShipmentModal({
     enabled: isOpen,
   })
 
-  const warehouses = warehousesData?.data || []
-  const so = soData?.data
+  const warehouses = (warehousesData?.data ?? []) as WarehouseRow[]
+  const so = soData?.data as SalesOrderResponse | undefined
 
   useEffect(() => {
-    if (so && so.lines) {
-      setFormData({
-        ...formData,
-        salesOrderId: so.id,
-        lines: so.lines.map((line: any) => ({
-          soLineId: line.id,
-          qtyShipped: Math.max(0, Number(line.qtyOrdered) - Number(line.qtyShipped)),
-          fromLocationId: '',
-        })),
-      })
-    }
+    if (!so?.lines?.length) return
+    setFormDataBase({
+      salesOrderId: so.id,
+      shippedAt: new Date().toISOString().split('T')[0],
+      notes: '',
+      lines: so.lines.map((line) => ({
+        soLineId: line.id,
+        qtyShipped: Math.max(0, Number(line.qtyOrdered) - Number(line.qtyShipped)),
+        fromLocationId: '',
+      })),
+    })
   }, [so])
 
-  const updateLine = (index: number, field: string, value: any) => {
-    const newLines = [...formData.lines]
-    newLines[index] = { ...newLines[index], [field]: value }
-    setFormData({ ...formData, lines: newLines })
+  const updateLine = <K extends keyof ShipmentLineForm>(index: number, field: K, value: ShipmentLineForm[K]) => {
+    setFormData((prev) => {
+      const newLines = [...prev.lines]
+      newLines[index] = { ...newLines[index], [field]: value }
+      return { ...prev, lines: newLines }
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -110,8 +148,21 @@ export default function CreateShipmentModal({
       })
       resetDirty()
       onSuccess()
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to create shipment'
+    } catch (err: unknown) {
+      const fromApi =
+        err &&
+        typeof err === 'object' &&
+        'response' in err &&
+        err.response &&
+        typeof err.response === 'object' &&
+        'data' in err.response &&
+        err.response.data &&
+        typeof err.response.data === 'object' &&
+        'error' in err.response.data
+          ? String((err.response.data as { error?: string }).error)
+          : ''
+      const errorMessage =
+        fromApi || (err instanceof Error ? err.message : '') || 'Failed to create shipment'
       setError(errorMessage)
       console.error('Error creating shipment:', err)
     } finally {
@@ -121,14 +172,13 @@ export default function CreateShipmentModal({
 
   if (!isOpen) return null
 
-  const allLocations: any[] = []
-  warehouses.forEach((wh: any) => {
-    if (wh.locations) {
-      wh.locations.forEach((loc: any) => {
-        allLocations.push({ ...loc, warehouseName: wh.name, warehouseCode: wh.code })
-      })
+  const allLocations: LocationOption[] = []
+  for (const wh of warehouses) {
+    if (!wh.locations) continue
+    for (const loc of wh.locations) {
+      allLocations.push({ ...loc, warehouseName: wh.name, warehouseCode: wh.code })
     }
-  })
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}>
@@ -186,7 +236,7 @@ export default function CreateShipmentModal({
             ) : (
               <div className="space-y-2">
                 {formData.lines.map((line, index) => {
-                  const soLine = so?.lines?.find((l: any) => l.id === line.soLineId)
+                  const soLine = so?.lines?.find((l) => l.id === line.soLineId)
                   const item = soLine?.item
 
                   return (

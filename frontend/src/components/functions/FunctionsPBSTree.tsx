@@ -177,9 +177,9 @@ export default function FunctionsPBSTree({
     syncPBS()
   }, [projectId, pbsSynced])
 
-  const { data: componentTree = [] } = useQuery({
+  const { data: componentTree = [] } = useQuery<ComponentTreeNode[]>({
     queryKey: ['pbs-nodes', projectId],
-    queryFn: () => loadPBSComponentTreeAsync(projectId!),
+    queryFn: () => loadPBSComponentTreeAsync(projectId!) as Promise<ComponentTreeNode[]>,
     enabled: !!projectId,
   })
 
@@ -187,7 +187,7 @@ export default function FunctionsPBSTree({
     if (componentTree.length > 0) {
       setExpandedNodes(prev => {
         const next = new Set(prev)
-        const expandAll = (nodes: any[]) => {
+        const expandAll = (nodes: ComponentTreeNode[]) => {
           for (const node of nodes) {
             next.add(node.id)
             if (node.children && node.children.length > 0) expandAll(node.children)
@@ -197,7 +197,7 @@ export default function FunctionsPBSTree({
         return next
       })
     }
-  }, [componentTree.length])
+  }, [componentTree])
 
   const assignComponentMutation = useMutation({
     mutationFn: ({ functionId, componentId }: { functionId: string; componentId: string | null }) =>
@@ -207,7 +207,7 @@ export default function FunctionsPBSTree({
       queryClient.invalidateQueries({ queryKey: ['trace-links', projectId] })
       queryClient.invalidateQueries({ queryKey: ['links', projectId] })
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('Failed to assign PBS component:', error)
     },
   })

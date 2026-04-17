@@ -31,6 +31,33 @@ interface LifecycleFlowViewerProps {
     className?: string
 }
 
+type StepPos = { x: number; y: number }
+
+type BackwardOrSkipArrow = {
+    rule: TransitionRule
+    idx: number
+    fromPos: StepPos
+    toPos: StepPos
+    minX: number
+    maxX: number
+    offset?: number
+    path?: string
+}
+
+type SequentialArrow = {
+    rule: TransitionRule
+    idx: number
+    fromPos: StepPos
+    toPos: StepPos
+    path?: string
+}
+
+type SelfArrow = {
+    rule: TransitionRule
+    idx: number
+    fromPos: StepPos
+}
+
 export function LifecycleFlowViewer({
     steps,
     transitionRules,
@@ -45,29 +72,6 @@ export function LifecycleFlowViewer({
         return [...steps].sort((a, b) => a.order - b.order)
     }, [steps])
 
-    // Helper function to get step order by statusId
-    const getStepOrder = (statusId: string): number => {
-        const step = steps.find(s => s.statusId === statusId)
-        return step ? step.order : -1
-    }
-
-    // Helper function to determine transition type
-    const getTransitionType = (fromStatusId: string, toStatusId: string): 'forward' | 'backward' | 'self' => {
-        if (fromStatusId === toStatusId) return 'self'
-        const fromOrder = getStepOrder(fromStatusId)
-        const toOrder = getStepOrder(toStatusId)
-        if (fromOrder === -1 || toOrder === -1) return 'forward'
-        return toOrder < fromOrder ? 'backward' : 'forward'
-    }
-
-    // Helper function to check if a forward transition is sequential (adjacent steps)
-    const isSequentialForward = (fromStatusId: string, toStatusId: string): boolean => {
-        const fromStep = sortedSteps.find(s => s.statusId === fromStatusId)
-        const toStep = sortedSteps.find(s => s.statusId === toStatusId)
-        if (!fromStep || !toStep) return false
-        return toStep.order === fromStep.order + 1
-    }
-
     // Smaller dimensions
     const STEP_WIDTH = 100
     const STEP_HEIGHT = 60
@@ -77,18 +81,38 @@ export function LifecycleFlowViewer({
     const VERTICAL_OFFSET_BASE = 20
     const VERTICAL_OFFSET_STEP = 15
 
-    const getStepCenter = (stepIndex: number) => {
-        const x = PADDING_X + (stepIndex * (STEP_WIDTH + GAP)) + (STEP_WIDTH / 2)
-        const y = PADDING_Y + (STEP_HEIGHT / 2)
-        return { x, y }
-    }
-
     // Calculate arrow paths
     const arrows = useMemo(() => {
-        const backwardArrows: any[] = []
-        const forwardSkipArrows: any[] = []
-        const sequentialArrows: any[] = []
-        const selfArrows: any[] = []
+        const getStepOrder = (statusId: string): number => {
+            const step = steps.find(s => s.statusId === statusId)
+            return step ? step.order : -1
+        }
+
+        const getTransitionType = (fromStatusId: string, toStatusId: string): 'forward' | 'backward' | 'self' => {
+            if (fromStatusId === toStatusId) return 'self'
+            const fromOrder = getStepOrder(fromStatusId)
+            const toOrder = getStepOrder(toStatusId)
+            if (fromOrder === -1 || toOrder === -1) return 'forward'
+            return toOrder < fromOrder ? 'backward' : 'forward'
+        }
+
+        const isSequentialForward = (fromStatusId: string, toStatusId: string): boolean => {
+            const fromStep = sortedSteps.find(s => s.statusId === fromStatusId)
+            const toStep = sortedSteps.find(s => s.statusId === toStatusId)
+            if (!fromStep || !toStep) return false
+            return toStep.order === fromStep.order + 1
+        }
+
+        const getStepCenter = (stepIndex: number): StepPos => {
+            const x = PADDING_X + (stepIndex * (STEP_WIDTH + GAP)) + (STEP_WIDTH / 2)
+            const y = PADDING_Y + (STEP_HEIGHT / 2)
+            return { x, y }
+        }
+
+        const backwardArrows: BackwardOrSkipArrow[] = []
+        const forwardSkipArrows: BackwardOrSkipArrow[] = []
+        const sequentialArrows: SequentialArrow[] = []
+        const selfArrows: SelfArrow[] = []
 
         transitionRules.forEach((rule, idx) => {
             const fromStepIndex = sortedSteps.findIndex(s => s.statusId === rule.fromStatusId)
@@ -135,7 +159,7 @@ export function LifecycleFlowViewer({
             for (let j = 0; j < i; j++) {
                 const prev = backwardArrows[j]
                 if (!(arrow.maxX < prev.minX || arrow.minX > prev.maxX)) {
-                    offset = Math.max(offset, prev.offset + VERTICAL_OFFSET_STEP)
+                    offset = Math.max(offset, (prev.offset ?? 0) + VERTICAL_OFFSET_STEP)
                 }
             }
             arrow.offset = offset
@@ -149,7 +173,7 @@ export function LifecycleFlowViewer({
             for (let j = 0; j < i; j++) {
                 const prev = forwardSkipArrows[j]
                 if (!(arrow.maxX < prev.minX || arrow.minX > prev.maxX)) {
-                    offset = Math.max(offset, prev.offset + VERTICAL_OFFSET_STEP)
+                    offset = Math.max(offset, (prev.offset ?? 0) + VERTICAL_OFFSET_STEP)
                 }
             }
             arrow.offset = offset
@@ -164,7 +188,18 @@ export function LifecycleFlowViewer({
         })
 
         return { backwardArrows, forwardSkipArrows, sequentialArrows, selfArrows }
-    }, [sortedSteps, transitionRules])
+    }, [
+        sortedSteps,
+        transitionRules,
+        steps,
+        STEP_WIDTH,
+        STEP_HEIGHT,
+        GAP,
+        PADDING_X,
+        PADDING_Y,
+        VERTICAL_OFFSET_BASE,
+        VERTICAL_OFFSET_STEP,
+    ])
 
     if (!steps || steps.length === 0) {
         return (
@@ -175,9 +210,8 @@ export function LifecycleFlowViewer({
     }
 
     // Calculate container height based on max offsets
-    const maxBackwardOffset = Math.max(0, ...arrows.backwardArrows.map(a => a.offset))
-    const maxForwardOffset = Math.max(0, ...arrows.forwardSkipArrows.map(a => a.offset))
-    const containerHeight = STEP_HEIGHT + PADDING_Y * 2 + maxBackwardOffset + maxForwardOffset
+    const maxBackwardOffset = Math.max(0, ...arrows.backwardArrows.map(a => a.offset ?? 0))
+    const maxForwardOffset = Math.max(0, ...arrows.forwardSkipArrows.map(a => a.offset ?? 0))
 
     // Also explicit self-loop height
     const hasSelfLoops = arrows.selfArrows.length > 0

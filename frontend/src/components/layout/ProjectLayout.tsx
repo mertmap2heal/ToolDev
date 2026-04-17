@@ -1,22 +1,7 @@
 import { Outlet, useParams, useSearchParams } from 'react-router-dom'
 import PBSSidebar from '../pbs/PBSSidebar'
-import { createContext, useContext, useMemo } from 'react'
-
-/**
- * Context for the current component scope
- * Provides the componentId from the URL to all child components
- */
-interface ComponentContextValue {
-  componentId: string | null
-  projectId: string | null
-}
-
-const ComponentContext = createContext<ComponentContextValue>({
-  componentId: null,
-  projectId: null,
-})
-
-export const useComponentContext = () => useContext(ComponentContext)
+import { useMemo } from 'react'
+import { ComponentContext } from './projectComponentContext'
 
 /**
  * ProjectLayout wraps all project-scoped routes.

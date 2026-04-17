@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { linkService } from '../../services/link.service'
 import { invalidateLinkCaches } from '../../utils/invalidateLinkCaches'
 import { buildDeepLink } from '../../linkage/buildDeepLink'
-import type { Link, CreateLinkDto, LinkType } from 'shared/types/linkage.types'
+import type { CreateLinkDto, LinkType } from 'shared/types/linkage.types'
 import { Plus, Trash2, ExternalLink, AlertCircle } from 'lucide-react'
 
 interface FunctionTraceabilityTabProps {

@@ -28,7 +28,6 @@ import CreateChangeRequestModal from '../../components/changeRequests/CreateChan
 import CreateIssueModal from '../../components/issues/CreateIssueModal'
 import CreateRequirementLinkDialog from '../../components/requirements/CreateRequirementLinkDialog'
 import ReviewStatusBadge from '../../components/requirements/ReviewStatusBadge'
-import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import LockWarningModal from '../../components/requirements/LockWarningModal'
 import { requirementService, type RequirementFilters } from '../../services/requirement.service'
 import { functionService } from '../../services/function.service'
@@ -1523,18 +1522,6 @@ export default function RequirementsPage() {
     enabled: !!projectId && isExportOpen,
   })
 
-  // Linked safety items count (requirements linked to hazard, safety_requirement, safety_analysis, safety_evidence)
-  const SAFETY_ENTITY_TYPES = ['hazard', 'safety_requirement', 'safety_analysis', 'safety_evidence']
-  const linkedSafetyCount = useMemo(() => {
-    if (!LINKAGE_V1 || !effectiveLinks.length) return 0
-    const safetyLinks = effectiveLinks.filter(
-      (l) =>
-        (l.sourceType === 'requirement' && SAFETY_ENTITY_TYPES.includes(l.targetType as string)) ||
-        (l.targetType === 'requirement' && SAFETY_ENTITY_TYPES.includes(l.sourceType as string))
-    )
-    return safetyLinks.length
-  }, [LINKAGE_V1, effectiveLinks])
-
   const deleteRequirementMutation = useMutation({
     mutationFn: ({ requirementId, reason, childrenToDelete, linkedItemsToDelete }: { requirementId: string; reason?: string; childrenToDelete?: string[], linkedItemsToDelete?: { type: string, id: string }[] }) => {
       if (!projectId) throw new Error('Project ID required')
@@ -2303,7 +2290,7 @@ export default function RequirementsPage() {
         >
           <td
             className={clsx(
-              "px-4 py-3 sticky left-0 z-20 bg-white dark:bg-gray-800",
+              "px-4 py-3 sticky left-0 z-[15] bg-white dark:bg-gray-800",
               level > 0 && 'bg-gray-50/50 dark:bg-gray-900/30',
               "shadow-[2px_0_0_0_rgba(0,0,0,0.06)] dark:shadow-[2px_0_0_0_rgba(255,255,255,0.06)]"
             )}
@@ -3459,7 +3446,7 @@ export default function RequirementsPage() {
             </div>
           )}
 
-          <div className="flex flex-col gap-2 sticky top-0 z-20 bg-gray-50 dark:bg-gray-900 py-2 -mx-1 px-1">
+          <div className="flex flex-col gap-2 sticky top-0 z-[35] bg-gray-50 dark:bg-gray-900 py-2 -mx-1 px-1">
             <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <button
@@ -3819,7 +3806,6 @@ export default function RequirementsPage() {
                 <Settings size={16} />
                 <span>Settings</span>
               </Link>
-              {projectId && <SafetyLinkPanel variant="linked" count={linkedSafetyCount} />}
             </div>
           </div>
 
@@ -4523,8 +4509,8 @@ export default function RequirementsPage() {
             )}
           </div>
 
-          {/* Sticky Summary & Pagination Bar */}
-          <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg sticky bottom-0 z-10 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] dark:shadow-[0_-2px_8px_rgba(0,0,0,0.3)]">
+          {/* Sticky Summary & Pagination Bar — z-40 above sticky row cells (checkbox z-[15], ID header z-25, checkbox th z-30) */}
+          <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg sticky bottom-0 z-40 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] dark:shadow-[0_-2px_8px_rgba(0,0,0,0.3)]">
             <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
               <span>
                 {totalRequirements > 0

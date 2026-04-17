@@ -1,8 +1,50 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { X } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { inventoryService } from '../../../services/inventory.service'
+import { inventoryService, type Item } from '../../../services/inventory.service'
 import { useUnsavedChanges } from '../../../hooks/useUnsavedChanges'
+
+type ReceiptLineForm = {
+  poLineId?: string
+  itemId: string
+  qtyReceived: number
+  locationId: string
+  lotId?: string
+  serialId?: string
+  unitCost?: number
+}
+
+type ReceiptFormState = {
+  purchaseOrderId: string
+  receivedAt: string
+  notes: string
+  lines: ReceiptLineForm[]
+}
+
+type POLineResponse = {
+  id: string
+  itemId: string
+  qtyOrdered?: number | string
+  qtyReceived?: number | string
+  locationId?: string
+  unitPrice?: number
+  item?: Pick<Item, 'sku' | 'name' | 'trackingPolicy'>
+}
+
+type PurchaseOrderResponse = {
+  id: string
+  lines?: POLineResponse[]
+}
+
+type WarehouseLocationRow = { id: string; code: string; name?: string }
+type WarehouseRow = {
+  id: string
+  name: string
+  code: string
+  locations?: WarehouseLocationRow[]
+}
+
+type LocationOption = WarehouseLocationRow & { warehouseName: string; warehouseCode: string }
 
 interface CreateReceiptModalProps {
   isOpen: boolean
@@ -19,21 +61,18 @@ export default function CreateReceiptModal({
 }: CreateReceiptModalProps) {
   const onDiscardRef = useRef<() => void>()
   const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
-  const [formData, setFormDataBase] = useState({
+  const [formData, setFormDataBase] = useState<ReceiptFormState>({
     purchaseOrderId: purchaseOrderId || '',
     receivedAt: new Date().toISOString().split('T')[0],
     notes: '',
-    lines: [] as Array<{
-      poLineId?: string
-      itemId: string
-      qtyReceived: number
-      locationId: string
-      lotId?: string
-      serialId?: string
-      unitCost?: number
-    }>,
+    lines: [],
   })
-  const setFormData = (v: typeof formData | ((prev: typeof formData) => typeof formData)) => { setFormDataBase(v as any); markDirty() }
+  const markDirtyRef = useRef(markDirty)
+  markDirtyRef.current = markDirty
+  const setFormData = useCallback((v: ReceiptFormState | ((prev: ReceiptFormState) => ReceiptFormState)) => {
+    setFormDataBase((prev) => (typeof v === 'function' ? v(prev) : v))
+    markDirtyRef.current()
+  }, [])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -59,29 +98,31 @@ export default function CreateReceiptModal({
     enabled: isOpen,
   })
 
-  const warehouses = warehousesData?.data || []
-  const po = poData?.data
+  const warehouses = (warehousesData?.data ?? []) as WarehouseRow[]
+  const po = poData?.data as PurchaseOrderResponse | undefined
 
   useEffect(() => {
-    if (po && po.lines) {
-      setFormData({
-        ...formData,
-        purchaseOrderId: po.id,
-        lines: po.lines.map((line: any) => ({
-          poLineId: line.id,
-          itemId: line.itemId,
-          qtyReceived: Math.max(0, Number(line.qtyOrdered) - Number(line.qtyReceived)),
-          locationId: line.locationId,
-          unitCost: line.unitPrice,
-        })),
-      })
-    }
+    if (!po?.lines?.length) return
+    setFormDataBase({
+      purchaseOrderId: po.id,
+      receivedAt: new Date().toISOString().split('T')[0],
+      notes: '',
+      lines: po.lines.map((line) => ({
+        poLineId: line.id,
+        itemId: line.itemId,
+        qtyReceived: Math.max(0, Number(line.qtyOrdered) - Number(line.qtyReceived)),
+        locationId: line.locationId ?? '',
+        unitCost: line.unitPrice,
+      })),
+    })
   }, [po])
 
-  const updateLine = (index: number, field: string, value: any) => {
-    const newLines = [...formData.lines]
-    newLines[index] = { ...newLines[index], [field]: value }
-    setFormData({ ...formData, lines: newLines })
+  const updateLine = <K extends keyof ReceiptLineForm>(index: number, field: K, value: ReceiptLineForm[K]) => {
+    setFormData((prev) => {
+      const newLines = [...prev.lines]
+      newLines[index] = { ...newLines[index], [field]: value }
+      return { ...prev, lines: newLines }
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -114,8 +155,21 @@ export default function CreateReceiptModal({
       })
       resetDirty()
       onSuccess()
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to create receipt'
+    } catch (err: unknown) {
+      const fromApi =
+        err &&
+        typeof err === 'object' &&
+        'response' in err &&
+        err.response &&
+        typeof err.response === 'object' &&
+        'data' in err.response &&
+        err.response.data &&
+        typeof err.response.data === 'object' &&
+        'error' in err.response.data
+          ? String((err.response.data as { error?: string }).error)
+          : ''
+      const errorMessage =
+        fromApi || (err instanceof Error ? err.message : '') || 'Failed to create receipt'
       setError(errorMessage)
       console.error('Error creating receipt:', err)
     } finally {
@@ -125,14 +179,13 @@ export default function CreateReceiptModal({
 
   if (!isOpen) return null
 
-  const allLocations: any[] = []
-  warehouses.forEach((wh: any) => {
-    if (wh.locations) {
-      wh.locations.forEach((loc: any) => {
-        allLocations.push({ ...loc, warehouseName: wh.name, warehouseCode: wh.code })
-      })
+  const allLocations: LocationOption[] = []
+  for (const wh of warehouses) {
+    if (!wh.locations) continue
+    for (const loc of wh.locations) {
+      allLocations.push({ ...loc, warehouseName: wh.name, warehouseCode: wh.code })
     }
-  })
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}>
@@ -190,7 +243,7 @@ export default function CreateReceiptModal({
             ) : (
               <div className="space-y-2">
                 {formData.lines.map((line, index) => {
-                  const poLine = po?.lines?.find((l: any) => l.id === line.poLineId)
+                  const poLine = po?.lines?.find((l) => l.id === line.poLineId)
                   const item = poLine?.item
                   const trackingPolicy = item?.trackingPolicy
 

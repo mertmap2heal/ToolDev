@@ -13,7 +13,6 @@ import {
   Shield,
   Layers,
   Plus,
-  ExternalLink,
   ClipboardList,
   TestTube2,
 } from 'lucide-react'
@@ -64,21 +63,24 @@ export default function FunctionDetailPanel({
   const [editData, setEditData] = useState<Partial<SystemFunction>>({})
   const [activeTab, setActiveTab] = useState<'details' | 'links' | 'hierarchy'>('details')
 
+  type TestPlanRow = { id: string; key: string; name: string; status: string }
+  type TestCaseRow = { id: string; key: string; title: string; status: string }
+
   // Fetch test plans and test cases for verification method
-  const { data: testPlans = [] } = useQuery({
+  const { data: testPlans = [] } = useQuery<TestPlanRow[]>({
     queryKey: ['test-plans', projectId],
     queryFn: async () => {
       const res = await verificationService.getTestPlans(projectId)
-      return (res.success && res.data ? res.data : []) as Array<{ id: string; key: string; name: string; status: string }>
+      return (res.success && res.data ? res.data : []) as TestPlanRow[]
     },
     enabled: !!projectId,
   })
 
-  const { data: testCases = [] } = useQuery({
+  const { data: testCases = [] } = useQuery<TestCaseRow[]>({
     queryKey: ['test-cases', projectId],
     queryFn: async () => {
       const res = await verificationService.getTestCases(projectId)
-      return (res.success && res.data ? res.data : []) as Array<{ id: string; key: string; title: string; status: string }>
+      return (res.success && res.data ? res.data : []) as TestCaseRow[]
     },
     enabled: !!projectId,
   })
@@ -88,12 +90,12 @@ export default function FunctionDetailPanel({
     if (!method) return { type: 'none' as const, label: '—' }
     if (method.startsWith('TP::')) {
       const parts = method.split('::')
-      const plan = testPlans.find((p: any) => p.id === parts[1])
+      const plan = testPlans.find((p) => p.id === parts[1])
       return { type: 'test-plan' as const, id: parts[1], key: parts[2], label: plan ? `${plan.key} — ${plan.name}` : parts[2] }
     }
     if (method.startsWith('TC::')) {
       const parts = method.split('::')
-      const tc = testCases.find((c: any) => c.id === parts[1])
+      const tc = testCases.find((c) => c.id === parts[1])
       return { type: 'test-case' as const, id: parts[1], key: parts[2], label: tc ? `${tc.key} — ${tc.title}` : parts[2] }
     }
     return { type: 'standard' as const, label: method }
@@ -278,7 +280,12 @@ export default function FunctionDetailPanel({
             <>
               <select
                 value={editData.status || 'draft'}
-                onChange={e => setEditData(d => ({ ...d, status: e.target.value as any }))}
+                onChange={e =>
+                  setEditData(d => ({
+                    ...d,
+                    status: e.target.value as NonNullable<SystemFunction['status']>,
+                  }))
+                }
                 className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
                 {STATUS_OPTIONS.map(s => (
@@ -401,7 +408,7 @@ export default function FunctionDetailPanel({
                       </optgroup>
                       {testPlans.length > 0 && (
                         <optgroup label="Test Plans">
-                          {testPlans.map((tp: any) => (
+                          {testPlans.map((tp) => (
                             <option key={tp.id} value={`TP::${tp.id}::${tp.key}`}>
                               {tp.key} — {tp.name}
                             </option>
@@ -410,7 +417,7 @@ export default function FunctionDetailPanel({
                       )}
                       {testCases.length > 0 && (
                         <optgroup label="Test Cases">
-                          {testCases.map((tc: any) => (
+                          {testCases.map((tc) => (
                             <option key={tc.id} value={`TC::${tc.id}::${tc.key}`}>
                               {tc.key} — {tc.title}
                             </option>

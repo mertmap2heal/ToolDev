@@ -378,12 +378,18 @@ describe('Parameter IDOR protection (#74)', () => {
       },
     })
     projectBParamId = paramB.id
+
+    // Membership on project A only: requests use projectAId in path; controller must still reject cross-project param.
+    await prisma.projectMember.create({
+      data: { projectId: projectAId, userId: userAId, role: 'owner' },
+    })
   })
 
   afterAll(async () => {
     await prisma.parameterVersion.deleteMany({ where: { parameter: { projectId: projectBId } } })
     await prisma.parameter.deleteMany({ where: { projectId: projectBId } })
     await prisma.parameter.deleteMany({ where: { projectId: projectAId } })
+    await prisma.projectMember.deleteMany({ where: { projectId: { in: [projectAId, projectBId] } } })
     await prisma.project.deleteMany({ where: { id: { in: [projectAId, projectBId] } } })
     await prisma.user.delete({ where: { id: userAId } })
   })

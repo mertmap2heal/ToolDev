@@ -80,7 +80,16 @@ describe('Cleanup job — idempotency and distributed lock (#43)', () => {
   })
 
   it('permanently deletes a requirement past the retention window', async () => {
-    // Create a requirement and soft-delete it 8 days ago
+    // Deterministic env: CI may set a large CLEANUP_RETENTION_DAYS; deletedAt must be older than cutoff.
+    const originalRetention = process.env.CLEANUP_RETENTION_DAYS
+    const originalEnabled = process.env.CLEANUP_ENABLED
+    process.env.CLEANUP_ENABLED = 'true'
+    process.env.CLEANUP_RETENTION_DAYS = '7'
+    const retentionDays = 7
+    // Clear a stuck advisory lock from a parallel suite or a prior failed test (same DB key as cleanup job).
+    const CLEANUP_LOCK_KEY = BigInt('0x636c65616e757001')
+    await prisma.$executeRaw`SELECT pg_advisory_unlock(${CLEANUP_LOCK_KEY})`.catch(() => {})
+
     const req = await prisma.requirement.create({
       data: {
         projectId,
@@ -89,12 +98,16 @@ describe('Cleanup job — idempotency and distributed lock (#43)', () => {
         priority: 'low',
         status: 'draft',
         stage: 'system',
-        deletedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+        deletedAt: new Date(Date.now() - (retentionDays + 3) * 24 * 60 * 60 * 1000),
       },
     })
 
-    process.env.CLEANUP_RETENTION_DAYS = '7'
     await cleanupSoftDeletedRequirements()
+
+    if (originalRetention === undefined) delete process.env.CLEANUP_RETENTION_DAYS
+    else process.env.CLEANUP_RETENTION_DAYS = originalRetention
+    if (originalEnabled === undefined) delete process.env.CLEANUP_ENABLED
+    else process.env.CLEANUP_ENABLED = originalEnabled
 
     const found = await prisma.requirement.findFirst({ where: { id: req.id } })
     expect(found).toBeNull()

@@ -7,7 +7,7 @@ import { AuthRequest } from './auth.middleware'
  * req.params.projectId.  Must be placed after authenticateToken and after
  * the projectIdParam resolver (so req.params.projectId is already a UUID).
  *
- * Returns 403 when the user has no ProjectMember record for the project.
+ * Returns 403 when the user is neither a ProjectMember nor the project owner (project.userId).
  */
 export async function requireProjectMember(
   req: AuthRequest,
@@ -28,12 +28,22 @@ export async function requireProjectMember(
       select: { id: true },
     })
 
-    if (!member) {
-      res.status(403).json({ success: false, error: 'Access denied: not a member of this project' })
+    if (member) {
+      next()
       return
     }
 
-    next()
+    // Legacy / backfill gap: project creator (project.userId) may not have a ProjectMember row yet.
+    const project = await prisma.project.findFirst({
+      where: { id: projectId },
+      select: { userId: true },
+    })
+    if (project?.userId === userId) {
+      next()
+      return
+    }
+
+    res.status(403).json({ success: false, error: 'Access denied: not a member of this project' })
   } catch (err) {
     console.error('requireProjectMember error:', err)
     res.status(500).json({ success: false, error: 'Internal server error' })
