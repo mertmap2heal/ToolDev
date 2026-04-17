@@ -14,10 +14,21 @@ function loadCreds() {
   return null
 }
 
-export const TEST_USER = {
-  username: process.env.E2E_USERNAME ?? loadCreds()?.username ?? 'christian.mandle',
-  password: process.env.E2E_PASSWORD ?? loadCreds()?.password ?? 'mandle1998',
+function resolveCreds(): { username: string; password: string } {
+  const fromFile = loadCreds()
+  const username = process.env.E2E_USERNAME ?? fromFile?.username
+  const password = process.env.E2E_PASSWORD ?? fromFile?.password
+  if (!username || !password) {
+    throw new Error(
+      'E2E credentials missing. Set E2E_USERNAME and E2E_PASSWORD environment variables, ' +
+      'or create frontend/e2e/.auth/creds.json with {"username":"...","password":"..."} ' +
+      '(see backend/.env.example for documentation).',
+    )
+  }
+  return { username, password }
 }
+
+export const TEST_USER = resolveCreds()
 
 export const AUTH_FILE = path.join(__dirname, '../.auth/user.json')
 

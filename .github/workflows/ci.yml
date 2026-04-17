@@ -172,8 +172,13 @@ jobs:
       - name: Run Playwright e2e tests
         run: cd frontend && npm run test:e2e
         env:
-          E2E_USERNAME: christian.mandle
-          E2E_PASSWORD: mandle1998
+          # Credentials are read from GitHub Actions secrets. Configure under
+          # Repo Settings > Secrets and variables > Actions:
+          #   E2E_TEST_EMAIL     - username/email of the e2e test account
+          #   E2E_TEST_PASSWORD  - password of the e2e test account
+          # Never put real credentials in this file.
+          E2E_USERNAME: ${{ secrets.E2E_TEST_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
 
       - name: Upload Playwright report
         if: always()
