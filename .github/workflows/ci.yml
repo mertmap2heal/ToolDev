@@ -30,6 +30,26 @@ jobs:
         run: cd backend && npm run build
         continue-on-error: true  # ~60 pre-existing TypeScript errors from merged branches; tracked separately
 
+      - name: Guard against unsanitized dangerouslySetInnerHTML (#169)
+        run: |
+          set -e
+          # Every dangerouslySetInnerHTML in frontend/src must be accompanied by
+          # sanitizeHtml( or sanitizeSvg( on the same or an adjacent line.
+          # Finds any call to dangerouslySetInnerHTML that does NOT include a
+          # sanitizer on the same line.
+          unsanitized=$(grep -rn "dangerouslySetInnerHTML" frontend/src || true)
+          if [ -z "$unsanitized" ]; then
+            exit 0
+          fi
+          fail=0
+          while IFS= read -r line; do
+            case "$line" in
+              *sanitizeHtml*|*sanitizeSvg*) ;;
+              *) echo "::error::unsanitized dangerouslySetInnerHTML (issue #169): $line"; fail=1 ;;
+            esac
+          done <<< "$unsanitized"
+          exit $fail
+
   test:
     runs-on: ubuntu-latest
     services:
