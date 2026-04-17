@@ -70,6 +70,30 @@ jobs:
           DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
           JWT_SECRET: ci-test-secret
 
+      - name: Guard verification key atomicity + cascade (#135,#136,#137)
+        run: |
+          set -e
+          # Controllers must call the atomic allocators — not the legacy read-then-increment.
+          if grep -n "verificationService\.generateTestCaseKey\|verificationService\.generateTestPlanKey" \
+              backend/src/controllers/verification/testCase.controller.ts \
+              backend/src/controllers/verification/testPlan.controller.ts; then
+            echo "::error::generateTestCaseKey/generateTestPlanKey must not be used directly (issue #135)"
+            exit 1
+          fi
+          for f in \
+            backend/src/controllers/verification/testCase.controller.ts \
+            backend/src/controllers/verification/testPlan.controller.ts; do
+            if ! grep -q "allocateTestCaseKey\|allocateTestPlanKey" "$f"; then
+              echo "::error file=$f::must use atomic allocator from lib/verificationKey (issue #135)"
+              exit 1
+            fi
+          done
+          # deleteTestCase body must wrap cascade in prisma.$transaction
+          if ! grep -A 30 "deleteTestCase = " backend/src/controllers/verification/testCase.controller.ts | grep -q 'prisma\.\$transaction'; then
+            echo "::error file=backend/src/controllers/verification/testCase.controller.ts::deleteTestCase must be wrapped in prisma.\$transaction (issue #136)"
+            exit 1
+          fi
+
   e2e:
     runs-on: ubuntu-latest
     services:
