@@ -7,6 +7,21 @@ on:
     branches: [ master, dev ]
 
 jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Blocking secret scan (issue #173). Fails the build if any known
+      # credential pattern (AWS keys, JWT secrets, high-entropy strings,
+      # the previously leaked test password, etc.) is found in any tracked
+      # file or in the diff of this PR.
+      - name: gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -226,8 +241,13 @@ jobs:
       - name: Run Playwright e2e tests
         run: cd frontend && npm run test:e2e
         env:
-          E2E_USERNAME: christian.mandle
-          E2E_PASSWORD: mandle1998
+          # Credentials are read from GitHub Actions secrets. Configure under
+          # Repo Settings > Secrets and variables > Actions:
+          #   E2E_TEST_EMAIL     - username/email of the e2e test account
+          #   E2E_TEST_PASSWORD  - password of the e2e test account
+          # Never put real credentials in this file.
+          E2E_USERNAME: ${{ secrets.E2E_TEST_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
 
       - name: Upload Playwright report
         if: always()
