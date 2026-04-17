@@ -70,6 +70,22 @@ jobs:
           DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
           JWT_SECRET: ci-test-secret
 
+      - name: Verify project-scoped routers declare requireProjectMember (#90)
+        run: |
+          set -e
+          missing=0
+          for f in \
+            backend/src/routes/requirements.routes.ts \
+            backend/src/routes/requirementReviews.routes.ts \
+            backend/src/routes/requirementValidation.routes.ts \
+            backend/src/routes/requirementsViewPreferences.routes.ts; do
+            if ! grep -q "requireProjectMember" "$f"; then
+              echo "::error file=$f::missing requireProjectMember middleware (see issue #90)"
+              missing=1
+            fi
+          done
+          exit $missing
+
   e2e:
     runs-on: ubuntu-latest
     services:
