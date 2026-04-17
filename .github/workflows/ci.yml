@@ -256,6 +256,28 @@ jobs:
           done
           exit $missing
 
+      - name: Guard verification key atomicity + cascade (#135,#136,#137)
+        run: |
+          set -e
+          if grep -n "verificationService\.generateTestCaseKey\|verificationService\.generateTestPlanKey" \
+              backend/src/controllers/verification/testCase.controller.ts \
+              backend/src/controllers/verification/testPlan.controller.ts; then
+            echo "::error::generateTestCaseKey/generateTestPlanKey must not be used directly (issue #135)"
+            exit 1
+          fi
+          for f in \
+            backend/src/controllers/verification/testCase.controller.ts \
+            backend/src/controllers/verification/testPlan.controller.ts; do
+            if ! grep -q "allocateTestCaseKey\|allocateTestPlanKey" "$f"; then
+              echo "::error file=$f::must use atomic allocator from lib/verificationKey (issue #135)"
+              exit 1
+            fi
+          done
+          if ! grep -A 30 "deleteTestCase = " backend/src/controllers/verification/testCase.controller.ts | grep -q 'prisma\.\$transaction'; then
+            echo "::error file=backend/src/controllers/verification/testCase.controller.ts::deleteTestCase must be wrapped in prisma.\$transaction (issue #136)"
+            exit 1
+          fi
+
   e2e:
     runs-on: ubuntu-latest
     services:
