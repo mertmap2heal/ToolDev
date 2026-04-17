@@ -3,6 +3,8 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import MainLayout from './components/layout/MainLayout'
 import LandingOrApp from './components/LandingOrApp'
 import LoginPage from './pages/Login/LoginPage'
+import PrivacyPolicy from './pages/Legal/PrivacyPolicy'
+import TermsOfUse from './pages/Legal/TermsOfUse'
 import DashboardPage from './pages/Dashboard/DashboardPage'
 import RequirementsPage from './pages/Requirements/RequirementsPage'
 import RequirementsSettingsPage from './pages/Requirements/RequirementsSettingsPage'
@@ -90,6 +92,9 @@ function App() {
       <Routes>
         {/* Login - public route */}
         <Route path="/login" element={<LoginPage />} />
+        {/* Legal - public static pages (accessible without authentication) */}
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<TermsOfUse />} />
         {/* MBSE Models - Full page experience outside MainLayout */}
         <Route path="projects/:projectId/mbse-models" element={<FeatureGuard moduleId="mbse-models"><MBSEModelsPage /></FeatureGuard>} />
         {/* Landing when unauthenticated, app when authenticated */}
