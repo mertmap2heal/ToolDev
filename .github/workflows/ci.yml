@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ master, dev ]
 
+# GitHub Actions: JS-based actions moving to Node 24; silences Node 20 runner deprecation noise.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   lint:
     runs-on: ubuntu-latest

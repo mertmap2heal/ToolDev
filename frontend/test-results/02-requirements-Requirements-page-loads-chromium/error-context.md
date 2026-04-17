@@ -23,71 +23,92 @@
           - /url: /inventory/items
           - img [ref=e25]
           - generic [ref=e29]: Inventory
-      - link "Settings" [ref=e31] [cursor=pointer]:
-        - /url: /settings
-        - img [ref=e32]
-        - generic [ref=e35]: Settings
-    - generic [ref=e36]:
-      - banner [ref=e37]:
-        - navigation [ref=e39]:
-          - link "Home" [ref=e41] [cursor=pointer]:
+      - generic [ref=e30]:
+        - link "Settings" [ref=e31] [cursor=pointer]:
+          - /url: /settings
+          - img [ref=e32]
+          - generic [ref=e35]: Settings
+        - generic [ref=e36]:
+          - generic [ref=e37]: C
+          - generic [ref=e38]: Christian Mandle
+    - generic [ref=e39]:
+      - banner [ref=e40]:
+        - navigation [ref=e42]:
+          - link "Home" [ref=e44] [cursor=pointer]:
             - /url: /
-        - button "Search... Ctrl K" [ref=e42]:
-          - img [ref=e43]
-          - generic [ref=e46]: Search...
-          - generic [ref=e47]: Ctrl K
-        - generic [ref=e48]:
-          - button "AI Guide" [ref=e49] [cursor=pointer]:
-            - img [ref=e50]
-          - button "Notifications" [ref=e53] [cursor=pointer]:
-            - img [ref=e54]
-          - button "?" [ref=e58] [cursor=pointer]:
-            - generic [ref=e59]: "?"
-      - main [ref=e61]:
-        - generic [ref=e62]:
-          - generic [ref=e63]:
-            - heading "Projects" [level=1] [ref=e64]
-            - button "Create Project" [ref=e65] [cursor=pointer]:
-              - img [ref=e66]
-              - generic [ref=e67]: Create Project
-          - generic [ref=e68]:
-            - generic [ref=e69]:
-              - generic [ref=e70]: Total Projects
-              - generic [ref=e71]: "0"
-              - generic [ref=e72]: across all domains
-            - generic [ref=e73]:
-              - generic [ref=e74]: Active
-              - generic [ref=e75]: "0"
-              - generic [ref=e76]: currently running
-            - generic [ref=e77]:
-              - generic [ref=e78]: Avg Progress
-              - generic [ref=e79]: 0%
-              - generic [ref=e80]: mean completion
-          - generic [ref=e81]:
-            - generic [ref=e82]:
+        - button "Search... Ctrl K" [ref=e45]:
+          - img [ref=e46]
+          - generic [ref=e49]: Search...
+          - generic [ref=e50]: Ctrl K
+        - generic [ref=e51]:
+          - button "AI Guide" [ref=e52] [cursor=pointer]:
+            - img [ref=e53]
+          - button "Notifications" [ref=e56] [cursor=pointer]:
+            - img [ref=e57]
+          - button "CM" [ref=e61] [cursor=pointer]:
+            - generic [ref=e62]: CM
+      - main [ref=e64]:
+        - generic [ref=e65]:
+          - generic [ref=e66]:
+            - heading "Projects" [level=1] [ref=e67]
+            - button "Create Project" [ref=e68] [cursor=pointer]:
+              - img [ref=e69]
+              - generic [ref=e70]: Create Project
+          - generic [ref=e71]:
+            - generic [ref=e72]:
+              - generic [ref=e73]: Total Projects
+              - generic [ref=e74]: "1"
+              - generic [ref=e75]: across all domains
+            - generic [ref=e76]:
+              - generic [ref=e77]: Active
+              - generic [ref=e78]: "1"
+              - generic [ref=e79]: currently running
+            - generic [ref=e80]:
+              - generic [ref=e81]: Avg Progress
+              - generic [ref=e82]: 0%
+              - generic [ref=e83]: mean completion
+          - generic [ref=e84]:
+            - generic [ref=e85]:
               - img
-              - textbox "Search projects..." [ref=e83]
-            - combobox [ref=e84]:
+              - textbox "Search projects..." [ref=e86]
+            - combobox [ref=e87]:
               - option "All statuses" [selected]
               - option "Active"
               - option "Completed"
               - option "Archived"
-            - textbox [ref=e85]
-            - textbox [ref=e86]
-            - button "Active only" [ref=e87] [cursor=pointer]:
-              - img [ref=e88]
-            - button [ref=e91] [cursor=pointer]:
-              - img [ref=e92]
-          - generic [ref=e95]:
-            - paragraph [ref=e96]: An error occurred
-            - paragraph [ref=e97]: Check that the backend is running, the database is connected, and you are logged in.
-            - generic [ref=e98]:
-              - button "Retry" [ref=e99] [cursor=pointer]
-              - link "Check backend health" [ref=e100] [cursor=pointer]:
-                - /url: /api/health
-  - generic [ref=e101]:
-    - generic [ref=e102]: "Pkg:"
-    - button "Core" [ref=e103] [cursor=pointer]
-    - button "Advanced" [ref=e104] [cursor=pointer]
-    - button "Complete" [ref=e105] [cursor=pointer]
+            - textbox [ref=e88]
+            - textbox [ref=e89]
+            - button "Active only" [ref=e90] [cursor=pointer]:
+              - img [ref=e91]
+            - button [ref=e94] [cursor=pointer]:
+              - img [ref=e95]
+            - generic [ref=e98] [cursor=pointer]:
+              - checkbox "Select all" [ref=e99]
+              - text: Select all
+          - generic [ref=e101] [cursor=pointer]:
+            - generic [ref=e102]:
+              - checkbox [ref=e103]
+              - generic [ref=e104]:
+                - generic [ref=e107]: Test Project
+                - text: Testing
+              - generic [ref=e108]: active
+            - generic [ref=e110]:
+              - generic [ref=e111]: Progress
+              - generic [ref=e112]: 0%
+            - generic [ref=e114]:
+              - generic [ref=e115]: 4/11/2026
+              - generic [ref=e116]:
+                - button "Team" [ref=e117]:
+                  - img [ref=e118]
+                - button "Analytics" [ref=e123]:
+                  - img [ref=e124]
+                - button "Audit" [ref=e126]:
+                  - img [ref=e127]
+                - button "Delete" [ref=e130]:
+                  - img [ref=e131]
+  - generic [ref=e134]:
+    - generic [ref=e135]: "Pkg:"
+    - button "Core" [ref=e136] [cursor=pointer]
+    - button "Advanced" [ref=e137] [cursor=pointer]
+    - button "Complete" [ref=e138] [cursor=pointer]
 ```

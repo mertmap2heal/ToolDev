@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, type SetStateAction } from 'react'
 import { X, AlertCircle } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { issueService } from '../../services/issue.service'
@@ -28,7 +28,13 @@ export default function RaiseIssueModal({
     owner: '',
     relatedFunctionIds: [],
   })
-  const setFormData = (v: CreateIssueDto | ((prev: CreateIssueDto) => CreateIssueDto)) => { setFormDataBase(v as any); markDirty() }
+  const setFormData = (v: SetStateAction<CreateIssueDto>) => {
+    setFormDataBase((prev) => {
+      const next = typeof v === 'function' ? v(prev) : v
+      markDirty()
+      return next
+    })
+  }
   const formData = formDataBase
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -64,8 +70,9 @@ export default function RaiseIssueModal({
         setErrors({ submit: response.error || 'Failed to create issue' })
       }
     },
-    onError: (error: any) => {
-      const errorMessage = error?.response?.data?.error || error?.message || 'Failed to create issue'
+    onError: (error: unknown) => {
+      const o = error as { response?: { data?: { error?: string } }; message?: string }
+      const errorMessage = o.response?.data?.error || o.message || 'Failed to create issue'
       setErrors({ submit: errorMessage })
     },
   })

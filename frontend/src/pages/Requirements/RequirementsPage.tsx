@@ -238,6 +238,8 @@ export default function RequirementsPage() {
   const sortDropdownRef = useRef<HTMLDivElement>(null)
   const panelTabDropdownRef = useRef<HTMLDivElement>(null)
   const bulkActionDropdownRef = useRef<HTMLDivElement>(null)
+  /** Table title cell uses click-to-open detail; defer so double-click can start inline edit without opening the drawer first. */
+  const titleDetailOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Inline editing state
   const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null)
@@ -1787,6 +1789,30 @@ export default function RequirementsPage() {
     }
   }, [inlineEdit])
 
+  useEffect(() => {
+    return () => {
+      if (titleDetailOpenTimerRef.current) {
+        clearTimeout(titleDetailOpenTimerRef.current)
+        titleDetailOpenTimerRef.current = null
+      }
+    }
+  }, [])
+
+  const cancelScheduledTitleDetailOpen = useCallback(() => {
+    if (titleDetailOpenTimerRef.current) {
+      clearTimeout(titleDetailOpenTimerRef.current)
+      titleDetailOpenTimerRef.current = null
+    }
+  }, [])
+
+  const scheduleTitleCellOpenDetail = useCallback((req: Requirement) => {
+    if (titleDetailOpenTimerRef.current) clearTimeout(titleDetailOpenTimerRef.current)
+    titleDetailOpenTimerRef.current = setTimeout(() => {
+      titleDetailOpenTimerRef.current = null
+      setDetailRequirement(req)
+    }, 280)
+  }, [])
+
   // Handle starting inline edit (strip HTML for description so user sees plain text)
   const startInlineEdit = (req: Requirement, field: InlineEditState['field']) => {
     if (isBaselineView) return
@@ -2290,7 +2316,7 @@ export default function RequirementsPage() {
         >
           <td
             className={clsx(
-              "px-4 py-3 sticky left-0 z-[15] bg-white dark:bg-gray-800",
+              "!pl-2.5 !pr-1 py-3 sticky left-0 z-[15] bg-white dark:bg-gray-800",
               level > 0 && 'bg-gray-50/50 dark:bg-gray-900/30',
               "shadow-[2px_0_0_0_rgba(0,0,0,0.06)] dark:shadow-[2px_0_0_0_rgba(255,255,255,0.06)]"
             )}
@@ -2321,7 +2347,7 @@ export default function RequirementsPage() {
           {requirementColumns.has('requirementId') && (
             <td
               className={clsx(
-                "px-4 py-3 sticky z-10",
+                "!pl-2 pr-4 py-3 sticky z-10",
                 level > 0 ? 'bg-gray-50/50 dark:bg-gray-900/30' : 'bg-white dark:bg-gray-800'
               )}
               style={{ left: 48 }}
@@ -2372,9 +2398,12 @@ export default function RequirementsPage() {
                 <div className="flex items-center gap-2">
                   <div
                     className="font-medium text-gray-900 dark:text-white cursor-pointer group/title inline-flex items-center min-w-0"
-                    onClick={() => setDetailRequirement(req)}
+                    onClick={() => scheduleTitleCellOpenDetail(req)}
                     onDoubleClick={(e) => {
                       e.stopPropagation()
+                      cancelScheduledTitleDetailOpen()
+                      if (isBaselineView) return
+                      if (!canInlineEdit(req)) return
                       startInlineEdit(req, 'title')
                     }}
                     title="Double-click to edit"
@@ -2419,6 +2448,8 @@ export default function RequirementsPage() {
                     title="Double-click to edit"
                     onDoubleClick={(e) => {
                       e.stopPropagation()
+                      if (isBaselineView) return
+                      if (!canInlineEdit(req)) return
                       startInlineEdit(req, 'description')
                     }}
                   >
@@ -2946,6 +2977,56 @@ export default function RequirementsPage() {
                 </td>
               </tr>
             )}
+            {/* Title (expanded) — same double-click inline edit as table; input here when title column is hidden */}
+            <tr>
+              <td colSpan={getTotalColumnCount()} className="px-4 py-3 bg-gray-50/50 dark:bg-gray-900/30">
+                <div className="pl-4 ml-6 border-l-2 border-gray-200 dark:border-gray-700">
+                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Title</p>
+                  {!isBaselineView &&
+                  inlineEdit?.requirementId === req.id &&
+                  inlineEdit.field === 'title' &&
+                  !requirementColumns.has('title') ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        ref={inlineInputRef}
+                        type="text"
+                        value={inlineEdit.value}
+                        onChange={(e) => setInlineEdit({ ...inlineEdit, value: e.target.value })}
+                        onKeyDown={handleInlineKeyDown}
+                        onBlur={saveInlineEdit}
+                        className="flex-1 min-w-[200px] px-2 py-1 text-sm border border-blue-500 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      className={clsx(
+                        'text-sm text-gray-900 dark:text-white min-w-0 w-full flex flex-1 group/exp-title',
+                        !isBaselineView && 'cursor-pointer'
+                      )}
+                      title={!isBaselineView ? 'Double-click to edit' : undefined}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation()
+                        cancelScheduledTitleDetailOpen()
+                        if (isBaselineView) return
+                        if (!canInlineEdit(req)) return
+                        startInlineEdit(req, 'title')
+                      }}
+                    >
+                      <div className="font-medium break-words group-hover/exp-title:text-blue-600 dark:group-hover/exp-title:text-blue-400 transition-colors w-full inline-flex items-center min-w-0">
+                        {projectId && (req.title || '').includes('{{param:') ? (
+                          <RequirementParameterText projectId={projectId} text={req.title} />
+                        ) : (
+                          <span>{req.title || '—'}</span>
+                        )}
+                        {!isBaselineView && (
+                          <Edit2 size={12} className="opacity-0 group-hover/exp-title:opacity-100 text-blue-500 ml-1.5 shrink-0 transition-opacity flex-none" />
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </td>
+            </tr>
             {/* Description */}
             <tr>
               <td colSpan={getTotalColumnCount()} className="px-4 py-3 bg-gray-50/50 dark:bg-gray-900/30">
@@ -4308,7 +4389,7 @@ export default function RequirementsPage() {
                   <tr>
                     <th
                       className={clsx(
-                        'px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider sticky left-0 z-30 bg-gray-50 dark:bg-gray-900',
+                        '!pl-2.5 !pr-1 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider sticky left-0 z-30 bg-gray-50 dark:bg-gray-900',
                         'shadow-[2px_0_0_0_rgba(0,0,0,0.06)] dark:shadow-[2px_0_0_0_rgba(255,255,255,0.06)]'
                       )}
                       style={{ width: 48, minWidth: 48, maxWidth: 48 }}
@@ -4337,7 +4418,9 @@ export default function RequirementsPage() {
                           width={columnWidths[col.key] || col.defaultWidth || 150}
                           onResize={(w) => handleColumnResize(col.key, w)}
                           className={clsx(
-                            "px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider",
+                            isStickyIdCol
+                              ? "!pl-2 pr-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                              : "px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider",
                             col.sortable && "cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none"
                           )}
                           style={

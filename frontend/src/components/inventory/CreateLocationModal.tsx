@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, type SetStateAction } from 'react'
 import { X } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { inventoryService } from '../../services/inventory.service'
@@ -9,6 +9,26 @@ interface CreateLocationModalProps {
   onClose: () => void
   warehouseId: string
   onSuccess: () => void
+}
+
+interface LocationTreeNode {
+  id: string
+  code: string
+  name?: string | null
+  children?: LocationTreeNode[]
+}
+
+function flattenLocationTree(
+  locations: LocationTreeNode[],
+  result: LocationTreeNode[] = []
+): LocationTreeNode[] {
+  locations.forEach((loc) => {
+    result.push(loc)
+    if (loc.children && loc.children.length > 0) {
+      flattenLocationTree(loc.children, result)
+    }
+  })
+  return result
 }
 
 export default function CreateLocationModal({
@@ -26,7 +46,13 @@ export default function CreateLocationModal({
     locationType: 'BIN',
     pickingPriority: 0,
   })
-  const setFormData = (v: typeof formData | ((prev: typeof formData) => typeof formData)) => { setFormDataBase(v as any); markDirty() }
+  const setFormData = (v: SetStateAction<typeof formData>) => {
+    setFormDataBase((prev) => {
+      const next = typeof v === 'function' ? v(prev) : v
+      markDirty()
+      return next
+    })
+  }
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -49,17 +75,7 @@ export default function CreateLocationModal({
 
   const locationTree = locationTreeData?.data || []
 
-  const flattenLocations = (locations: any[], result: any[] = []): any[] => {
-    locations.forEach((loc) => {
-      result.push(loc)
-      if (loc.children && loc.children.length > 0) {
-        flattenLocations(loc.children, result)
-      }
-    })
-    return result
-  }
-
-  const allLocations = flattenLocations(locationTree)
+  const allLocations = flattenLocationTree(locationTree as LocationTreeNode[])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -83,8 +99,9 @@ export default function CreateLocationModal({
       })
       resetDirty()
       onSuccess()
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to create location'
+    } catch (err: unknown) {
+      const o = err as { response?: { data?: { error?: string } }; message?: string }
+      const errorMessage = o.response?.data?.error || o.message || 'Failed to create location'
       setError(errorMessage)
       console.error('Error creating location:', err)
     } finally {

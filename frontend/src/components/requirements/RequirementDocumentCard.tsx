@@ -169,6 +169,16 @@ export default function RequirementDocumentCard({
   const canInlineEdit = !isBaselineView && onStartInlineEdit && onSaveInlineEdit && onInlineEditChange
   const isEditingTitle = inlineEdit?.requirementId === requirement.id && inlineEdit?.field === 'title'
   const isEditingDescription = inlineEdit?.requirementId === requirement.id && inlineEdit?.field === 'description'
+  const titleOpenDetailTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  React.useEffect(() => {
+    return () => {
+      if (titleOpenDetailTimerRef.current) {
+        clearTimeout(titleOpenDetailTimerRef.current)
+        titleOpenDetailTimerRef.current = null
+      }
+    }
+  }, [])
   const createdFormatted = requirement.createdAt
     ? format(new Date(requirement.createdAt), 'MM/dd/yyyy hh:mm:ss a O')
     : '—'
@@ -328,11 +338,22 @@ export default function RequirementDocumentCard({
           ) : (
             <button
               type="button"
-              onClick={() => onRequirementClick?.(requirement)}
+              onClick={() => {
+                if (!onRequirementClick) return
+                if (titleOpenDetailTimerRef.current) clearTimeout(titleOpenDetailTimerRef.current)
+                titleOpenDetailTimerRef.current = setTimeout(() => {
+                  titleOpenDetailTimerRef.current = null
+                  onRequirementClick(requirement)
+                }, 280)
+              }}
               onDoubleClick={
                 canInlineEdit
                   ? (e) => {
                       e.stopPropagation()
+                      if (titleOpenDetailTimerRef.current) {
+                        clearTimeout(titleOpenDetailTimerRef.current)
+                        titleOpenDetailTimerRef.current = null
+                      }
                       onStartInlineEdit?.(requirement, 'title')
                     }
                   : undefined
@@ -407,7 +428,7 @@ export default function RequirementDocumentCard({
                           className={textareaClassName}
                         />
                       ) : isTitleRow && isEditingTitle ? (
-                        inlineEdit?.value ?? '—'
+                        <span className="text-sm text-gray-500 dark:text-gray-400 italic">Editing in header…</span>
                       ) : isTitleRow && canInlineEdit ? (
                         <span
                           role="button"

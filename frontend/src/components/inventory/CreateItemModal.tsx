@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef, type SetStateAction } from 'react'
 import { X } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { inventoryService, CreateItemInput } from '../../services/inventory.service'
@@ -8,6 +8,12 @@ interface CreateItemModalProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
+}
+
+interface UomOption {
+  id: string
+  code: string
+  name: string
 }
 
 export default function CreateItemModal({ isOpen, onClose, onSuccess }: CreateItemModalProps) {
@@ -23,7 +29,13 @@ export default function CreateItemModal({ isOpen, onClose, onSuccess }: CreateIt
     projectId: undefined,
     isActive: true,
   })
-  const setFormData = (v: CreateItemInput | ((prev: CreateItemInput) => CreateItemInput)) => { setFormDataBase(v as any); markDirty() }
+  const setFormData = (v: SetStateAction<CreateItemInput>) => {
+    setFormDataBase((prev) => {
+      const next = typeof v === 'function' ? v(prev) : v
+      markDirty()
+      return next
+    })
+  }
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -65,8 +77,9 @@ export default function CreateItemModal({ isOpen, onClose, onSuccess }: CreateIt
       await inventoryService.createItem(formData)
       resetDirty()
       onSuccess()
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to create item'
+    } catch (err: unknown) {
+      const o = err as { response?: { data?: { error?: string } }; message?: string }
+      const errorMessage = o.response?.data?.error || o.message || 'Failed to create item'
       setError(errorMessage)
       console.error('Error creating item:', err)
     } finally {
@@ -175,7 +188,7 @@ export default function CreateItemModal({ isOpen, onClose, onSuccess }: CreateIt
               <option value="">
                 {uomsLoading ? 'Loading UOMs...' : uomsError ? 'Error loading UOMs' : 'Select UOM'}
               </option>
-              {uoms.map((uom: any) => (
+              {uoms.map((uom: UomOption) => (
                 <option key={uom.id} value={uom.id}>
                   {uom.code} - {uom.name}
                 </option>

@@ -1,9 +1,7 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
 import ParameterDetailsModal from '../parameters/ParameterDetailsModal'
-import type { Parameter } from 'shared/types/engineering.types'
 
 interface ParameterTextRendererProps {
   text: string
@@ -53,7 +51,6 @@ export default function ParameterTextRenderer({ text, projectId }: ParameterText
       if (typeof part === 'string') {
         return <span key={index}>{part}</span>
       } else {
-        const param = parameters.find((p) => p.name === part.name)
         return (
           <span
             key={index}

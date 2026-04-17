@@ -384,6 +384,49 @@ test.describe('Requirements', () => {
     await expect(row).toContainText('abc', { timeout: 10_000 })
   })
 
+  test('inline edit: title double-click opens input and saves', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/requirements/browse`)
+    await page.waitForLoadState('domcontentloaded')
+    const token = await readAuthToken(page)
+
+    const seedTitle = `E2E inline-edit title seed ${Date.now()}`
+    const createResp = await page.request.post(`${E2E_API_V1}/requirements/${projectId}`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: {
+        title: seedTitle,
+        description: 'seed',
+      },
+    })
+    expect(createResp.ok(), await createResp.text()).toBeTruthy()
+
+    await page.evaluate(() => {
+      try {
+        localStorage.removeItem('requirements-columns')
+        localStorage.setItem('requirements-list-view', 'table')
+      } catch {
+        /* ignore */
+      }
+    })
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
+
+    const row = page.locator('table tbody tr').filter({ hasText: seedTitle }).first()
+    await expect(row).toBeVisible({ timeout: 15_000 })
+
+    const titleCell = row.locator('div.group\\/title[title="Double-click to edit"]').first()
+    await expect(titleCell).toBeVisible()
+    await titleCell.dblclick()
+
+    const input = row.locator('td input[type="text"]').first()
+    await expect(input).toBeFocused({ timeout: 5_000 })
+
+    const newTitle = `${seedTitle} — edited`
+    await input.fill(newTitle)
+    await input.press('Enter')
+    await expect(row.locator('td input[type="text"]')).toHaveCount(0, { timeout: 10_000 })
+    await expect(row.getByText(newTitle, { exact: true })).toBeVisible({ timeout: 10_000 })
+  })
+
   test('add link dialog opens from expanded row', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
