@@ -88,7 +88,7 @@ export async function notifyRequirementSubscribers(params: {
 
     const actorName = actor?.name || 'System'
     const requirementKey = requirement.requirementId || requirement.id.substring(0, 8)
-    const link = `${APP_URL}/projects/${projectId}/requirements?requirementId=${requirement.id}`
+    const link = `${APP_URL}/projects/${projectId}/requirements/browse?requirementId=${requirement.id}`
 
     const recipients = subscriptions.filter((sub) => {
       if (!sub.user.email) return false

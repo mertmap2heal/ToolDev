@@ -536,7 +536,7 @@ export default function VerificationTreePanel({
   const buildDeepLink = useCallback((node: VerTreeNode): string | null => {
     if (node.type === 'requirement') {
       if (!node.requirementId) return null
-      return `${window.location.origin}/projects/${projectId}/requirements?requirementId=${node.requirementId}`
+      return `${window.location.origin}/projects/${projectId}/requirements/browse?requirementId=${node.requirementId}`
     }
     const tab = TAB_MAP[node.type]
     if (!tab) return null

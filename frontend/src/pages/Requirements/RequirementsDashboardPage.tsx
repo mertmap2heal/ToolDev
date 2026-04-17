@@ -30,7 +30,7 @@ export default function RequirementsDashboardPage() {
     )
   }
 
-  const baseUrl = `/projects/${projectId}/requirements`
+  const baseUrl = `/projects/${projectId}/requirements/browse`
   const data = dashboard?.data
 
   return (

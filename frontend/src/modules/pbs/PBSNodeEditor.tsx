@@ -965,7 +965,7 @@ function RequirementsTab({
             <li
               key={req.id}
               className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors"
-              onClick={() => navigate(`/projects/${projectId}/requirements?requirementId=${req.id}`)}
+              onClick={() => navigate(`/projects/${projectId}/requirements/browse?requirementId=${req.id}`)}
             >
               <FileText size={14} className="text-blue-500 shrink-0" />
               <span className="font-mono text-xs text-gray-500 dark:text-gray-400 shrink-0">

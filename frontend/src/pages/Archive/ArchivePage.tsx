@@ -466,7 +466,7 @@ export default function ArchivePage() {
                         <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No baselines yet</p>
                         <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Create one from the Requirements page (Baselines button).</p>
                         <Link
-                          to={`/projects/${projectId}/requirements`}
+                          to={`/projects/${projectId}/requirements/browse`}
                           className="mt-3 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
                         >
                           Go to Requirements
@@ -545,7 +545,7 @@ export default function ArchivePage() {
                                     <Download size={18} />
                                   </button>
                                   <Link
-                                    to={`/projects/${projectId}/requirements?baselineId=${b.id}`}
+                                    to={`/projects/${projectId}/requirements/browse?baselineId=${b.id}`}
                                     className="p-2 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-lg transition-colors"
                                     title="View in Requirements"
                                   >
@@ -620,7 +620,7 @@ export default function ArchivePage() {
           onClose={() => setViewingBaselineId(null)}
           onViewInRequirementsPage={(baselineId) => {
             setViewingBaselineId(null)
-            navigate(`/projects/${projectId}/requirements?baselineId=${baselineId}`)
+            navigate(`/projects/${projectId}/requirements/browse?baselineId=${baselineId}`)
           }}
         />
       )}

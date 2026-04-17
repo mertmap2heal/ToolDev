@@ -290,7 +290,7 @@ export default function DeleteRequirementModal({
                         let url = '#'
                         if (item.targetType === 'issue') url = `/projects/${requirement.projectId}/issues/${item.targetId}`
                         else if (item.targetType === 'change_request') url = `/projects/${requirement.projectId}/change-requests/${item.targetId}?changeRequestId=${item.targetId}`
-                        else if (item.targetType === 'requirement') url = `/projects/${requirement.projectId}/requirements?requirementId=${item.targetId}`
+                        else if (item.targetType === 'requirement') url = `/projects/${requirement.projectId}/requirements/browse?requirementId=${item.targetId}`
 
                         const content = (
                           <div className="flex-1 min-w-0 text-left">

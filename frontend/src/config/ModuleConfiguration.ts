@@ -47,7 +47,7 @@ export const MODULES: ModuleDefinition[] = [
     { id: 'parameters', label: 'Parameters', icon: Sliders, route: 'parameters', category: 'system', minPackage: 'core' },
 
     // Development & Control
-    { id: 'requirements', label: 'Requirements', icon: FileCheck, route: 'requirements', category: 'development', minPackage: 'core' },
+    { id: 'requirements', label: 'Requirements', icon: FileCheck, route: 'requirements/browse', category: 'development', minPackage: 'core' },
     { id: 'tasks', label: 'Tasks', icon: ClipboardList, route: 'tasks', category: 'development', minPackage: 'advanced' },
     { id: 'change-requests', label: 'Change Requests', icon: GitBranch, route: 'change-requests', category: 'development', minPackage: 'core' },
     { id: 'issues', label: 'Issues', icon: AlertCircle, route: 'issues', category: 'development', minPackage: 'core' },

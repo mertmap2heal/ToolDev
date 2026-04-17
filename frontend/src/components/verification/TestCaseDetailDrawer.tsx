@@ -311,7 +311,7 @@ export default function TestCaseDetailDrawer({ testCase, isOpen, onClose, projec
       icon: Link2,
       onClick: () => {
         if (!r.id) return
-        navigate(`/projects/${projectId}/requirements?requirementId=${r.id}`)
+        navigate(`/projects/${projectId}/requirements/browse?requirementId=${r.id}`)
       },
       title: r.title ? `Open requirement: ${r.title}` : 'Open requirement',
     }))

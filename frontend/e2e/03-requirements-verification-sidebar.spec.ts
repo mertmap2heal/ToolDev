@@ -18,7 +18,7 @@ test.describe('Requirements / Verification sidebar', () => {
     const planName = `E2E Plan ${stamp}`
     const testCaseTitle = `E2E Test Case ${stamp}`
 
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
     const token = await readAuthToken(page)
 
@@ -85,7 +85,7 @@ test.describe('Requirements / Verification sidebar', () => {
     expect(linkResp.ok(), await linkResp.text()).toBeTruthy()
 
     // Reload with structure panel + Verification tab (avoids brittle dropdown a11y names)
-    await page.goto(`/projects/${projectId}/requirements?panel=1&panelTab=verification`)
+    await page.goto(`/projects/${projectId}/requirements/browse?panel=1&panelTab=verification`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.getByRole('heading', { name: /^Requirements$/i })).toBeVisible({ timeout: 15_000 })
 
@@ -124,7 +124,7 @@ test.describe('Requirements / Verification sidebar', () => {
     const planName = `E2E Plan Baseline ${stamp}`
     const testCaseTitle = `E2E Test Case Baseline ${stamp}`
 
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
     const token = await readAuthToken(page)
 
@@ -206,7 +206,7 @@ test.describe('Requirements / Verification sidebar', () => {
     expect(baselineId, 'Baseline id').toBeTruthy()
 
     // Baseline mode does not hydrate panel=1 from the URL — open the structure panel explicitly.
-    await page.goto(`/projects/${projectId}/requirements?baselineId=${baselineId}&panelTab=verification`)
+    await page.goto(`/projects/${projectId}/requirements/browse?baselineId=${baselineId}&panelTab=verification`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.getByRole('heading', { name: /^Requirements$/i })).toBeVisible({ timeout: 15_000 })
     await expect(page.getByText(/Viewing baseline/i)).toBeVisible({ timeout: 15_000 })

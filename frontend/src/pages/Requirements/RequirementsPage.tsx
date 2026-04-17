@@ -43,6 +43,7 @@ import { baselineService } from '../../services/baseline.service'
 import { LINKAGE_V1, LIFECYCLE_V1 } from '../../config/featureFlags'
 import { getVerificationTabForNodeType, buildVerificationUrl } from '../../config/verificationTabs'
 import { REQUIREMENTS_LEFT_PANEL_TABS, type RequirementsLeftPanelTabId } from '../../config/pbsTabs'
+import { requirementsBrowsePath, requirementsTraceabilityPath } from '../../config/requirementsRoutes'
 import { buildDeepLink } from '../../linkage/buildDeepLink'
 import {
   buildRequirementLinkedItems,
@@ -176,7 +177,16 @@ export default function RequirementsPage() {
   const navigate = useNavigate()
   const [urlHydrated, setUrlHydrated] = useState(false)
   const baselineId = searchParams.get('baselineId')
-  const focusRequirementId = searchParams.get('requirementId')
+  const focusRequirementId = useMemo(() => {
+    const r = searchParams.get('requirementId')
+    if (r) return r
+    const legacy = searchParams.get('focusRequirementId')
+    if (legacy) return legacy
+    const ft = (searchParams.get('focusType') || '').toLowerCase().replace(/-/g, '_')
+    const fid = searchParams.get('focusId')
+    if (ft === 'requirement' && fid) return fid
+    return null
+  }, [searchParams])
   const [searchQuery, setSearchQuery] = useState('')
   const { user } = useAuthStore()
   const currentUserId = user?.id
@@ -507,6 +517,16 @@ export default function RequirementsPage() {
       return
     }
 
+    const layoutParam = searchParams.get('layout')
+    if (layoutParam === 'table' || layoutParam === 'document') {
+      setListViewStyle((prev) => (prev === layoutParam ? prev : layoutParam))
+      try {
+        localStorage.setItem('requirements-list-view', layoutParam)
+      } catch {
+        /* ignore */
+      }
+    }
+
     const tabParam = searchParams.get('panelTab') || searchParams.get('tree')
     const hasExplicitPanelTab =
       tabParam === 'pbs' || tabParam === 'functions' || tabParam === 'verification'
@@ -601,8 +621,12 @@ export default function RequirementsPage() {
         next.delete('openPanel')
         if (isPBSPanelOpen) next.set('panel', '1')
         else next.delete('panel')
-        next.set('panelTab', leftPanelTab)
-        next.set('tree', leftPanelTab)
+        // Omit defaults from the URL: PBS + table are implied when params are absent.
+        if (leftPanelTab !== 'pbs') next.set('panelTab', leftPanelTab)
+        else next.delete('panelTab')
+        next.delete('tree')
+        if (listViewStyle !== 'table') next.set('layout', listViewStyle)
+        else next.delete('layout')
         if (selectedComponentId) next.set('componentId', selectedComponentId)
         else next.delete('componentId')
         if (selectedFunctionId) next.set('functionId', selectedFunctionId)
@@ -640,6 +664,7 @@ export default function RequirementsPage() {
     baselineId,
     isPBSPanelOpen,
     leftPanelTab,
+    listViewStyle,
     selectedComponentId,
     selectedFunctionId,
     selectedVerificationNode,
@@ -648,6 +673,32 @@ export default function RequirementsPage() {
     setSearchParams,
     urlHydrated,
   ])
+
+  // Merge legacy deep-link query shapes into requirementId (canonical).
+  useEffect(() => {
+    if (!urlHydrated || baselineId) return
+    const r = searchParams.get('requirementId')
+    const legacy = searchParams.get('focusRequirementId')
+    const ft = (searchParams.get('focusType') || '').toLowerCase().replace(/-/g, '_')
+    const fid = searchParams.get('focusId')
+    if (!legacy && !(ft === 'requirement' && fid)) return
+    const canonical = r || legacy || fid
+    if (!canonical) return
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('requirementId', canonical)
+        next.delete('focusRequirementId')
+        if (ft === 'requirement') {
+          next.delete('focusType')
+          next.delete('focusId')
+        }
+        if (next.toString() === prev.toString()) return prev
+        return next
+      },
+      { replace: true }
+    )
+  }, [urlHydrated, baselineId, searchParams, setSearchParams])
 
   // Requirement field schema lives in `config/requirementsFields` and drives both Table + Document views.
 
@@ -712,8 +763,11 @@ export default function RequirementsPage() {
     if (!prefs) return
 
     if (prefs.listViewStyle === 'table' || prefs.listViewStyle === 'document') {
-      setListViewStyle(prefs.listViewStyle)
-      try { localStorage.setItem('requirements-list-view', prefs.listViewStyle) } catch { /* ignore */ }
+      const layoutParam = searchParams.get('layout')
+      if (layoutParam !== 'table' && layoutParam !== 'document') {
+        setListViewStyle(prefs.listViewStyle)
+        try { localStorage.setItem('requirements-list-view', prefs.listViewStyle) } catch { /* ignore */ }
+      }
     }
 
     if (Array.isArray(prefs.visibleFieldKeys)) {
@@ -744,7 +798,7 @@ export default function RequirementsPage() {
     if (prefs.relationshipsFilters && typeof prefs.relationshipsFilters === 'object') {
       try { localStorage.setItem('requirements-doc-relationship-filters', JSON.stringify(prefs.relationshipsFilters)) } catch { /* ignore */ }
     }
-  }, [prefsQuery.data])
+  }, [prefsQuery.data, searchParams])
 
   const prefsMutation = useMutation({
     mutationFn: async (prefs: RequirementsViewPreferences) => {
@@ -3054,7 +3108,7 @@ export default function RequirementsPage() {
       if (req) {
         setDetailRequirement(req)
       } else {
-        navigate(`/projects/${projectId}/requirements?requirementId=${targetId}`)
+        navigate(`${requirementsBrowsePath(projectId)}?requirementId=${targetId}`)
       }
     } else {
       navigate(buildDeepLink(projectId, { type: targetType as EntityType, id: targetId }))
@@ -3381,7 +3435,7 @@ export default function RequirementsPage() {
                 </span>
               </div>
               <button
-                onClick={() => navigate(`/projects/${projectId}/requirements`)}
+                onClick={() => navigate(requirementsBrowsePath(projectId!))}
                 className="px-4 py-2 text-sm font-medium bg-white dark:bg-gray-800 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-gray-700 border border-amber-200 dark:border-amber-700/50 shadow-sm rounded-lg transition-colors flex items-center gap-2"
               >
                 Exit baseline view
@@ -3521,7 +3575,7 @@ export default function RequirementsPage() {
                       Traceability Matrix
                     </button>
                     <button
-                      onClick={() => { navigate(`/projects/${projectId}/requirements/traceability-views`); setTraceabilityDropdownOpen(false) }}
+                      onClick={() => { navigate(requirementsTraceabilityPath(projectId!)); setTraceabilityDropdownOpen(false) }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
                       <Folder size={16} className="text-gray-500 dark:text-gray-400" />
@@ -4659,7 +4713,7 @@ export default function RequirementsPage() {
               onClose={() => setIsBaselineManagerOpen(false)}
               onViewInRequirementsPage={(id, requirementId) => {
                 setIsBaselineManagerOpen(false)
-                navigate(`/projects/${projectId}/requirements?baselineId=${id}${requirementId ? `&requirementId=${requirementId}` : ''}`)
+                navigate(`${requirementsBrowsePath(projectId)}?baselineId=${id}${requirementId ? `&requirementId=${requirementId}` : ''}`)
               }}
             />
           )}

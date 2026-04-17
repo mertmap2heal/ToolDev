@@ -31,7 +31,7 @@ async function matrixColumnIndexForHeader(modalRoot: Locator, match: string): Pr
 
 test.describe('Requirements / Traceability matrix', () => {
   test('opens modal: title, target selector, and matrix area', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
 
     await openTraceabilityMatrixFromToolbar(page)
@@ -53,7 +53,7 @@ test.describe('Requirements / Traceability matrix', () => {
   })
 
   test('baseline view: Traceability button is disabled', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
     const token = await readAuthToken(page)
 
@@ -84,7 +84,7 @@ test.describe('Requirements / Traceability matrix', () => {
     const baselineId: string = baseline?.id
     expect(baselineId).toBeTruthy()
 
-    await page.goto(`/projects/${projectId}/requirements?baselineId=${baselineId}`)
+    await page.goto(`/projects/${projectId}/requirements/browse?baselineId=${baselineId}`)
     await page.waitForLoadState('domcontentloaded')
 
     const traceBtn = page.getByRole('button', { name: /^Traceability$/ })
@@ -99,7 +99,7 @@ test.describe('Requirements / Traceability matrix', () => {
     const errors: string[] = []
     page.on('pageerror', (err) => errors.push(err.message))
 
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
 
     await openTraceabilityMatrixFromToolbar(page)
@@ -129,7 +129,7 @@ test.describe('Requirements / Traceability matrix', () => {
     const errors: string[] = []
     page.on('pageerror', (err) => errors.push(err.message))
 
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
 
     await openTraceabilityMatrixFromToolbar(page)
@@ -159,7 +159,7 @@ test.describe('Requirements / Traceability matrix', () => {
   })
 
   test('matrix: Excel export triggers download', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
 
     await openTraceabilityMatrixFromToolbar(page)
@@ -184,7 +184,7 @@ test.describe('Requirements / Traceability matrix', () => {
     test.describe.configure({ timeout: 120_000 })
 
     test('matrix: CSV, PDF, and Word exports trigger downloads', async ({ page, projectId }) => {
-      await page.goto(`/projects/${projectId}/requirements`)
+      await page.goto(`/projects/${projectId}/requirements/browse`)
       await page.waitForLoadState('domcontentloaded')
 
       await openTraceabilityMatrixFromToolbar(page)
@@ -218,7 +218,7 @@ test.describe('Requirements / Traceability matrix', () => {
       })
       expect(reqResp.ok(), await reqResp.text()).toBeTruthy()
 
-      await page.goto(`/projects/${projectId}/requirements`)
+      await page.goto(`/projects/${projectId}/requirements/browse`)
       await page.waitForLoadState('domcontentloaded')
 
       await openTraceabilityMatrixFromToolbar(page)
@@ -252,7 +252,7 @@ test.describe('Requirements / Traceability matrix', () => {
       })
       expect(reqResp.ok(), await reqResp.text()).toBeTruthy()
 
-      await page.goto(`/projects/${projectId}/requirements`)
+      await page.goto(`/projects/${projectId}/requirements/browse`)
       await page.waitForLoadState('domcontentloaded')
 
       await openTraceabilityMatrixFromToolbar(page)

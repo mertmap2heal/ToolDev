@@ -371,7 +371,7 @@ export default function ParameterDetailDrawer({
                 {requirements.map((req) => (
                   <li key={req.id}>
                     <Link
-                      to={`/projects/${projectId}/requirements?requirementId=${req.id}`}
+                      to={`/projects/${projectId}/requirements/browse?requirementId=${req.id}`}
                       className="block px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 text-sm text-gray-900 dark:text-white"
                     >
                       <span className="font-medium">{req.requirementId || req.id.slice(0, 8)}</span>

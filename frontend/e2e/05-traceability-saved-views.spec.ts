@@ -12,7 +12,7 @@ import { E2E_API_V1 } from './helpers/api'
 
 test.describe('Saved Traceability Views', () => {
   test('open saved view and export smoke', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements/traceability-views`)
+    await page.goto(`/projects/${projectId}/requirements/traceability`)
     await page.waitForLoadState('domcontentloaded')
     const token = await readAuthToken(page)
 
@@ -49,7 +49,7 @@ test.describe('Saved Traceability Views', () => {
     expect(viewResp.ok(), await viewResp.text()).toBeTruthy()
 
     // Reload and pick folder
-    await page.goto(`/projects/${projectId}/requirements/traceability-views`)
+    await page.goto(`/projects/${projectId}/requirements/traceability`)
     await page.waitForLoadState('domcontentloaded')
 
     await page.getByRole('button', { name: 'Unfiled' }).click()

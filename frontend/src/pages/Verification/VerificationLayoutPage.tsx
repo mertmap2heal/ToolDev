@@ -527,7 +527,7 @@ function VerificationLayoutInner() {
                         Verification
                       </div>
                       <Link
-                        to={`/projects/${projectId}/requirements?panel=1&panelTab=verification`}
+                        to={`/projects/${projectId}/requirements/browse?panel=1&panelTab=verification`}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200"
                         title="Open the same structure tree in Requirements (left panel → Verification tab)"
                       >
@@ -561,13 +561,13 @@ function VerificationLayoutInner() {
                     requirementTestCaseLinks={requirementTestCaseLinks}
                     requirements={requirementsForTree}
                     onAddRequirementToTestCase={(caseId) => {
-                      navigate(`/projects/${projectId}/requirements?tree=verification&linkToCase=${caseId}`)
+                      navigate(`/projects/${projectId}/requirements/browse?tree=verification&linkToCase=${caseId}`)
                     }}
                     onRemoveRequirementFromTestCase={(reqId, caseId) => {
                       removeRequirementFromTestCaseMutation.mutate({ reqId, caseId })
                     }}
                     onRequirementClick={(reqId) => {
-                      navigate(`/projects/${projectId}/requirements?requirementId=${reqId}`)
+                      navigate(`/projects/${projectId}/requirements/browse?requirementId=${reqId}`)
                     }}
                     onOpenTraceabilityMatrix={(focusReqId) => {
                       const qs = new URLSearchParams()

@@ -169,7 +169,7 @@ export default function ParameterDetailsModal({
                         {impactData.requirements.slice(0, 10).map((r) => (
                           <li key={r.id}>
                             <Link
-                              to={`/projects/${projectId}/requirements?requirementId=${r.id}`}
+                              to={`/projects/${projectId}/requirements/browse?requirementId=${r.id}`}
                               className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
                               onClick={onClose}
                             >

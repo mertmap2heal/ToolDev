@@ -267,7 +267,7 @@ export default function TraceabilityViewsPage() {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate(`/projects/${projectId}/requirements`)}
+            onClick={() => navigate(`/projects/${projectId}/requirements/browse`)}
             className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-sm flex items-center gap-2"
           >
             <ArrowLeft size={16} />

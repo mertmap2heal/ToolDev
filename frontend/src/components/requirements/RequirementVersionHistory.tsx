@@ -655,7 +655,7 @@ export default function RequirementVersionHistory({
                                       type="button"
                                       onClick={() => {
                                         onClose()
-                                        navigate(`/projects/${projectId}/requirements?openBaselines=1&baselineId=${version.baselineId}`)
+                                        navigate(`/projects/${projectId}/requirements/browse?openBaselines=1&baselineId=${version.baselineId}`)
                                       }}
                                       className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
                                     >

@@ -3730,7 +3730,7 @@ export const sendLifecycleTransitionReminder = async (req: AuthRequest, res: Res
     const titleTail = (requirement.title || '').length > 120 ? '…' : ''
     const note = clampReminderStr(body.note, 400)
     const openPath = project?.slug
-      ? `/projects/${encodeURIComponent(project.slug)}/requirements?requirementId=${encodeURIComponent(requirement.id)}`
+      ? `/projects/${encodeURIComponent(project.slug)}/requirements/browse?requirementId=${encodeURIComponent(requirement.id)}`
       : ''
 
     let message = `${actorLabel} asked you to help advance requirement ${reqRef} (${titleShort}${titleTail}) from "${fromName}" toward "${toName}". This transition is gated for: ${roleLabel}.`

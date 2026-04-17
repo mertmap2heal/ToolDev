@@ -331,7 +331,7 @@ export default function IssueLinkedItems({ issue, projectId }: IssueLinkedItemsP
                   type="button"
                   onClick={() => {
                     const path = link.linkedType === 'requirement'
-                      ? `/projects/${projectId}/requirements?focusRequirementId=${link.linkedId}`
+                      ? `/projects/${projectId}/requirements/browse?requirementId=${link.linkedId}`
                       : link.linkedType === 'issue'
                         ? `/projects/${projectId}/issues/${link.linkedId}`
                         : `/projects/${projectId}/${link.linkedType}s/${link.linkedId}`

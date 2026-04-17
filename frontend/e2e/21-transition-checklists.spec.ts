@@ -782,7 +782,7 @@ test.describe('Transition Checklists', () => {
       expect(createResp.ok()).toBeTruthy()
     }
 
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
 
     const idCell = page.locator('td .font-mono.cursor-pointer').first()
@@ -856,7 +856,7 @@ test.describe('Transition Checklists', () => {
       return
     }
 
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
 
     const openLabel = row.requirementId?.trim() || row.id.slice(0, 8)

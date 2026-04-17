@@ -13,6 +13,7 @@ import { cmAdapter } from './adapters/cmAdapter'
 import { complianceAdapter } from './adapters/complianceAdapter'
 import { certificationAdapter } from './adapters/certificationAdapter'
 import { archiveAdapter } from './adapters/archiveAdapter'
+import { requirementsBrowsePath } from '../config/requirementsRoutes'
 import { functionAdapter } from './adapters/functionAdapter'
 
 const ADAPTER_MAP: Record<string, { buildDeepLink: (projectId: string, ref: EntityRef) => string }> = {
@@ -42,7 +43,7 @@ const ADAPTER_MAP: Record<string, { buildDeepLink: (projectId: string, ref: Enti
   stakeholder: stakeholderAdapter,
   requirement: {
     buildDeepLink: (projectId, ref) =>
-      `/projects/${projectId}/requirements?focusType=requirement&focusId=${ref.id}`,
+      `${requirementsBrowsePath(projectId)}?requirementId=${ref.id}`,
   },
 }
 

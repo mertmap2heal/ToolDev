@@ -182,7 +182,7 @@ export default function MBSEModelsPage() {
       <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate(`/projects/${projectId}/requirements`)}
+            onClick={() => navigate(`/projects/${projectId}/requirements/browse`)}
             className="flex items-center gap-2 px-2.5 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             title="Back to Project"
           >

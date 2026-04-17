@@ -1,0 +1,114 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - link "Engineering Tool Logo Engineering Tool Project Development" [ref=e6] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e7]:
+            - img "Engineering Tool Logo" [ref=e8]
+            - generic [ref=e9]:
+              - generic [ref=e10]: Engineering Tool
+              - generic [ref=e11]: Project Development
+        - button "Collapse sidebar (Ctrl+B)" [ref=e12] [cursor=pointer]:
+          - img [ref=e13]
+      - generic [ref=e16]:
+        - link "Dashboard" [ref=e17] [cursor=pointer]:
+          - /url: /
+          - img [ref=e18]
+          - generic [ref=e23]: Dashboard
+        - link "Inventory" [ref=e24] [cursor=pointer]:
+          - /url: /inventory/items
+          - img [ref=e25]
+          - generic [ref=e29]: Inventory
+      - generic [ref=e30]:
+        - link "Settings" [ref=e31] [cursor=pointer]:
+          - /url: /settings
+          - img [ref=e32]
+          - generic [ref=e35]: Settings
+        - generic [ref=e36]:
+          - generic [ref=e37]: C
+          - generic [ref=e38]: Christian Mandle
+    - generic [ref=e39]:
+      - banner [ref=e40]:
+        - navigation [ref=e42]:
+          - link "Home" [ref=e44] [cursor=pointer]:
+            - /url: /
+        - button "Search... Ctrl K" [ref=e45]:
+          - img [ref=e46]
+          - generic [ref=e49]: Search...
+          - generic [ref=e50]: Ctrl K
+        - generic [ref=e51]:
+          - button "AI Guide" [ref=e52] [cursor=pointer]:
+            - img [ref=e53]
+          - button "Notifications" [ref=e56] [cursor=pointer]:
+            - img [ref=e57]
+          - button "CM" [ref=e61] [cursor=pointer]:
+            - generic [ref=e62]: CM
+      - main [ref=e64]:
+        - generic [ref=e65]:
+          - generic [ref=e66]:
+            - heading "Projects" [level=1] [ref=e67]
+            - button "Create Project" [ref=e68] [cursor=pointer]:
+              - img [ref=e69]
+              - generic [ref=e70]: Create Project
+          - generic [ref=e71]:
+            - generic [ref=e72]:
+              - generic [ref=e73]: Total Projects
+              - generic [ref=e74]: "1"
+              - generic [ref=e75]: across all domains
+            - generic [ref=e76]:
+              - generic [ref=e77]: Active
+              - generic [ref=e78]: "1"
+              - generic [ref=e79]: currently running
+            - generic [ref=e80]:
+              - generic [ref=e81]: Avg Progress
+              - generic [ref=e82]: 0%
+              - generic [ref=e83]: mean completion
+          - generic [ref=e84]:
+            - generic [ref=e85]:
+              - img
+              - textbox "Search projects..." [ref=e86]
+            - combobox [ref=e87]:
+              - option "All statuses" [selected]
+              - option "Active"
+              - option "Completed"
+              - option "Archived"
+            - textbox [ref=e88]
+            - textbox [ref=e89]
+            - button "Active only" [ref=e90] [cursor=pointer]:
+              - img [ref=e91]
+            - button [ref=e94] [cursor=pointer]:
+              - img [ref=e95]
+            - generic [ref=e98] [cursor=pointer]:
+              - checkbox "Select all" [ref=e99]
+              - text: Select all
+          - generic [ref=e101] [cursor=pointer]:
+            - generic [ref=e102]:
+              - checkbox [ref=e103]
+              - generic [ref=e104]:
+                - generic [ref=e107]: Test Project
+                - text: Testing
+              - generic [ref=e108]: active
+            - generic [ref=e110]:
+              - generic [ref=e111]: Progress
+              - generic [ref=e112]: 0%
+            - generic [ref=e114]:
+              - generic [ref=e115]: 4/11/2026
+              - generic [ref=e116]:
+                - button "Team" [ref=e117]:
+                  - img [ref=e118]
+                - button "Analytics" [ref=e123]:
+                  - img [ref=e124]
+                - button "Audit" [ref=e126]:
+                  - img [ref=e127]
+                - button "Delete" [ref=e130]:
+                  - img [ref=e131]
+  - generic [ref=e134]:
+    - generic [ref=e135]: "Pkg:"
+    - button "Core" [ref=e136] [cursor=pointer]
+    - button "Advanced" [ref=e137] [cursor=pointer]
+    - button "Complete" [ref=e138] [cursor=pointer]
+```

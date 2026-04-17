@@ -6,7 +6,7 @@ import { selectRequirementsLeftPanelTab } from './helpers/requirementsUi'
 
 test.describe('Requirements panel scope & deep links', () => {
   test('openPanel=1 opens structure panel once and removes query param', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements?openPanel=1`)
+    await page.goto(`/projects/${projectId}/requirements/browse?openPanel=1`)
     await page.waitForLoadState('domcontentloaded')
 
     // Panel should be open (tabs visible) and openPanel should be removed (one-shot deep link)
@@ -25,7 +25,7 @@ test.describe('Requirements panel scope & deep links', () => {
   })
 
   test('reviewStatus query hydrates review filter', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements?reviewStatus=draft`)
+    await page.goto(`/projects/${projectId}/requirements/browse?reviewStatus=draft`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page).toHaveURL(/reviewStatus=draft/)
     await page.getByRole('button', { name: /more filters/i }).click()
@@ -34,7 +34,7 @@ test.describe('Requirements panel scope & deep links', () => {
   })
 
   test('verificationStatus query hydrates verification filter', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements?verificationStatus=not_verified`)
+    await page.goto(`/projects/${projectId}/requirements/browse?verificationStatus=not_verified`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page).toHaveURL(/verificationStatus=not_verified/)
     await page.getByRole('button', { name: /more filters/i }).click()
@@ -43,14 +43,14 @@ test.describe('Requirements panel scope & deep links', () => {
   })
 
   test('openSuspect=1 opens suspect review and removes query param', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements?openSuspect=1`)
+    await page.goto(`/projects/${projectId}/requirements/browse?openSuspect=1`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.getByRole('heading', { name: /suspect links review/i })).toBeVisible({ timeout: 15_000 })
     await expect(page).not.toHaveURL(/openSuspect=1/)
   })
 
   test('openBaselines=1 opens baseline manager', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements?openBaselines=1`)
+    await page.goto(`/projects/${projectId}/requirements/browse?openBaselines=1`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.getByRole('heading', { name: /baseline manager/i })).toBeVisible({ timeout: 15_000 })
   })
@@ -66,7 +66,7 @@ test.describe('Requirements panel scope & deep links', () => {
 
   test('functionId deep link shows scope and stays on requirements', async ({ page, projectId }) => {
     const fid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
-    await page.goto(`/projects/${projectId}/requirements?panel=1&functionId=${fid}`)
+    await page.goto(`/projects/${projectId}/requirements/browse?panel=1&functionId=${fid}`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page).toHaveURL(new RegExp(`projects/${projectId}/requirements`))
     await expect(page).toHaveURL(/functionId=/)
@@ -76,23 +76,23 @@ test.describe('Requirements panel scope & deep links', () => {
 
   test('verification testCaseId deep link stays on requirements page', async ({ page, projectId }) => {
     const tc = 'bbbbbbbb-cccc-dddd-eeee-ffffffffffff'
-    await page.goto(`/projects/${projectId}/requirements?panel=1&panelTab=verification&testCaseId=${tc}`)
+    await page.goto(`/projects/${projectId}/requirements/browse?panel=1&panelTab=verification&testCaseId=${tc}`)
     await page.waitForLoadState('domcontentloaded')
-    await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/requirements`))
+    await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/requirements/browse`))
     await expect(page).not.toHaveURL(/\/projects\/[^/]+\/verification/)
     await expect(page.getByText('Scope', { exact: true })).toBeVisible({ timeout: 10_000 })
     await expect(page.getByText(/Test Case \(bbbbbbbb/)).toBeVisible({ timeout: 10_000 })
   })
 
   test('noTestCaseVerifiesLink deep link hydrates verification unassigned scope', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements?panel=1&noTestCaseVerifiesLink=1`)
+    await page.goto(`/projects/${projectId}/requirements/browse?panel=1&noTestCaseVerifiesLink=1`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page).toHaveURL(/noTestCaseVerifiesLink=1/)
     await expect(page.getByText('Verification: No test case link')).toBeVisible({ timeout: 10_000 })
   })
 
   test('URL search string stabilizes after load (no query thrash)', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements?panel=1&panelTab=pbs`)
+    await page.goto(`/projects/${projectId}/requirements/browse?panel=1&panelTab=pbs`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.getByRole('heading', { name: /^Requirements$/i })).toBeVisible({ timeout: 15_000 })
 
@@ -113,7 +113,7 @@ test.describe('Requirements panel scope & deep links', () => {
   })
 
   test('switching structure panel tab stabilizes URL', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements?panel=1&panelTab=pbs`)
+    await page.goto(`/projects/${projectId}/requirements/browse?panel=1&panelTab=pbs`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.getByRole('heading', { name: /^Requirements$/i })).toBeVisible({ timeout: 15_000 })
     await selectRequirementsLeftPanelTab(page, 'functions')
@@ -145,7 +145,7 @@ test.describe('Requirements panel scope & deep links', () => {
     }
     const reqLink = page.getByRole('link', { name: /Open in Requirements/i })
     await expect(reqLink).toBeVisible({ timeout: 10_000 })
-    await expect(reqLink).toHaveAttribute('href', new RegExp(`/projects/${projectId}/requirements`))
+    await expect(reqLink).toHaveAttribute('href', new RegExp(`/projects/${projectId}/requirements/browse`))
     await expect(reqLink).toHaveAttribute('href', /panelTab=verification/)
   })
 })

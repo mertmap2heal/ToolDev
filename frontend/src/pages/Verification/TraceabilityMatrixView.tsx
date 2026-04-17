@@ -496,7 +496,7 @@ export default function TraceabilityMatrixView() {
 
   // ─── Navigation ────────────────────────────────────────────────────────────
 
-  const openRequirement = (reqId: string) => navigate(`/projects/${projectId}/requirements?requirementId=${reqId}`)
+  const openRequirement = (reqId: string) => navigate(`/projects/${projectId}/requirements/browse?requirementId=${reqId}`)
   const openTestCase = (tcId: string) => {
     setSearchParams((p) => {
       const n = new URLSearchParams(p)

@@ -562,7 +562,7 @@ export default function PBSPage() {
     if (!projectId || !linkedElementPreview) return
     const { targetType, targetId } = linkedElementPreview
     if (targetType === 'requirement') {
-      navigate(`/projects/${projectId}/requirements?requirementId=${targetId}`)
+      navigate(`/projects/${projectId}/requirements/browse?requirementId=${targetId}`)
     } else {
       navigate(buildDeepLink(projectId, { type: targetType as EntityType, id: targetId }))
     }
@@ -990,7 +990,7 @@ export default function PBSPage() {
                   }}
                   links={LINKAGE_V1 ? links : []}
                   onLinkedElementClick={handleLinkedElementClick}
-                  onRequirementClick={(req) => navigate(`/projects/${projectId}/requirements?requirementId=${req.id}`)}
+                  onRequirementClick={(req) => navigate(`/projects/${projectId}/requirements/browse?requirementId=${req.id}`)}
                 />
               ) : (
                 <FunctionsPBSTree

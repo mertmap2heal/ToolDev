@@ -63,7 +63,7 @@ function requirementDrawerCloseButton(page: Page) {
 
 test.describe('Requirements', () => {
   test('page loads', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page).toHaveURL(/requirements/)
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
@@ -71,7 +71,7 @@ test.describe('Requirements', () => {
 
   /** Deep link parity with Verification shell: heading + primary search (no extra card). */
   test('PBS panel deep link shows Requirements heading and search', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements?panel=1&panelTab=pbs&tree=pbs`)
+    await page.goto(`/projects/${projectId}/requirements/browse?panel=1&panelTab=pbs&tree=pbs`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.getByRole('heading', { level: 2, name: 'Requirements', exact: true })).toBeVisible({
       timeout: 10_000,
@@ -82,7 +82,7 @@ test.describe('Requirements', () => {
   })
 
   test('open Create Requirement modal', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /create requirement/i }).click()
     await expect(page.locator(MODAL_OVERLAY)).toBeVisible({ timeout: 5_000 })
@@ -90,7 +90,7 @@ test.describe('Requirements', () => {
   })
 
   test('create modal: Traceability tab shows structured sections', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /create requirement/i }).click()
     const modal = page.locator(MODAL_OVERLAY)
@@ -106,7 +106,7 @@ test.describe('Requirements', () => {
   })
 
   test('create modal: required field validation', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /create requirement/i }).click()
     await expect(page.locator(MODAL_OVERLAY)).toBeVisible({ timeout: 5_000 })
@@ -117,7 +117,7 @@ test.describe('Requirements', () => {
   })
 
   test('create modal: no unsaved-changes warning on clean open/close', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /create requirement/i }).click()
     await expect(page.locator(MODAL_OVERLAY)).toBeVisible({ timeout: 5_000 })
@@ -129,7 +129,7 @@ test.describe('Requirements', () => {
   })
 
   test('create modal: unsaved-changes warning after typing', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /create requirement/i }).click()
     const modal = page.locator(MODAL_OVERLAY)
@@ -146,7 +146,7 @@ test.describe('Requirements', () => {
   })
 
   test('create modal: Clear all button appears after typing', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /create requirement/i }).click()
     const modal = page.locator(MODAL_OVERLAY)
@@ -159,7 +159,7 @@ test.describe('Requirements', () => {
   })
 
   test('create modal: Keep for later preserves draft on reopen', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /create requirement/i }).click()
     const modal = page.locator(MODAL_OVERLAY)
@@ -187,7 +187,7 @@ test.describe('Requirements', () => {
   })
 
   test('Columns picker affects both Table and Document views', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
 
     await page.evaluate(() => {
@@ -222,7 +222,7 @@ test.describe('Requirements', () => {
   })
 
   test('Document view: collapsible sections persist on reload', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
 
     // Switch to Document View
@@ -239,7 +239,7 @@ test.describe('Requirements', () => {
   })
 
   test('Manage menu: Audit log opens audit log modal', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
 
     // Open Manage dropdown (formerly "Data")
@@ -255,14 +255,14 @@ test.describe('Requirements', () => {
   })
 
   test('traceability matrix opens from requirements page', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
     await openTraceabilityMatrixFromToolbar(page)
   })
 
   test('UI: create requirement then move to trash', async ({ page, projectId }) => {
     try {
-      await page.goto(`/projects/${projectId}/requirements`)
+      await page.goto(`/projects/${projectId}/requirements/browse`)
       await page.waitForLoadState('domcontentloaded')
       await page.evaluate(() => {
         try {
@@ -341,7 +341,7 @@ test.describe('Requirements', () => {
   })
 
   test('inline edit: description allows typing multiple characters', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
     const token = await readAuthToken(page)
 
@@ -385,7 +385,7 @@ test.describe('Requirements', () => {
   })
 
   test('add link dialog opens from expanded row', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
     const token = await readAuthToken(page)
 
@@ -470,7 +470,7 @@ test.describe('Requirements', () => {
   })
 
   test('child requirements: parent row can be expanded to reveal children', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
     // Wait for the requirements table to render
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
@@ -494,8 +494,8 @@ test.describe('Requirements', () => {
     expect(rowsAfter).toBeGreaterThanOrEqual(rowsBefore)
   })
 
-  test('deep link: panel open with PBS tab keeps panel, panelTab, and tree in URL', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements?panel=1&panelTab=pbs&tree=pbs`)
+  test('deep link: panel open with PBS tab keeps panel; default PBS omits panelTab from URL', async ({ page, projectId }) => {
+    await page.goto(`/projects/${projectId}/requirements/browse?panel=1&panelTab=pbs&tree=pbs`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
     await expect(page.getByTitle('Close left panel')).toBeVisible()
@@ -503,11 +503,11 @@ test.describe('Requirements', () => {
     await expect.poll(() => {
       const u = new URL(page.url())
       return [u.searchParams.get('panel'), u.searchParams.get('panelTab'), u.searchParams.get('tree')].join('|')
-    }, { timeout: 10_000 }).toBe('1|pbs|pbs')
+    }, { timeout: 10_000 }).toBe('1||')
   })
 
   test('left panel: switch PBS, Functions, and Verification updates URL', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements?panel=1&panelTab=pbs&tree=pbs`)
+    await page.goto(`/projects/${projectId}/requirements/browse?panel=1&panelTab=pbs&tree=pbs`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
     await expect(page.getByTitle('Close left panel')).toBeVisible()
@@ -515,7 +515,7 @@ test.describe('Requirements', () => {
     await selectRequirementsLeftPanelTab(page, 'functions')
     await expect(page.getByRole('button', { name: /^Functions$/ }).first()).toBeVisible({ timeout: 5_000 })
     await expect.poll(() => new URL(page.url()).searchParams.get('panelTab')).toBe('functions')
-    await expect.poll(() => new URL(page.url()).searchParams.get('tree')).toBe('functions')
+    await expect.poll(() => new URL(page.url()).searchParams.get('tree')).toBeNull()
 
     await selectRequirementsLeftPanelTab(page, 'verification')
     await expect(page.getByRole('button', { name: /^Verification$/ }).first()).toBeVisible({ timeout: 5_000 })
@@ -523,7 +523,7 @@ test.describe('Requirements', () => {
 
     await selectRequirementsLeftPanelTab(page, 'pbs')
     await expect(page.getByRole('button', { name: /^PBS$/ }).first()).toBeVisible({ timeout: 5_000 })
-    await expect.poll(() => new URL(page.url()).searchParams.get('tree')).toBe('pbs')
+    await expect.poll(() => new URL(page.url()).searchParams.get('panelTab')).toBeNull()
   })
 
   test('toolbar: Analysis and View menus open without page errors', async ({ page, projectId }) => {
@@ -531,7 +531,7 @@ test.describe('Requirements', () => {
     page.on('pageerror', (err) => {
       errors.push(err.message)
     })
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
 
@@ -547,7 +547,7 @@ test.describe('Requirements', () => {
   })
 
   test('left column: panel toggle syncs panel query param', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements`)
+    await page.goto(`/projects/${projectId}/requirements/browse`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
 
@@ -566,7 +566,7 @@ test.describe('Requirements', () => {
     const errors: string[] = []
     page.on('pageerror', (err) => errors.push(err.message))
 
-    await page.goto(`/projects/${projectId}/requirements?panel=1&panelTab=pbs&tree=pbs`)
+    await page.goto(`/projects/${projectId}/requirements/browse?panel=1&panelTab=pbs&tree=pbs`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
     await expect(page.getByTitle('Close left panel')).toBeVisible()
@@ -599,7 +599,7 @@ test.describe('Requirements', () => {
     const errors: string[] = []
     page.on('pageerror', (err) => errors.push(err.message))
 
-    await page.goto(`/projects/${projectId}/requirements?panel=1&panelTab=pbs&tree=pbs`)
+    await page.goto(`/projects/${projectId}/requirements/browse?panel=1&panelTab=pbs&tree=pbs`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.getByPlaceholder('Search components...')).toBeVisible({ timeout: 10_000 })
 
@@ -617,7 +617,7 @@ test.describe('Requirements', () => {
     const seeded = await ensurePbsChildComponent(page, projectId)
     test.skip(seeded == null, 'Could not seed PBS child component via API')
 
-    await page.goto(`/projects/${projectId}/requirements?panel=1&panelTab=pbs&tree=pbs`)
+    await page.goto(`/projects/${projectId}/requirements/browse?panel=1&panelTab=pbs&tree=pbs`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
 
@@ -635,7 +635,7 @@ test.describe('Requirements', () => {
     const fn = await ensureFunctionForProject(page, projectId)
     test.skip(fn == null, 'Could not ensure function via API')
 
-    await page.goto(`/projects/${projectId}/requirements?panel=1&panelTab=functions&tree=functions`)
+    await page.goto(`/projects/${projectId}/requirements/browse?panel=1&panelTab=functions&tree=functions`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
 
@@ -653,7 +653,7 @@ test.describe('Requirements', () => {
     const ver = await ensureVerificationPlanWithCase(page, projectId)
     test.skip(ver == null, 'Could not ensure verification plan with case via API')
 
-    await page.goto(`/projects/${projectId}/requirements?panel=1&panelTab=verification&tree=verification`)
+    await page.goto(`/projects/${projectId}/requirements/browse?panel=1&panelTab=verification&tree=verification`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
 
@@ -673,7 +673,7 @@ test.describe('Requirements', () => {
   })
 
   test('left column: unassigned verification group sets noTestCaseVerifiesLink and scope', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements?panel=1&panelTab=verification&tree=verification`)
+    await page.goto(`/projects/${projectId}/requirements/browse?panel=1&panelTab=verification&tree=verification`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
 
@@ -686,7 +686,7 @@ test.describe('Requirements', () => {
   })
 
   test('left column: PBS panel resize handle changes panel width', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements?panel=1&panelTab=pbs&tree=pbs`)
+    await page.goto(`/projects/${projectId}/requirements/browse?panel=1&panelTab=pbs&tree=pbs`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
 
@@ -730,7 +730,7 @@ test.describe('Requirements', () => {
       }
     })
 
-    await page.goto(`/projects/${projectId}/requirements?requirementId=${reqId}`)
+    await page.goto(`/projects/${projectId}/requirements/browse?requirementId=${reqId}`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
 
@@ -761,7 +761,7 @@ test.describe('Requirements', () => {
       }
     })
 
-    await page.goto(`/projects/${projectId}/requirements?requirementId=${reqId}`)
+    await page.goto(`/projects/${projectId}/requirements/browse?requirementId=${reqId}`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
 
@@ -793,7 +793,7 @@ test.describe('Requirements', () => {
       }
     })
 
-    await page.goto(`/projects/${projectId}/requirements?requirementId=${reqId}`)
+    await page.goto(`/projects/${projectId}/requirements/browse?requirementId=${reqId}`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
     await expect(page.getByRole('heading', { name: 'Requirement Details' })).toBeVisible({ timeout: 15_000 })
@@ -819,7 +819,7 @@ test.describe('Requirements', () => {
       }
     })
 
-    await page.goto(`/projects/${projectId}/requirements?requirementId=${reqId}`)
+    await page.goto(`/projects/${projectId}/requirements/browse?requirementId=${reqId}`)
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
     await expect(page.getByRole('heading', { name: 'Requirement Details' })).toBeVisible({ timeout: 15_000 })

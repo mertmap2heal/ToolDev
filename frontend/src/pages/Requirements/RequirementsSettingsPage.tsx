@@ -19,7 +19,7 @@ export default function RequirementsSettingsPage() {
       <div className="flex items-center justify-between">
         <div>
           <Link
-            to={`/projects/${projectId}/requirements`}
+            to={`/projects/${projectId}/requirements/browse`}
             className="inline-flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-2"
           >
             <ArrowLeft size={16} />

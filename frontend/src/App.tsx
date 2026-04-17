@@ -8,6 +8,10 @@ import RequirementsPage from './pages/Requirements/RequirementsPage'
 import RequirementsSettingsPage from './pages/Requirements/RequirementsSettingsPage'
 import RequirementsDashboardPage from './pages/Requirements/RequirementsDashboardPage'
 import TraceabilityViewsPage from './pages/Requirements/TraceabilityViewsPage'
+import {
+  RequirementsModuleRootRedirect,
+  TraceabilityViewsLegacyRedirect,
+} from './pages/Requirements/RequirementsModuleRedirects'
 import SystemFunctionsPage from './pages/SystemFunctions/SystemFunctionsPage'
 import ArchitecturePage from './pages/Architecture/ArchitecturePage'
 import VerificationLayoutPage from './pages/Verification/VerificationLayoutPage'
@@ -114,8 +118,10 @@ function App() {
             <Route path="projects/:projectId/product-breakdown-structure" element={<FeatureGuard moduleId="product-breakdown-structure"><PBSPage /></FeatureGuard>} />
             <Route path="projects/:projectId/requirements/settings" element={<FeatureGuard moduleId="requirements"><RequirementsSettingsPage /></FeatureGuard>} />
             <Route path="projects/:projectId/requirements/dashboard" element={<FeatureGuard moduleId="requirements"><RequirementsDashboardPage /></FeatureGuard>} />
-            <Route path="projects/:projectId/requirements/traceability-views" element={<FeatureGuard moduleId="requirements"><TraceabilityViewsPage /></FeatureGuard>} />
-            <Route path="projects/:projectId/requirements" element={<FeatureGuard moduleId="requirements"><RequirementsPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/requirements/browse" element={<FeatureGuard moduleId="requirements"><RequirementsPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/requirements/traceability" element={<FeatureGuard moduleId="requirements"><TraceabilityViewsPage /></FeatureGuard>} />
+            <Route path="projects/:projectId/requirements/traceability-views" element={<FeatureGuard moduleId="requirements"><TraceabilityViewsLegacyRedirect /></FeatureGuard>} />
+            <Route path="projects/:projectId/requirements" element={<FeatureGuard moduleId="requirements"><RequirementsModuleRootRedirect /></FeatureGuard>} />
             <Route path="projects/:projectId/tasks" element={<FeatureGuard moduleId="tasks"><TasksPage /></FeatureGuard>} />
             <Route path="tasks">
             <Route index element={<TasksDashboardPage />} />

@@ -277,7 +277,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
         title: r.title,
         status: r.status,
         projectId: r.projectId,
-        route: `/projects/${r.projectId}/requirements?focusRequirementId=${r.id}`,
+        route: `/projects/${r.projectId}/requirements/browse?requirementId=${r.id}`,
       }),
     )
 
