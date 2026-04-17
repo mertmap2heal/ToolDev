@@ -1,0 +1,670 @@
+/* ============================================================
+   Preview Landing — scoped design tokens + typography.
+   Everything is scoped under `.preview-landing` so nothing
+   leaks into the rest of the app. Do NOT touch global index.css.
+   ============================================================ */
+
+.preview-landing {
+  /* --- Colour tokens (locked from improvements/design-system.md) --- */
+  --ink-primary:         #0F1419;
+  --ink-muted:           #6B6660;
+  --ink-faint:           #A8A29A;
+
+  --surface-base:        #FAF8F3;
+  --surface-raised:      #F2EEE3;
+  --surface-inset:       #EBE5D5;
+
+  --border-default:      #E2DCCD;
+  --border-strong:       #C9C2AF;
+
+  --accent-primary:      #1B4332;
+  --accent-primary-hover:#2D5A3D;
+  --accent-primary-text: #FAF8F3;
+
+  --status-success:      #1B4332;
+  --status-warning:      #B8860B;
+  --status-danger:       #8B0000;
+
+  /* --- Typography families --- */
+  --font-display: 'Fraunces', ui-serif, Georgia, serif;
+  --font-body:    'Geist', 'Geist Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* --- Scale --- */
+  --display-xl: 72px;
+  --display-lg: 56px;
+  --display-md: 40px;
+  --title-lg:   32px;
+  --title-md:   24px;
+  --title-sm:   18px;
+  --body-lg:    17px;
+  --body-md:    15px;
+  --body-sm:    13px;
+  --caption:    12px;
+
+  /* --- Surface --- */
+  background-color: var(--surface-base);
+  color: var(--ink-primary);
+  font-family: var(--font-body);
+  font-size: var(--body-md);
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  font-weight: 400;
+  min-height: 100vh;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-synthesis: none;
+}
+
+/* Override the theme variables the global root sets, but only inside this scope. */
+.preview-landing,
+.preview-landing * {
+  font-family: var(--font-body);
+}
+
+/* --- Display / Serif headings --- */
+.preview-landing .pl-display {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--ink-primary);
+}
+
+.preview-landing .pl-display-xl {
+  font-size: var(--display-xl);
+}
+.preview-landing .pl-display-lg {
+  font-size: var(--display-lg);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+.preview-landing .pl-display-md {
+  font-size: var(--display-md);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+@media (max-width: 768px) {
+  .preview-landing .pl-display-xl { font-size: 44px; line-height: 1.08; }
+  .preview-landing .pl-display-lg { font-size: 36px; }
+  .preview-landing .pl-display-md { font-size: 28px; }
+}
+
+/* --- Body scale helpers --- */
+.preview-landing .pl-body-lg {
+  font-size: var(--body-lg);
+  line-height: 1.55;
+  color: var(--ink-muted);
+}
+.preview-landing .pl-body-md {
+  font-size: var(--body-md);
+  line-height: 1.55;
+}
+.preview-landing .pl-body-sm {
+  font-size: var(--body-sm);
+  line-height: 1.5;
+}
+.preview-landing .pl-caption {
+  font-size: var(--caption);
+  line-height: 1.4;
+  color: var(--ink-muted);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/* --- Monospace helper --- */
+.preview-landing .pl-mono {
+  font-family: var(--font-mono);
+  font-size: var(--body-sm);
+  letter-spacing: 0;
+}
+
+/* --- Section shell --- */
+.preview-landing .pl-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+@media (max-width: 768px) {
+  .preview-landing .pl-container { padding: 0 24px; }
+}
+
+.preview-landing .pl-section {
+  padding: 96px 0;
+  border-bottom: 1px solid var(--border-default);
+}
+.preview-landing .pl-section--tight { padding: 64px 0; }
+.preview-landing .pl-section--loose { padding: 128px 0; }
+
+@media (max-width: 768px) {
+  .preview-landing .pl-section         { padding: 64px 0; }
+  .preview-landing .pl-section--tight  { padding: 48px 0; }
+  .preview-landing .pl-section--loose  { padding: 96px 0; }
+}
+
+/* --- Primary CTA (forest on cream) --- */
+.preview-landing .pl-cta-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 20px;
+  background-color: var(--accent-primary);
+  color: var(--accent-primary-text);
+  border: 1px solid var(--accent-primary);
+  border-radius: 4px;
+  font-family: var(--font-body);
+  font-size: var(--body-md);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 80ms ease-out, border-color 80ms ease-out;
+}
+.preview-landing .pl-cta-primary:hover {
+  background-color: var(--accent-primary-hover);
+  border-color: var(--accent-primary-hover);
+}
+
+/* --- Secondary CTA (bordered) --- */
+.preview-landing .pl-cta-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 20px;
+  background-color: transparent;
+  color: var(--accent-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  font-family: var(--font-body);
+  font-size: var(--body-md);
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  transition: border-color 80ms ease-out, background-color 80ms ease-out;
+}
+.preview-landing .pl-cta-secondary:hover {
+  border-color: var(--accent-primary);
+  background-color: var(--surface-raised);
+}
+
+/* --- Pills / badges (forest tint) --- */
+.preview-landing .pl-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: var(--caption);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  background-color: rgba(27, 67, 50, 0.10);
+  color: var(--accent-primary);
+  border: 1px solid rgba(27, 67, 50, 0.18);
+}
+.preview-landing .pl-pill--neutral {
+  background-color: var(--surface-inset);
+  color: var(--ink-muted);
+  border: 1px solid var(--border-default);
+}
+.preview-landing .pl-pill--warning {
+  background-color: rgba(184, 134, 11, 0.12);
+  color: var(--status-warning);
+  border: 1px solid rgba(184, 134, 11, 0.24);
+}
+.preview-landing .pl-pill--danger {
+  background-color: rgba(139, 0, 0, 0.08);
+  color: var(--status-danger);
+  border: 1px solid rgba(139, 0, 0, 0.20);
+}
+
+/* --- Surface cards (borders, not shadows) --- */
+.preview-landing .pl-card {
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 24px;
+}
+.preview-landing .pl-card--inset {
+  background-color: var(--surface-inset);
+}
+
+/* --- 1px divider --- */
+.preview-landing .pl-divider {
+  height: 1px;
+  background-color: var(--border-default);
+  border: 0;
+  margin: 0;
+}
+
+/* --- Nav bar --- */
+.preview-landing .pl-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border-default);
+  background-color: var(--surface-base);
+}
+.preview-landing .pl-wordmark {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  color: var(--ink-primary);
+  text-decoration: none;
+}
+.preview-landing .pl-nav-items {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+.preview-landing .pl-nav-link {
+  font-size: var(--body-md);
+  color: var(--ink-muted);
+  text-decoration: none;
+  transition: color 80ms ease-out;
+}
+.preview-landing .pl-nav-link:hover {
+  color: var(--ink-primary);
+}
+@media (max-width: 900px) {
+  .preview-landing .pl-nav-items { gap: 20px; }
+  .preview-landing .pl-nav-desktop-only { display: none; }
+}
+
+/* --- Grid helpers --- */
+.preview-landing .pl-grid {
+  display: grid;
+  gap: 48px;
+}
+.preview-landing .pl-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: center;
+}
+.preview-landing .pl-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 48px;
+}
+@media (max-width: 900px) {
+  .preview-landing .pl-grid-2 { grid-template-columns: 1fr; gap: 48px; }
+  .preview-landing .pl-grid-3 { grid-template-columns: 1fr; gap: 32px; }
+}
+
+/* --- Section eyebrow --- */
+.preview-landing .pl-eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--caption);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent-primary);
+  margin-bottom: 16px;
+}
+
+/* --- Traceability matrix mock --- */
+.preview-landing .pl-matrix {
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  overflow: hidden;
+  font-family: var(--font-body);
+}
+.preview-landing .pl-matrix-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-default);
+  background-color: var(--surface-base);
+}
+.preview-landing .pl-matrix-title {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: var(--title-sm);
+  letter-spacing: -0.01em;
+}
+.preview-landing .pl-matrix-meta {
+  font-family: var(--font-mono);
+  font-size: var(--caption);
+  color: var(--ink-muted);
+}
+.preview-landing .pl-matrix-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 100px 120px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-default);
+  align-items: center;
+  gap: 16px;
+}
+.preview-landing .pl-matrix-row:first-of-type { border-top: 0; }
+.preview-landing .pl-matrix-row--head {
+  background-color: var(--surface-inset);
+  font-family: var(--font-mono);
+  font-size: var(--caption);
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 10px 20px;
+}
+.preview-landing .pl-matrix-row__code {
+  font-family: var(--font-mono);
+  font-size: var(--body-sm);
+  color: var(--ink-primary);
+}
+.preview-landing .pl-matrix-row__label {
+  font-size: var(--body-md);
+  color: var(--ink-primary);
+}
+.preview-landing .pl-matrix-row__count {
+  font-family: var(--font-mono);
+  font-size: var(--body-sm);
+  color: var(--ink-muted);
+  text-align: right;
+}
+
+/* --- Provenance chain mock --- */
+.preview-landing .pl-provenance {
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 24px;
+}
+.preview-landing .pl-provenance-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-default);
+}
+.preview-landing .pl-provenance-id {
+  font-family: var(--font-mono);
+  font-size: var(--body-sm);
+  color: var(--ink-primary);
+}
+.preview-landing .pl-provenance-row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-default);
+  gap: 16px;
+  align-items: baseline;
+}
+.preview-landing .pl-provenance-row:first-of-type { border-top: 0; padding-top: 0; }
+.preview-landing .pl-provenance-label {
+  font-family: var(--font-mono);
+  font-size: var(--caption);
+  color: var(--ink-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.preview-landing .pl-provenance-value {
+  font-family: var(--font-body);
+  font-size: var(--body-sm);
+  color: var(--ink-primary);
+}
+.preview-landing .pl-provenance-value--mono {
+  font-family: var(--font-mono);
+}
+
+/* --- MCP diagram mock --- */
+.preview-landing .pl-mcp {
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 32px;
+}
+.preview-landing .pl-mcp-node {
+  background-color: var(--surface-base);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 12px 16px;
+  text-align: center;
+}
+.preview-landing .pl-mcp-node__label {
+  font-family: var(--font-mono);
+  font-size: var(--caption);
+  color: var(--ink-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.preview-landing .pl-mcp-node__name {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: var(--body-md);
+  color: var(--ink-primary);
+}
+
+/* --- Numbers metrics --- */
+.preview-landing .pl-metric-number {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 64px;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: var(--accent-primary);
+  margin-bottom: 12px;
+}
+.preview-landing .pl-metric-label {
+  font-family: var(--font-body);
+  font-size: var(--body-md);
+  color: var(--ink-muted);
+  line-height: 1.5;
+  max-width: 260px;
+}
+@media (max-width: 768px) {
+  .preview-landing .pl-metric-number { font-size: 48px; }
+}
+
+/* --- Trust strip --- */
+.preview-landing .pl-trust-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  font-family: var(--font-mono);
+  font-size: var(--body-sm);
+  color: var(--ink-muted);
+  letter-spacing: 0.02em;
+  align-items: center;
+}
+.preview-landing .pl-trust-strip__dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 9999px;
+  background-color: var(--ink-faint);
+}
+
+/* --- Footer --- */
+.preview-landing .pl-footer {
+  padding: 64px 0 48px;
+  border-top: 1px solid var(--border-default);
+  background-color: var(--surface-base);
+}
+.preview-landing .pl-footer-grid {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(3, 1fr);
+  gap: 48px;
+  margin-bottom: 48px;
+}
+@media (max-width: 768px) {
+  .preview-landing .pl-footer-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+  }
+}
+.preview-landing .pl-footer-col h4 {
+  font-family: var(--font-mono);
+  font-size: var(--caption);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  margin: 0 0 16px 0;
+  font-weight: 500;
+}
+.preview-landing .pl-footer-col ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.preview-landing .pl-footer-col a {
+  color: var(--ink-primary);
+  text-decoration: none;
+  font-size: var(--body-sm);
+  transition: color 80ms ease-out;
+}
+.preview-landing .pl-footer-col a:hover {
+  color: var(--accent-primary);
+}
+.preview-landing .pl-footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 32px;
+  border-top: 1px solid var(--border-default);
+  font-size: var(--body-sm);
+  color: var(--ink-muted);
+}
+
+/* --- Focus rings --- */
+.preview-landing :focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* --- Standards strip specific --- */
+.preview-landing .pl-standards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 32px;
+}
+
+/* --- Hero layout --- */
+.preview-landing .pl-hero {
+  padding-top: 96px;
+  padding-bottom: 96px;
+}
+@media (max-width: 900px) {
+  .preview-landing .pl-hero { padding-top: 64px; padding-bottom: 64px; }
+}
+.preview-landing .pl-hero-copy { max-width: 720px; }
+.preview-landing .pl-hero-sub {
+  font-size: var(--body-lg);
+  color: var(--ink-muted);
+  margin-top: 24px;
+  max-width: 560px;
+  line-height: 1.5;
+}
+.preview-landing .pl-hero-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+/* --- Section head block --- */
+.preview-landing .pl-section-head__heading {
+  margin: 0;
+}
+.preview-landing .pl-section-head__body {
+  font-size: var(--body-lg);
+  color: var(--ink-muted);
+  margin: 24px 0 0 0;
+  max-width: 560px;
+  line-height: 1.55;
+}
+
+/* --- CTA block --- */
+.preview-landing .pl-cta-block {
+  text-align: center;
+  padding: 96px 0;
+  border-top: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-default);
+}
+.preview-landing .pl-cta-block__body {
+  font-size: var(--body-lg);
+  color: var(--ink-muted);
+  margin: 24px auto 32px;
+  max-width: 520px;
+}
+.preview-landing .pl-cta-block__buttons {
+  display: inline-flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* --- Numbers section --- */
+.preview-landing .pl-numbers-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 48px;
+}
+@media (max-width: 900px) {
+  .preview-landing .pl-numbers-grid { grid-template-columns: 1fr; gap: 48px; }
+}
+
+/* --- Integration badges --- */
+.preview-landing .pl-integration-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 24px;
+}
+.preview-landing .pl-integration-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-default);
+  background-color: var(--surface-base);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: var(--body-sm);
+  color: var(--ink-primary);
+}
+
+/* --- Links (inline content) --- */
+.preview-landing a {
+  color: var(--accent-primary);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 80ms ease-out;
+}
+.preview-landing a:hover {
+  border-bottom-color: var(--accent-primary);
+}
+/* CTA buttons override the link underline */
+.preview-landing .pl-cta-primary,
+.preview-landing .pl-cta-secondary,
+.preview-landing .pl-wordmark,
+.preview-landing .pl-nav-link {
+  border-bottom: 0;
+}
+.preview-landing .pl-nav-link:hover,
+.preview-landing .pl-wordmark:hover {
+  border-bottom: 0;
+}
+
+/* --- Pair (alternating editorial layout) --- */
+.preview-landing .pl-pair--reverse .pl-pair__text { order: 2; }
+.preview-landing .pl-pair--reverse .pl-pair__media { order: 1; }
+@media (max-width: 900px) {
+  .preview-landing .pl-pair--reverse .pl-pair__text { order: 1; }
+  .preview-landing .pl-pair--reverse .pl-pair__media { order: 2; }
+}

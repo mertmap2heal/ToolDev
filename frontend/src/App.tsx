@@ -79,6 +79,7 @@ import AuditLogsPage from './pages/PlatformAdmin/AuditLogsPage'
 import DataFlowAdminPanel from './pages/PlatformAdmin/DataFlowAdminPanel'
 import OrganizationPage from './pages/Organization/OrganizationPage'
 import SettingsPage from './pages/Settings/SettingsPage'
+import PreviewLandingPage from './pages/PreviewLanding/PreviewLandingPage'
 import { FeaturePackageProvider } from './contexts/FeaturePackageContext'
 import FeatureGuard from './components/access/FeatureGuard'
 import PackageSwitcher from './components/dev/PackageSwitcher'
@@ -90,6 +91,8 @@ function App() {
       <Routes>
         {/* Login - public route */}
         <Route path="/login" element={<LoginPage />} />
+        {/* Preview landing (brand validation sample, public, unauthenticated) */}
+        <Route path="/preview/landing" element={<PreviewLandingPage />} />
         {/* MBSE Models - Full page experience outside MainLayout */}
         <Route path="projects/:projectId/mbse-models" element={<FeatureGuard moduleId="mbse-models"><MBSEModelsPage /></FeatureGuard>} />
         {/* Landing when unauthenticated, app when authenticated */}
