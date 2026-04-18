@@ -23,11 +23,33 @@ export const getProjectAnalytics = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// Whitelist of fields accepted by bulkUpdateProjects.  Same mass-assignment
+// risk as importProjects (#154): reject unknown top-level keys.
+const BULK_UPDATE_ALLOWED_FIELDS = ['name', 'description', 'domain', 'companyName', 'status', 'progress'] as const
+
 export const bulkUpdateProjects = async (req: AuthRequest, res: Response) => {
   try {
     const { ids, updates } = req.body;
-    if (!Array.isArray(ids) || !updates) return res.status(400).json({ success: false, error: 'Invalid payload.' });
-    const result = await prisma.project.updateMany({ where: { id: { in: ids } }, data: updates });
+    if (!Array.isArray(ids) || !updates || typeof updates !== 'object' || Array.isArray(updates)) {
+      return res.status(400).json({ success: false, error: 'Invalid payload.' });
+    }
+
+    const unknownKeys = Object.keys(updates).filter(
+      (k) => !(BULK_UPDATE_ALLOWED_FIELDS as readonly string[]).includes(k)
+    )
+    if (unknownKeys.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `updates contains unknown field(s): ${unknownKeys.join(', ')}`,
+      })
+    }
+
+    const safeUpdates: Record<string, unknown> = {}
+    for (const key of BULK_UPDATE_ALLOWED_FIELDS) {
+      if (key in updates) safeUpdates[key] = (updates as Record<string, unknown>)[key]
+    }
+
+    const result = await prisma.project.updateMany({ where: { id: { in: ids } }, data: safeUpdates });
     res.json({ success: true, data: result });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Bulk update failed.' });
@@ -43,14 +65,87 @@ export const exportProjects = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// Whitelist of fields accepted from the importProjects payload.  Extending
+// this list is a security-relevant change; review #154 before adding fields.
+const IMPORT_PROJECT_ALLOWED_FIELDS = ['name', 'description', 'domain', 'companyName'] as const
+
 export const importProjects = async (req: AuthRequest, res: Response) => {
   try {
-    const { projects } = req.body;
-    if (!Array.isArray(projects)) return res.status(400).json({ success: false, error: 'Invalid payload.' });
-    const created = await prisma.project.createMany({ data: projects });
-    res.json({ success: true, data: created });
+    const userId = req.userId
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+
+    const { projects } = req.body
+    if (!Array.isArray(projects)) {
+      return res.status(400).json({ success: false, error: 'Invalid payload.' })
+    }
+    if (projects.length === 0) {
+      return res.status(400).json({ success: false, error: 'No projects provided.' })
+    }
+
+    const cleaned: Array<{
+      name: string
+      description: string | null
+      domain: string
+      companyName: string | null
+      slug: string
+      userId: string
+    }> = []
+
+    for (let i = 0; i < projects.length; i++) {
+      const p = projects[i]
+      if (!p || typeof p !== 'object' || Array.isArray(p)) {
+        return res.status(400).json({
+          success: false,
+          error: `projects[${i}] must be an object`,
+        })
+      }
+      if (typeof (p as { name?: unknown }).name !== 'string' || !(p as { name: string }).name.trim()) {
+        return res.status(400).json({
+          success: false,
+          error: `projects[${i}].name is required`,
+        })
+      }
+
+      // Reject unknown top-level fields so mass-assignment attempts (e.g.
+      // createdAt, updatedAt, userId, isTemplate) are surfaced to the caller
+      // instead of silently dropped.
+      const unknownKeys = Object.keys(p as Record<string, unknown>).filter(
+        (k) => !(IMPORT_PROJECT_ALLOWED_FIELDS as readonly string[]).includes(k)
+      )
+      if (unknownKeys.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: `projects[${i}] contains unknown field(s): ${unknownKeys.join(', ')}`,
+        })
+      }
+
+      const typed = p as {
+        name: string
+        description?: string
+        domain?: string
+        companyName?: string
+      }
+      const domain = typed.domain ?? typed.name
+      const baseSlug = slugFromName(domain)
+      const slug = await ensureUniqueSlug(baseSlug)
+
+      cleaned.push({
+        name: typed.name,
+        description: typed.description ?? null,
+        domain,
+        companyName: typed.companyName ?? null,
+        slug,
+        userId,
+      })
+    }
+
+    const created = await prisma.project.createMany({ data: cleaned, skipDuplicates: true })
+    res.json({ success: true, data: created })
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Import failed.' });
+    console.error('Import projects error:', error)
+    res.status(500).json({ success: false, error: 'Import failed.' })
   }
 };
 import { Response } from 'express'
@@ -265,7 +360,10 @@ export const updateProject = async (req: AuthRequest, res: Response) => {
     const { id } = req.params
     const { name, description, domain, companyName, progress, status, deadline, strictLifecycleGates } = req.body
 
-    // Admin view: Allow updating any project
+    // Ownership/admin enforcement is handled by requireProjectOwnerOrAdmin
+    // middleware on the route (#152).  This findUnique is kept to return the
+    // 404 with the standard error shape when the row vanished between auth
+    // and update (race condition / concurrent delete).
     const project = await prisma.project.findUnique({
       where: { id },
     })
@@ -322,7 +420,8 @@ export const deleteProject = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
 
-    // Admin view: Allow deleting any project
+    // Ownership/admin enforcement is handled by requireProjectOwnerOrAdmin
+    // middleware on the route (#152).
     const project = await prisma.project.findUnique({
       where: { id },
     })

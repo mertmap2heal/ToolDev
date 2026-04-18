@@ -1,4 +1,5 @@
 import clsx from 'clsx'
+import { sanitizeHtml } from '../../utils/richText'
 
 const LOOKS_LIKE_HTML = /<[a-z][\s\S]*>/i
 
@@ -24,7 +25,7 @@ export default function RequirementRichTextField({
           'dark:prose-headings:text-gray-200 prose-p:my-1',
           className
         )}
-        dangerouslySetInnerHTML={{ __html: trimmed }}
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(trimmed) }}
       />
     )
   }

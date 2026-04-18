@@ -9,8 +9,8 @@ import { testExecutionService } from '../../services/verification/TestExecutionS
 import { createTestCycleBuilder } from '../../services/verification/TestCycleBuilder'
 import path from 'path'
 import fs from 'fs'
-import { randomUUID } from 'crypto'
 import { fileURLToPath } from 'url'
+import { validateUpload, validateMulterUpload } from '../../lib/uploadValidation'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -235,38 +235,44 @@ export const uploadEvidence = async (req: AuthRequest, res: Response): Promise<R
       return res.status(404).json({ success: false, error: 'Test run result not found' })
     }
 
-    let buffer: Buffer
-    let name: string
-    let mime: string | undefined
-
-    if (file?.buffer) {
-      buffer = file.buffer
-      name = file.originalname || fileName || 'evidence'
-      mime = file.mimetype
-    } else if (fileData) {
-      const base64 = fileData.startsWith('data:') ? fileData.split(',')[1] : fileData
-      buffer = Buffer.from(base64, 'base64')
-      name = fileName || 'evidence'
-      mime = mimeType
-    } else {
-      return res.status(400).json({ success: false, error: 'fileData or multipart file required' })
+    // Validate MIME + size BEFORE decoding (#131,#139).
+    let validated
+    try {
+      if (file?.buffer) {
+        validated = validateMulterUpload({
+          buffer: file.buffer,
+          originalname: file.originalname || fileName || 'evidence',
+          mimetype: file.mimetype,
+        })
+      } else if (fileData) {
+        validated = validateUpload({
+          fileData,
+          fileName: fileName || 'evidence',
+          mimeType,
+        })
+      } else {
+        return res.status(400).json({ success: false, error: 'fileData or multipart file required' })
+      }
+    } catch (e: any) {
+      if (e?.name === 'UploadValidationError' || typeof e?.status === 'number') {
+        return res.status(e.status || 400).json({ success: false, error: e.message })
+      }
+      throw e
     }
 
-    const ext = path.extname(name) || ''
-    const uniqueName = `${randomUUID()}${ext}`
-    const filePath = path.join(EVIDENCE_UPLOAD_DIR, uniqueName)
-    fs.writeFileSync(filePath, buffer)
-    const storageKey = `verification/run-results-evidence/${uniqueName}`
+    const filePath = path.join(EVIDENCE_UPLOAD_DIR, validated.uniqueFileName)
+    fs.writeFileSync(filePath, validated.buffer)
+    const storageKey = `verification/run-results-evidence/${validated.uniqueFileName}`
 
     await testExecutionService.addActualResultBlock(projectId, resultId, {
       type: 'IMAGE',
       imageStorageKey: storageKey,
-      imageFileName: name,
+      imageFileName: validated.safeDisplayName,
     })
 
     res.status(201).json({
       success: true,
-      data: { storageKey, fileName: name, fileUrl: `/uploads/verification/run-results-evidence/${uniqueName}` },
+      data: { storageKey, fileName: validated.safeDisplayName, fileUrl: `/uploads/verification/run-results-evidence/${validated.uniqueFileName}` },
     })
   } catch (error: any) {
     console.error('Upload evidence error:', error)

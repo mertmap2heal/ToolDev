@@ -94,6 +94,7 @@ router.get('/:projectId/metrics', ctrl.getCertificationMetrics)
 router.get('/:projectId/checklists', ctrl.getChecklists)
 router.post('/:projectId/checklists', ctrl.createChecklist)
 router.patch('/:projectId/checklists/:checklistId/items/:id', ctrl.updateChecklistItem)
+// Sign-off routes enforce project membership inside the controller (issue #163)
 router.post('/:projectId/checklists/:checklistId/sign-offs', ctrl.addSignOff)
 router.patch('/:projectId/sign-offs/:id', ctrl.updateSignOff)
 

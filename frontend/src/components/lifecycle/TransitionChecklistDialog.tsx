@@ -25,6 +25,7 @@ import type {
 import { transitionChecklistService } from '../../services/transitionChecklist.service'
 import { useAuthStore } from '../../store/authStore'
 import { useStatusDefinitionsStore } from '../../store/statusDefinitionsStore'
+import { sanitizeHtml } from '../../utils/richText'
 
 function decodeHtmlEntities(input: string): string {
   const withNamed = input
@@ -386,7 +387,7 @@ export default function TransitionChecklistDialog({
                 <span className="text-xs text-gray-500 dark:text-gray-400">Description</span>
                 <div
                   className="text-sm text-gray-700 dark:text-gray-300 prose prose-sm dark:prose-invert max-w-none"
-                  dangerouslySetInnerHTML={{ __html: requirement.description || '<em>Empty</em>' }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(requirement.description || '<em>Empty</em>') }}
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">

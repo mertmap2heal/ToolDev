@@ -1,6 +1,7 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
+import type { Prisma } from '@prisma/client'
 
 
 /**
@@ -303,21 +304,33 @@ export const compareVersions = async (req: AuthRequest, res: Response) => {
  * Helper function to create a version when updating a requirement
  * Call this before updating the requirement to capture the previous state
  */
+/**
+ * Create a version snapshot of a requirement's current state.
+ *
+ * @param tx  Optional Prisma transaction client. When provided the snapshot is
+ *            written atomically with the caller's transaction — any error
+ *            propagates so the caller's transaction rolls back. When omitted
+ *            the function uses the global singleton and swallows errors so it
+ *            never blocks a standalone call.
+ */
 export async function createVersionSnapshot(
   requirementId: string,
   projectId: string,
   userId?: string,
   userName?: string,
-  changeReason?: string
+  changeReason?: string,
+  tx?: Prisma.TransactionClient
 ): Promise<void> {
-  try {
-    const requirement = await prisma.requirement.findFirst({
+  const client = tx ?? prisma
+
+  const doSnapshot = async () => {
+    const requirement = await client.requirement.findFirst({
       where: { id: requirementId, projectId },
     })
 
     if (!requirement) return
 
-    const latestVersion = await prisma.requirementVersion.findFirst({
+    const latestVersion = await client.requirementVersion.findFirst({
       where: { requirementId, projectId },
       orderBy: { version: 'desc' },
       select: { version: true },
@@ -325,7 +338,7 @@ export async function createVersionSnapshot(
 
     const newVersionNumber = (latestVersion?.version || 0) + 1
 
-    await prisma.requirementVersion.create({
+    await client.requirementVersion.create({
       data: {
         requirementId,
         projectId,
@@ -347,7 +360,17 @@ export async function createVersionSnapshot(
         snapshot: JSON.stringify(requirement),
       },
     })
-  } catch (error) {
-    console.error('Create version snapshot error:', error)
+  }
+
+  if (tx) {
+    // Inside a transaction: let errors propagate to trigger rollback
+    await doSnapshot()
+  } else {
+    // Standalone: swallow errors so snapshot failure never blocks the caller
+    try {
+      await doSnapshot()
+    } catch (error) {
+      console.error('Create version snapshot error:', error)
+    }
   }
 }

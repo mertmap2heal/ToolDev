@@ -3,7 +3,8 @@
  */
 
 import { apiClient } from './api'
-import { authService, setStoredAdminProfile } from './auth.service'
+import { authService } from './auth.service'
+import * as adminUserRoleService from './adminUserRole.service'
 import { projectService } from './project.service'
 import type {
   AdminUser,
@@ -107,12 +108,14 @@ export async function createUser(input: CreateUserInput): Promise<CreateUserResu
       console.warn(`Failed to add user to project ${projectId}:`, addRes.error)
     }
   }
-  setStoredAdminProfile(created.id, {
-    roles: input.roles ?? [],
-    projects: input.projects ?? [],
-    authorities: input.authorities ?? [],
-    permissions: input.permissions,
-  })
+  // Persist admin (permission) role assignments to the backend (issue #166).
+  if (input.roles && input.roles.length > 0) {
+    await Promise.all(
+      input.roles.map((adminRoleId) =>
+        adminUserRoleService.assignRole(created.id, adminRoleId)
+      )
+    )
+  }
   return { user: adminUser, generatedPassword }
 }
 

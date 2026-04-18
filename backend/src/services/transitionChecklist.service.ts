@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma'
-import { formatIssueKey, getMaxIssueSequenceNumber, isIssueKeyUniqueViolation } from '../lib/issueKey'
+import { allocateIssueKey } from '../lib/issueKey'
 import { Prisma } from '@prisma/client'
 
 export interface CreateChecklistInput {
@@ -477,36 +477,20 @@ export const transitionChecklistService = {
   },
 
   async createChecklistItemIssue(input: CreateChecklistItemIssueInput) {
-    const maxAttempts = 12
-    let issue: Awaited<ReturnType<typeof prisma.issue.create>> | null = null
-    let lastKeyError: unknown
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const nextSeq = (await getMaxIssueSequenceNumber()) + 1
-      const issueKey = formatIssueKey(nextSeq)
-      try {
-        issue = await prisma.issue.create({
-          data: {
-            projectId: input.projectId,
-            issueKey,
-            title: input.title,
-            description: input.description,
-            priority: input.priority || 'medium',
-            createdBy: input.createdBy,
-            updatedBy: input.createdBy,
-          },
-        })
-        break
-      } catch (e) {
-        if (isIssueKeyUniqueViolation(e)) {
-          lastKeyError = e
-          continue
-        }
-        throw e
-      }
-    }
-    if (!issue) {
-      throw lastKeyError ?? new Error('Could not allocate a unique issue key')
-    }
+    const issue = await prisma.$transaction(async (tx) => {
+      const issueKey = await allocateIssueKey(tx)
+      return tx.issue.create({
+        data: {
+          projectId: input.projectId,
+          issueKey,
+          title: input.title,
+          description: input.description,
+          priority: input.priority || 'medium',
+          createdBy: input.createdBy,
+          updatedBy: input.createdBy,
+        },
+      })
+    })
 
     if (input.createdBy) {
       await prisma.issueSubscription.create({

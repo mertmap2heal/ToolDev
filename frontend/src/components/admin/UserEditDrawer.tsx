@@ -3,7 +3,8 @@ import { X } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import * as adminService from '../../services/admin.service'
-import { authService, setStoredAdminProfile } from '../../services/auth.service'
+import { authService } from '../../services/auth.service'
+import * as adminUserRoleService from '../../services/adminUserRole.service'
 import { projectService } from '../../services/project.service'
 import type { AdminUser } from '../../types/admin.types'
 import PermissionMatrix from './PermissionMatrix'
@@ -174,13 +175,8 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
           if (!res.success) throw new Error(res.error || 'Failed to remove from project')
         }
       }
-      setStoredAdminProfile(user.id, {
-        roles,
-        projects,
-        status,
-        authorities,
-        permissions,
-      })
+      // Persist admin (permission) role assignments to the backend.
+      await adminUserRoleService.syncUserRoles(user.id, user.roles, roles)
       await adminService.updateUser(user.id, {
         status,
         projects,
@@ -204,6 +200,7 @@ export default function UserEditDrawer({ user, onClose, onSaved, onRefetchUsers 
         }
       }
       queryClient.invalidateQueries({ queryKey: ['admin', 'engineeringRoles'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'authUsers'] })
       resetDirty()
       onSaved()
     } finally {

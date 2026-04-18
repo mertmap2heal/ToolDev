@@ -37,9 +37,16 @@ Thumbs.db
 coverage/
 .nyc_output/
 
+# Backups (produced at runtime by the backup sidecar)
+backups/
+
 # Misc
 *.pem
 .cache/
 .mcp.json
 .playwright-mcp/
 *.png
+
+# Playwright auth session storage (never commit — may contain real credentials)
+**/.auth/
+**/.auth/**
