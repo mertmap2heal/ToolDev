@@ -961,7 +961,7 @@ model CommField {
 model ChangeRequest {
   id             String   @id @default(uuid())
   projectId      String
-  crId           String?   @unique // Human readable ID (e.g. CR-001)
+  crId           String?   // Human readable ID (e.g. CR-001), unique per project
   title          String
   description    String
   sourceType     String // 'function' | 'issue' | 'parameter' | 'requirement'
@@ -992,6 +992,7 @@ model ChangeRequest {
   @@index([sourceType, sourceId])
   @@index([status])
   @@index([crId])
+  @@unique([projectId, crId], map: "ChangeRequest_projectId_crId_key")
 }
 
 model ChangeRequestAttachment {
