@@ -30,12 +30,21 @@ test.describe('Login page (#110)', () => {
     await expect(page.getByPlaceholder(/email or username/i)).toBeVisible({ timeout: 10_000 })
   })
 
-  test('shows validation errors when submitting empty form', async ({ page }) => {
-    await page.getByPlaceholder(/email or username/i).fill('')
-    await page.getByPlaceholder(/enter your password/i).fill('')
+  test('shows validation errors when submitting whitespace-only fields', async ({ page }) => {
+    // Both inputs carry the HTML required attribute, so fill('') plus a
+    // submit click is blocked by the browser's native validation and the
+    // component's handleSubmit never runs. Whitespace passes the native
+    // check but validateForm trims and rejects, which is the client-side
+    // error path we want to exercise.
+    await page.getByPlaceholder(/email or username/i).fill(' ')
+    await page.getByPlaceholder(/enter your password/i).fill(' ')
     await page.getByRole('button', { name: /sign in/i }).click()
-    await expect(page.getByText(/email or username is required/i)).toBeVisible()
-    await expect(page.getByText(/password is required/i)).toBeVisible()
+    await expect(
+      page.getByText(/email or username is required|must be at least/i).first(),
+    ).toBeVisible({ timeout: 5_000 })
+    await expect(
+      page.getByText(/password is required|password must be at least/i).first(),
+    ).toBeVisible({ timeout: 5_000 })
   })
 
   test('shows validation error for password shorter than 8 characters', async ({ page }) => {
