@@ -197,4 +197,82 @@ describe('Requirement Comment API', () => {
       .set('Authorization', `Bearer ${authorToken}`)
     expect(res.status).toBe(404)
   })
+
+  // ---------------------------------------------------------------------------
+  // Create comment — validation + 404 (#96)
+  // ---------------------------------------------------------------------------
+
+  it('POST comment returns 400 for empty content', async () => {
+    const res = await request(app)
+      .post(`/api/v1/requirements/${projectId}/${requirementDbId}/comments`)
+      .set('Authorization', `Bearer ${authorToken}`)
+      .send({ content: '   ' })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/content/i)
+  })
+
+  it('POST comment returns 400 when content is missing entirely', async () => {
+    const res = await request(app)
+      .post(`/api/v1/requirements/${projectId}/${requirementDbId}/comments`)
+      .set('Authorization', `Bearer ${authorToken}`)
+      .send({})
+    expect(res.status).toBe(400)
+  })
+
+  it('POST comment returns 404 for a non-existent requirement', async () => {
+    const ghostReqId = '00000000-0000-0000-0000-000000000000'
+    const res = await request(app)
+      .post(`/api/v1/requirements/${projectId}/${ghostReqId}/comments`)
+      .set('Authorization', `Bearer ${authorToken}`)
+      .send({ content: '<p>ghost</p>' })
+    expect(res.status).toBe(404)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Cross-project DELETE isolation (#96)
+  // ---------------------------------------------------------------------------
+
+  it('DELETE comment with wrong projectId returns 404 (cross-project IDOR)', async () => {
+    const ts = Date.now()
+    const slug = `req-comment-b-${ts}`
+    const projectB = await prisma.project.create({
+      data: { name: `Req Comment B ${ts}`, domain: slug, slug, userId: authorId },
+    })
+    await prisma.projectMember.create({
+      data: { projectId: projectB.id, userId: authorId, role: 'owner', status: 'accepted' },
+    })
+    const reqB = await prisma.requirement.create({
+      data: {
+        projectId: projectB.id,
+        title: 'Req in Project B',
+        description: '',
+        status: 'Draft',
+        priority: 'Medium',
+        stage: 'Analysis',
+        requirementId: `REQ-COMMENT-B-${ts}`,
+      },
+    })
+    const commentB = await prisma.requirementComment.create({
+      data: {
+        projectId: projectB.id,
+        requirementId: reqB.id,
+        content: '<p>Comment in B</p>',
+        authorId,
+      },
+    })
+
+    // Attempt to delete projectB's comment via projectA's URL
+    const res = await request(app)
+      .delete(`/api/v1/requirements/${projectId}/comments/${commentB.id}`)
+      .set('Authorization', `Bearer ${authorToken}`)
+    expect(res.status).toBe(404)
+
+    const stillThere = await prisma.requirementComment.findUnique({ where: { id: commentB.id } })
+    expect(stillThere).not.toBeNull()
+
+    await prisma.requirementComment.delete({ where: { id: commentB.id } }).catch(() => {})
+    await prisma.requirement.delete({ where: { id: reqB.id } }).catch(() => {})
+    await prisma.projectMember.deleteMany({ where: { projectId: projectB.id } }).catch(() => {})
+    await prisma.project.delete({ where: { id: projectB.id } }).catch(() => {})
+  })
 })
