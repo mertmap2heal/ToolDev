@@ -3,11 +3,18 @@ import { prisma } from '../lib/prisma'
 import { AuthRequest } from './auth.middleware'
 
 /**
- * Ensures the authenticated user is a member of the project identified by
- * req.params.projectId.  Must be placed after authenticateToken and after
- * the projectIdParam resolver (so req.params.projectId is already a UUID).
+ * Ensures the authenticated user is allowed to access the project identified
+ * by req.params.projectId (or req.params.id for /projects/:id routes).
  *
- * Returns 403 when the user is neither a ProjectMember nor the project owner (project.userId).
+ * Access granted when any of the following hold (matches the rule used by
+ * resolveProjectParam.middleware.ts and requireProjectOwnerOrAdmin):
+ *   - ProjectMember row with status=accepted
+ *   - legacy Project.userId owner
+ *   - platform admin (role SUPERIOR_ADMIN | COMPANY_ADMIN, email in
+ *     ADMIN_EMAILS, or first-user fallback)
+ *
+ * Must be placed after authenticateToken and after the project param
+ * resolver (so the param is already a UUID).
  */
 export async function requireProjectMember(
   req: AuthRequest,
@@ -15,30 +22,43 @@ export async function requireProjectMember(
   next: NextFunction
 ): Promise<void> {
   try {
-    const userId = req.user?.userId
-    const { projectId } = req.params
+    const userId = req.userId ?? req.user?.userId
+    const projectId = req.params.projectId ?? req.params.id
 
     if (!userId || !projectId) {
       res.status(401).json({ success: false, error: 'Unauthorized' })
       return
     }
 
+    // Only accept "accepted" memberships; pending invites do not grant access.
     const member = await prisma.projectMember.findFirst({
-      where: { projectId, userId },
+      where: { projectId, userId, status: 'accepted' },
       select: { id: true },
     })
-
     if (member) {
       next()
       return
     }
 
-    // Legacy / backfill gap: project creator (project.userId) may not have a ProjectMember row yet.
-    const project = await prisma.project.findFirst({
-      where: { id: projectId },
-      select: { userId: true },
-    })
+    const [project, user] = await Promise.all([
+      prisma.project.findUnique({
+        where: { id: projectId },
+        select: { userId: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, role: true },
+      }),
+    ])
     if (project?.userId === userId) {
+      next()
+      return
+    }
+    if (user?.role === 'SUPERIOR_ADMIN' || user?.role === 'COMPANY_ADMIN') {
+      next()
+      return
+    }
+    if (user?.email && (await isEnvAdmin(user.email))) {
       next()
       return
     }
@@ -48,4 +68,17 @@ export async function requireProjectMember(
     console.error('requireProjectMember error:', err)
     res.status(500).json({ success: false, error: 'Internal server error' })
   }
+}
+
+async function isEnvAdmin(email: string): Promise<boolean> {
+  const list = process.env.ADMIN_EMAILS
+  if (list) {
+    const emails = list.split(',').map((e) => e.trim().toLowerCase())
+    return emails.includes(email.toLowerCase())
+  }
+  const first = await prisma.user.findFirst({
+    orderBy: { createdAt: 'asc' },
+    select: { email: true },
+  })
+  return first?.email?.toLowerCase() === email.toLowerCase()
 }

@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 export default function LandingFooter() {
   return (
     <footer className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 py-8">
@@ -15,12 +17,12 @@ export default function LandingFooter() {
             >
               contact@company.com
             </a>
-            <a href="#" className="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+            <Link to="/privacy" className="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
               Privacy
-            </a>
-            <a href="#" className="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+            </Link>
+            <Link to="/terms" className="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
               Terms
-            </a>
+            </Link>
           </div>
         </div>
       </div>

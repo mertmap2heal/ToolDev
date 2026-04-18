@@ -2,53 +2,13 @@ import { prisma } from '../../lib/prisma'
 
 
 /**
- * Core verification service with helper functions
+ * Core verification service with helper functions.
+ *
+ * Note: key allocation (TC-NNN, TP-NNN) lives in `backend/src/lib/verificationKey.ts`.
+ * The CI pipeline rejects any new usage of verificationService.generateTestCaseKey or
+ * verificationService.generateTestPlanKey — do not reintroduce them here.
  */
 export const verificationService = {
-  /**
-   * Generate unique test case key
-   */
-  async generateTestCaseKey(projectId: string): Promise<string> {
-    const existing = await prisma.verTestCase.findMany({
-      where: { projectId },
-      select: { key: true },
-    })
-
-    let maxNumber = 0
-    for (const tc of existing) {
-      const match = tc.key.match(/TC-(\d+)$/)
-      if (match) {
-        const num = parseInt(match[1], 10)
-        if (num > maxNumber) maxNumber = num
-      }
-    }
-
-    const nextNumber = maxNumber + 1
-    return `TC-${nextNumber.toString().padStart(3, '0')}`
-  },
-
-  /**
-   * Generate unique test plan key
-   */
-  async generateTestPlanKey(projectId: string): Promise<string> {
-    const existing = await prisma.verTestPlan.findMany({
-      where: { projectId },
-      select: { key: true },
-    })
-
-    let maxNumber = 0
-    for (const tp of existing) {
-      const match = tp.key.match(/TP-(\d+)$/)
-      if (match) {
-        const num = parseInt(match[1], 10)
-        if (num > maxNumber) maxNumber = num
-      }
-    }
-
-    const nextNumber = maxNumber + 1
-    return `TP-${nextNumber.toString().padStart(3, '0')}`
-  },
-
   /**
    * Create version snapshot of test case
    */

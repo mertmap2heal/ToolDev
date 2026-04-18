@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import DOMPurify from 'dompurify'
+import { sanitizeSvg } from '../../utils/richText'
 import {
   ChevronDown,
   ChevronRight,
@@ -167,14 +167,11 @@ export default function IconLibrary({
       if (icon.svg.startsWith('data:')) {
         return <img src={icon.svg} alt={icon.name} width={size} height={size} />
       }
-      // Replace currentColor then sanitize before rendering — prevents stored XSS (#28)
-      const coloredSvg = DOMPurify.sanitize(
-        icon.svg.replace(/currentColor/g, '#374151'),
-        { USE_PROFILES: { svg: true, svgFilters: true } }
-      )
+      // Replace currentColor with a specific color for better visibility
+      const coloredSvg = icon.svg.replace(/currentColor/g, '#374151')
       return (
         <div
-          dangerouslySetInnerHTML={{ __html: coloredSvg }}
+          dangerouslySetInnerHTML={{ __html: sanitizeSvg(coloredSvg) }}
           style={{ width: size, height: size }}
           className="[&>svg]:w-full [&>svg]:h-full dark:[&>svg]:stroke-gray-200"
         />
@@ -284,14 +281,11 @@ export function renderIconSvg(icon: IconDefinition, size: number = 24, color?: s
     if (icon.svg.startsWith('data:')) {
       return <img src={icon.svg} alt={icon.name} width={size} height={size} />
     }
-    // Replace currentColor then sanitize before rendering — prevents stored XSS (#28)
-    const coloredSvg = DOMPurify.sanitize(
-      icon.svg.replace(/currentColor/g, '#374151'),
-      { USE_PROFILES: { svg: true, svgFilters: true } }
-    )
+    // Replace currentColor with a specific color for better visibility
+    const coloredSvg = icon.svg.replace(/currentColor/g, '#374151')
     return (
       <div
-        dangerouslySetInnerHTML={{ __html: coloredSvg }}
+        dangerouslySetInnerHTML={{ __html: sanitizeSvg(coloredSvg) }}
         style={{ width: size, height: size }}
         className="[&>svg]:w-full [&>svg]:h-full"
       />

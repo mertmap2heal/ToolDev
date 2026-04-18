@@ -5,28 +5,26 @@ import jwt from 'jsonwebtoken'
 import { prisma } from '../lib/prisma'
 import type { AuthRequest } from '../middleware/auth.middleware'
 import { sendInviteEmail, sendForgotPasswordEmail } from '../services/email.service'
+import { isAdminUser, resolveIsAdmin } from '../lib/adminAuth'
 
 
-async function requireAdmin(req: AuthRequest, res: Response): Promise<{ email: string } | null> {
+async function requireAdmin(req: AuthRequest, res: Response): Promise<{ email: string; role: string | null } | null> {
   const currentUserId = req.userId
   if (!currentUserId) {
     res.status(401).json({ success: false, error: 'Unauthorized' })
     return null
   }
-  const currentUser = await prisma.user.findUnique({
-    where: { id: currentUserId },
-    select: { email: true },
-  })
-  if (!currentUser) {
-    res.status(401).json({ success: false, error: 'User not found' })
-    return null
-  }
-  const isAdmin = await resolveIsAdmin(currentUser.email)
-  if (!isAdmin) {
+  const admin = await isAdminUser(currentUserId)
+  if (!admin) {
+    const exists = await prisma.user.findUnique({ where: { id: currentUserId }, select: { id: true } })
+    if (!exists) {
+      res.status(401).json({ success: false, error: 'User not found' })
+      return null
+    }
     res.status(403).json({ success: false, error: 'Admin access required' })
     return null
   }
-  return currentUser
+  return admin
 }
 
 function randomTempPassword(length = 14): string {
@@ -117,8 +115,11 @@ export const register = async (req: Request, res: Response) => {
     })
 
     const token = generateToken(user.id)
-    const isAdmin = await resolveIsAdmin(user.email)
     const role = user.role ?? null
+    const isAdmin =
+      role === 'SUPERIOR_ADMIN' ||
+      role === 'COMPANY_ADMIN' ||
+      (await resolveIsAdmin(user.email))
     const isSuperiorAdmin = role === 'SUPERIOR_ADMIN'
 
     res.status(201).json({
@@ -174,8 +175,11 @@ export const login = async (req: Request, res: Response) => {
     })
 
     const token = generateToken(user.id)
-    const isAdmin = await resolveIsAdmin(user.email)
     const role = (user as { role?: string | null }).role ?? null
+    const isAdmin =
+      role === 'SUPERIOR_ADMIN' ||
+      role === 'COMPANY_ADMIN' ||
+      (await resolveIsAdmin(user.email))
     const isSuperiorAdmin = role === 'SUPERIOR_ADMIN'
 
     const mustChange = (user as { mustChangePasswordOnFirstLogin?: boolean }).mustChangePasswordOnFirstLogin ?? false
@@ -231,13 +235,12 @@ export const forgotPassword = async (req: Request, res: Response) => {
       return res.status(200).json({ success: true, message: FORGOT_PASSWORD_MESSAGE })
     }
 
+    // #107: send the reset email BEFORE committing the new password. If SMTP
+    // fails we must leave the user's existing credentials intact — otherwise
+    // the account is locked out of its current password while no reset email
+    // was delivered. The response stays a fixed generic message either way so
+    // attackers cannot use it to probe whether an account exists.
     const tempPassword = randomTempPassword(14)
-    const hashedPassword = await bcrypt.hash(tempPassword, 10)
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { password: hashedPassword, mustChangePasswordOnFirstLogin: true },
-    })
-
     try {
       await sendForgotPasswordEmail({
         to: recipient,
@@ -246,7 +249,14 @@ export const forgotPassword = async (req: Request, res: Response) => {
       })
     } catch (sendError) {
       console.error('Forgot password email error:', sendError)
+      return res.status(200).json({ success: true, message: FORGOT_PASSWORD_MESSAGE })
     }
+
+    const hashedPassword = await bcrypt.hash(tempPassword, 10)
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword, mustChangePasswordOnFirstLogin: true },
+    })
 
     return res.status(200).json({ success: true, message: FORGOT_PASSWORD_MESSAGE })
   } catch (error) {
@@ -407,18 +417,12 @@ export const resetUserPassword = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ success: false, error: 'Unauthorized' })
     }
 
-    const currentUser = await prisma.user.findUnique({
-      where: { id: currentUserId },
-      select: { email: true, role: true },
-    })
+    const currentUser = await isAdminUser(currentUserId)
     if (!currentUser) {
-      return res.status(401).json({ success: false, error: 'User not found' })
-    }
-
-    const isAdmin =
-      currentUser.role === 'SUPERIOR_ADMIN' ||
-      (await resolveIsAdmin(currentUser.email))
-    if (!isAdmin) {
+      const exists = await prisma.user.findUnique({ where: { id: currentUserId }, select: { id: true } })
+      if (!exists) {
+        return res.status(401).json({ success: false, error: 'User not found' })
+      }
       return res.status(403).json({ success: false, error: 'Admin access required' })
     }
 
@@ -546,10 +550,33 @@ export const createAdminUser = async (req: AuthRequest, res: Response) => {
   }
 }
 
-/** List users (id, name, email, inviteEmail, lastLoginAt) for invite dropdowns and admin. Requires authentication. */
-export const getUsers = async (_req: Request, res: Response) => {
+/**
+ * List users (id, name, email, inviteEmail, lastLoginAt) for invite dropdowns and admin.
+ * Scoped to the requesting user's company; platform admins (SUPERIOR_ADMIN, ADMIN_EMAILS,
+ * or first-user) see all users (#150).
+ */
+export const getUsers = async (req: AuthRequest, res: Response) => {
   try {
+    const userId = req.userId
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+    const requester = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, role: true, company: true },
+    })
+    if (!requester) {
+      return res.status(401).json({ success: false, error: 'User not found' })
+    }
+    const isPlatformAdmin =
+      requester.role === 'SUPERIOR_ADMIN' ||
+      requester.role === 'COMPANY_ADMIN' ||
+      (await resolveIsAdmin(requester.email))
+
+    const where = isPlatformAdmin ? {} : { company: requester.company ?? null }
+
     const users = await prisma.user.findMany({
+      where,
       select: {
         id: true,
         name: true,
@@ -690,20 +717,7 @@ export const sendUserInvite = async (req: AuthRequest, res: Response) => {
   }
 }
 
-/** Derive admin flag: comma-separated ADMIN_EMAILS env, or first user in DB (by createdAt). */
-async function resolveIsAdmin(email: string | null): Promise<boolean> {
-  if (!email) return false
-  const list = process.env.ADMIN_EMAILS
-  if (list) {
-    const emails = list.split(',').map((e) => e.trim().toLowerCase())
-    return emails.includes(email.toLowerCase())
-  }
-  const first = await prisma.user.findFirst({
-    orderBy: { createdAt: 'asc' },
-    select: { email: true },
-  })
-  return first?.email?.toLowerCase() === email.toLowerCase()
-}
+// resolveIsAdmin moved to backend/src/lib/adminAuth.ts (#151)
 
 function generateToken(userId: string): string {
   const secret = process.env.JWT_SECRET

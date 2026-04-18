@@ -1,7 +1,9 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
+import { allocateChangeRequestId } from '../lib/crId'
 import { linkageAuditService } from '../services/linkageAudit.service'
+import { validateUpload, UploadValidationError } from '../lib/uploadValidation'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -47,10 +49,6 @@ export const createChangeRequest = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    // Generate a simple CR ID
-    const count = await prisma.changeRequest.count({ where: { projectId } })
-    const crId = `CR-${(count + 1).toString().padStart(4, '0')}`
-
     // Auto-populate requestedBy if not provided
     let finalRequestedBy = requestedBy
     if (!finalRequestedBy && req.userId) {
@@ -71,44 +69,51 @@ export const createChangeRequest = async (req: AuthRequest, res: Response) => {
       impactedRequirementIds.forEach((id: string) => requirementIdsToLink.add(id))
     }
 
-    const changeRequest = await prisma.changeRequest.create({
-      data: {
-        projectId,
-        crId,
-        title,
-        description,
-        sourceType,
-        sourceId,
-        priority: priority || 'medium',
-        requestedBy: finalRequestedBy || 'system',
-        owner: owner || null,
-        risk: risk || null,
-        effort: effort || null,
-        justification: justification || null,
-        createdBy: req.userId || 'system',
-        updatedBy: req.userId || 'system',
-        requirementLinks: requirementIdsToLink.size > 0 ? {
-          create: Array.from(requirementIdsToLink).map((reqId) => ({
-            requirementId: reqId,
-            relationshipType: reqId === sourceId ? 'originates_from' : 'relates_to',
-            createdBy: req.userId || null,
-          }))
-        } : undefined,
-      },
-      include: {
-        attachments: true,
-        requirementLinks: {
-          include: {
-            requirement: {
-              select: {
-                id: true,
-                requirementId: true,
-                title: true,
+    // Allocate the CR ID atomically and create the row inside the same
+    // transaction. pg_advisory_xact_lock in allocateChangeRequestId serialises
+    // concurrent creates for this project so every insert receives a unique
+    // CR-NNNN — no retry loop needed (issue #162).
+    const changeRequest = await prisma.$transaction(async (tx) => {
+      const crId = await allocateChangeRequestId(tx, projectId)
+      return tx.changeRequest.create({
+        data: {
+          projectId,
+          crId,
+          title,
+          description,
+          sourceType,
+          sourceId,
+          priority: priority || 'medium',
+          requestedBy: finalRequestedBy || 'system',
+          owner: owner || null,
+          risk: risk || null,
+          effort: effort || null,
+          justification: justification || null,
+          createdBy: req.userId || 'system',
+          updatedBy: req.userId || 'system',
+          requirementLinks: requirementIdsToLink.size > 0 ? {
+            create: Array.from(requirementIdsToLink).map((reqId) => ({
+              requirementId: reqId,
+              relationshipType: reqId === sourceId ? 'originates_from' : 'relates_to',
+              createdBy: req.userId || null,
+            }))
+          } : undefined,
+        },
+        include: {
+          attachments: true,
+          requirementLinks: {
+            include: {
+              requirement: {
+                select: {
+                  id: true,
+                  requirementId: true,
+                  title: true,
+                }
               }
             }
-          }
+          },
         },
-      },
+      })
     })
 
     // Log linkage for Requirement version history
@@ -348,19 +353,35 @@ export const deleteChangeRequest = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    // Delete associated files
+    // #126: Collect file paths BEFORE the DB delete so we can unlink them
+    // afterwards. The DB delete must run first — if we unlink files up front
+    // and the subsequent DB delete throws, we lose the files forever while
+    // the CR row and its attachment rows still reference URLs that no longer
+    // exist on disk. Ordering DB-then-disk means a mid-delete failure leaves
+    // the record + files intact for a retry.
+    const filePathsToUnlink: string[] = []
     for (const attachment of changeRequest.attachments) {
       if (attachment.fileUrl && !attachment.fileUrl.startsWith('data:')) {
-        const filePath = path.join(uploadsDir, path.basename(attachment.fileUrl))
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath)
-        }
+        filePathsToUnlink.push(path.join(uploadsDir, path.basename(attachment.fileUrl)))
       }
     }
 
     await prisma.changeRequest.delete({
       where: { id },
     })
+
+    // DB commit succeeded — best-effort file cleanup. Any unlink failure
+    // leaves an orphan file on disk (recoverable by ops) but does NOT
+    // roll back the DB delete, since the row is already gone.
+    for (const filePath of filePathsToUnlink) {
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath)
+        }
+      } catch (unlinkErr) {
+        console.error('Failed to unlink change-request attachment after delete:', filePath, unlinkErr)
+      }
+    }
 
     res.json({
       success: true,
@@ -402,46 +423,30 @@ export const uploadAttachment = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    // Handle base64 file data
-    let fileUrl: string
-    let fileSize: number
-
-    if (fileData.startsWith('data:')) {
-      // Data URL format: data:mimeType;base64,data
-      const base64Data = fileData.split(',')[1]
-      const buffer = Buffer.from(base64Data, 'base64')
-      fileSize = buffer.length
-
-      // For files larger than 1MB, save to filesystem
-      if (fileSize > 1024 * 1024) {
-        const fileExtension = path.extname(fileName)
-        const uniqueFileName = `${changeRequestId}-${Date.now()}${fileExtension}`
-        const filePath = path.join(uploadsDir, uniqueFileName)
-        fs.writeFileSync(filePath, buffer)
-        fileUrl = `/uploads/change-requests/${uniqueFileName}`
-      } else {
-        // Store as data URL for small files
-        fileUrl = fileData
+    // Allowlist MIME type, cap size, generate safe filename with server-derived
+    // extension (no client-controlled filename reaches disk).
+    let validated
+    try {
+      validated = validateUpload({ fileData, fileName, mimeType })
+    } catch (e) {
+      if (e instanceof UploadValidationError) {
+        return res.status(e.status).json({ success: false, error: e.message })
       }
-    } else {
-      // Assume it's already base64 without data URL prefix
-      const buffer = Buffer.from(fileData, 'base64')
-      fileSize = buffer.length
-      const fileExtension = path.extname(fileName)
-      const uniqueFileName = `${changeRequestId}-${Date.now()}${fileExtension}`
-      const filePath = path.join(uploadsDir, uniqueFileName)
-      fs.writeFileSync(filePath, buffer)
-      fileUrl = `/uploads/change-requests/${uniqueFileName}`
+      throw e
     }
+
+    const filePath = path.join(uploadsDir, validated.uniqueFileName)
+    fs.writeFileSync(filePath, validated.buffer)
+    const fileUrl = `/uploads/change-requests/${validated.uniqueFileName}`
 
     const attachment = await prisma.changeRequestAttachment.create({
       data: {
         changeRequestId,
         projectId,
-        fileName,
+        fileName: validated.safeDisplayName,
         fileUrl,
-        fileSize,
-        mimeType: mimeType || 'application/octet-stream',
+        fileSize: validated.fileSize,
+        mimeType: validated.mimeType,
         uploadedBy: req.userId || null,
         uploadedByName: null, // Can be populated from user lookup if needed
       },

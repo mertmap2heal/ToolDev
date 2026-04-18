@@ -150,6 +150,38 @@ export default function ChangeRequestsPage() {
     })
   }, [changeRequests, searchQuery, statusFilter, priorityFilter, sortField, sortOrder])
 
+  // CSV export (#125). Dumps the currently-filtered view rather than the
+  // full table so filters double as an export scope. CR-style fields are
+  // quoted; embedded quotes are escaped per RFC 4180.
+  const handleExport = () => {
+    if (filteredChangeRequests.length === 0) return
+    const escape = (v: unknown): string => {
+      const s = v == null ? '' : String(v)
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const header = ['CR ID', 'Title', 'Status', 'Priority', 'Requested By', 'Owner', 'Source Type', 'Updated']
+    const lines = [header.join(',')]
+    for (const cr of filteredChangeRequests) {
+      const updatedAt = isValid(new Date(cr.updatedAt))
+        ? format(new Date(cr.updatedAt), 'yyyy-MM-dd')
+        : ''
+      lines.push(
+        [cr.crId ?? '', cr.title, cr.status, cr.priority, cr.requestedBy, cr.owner ?? '', cr.sourceType, updatedAt]
+          .map(escape)
+          .join(','),
+      )
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `change-requests-${format(new Date(), 'yyyyMMdd-HHmmss')}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   // Handlers
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -249,7 +281,12 @@ export default function ChangeRequestsPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+              <button
+                onClick={handleExport}
+                disabled={filteredChangeRequests.length === 0}
+                title={filteredChangeRequests.length === 0 ? 'No change requests to export' : 'Export the current view as CSV'}
+                className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 <Download size={16} />
                 Export
               </button>

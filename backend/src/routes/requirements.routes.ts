@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
+import { requireProjectMember } from '../middleware/requireProjectMember.middleware'
+import { requireProjectOwnerOrAdmin } from '../middleware/requireProjectOwnerOrAdmin.middleware'
 import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import {
   getRequirements,
@@ -38,6 +40,7 @@ const router = Router()
 
 router.use(authenticateToken)
 router.param('projectId', projectIdParam)
+router.use('/:projectId', requireProjectMember)
 
 // Custom Requirement Types - MUST be defined before /:projectId/:requirementId
 router.get('/:projectId/custom-types', getCustomRequirementTypes)
@@ -76,11 +79,6 @@ router.post('/:projectId/bulk-import', bulkImportRequirements)
 router.post('/:projectId/:requirementId/comments', createRequirementComment)
 router.delete('/:projectId/comments/:commentId', deleteRequirementComment)
 
-// Custom Requirement Types (Moved to top)
-
-// Migration endpoint
-router.post('/:projectId/migrate-category-to-type', migrateCategoryToRequirementType)
-
 // Component assignment (drag-and-drop)
 router.patch('/:projectId/:requirementId/component', updateRequirementComponent)
 
@@ -93,6 +91,7 @@ router.post(
 
 router.delete(
   '/:projectId/:requirementId/permanent',
+  requireProjectOwnerOrAdmin,
   permanentDeleteRequirement
 )
 

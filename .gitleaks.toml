@@ -1,0 +1,52 @@
+# gitleaks config for this repository (issue #173).
+#
+# Extends the default gitleaks ruleset (AWS keys, JWT secrets, PEM keys,
+# high-entropy generic secrets, etc.) and adds project-specific rules.
+#
+# Allowlist entries below document historical credential leaks that are
+# tracked as separate follow-up work - they exist on master today and
+# cannot be removed in the #173 fix without scope creep. Every allowlist
+# entry must reference its follow-up issue or TODO so that the list can
+# be whittled down over time.
+
+[extend]
+useDefault = true
+
+# Known test-account password from the historical #103 leak. Keeps the
+# pattern pinned as a custom rule so gitleaks flags any reintroduction
+# anywhere outside the explicit allowlist below.
+[[rules]]
+id = "project-leaked-test-password"
+description = "Historical e2e test account password (see issue #173)"
+regex = '''mandle1998'''
+tags = ["password", "test-account"]
+
+[[rules]]
+id = "project-leaked-seed-password"
+description = "Historical seed-users.ts test password (see issue #173 follow-up)"
+regex = '''Mmcf_6378'''
+tags = ["password", "test-account"]
+
+[allowlist]
+description = "Known-leak allowlist - follow-up cleanup tracked separately"
+paths = [
+  # Dev-only seed script that *establishes* the leaked accounts. Rotating
+  # the password and moving the seed to env vars is tracked as a separate
+  # follow-up from #173.
+  '''backend/src/scripts/seed-users\.ts''',
+  # PowerShell launcher prints the seeded credentials to stdout. Same
+  # follow-up as seed-users.ts.
+  '''start\.ps1''',
+  # Debug helper scripts that reference the leaked usernames (not the
+  # passwords). Referenced only to aid local debugging.
+  '''backend/register-users\.ts''',
+  '''backend/check-user\.ts''',
+  '''backend/src/scripts/check-password\.ts''',
+  '''backend/src/scripts/check_user_debug\.ts''',
+  '''backend/src/scripts/reassign-project-owner\.ts''',
+  # The guard test itself lists the forbidden literals as data so that it
+  # can detect regressions.
+  '''backend/src/__tests__/security/credentialLeak\.test\.ts''',
+  # gitleaks config has the patterns as rule regexes by design.
+  '''\.gitleaks\.toml''',
+]

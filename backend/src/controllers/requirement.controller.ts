@@ -1,4 +1,5 @@
 import { Response } from 'express'
+import { Prisma } from '@prisma/client'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
 import { createVersionSnapshot } from './version.controller'
@@ -114,64 +115,20 @@ const checkLock = (requirement: any, userId: string | undefined): boolean => {
 
 
 // Helper function to generate requirement ID based on classification
-async function generateRequirementId(
-  projectId: string
-): Promise<string> {
-  // Always use the generic prefix 'REQ' regardless of type
-  const prefix = 'REQ'
-
-  // Find the highest number for this prefix
-  // Fetch all requirements and filter in JavaScript since requirementId is nullable
-  const allRequirements = await prisma.requirement.findMany({
-    where: {
-      projectId,
-    },
-    select: {
-      requirementId: true,
-    },
-  })
-
-  // Filter requirements that start with the prefix followed by dash and number
-  // Format: "PREFIX-001", "PREFIX-002", etc.
-  // Also handle old format without REQ- prefix for transition compatibility
-  const existingRequirements = allRequirements.filter(
-    (req) => {
-      if (!req.requirementId) return false
-      // Escape special regex characters in prefix
-      const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      // Match new format: "REQ-FUNC-001" or old format: "FUNC-001" (for transition)
-      // If prefix starts with "REQ-", also check for old format without "REQ-"
-      let prefixPattern: RegExp
-      if (prefix.startsWith('REQ-')) {
-        // Extract the suffix after "REQ-" (e.g., "FUNC" from "REQ-FUNC")
-        const suffix = prefix.substring(4) // Remove "REQ-"
-        const escapedSuffix = suffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        // Match both new format (REQ-FUNC-001) and old format (FUNC-001)
-        prefixPattern = new RegExp(`^(?:${escapedPrefix}|${escapedSuffix})-\\d+$`)
-      } else {
-        // For non-REQ prefixes (like just "REQ"), match exact format
-        prefixPattern = new RegExp(`^${escapedPrefix}-\\d+$`)
-      }
-      return prefixPattern.test(req.requirementId)
-    }
-  )
-
-  let maxNumber = 0
-  for (const req of existingRequirements) {
-    if (req.requirementId) {
-      // Extract number after the dash (e.g., "FUNC-001" -> 1)
-      const match = req.requirementId.match(/-(\d+)$/)
-      if (match) {
-        const num = parseInt(match[1], 10)
-        if (num > maxNumber) {
-          maxNumber = num
-        }
-      }
-    }
-  }
-
-  const nextNumber = maxNumber + 1
-  return `${prefix}-${nextNumber.toString().padStart(3, '0')}`
+async function generateRequirementId(projectId: string): Promise<string> {
+  // Single O(1) query — avoids the full-table-scan + JS iteration that caused the
+  // race condition documented in GitHub issue #91.
+  const rows = await prisma.$queryRaw<Array<{ max: number | null }>>`
+    SELECT MAX(
+      CAST(SUBSTRING("requirementId" FROM 'REQ-([0-9]+)$') AS INTEGER)
+    ) AS max
+    FROM "Requirement"
+    WHERE "projectId" = ${projectId}
+      AND "requirementId" ~ '^REQ-[0-9]+$'
+  `
+  const raw = rows[0]?.max
+  const current = raw == null ? 0 : (typeof raw === 'bigint' ? Number(raw) : Number(raw))
+  return `REQ-${(current + 1).toString().padStart(3, '0')}`
 }
 
 // Helper function to check for circular references
@@ -1269,33 +1226,27 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    // Generate requirement ID if not provided
-    // Uses requirementType (classification) as primary, category as fallback
+    // Validate user-provided requirementId for conflicts before proceeding
     let finalRequirementId = providedRequirementId
-    if (!finalRequirementId) {
-      finalRequirementId = await generateRequirementId(projectId)
-    }
-
-    // Check if requirementId already exists in this project
-    const existingRequirement = await prisma.requirement.findFirst({
-      where: {
-        projectId,
-        requirementId: finalRequirementId,
-      },
-    })
-
-    if (existingRequirement) {
-      // Check if it's soft deleted
-      if (existingRequirement.deletedAt) {
+    if (finalRequirementId) {
+      const existingRequirement = await prisma.requirement.findFirst({
+        where: { projectId, requirementId: finalRequirementId },
+      })
+      if (existingRequirement) {
+        if (existingRequirement.deletedAt) {
+          return res.status(400).json({
+            success: false,
+            error: `This Requirement ID "${finalRequirementId}" is reserved until the deleted item is restored or permanently deleted.`,
+          })
+        }
         return res.status(400).json({
           success: false,
-          error: `This Requirement ID "${finalRequirementId}" is reserved until the deleted item is restored or permanently deleted.`,
+          error: `Requirement ID "${finalRequirementId}" already exists in this project`,
         })
       }
-      return res.status(400).json({
-        success: false,
-        error: `Requirement ID "${finalRequirementId}" already exists in this project`,
-      })
+    } else {
+      // Auto-generate — use SQL MAX for O(1) read; retry on the rare concurrent collision
+      finalRequirementId = await generateRequirementId(projectId)
     }
 
     // Validate parent if provided
@@ -1318,47 +1269,59 @@ export const createRequirement = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const requirement = await prisma.requirement.create({
-      data: {
-        projectId,
-        requirementId: finalRequirementId,
-        title,
-        description,
-        parentId: parentId || null,
-        priority: priority || 'medium',
-        status: status || 'draft',
-        stage: stage || '',
-        owner: owner || null,
-        verificationMethod: verificationMethod || null,
-        acceptanceCriteria: acceptanceCriteria || null,
-        source: source || null,
-        category: category || null,
-        relatedDocuments: relatedDocuments || [],
-        tags: tags || [],
-        requirementType: requirementType || null,
-        requirementLevel: requirementLevel || null,
-        risk: risk || null,
-        complexity: complexity || null,
-        rationale: rationale || null,
-        linkedMocCode: linkedMocCode ? parseInt(linkedMocCode, 10) : null,
-        componentId: componentId || null,
-        lifecycleId: lifecycleId || null,
-        statusId: statusId || null,
-        thresholdValue: thresholdValue || null,
-        objectiveValue: objectiveValue || null,
-        customAttributes: customAttributes || null,
-      },
-      include: {
-        parent: {
-          select: {
-            id: true,
-            requirementId: true,
-            title: true,
+    // Retry loop handles the rare concurrent-create collision on the auto-generated ID.
+    // User-provided IDs are not retried (collision is a user error, not a race).
+    let requirement: Awaited<ReturnType<typeof prisma.requirement.create>> | null = null
+    let lastIdError: unknown
+    const maxAttempts = providedRequirementId ? 1 : 5
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      if (attempt > 0) finalRequirementId = await generateRequirementId(projectId)
+      try {
+        requirement = await prisma.requirement.create({
+          data: {
+            projectId,
+            requirementId: finalRequirementId,
+            title,
+            description,
+            parentId: parentId || null,
+            priority: priority || 'medium',
+            status: status || 'draft',
+            stage: stage || '',
+            owner: owner || null,
+            verificationMethod: verificationMethod || null,
+            acceptanceCriteria: acceptanceCriteria || null,
+            source: source || null,
+            category: category || null,
+            relatedDocuments: relatedDocuments || [],
+            tags: tags || [],
+            requirementType: requirementType || null,
+            requirementLevel: requirementLevel || null,
+            risk: risk || null,
+            complexity: complexity || null,
+            rationale: rationale || null,
+            linkedMocCode: linkedMocCode ? parseInt(linkedMocCode, 10) : null,
+            componentId: componentId || null,
+            lifecycleId: lifecycleId || null,
+            statusId: statusId || null,
+            thresholdValue: thresholdValue || null,
+            objectiveValue: objectiveValue || null,
+            customAttributes: customAttributes || null,
           },
-        },
-        moc: true,
-      },
-    })
+          include: {
+            parent: { select: { id: true, requirementId: true, title: true } },
+            moc: true,
+          },
+        })
+        break
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+          lastIdError = e
+          continue
+        }
+        throw e
+      }
+    }
+    if (!requirement) throw lastIdError ?? new Error('Could not allocate a unique requirement ID')
 
     // Create additional trace links if provided
     if (links && Array.isArray(links) && links.length > 0) {
@@ -2574,6 +2537,21 @@ export const deleteRequirementComment = async (req: AuthRequest, res: Response) 
       })
     }
 
+    // Only the comment author or an admin may delete
+    if (comment.authorId && comment.authorId !== req.userId) {
+      const actor = await prisma.user.findUnique({
+        where: { id: req.userId! },
+        select: { role: true },
+      })
+      const isAdmin = actor?.role === 'SUPERIOR_ADMIN' || actor?.role === 'COMPANY_ADMIN'
+      if (!isAdmin) {
+        return res.status(403).json({
+          success: false,
+          error: 'You can only delete your own comments',
+        })
+      }
+    }
+
     await linkageAuditService.log({
       projectId,
       entityType: 'REQUIREMENT',
@@ -3444,14 +3422,24 @@ export const getRequirementsDashboard = async (req: AuthRequest, res: Response) 
 
     const baseWhere = { projectId, deletedAt: null }
 
+    // #94: replace the in-memory trace-link scan with a single SQL aggregate.
+    // The previous implementation loaded every TraceLink row into Node heap
+    // to derive requirementIdsWithTestLink — unbounded by project size and
+    // guaranteed to OOM on large certification projects.
+    // `test_case` / `testcase` variants are both accepted because historic
+    // rows used either spelling; the normalisation is applied inside SQL
+    // so we do not need a post-query filter step.
+    //
+    // Suspect-link count is likewise replaced with a COUNT query — the
+    // dashboard only used .length on the original array.
     const [
       totalRequirements,
       reviewStatusGroups,
       verificationStatusGroups,
       baselineCount,
       recentBaselines,
-      allLinks,
-      suspectLinks,
+      coverageRows,
+      suspectCountRows,
     ] = await Promise.all([
       prisma.requirement.count({ where: baseWhere }),
       prisma.requirement.groupBy({
@@ -3471,25 +3459,30 @@ export const getRequirementsDashboard = async (req: AuthRequest, res: Response) 
         take: 5,
         select: { id: true, name: true, createdAt: true, status: true },
       }),
-      traceabilityService.getTraceLinks(projectId),
-      traceabilityService.getSuspectLinks(projectId),
+      prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(DISTINCT
+          CASE
+            WHEN lower(replace(tl."sourceType", '-', '_')) = 'requirement'
+             AND lower(replace(tl."targetType", '-', '_')) IN ('test_case', 'testcase')
+              THEN tl."sourceId"
+            WHEN lower(replace(tl."targetType", '-', '_')) = 'requirement'
+             AND lower(replace(tl."sourceType", '-', '_')) IN ('test_case', 'testcase')
+              THEN tl."targetId"
+          END
+        ) AS count
+        FROM "TraceLink" tl
+        WHERE tl."projectId" = ${projectId}
+      `,
+      prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*)::bigint AS count
+        FROM "TraceLink" tl
+        WHERE tl."projectId" = ${projectId}
+          AND tl."isSuspect" = TRUE
+      `,
     ])
 
-    const normType = (t: string) => (t ?? '').toLowerCase().replace(/-/g, '_')
-    const isTestCase = (t: string) => {
-      const n = normType(t)
-      return n === 'test_case' || n === 'testcase'
-    }
-    const requirementIdsWithTestLink = new Set<string>()
-    for (const link of allLinks) {
-      const st = (link as any).sourceType
-      const tt = (link as any).targetType
-      const sid = (link as any).sourceId
-      const tid = (link as any).targetId
-      if (st === 'requirement' && isTestCase(tt)) requirementIdsWithTestLink.add(sid)
-      if (tt === 'requirement' && isTestCase(st)) requirementIdsWithTestLink.add(tid)
-    }
-    const totalWithTestLink = requirementIdsWithTestLink.size
+    const totalWithTestLink = Number(coverageRows[0]?.count ?? 0)
+    const suspectLinksCount = Number(suspectCountRows[0]?.count ?? 0)
     const coveragePercent =
       totalRequirements > 0 ? Math.round((totalWithTestLink / totalRequirements) * 100) : 0
 
@@ -3513,7 +3506,7 @@ export const getRequirementsDashboard = async (req: AuthRequest, res: Response) 
         coveragePercent,
         coverageCount: totalWithTestLink,
         totalWithTestLink,
-        suspectLinksCount: suspectLinks.length,
+        suspectLinksCount,
         baselineCount,
         recentBaselines: recentBaselines.map((b) => ({
           id: b.id,

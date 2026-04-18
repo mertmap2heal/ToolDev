@@ -73,15 +73,23 @@ export const createTestResult = async (req: AuthRequest, res: Response) => {
       linkedTestPlanId,
     } = req.body
 
-    if (!title || !fileName || !fileData) {
+    if (!title || !fileName || !fileData || !mimeType) {
       return res.status(400).json({
         success: false,
-        error: 'title, fileName, and fileData are required',
+        error: 'title, fileName, fileData, and mimeType are required',
       })
     }
 
-    // Handle file upload
-    const { storageRef, fileSize, checksum } = await testResultService.handleFileUpload(fileData, fileName)
+    // Handle file upload — validates MIME + size (#131,#139)
+    let storageRef: string, fileSize: number, checksum: string
+    try {
+      ;({ storageRef, fileSize, checksum } = await testResultService.handleFileUpload(fileData, fileName, mimeType))
+    } catch (e: any) {
+      if (e?.name === 'UploadValidationError' || typeof e?.status === 'number') {
+        return res.status(e.status || 400).json({ success: false, error: e.message })
+      }
+      throw e
+    }
 
     // Create test result
     const testResult = await prisma.verTestResult.create({

@@ -7,6 +7,21 @@ on:
     branches: [ master, dev ]
 
 jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Blocking secret scan (issue #173). Fails the build if any known
+      # credential pattern (AWS keys, JWT secrets, high-entropy strings,
+      # the previously leaked test password, etc.) is found in any tracked
+      # file or in the diff of this PR.
+      - name: gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -28,7 +43,31 @@ jobs:
         run: cd frontend && npm run lint
       - name: Lint backend
         run: cd backend && npm run build
-        continue-on-error: true  # ~60 pre-existing TypeScript errors from merged branches; tracked separately
+
+      - name: Guard against body.signerId / body.userId in certification controllers (#163)
+        run: |
+          if grep -RnE "(req\\.)?body\\.(signerId|userId)" backend/src/controllers/certification/; then
+            echo "ERROR: body.signerId / body.userId found in certification controllers."
+            echo "Signer identity must come from req.user only (issue #163)."
+            exit 1
+          fi
+          echo "OK: certification controllers do not read signer identity from request body."
+
+      - name: Guard against unsanitized dangerouslySetInnerHTML (#169)
+        run: |
+          set -e
+          unsanitized=$(grep -rn "dangerouslySetInnerHTML" frontend/src || true)
+          if [ -z "$unsanitized" ]; then
+            exit 0
+          fi
+          fail=0
+          while IFS= read -r line; do
+            case "$line" in
+              *sanitizeHtml*|*sanitizeSvg*) ;;
+              *) echo "::error::unsanitized dangerouslySetInnerHTML (issue #169): $line"; fail=1 ;;
+            esac
+          done <<< "$unsanitized"
+          exit $fail
 
   test:
     runs-on: ubuntu-latest
@@ -69,6 +108,265 @@ jobs:
         env:
           DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
           JWT_SECRET: ci-test-secret
+
+      - name: Verify project-scoped routers declare requireProjectMember (#90)
+        run: |
+          set -e
+          missing=0
+          for f in \
+            backend/src/routes/requirements.routes.ts \
+            backend/src/routes/requirementReviews.routes.ts \
+            backend/src/routes/requirementValidation.routes.ts \
+            backend/src/routes/requirementsViewPreferences.routes.ts; do
+            if ! grep -q "requireProjectMember" "$f"; then
+              echo "::error file=$f::missing requireProjectMember middleware (see issue #90)"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Verify upload handlers enforce MIME allowlist + size guard (#161, #27)
+        run: |
+          set -e
+          missing=0
+          for f in \
+            backend/src/controllers/issue.controller.ts; do
+            if ! grep -q "ALLOWED_MIME_TYPES" "$f"; then
+              echo "::error file=$f::upload handler missing MIME allowlist (see issue #161)"
+              missing=1
+            fi
+            if ! grep -q "SAFE_FILENAME_RE" "$f"; then
+              echo "::error file=$f::upload handler missing safe-filename regex (see issue #161)"
+              missing=1
+            fi
+            if ! grep -q "MAX_BASE64_CHARS" "$f"; then
+              echo "::error file=$f::upload handler missing pre-decode size guard (see issue #161)"
+              missing=1
+            fi
+            if grep -qE "path\.extname\(fileName\)" "$f"; then
+              echo "::error file=$f::upload handler still trusts path.extname(fileName) - double-extension bypass (see issue #161)"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Guard against unconditional localhost CORS (#149)
+        run: |
+          set -e
+          if grep -nE "^\s*'http://localhost:3000'" backend/src/server.ts | grep -v "NODE_ENV"; then
+            echo "::error file=backend/src/server.ts::localhost:3000 must be gated on NODE_ENV !== 'production' (issue #149)"
+            exit 1
+          fi
+          if ! grep -q "buildCorsOrigins" backend/src/server.ts; then
+            echo "::error file=backend/src/server.ts::expected buildCorsOrigins env-driven allowlist (issue #149)"
+            exit 1
+          fi
+
+      - name: Verify Socket.IO enforces JWT auth on handshake (#170)
+        run: |
+          set -e
+          rtfile=backend/src/realtime/realtime.ts
+          if ! grep -q "io.use" "$rtfile"; then
+            echo "::error file=$rtfile::Socket.IO io.use() middleware missing (see issue #170)"
+            exit 1
+          fi
+          if ! grep -q "verifySocketToken" "$rtfile"; then
+            echo "::error file=$rtfile::verifySocketToken not referenced (see issue #170)"
+            exit 1
+          fi
+          if grep -qE "origin:\s*'\*'" "$rtfile"; then
+            echo "::error file=$rtfile::Socket.IO CORS origin is wide-open '*' (see issue #170)"
+            exit 1
+          fi
+          if grep -q "handshake.query.admin" "$rtfile"; then
+            echo "::error file=$rtfile::admin room joined via handshake.query.admin — must gate on verified role (see issue #170)"
+            exit 1
+          fi
+
+      - name: Run change-request concurrency regression suite (#162)
+        run: cd backend && npx vitest run src/__tests__/changeRequest.key.test.ts
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret
+
+      - name: Run lifecycle control tower IDOR regression (#164)
+        run: cd backend && npx vitest run src/__tests__/lifecycle.controlTower.test.ts
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret
+
+      - name: Verify change-request controller uses atomic CR-ID allocator (#162)
+        run: |
+          set -e
+          ctrl=backend/src/controllers/changeRequest.controller.ts
+          if ! grep -q "allocateChangeRequestId" "$ctrl"; then
+            echo "::error file=$ctrl::allocateChangeRequestId not referenced (see issue #162)"
+            exit 1
+          fi
+          if grep -q "changeRequest.count" "$ctrl"; then
+            echo "::error file=$ctrl::racy 'changeRequest.count' still used for CR-ID generation (see issue #162)"
+            exit 1
+          fi
+          if ! grep -q "pg_advisory_xact_lock" backend/src/lib/crId.ts; then
+            echo "::error file=backend/src/lib/crId.ts::allocator is missing pg_advisory_xact_lock (see issue #162)"
+            exit 1
+          fi
+
+      - name: Verify lifecycle control tower enforces project membership (#164)
+        run: |
+          set -e
+          f=backend/src/routes/lifecycle.routes.ts
+          if ! grep -q "requireProjectMember" "$f"; then
+            echo "::error file=$f::missing requireProjectMember middleware (see issue #164)"
+            exit 1
+          fi
+          if ! grep -q "projectIdParam" "$f"; then
+            echo "::error file=$f::missing projectIdParam resolver (see issue #164)"
+            exit 1
+          fi
+          if grep -q "req.query.projectId" "$f"; then
+            echo "::error file=$f::projectId must not be read from req.query (see issue #164)"
+            exit 1
+          fi
+          if grep -q "?? 'default'" "$f"; then
+            echo "::error file=$f::'default' projectId fallback must be removed (see issue #164)"
+            exit 1
+          fi
+
+      - name: Verify admin user-role module files exist (#166)
+        run: |
+          set -euo pipefail
+          test -f backend/src/services/adminUserRole.service.ts
+          test -f backend/src/controllers/adminUserRole.controller.ts
+          test -f backend/src/routes/adminUserRole.routes.ts
+          test -f backend/src/__tests__/adminUserRole.test.ts
+          grep -q "adminUserRole" backend/src/routes/index.ts
+          grep -q "model UserAdminRole" backend/prisma/schema.prisma
+
+      - name: Run admin user-role integration tests (#166)
+        run: cd backend && npx vitest run src/__tests__/adminUserRole.test.ts
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret
+
+      - name: Guard against unsafe verification upload regressions (#131,#139)
+        run: |
+          set -e
+          missing=0
+          for f in \
+            backend/src/services/verification/testResult.service.ts \
+            backend/src/services/verification/customSection.service.ts \
+            backend/src/controllers/verification/setup.controller.ts \
+            backend/src/controllers/verification/testRun.controller.ts; do
+            if ! grep -q "validateUpload\|validateMulterUpload" "$f"; then
+              echo "::error file=$f::must call validateUpload (issue #131,#139)"
+              missing=1
+            fi
+            if grep -n "path.extname(fileName)\|path.extname(name)" "$f" >/dev/null; then
+              echo "::error file=$f::do not derive extension from client-supplied filename (#131)"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Guard verification key atomicity + cascade (#135,#136,#137)
+        run: |
+          set -e
+          if grep -n "verificationService\.generateTestCaseKey\|verificationService\.generateTestPlanKey" \
+              backend/src/controllers/verification/testCase.controller.ts \
+              backend/src/controllers/verification/testPlan.controller.ts; then
+            echo "::error::generateTestCaseKey/generateTestPlanKey must not be used directly (issue #135)"
+            exit 1
+          fi
+          for f in \
+            backend/src/controllers/verification/testCase.controller.ts \
+            backend/src/controllers/verification/testPlan.controller.ts; do
+            if ! grep -q "allocateTestCaseKey\|allocateTestPlanKey" "$f"; then
+              echo "::error file=$f::must use atomic allocator from lib/verificationKey (issue #135)"
+              exit 1
+            fi
+          done
+          if ! grep -A 30 "deleteTestCase = " backend/src/controllers/verification/testCase.controller.ts | grep -q 'prisma\.\$transaction'; then
+            echo "::error file=backend/src/controllers/verification/testCase.controller.ts::deleteTestCase must be wrapped in prisma.\$transaction (issue #136)"
+            exit 1
+          fi
+
+      - name: Guard against duplicated resolveIsAdmin + auth console.log (#146,#151)
+        run: |
+          set -e
+          if grep -n "async function resolveIsAdmin" backend/src/middleware/auth.middleware.ts backend/src/controllers/auth.controller.ts; then
+            echo "::error::resolveIsAdmin must only be defined in backend/src/lib/adminAuth.ts (issue #151)"
+            exit 1
+          fi
+          if grep -n "console.log" backend/src/middleware/auth.middleware.ts; then
+            echo "::error file=backend/src/middleware/auth.middleware.ts::remove console.log (issue #146)"
+            exit 1
+          fi
+
+      - name: Verify projects.routes.ts enforces owner/admin + membership (#152,#153,#154)
+        run: |
+          set -e
+          f=backend/src/routes/projects.routes.ts
+          fail=0
+          if ! grep -qE "router\.put\('/:id'.*requireProjectOwnerOrAdmin.*updateProject" "$f"; then
+            echo "::error file=$f::PUT /:id must use requireProjectOwnerOrAdmin (see #152)"
+            fail=1
+          fi
+          if ! grep -qE "router\.delete\('/:id'.*requireProjectOwnerOrAdmin.*deleteProject" "$f"; then
+            echo "::error file=$f::DELETE /:id must use requireProjectOwnerOrAdmin (see #152)"
+            fail=1
+          fi
+          for path in analytics members audit-logs; do
+            if ! grep -qE "router\.get\('/:id/$path'.*requireProjectMember" "$f"; then
+              echo "::error file=$f::GET /:id/$path must use requireProjectMember (see #153)"
+              fail=1
+            fi
+          done
+          if ! grep -qE "router\.post\('/import'.*authenticateToken" "$f"; then
+            echo "::error file=$f::POST /import must use authenticateToken (see #154)"
+            fail=1
+          fi
+          exit $fail
+
+      - name: SAST grep-guard - no spread of untrusted input in project controller (#154)
+        run: |
+          set -e
+          f=backend/src/controllers/project.controller.ts
+          fail=0
+          if grep -nE "\\.\\.\\.req\\.body" "$f"; then
+            echo "::error file=$f::do not spread req.body in project.controller (see #154)"
+            fail=1
+          fi
+          if grep -nE "prisma\\.project\\.createMany\\(\\s*\\{\\s*data:\\s*[^}]*\\.\\.\\." "$f"; then
+            echo "::error file=$f::prisma.project.createMany must not spread untrusted input (see #154)"
+            fail=1
+          fi
+          if grep -nE "projects\\.map\\([^)]*\\.\\.\\." "$f"; then
+            echo "::error file=$f::projects.map spread is the #154 exploit pattern - use explicit allowlist"
+            fail=1
+          fi
+          exit $fail
+
+      - name: Verify task subsystem enforces project membership (#159,#160)
+        run: |
+          set -e
+          missing=0
+          for f in \
+            backend/src/routes/tasks.routes.ts \
+            backend/src/routes/attachments.routes.ts \
+            backend/src/routes/relations.routes.ts \
+            backend/src/routes/board.routes.ts \
+            backend/src/routes/taskAnalytics.routes.ts; do
+            if ! grep -q "requireTaskProjectMember\|requireBodyProjectMember\|requireBodyTaskProjectMember" "$f"; then
+              echo "::error file=$f::missing task-project-membership middleware (see issue #159)"
+              missing=1
+            fi
+          done
+          if grep -E "authorName:\s*(author_name|req\.body\.author_name)" backend/src/controllers/comment.controller.ts; then
+            echo "::error file=backend/src/controllers/comment.controller.ts::author_name must be derived from req.user, not req.body (see issue #160)"
+            missing=1
+          fi
+          exit $missing
 
   e2e:
     runs-on: ubuntu-latest
@@ -176,8 +474,13 @@ jobs:
       - name: Run Playwright e2e tests
         run: cd frontend && npm run test:e2e
         env:
-          E2E_USERNAME: christian.mandle
-          E2E_PASSWORD: mandle1998
+          # Credentials are read from GitHub Actions secrets. Configure under
+          # Repo Settings > Secrets and variables > Actions:
+          #   E2E_TEST_EMAIL     - username/email of the e2e test account
+          #   E2E_TEST_PASSWORD  - password of the e2e test account
+          # Never put real credentials in this file.
+          E2E_USERNAME: ${{ secrets.E2E_TEST_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
 
       - name: Upload Playwright report
         if: always()

@@ -8,6 +8,7 @@ import { traceabilityService } from '../../services/traceability.service'
 import { outOfSyncService } from '../../services/verification/outOfSync.service'
 import { linkageAuditService } from '../../services/linkageAudit.service'
 import { AuditAction, TestCaseStatus } from '../../types/verification.types'
+import { allocateTestCaseKey } from '../../lib/verificationKey'
 
 
 export const getTestCases = async (req: AuthRequest, res: Response) => {
@@ -87,28 +88,40 @@ export const createTestCase = async (req: AuthRequest, res: Response) => {
     const { projectId } = req.params
     const { key, title, objective, preconditions, steps, expectedResults, passFailCriteria, linkedMocCode, linkedMethodId, ownerUserId } = req.body
     if (!title) return res.status(400).json({ success: false, error: 'Title is required' })
-    const testCaseKey = key || await verificationService.generateTestCaseKey(projectId)
-    // Check uniqueness
-    const existing = await prisma.verTestCase.findFirst({ where: { projectId, key: testCaseKey } })
-    if (existing) return res.status(400).json({ success: false, error: 'Test case key already exists' })
-    const testCase = await prisma.verTestCase.create({
-      data: {
-        projectId,
-        key: testCaseKey,
-        title,
-        objective,
-        preconditions,
-        steps: steps || null,
-        expectedResults: expectedResults || null,
-        passFailCriteria,
-        linkedMocCode: linkedMocCode ? parseInt(linkedMocCode, 10) : null,
-        linkedMethodId,
-        ownerUserId: ownerUserId || req.userId,
-        status: TestCaseStatus.DRAFT,
-        version: '1.0',
-      },
-      include: { moc: true, method: true },
+
+    // Allocate key atomically inside the transaction (#135).
+    // If the caller supplied an explicit `key`, we still check uniqueness inside the
+    // transaction so concurrent explicit creates cannot collide.
+    const testCase = await prisma.$transaction(async (tx) => {
+      const testCaseKey = key || (await allocateTestCaseKey(tx, projectId))
+
+      if (key) {
+        const existing = await tx.verTestCase.findFirst({ where: { projectId, key: testCaseKey } })
+        if (existing) {
+          throw Object.assign(new Error('Test case key already exists'), { status: 409 })
+        }
+      }
+
+      return tx.verTestCase.create({
+        data: {
+          projectId,
+          key: testCaseKey,
+          title,
+          objective,
+          preconditions,
+          steps: steps || null,
+          expectedResults: expectedResults || null,
+          passFailCriteria,
+          linkedMocCode: linkedMocCode ? parseInt(linkedMocCode, 10) : null,
+          linkedMethodId,
+          ownerUserId: ownerUserId || req.userId,
+          status: TestCaseStatus.DRAFT,
+          version: '1.0',
+        },
+        include: { moc: true, method: true },
+      })
     })
+
     await auditService.logEvent({
       projectId,
       entityType: 'TEST_CASE',
@@ -119,6 +132,9 @@ export const createTestCase = async (req: AuthRequest, res: Response) => {
     })
     res.status(201).json({ success: true, data: testCase })
   } catch (error: any) {
+    if (typeof error?.status === 'number') {
+      return res.status(error.status).json({ success: false, error: error.message })
+    }
     console.error('Create test case error:', error)
     res.status(500).json({ success: false, error: error?.message || 'Internal server error' })
   }
@@ -325,27 +341,44 @@ export const getVerificationLinks = async (req: AuthRequest, res: Response) => {
       orderBy: { createdAt: 'desc' },
     })
 
-    // Fetch the linked requirements and functions
-    const linkedElements = await Promise.all(
-      links.map(async (link) => {
-        if (link.targetType === 'requirement') {
-          const requirement = await prisma.requirement.findFirst({
-            where: { id: link.targetId, projectId },
+    // Fetch linked requirements and functions in two batched queries (#137).
+    // Replaces the previous N+1 loop (one findFirst per link) with a single
+    // findMany per target type.
+    const reqIds = links.filter((l) => l.targetType === 'requirement').map((l) => l.targetId)
+    const fnIds = links.filter((l) => l.targetType === 'function').map((l) => l.targetId)
+
+    const [reqRows, fnRows] = await Promise.all([
+      reqIds.length
+        ? prisma.requirement.findMany({
+            where: { id: { in: reqIds }, projectId },
             select: { id: true, requirementId: true, title: true, description: true },
           })
-          return requirement ? { ...link, targetElement: requirement } : null
-        } else if (link.targetType === 'function') {
-          const function_ = await prisma.systemFunction.findFirst({
-            where: { id: link.targetId, projectId },
+        : [],
+      fnIds.length
+        ? prisma.systemFunction.findMany({
+            where: { id: { in: fnIds }, projectId },
             select: { id: true, functionId: true, name: true, description: true },
           })
-          return function_ ? { ...link, targetElement: function_ } : null
+        : [],
+    ])
+
+    const reqById = new Map(reqRows.map((r) => [r.id, r]))
+    const fnById = new Map(fnRows.map((f) => [f.id, f]))
+
+    const validLinks = links
+      .map((link) => {
+        if (link.targetType === 'requirement') {
+          const target = reqById.get(link.targetId)
+          return target ? { ...link, targetElement: target } : null
+        }
+        if (link.targetType === 'function') {
+          const target = fnById.get(link.targetId)
+          return target ? { ...link, targetElement: target } : null
         }
         return null
       })
-    )
+      .filter((l) => l !== null)
 
-    const validLinks = linkedElements.filter((link) => link !== null)
     res.json({ success: true, data: validLinks })
   } catch (error: any) {
     console.error('Get verification links error:', error)
@@ -506,29 +539,24 @@ export const deleteTestCase = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ success: false, error: 'Test case not found' })
     }
 
-    // Delete verification links (trace links)
-    const traceLinks = await prisma.traceLink.findMany({
-      where: {
-        projectId,
-        sourceType: 'test_case',
-        sourceId: id,
-      },
-    })
-    for (const link of traceLinks) {
-      await traceabilityService.deleteTraceLink(projectId, link.id)
-    }
+    // Atomic cascade delete (#136): trace links + test result links + test case are
+    // wrapped in a single transaction so a mid-delete failure rolls everything back
+    // rather than leaving orphaned link rows.
+    await prisma.$transaction(async (tx) => {
+      // Delete trace links inline (traceabilityService.deleteTraceLink uses the
+      // global prisma singleton — cannot participate in a transaction with `tx`).
+      // Matches the behaviour of deleteTraceLink: remove the row, no cross-entity
+      // bookkeeping required since the test case itself is being removed.
+      await tx.traceLink.deleteMany({
+        where: { projectId, sourceType: 'test_case', sourceId: id },
+      })
 
-    // Delete test result links
-    await prisma.verTestResultLink.deleteMany({
-      where: {
-        linkedEntityType: 'TEST_CASE',
-        linkedEntityId: id,
-      },
-    })
+      await tx.verTestResultLink.deleteMany({
+        where: { linkedEntityType: 'TEST_CASE', linkedEntityId: id },
+      })
 
-    // Delete test case (customSections and testCaseSetups will cascade delete automatically)
-    await prisma.verTestCase.delete({
-      where: { id },
+      // customSections and testCaseSetups cascade-delete via schema.
+      await tx.verTestCase.delete({ where: { id } })
     })
 
     await auditService.logEvent({
