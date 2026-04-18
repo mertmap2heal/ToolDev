@@ -9,7 +9,7 @@ import { authService } from '../../services/auth.service'
 import { useAuthStore } from '../../store/authStore'
 
 const MIN_USERNAME_LENGTH = 1
-const MIN_PASSWORD_LENGTH = 6
+const MIN_PASSWORD_LENGTH = 8
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
