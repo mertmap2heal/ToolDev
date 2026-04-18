@@ -211,6 +211,33 @@ jobs:
             exit 1
           fi
 
+      - name: Run COMPANY_ADMIN tenant regression (#281)
+        run: cd backend && npx vitest run src/__tests__/companyAdmin.tenant.test.ts
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret
+
+      - name: Guard project middlewares enforce COMPANY_ADMIN tenant (#281)
+        run: |
+          set -e
+          fail=0
+          for f in \
+            backend/src/middleware/resolveProjectParam.middleware.ts \
+            backend/src/middleware/requireProjectMember.middleware.ts \
+            backend/src/middleware/requireProjectOwnerOrAdmin.middleware.ts; do
+            # Old shape granted both roles in one OR — ban that exact line.
+            if grep -qE "role === 'SUPERIOR_ADMIN' \|\| user.\?role === 'COMPANY_ADMIN'" "$f"; then
+              echo "::error file=$f::COMPANY_ADMIN must be tenant-checked, not or'd with SUPERIOR_ADMIN (see issue #281)"
+              fail=1
+            fi
+            # Must now read companyName from project + company from user.
+            if ! grep -q "companyName" "$f"; then
+              echo "::error file=$f::select { companyName } on project lookup (see issue #281)"
+              fail=1
+            fi
+          done
+          exit $fail
+
       - name: Run admin audit-log tenant regression (#288)
         run: cd backend && npx vitest run src/__tests__/adminAudit.tenant.test.ts
         env:
