@@ -2,10 +2,36 @@ import { X, Receipt, CheckCircle } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { inventoryService } from '../../../services/inventory.service'
 
+interface GoodsReceiptLineRow {
+  id: string
+  qtyReceived: number
+  unitCost: number | null
+  item?: { sku?: string; name?: string }
+  location?: { code?: string }
+  lot?: { lotCode?: string }
+  serial?: { serialCode?: string }
+}
+
+interface GoodsReceiptDrawerModel {
+  id: string
+  number: string
+  status: string
+  receivedAt: string
+  lines?: GoodsReceiptLineRow[]
+  purchaseOrder?: { number?: string }
+}
+
 interface ReceiptDetailDrawerProps {
-  receipt: any
+  receipt: GoodsReceiptDrawerModel
   isOpen: boolean
   onClose: () => void
+}
+
+function axiosLikeErrorMessage(error: unknown, fallback: string): string {
+  if (!error || typeof error !== 'object') return fallback
+  const res = (error as { response?: { data?: { error?: unknown } } }).response
+  const msg = res?.data?.error
+  return typeof msg === 'string' ? msg : fallback
 }
 
 export default function ReceiptDetailDrawer({ receipt, isOpen, onClose }: ReceiptDetailDrawerProps) {
@@ -32,15 +58,15 @@ export default function ReceiptDetailDrawer({ receipt, isOpen, onClose }: Receip
       try {
         await postMutation.mutateAsync(fullReceipt.id)
         alert('Receipt posted successfully! Stock has been updated.')
-      } catch (error: any) {
-        alert(error.response?.data?.error || 'Failed to post receipt')
+      } catch (error: unknown) {
+        alert(axiosLikeErrorMessage(error, 'Failed to post receipt'))
       }
     }
   }
 
   if (!isOpen) return null
 
-  const fullReceipt = receiptData?.data || receipt
+  const fullReceipt: GoodsReceiptDrawerModel = receiptData?.data ?? receipt
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-end">
@@ -146,7 +172,7 @@ export default function ReceiptDetailDrawer({ receipt, isOpen, onClose }: Receip
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {fullReceipt.lines?.map((line: any) => (
+                      {fullReceipt.lines?.map((line) => (
                         <tr key={line.id}>
                           <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
                             {line.item?.sku} - {line.item?.name}

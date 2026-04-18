@@ -5,8 +5,23 @@ import { inventoryService } from '../../../services/inventory.service'
 import CreatePurchaseOrderModal from './CreatePurchaseOrderModal'
 import PurchaseOrderDetailDrawer from './PurchaseOrderDetailDrawer'
 
+interface PurchaseOrderListItem {
+  id: string
+  number: string
+  status: string
+  orderedAt: string
+  supplier?: { name?: string }
+}
+
+function axiosLikeErrorMessage(error: unknown, fallback: string): string {
+  if (!error || typeof error !== 'object') return fallback
+  const res = (error as { response?: { data?: { error?: unknown } } }).response
+  const msg = res?.data?.error
+  return typeof msg === 'string' ? msg : fallback
+}
+
 export default function PurchaseOrdersTab() {
-  const [selectedPO, setSelectedPO] = useState<any>(null)
+  const [selectedPO, setSelectedPO] = useState<PurchaseOrderListItem | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false)
   const queryClient = useQueryClient()
@@ -23,22 +38,22 @@ export default function PurchaseOrdersTab() {
     },
   })
 
-  const handleViewPO = (po: any) => {
+  const handleViewPO = (po: PurchaseOrderListItem) => {
     setSelectedPO(po)
     setIsDetailDrawerOpen(true)
   }
 
-  const handleApprove = async (po: any) => {
+  const handleApprove = async (po: PurchaseOrderListItem) => {
     if (window.confirm(`Approve purchase order ${po.number}?`)) {
       try {
         await approveMutation.mutateAsync(po.id)
-      } catch (error: any) {
-        alert(error.response?.data?.error || 'Failed to approve purchase order')
+      } catch (error: unknown) {
+        alert(axiosLikeErrorMessage(error, 'Failed to approve purchase order'))
       }
     }
   }
 
-  const orders = data?.data?.orders || []
+  const orders: PurchaseOrderListItem[] = data?.data?.orders ?? []
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
@@ -108,7 +123,7 @@ export default function PurchaseOrdersTab() {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {orders.map((po: any) => (
+              {orders.map((po) => (
                 <tr key={po.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                     {po.number}

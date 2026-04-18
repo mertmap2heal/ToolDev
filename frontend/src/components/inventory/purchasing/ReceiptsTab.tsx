@@ -5,8 +5,23 @@ import { inventoryService } from '../../../services/inventory.service'
 import CreateReceiptModal from './CreateReceiptModal'
 import ReceiptDetailDrawer from './ReceiptDetailDrawer'
 
+interface GoodsReceiptListItem {
+  id: string
+  number: string
+  status: string
+  receivedAt: string
+  purchaseOrder?: { number?: string }
+}
+
+function axiosLikeErrorMessage(error: unknown, fallback: string): string {
+  if (!error || typeof error !== 'object') return fallback
+  const res = (error as { response?: { data?: { error?: unknown } } }).response
+  const msg = res?.data?.error
+  return typeof msg === 'string' ? msg : fallback
+}
+
 export default function ReceiptsTab() {
-  const [selectedReceipt, setSelectedReceipt] = useState<any>(null)
+  const [selectedReceipt, setSelectedReceipt] = useState<GoodsReceiptListItem | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false)
   const queryClient = useQueryClient()
@@ -25,23 +40,23 @@ export default function ReceiptsTab() {
     },
   })
 
-  const handleViewReceipt = (receipt: any) => {
+  const handleViewReceipt = (receipt: GoodsReceiptListItem) => {
     setSelectedReceipt(receipt)
     setIsDetailDrawerOpen(true)
   }
 
-  const handlePost = async (receipt: any) => {
+  const handlePost = async (receipt: GoodsReceiptListItem) => {
     if (window.confirm(`Post goods receipt ${receipt.number} to inventory? This will increase stock.`)) {
       try {
         await postMutation.mutateAsync(receipt.id)
         alert('Receipt posted successfully! Stock has been updated.')
-      } catch (error: any) {
-        alert(error.response?.data?.error || 'Failed to post receipt')
+      } catch (error: unknown) {
+        alert(axiosLikeErrorMessage(error, 'Failed to post receipt'))
       }
     }
   }
 
-  const receipts = data?.data?.receipts || []
+  const receipts: GoodsReceiptListItem[] = data?.data?.receipts ?? []
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
@@ -107,7 +122,7 @@ export default function ReceiptsTab() {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {receipts.map((receipt: any) => (
+              {receipts.map((receipt) => (
                 <tr key={receipt.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                     {receipt.number}

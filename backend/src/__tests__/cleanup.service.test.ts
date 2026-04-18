@@ -7,6 +7,32 @@ describe('cleanupSoftDeletedRequirements', () => {
   let userId: string
 
   /** Creates a requirement already past any retention window */
+  function toCleanupBatchRow(req: {
+    id: string
+    projectId: string
+    requirementId: string
+    title: string
+  }) {
+    return {
+      id: req.id,
+      projectId: req.projectId,
+      requirementId: req.requirementId,
+      title: req.title,
+    }
+  }
+
+  /** Vitest 4 + Prisma proxy breaks vi.spyOn(model, 'findMany'); swap the method instead. */
+  function stubCleanupFindManyResult(
+    rows: ReturnType<typeof toCleanupBatchRow>[],
+  ): () => void {
+    type FindMany = (typeof prisma.requirement)['findMany']
+    const original: FindMany = prisma.requirement.findMany
+    prisma.requirement.findMany = (async () => rows) as FindMany
+    return () => {
+      prisma.requirement.findMany = original
+    }
+  }
+
   async function createExpiredRequirement(suffix: string) {
     return prisma.requirement.create({
       data: {
@@ -106,36 +132,43 @@ describe('cleanupSoftDeletedRequirements', () => {
   it('writes a REQUIREMENT_CLEANUP_ERROR audit event when a per-item delete fails', async () => {
     const req = await createExpiredRequirement('error')
 
-    // Intercept $transaction to simulate a failure on the first call (the per-item delete tx)
-    const originalTransaction = prisma.$transaction.bind(prisma)
-    let callCount = 0
-    vi.spyOn(prisma, '$transaction').mockImplementation(async (fn: any, ...args: any[]) => {
-      callCount++
-      if (callCount === 1) {
-        throw new Error('Simulated delete failure for audit event test')
-      }
-      return originalTransaction(fn, ...args)
-    })
+    // Lock batch to this row so error rate math is deterministic (findMany has no orderBy)
+    const restoreFindMany = stubCleanupFindManyResult([toCleanupBatchRow(req)])
 
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      // Intercept $transaction to simulate a failure on the first call (the per-item delete tx)
+      const originalTransaction = prisma.$transaction.bind(prisma)
+      let callCount = 0
+      vi.spyOn(prisma, '$transaction').mockImplementation(async (fn: any, ...args: any[]) => {
+        callCount++
+        if (callCount === 1) {
+          throw new Error('Simulated delete failure for audit event test')
+        }
+        return originalTransaction(fn, ...args)
+      })
 
-    // With 1 item and 1 failure, error rate = 100% > 10%, so the function throws
-    await expect(cleanupSoftDeletedRequirements()).rejects.toThrow()
+      vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    // Give the best-effort audit write time to settle (it is fire-and-forget)
-    await new Promise(resolve => setTimeout(resolve, 200))
+      // With 1 item and 1 failure, error rate = 100% > 10%, so the function throws
+      await expect(cleanupSoftDeletedRequirements()).rejects.toThrow()
 
-    // REQUIREMENT_CLEANUP_ERROR event must be written to the DB
-    const errorEvent = await prisma.verAuditEvent.findFirst({
-      where: { projectId, entityId: req.id, action: 'REQUIREMENT_CLEANUP_ERROR' },
-    })
-    expect(errorEvent).not.toBeNull()
-    expect(errorEvent?.performedByUserId).toBe('SYSTEM_CLEANUP')
-    const oldVal = errorEvent?.oldValue as Record<string, unknown>
-    expect(String(oldVal.error)).toContain('Simulated delete failure')
+      // Give the best-effort audit write time to settle (it is fire-and-forget)
+      await new Promise(resolve => setTimeout(resolve, 200))
 
-    // Clean up the requirement the service failed to delete
-    await prisma.requirement.deleteMany({ where: { id: req.id } })
+      // REQUIREMENT_CLEANUP_ERROR event must be written to the DB
+      const errorEvent = await prisma.verAuditEvent.findFirst({
+        where: { projectId, entityId: req.id, action: 'REQUIREMENT_CLEANUP_ERROR' },
+      })
+      expect(errorEvent).not.toBeNull()
+      expect(errorEvent?.performedByUserId).toBe('SYSTEM_CLEANUP')
+      const oldVal = errorEvent?.oldValue as Record<string, unknown>
+      expect(String(oldVal.error)).toContain('Simulated delete failure')
+
+      // Clean up the requirement the service failed to delete
+      await prisma.requirement.deleteMany({ where: { id: req.id } })
+    } finally {
+      restoreFindMany()
+    }
   })
 
   // -----------------------------------------------------------------------
@@ -147,23 +180,29 @@ describe('cleanupSoftDeletedRequirements', () => {
       Array.from({ length: 10 }, (_, i) => createExpiredRequirement(`threshold-${i}`))
     )
 
-    let txCallCount = 0
-    const originalTransaction = prisma.$transaction.bind(prisma)
-    vi.spyOn(prisma, '$transaction').mockImplementation(async (fn: any, ...args: any[]) => {
-      txCallCount++
-      if (txCallCount <= 2) {
-        throw new Error('Simulated failure for threshold test')
-      }
-      return originalTransaction(fn, ...args)
-    })
+    const restoreFindMany = stubCleanupFindManyResult(reqs.map(toCleanupBatchRow))
 
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      let txCallCount = 0
+      const originalTransaction = prisma.$transaction.bind(prisma)
+      vi.spyOn(prisma, '$transaction').mockImplementation(async (fn: any, ...args: any[]) => {
+        txCallCount++
+        if (txCallCount <= 2) {
+          throw new Error('Simulated failure for threshold test')
+        }
+        return originalTransaction(fn, ...args)
+      })
 
-    await expect(cleanupSoftDeletedRequirements()).rejects.toThrow(/High failure rate/)
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+      vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    // Clean up requirements the service did not delete
-    await prisma.requirement.deleteMany({ where: { id: { in: reqs.map(r => r.id) } } })
+      await expect(cleanupSoftDeletedRequirements()).rejects.toThrow(/High failure rate/)
+
+      // Clean up requirements the service did not delete
+      await prisma.requirement.deleteMany({ where: { id: { in: reqs.map(r => r.id) } } })
+    } finally {
+      restoreFindMany()
+    }
   })
 
   // -----------------------------------------------------------------------
@@ -175,23 +214,29 @@ describe('cleanupSoftDeletedRequirements', () => {
       Array.from({ length: 10 }, (_, i) => createExpiredRequirement(`boundary-${i}`))
     )
 
-    let txCallCount = 0
-    const originalTransaction = prisma.$transaction.bind(prisma)
-    vi.spyOn(prisma, '$transaction').mockImplementation(async (fn: any, ...args: any[]) => {
-      txCallCount++
-      if (txCallCount === 1) {
-        throw new Error('Single failure — exactly 10%')
-      }
-      return originalTransaction(fn, ...args)
-    })
+    const restoreFindMany = stubCleanupFindManyResult(reqs.map(toCleanupBatchRow))
 
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      let txCallCount = 0
+      const originalTransaction = prisma.$transaction.bind(prisma)
+      vi.spyOn(prisma, '$transaction').mockImplementation(async (fn: any, ...args: any[]) => {
+        txCallCount++
+        if (txCallCount === 1) {
+          throw new Error('Single failure — exactly 10%')
+        }
+        return originalTransaction(fn, ...args)
+      })
 
-    await expect(cleanupSoftDeletedRequirements()).resolves.not.toThrow()
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+      vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    // Clean up any remaining requirements (the 1 that failed to delete)
-    await prisma.requirement.deleteMany({ where: { id: { in: reqs.map(r => r.id) } } })
+      await expect(cleanupSoftDeletedRequirements()).resolves.not.toThrow()
+
+      // Clean up any remaining requirements (the 1 that failed to delete)
+      await prisma.requirement.deleteMany({ where: { id: { in: reqs.map(r => r.id) } } })
+    } finally {
+      restoreFindMany()
+    }
   })
 
   // -----------------------------------------------------------------------
