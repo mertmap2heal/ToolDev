@@ -1,12 +1,14 @@
 import { useState } from 'react'
+import axios from 'axios'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Eye, CheckCircle, Truck } from 'lucide-react'
 import { inventoryService } from '../../../services/inventory.service'
 import CreateShipmentModal from './CreateShipmentModal'
 import ShipmentDetailDrawer from './ShipmentDetailDrawer'
+import type { ShipmentListRow } from './inventorySalesTypes'
 
 export default function ShipmentsTab() {
-  const [selectedShipment, setSelectedShipment] = useState<any>(null)
+  const [selectedShipment, setSelectedShipment] = useState<ShipmentListRow | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false)
   const queryClient = useQueryClient()
@@ -25,23 +27,28 @@ export default function ShipmentsTab() {
     },
   })
 
-  const handleViewShipment = (shipment: any) => {
+  const handleViewShipment = (shipment: ShipmentListRow) => {
     setSelectedShipment(shipment)
     setIsDetailDrawerOpen(true)
   }
 
-  const handlePost = async (shipment: any) => {
+  const handlePost = async (shipment: ShipmentListRow) => {
     if (window.confirm(`Post shipment ${shipment.number} to inventory? This will decrease stock.`)) {
       try {
         await postMutation.mutateAsync(shipment.id)
         alert('Shipment posted successfully! Stock has been updated.')
-      } catch (error: any) {
-        alert(error.response?.data?.error || 'Failed to post shipment')
+      } catch (err: unknown) {
+        const msg = axios.isAxiosError(err)
+          ? (err.response?.data as { error?: string } | undefined)?.error ?? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Failed to post shipment'
+        alert(msg)
       }
     }
   }
 
-  const shipments = data?.data?.shipments || []
+  const shipments = (data?.data?.shipments ?? []) as ShipmentListRow[]
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
@@ -109,7 +116,7 @@ export default function ShipmentsTab() {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {shipments.map((shipment: any) => (
+              {shipments.map((shipment) => (
                 <tr key={shipment.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                     {shipment.number}

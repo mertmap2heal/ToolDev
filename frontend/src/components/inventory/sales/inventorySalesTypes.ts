@@ -29,3 +29,24 @@ export type SalesOrderListRow = {
 export type SalesOrderDetail = SalesOrderListRow & {
   lines?: SalesOrderLineRow[]
 }
+
+export type ShipmentListRow = {
+  id: string
+  number: string
+  status: string
+  shippedAt?: string | null
+  salesOrder?: { number?: string }
+}
+
+export type ShipmentLineRow = {
+  id: string
+  qtyShipped?: number | string
+  item?: Pick<Item, 'sku' | 'name'>
+  fromLocation?: { code?: string }
+  lot?: { lotCode?: string }
+  serial?: { serialCode?: string }
+}
+
+export type ShipmentDetail = ShipmentListRow & {
+  lines?: ShipmentLineRow[]
+}

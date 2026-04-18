@@ -1,9 +1,11 @@
 import { X, Truck, CheckCircle } from 'lucide-react'
+import axios from 'axios'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { inventoryService } from '../../../services/inventory.service'
+import type { ShipmentDetail, ShipmentLineRow, ShipmentListRow } from './inventorySalesTypes'
 
 interface ShipmentDetailDrawerProps {
-  shipment: any
+  shipment: ShipmentListRow
   isOpen: boolean
   onClose: () => void
 }
@@ -27,20 +29,25 @@ export default function ShipmentDetailDrawer({ shipment, isOpen, onClose }: Ship
     },
   })
 
+  if (!isOpen) return null
+
+  const fullShipment: ShipmentDetail = (shipmentData?.data ?? shipment) as ShipmentDetail
+
   const handlePost = async () => {
     if (window.confirm(`Post shipment ${fullShipment.number} to inventory? This will decrease stock.`)) {
       try {
         await postMutation.mutateAsync(fullShipment.id)
         alert('Shipment posted successfully! Stock has been updated.')
-      } catch (error: any) {
-        alert(error.response?.data?.error || 'Failed to post shipment')
+      } catch (err: unknown) {
+        const msg = axios.isAxiosError(err)
+          ? (err.response?.data as { error?: string } | undefined)?.error ?? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Failed to post shipment'
+        alert(msg)
       }
     }
   }
-
-  if (!isOpen) return null
-
-  const fullShipment = shipmentData?.data || shipment
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-end">
@@ -145,7 +152,7 @@ export default function ShipmentDetailDrawer({ shipment, isOpen, onClose }: Ship
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {fullShipment.lines?.map((line: any) => (
+                      {fullShipment.lines?.map((line: ShipmentLineRow) => (
                         <tr key={line.id}>
                           <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
                             {line.item?.sku} - {line.item?.name}
