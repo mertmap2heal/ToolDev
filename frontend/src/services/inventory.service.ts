@@ -1,6 +1,40 @@
-import axios from 'axios'
+import axios, { AxiosError } from 'axios'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api/v1' : 'http://localhost:5000/api/v1')
+
+// #299: legacy direct-axios usage kept to avoid a 40-call migration in a
+// security PR. But the token read + 401/403 handling must match the
+// central interceptor in services/api.ts so that:
+//   - users who logged in without "Remember me" (token in sessionStorage)
+//     still authenticate here, and
+//   - an expired/revoked token triggers the same `token-expired` global
+//     event that logs the user out.
+function readStoredToken(): string | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem('token') ?? sessionStorage.getItem('token')
+}
+
+// Module-local axios instance so our response interceptor fires for every
+// call in this file without touching the global axios defaults (which
+// would double-fire with the apiClient interceptor).
+const inventoryAxios = axios.create()
+inventoryAxios.interceptors.response.use(
+  (r) => r,
+  (error: AxiosError) => {
+    const status = error?.response?.status
+    if (status === 401 || status === 403) {
+      const token = readStoredToken()
+      if (token) {
+        localStorage.removeItem('token')
+        sessionStorage.removeItem('token')
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('token-expired'))
+        }
+      }
+    }
+    return Promise.reject(error)
+  },
+)
 
 export interface Item {
   id: string
@@ -95,11 +129,14 @@ export interface ItemLedgerEntry {
 }
 
 class InventoryService {
+  // #299: read from BOTH localStorage and sessionStorage, matching the
+  // central apiClient interceptor. Previously session-only users saw
+  // `Bearer null` on every inventory call.
   private getAuthHeaders() {
-    const token = localStorage.getItem('token')
+    const token = readStoredToken()
     return {
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${token ?? ''}`,
       },
     }
   }
@@ -124,7 +161,7 @@ class InventoryService {
       })
     }
 
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/items?${params.toString()}`,
       this.getAuthHeaders()
     )
@@ -132,7 +169,7 @@ class InventoryService {
   }
 
   async getItem(itemId: string) {
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/items/${itemId}`,
       this.getAuthHeaders()
     )
@@ -140,7 +177,7 @@ class InventoryService {
   }
 
   async createItem(input: CreateItemInput) {
-    const response = await axios.post(
+    const response = await inventoryAxios.post(
       `${API_BASE_URL}/inventory/items`,
       input,
       this.getAuthHeaders()
@@ -149,7 +186,7 @@ class InventoryService {
   }
 
   async updateItem(itemId: string, input: UpdateItemInput) {
-    const response = await axios.patch(
+    const response = await inventoryAxios.patch(
       `${API_BASE_URL}/inventory/items/${itemId}`,
       input,
       this.getAuthHeaders()
@@ -158,7 +195,7 @@ class InventoryService {
   }
 
   async deleteItem(itemId: string) {
-    const response = await axios.delete(
+    const response = await inventoryAxios.delete(
       `${API_BASE_URL}/inventory/items/${itemId}`,
       this.getAuthHeaders()
     )
@@ -166,7 +203,7 @@ class InventoryService {
   }
 
   async getItemStock(itemId: string): Promise<{ success: boolean; data: ItemStock[] }> {
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/items/${itemId}/stock`,
       this.getAuthHeaders()
     )
@@ -186,7 +223,7 @@ class InventoryService {
       })
     }
 
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/items/${itemId}/ledger?${params.toString()}`,
       this.getAuthHeaders()
     )
@@ -195,7 +232,7 @@ class InventoryService {
 
   // Warehouses
   async getWarehouses() {
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/warehouses`,
       this.getAuthHeaders()
     )
@@ -203,7 +240,7 @@ class InventoryService {
   }
 
   async getWarehouse(warehouseId: string) {
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/warehouses/${warehouseId}`,
       this.getAuthHeaders()
     )
@@ -220,7 +257,7 @@ class InventoryService {
     country?: string
     negativeStockPolicy?: 'STRICT' | 'ALLOW_WITH_WARNING'
   }) {
-    const response = await axios.post(
+    const response = await inventoryAxios.post(
       `${API_BASE_URL}/inventory/warehouses`,
       input,
       this.getAuthHeaders()
@@ -229,7 +266,7 @@ class InventoryService {
   }
 
   async deleteWarehouse(warehouseId: string) {
-    const response = await axios.delete(
+    const response = await inventoryAxios.delete(
       `${API_BASE_URL}/inventory/warehouses/${warehouseId}`,
       this.getAuthHeaders()
     )
@@ -237,7 +274,7 @@ class InventoryService {
   }
 
   async getLocationTree(warehouseId: string) {
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/warehouses/${warehouseId}/locations`,
       this.getAuthHeaders()
     )
@@ -252,7 +289,7 @@ class InventoryService {
     locationType?: string
     pickingPriority?: number
   }) {
-    const response = await axios.post(
+    const response = await inventoryAxios.post(
       `${API_BASE_URL}/inventory/warehouses/locations`,
       input,
       this.getAuthHeaders()
@@ -262,7 +299,7 @@ class InventoryService {
 
   // UOMs
   async getUoms() {
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/uoms`,
       this.getAuthHeaders()
     )
@@ -271,7 +308,7 @@ class InventoryService {
 
   // Suppliers
   async getSuppliers() {
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/suppliers`,
       this.getAuthHeaders()
     )
@@ -279,7 +316,7 @@ class InventoryService {
   }
 
   async getSupplier(supplierId: string) {
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/suppliers/${supplierId}`,
       this.getAuthHeaders()
     )
@@ -298,7 +335,7 @@ class InventoryService {
     zipCode?: string
     country?: string
   }) {
-    const response = await axios.post(
+    const response = await inventoryAxios.post(
       `${API_BASE_URL}/inventory/suppliers`,
       input,
       this.getAuthHeaders()
@@ -307,7 +344,7 @@ class InventoryService {
   }
 
   async deleteSupplier(supplierId: string) {
-    const response = await axios.delete(
+    const response = await inventoryAxios.delete(
       `${API_BASE_URL}/inventory/suppliers/${supplierId}`,
       this.getAuthHeaders()
     )
@@ -330,7 +367,7 @@ class InventoryService {
       })
     }
 
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/purchase-orders?${params.toString()}`,
       this.getAuthHeaders()
     )
@@ -338,7 +375,7 @@ class InventoryService {
   }
 
   async getPurchaseOrder(poId: string) {
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/purchase-orders/${poId}`,
       this.getAuthHeaders()
     )
@@ -358,7 +395,7 @@ class InventoryService {
       locationId: string
     }>
   }) {
-    const response = await axios.post(
+    const response = await inventoryAxios.post(
       `${API_BASE_URL}/inventory/purchase-orders`,
       input,
       this.getAuthHeaders()
@@ -367,7 +404,7 @@ class InventoryService {
   }
 
   async approvePurchaseOrder(poId: string) {
-    const response = await axios.post(
+    const response = await inventoryAxios.post(
       `${API_BASE_URL}/inventory/purchase-orders/${poId}/approve`,
       {},
       this.getAuthHeaders()
@@ -391,7 +428,7 @@ class InventoryService {
       })
     }
 
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/receipts?${params.toString()}`,
       this.getAuthHeaders()
     )
@@ -399,7 +436,7 @@ class InventoryService {
   }
 
   async getGoodsReceipt(receiptId: string) {
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/receipts/${receiptId}`,
       this.getAuthHeaders()
     )
@@ -420,7 +457,7 @@ class InventoryService {
       unitCost?: number
     }>
   }) {
-    const response = await axios.post(
+    const response = await inventoryAxios.post(
       `${API_BASE_URL}/inventory/receipts`,
       input,
       this.getAuthHeaders()
@@ -429,7 +466,7 @@ class InventoryService {
   }
 
   async postGoodsReceipt(receiptId: string, idempotencyKey?: string) {
-    const response = await axios.post(
+    const response = await inventoryAxios.post(
       `${API_BASE_URL}/inventory/receipts/${receiptId}/post`,
       { idempotencyKey: idempotencyKey || `receipt-${receiptId}-${Date.now()}` },
       this.getAuthHeaders()
@@ -439,7 +476,7 @@ class InventoryService {
 
   // Customers
   async getCustomers() {
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/customers`,
       this.getAuthHeaders()
     )
@@ -447,7 +484,7 @@ class InventoryService {
   }
 
   async getCustomer(customerId: string) {
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/customers/${customerId}`,
       this.getAuthHeaders()
     )
@@ -466,7 +503,7 @@ class InventoryService {
     zipCode?: string
     country?: string
   }) {
-    const response = await axios.post(
+    const response = await inventoryAxios.post(
       `${API_BASE_URL}/inventory/customers`,
       input,
       this.getAuthHeaders()
@@ -475,7 +512,7 @@ class InventoryService {
   }
 
   async deleteCustomer(customerId: string) {
-    const response = await axios.delete(
+    const response = await inventoryAxios.delete(
       `${API_BASE_URL}/inventory/customers/${customerId}`,
       this.getAuthHeaders()
     )
@@ -498,7 +535,7 @@ class InventoryService {
       })
     }
 
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/sales-orders?${params.toString()}`,
       this.getAuthHeaders()
     )
@@ -506,7 +543,7 @@ class InventoryService {
   }
 
   async getSalesOrder(soId: string) {
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/sales-orders/${soId}`,
       this.getAuthHeaders()
     )
@@ -525,7 +562,7 @@ class InventoryService {
       uomId: string
     }>
   }) {
-    const response = await axios.post(
+    const response = await inventoryAxios.post(
       `${API_BASE_URL}/inventory/sales-orders`,
       input,
       this.getAuthHeaders()
@@ -534,7 +571,7 @@ class InventoryService {
   }
 
   async approveSalesOrder(soId: string) {
-    const response = await axios.post(
+    const response = await inventoryAxios.post(
       `${API_BASE_URL}/inventory/sales-orders/${soId}/approve`,
       {},
       this.getAuthHeaders()
@@ -543,7 +580,7 @@ class InventoryService {
   }
 
   async allocateSalesOrder(soId: string) {
-    const response = await axios.post(
+    const response = await inventoryAxios.post(
       `${API_BASE_URL}/inventory/sales-orders/${soId}/allocate`,
       {},
       this.getAuthHeaders()
@@ -567,7 +604,7 @@ class InventoryService {
       })
     }
 
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/shipments?${params.toString()}`,
       this.getAuthHeaders()
     )
@@ -575,7 +612,7 @@ class InventoryService {
   }
 
   async getShipment(shipmentId: string) {
-    const response = await axios.get(
+    const response = await inventoryAxios.get(
       `${API_BASE_URL}/inventory/shipments/${shipmentId}`,
       this.getAuthHeaders()
     )
@@ -594,7 +631,7 @@ class InventoryService {
       serialId?: string
     }>
   }) {
-    const response = await axios.post(
+    const response = await inventoryAxios.post(
       `${API_BASE_URL}/inventory/shipments`,
       input,
       this.getAuthHeaders()
@@ -603,7 +640,7 @@ class InventoryService {
   }
 
   async postShipment(shipmentId: string, idempotencyKey?: string) {
-    const response = await axios.post(
+    const response = await inventoryAxios.post(
       `${API_BASE_URL}/inventory/shipments/${shipmentId}/post`,
       { idempotencyKey: idempotencyKey || `shipment-${shipmentId}-${Date.now()}` },
       this.getAuthHeaders()
