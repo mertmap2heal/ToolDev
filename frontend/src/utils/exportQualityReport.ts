@@ -140,10 +140,10 @@ export function downloadQualityExcel(
   wsSummary['!cols'] = [{ wch: 38 }, { wch: 52 }]
   XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary')
 
+  // Column order: human-readable first; full UUID last with extra width (GUIDs are 36 chars — narrow columns clip in Excel).
   const detailObjects = rows.map((r) => ({
     Project: projectName,
     'Display ID': r.displayId ?? '',
-    'Requirement ID': r.requirementId,
     'Requirement title': r.title,
     'Validation score': r.baseScore,
     'Finding / issue': r.issueMessage,
@@ -151,19 +151,20 @@ export function downloadQualityExcel(
     'Recommended fix type': r.fixType,
     Dismissed: r.skipped,
     'Dismissal rationale': r.skipReason,
+    'Internal ID (UUID)': r.requirementId,
   }))
   const wsDetail = XLSX.utils.json_to_sheet(detailObjects)
   wsDetail['!cols'] = [
-    { wch: 18 },
+    { wch: 22 },
+    { wch: 16 },
+    { wch: 42 },
+    { wch: 12 },
+    { wch: 52 },
+    { wch: 14 },
+    { wch: 22 },
     { wch: 12 },
     { wch: 36 },
-    { wch: 40 },
-    { wch: 10 },
-    { wch: 48 },
-    { wch: 12 },
-    { wch: 18 },
-    { wch: 10 },
-    { wch: 32 },
+    { wch: 42 },
   ]
   if (wsDetail['!ref']) {
     const range = XLSX.utils.decode_range(wsDetail['!ref'])
