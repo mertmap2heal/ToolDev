@@ -183,6 +183,41 @@ jobs:
             exit 1
           fi
 
+      - name: Run transition-checklist IDOR regression (#297)
+        run: cd backend && npx vitest run src/__tests__/transitionChecklist.idor.test.ts
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret
+
+      - name: Guard transitionChecklist service scopes by projectId (#297)
+        run: |
+          set -e
+          f=backend/src/services/transitionChecklist.service.ts
+          fail=0
+          # Every pre-fix findUnique by id alone must be gone.
+          if grep -nE "transitionChecklist\.findUnique\(\s*\{\s*where:\s*\{\s*id:\s*checklistId\s*\}" "$f"; then
+            echo "::error file=$f::transitionChecklist.findUnique({id:checklistId}) missing projectId (see issue #297)"
+            fail=1
+          fi
+          if grep -nE "checklistAssignment\.delete\(\s*\{\s*where:\s*\{\s*id:\s*assignmentId\s*\}\s*\}\s*\)" "$f"; then
+            echo "::error file=$f::checklistAssignment.delete by id alone missing projectId (see issue #297)"
+            fail=1
+          fi
+          # getById / update / deleteChecklist signatures must take projectId first.
+          if ! grep -q "async getById(projectId: string" "$f"; then
+            echo "::error file=$f::service getById must take projectId (see issue #297)"
+            fail=1
+          fi
+          if ! grep -q "async update(projectId: string" "$f"; then
+            echo "::error file=$f::service update must take projectId (see issue #297)"
+            fail=1
+          fi
+          if ! grep -q "async deleteChecklist(projectId: string" "$f"; then
+            echo "::error file=$f::service deleteChecklist must take projectId (see issue #297)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Run saved-view access-control regression (#294)
         run: cd backend && npx vitest run src/__tests__/savedView.access.test.ts
         env:
