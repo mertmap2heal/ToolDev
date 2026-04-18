@@ -1,19 +1,53 @@
 /**
- * Reassign a project's owner to another user (by project name and new owner email).
- * Run: npx tsx src/scripts/reassign-project-owner.ts <projectName> <newOwnerEmail>
- * Example: npx tsx src/scripts/reassign-project-owner.ts MPAC mert.caferoglu
+ * Reassign a project's owner to another user (by project name + new owner email).
+ *
+ * #301: hardened to prevent accidental mass-deletion of collaborators.
+ *
+ * Guards before any write:
+ *   1. ALLOW_DESTRUCTIVE_SCRIPTS env var must be set to "true".
+ *   2. NODE_ENV must be "development" (refuses to run against prod).
+ *   3. CLI must include the explicit confirmation flag
+ *      --yes-i-know-this-wipes-collaborators.
+ *
+ * All member deletions and the new owner assignment are logged to the
+ * AuditLog table so the change is traceable after the fact.
+ *
+ * Run: npx tsx src/scripts/reassign-project-owner.ts <projectName> <newOwnerEmail> --yes-i-know-this-wipes-collaborators
  */
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 
-const prisma = new PrismaClient()
+const CONFIRM_FLAG = '--yes-i-know-this-wipes-collaborators'
 
 async function main() {
-  const projectName = process.argv[2]
-  const newOwnerEmail = process.argv[3]
+  const positional = process.argv.slice(2).filter((a) => !a.startsWith('--'))
+  const flags = new Set(process.argv.slice(2).filter((a) => a.startsWith('--')))
+  const [projectName, newOwnerEmail] = positional
 
   if (!projectName || !newOwnerEmail) {
-    console.error('Usage: npx tsx src/scripts/reassign-project-owner.ts <projectName> <newOwnerEmail>')
-    console.error('Example: npx tsx src/scripts/reassign-project-owner.ts MPAC mert.caferoglu')
+    console.error(
+      `Usage: npx tsx src/scripts/reassign-project-owner.ts <projectName> <newOwnerEmail> ${CONFIRM_FLAG}`,
+    )
+    process.exit(1)
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    console.error(
+      'Refusing to run: reassign-project-owner is forbidden in production (set NODE_ENV=development).',
+    )
+    process.exit(1)
+  }
+
+  if (process.env.ALLOW_DESTRUCTIVE_SCRIPTS !== 'true') {
+    console.error(
+      'Refusing to run: ALLOW_DESTRUCTIVE_SCRIPTS=true must be set in the environment for this script.',
+    )
+    process.exit(1)
+  }
+
+  if (!flags.has(CONFIRM_FLAG)) {
+    console.error(
+      `Refusing to run: reassign-project-owner deletes every ProjectMember row. Pass ${CONFIRM_FLAG} to acknowledge.`,
+    )
     process.exit(1)
   }
 
@@ -45,6 +79,8 @@ async function main() {
     return
   }
 
+  const oldMembers = project.teamMembers ?? []
+
   await prisma.$transaction([
     prisma.project.update({
       where: { id: project.id },
@@ -60,9 +96,27 @@ async function main() {
         role: 'owner',
       },
     }),
+    prisma.auditLog.create({
+      data: {
+        projectId: project.id,
+        userId: newOwnerId,
+        action: 'PROJECT_OWNER_REASSIGNED',
+        details: JSON.stringify({
+          previousOwnerId: oldOwnerId,
+          newOwnerId,
+          newOwnerEmail,
+          wipedMembers: oldMembers.map((m) => ({
+            userId: m.userId,
+            role: m.role,
+          })),
+        }),
+      },
+    }),
   ])
 
-  console.log(`Project "${projectName}" owner reassigned to ${newOwnerEmail} (${newOwner.name}).`)
+  console.log(
+    `Project "${projectName}" owner reassigned to ${newOwnerEmail} (${newOwner.name}). ${oldMembers.length} member row(s) wiped; AuditLog entry created.`,
+  )
 }
 
 main()

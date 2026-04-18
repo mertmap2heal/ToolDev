@@ -821,6 +821,29 @@ jobs:
             fi
           done
 
+      - name: Guard destructive scripts require env + confirmation (#300,#301)
+        run: |
+          set -e
+          fail=0
+          for f in \
+            backend/src/scripts/delete-stale-project.ts \
+            backend/src/scripts/reassign-project-owner.ts; do
+            if ! grep -q "ALLOW_DESTRUCTIVE_SCRIPTS" "$f"; then
+              echo "::error file=$f::missing ALLOW_DESTRUCTIVE_SCRIPTS env gate (see issues #300,#301)"
+              fail=1
+            fi
+            if ! grep -q "NODE_ENV === 'production'" "$f"; then
+              echo "::error file=$f::missing NODE_ENV=production refusal (see issues #300,#301)"
+              fail=1
+            fi
+          done
+          # delete-stale-project.ts must not reintroduce a hardcoded UUID.
+          if grep -qE "PROJECT_ID_TO_DELETE\s*=\s*'[0-9a-f-]{36}'" backend/src/scripts/delete-stale-project.ts; then
+            echo "::error file=backend/src/scripts/delete-stale-project.ts::hardcoded project id must not return (see issue #300)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Guard against duplicated resolveIsAdmin + auth console.log (#146,#151)
         run: |
           set -e
