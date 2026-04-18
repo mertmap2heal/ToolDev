@@ -131,9 +131,8 @@ export const createNonconformityFromFailedResult = async (req: AuthRequest, res:
         testRun: { testPlan: { projectId: projectId as string } },
       },
       include: {
-        testCaseVersionSnapshot: true,
         testCase: true,
-      } as any,
+      },
     })
     if (!runResult) {
       return res.status(404).json({ success: false, error: 'Run result not found' })
