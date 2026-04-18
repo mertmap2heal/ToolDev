@@ -1,8 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import type { AuthRequest } from './auth.middleware'
-
-const prisma = new PrismaClient()
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function resolveSlugOrIdToProjectId(
