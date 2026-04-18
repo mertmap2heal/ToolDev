@@ -342,6 +342,43 @@ describe('Change request CRUD integration (#121)', () => {
       expect(res.status).toBe(404)
     })
 
+    it('returns 200 even when the on-disk file is already missing (#126 ordering)', async () => {
+      const cr = await prisma.changeRequest.create({
+        data: {
+          projectId: projectA,
+          crId: `CR-DEL-NOFILE-${stamp}`,
+          title: 'To delete (no file on disk)',
+          description: 'Attachment row points at a path that was never written',
+          sourceType: 'requirement',
+          sourceId: 'seed-a',
+          priority: 'medium',
+          requestedBy: 'seed',
+          createdBy: userId,
+          updatedBy: userId,
+        },
+      })
+      createdCrIds.push(cr.id)
+
+      // Attachment row whose fileUrl has no matching file on disk.
+      await prisma.changeRequestAttachment.create({
+        data: {
+          changeRequestId: cr.id,
+          projectId: projectA,
+          fileName: 'ghost.png',
+          fileUrl: `/uploads/change-requests/ghost-${stamp}-does-not-exist.png`,
+          fileSize: 1,
+          mimeType: 'image/png',
+        },
+      })
+
+      const res = await request(app)
+        .delete(`/api/v1/change-requests/${projectA}/${cr.id}`)
+        .set('Authorization', `Bearer ${token}`)
+      expect(res.status).toBe(200)
+      const gone = await prisma.changeRequest.findUnique({ where: { id: cr.id } })
+      expect(gone).toBeNull()
+    })
+
     it('removes the CR and cascades its attachments', async () => {
       const cr = await prisma.changeRequest.create({
         data: {
