@@ -6,6 +6,8 @@ export default defineConfig({
     environment: 'node',
     env: { NODE_ENV: 'test' },
     include: ['src/**/*.test.ts'],
+    // Shared DB + advisory lock + global findMany — run files sequentially
+    fileParallelism: false,
   },
   resolve: {
     alias: {

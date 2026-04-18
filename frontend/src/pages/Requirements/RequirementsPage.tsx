@@ -61,6 +61,7 @@ import clsx from 'clsx'
 import { format } from 'date-fns'
 import { useAuthStore } from '../../store/authStore'
 import { requirementsViewPreferencesService, type RequirementsViewPreferences } from '../../services/requirementsViewPreferences.service'
+import { projectService } from '../../services/project.service'
 
 interface ExpandedRow {
   requirementId: string
@@ -518,6 +519,15 @@ export default function RequirementsPage() {
       return
     }
 
+    if (searchParams.get('qualityWorkbench') === '1') {
+      setIsQualityPanelOpen(true)
+      const next = new URLSearchParams(searchParams)
+      next.delete('qualityWorkbench')
+      setSearchParams(next, { replace: true })
+      setUrlHydrated(true)
+      return
+    }
+
     const layoutParam = searchParams.get('layout')
     if (layoutParam === 'table' || layoutParam === 'document') {
       setListViewStyle((prev) => (prev === layoutParam ? prev : layoutParam))
@@ -898,6 +908,18 @@ export default function RequirementsPage() {
 
   const queryClient = useQueryClient()
   const { statuses: statusDefinitions } = useStatusDefinitionsStore()
+
+  const { data: projectForQuality } = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: async () => {
+      if (!projectId) throw new Error('Project ID required')
+      const response = await projectService.getProject(projectId)
+      if (response.success && response.data) return response.data
+      throw new Error(response.error || 'Failed to load project')
+    },
+    enabled: !!projectId,
+    staleTime: 60_000,
+  })
 
   // Paginated requirements query (disabled when viewing baseline)
   const { data: paginatedData, isLoading: isLoadingLive } = useQuery({
@@ -4872,6 +4894,8 @@ export default function RequirementsPage() {
           {isQualityPanelOpen && projectId && (
             <RequirementQualityPanel
               projectId={projectId}
+              initialSelectedRequirementId={focusRequirementId ?? undefined}
+              projectDisplayName={projectForQuality?.name ?? 'Project'}
               onClose={() => setIsQualityPanelOpen(false)}
               onRequirementClick={(requirementId) => {
                 const req = requirements.find((r) => r.id === requirementId)

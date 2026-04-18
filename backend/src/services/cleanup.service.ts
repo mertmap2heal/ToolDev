@@ -15,10 +15,24 @@ import { logger } from '../lib/logger.js'
  *   CLEANUP_ENABLED=false          Set to false to disable (emergency kill switch)
  *   CLEANUP_RETENTION_DAYS=7       Days after soft-delete before permanent deletion
  *   CLEANUP_BATCH_SIZE=100         Records to process per run
+ *   CLEANUP_ADVISORY_LOCK_KEY      Optional bigint string; default is the production lock key (tests use a unique key)
  */
 
-// Stable advisory lock key — unique to this job (bigint hash of "cleanup_job")
-const CLEANUP_LOCK_KEY = BigInt('0x636c65616e757001')
+// Default advisory lock key — unique to this job (bigint hash of "cleanup_job").
+// Tests may set CLEANUP_ADVISORY_LOCK_KEY so parallel workers do not block each other on pg_try_advisory_lock.
+const DEFAULT_ADVISORY_LOCK_KEY = BigInt('0x636c65616e757001')
+
+function getCleanupAdvisoryLockKey(): bigint {
+    const raw = process.env.CLEANUP_ADVISORY_LOCK_KEY
+    if (raw != null && String(raw).trim() !== '') {
+        try {
+            return BigInt(String(raw).trim())
+        } catch {
+            // invalid value — fall back to default
+        }
+    }
+    return DEFAULT_ADVISORY_LOCK_KEY
+}
 
 export const cleanupSoftDeletedRequirements = async () => {
     const CLEANUP_ENABLED    = process.env.CLEANUP_ENABLED !== 'false'
@@ -32,8 +46,9 @@ export const cleanupSoftDeletedRequirements = async () => {
 
     // Acquire distributed advisory lock — non-blocking (pg_try_advisory_lock returns false
     // immediately if another session already holds it, rather than waiting)
+    const lockKey = getCleanupAdvisoryLockKey()
     const lockRows = await prisma.$queryRaw<Array<{ acquired: boolean }>>`
-        SELECT pg_try_advisory_lock(${CLEANUP_LOCK_KEY}) AS acquired
+        SELECT pg_try_advisory_lock(${lockKey}) AS acquired
     `
     const lockAcquired = lockRows[0]?.acquired ?? false
 
@@ -135,7 +150,7 @@ export const cleanupSoftDeletedRequirements = async () => {
         }
     } finally {
         // Always release the lock — even if the run threw — so the next scheduled run can proceed
-        await prisma.$executeRaw`SELECT pg_advisory_unlock(${CLEANUP_LOCK_KEY})`.catch((e: unknown) => {
+        await prisma.$executeRaw`SELECT pg_advisory_unlock(${lockKey})`.catch((e: unknown) => {
             logger.error('cleanup_lock_release_failed', { error: (e as Error).message })
         })
     }

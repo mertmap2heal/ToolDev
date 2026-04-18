@@ -1,8 +1,16 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Edit, Trash2, Eye } from 'lucide-react'
+import { Plus, Edit, Trash2 } from 'lucide-react'
 import { inventoryService } from '../../../services/inventory.service'
 import CreateSupplierModal from './CreateSupplierModal'
+
+interface SupplierRow {
+  id: string
+  code: string
+  name: string
+  contactName?: string | null
+  email?: string | null
+}
 
 export default function SuppliersTab() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -20,7 +28,7 @@ export default function SuppliersTab() {
     },
   })
 
-  const suppliers = data?.data || []
+  const suppliers = (data?.data ?? []) as SupplierRow[]
 
   return (
     <div>
@@ -73,7 +81,7 @@ export default function SuppliersTab() {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {suppliers.map((supplier: any) => (
+              {suppliers.map((supplier) => (
                 <tr key={supplier.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                     {supplier.code}

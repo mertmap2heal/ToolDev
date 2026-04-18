@@ -38,6 +38,8 @@ model User {
   parameterVersions ParameterVersion[]
   checklistItemResponses TransitionChecklistItemResponse[] @relation("ChecklistItemResponder")
   checklistItemComments  ChecklistItemComment[]
+  requirementQualityDismissals RequirementQualityDismissal[]
+  requirementQualitySnapshots  RequirementQualitySnapshot[]
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -221,6 +223,8 @@ model Project {
   commBuses             CommBus[]
   projectUserEngineeringRoles ProjectUserEngineeringRole[]
   parameterFolders      ParameterFolder[]
+  requirementQualityDismissals RequirementQualityDismissal[]
+  requirementQualitySnapshots  RequirementQualitySnapshot[]
 }
 
 // Requirements export templates (ExportBuilder) - enterprise export wizard presets.
@@ -471,6 +475,8 @@ model Requirement {
   certObjectiveLinks CertObjectiveRequirementLink[]
   changeRequestLinks RequirementChangeRequestLink[]
   subscriptions RequirementSubscription[]
+  qualityDismissals RequirementQualityDismissal[]
+  qualitySnapshots  RequirementQualitySnapshot[]
 
   @@unique([projectId, requirementId])
   @@index([projectId])
@@ -484,6 +490,49 @@ model Requirement {
   @@index([statusId])
   @@index([statusChangedBy])
   @@index([deletedById])
+}
+
+/// Per-user dismissals of validation issues in the Quality Workbench
+model RequirementQualityDismissal {
+  id            String   @id @default(uuid())
+  projectId     String
+  requirementId String
+  userId        String
+  issueKey      String
+  reason        String?  @db.VarChar(500)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requirement Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([requirementId, userId, issueKey])
+  @@index([projectId, userId])
+  @@index([requirementId])
+}
+
+enum RequirementQualitySnapSource {
+  full_project
+  single_requirement
+}
+
+/// Stored validation summary for compare (last run vs current)
+model RequirementQualitySnapshot {
+  id            String                       @id @default(uuid())
+  projectId     String
+  userId        String?
+  source        RequirementQualitySnapSource
+  requirementId String?
+  capturedAt    DateTime                     @default(now())
+  payload       Json
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requirement Requirement? @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, capturedAt])
+  @@index([projectId, requirementId])
 }
 
 model RequirementSubscription {

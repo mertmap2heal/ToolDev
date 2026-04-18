@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi, afterEach } from 'vitest'
+import type { Requirement } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { cleanupSoftDeletedRequirements } from '../services/cleanup.service'
 
@@ -7,12 +8,9 @@ describe('cleanupSoftDeletedRequirements', () => {
   let userId: string
 
   /** Creates a requirement already past any retention window */
-  function toCleanupBatchRow(req: {
-    id: string
-    projectId: string
-    requirementId: string
-    title: string
-  }) {
+  function toCleanupBatchRow(
+    req: Pick<Requirement, 'id' | 'projectId' | 'requirementId' | 'title'>,
+  ) {
     return {
       id: req.id,
       projectId: req.projectId,
@@ -49,6 +47,9 @@ describe('cleanupSoftDeletedRequirements', () => {
   }
 
   beforeAll(async () => {
+    // Isolated from other workers — same DB would otherwise contend on pg_try_advisory_lock
+    process.env.CLEANUP_ADVISORY_LOCK_KEY = '7700012345678900001'
+
     const ts = Date.now()
 
     const user = await prisma.user.create({
@@ -93,6 +94,7 @@ describe('cleanupSoftDeletedRequirements', () => {
   // -----------------------------------------------------------------------
   it('deletes a requirement past the retention window and emits a cleanup_finished log', async () => {
     const req = await createExpiredRequirement('happy')
+    const restoreFindMany = stubCleanupFindManyResult([toCleanupBatchRow(req)])
 
     const loggedLines: string[] = []
     const logSpy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
@@ -100,7 +102,12 @@ describe('cleanupSoftDeletedRequirements', () => {
       return true
     })
 
-    await cleanupSoftDeletedRequirements()
+    try {
+      await cleanupSoftDeletedRequirements()
+    } finally {
+      restoreFindMany()
+      logSpy.mockRestore()
+    }
 
     // Requirement must be permanently gone
     const found = await prisma.requirement.findUnique({ where: { id: req.id } })

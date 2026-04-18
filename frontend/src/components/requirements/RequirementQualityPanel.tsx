@@ -18,6 +18,7 @@ import {
   Save,
   EyeOff,
   Eye,
+  Download,
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../../services/api'
@@ -37,6 +38,17 @@ import type { EntitySummary } from 'shared/types/linkage.types'
 import { invalidateLinkCaches } from '../../utils/invalidateLinkCaches'
 import RichTextEditor from '../common/RichTextEditor'
 import clsx from 'clsx'
+import {
+  fetchQualityDismissals,
+  upsertQualityDismissals,
+  deleteQualityDismissal,
+  deleteAllDismissalsForRequirement,
+  clearAllDismissalsForProject,
+  bulkSkipWarnings,
+  type QualityDismissalRow,
+} from '../../services/requirementQualityWorkbench'
+import { useFocusTrap } from '../../hooks/useFocusTrap'
+import { downloadQualityCsv, downloadQualityPdf } from '../../utils/exportQualityReport'
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -63,10 +75,31 @@ interface RequirementQualityCheck {
   validation: ValidationResult
 }
 
+export type ProjectQualityCompare =
+  | {
+      hasPrevious: false
+      avgScoreDelta: number
+      avgScorePrevious: number | null
+      avgScoreCurrent: number
+      improvedCount: number
+      regressedCount: number
+      previousCapturedAt: string | null
+    }
+  | {
+      hasPrevious: true
+      avgScoreDelta: number
+      avgScorePrevious: number | null
+      avgScoreCurrent: number
+      improvedCount: number
+      regressedCount: number
+      previousCapturedAt: string | null
+    }
+
 interface ProjectValidationResult {
   requirements: RequirementQualityCheck[]
   circularDependencies: string[][]
   duplicateIds: string[]
+  compare?: ProjectQualityCompare
 }
 
 type SeverityFilter = 'all' | 'errors' | 'warnings' | 'passing'
@@ -81,6 +114,10 @@ interface RequirementQualityPanelProps {
   onClose: () => void
   onRequirementClick?: (requirementId: string) => void
   onRequirementUpdated?: () => void
+  /** Deep link: pre-select this requirement when data loads */
+  initialSelectedRequirementId?: string | null
+  /** Label for exported filenames */
+  projectDisplayName?: string
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -129,12 +166,6 @@ function loadDismissedIssues(projectId: string): Record<string, string[]> {
     const raw = localStorage.getItem(`quality-dismissed-${projectId}`)
     return raw ? JSON.parse(raw) : {}
   } catch { return {} }
-}
-
-function saveDismissedIssues(projectId: string, data: Record<string, string[]>) {
-  try {
-    localStorage.setItem(`quality-dismissed-${projectId}`, JSON.stringify(data))
-  } catch { /* storage quota or private browsing */ }
 }
 
 function computeAdjustedScore(check: RequirementQualityCheck, dismissed: Set<string>): number {
@@ -304,6 +335,7 @@ function IssuesList({
   onUnskip,
   showDismissed,
   onToggleDismissed,
+  getSkipReason,
 }: {
   issues?: ValidationIssue[]
   errors: string[]
@@ -311,10 +343,11 @@ function IssuesList({
   renderFieldEditor: (issue: ValidationIssue, isFirst: boolean) => JSX.Element | null
   dismissedKeys: Set<string>
   resolved: ValidationIssue[]
-  onSkip: (key: string) => void
+  onSkip: (issue: ValidationIssue) => void
   onUnskip: (key: string) => void
   showDismissed: boolean
   onToggleDismissed: () => void
+  getSkipReason?: (issueKey: string) => string | undefined
 }) {
   if (issues && issues.length > 0) {
     const activeIssues = issues.filter(i => !dismissedKeys.has(issueKey(i)))
@@ -359,9 +392,11 @@ function IssuesList({
                         {issue.message}
                       </p>
                       <button
-                        onClick={() => onSkip(key)}
+                        type="button"
+                        onClick={() => onSkip(issue)}
                         title="Skip this suggestion (won't affect score)"
-                        className="flex-shrink-0 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                        aria-label="Skip this suggestion"
+                        className="flex-shrink-0 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
                       >
                         <EyeOff size={13} />
                       </button>
@@ -447,11 +482,20 @@ function IssuesList({
                       ) : (
                         <AlertTriangle size={12} className="text-gray-400 mt-0.5 flex-shrink-0" />
                       )}
-                      <p className="flex-1 text-xs text-gray-500 dark:text-gray-400 line-through">{issue.message}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 line-through">{issue.message}</p>
+                        {getSkipReason?.(issueKey(issue)) && (
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 italic">
+                            Reason: {getSkipReason(issueKey(issue))}
+                          </p>
+                        )}
+                      </div>
                       <button
+                        type="button"
                         onClick={() => onUnskip(issueKey(issue))}
                         title="Restore this suggestion"
-                        className="flex-shrink-0 p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded transition-colors"
+                        aria-label="Restore this suggestion"
+                        className="flex-shrink-0 p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
                       >
                         <Eye size={12} />
                       </button>
@@ -501,6 +545,8 @@ export default function RequirementQualityPanel({
   onClose,
   onRequirementClick,
   onRequirementUpdated,
+  initialSelectedRequirementId,
+  projectDisplayName = 'Project',
 }: RequirementQualityPanelProps) {
   const queryClient = useQueryClient()
 
@@ -513,30 +559,89 @@ export default function RequirementQualityPanel({
   const [sortMode, setSortMode] = useState<SortMode>('score_asc')
   const [pendingEdits, setPendingEdits] = useState<Record<string, Partial<UpdateRequirementDto>>>({})
   const [activeTab, setActiveTab] = useState<'requirements' | 'project'>('requirements')
-  const [dismissedIssues, setDismissedIssues] = useState<Record<string, string[]>>(() => loadDismissedIssues(projectId))
   const [resolvedIssues, setResolvedIssues] = useState<Record<string, ValidationIssue[]>>({})
   const [showDismissed, setShowDismissed] = useState(false)
+  const [skipTarget, setSkipTarget] = useState<{ reqId: string; issue: ValidationIssue } | null>(null)
+  const [skipReasonDraft, setSkipReasonDraft] = useState('')
   const preRevalidationSnapshot = useRef<Record<string, ValidationIssue[]>>({})
+  const localDismissalsMigrated = useRef(false)
   const listRef = useRef<HTMLDivElement>(null)
+  const panelInnerRef = useRef<HTMLDivElement>(null)
 
   // ─── Data fetching ───
-  const { data: projectValidation, isLoading, refetch } = useQuery({
+  const {
+    data: projectValidation,
+    isLoading,
+    isFetching,
+    isError: qualityLoadError,
+    dataUpdatedAt,
+    refetch,
+    error: qualityLoadErr,
+  } = useQuery({
     queryKey: ['requirement-quality', projectId],
     queryFn: async () => {
       const response = await apiClient.get<ProjectValidationResult>(`/requirement-validation/${projectId}`)
       if (response.success && response.data) return response.data
-      // Backward compatibility: if the response is an array (old format), wrap it
       if (response.success && Array.isArray(response.data)) {
-        return { requirements: response.data as unknown as RequirementQualityCheck[], circularDependencies: [], duplicateIds: [] }
+        return {
+          requirements: response.data as unknown as RequirementQualityCheck[],
+          circularDependencies: [],
+          duplicateIds: [],
+        }
       }
       return { requirements: [], circularDependencies: [], duplicateIds: [] }
     },
+    enabled: !!projectId,
+    retry: 1,
+  })
+
+  const { data: dismissalRows = [], isSuccess: dismissalsLoaded } = useQuery({
+    queryKey: ['quality-dismissals', projectId],
+    queryFn: () => fetchQualityDismissals(projectId),
     enabled: !!projectId,
   })
 
   const qualityChecks = projectValidation?.requirements ?? []
   const circularDependencies = projectValidation?.circularDependencies ?? []
   const duplicateIds = projectValidation?.duplicateIds ?? []
+  const compareRun = projectValidation?.compare
+
+  const dismissedIssues = useMemo(() => {
+    const m: Record<string, string[]> = {}
+    for (const r of dismissalRows) {
+      if (!m[r.requirementId]) m[r.requirementId] = []
+      m[r.requirementId].push(r.issueKey)
+    }
+    return m
+  }, [dismissalRows])
+
+  /** One-way migration: merge legacy localStorage dismissals into API once */
+  useEffect(() => {
+    if (!dismissalsLoaded || localDismissalsMigrated.current) return
+    localDismissalsMigrated.current = true
+    const local = loadDismissedIssues(projectId)
+    const serverPairs = new Set(dismissalRows.map((r) => `${r.requirementId}\t${r.issueKey}`))
+    const items: Array<{ requirementId: string; issueKey: string; reason?: null }> = []
+    for (const [reqId, keys] of Object.entries(local)) {
+      for (const k of keys) {
+        if (!serverPairs.has(`${reqId}\t${k}`)) items.push({ requirementId: reqId, issueKey: k, reason: null })
+      }
+    }
+    if (items.length > 0) {
+      upsertQualityDismissals(projectId, items).then((res) => {
+        if (res.success) {
+          try {
+            localStorage.removeItem(`quality-dismissed-${projectId}`)
+          } catch { /* ignore */ }
+          queryClient.invalidateQueries({ queryKey: ['quality-dismissals', projectId] })
+        }
+      })
+    } else {
+      try {
+        if (Object.keys(local).length > 0) localStorage.removeItem(`quality-dismissed-${projectId}`)
+      } catch { /* ignore */ }
+    }
+  }, [dismissalsLoaded, projectId, dismissalRows, queryClient])
 
   const { data: selectedRequirementData } = useQuery({
     queryKey: ['requirement-detail-quality', projectId, selectedId],
@@ -618,9 +723,13 @@ export default function RequirementQualityPanel({
 
   const revalidateMutation = useMutation({
     mutationFn: async (requirementId: string) => {
-      const response = await apiClient.get<ValidationResult>(`/requirement-validation/${projectId}/requirement/${requirementId}`)
+      const response = await apiClient.get<ValidationResult & { compare?: unknown }>(
+        `/requirement-validation/${projectId}/requirement/${requirementId}`
+      )
       if (!response.success || !response.data) throw new Error('Revalidation failed')
-      return { requirementId, validation: response.data }
+      const raw = response.data as ValidationResult & { compare?: unknown }
+      const { compare: _c, ...validation } = raw
+      return { requirementId, validation: validation as ValidationResult }
     },
     onSuccess: (result) => {
       const prevIssues = preRevalidationSnapshot.current[result.requirementId] ?? []
@@ -716,10 +825,66 @@ export default function RequirementQualityPanel({
     [filteredChecks, selectedId],
   )
 
-  // ─── Dismissed issues persistence ───
-  useEffect(() => {
-    saveDismissedIssues(projectId, dismissedIssues)
-  }, [projectId, dismissedIssues])
+  const dismissMutation = useMutation({
+    mutationFn: async (payload: { requirementId: string; issueKey: string; reason: string | null }) => {
+      const res = await upsertQualityDismissals(projectId, [payload])
+      if (!res.success) throw new Error(res.error || 'Save failed')
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quality-dismissals', projectId] })
+    },
+  })
+
+  const undismissMutation = useMutation({
+    mutationFn: async ({ requirementId, issueKey }: { requirementId: string; issueKey: string }) => {
+      const res = await deleteQualityDismissal(projectId, requirementId, issueKey)
+      if (!res.success) throw new Error(res.error || 'Restore failed')
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quality-dismissals', projectId] })
+    },
+  })
+
+  const bulkSkipWarningsMutation = useMutation({
+    mutationFn: async (requirementId: string) => {
+      const res = await bulkSkipWarnings(projectId, requirementId)
+      if (!res.success) throw new Error(res.error || 'Bulk skip failed')
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quality-dismissals', projectId] })
+    },
+  })
+
+  const clearRequirementDismissalsMutation = useMutation({
+    mutationFn: async (requirementId: string) => {
+      const res = await deleteAllDismissalsForRequirement(projectId, requirementId)
+      if (!res.success) throw new Error(res.error || 'Clear failed')
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quality-dismissals', projectId] })
+    },
+  })
+
+  const clearProjectDismissalsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await clearAllDismissalsForProject(projectId)
+      if (!res.success) throw new Error(res.error || 'Clear failed')
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quality-dismissals', projectId] })
+    },
+  })
+
+  const dismissalReasonMap = useMemo(() => {
+    const m: Record<string, Record<string, string>> = {}
+    for (const r of dismissalRows) {
+      if (!m[r.requirementId]) m[r.requirementId] = {}
+      if (r.reason) m[r.requirementId][r.issueKey] = r.reason
+    }
+    return m
+  }, [dismissalRows])
+
+  useFocusTrap(panelInnerRef, true)
 
   const getDismissedKeysForReq = useCallback((reqId: string): Set<string> => {
     return new Set(dismissedIssues[reqId] ?? [])
@@ -729,26 +894,44 @@ export default function RequirementQualityPanel({
     return computeAdjustedScore(check, getDismissedKeysForReq(check.requirementId))
   }, [getDismissedKeysForReq])
 
-  const handleSkipIssue = useCallback((reqId: string, key: string) => {
-    setDismissedIssues(prev => {
-      const existing = prev[reqId] ?? []
-      if (existing.includes(key)) return prev
-      return { ...prev, [reqId]: [...existing, key] }
-    })
+  const openSkipModal = useCallback((reqId: string, issue: ValidationIssue) => {
+    setSkipTarget({ reqId, issue })
+    setSkipReasonDraft('')
   }, [])
 
-  const handleUnskipIssue = useCallback((reqId: string, key: string) => {
-    setDismissedIssues(prev => {
-      const existing = prev[reqId] ?? []
-      const filtered = existing.filter(k => k !== key)
-      if (filtered.length === 0) {
-        const next = { ...prev }
-        delete next[reqId]
-        return next
+  const confirmSkipWithReason = useCallback(() => {
+    if (!skipTarget) return
+    const keyStr = issueKey(skipTarget.issue)
+    dismissMutation.mutate(
+      {
+        requirementId: skipTarget.reqId,
+        issueKey: keyStr,
+        reason: skipReasonDraft.trim() || null,
+      },
+      {
+        onSuccess: () => {
+          setSkipTarget(null)
+          setSkipReasonDraft('')
+        },
       }
-      return { ...prev, [reqId]: filtered }
-    })
-  }, [])
+    )
+  }, [skipTarget, skipReasonDraft, dismissMutation])
+
+  const handleUnskipIssue = useCallback(
+    (reqId: string, key: string) => {
+      undismissMutation.mutate({ requirementId: reqId, issueKey: key })
+    },
+    [undismissMutation]
+  )
+
+  const getSkipReasonForSelected = useCallback(
+    (ik: string) => {
+      if (!selectedId) return undefined
+      const row = dismissalRows.find((r) => r.requirementId === selectedId && r.issueKey === ik)
+      return row?.reason ?? undefined
+    },
+    [dismissalRows, selectedId]
+  )
 
   // ─── Stats ───
   const adjustedOverallScore = qualityChecks.length > 0
@@ -789,7 +972,14 @@ export default function RequirementQualityPanel({
   // ─── Keyboard handling ───
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return
+      if (skipTarget && e.key === 'Escape') {
+        e.preventDefault()
+        setSkipTarget(null)
+        setSkipReasonDraft('')
+        return
+      }
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement)
+        return
       if ((e.target as HTMLElement)?.getAttribute?.('contenteditable') === 'true') return
 
       if (e.key === 'ArrowDown' || e.key === 'j') {
@@ -812,7 +1002,7 @@ export default function RequirementQualityPanel({
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [filteredChecks, selectedIndex, selectedId, onClose])
+  }, [filteredChecks, selectedIndex, selectedId, onClose, skipTarget])
 
   // ─── Scroll selected into view ───
   useEffect(() => {
@@ -820,6 +1010,17 @@ export default function RequirementQualityPanel({
     const el = listRef.current.querySelector(`[data-req-id="${selectedId}"]`)
     if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [selectedId])
+
+  const deepLinkSelectDone = useRef(false)
+  useEffect(() => {
+    if (!initialSelectedRequirementId || deepLinkSelectDone.current) return
+    if (isLoading && qualityChecks.length === 0) return
+    const hit = qualityChecks.some((c) => c.requirementId === initialSelectedRequirementId)
+    if (hit) {
+      setSelectedId(initialSelectedRequirementId)
+      deepLinkSelectDone.current = true
+    }
+  }, [initialSelectedRequirementId, qualityChecks, isLoading])
 
   // ─── Edit helpers ───
   const currentEdits = selectedId ? (pendingEdits[selectedId] ?? {}) : {}
@@ -1033,10 +1234,27 @@ export default function RequirementQualityPanel({
     }
   }
 
+  const showLoadingSkeleton = isLoading && !projectValidation
+  const showStaleBanner = Boolean(qualityLoadError && projectValidation)
+
   // ─── Render ───
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[95vw] h-[90vh] flex flex-col">
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      data-testid="requirement-quality-workbench"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Requirement Quality Workbench"
+      aria-describedby="rq-quality-help"
+    >
+      <div
+        ref={panelInnerRef}
+        tabIndex={-1}
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[95vw] h-[90vh] flex flex-col outline-none relative"
+      >
+        <p id="rq-quality-help" className="sr-only">
+          Keyboard: Escape clears the selected requirement or closes the workbench. Tab moves focus within the dialog.
+        </p>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 dark:border-gray-700">
           <div>
@@ -1045,28 +1263,88 @@ export default function RequirementQualityPanel({
           </div>
           <div className="flex items-center gap-2">
             <button
+              type="button"
+              onClick={() =>
+                downloadQualityCsv(projectDisplayName, qualityChecks, dismissedIssues, dismissalReasonMap)
+              }
+              disabled={showLoadingSkeleton}
+              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-blue-500"
+              title="Export CSV"
+              aria-label="Export quality report as CSV"
+            >
+              <Download size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                downloadQualityPdf(
+                  projectDisplayName,
+                  qualityChecks,
+                  dismissedIssues,
+                  dismissalReasonMap,
+                  compareRun,
+                  adjustedOverallScore
+                )
+              }
+              disabled={showLoadingSkeleton}
+              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-blue-500"
+              title="Export PDF"
+              aria-label="Export quality report as PDF"
+            >
+              <span className="text-xs font-semibold px-0.5">PDF</span>
+            </button>
+            <button
+              type="button"
               onClick={() => refetch()}
               disabled={isLoading}
-              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
               title="Re-analyze all"
+              aria-label="Re-analyze all requirements"
+              data-testid="rq-quality-refresh-all"
             >
               <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
             </button>
             <button
+              type="button"
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+              aria-label="Close workbench"
+              data-testid="rq-quality-close"
             >
               <X size={18} className="text-gray-600 dark:text-gray-400" />
             </button>
           </div>
         </div>
 
+        {showStaleBanner && (
+          <div className="px-5 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 text-sm text-amber-900 dark:text-amber-200 flex items-center justify-between gap-2">
+            <span>Could not refresh quality data. Showing last successful results.</span>
+            <button
+              type="button"
+              className="text-xs font-medium underline focus-visible:ring-2 focus-visible:ring-amber-500 rounded"
+              onClick={() => refetch()}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Summary bar */}
         <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <span className={`text-2xl font-bold ${getScoreColor(adjustedOverallScore)}`}>{adjustedOverallScore}</span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">Avg Score</span>
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-2">
+                <span className={`text-2xl font-bold ${getScoreColor(adjustedOverallScore)}`}>{adjustedOverallScore}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">Avg Score</span>
+              </div>
+              {compareRun?.hasPrevious && (
+                <span className="text-xs text-gray-500 dark:text-gray-400" title={compareRun.previousCapturedAt ?? undefined}>
+                  vs last run: {compareRun.avgScoreDelta >= 0 ? '+' : ''}
+                  {compareRun.avgScoreDelta} avg
+                  {compareRun.improvedCount > 0 && ` · ${compareRun.improvedCount} improved`}
+                  {compareRun.regressedCount > 0 && ` · ${compareRun.regressedCount} regressed`}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <span className="text-2xl font-bold text-gray-900 dark:text-white">{qualityChecks.length}</span>
@@ -1086,6 +1364,18 @@ export default function RequirementQualityPanel({
                 <span className="text-xs text-gray-500 dark:text-gray-400">Skipped</span>
               </div>
             )}
+            <button
+              type="button"
+              className="text-xs text-gray-500 hover:text-gray-800 dark:text-gray-400 underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+              onClick={() => {
+                if (window.confirm('Clear all skipped suggestions for this project?')) {
+                  clearProjectDismissalsMutation.mutate()
+                }
+              }}
+              disabled={clearProjectDismissalsMutation.isPending || totalDismissedCount === 0}
+            >
+              Clear all skips
+            </button>
             <div className="flex-1" />
             {/* Progress bar */}
             <div className="flex items-center gap-2 min-w-[200px]">
@@ -1136,6 +1426,20 @@ export default function RequirementQualityPanel({
 
         {/* Content */}
         {activeTab === 'requirements' ? (
+          showLoadingSkeleton ? (
+            <div className="flex-1 flex gap-4 p-4 overflow-hidden animate-pulse">
+              <div className="w-[40%] flex flex-col gap-2 border-r border-gray-200 dark:border-gray-700 pr-4">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className="h-14 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+                ))}
+              </div>
+              <div className="flex-1 flex flex-col gap-3">
+                <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-2/3" />
+                <div className="h-24 bg-gray-200 dark:bg-gray-700 rounded" />
+                <div className="h-24 bg-gray-200 dark:bg-gray-700 rounded" />
+              </div>
+            </div>
+          ) : (
           <div className="flex-1 flex overflow-hidden">
             {/* Left pane — issue list */}
             <div className="w-[40%] flex flex-col border-r border-gray-200 dark:border-gray-700">
@@ -1148,6 +1452,8 @@ export default function RequirementQualityPanel({
                     value={searchText}
                     onChange={e => setSearchText(e.target.value)}
                     placeholder="Search by title or ID..."
+                    data-testid="rq-quality-search"
+                    aria-label="Search requirements by title or ID"
                     className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
@@ -1348,10 +1654,11 @@ export default function RequirementQualityPanel({
                       renderFieldEditor={renderFieldEditor}
                       dismissedKeys={getDismissedKeysForReq(selectedCheck.requirementId)}
                       resolved={resolvedIssues[selectedCheck.requirementId] ?? []}
-                      onSkip={(key) => handleSkipIssue(selectedCheck.requirementId, key)}
+                      onSkip={(issue) => openSkipModal(selectedCheck.requirementId, issue)}
                       onUnskip={(key) => handleUnskipIssue(selectedCheck.requirementId, key)}
                       showDismissed={showDismissed}
                       onToggleDismissed={() => setShowDismissed(prev => !prev)}
+                      getSkipReason={getSkipReasonForSelected}
                     />
                   </div>
 
@@ -1382,11 +1689,32 @@ export default function RequirementQualityPanel({
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      {(selectedCheck.validation.issues ?? []).some((i) => i.severity === 'warning') && (
+                        <button
+                          type="button"
+                          onClick={() => bulkSkipWarningsMutation.mutate(selectedCheck.requirementId)}
+                          disabled={bulkSkipWarningsMutation.isPending}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-blue-500"
+                        >
+                          Skip all warnings
+                        </button>
+                      )}
+                      {(dismissedIssues[selectedCheck.requirementId]?.length ?? 0) > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => clearRequirementDismissalsMutation.mutate(selectedCheck.requirementId)}
+                          disabled={clearRequirementDismissalsMutation.isPending}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-blue-500"
+                        >
+                          Clear skips (req.)
+                        </button>
+                      )}
                       {(updateMutation.isError || revalidateMutation.isError) && (
                         <span className="text-xs text-red-500">Save failed. Try again.</span>
                       )}
                       <button
+                        type="button"
                         onClick={() => snapshotAndRevalidate(selectedCheck.requirementId)}
                         disabled={isSaving}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-40 transition-colors"
@@ -1409,6 +1737,7 @@ export default function RequirementQualityPanel({
               )}
             </div>
           </div>
+          )
         ) : (
           /* Project-level issues tab */
           <div className="flex-1 overflow-y-auto p-5">
@@ -1457,6 +1786,66 @@ export default function RequirementQualityPanel({
                 )}
               </div>
             )}
+          </div>
+        )}
+        {skipTarget && (
+          <div
+            className="absolute inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+            role="presentation"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) {
+                setSkipTarget(null)
+                setSkipReasonDraft('')
+              }
+            }}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="rq-skip-reason-title"
+              className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-4 border border-gray-200 dark:border-gray-700"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <h3 id="rq-skip-reason-title" className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                Skip suggestion
+              </h3>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mb-3 line-clamp-4">
+                {skipTarget.issue.message}
+              </p>
+              <label htmlFor="rq-skip-reason" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Reason (optional)
+              </label>
+              <textarea
+                id="rq-skip-reason"
+                value={skipReasonDraft}
+                onChange={(e) => setSkipReasonDraft(e.target.value)}
+                maxLength={500}
+                rows={3}
+                className="w-full text-sm px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="e.g. Accepted risk for this release"
+              />
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  type="button"
+                  className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 focus-visible:ring-2 focus-visible:ring-blue-500"
+                  onClick={() => {
+                    setSkipTarget(null)
+                    setSkipReasonDraft('')
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  data-testid="rq-quality-confirm-skip"
+                  className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-blue-500"
+                  onClick={() => confirmSkipWithReason()}
+                  disabled={dismissMutation.isPending}
+                >
+                  {dismissMutation.isPending ? 'Saving…' : 'Confirm skip'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

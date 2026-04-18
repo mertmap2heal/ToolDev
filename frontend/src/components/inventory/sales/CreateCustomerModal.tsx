@@ -1,18 +1,24 @@
 import { useState, useRef } from 'react'
+import axios from 'axios'
 import { X } from 'lucide-react'
 import { inventoryService } from '../../../services/inventory.service'
 import { useUnsavedChanges } from '../../../hooks/useUnsavedChanges'
 
-interface CreateCustomerModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onSuccess: () => void
+type CustomerFormState = {
+  code: string
+  name: string
+  contactName: string
+  email: string
+  phone: string
+  address: string
+  city: string
+  state: string
+  zipCode: string
+  country: string
 }
 
-export default function CreateCustomerModal({ isOpen, onClose, onSuccess }: CreateCustomerModalProps) {
-  const onDiscardRef = useRef<() => void>()
-  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
-  const [formData, setFormDataBase] = useState({
+function emptyCustomerForm(): CustomerFormState {
+  return {
     code: '',
     name: '',
     contactName: '',
@@ -23,24 +29,28 @@ export default function CreateCustomerModal({ isOpen, onClose, onSuccess }: Crea
     state: '',
     zipCode: '',
     country: '',
-  })
-  const setFormData = (v: typeof formData | ((prev: typeof formData) => typeof formData)) => { setFormDataBase(v as any); markDirty() }
+  }
+}
+
+interface CreateCustomerModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onSuccess: () => void
+}
+
+export default function CreateCustomerModal({ isOpen, onClose, onSuccess }: CreateCustomerModalProps) {
+  const onDiscardRef = useRef<() => void>()
+  const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
+  const [formData, setFormDataBase] = useState<CustomerFormState>(() => emptyCustomerForm())
+  const setFormData = (v: React.SetStateAction<CustomerFormState>) => {
+    setFormDataBase(v)
+    markDirty()
+  }
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   onDiscardRef.current = () => {
-    setFormDataBase({
-      code: '',
-      name: '',
-      contactName: '',
-      email: '',
-      phone: '',
-      address: '',
-      city: '',
-      state: '',
-      zipCode: '',
-      country: '',
-    })
+    setFormDataBase(emptyCustomerForm())
     setError(null)
   }
 
@@ -59,8 +69,12 @@ export default function CreateCustomerModal({ isOpen, onClose, onSuccess }: Crea
       await inventoryService.createCustomer(formData)
       resetDirty()
       onSuccess()
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to create customer'
+    } catch (err: unknown) {
+      const errorMessage = axios.isAxiosError(err)
+        ? (err.response?.data as { error?: string } | undefined)?.error ?? err.message
+        : err instanceof Error
+          ? err.message
+          : 'Failed to create customer'
       setError(errorMessage)
       console.error('Error creating customer:', err)
     } finally {

@@ -1,8 +1,38 @@
 import { useState, useRef } from 'react'
+import axios from 'axios'
 import { X, Plus, Trash2 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { inventoryService } from '../../../services/inventory.service'
+import { inventoryService, type Item } from '../../../services/inventory.service'
 import { useUnsavedChanges } from '../../../hooks/useUnsavedChanges'
+
+type UomRow = { id: string; code: string }
+
+type CustomerRow = { id: string; code: string; name: string }
+
+type SalesOrderLine = {
+  itemId: string
+  qtyOrdered: number
+  unitPrice: number
+  uomId: string
+}
+
+type SalesOrderFormState = {
+  customerId: string
+  orderedAt: string
+  requiredAt: string
+  notes: string
+  lines: SalesOrderLine[]
+}
+
+function emptySalesOrderForm(): SalesOrderFormState {
+  return {
+    customerId: '',
+    orderedAt: new Date().toISOString().split('T')[0],
+    requiredAt: '',
+    notes: '',
+    lines: [],
+  }
+}
 
 interface CreateSalesOrderModalProps {
   isOpen: boolean
@@ -17,30 +47,16 @@ export default function CreateSalesOrderModal({
 }: CreateSalesOrderModalProps) {
   const onDiscardRef = useRef<() => void>()
   const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
-  const [formData, setFormDataBase] = useState({
-    customerId: '',
-    orderedAt: new Date().toISOString().split('T')[0],
-    requiredAt: '',
-    notes: '',
-    lines: [] as Array<{
-      itemId: string
-      qtyOrdered: number
-      unitPrice: number
-      uomId: string
-    }>,
-  })
-  const setFormData = (v: typeof formData | ((prev: typeof formData) => typeof formData)) => { setFormDataBase(v as any); markDirty() }
+  const [formData, setFormDataBase] = useState<SalesOrderFormState>(() => emptySalesOrderForm())
+  const setFormData = (v: React.SetStateAction<SalesOrderFormState>) => {
+    setFormDataBase(v)
+    markDirty()
+  }
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   onDiscardRef.current = () => {
-    setFormDataBase({
-      customerId: '',
-      orderedAt: new Date().toISOString().split('T')[0],
-      requiredAt: '',
-      notes: '',
-      lines: [],
-    })
+    setFormDataBase(emptySalesOrderForm())
     setError(null)
   }
 
@@ -62,9 +78,9 @@ export default function CreateSalesOrderModal({
     enabled: isOpen,
   })
 
-  const customers = customersData?.data || []
-  const items = itemsData?.data?.items || []
-  const uoms = uomsData?.data || []
+  const customers = (customersData?.data ?? []) as CustomerRow[]
+  const items = (itemsData?.data?.items ?? []) as Item[]
+  const uoms = (uomsData?.data ?? []) as UomRow[]
 
   const addLine = () => {
     setFormData({
@@ -88,7 +104,7 @@ export default function CreateSalesOrderModal({
     })
   }
 
-  const updateLine = (index: number, field: string, value: any) => {
+  const updateLine = <K extends keyof SalesOrderLine>(index: number, field: K, value: SalesOrderLine[K]) => {
     const newLines = [...formData.lines]
     newLines[index] = { ...newLines[index], [field]: value }
     setFormData({ ...formData, lines: newLines })
@@ -125,8 +141,12 @@ export default function CreateSalesOrderModal({
       })
       resetDirty()
       onSuccess()
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to create sales order'
+    } catch (err: unknown) {
+      const errorMessage = axios.isAxiosError(err)
+        ? (err.response?.data as { error?: string } | undefined)?.error ?? err.message
+        : err instanceof Error
+          ? err.message
+          : 'Failed to create sales order'
       setError(errorMessage)
       console.error('Error creating sales order:', err)
     } finally {
@@ -171,7 +191,7 @@ export default function CreateSalesOrderModal({
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">Select Customer</option>
-                {customers.map((customer: any) => (
+                {customers.map((customer) => (
                   <option key={customer.id} value={customer.id}>
                     {customer.code} - {customer.name}
                   </option>
@@ -262,7 +282,7 @@ export default function CreateSalesOrderModal({
                           className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800"
                         >
                           <option value="">Select</option>
-                          {items.map((item: any) => (
+                          {items.map((item) => (
                             <option key={item.id} value={item.id}>
                               {item.sku} - {item.name}
                             </option>
@@ -302,7 +322,7 @@ export default function CreateSalesOrderModal({
                           className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800"
                         >
                           <option value="">Select</option>
-                          {uoms.map((uom: any) => (
+                          {uoms.map((uom) => (
                             <option key={uom.id} value={uom.id}>
                               {uom.code}
                             </option>

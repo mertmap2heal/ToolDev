@@ -11,6 +11,8 @@ describe('Cleanup job — idempotency and distributed lock (#43)', () => {
   let userId: string
 
   beforeAll(async () => {
+    process.env.CLEANUP_ADVISORY_LOCK_KEY = '7700012345678900002'
+
     const ts = Date.now()
     const user = await prisma.user.create({
       data: { email: `cleanup-lock-${ts}@example.com`, name: 'Cleanup Test', password: 'x' },
