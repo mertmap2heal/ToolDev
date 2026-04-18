@@ -1,12 +1,31 @@
 import { Response } from 'express'
 import * as service from '../services/adminUserRole.service'
 import type { AuthRequest } from '../middleware/auth.middleware'
+import { prisma } from '../lib/prisma'
 
 /** GET /admin/user-roles - list assignments. Optional query: ?userId=... */
 export const list = async (req: AuthRequest, res: Response) => {
   try {
+    const callerId = req.userId
+    if (!callerId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' })
+      return
+    }
     const userId = typeof req.query.userId === 'string' ? req.query.userId : undefined
-    const data = await service.listAssignments(userId)
+
+    // #288: non-SUPERIOR_ADMIN sees only assignments for users in their
+    // own company. SUPERIOR_ADMIN retains full visibility.
+    const me = await prisma.user.findUnique({
+      where: { id: callerId },
+      select: { company: true, role: true },
+    })
+    const isSuperior = me?.role === 'SUPERIOR_ADMIN'
+    const callerCompany = me?.company ?? null
+
+    const data = await service.listAssignments(
+      userId,
+      isSuperior ? undefined : callerCompany,
+    )
     res.json({ success: true, data })
   } catch (e) {
     console.error('Admin user-role list error:', e)

@@ -12,10 +12,22 @@ export interface AdminUserRoleAssignment {
   assignedBy: string | null
 }
 
-/** List all admin user-role assignments. Optionally filter by userId. */
-export async function listAssignments(userId?: string): Promise<AdminUserRoleAssignment[]> {
+/**
+ * List admin user-role assignments. Optionally filter by userId AND/OR by
+ * the caller's companyKey (pass `undefined` for no company filter — used
+ * for SUPERIOR_ADMIN and the controller-owned tenant filter in #288).
+ */
+export async function listAssignments(
+  userId?: string,
+  callerCompany?: string | null,
+): Promise<AdminUserRoleAssignment[]> {
+  const where: { userId?: string; user?: { company: string | null } } = {}
+  if (userId) where.userId = userId
+  if (callerCompany !== undefined) {
+    where.user = { company: callerCompany }
+  }
   return prisma.userAdminRole.findMany({
-    where: userId ? { userId } : undefined,
+    where: Object.keys(where).length > 0 ? where : undefined,
     orderBy: { assignedAt: 'asc' },
   })
 }
