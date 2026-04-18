@@ -17,7 +17,10 @@ export default function PackageSwitcher() {
       position: 'fixed',
       bottom: 16,
       right: 16,
-      zIndex: 9999,
+      // z-index 40 keeps the switcher visible above page content but BELOW modal
+      // overlays (which use z-50). Avoids intercepting clicks on modal action
+      // buttons that render in the bottom-right corner (#243).
+      zIndex: 40,
       background: 'var(--theme-surface)',
       border: '1px solid var(--theme-border)',
       borderRadius: 8,
