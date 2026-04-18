@@ -30,11 +30,28 @@ async function userCanAccessProject(userId: string | undefined, projectId: strin
   if (member) return true
 
   const [project, user] = await Promise.all([
-    prisma.project.findUnique({ where: { id: projectId }, select: { userId: true } }),
-    prisma.user.findUnique({ where: { id: userId }, select: { email: true, role: true } }),
+    prisma.project.findUnique({
+      where: { id: projectId },
+      select: { userId: true, companyName: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, role: true, company: true },
+    }),
   ])
   if (project?.userId === userId) return true
-  if (user?.role === 'SUPERIOR_ADMIN' || user?.role === 'COMPANY_ADMIN') return true
+  // #281: SUPERIOR_ADMIN is platform-wide; COMPANY_ADMIN is tenant-scoped.
+  // Before this fix, both bypassed unconditionally — a Company A admin
+  // could reach Company B projects.
+  if (user?.role === 'SUPERIOR_ADMIN') return true
+  if (
+    user?.role === 'COMPANY_ADMIN' &&
+    project?.companyName != null &&
+    user.company != null &&
+    project.companyName === user.company
+  ) {
+    return true
+  }
   if (user?.email && (await isEnvAdmin(user.email))) return true
   return false
 }
