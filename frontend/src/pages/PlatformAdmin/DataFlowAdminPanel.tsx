@@ -217,6 +217,43 @@ const nodeTypes = {
   schema: SchemaNode,
 };
 
+// #266: Every destructive admin action must pass through a confirmation
+// modal. High-blast-radius commands (Halt Sys, Rollout) additionally require
+// the operator to type the full confirmation phrase — so one misclick cannot
+// take the platform offline or trigger a rollout.
+interface AdminCommandSpec {
+  label: string;
+  description: string;
+  confirmPhrase: string | null; // null = simple Yes/No; string = must be typed to arm the Confirm button
+}
+
+const ADMIN_COMMAND_SPECS: Record<string, AdminCommandSpec> = {
+  'Flush Cache': {
+    label: 'Flush Cache',
+    description: 'Evict all cached entries across the platform. Applications will cold-miss until caches repopulate.',
+    confirmPhrase: null,
+  },
+  'GC Run': {
+    label: 'GC Run',
+    description: 'Force a server-side garbage-collection cycle. Causes a brief pause on affected workers.',
+    confirmPhrase: null,
+  },
+  'Rollout': {
+    label: 'Rollout',
+    description: 'Promote the staged build to production. This is visible to every user of every tenant.',
+    confirmPhrase: 'CONFIRM ROLLOUT',
+  },
+  'Halt Sys': {
+    label: 'Halt Sys',
+    description: 'Stop the platform. Every in-flight request is terminated and all users are logged out.',
+    confirmPhrase: 'CONFIRM HALT',
+  },
+};
+
+type PendingAdminAction =
+  | { kind: 'command'; spec: AdminCommandSpec }
+  | { kind: 'remove-node'; nodeId: string; label: string };
+
 const DataFlowAdminPanel: React.FC = () => {
   const [currentView, setCurrentView] = useState<'INFRA' | 'APP' | 'TRACE' | 'DATA' | 'SCHEMA'>('INFRA');
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -227,6 +264,8 @@ const DataFlowAdminPanel: React.FC = () => {
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
   const [isAuditorOpen, setIsAuditorOpen] = useState(false);
   const [auditFindings, setAuditFindings] = useState<any[]>([]);
+  const [pendingAction, setPendingAction] = useState<PendingAdminAction | null>(null);
+  const [confirmInput, setConfirmInput] = useState('');
   const [adminKpis, setAdminKpis] = useState({
     healthScore: 100,
     avgLatency: 0,
@@ -280,11 +319,24 @@ const DataFlowAdminPanel: React.FC = () => {
     ]);
   }, []);
 
-  const handleCommand = useCallback((cmd: string) => {
+  // #266: never emit admin:command directly from a click. All call paths go
+  // through requestCommand -> confirmation modal -> executeCommand.
+  const executeCommand = useCallback((cmd: string) => {
     addLog(`Executing command: ${cmd}`, 'info');
     if (socketRef.current?.connected) {
       socketRef.current.emit('admin:command', { command: cmd });
     }
+  }, [addLog]);
+
+  const requestCommand = useCallback((cmd: string) => {
+    const spec = ADMIN_COMMAND_SPECS[cmd];
+    if (!spec) {
+      // Unknown command - refuse rather than silently emit.
+      addLog(`Refused unknown admin command: ${cmd}`, 'error');
+      return;
+    }
+    setConfirmInput('');
+    setPendingAction({ kind: 'command', spec });
   }, [addLog]);
 
   useEffect(() => {
@@ -390,7 +442,7 @@ const DataFlowAdminPanel: React.FC = () => {
     addLog(`Deployed new ${type} instance: ${id}`);
   };
 
-  const handleRemoveSelected = () => {
+  const performRemoveSelected = useCallback(() => {
     if (!selectedElement) return;
 
     if (selectedElement.type === 'node') {
@@ -411,7 +463,39 @@ const DataFlowAdminPanel: React.FC = () => {
       addLog(`Severed communication path: ${selectedElement.id}`, 'warn');
     }
     setSelectedElement(null);
-  };
+  }, [selectedElement, nodes, edges, setNodes, setEdges, emitUpdate, addLog]);
+
+  // #266: removing a node or edge goes through the same confirmation modal
+  // as admin commands. The header button label was also clarified.
+  const handleRemoveSelected = useCallback(() => {
+    if (!selectedElement) return;
+    const label = selectedElement.type === 'node' ? 'node' : 'edge';
+    setConfirmInput('');
+    setPendingAction({
+      kind: 'remove-node',
+      nodeId: selectedElement.id,
+      label,
+    });
+  }, [selectedElement]);
+
+  const closePendingAction = useCallback(() => {
+    setPendingAction(null);
+    setConfirmInput('');
+  }, []);
+
+  const confirmPendingAction = useCallback(() => {
+    if (!pendingAction) return;
+    if (pendingAction.kind === 'command') {
+      const { spec } = pendingAction;
+      if (spec.confirmPhrase && confirmInput.trim() !== spec.confirmPhrase) {
+        return; // armed button would be disabled; belt-and-braces
+      }
+      executeCommand(spec.label);
+    } else {
+      performRemoveSelected();
+    }
+    closePendingAction();
+  }, [pendingAction, confirmInput, executeCommand, performRemoveSelected, closePendingAction]);
 
   const onNodesDelete = useCallback(() => {
     addLog('Batch node deletion triggered', 'warn');
@@ -466,7 +550,7 @@ const DataFlowAdminPanel: React.FC = () => {
                   }`}
               >
                 <Trash2 size={16} />
-                Terminal Selected
+                {selectedElement?.type === 'edge' ? 'Remove Edge' : 'Remove Node'}
               </button>
             </div>
           </div>
@@ -527,7 +611,7 @@ const DataFlowAdminPanel: React.FC = () => {
           logs={logs}
           activeUsers={activeUsers}
           selectedNode={selectedNodeData}
-          onCommand={handleCommand}
+          onCommand={requestCommand}
           onFocusNode={handleFocusNode}
         />
       </div>
@@ -558,9 +642,120 @@ const DataFlowAdminPanel: React.FC = () => {
           </span>
         </button>
       )}
+
+      {pendingAction && (
+        <AdminConfirmModal
+          pendingAction={pendingAction}
+          typedInput={confirmInput}
+          onTypedInputChange={setConfirmInput}
+          onConfirm={confirmPendingAction}
+          onCancel={closePendingAction}
+        />
+      )}
     </div>
   );
 };
+
+// #266: dedicated confirmation modal for destructive platform-admin actions.
+// High-blast-radius commands (Halt Sys, Rollout) require the operator to type
+// the full confirmation phrase before Confirm enables. Cancel is always the
+// default action (autofocus + Escape-to-close via the backdrop click).
+function AdminConfirmModal({
+  pendingAction,
+  typedInput,
+  onTypedInputChange,
+  onConfirm,
+  onCancel,
+}: {
+  pendingAction: PendingAdminAction;
+  typedInput: string;
+  onTypedInputChange: (s: string) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const isTyped =
+    pendingAction.kind === 'command' && pendingAction.spec.confirmPhrase !== null;
+  const phrase =
+    pendingAction.kind === 'command' ? pendingAction.spec.confirmPhrase : null;
+  const armed = !isTyped || (phrase !== null && typedInput.trim() === phrase);
+
+  const title =
+    pendingAction.kind === 'command'
+      ? `Run "${pendingAction.spec.label}"?`
+      : `Remove ${pendingAction.label}?`;
+  const description =
+    pendingAction.kind === 'command'
+      ? pendingAction.spec.description
+      : pendingAction.kind === 'remove-node'
+        ? `The ${pendingAction.label} "${pendingAction.nodeId}" will be detached and its connections dropped.`
+        : '';
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="admin-confirm-title"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      onClick={onCancel}
+    >
+      <div
+        className="bg-[#161b22] border border-red-500/40 rounded-2xl shadow-2xl w-full max-w-md p-6 text-gray-100"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3 mb-4">
+          <div className="p-2 bg-red-500/10 rounded-lg flex-shrink-0">
+            <AlertTriangle className="text-red-400" size={20} />
+          </div>
+          <div className="min-w-0">
+            <h2 id="admin-confirm-title" className="text-base font-bold tracking-tight">
+              {title}
+            </h2>
+            <p className="text-xs text-gray-400 mt-1">{description}</p>
+          </div>
+        </div>
+        {isTyped && phrase && (
+          <div className="mb-4">
+            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">
+              Type <span className="font-mono text-red-400">{phrase}</span> to confirm
+            </label>
+            <input
+              type="text"
+              autoFocus
+              autoComplete="off"
+              spellCheck={false}
+              value={typedInput}
+              onChange={e => onTypedInputChange(e.target.value)}
+              className="w-full px-3 py-2 text-sm bg-[#0d1117] border border-gray-700 rounded-lg text-gray-100 font-mono focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              placeholder={phrase}
+            />
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            autoFocus={!isTyped}
+            className="px-4 py-2 text-xs font-bold rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={!armed}
+            className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
+              armed
+                ? 'bg-red-600 hover:bg-red-500 text-white'
+                : 'bg-red-900/40 text-red-400/60 cursor-not-allowed'
+            }`}
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default () => (
   <ReactFlowProvider>
