@@ -3,13 +3,16 @@
  * Finds user by inviteEmail or email, sets temp password, sends email.
  * Usage: npx tsx src/scripts/send-invite-to-email.ts <email>
  * Example: npx tsx src/scripts/send-invite-to-email.ts mmertcaferoglu@gmail.com
+ *
+ * #303: the generated temp password is intentionally NOT logged to stdout.
+ * stdout ends up in shell history, CI logs, and terminal buffers where
+ * anyone with file-system or build-log access can retrieve a credential
+ * that should have stayed in the invite email alone.
  */
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { sendInviteEmail } from '../services/email.service'
-
-const prisma = new PrismaClient()
 
 function randomTempPassword(length = 14): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
@@ -58,7 +61,8 @@ async function main() {
   })
 
   console.log('Invite sent to', recipient, 'for user', user.email)
-  console.log('Temporary password (if you need it):', tempPassword)
+  // #303: tempPassword deliberately withheld from stdout. The recipient
+  // receives it via email; requesters who need it must read the email.
 }
 
 main()
