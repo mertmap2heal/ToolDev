@@ -211,6 +211,34 @@ jobs:
             exit 1
           fi
 
+      - name: Run function-delete cascade regression (#290)
+        run: cd backend && npx vitest run src/__tests__/function.deleteCascade.test.ts
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret
+
+      - name: Guard function deleteCascade gates hard delete (#290)
+        run: |
+          set -e
+          f=backend/src/controllers/function.controller.ts
+          fail=0
+          # Must consult the explicit flag before hard-deleting issues.
+          if ! grep -q "deleteLinkedIssues" "$f"; then
+            echo "::error file=$f::deleteFunction must read ?deleteLinkedIssues flag (see issue #290)"
+            fail=1
+          fi
+          # Must audit-log every hard-deleted issue.
+          if ! grep -q "ISSUE_HARD_DELETED_VIA_FUNCTION_CASCADE" "$f"; then
+            echo "::error file=$f::hard cascade must write AuditLog entries (see issue #290)"
+            fail=1
+          fi
+          # Must check admin / owner before the cascade.
+          if ! grep -q "isAdminUser" "$f"; then
+            echo "::error file=$f::hard cascade must gate on isAdminUser / project owner (see issue #290)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Run time-tracking access regression (#286)
         run: cd backend && npx vitest run src/__tests__/timeTracking.access.test.ts
         env:

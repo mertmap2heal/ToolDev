@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
 import { extractParameters } from '../utils/parameterExtractor'
 import { traceabilityService } from '../services/traceability.service'
+import { isAdminUser } from '../lib/adminAuth'
 
 
 export const createFunction = async (req: AuthRequest, res: Response) => {
@@ -389,12 +390,33 @@ async function updateDescendantLevels(parentId: string, parentLevel: number) {
   }
 }
 
+/**
+ * Delete a function.
+ *
+ * Issue #290: the previous implementation hard-deleted every Issue whose
+ * `relatedFunctionIds` contained this function's id, with no caller
+ * authorisation check beyond plain project membership and no audit trail.
+ * Any member could destroy the entire function-issue graph in one call.
+ *
+ * New behaviour:
+ *   - Scoped lookup by (id, projectId).
+ *   - Default cascade is *nullify*: the function id is spliced out of each
+ *     linked Issue's `relatedFunctionIds`, the Issues survive.
+ *   - Hard-delete of linked Issues still possible but requires BOTH
+ *     `?deleteLinkedIssues=true` AND the caller being project owner or
+ *     platform admin. Every deletion writes an AuditLog entry naming the
+ *     affected issueKey so the cascade is discoverable.
+ */
 export const deleteFunction = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params
+    const { projectId, id } = req.params
+    const userId = req.userId
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
 
-    const function_ = await prisma.systemFunction.findUnique({
-      where: { id },
+    const function_ = await prisma.systemFunction.findFirst({
+      where: { id, projectId },
       include: { children: { select: { id: true } } },
     })
 
@@ -419,27 +441,89 @@ export const deleteFunction = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Delete linked issues
+    // Resolve linked issues.
     const linkedIssues = await prisma.issue.findMany({
       where: {
         projectId: function_.projectId,
         relatedFunctionIds: { has: id },
       },
+      select: { id: true, issueKey: true, relatedFunctionIds: true, title: true },
     })
 
-    if (linkedIssues.length > 0) {
+    const wantsHardCascade = String(req.query.deleteLinkedIssues ?? '').toLowerCase() === 'true'
+
+    if (linkedIssues.length > 0 && wantsHardCascade) {
+      // Hard cascade — caller must be project owner / admin.
+      const [adminBypass, ownerMember, legacyOwner] = await Promise.all([
+        isAdminUser(userId),
+        prisma.projectMember.findFirst({
+          where: { projectId: function_.projectId, userId, role: 'owner' },
+          select: { id: true },
+        }),
+        prisma.project.findFirst({
+          where: { id: function_.projectId, userId },
+          select: { id: true },
+        }),
+      ])
+      const authorised = adminBypass || ownerMember || legacyOwner
+      if (!authorised) {
+        return res.status(403).json({
+          success: false,
+          error: 'Only a project owner or admin can hard-delete linked issues',
+        })
+      }
+
       await prisma.issue.deleteMany({
         where: { id: { in: linkedIssues.map((issue) => issue.id) } },
       })
+
+      // #290: record an audit entry per destroyed issue so the cascade is
+      // visible after the fact.
+      await prisma.auditLog.createMany({
+        data: linkedIssues.map((issue) => ({
+          projectId: function_.projectId,
+          userId,
+          action: 'ISSUE_HARD_DELETED_VIA_FUNCTION_CASCADE',
+          details: JSON.stringify({
+            issueId: issue.id,
+            issueKey: issue.issueKey,
+            title: issue.title,
+            functionId: id,
+            functionName: function_.name,
+          }),
+        })),
+      })
+    } else if (linkedIssues.length > 0) {
+      // Default nullify cascade: keep the issues, just unlink.
+      await Promise.all(
+        linkedIssues.map((issue) =>
+          prisma.issue.update({
+            where: { id: issue.id },
+            data: {
+              relatedFunctionIds: issue.relatedFunctionIds.filter((f) => f !== id),
+            },
+          }),
+        ),
+      )
     }
 
     await prisma.systemFunction.delete({
       where: { id },
     })
 
+    const msg = linkedIssues.length === 0
+      ? 'Function deleted successfully'
+      : wantsHardCascade
+        ? `Function deleted along with ${linkedIssues.length} linked issue(s)`
+        : `Function deleted; ${linkedIssues.length} linked issue(s) kept (unlinked)`
+
     res.json({
       success: true,
-      message: `Function deleted successfully${linkedIssues.length > 0 ? ` along with ${linkedIssues.length} linked issue(s)` : ''}`,
+      message: msg,
+      data: {
+        linkedIssueCount: linkedIssues.length,
+        cascadeMode: wantsHardCascade ? 'hard-delete' : 'nullify',
+      },
     })
   } catch (error) {
     console.error('Delete function error:', error)
