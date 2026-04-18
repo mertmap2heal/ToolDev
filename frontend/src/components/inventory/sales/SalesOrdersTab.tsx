@@ -1,12 +1,14 @@
 import { useState } from 'react'
+import axios from 'axios'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Eye, CheckCircle, Package } from 'lucide-react'
 import { inventoryService } from '../../../services/inventory.service'
 import CreateSalesOrderModal from './CreateSalesOrderModal'
 import SalesOrderDetailDrawer from './SalesOrderDetailDrawer'
+import type { SalesOrderListRow } from './inventorySalesTypes'
 
 export default function SalesOrdersTab() {
-  const [selectedSO, setSelectedSO] = useState<any>(null)
+  const [selectedSO, setSelectedSO] = useState<SalesOrderListRow | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false)
   const queryClient = useQueryClient()
@@ -30,33 +32,43 @@ export default function SalesOrdersTab() {
     },
   })
 
-  const handleViewSO = (so: any) => {
+  const handleViewSO = (so: SalesOrderListRow) => {
     setSelectedSO(so)
     setIsDetailDrawerOpen(true)
   }
 
-  const handleApprove = async (so: any) => {
+  const handleApprove = async (so: SalesOrderListRow) => {
     if (window.confirm(`Approve sales order ${so.number}?`)) {
       try {
         await approveMutation.mutateAsync(so.id)
-      } catch (error: any) {
-        alert(error.response?.data?.error || 'Failed to approve sales order')
+      } catch (err: unknown) {
+        const msg = axios.isAxiosError(err)
+          ? (err.response?.data as { error?: string } | undefined)?.error ?? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Failed to approve sales order'
+        alert(msg)
       }
     }
   }
 
-  const handleAllocate = async (so: any) => {
+  const handleAllocate = async (so: SalesOrderListRow) => {
     if (window.confirm(`Allocate reservations for sales order ${so.number}?`)) {
       try {
         await allocateMutation.mutateAsync(so.id)
         alert('Reservations allocated successfully!')
-      } catch (error: any) {
-        alert(error.response?.data?.error || 'Failed to allocate sales order')
+      } catch (err: unknown) {
+        const msg = axios.isAxiosError(err)
+          ? (err.response?.data as { error?: string } | undefined)?.error ?? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Failed to allocate sales order'
+        alert(msg)
       }
     }
   }
 
-  const orders = data?.data?.orders || []
+  const orders = (data?.data?.orders ?? []) as SalesOrderListRow[]
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
@@ -126,7 +138,7 @@ export default function SalesOrdersTab() {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {orders.map((so: any) => (
+              {orders.map((so) => (
                 <tr key={so.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                     {so.number}

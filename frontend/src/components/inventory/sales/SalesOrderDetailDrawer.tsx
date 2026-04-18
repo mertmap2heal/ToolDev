@@ -1,11 +1,13 @@
 import { useState } from 'react'
+import axios from 'axios'
 import { X, Package, Plus, CheckCircle } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { inventoryService } from '../../../services/inventory.service'
 import CreateShipmentModal from './CreateShipmentModal'
+import type { SalesOrderDetail, SalesOrderListRow, SalesOrderLineRow } from './inventorySalesTypes'
 
 interface SalesOrderDetailDrawerProps {
-  salesOrder: any
+  salesOrder: SalesOrderListRow
   isOpen: boolean
   onClose: () => void
 }
@@ -33,19 +35,24 @@ export default function SalesOrderDetailDrawer({
   })
 
   const handleAllocate = async () => {
-    if (window.confirm(`Allocate reservations for sales order ${so?.number}?`)) {
+    if (window.confirm(`Allocate reservations for sales order ${salesOrder.number}?`)) {
       try {
-        await allocateMutation.mutateAsync(so.id)
+        await allocateMutation.mutateAsync(salesOrder.id)
         alert('Reservations allocated successfully!')
-      } catch (error: any) {
-        alert(error.response?.data?.error || 'Failed to allocate sales order')
+      } catch (err: unknown) {
+        const msg = axios.isAxiosError(err)
+          ? (err.response?.data as { error?: string } | undefined)?.error ?? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Failed to allocate sales order'
+        alert(msg)
       }
     }
   }
 
   if (!isOpen) return null
 
-  const so = soData?.data || salesOrder
+  const so: SalesOrderDetail = (soData?.data ?? salesOrder) as SalesOrderDetail
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-end">
@@ -154,7 +161,7 @@ export default function SalesOrderDetailDrawer({
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {so.lines?.map((line: any) => (
+                      {so.lines?.map((line: SalesOrderLineRow) => (
                         <tr key={line.id}>
                           <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
                             {line.item?.sku} - {line.item?.name}
