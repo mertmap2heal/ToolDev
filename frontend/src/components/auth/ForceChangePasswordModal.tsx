@@ -9,6 +9,7 @@ interface ForceChangePasswordModalProps {
 const MIN_PASSWORD_LENGTH = 8
 
 export default function ForceChangePasswordModal({ onSuccess }: ForceChangePasswordModalProps) {
+  const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -18,6 +19,10 @@ export default function ForceChangePasswordModal({ onSuccess }: ForceChangePassw
     e.preventDefault()
     setError('')
 
+    if (currentPassword.length === 0) {
+      setError('Please enter your current (temporary) password')
+      return
+    }
     const trimmed = newPassword.trim()
     if (trimmed.length < MIN_PASSWORD_LENGTH) {
       setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`)
@@ -30,7 +35,7 @@ export default function ForceChangePasswordModal({ onSuccess }: ForceChangePassw
 
     setSubmitting(true)
     try {
-      const res = await authService.changeMyPassword(trimmed)
+      const res = await authService.changeMyPassword(currentPassword, trimmed)
       if (res.success) {
         onSuccess()
       } else {
@@ -58,6 +63,19 @@ export default function ForceChangePasswordModal({ onSuccess }: ForceChangePassw
               {error}
             </p>
           )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Current (temporary) password
+            </label>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
+              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Enter the temporary password you logged in with"
+            />
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               New password
