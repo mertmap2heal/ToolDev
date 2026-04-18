@@ -81,6 +81,24 @@ jobs:
           fi
           exit $fail
 
+      - name: Guard bulk verification mutations report per-id failures (#271)
+        run: |
+          set -e
+          f=frontend/src/pages/Verification/VerificationPage.tsx
+          fail=0
+          # Pre-fix: silently swallowed unlink errors with try/catch.
+          if grep -qE "try\s*\{\s*await verificationService\.unlinkSetup" "$f"; then
+            echo "::error file=$f::unlink must not silently swallow errors (see issue #271)"
+            fail=1
+          fi
+          # Every bulk mutation should call Promise.allSettled so a single
+          # rejection doesn't abandon the rest of the batch.
+          if ! grep -q "Promise.allSettled" "$f"; then
+            echo "::error file=$f::bulk mutations must use Promise.allSettled (see issue #271)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Guard Issues module error handlers stay typed (#267)
         run: |
           set -e

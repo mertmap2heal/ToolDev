@@ -824,11 +824,29 @@ export default function VerificationPage() {
     },
   })
 
+  // #271: bulk-delete used a sequential for-loop that threw on the first
+  // failure and left the preceding plans already deleted with no
+  // aggregated error to the user. Switch to Promise.allSettled so every
+  // plan gets a try and the user sees exactly which ids failed.
   const bulkDeletePlansMutation = useMutation({
     mutationFn: async (ids: string[]) => {
-      for (const id of ids) {
-        const res = (await verificationService.deleteTestPlan(projectId!, id)) as { success?: boolean; error?: string }
-        if (!res?.success) throw new Error(res?.error || 'Failed to delete plan')
+      const results = await Promise.allSettled(
+        ids.map((id) => verificationService.deleteTestPlan(projectId!, id)),
+      )
+      const failures: { id: string; error: string }[] = []
+      results.forEach((r, i) => {
+        if (r.status === 'rejected') {
+          failures.push({ id: ids[i]!, error: String((r.reason as Error)?.message ?? 'Failed') })
+        } else if ((r.value as { success?: boolean })?.success === false) {
+          failures.push({ id: ids[i]!, error: (r.value as { error?: string })?.error ?? 'Failed' })
+        }
+      })
+      if (failures.length > 0) {
+        throw new Error(
+          `Deleted ${ids.length - failures.length} of ${ids.length} plan(s). Failed: ${failures
+            .map((f) => `${f.id} (${f.error})`)
+            .join('; ')}`,
+        )
       }
     },
     onSuccess: () => {
@@ -836,6 +854,11 @@ export default function VerificationPage() {
       queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
       setSelectedPlanIds(new Set())
       setPlanRowMenuId(null)
+    },
+    onError: (err: unknown) => {
+      queryClient.invalidateQueries({ queryKey: ['test-plans', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
+      alert(err instanceof Error ? err.message : 'Bulk delete failed')
     },
   })
 
@@ -848,38 +871,95 @@ export default function VerificationPage() {
     },
   })
 
-  const bulkReviewMutation = useMutation({
-    mutationFn: async (ids: string[]) => {
-      for (const id of ids) {
-        await verificationService.reviewTestCase(projectId!, id)
+  // #271: helper used by the state-transition bulk mutations below. Runs
+  // all operations via Promise.allSettled, always invalidates the queries
+  // so the UI reflects whichever subset succeeded, and throws a single
+  // Error whose message lists the failed ids so onError can surface them.
+  const runBulkMutation = async <T,>(
+    ids: T[],
+    label: string,
+    op: (id: T) => Promise<unknown>,
+  ): Promise<void> => {
+    const results = await Promise.allSettled(ids.map((id) => op(id)))
+    const failures: { id: string; error: string }[] = []
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') {
+        failures.push({ id: String(ids[i]), error: String((r.reason as Error)?.message ?? 'Failed') })
+      } else if ((r.value as { success?: boolean })?.success === false) {
+        failures.push({ id: String(ids[i]), error: (r.value as { error?: string })?.error ?? 'Failed' })
       }
-    },
+    })
+    if (failures.length > 0) {
+      throw new Error(
+        `${label}: succeeded ${ids.length - failures.length}/${ids.length}. Failed: ${failures
+          .map((f) => `${f.id} (${f.error})`)
+          .join('; ')}`,
+      )
+    }
+  }
+
+  const bulkReviewMutation = useMutation({
+    mutationFn: (ids: string[]) =>
+      runBulkMutation(ids, 'Mark reviewed', (id) => verificationService.reviewTestCase(projectId!, id)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
       queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
       setSelectedCaseIds(new Set())
+    },
+    onError: (err: unknown) => {
+      queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
+      alert(err instanceof Error ? err.message : 'Bulk review failed')
     },
   })
 
   const bulkApproveMutation = useMutation({
-    mutationFn: async (ids: string[]) => {
-      for (const id of ids) {
-        await verificationService.approveTestCase(projectId!, id)
-      }
-    },
+    mutationFn: (ids: string[]) =>
+      runBulkMutation(ids, 'Approve', (id) => verificationService.approveTestCase(projectId!, id)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
       queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
       setSelectedCaseIds(new Set())
+    },
+    onError: (err: unknown) => {
+      queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
+      alert(err instanceof Error ? err.message : 'Bulk approve failed')
     },
   })
 
   const bulkLinkSetupsMutation = useMutation({
     mutationFn: async ({ caseIds, setupIds }: { caseIds: string[]; setupIds: string[] }) => {
+      const pairs: { caseId: string; setupId: string }[] = []
       for (const caseId of caseIds) {
         for (const setupId of setupIds) {
-          await verificationService.linkSetup(projectId!, caseId, setupId)
+          pairs.push({ caseId, setupId })
         }
+      }
+      const results = await Promise.allSettled(
+        pairs.map((p) => verificationService.linkSetup(projectId!, p.caseId, p.setupId)),
+      )
+      const failures: { pair: string; error: string }[] = []
+      results.forEach((r, i) => {
+        const pair = pairs[i]!
+        if (r.status === 'rejected') {
+          failures.push({
+            pair: `${pair.caseId}×${pair.setupId}`,
+            error: String((r.reason as Error)?.message ?? 'Failed'),
+          })
+        } else if ((r.value as { success?: boolean })?.success === false) {
+          failures.push({
+            pair: `${pair.caseId}×${pair.setupId}`,
+            error: (r.value as { error?: string })?.error ?? 'Failed',
+          })
+        }
+      })
+      if (failures.length > 0) {
+        throw new Error(
+          `Link setups: succeeded ${pairs.length - failures.length}/${pairs.length}. Failed: ${failures
+            .map((f) => `${f.pair} (${f.error})`)
+            .join('; ')}`,
+        )
       }
     },
     onSuccess: () => {
@@ -888,18 +968,52 @@ export default function VerificationPage() {
       setBulkSetupModal({ isOpen: false, mode: 'link', selectedSetupIds: new Set() })
       setSelectedCaseIds(new Set())
     },
+    onError: (err: unknown) => {
+      queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
+      alert(err instanceof Error ? err.message : 'Bulk link failed')
+    },
   })
 
+  // #271: unlink used to silently swallow errors with try/catch so a real
+  // 500 was indistinguishable from the already-unlinked case. Now every
+  // pair is tried via Promise.allSettled, the 404 "not linked" case is
+  // tolerated by filtering on the normalized shape, but other failures
+  // bubble up with ids so the user knows what happened.
   const bulkUnlinkSetupsMutation = useMutation({
     mutationFn: async ({ caseIds, setupIds }: { caseIds: string[]; setupIds: string[] }) => {
+      const pairs: { caseId: string; setupId: string }[] = []
       for (const caseId of caseIds) {
         for (const setupId of setupIds) {
-          try {
-            await verificationService.unlinkSetup(projectId!, caseId, setupId)
-          } catch {
-            // Ignore if setup wasn't linked
+          pairs.push({ caseId, setupId })
+        }
+      }
+      const results = await Promise.allSettled(
+        pairs.map((p) => verificationService.unlinkSetup(projectId!, p.caseId, p.setupId)),
+      )
+      const failures: { pair: string; error: string }[] = []
+      results.forEach((r, i) => {
+        const pair = pairs[i]!
+        if (r.status === 'rejected') {
+          failures.push({
+            pair: `${pair.caseId}×${pair.setupId}`,
+            error: String((r.reason as Error)?.message ?? 'Failed'),
+          })
+        } else if ((r.value as { success?: boolean })?.success === false) {
+          // Tolerate "not linked" as a no-op — the user asked for a terminal
+          // state (unlinked) and we're already there.
+          const err = (r.value as { error?: string })?.error ?? ''
+          if (!/not linked|not found/i.test(err)) {
+            failures.push({ pair: `${pair.caseId}×${pair.setupId}`, error: err || 'Failed' })
           }
         }
+      })
+      if (failures.length > 0) {
+        throw new Error(
+          `Unlink setups: succeeded ${pairs.length - failures.length}/${pairs.length}. Failed: ${failures
+            .map((f) => `${f.pair} (${f.error})`)
+            .join('; ')}`,
+        )
       }
     },
     onSuccess: () => {
@@ -907,6 +1021,11 @@ export default function VerificationPage() {
       queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
       setBulkSetupModal({ isOpen: false, mode: 'unlink', selectedSetupIds: new Set() })
       setSelectedCaseIds(new Set())
+    },
+    onError: (err: unknown) => {
+      queryClient.invalidateQueries({ queryKey: ['test-cases', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['verification-overview', projectId] })
+      alert(err instanceof Error ? err.message : 'Bulk unlink failed')
     },
   })
 
