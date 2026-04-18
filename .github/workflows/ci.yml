@@ -291,6 +291,46 @@ jobs:
             exit 1
           fi
 
+      - name: Verify comm.routes nested tiers carry :projectId (#289)
+        run: |
+          set -e
+          f=backend/src/routes/comm.routes.ts
+          fail=0
+          # Every router handler in comm.routes must mount under /:projectId/...
+          # Before #289 the nested message/field tiers bypassed projectIdParam
+          # by routing on /buses/:busId/... or /messages/:messageId/... directly.
+          if grep -nE "router\.(get|post|put|patch|delete)\('/[^:]" "$f"; then
+            echo "::error file=$f::every comm route must start with /:projectId (see issue #289)"
+            fail=1
+          fi
+          if grep -nE "router\.(get|post|put|patch|delete)\('/buses/:busId" "$f"; then
+            echo "::error file=$f::nested /buses/:busId route bypasses project membership (see issue #289)"
+            fail=1
+          fi
+          if grep -nE "router\.(get|post|put|patch|delete)\('/messages/:" "$f"; then
+            echo "::error file=$f::nested /messages/:id route bypasses project membership (see issue #289)"
+            fail=1
+          fi
+          if grep -nE "router\.(get|post|put|patch|delete)\('/fields/:" "$f"; then
+            echo "::error file=$f::nested /fields/:id route bypasses project membership (see issue #289)"
+            fail=1
+          fi
+          # Service layer must scope each nested op by projectId.
+          svc=backend/src/services/comm.service.ts
+          for needle in assertBusInProject assertMessageInProject assertFieldInProject; do
+            if ! grep -q "$needle" "$svc"; then
+              echo "::error file=$svc::missing $needle ownership check (see issue #289)"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Run comm cross-project IDOR regression (#289)
+        run: cd backend && npx vitest run src/__tests__/comm.idor.test.ts
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret
+
       - name: Verify changeMyPassword requires currentPassword (#274)
         run: |
           set -e
