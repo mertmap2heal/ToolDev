@@ -320,6 +320,33 @@ jobs:
           done
           exit $fail
 
+      - name: Run task-template access regression (#292)
+        run: cd backend && npx vitest run src/__tests__/taskTemplate.auth.test.ts
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret
+
+      - name: Guard template controller enforces project membership (#292)
+        run: |
+          set -e
+          f=backend/src/controllers/template.controller.ts
+          fail=0
+          for needle in resolveCallerContext isMemberOf canAccessTemplate; do
+            if ! grep -q "$needle" "$f"; then
+              echo "::error file=$f::missing helper $needle (see issue #292)"
+              fail=1
+            fi
+          done
+          if ! grep -q "Only SUPERIOR_ADMIN can create a global template" "$f"; then
+            echo "::error file=$f::must block non-superior global create (see issue #292)"
+            fail=1
+          fi
+          if ! grep -q "Only SUPERIOR_ADMIN can change template scope" "$f"; then
+            echo "::error file=$f::must block isGlobal toggle from non-superior (see issue #292)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Run PBS sync cross-project regression (#293)
         run: cd backend && npx vitest run src/__tests__/pbsSync.validation.test.ts
         env:
