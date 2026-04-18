@@ -291,6 +291,36 @@ jobs:
             exit 1
           fi
 
+      - name: Verify changeMyPassword requires currentPassword (#274)
+        run: |
+          set -e
+          f=backend/src/controllers/auth.controller.ts
+          # The handler must pull currentPassword out of req.body ...
+          if ! grep -qE "const \{[^}]*currentPassword[^}]*\} = req\.body" "$f"; then
+            echo "::error file=$f::changeMyPassword must read currentPassword from req.body (see issue #274)"
+            exit 1
+          fi
+          # ... and verify it with bcrypt.compare before updating the hash.
+          if ! grep -q "bcrypt.compare(currentPassword" "$f"; then
+            echo "::error file=$f::changeMyPassword must verify currentPassword with bcrypt.compare (see issue #274)"
+            exit 1
+          fi
+          # Frontend service must forward currentPassword to the server.
+          svc=frontend/src/services/auth.service.ts
+          if ! grep -q "currentPassword" "$svc"; then
+            echo "::error file=$svc::auth.service must send currentPassword with changeMyPassword (see issue #274)"
+            exit 1
+          fi
+          # Callers must invoke changeMyPassword with TWO arguments
+          # (currentPassword, newPassword). A single-argument call is the
+          # pre-fix takeover shape.
+          for f in frontend/src/pages/Settings/SettingsPage.tsx frontend/src/components/auth/ForceChangePasswordModal.tsx; do
+            if ! grep -qE "changeMyPassword\s*\(\s*\w+\s*,\s*\w+" "$f"; then
+              echo "::error file=$f::changeMyPassword caller must pass currentPassword as first arg (see issue #274)"
+              exit 1
+            fi
+          done
+
       - name: Guard against duplicated resolveIsAdmin + auth console.log (#146,#151)
         run: |
           set -e

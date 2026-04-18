@@ -157,9 +157,19 @@ export const authService = {
     return apiClient.post<{ message: string }>(`/auth/users/${userId}/send-invite`, {})
   },
 
-  /** Change own password (e.g. after first login with temp password). */
-  async changeMyPassword(newPassword: string): Promise<ApiResponse<{ message: string }>> {
-    return apiClient.patch<{ message: string }>('/auth/me/password', { newPassword })
+  /**
+   * Change own password. Requires the current password for verification
+   * (issue #274). The caller must collect and pass it — the server rejects
+   * a missing/incorrect currentPassword.
+   */
+  async changeMyPassword(
+    currentPassword: string,
+    newPassword: string
+  ): Promise<ApiResponse<{ message: string }>> {
+    return apiClient.patch<{ message: string }>('/auth/me/password', {
+      currentPassword,
+      newPassword,
+    })
   },
 
   /** Update own profile (name, company). */
