@@ -187,10 +187,7 @@ describe('Verification evidence endpoints (#240)', () => {
   })
 
   describe('POST /:projectId/:id/link and /unlink', () => {
-    // Skipped pending fix for #246: linkEvidence service inserts userId: null
-    // against a required FK (VerEvidenceLink.userId), so /link 500s in production.
-    // Re-enable once #246 lands.
-    it.skip('links evidence to a TEST_CASE then unlinks it (blocked by #246)', async () => {
+    it('links evidence to a TEST_CASE then unlinks it', async () => {
       const ev = await prisma.verEvidence.create({
         data: {
           projectId: projectA,
