@@ -28,8 +28,6 @@ export interface RequirementQualityCheck {
 
 export interface ProjectValidationResult {
   requirements: RequirementQualityCheck[]
-  circularDependencies: string[][]
-  duplicateIds: string[]
 }
 
 function stripHtml(text: string): string {
@@ -390,94 +388,6 @@ export const requirementValidationService = {
       }
     }
 
-    const [circularDependencies, duplicateIds] = await Promise.all([
-      this.checkCircularDependencies(projectId).catch(() => [] as string[][]),
-      this.checkDuplicateIds(projectId).catch(() => [] as string[]),
-    ])
-
-    return { requirements: results, circularDependencies, duplicateIds }
-  },
-
-  /**
-   * Checks for circular dependencies
-   */
-  async checkCircularDependencies(projectId: string): Promise<string[][]> {
-    const requirements = await prisma.requirement.findMany({
-      where: { projectId },
-      select: {
-        id: true,
-        dependencies: true,
-      },
-    })
-
-    const circular: string[][] = []
-    const visited = new Set<string>()
-    const recursionStack = new Set<string>()
-
-    const hasCycle = (reqId: string, path: string[]): boolean => {
-      if (recursionStack.has(reqId)) {
-        circular.push([...path, reqId])
-        return true
-      }
-
-      if (visited.has(reqId)) {
-        return false
-      }
-
-      visited.add(reqId)
-      recursionStack.add(reqId)
-
-      const req = requirements.find((r) => r.id === reqId)
-      if (req && req.dependencies) {
-        for (const depId of req.dependencies) {
-          if (hasCycle(depId, [...path, reqId])) {
-            return true
-          }
-        }
-      }
-
-      recursionStack.delete(reqId)
-      return false
-    }
-
-    for (const req of requirements) {
-      if (!visited.has(req.id)) {
-        hasCycle(req.id, [])
-      }
-    }
-
-    return circular
-  },
-
-  /**
-   * Checks for duplicate requirement IDs
-   */
-  async checkDuplicateIds(projectId: string): Promise<string[]> {
-    const requirements = await prisma.requirement.findMany({
-      where: { projectId },
-      select: {
-        id: true,
-        requirementId: true,
-      },
-    })
-
-    const idMap = new Map<string, string[]>()
-    requirements.forEach((req) => {
-      if (req.requirementId) {
-        if (!idMap.has(req.requirementId)) {
-          idMap.set(req.requirementId, [])
-        }
-        idMap.get(req.requirementId)!.push(req.id)
-      }
-    })
-
-    const duplicates: string[] = []
-    idMap.forEach((ids, reqId) => {
-      if (ids.length > 1) {
-        duplicates.push(reqId)
-      }
-    })
-
-    return duplicates
+    return { requirements: results }
   },
 }

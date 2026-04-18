@@ -937,8 +937,7 @@ test.describe('Requirements', () => {
 
     await expect(page.getByTestId('rq-quality-search')).toBeVisible()
     await expect(page.getByText(/passing$/)).toBeVisible()
-    await expect(page.getByText('Requirements (')).toBeVisible()
-    await expect(page.getByText('Project Issues')).toBeVisible()
+    await expect(page.getByText(/^Requirements \(/)).toBeVisible()
 
     expect(errors, errors.join('; ')).toEqual([])
   })
@@ -1022,29 +1021,6 @@ test.describe('Requirements', () => {
 
     const prevBtn = page.getByRole('button', { name: /^previous$/i })
     await prevBtn.click()
-  })
-
-  test('quality workbench: project issues tab renders', async ({ page, projectId }) => {
-    const errors: string[] = []
-    page.on('pageerror', (err) => errors.push(err.message))
-
-    await page.goto(`/projects/${projectId}/requirements/browse`)
-    await page.waitForLoadState('domcontentloaded')
-    await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
-
-    await page.getByRole('button', { name: /^analysis$/i }).click()
-    await page.getByRole('button', { name: /requirement quality/i }).click()
-    await expect(page.getByRole('heading', { name: /requirement quality workbench/i })).toBeVisible({ timeout: 10_000 })
-
-    await page.getByRole('button', { name: /project issues/i }).click()
-
-    const noIssues = page.getByText('No project-level issues', { exact: true })
-    const circularHeading = page.getByText(/^Circular Dependencies/i)
-    const duplicateHeading = page.getByText(/^Duplicate Requirement IDs/i)
-
-    await expect(noIssues.or(circularHeading).or(duplicateHeading)).toBeVisible({ timeout: 5_000 })
-
-    expect(errors, errors.join('; ')).toEqual([])
   })
 
   test('quality workbench: re-validate button works', async ({ page, projectId }) => {
@@ -1144,22 +1120,6 @@ test.describe('Requirements', () => {
     await page.getByTestId('rq-quality-close').click()
 
     await expect(page.getByTestId('requirement-quality-workbench')).not.toBeVisible({ timeout: 5_000 })
-  })
-
-  test('quality workbench: tabs switch between requirements list and project issues', async ({ page, projectId }) => {
-    await page.goto(`/projects/${projectId}/requirements/browse`)
-    await page.waitForLoadState('domcontentloaded')
-    await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
-
-    await openRequirementQualityWorkbench(page)
-
-    await page.getByRole('button', { name: /project issues/i }).click()
-    const noIssues = page.getByText('No project-level issues', { exact: true })
-    const circularHeading = page.getByText(/^Circular Dependencies/i)
-    await expect(noIssues.or(circularHeading)).toBeVisible({ timeout: 5_000 })
-
-    await page.getByRole('button', { name: /^requirements \(/i }).click()
-    await expect(page.getByTestId('rq-quality-search')).toBeVisible()
   })
 
   test('quality workbench: skip and restore suggestion when structured issues exist', async ({ page, projectId }) => {

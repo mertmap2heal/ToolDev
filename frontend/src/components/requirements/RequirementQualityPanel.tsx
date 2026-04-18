@@ -98,8 +98,6 @@ export type ProjectQualityCompare =
 
 interface ProjectValidationResult {
   requirements: RequirementQualityCheck[]
-  circularDependencies: string[][]
-  duplicateIds: string[]
   compare?: ProjectQualityCompare
 }
 
@@ -562,7 +560,6 @@ export default function RequirementQualityPanel({
   const [fixTypeFilter, setFixTypeFilter] = useState<FixTypeFilter>('all')
   const [sortMode, setSortMode] = useState<SortMode>('score_asc')
   const [pendingEdits, setPendingEdits] = useState<Record<string, Partial<UpdateRequirementDto>>>({})
-  const [activeTab, setActiveTab] = useState<'requirements' | 'project'>('requirements')
   const [resolvedIssues, setResolvedIssues] = useState<Record<string, ValidationIssue[]>>({})
   const [showDismissed, setShowDismissed] = useState(false)
   const [skipTarget, setSkipTarget] = useState<{ reqId: string; issue: ValidationIssue } | null>(null)
@@ -590,11 +587,9 @@ export default function RequirementQualityPanel({
       if (response.success && Array.isArray(response.data)) {
         return {
           requirements: response.data as unknown as RequirementQualityCheck[],
-          circularDependencies: [],
-          duplicateIds: [],
         }
       }
-      return { requirements: [], circularDependencies: [], duplicateIds: [] }
+      return { requirements: [] }
     },
     enabled: !!projectId,
     retry: 1,
@@ -607,8 +602,6 @@ export default function RequirementQualityPanel({
   })
 
   const qualityChecks = projectValidation?.requirements ?? []
-  const circularDependencies = projectValidation?.circularDependencies ?? []
-  const duplicateIds = projectValidation?.duplicateIds ?? []
   const compareRun = projectValidation?.compare
 
   const dismissedIssues = useMemo(() => {
@@ -1405,41 +1398,14 @@ export default function RequirementQualityPanel({
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex px-5 border-b border-gray-200 dark:border-gray-700">
-          <button
-            onClick={() => setActiveTab('requirements')}
-            className={clsx(
-              'px-4 py-2 text-sm font-medium border-b-2 transition-colors',
-              activeTab === 'requirements'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-            )}
-          >
+        <div className="border-b border-gray-200 px-5 py-2.5 dark:border-gray-700">
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
             Requirements ({filteredChecks.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('project')}
-            className={clsx(
-              'px-4 py-2 text-sm font-medium border-b-2 transition-colors',
-              activeTab === 'project'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300',
-              (circularDependencies.length > 0 || duplicateIds.length > 0) && activeTab !== 'project' && 'text-red-500 dark:text-red-400'
-            )}
-          >
-            Project Issues
-            {(circularDependencies.length > 0 || duplicateIds.length > 0) && (
-              <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
-                {circularDependencies.length + duplicateIds.length}
-              </span>
-            )}
-          </button>
+          </span>
         </div>
 
         {/* Content */}
-        {activeTab === 'requirements' ? (
-          showLoadingSkeleton ? (
+        {showLoadingSkeleton ? (
             <div className="flex-1 flex gap-4 p-4 overflow-hidden animate-pulse">
               <div className="w-[40%] flex flex-col gap-2 border-r border-gray-200 dark:border-gray-700 pr-4">
                 {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -1749,56 +1715,6 @@ export default function RequirementQualityPanel({
                 </>
               )}
             </div>
-          </div>
-          )
-        ) : (
-          /* Project-level issues tab */
-          <div className="flex-1 overflow-y-auto p-5">
-            {circularDependencies.length === 0 && duplicateIds.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <CheckCircle size={32} className="text-green-500 dark:text-green-400 mb-3" />
-                <p className="text-sm font-medium text-green-700 dark:text-green-400">No project-level issues</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">No circular dependencies or duplicate IDs found</p>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {circularDependencies.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                      <AlertCircle size={16} className="text-red-500" />
-                      Circular Dependencies ({circularDependencies.length})
-                    </h3>
-                    <div className="space-y-2">
-                      {circularDependencies.map((cycle, idx) => (
-                        <div key={idx} className="border border-red-200 dark:border-red-800/50 bg-red-50/50 dark:bg-red-900/10 rounded-lg p-3">
-                          <p className="text-sm text-red-700 dark:text-red-300">
-                            Cycle: {cycle.map(id => id.substring(0, 8)).join(' → ')}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {duplicateIds.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                      <AlertTriangle size={16} className="text-yellow-500" />
-                      Duplicate Requirement IDs ({duplicateIds.length})
-                    </h3>
-                    <div className="space-y-2">
-                      {duplicateIds.map((id, idx) => (
-                        <div key={idx} className="border border-yellow-200 dark:border-yellow-800/50 bg-yellow-50/50 dark:bg-yellow-900/10 rounded-lg p-3">
-                          <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                            Duplicate ID: <span className="font-mono font-medium">{id}</span>
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
         {clearAllSkipsConfirmOpen && (
