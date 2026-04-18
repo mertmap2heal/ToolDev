@@ -46,6 +46,8 @@ backups/
 .mcp.json
 .playwright-mcp/
 *.png
+# Handbook screenshots (tracked assets for user guidelines)
+!guidelines/assets/**/*.png
 
 # Playwright auth session storage (never commit — may contain real credentials)
 **/.auth/

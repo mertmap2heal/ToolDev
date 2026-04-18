@@ -2,7 +2,7 @@
 title: "Requirements"
 description: "Capture, organise, and trace engineering requirements through the full project lifecycle"
 status: "published"
-lastUpdated: "2026-04-14"
+lastUpdated: "2026-04-18"
 version: "1.0"
 audience: "all"
 relatedPages:
@@ -40,9 +40,9 @@ Requirements flow through a defined lifecycle (Draft → In Review → Approved)
 
 ## Navigation
 
-**Project** → **Requirements** (left sidebar)
+**Project** → **Requirements** (left sidebar). The main workspace opens at **`/projects/:projectId/requirements/browse`** (the shorter path **`/projects/:projectId/requirements`** redirects there and preserves the query string).
 
-The page loads the full requirement set for the currently active project.
+For a detailed, screenshot-backed walkthrough of the browse screen, see the in-repo handbook: `guidelines/requirements-page.md`.
 
 ---
 
@@ -54,7 +54,7 @@ The page loads the full requirement set for the currently active project.
 | **Parent requirement** | A higher-level requirement that is decomposed into child requirements below it |
 | **Child requirement** | A derived or decomposed requirement that belongs under a parent |
 | **Traceability link** | A defined relationship between a requirement and another artifact (function, test case, issue, parameter, etc.) |
-| **Verification status** | Whether a requirement has been verified — Unverified, In Progress, Verified, or Waived |
+| **Verification status** | Whether a requirement has been verified (filter uses **Not Verified**, **Verified**, **Failed**, plus review-related fields elsewhere) |
 | **Baseline** | A locked, named snapshot of the requirement set at a point in time |
 | **Suspect link** | A traceability link that may be broken or outdated (e.g. the linked artifact has changed since the link was created) |
 | **Inline editing** | Editing a field directly in the table row without opening a modal |
@@ -74,34 +74,35 @@ A resizable panel on the left provides three structured views for scoping the ma
 | **Functions** | System function tree / graph | Selecting a function filters the table to requirements allocated to that function |
 | **Verification** | Test plan and test case hierarchy | Selecting a test filters to requirements verified by that test |
 
-Click the panel's right edge and drag to resize. Click outside the selection to clear the filter.
+Click the panel's right edge and drag to resize. Clear **Scope** with the chip’s **×** or use **Clear all** for every filter.
 
 ---
 
 ### Toolbar
 
-Six dropdown menus group the available tools:
+Primary controls on the browse page:
 
-| Menu | Contents |
-|------|---------|
-| **Analysis** | Quality Panel (requirement quality metrics), Function Verification Matrix, Suspect Links Review |
-| **Traceability** | Traceability Matrix, Traceability Views, Diagrams |
-| **Data** | Export Builder, Import Wizard, Baseline Manager |
-| **View** | Table / Document view toggle, Compact / Comfortable density, Column visibility |
-| **Sort** | Sort field and direction selector |
-| **Bulk actions** | Delete selected, Create change requests, Allocate to function, Remove from component |
+| Control | Contents |
+|---------|----------|
+| **Analysis** | **Requirement quality**, **Function verification** (coverage matrix), **Suspect link review** |
+| **Traceability** | **Traceability Matrix** (overlay; unavailable in baseline snapshot view), **Matrix library** (opens the saved-matrix page under Requirements) |
+| **Manage** | **Import**, **Export**, **Baselines**, **Audit log** |
+| **View** | **Group by Type** / **Ungroup**, **Table View** / **Document View**, **Relationship diagram**, **Columns**, **Comfortable** / **Compact** density, **Parameters: names** / **values** |
+| **Sort:** | Pill control — pick a sortable column and toggle ascending/descending |
+| **Settings** | Link to Requirements settings |
 
-A **New Requirement** button sits at the far right of the toolbar.
+**Create Requirement** is at the top of the page (and repeated on the toolbar where space allows).
 
 ---
 
 ### Search and Filter Bar
 
-- **Search box** — full-text search across title and description
-- **Filter** button — opens a collapsible panel with filters for:
-  - Status, Priority, Owner, Source, Requirement Type, Category, Verification Status, Review Status
-- **Active filters** appear as chips below the bar; click the × on a chip to remove one filter
-- **Clear filters** removes all active filters at once
+- **Search box** — matches across title, description, ID, requirement type, owner, tags, criteria, and related fields (see the field’s tooltip in the app).
+- **Sort:** pill — choose column and direction.
+- **Status**, **Priority**, **Type** — primary filter pills.
+- **More Filters** / **Fewer Filters** — expands secondary filters: Category, Owner, Source, Verification, Review.
+- **Scope** — when the left panel filters the list, an indigo **Scope** chip appears; use **×** on it to clear only that scope.
+- **Clear all** — clears every active filter including scope.
 
 ---
 
@@ -118,7 +119,7 @@ The table displays all requirements that match the current search and filters.
 | Status | Lifecycle status badge (Draft, In Review, Approved, etc.) |
 | Priority | High / Medium / Low |
 | Owner | Assigned team member |
-| Verification Status | Unverified / In Progress / Verified / Waived |
+| Verification Status | Shown when column visible; filters use Not Verified / Verified / Failed |
 | Functions | Count of linked functions |
 | Issues | Count of linked issues |
 | Change Requests | Count of linked change requests |
@@ -130,19 +131,22 @@ Use **View → Columns** to show or hide any column. Column widths are resizable
 
 **Pagination:** 50 rows per page. Use the page selector at the bottom to navigate.
 
-**Row selection:** Tick the checkbox on the left of any row to select it. Selected rows enable Bulk actions in the toolbar.
+**Row selection:** Tick the checkbox on the left of any row. When one or more rows are selected, a **Bulk Actions** banner appears with **Create Change Request(s)**, **Create Issue(s)**, and **Delete Selected** (not available in baseline snapshot view).
 
 ---
 
 ### Detail Drawer
 
-Clicking a requirement's title opens a detail drawer on the right side. The drawer shows:
+Clicking a requirement's title opens a detail drawer on the right side. Use the tabs:
 
-- **Header** — requirement ID, title, status badge
-- **Description** — full rich-text description, including any `[[parameter]]` references resolved to their current values
-- **Metadata** — Owner, Status, Priority, Category, Verification Status, Review Status
-- **Linked items** — tabs for: Child Requirements, Functions, Issues, Change Requests, Test Cases, and generic Links
-- **Action buttons** — Edit, Delete, Create Link, Create Change Request, Create Issue
+- **Overview** — requirement details, description (rich text and parameters), classification, MoC, verification method, etc.
+- **Hierarchy** — parent/child relationships
+- **Links** — traceability links
+- **Reviews** — review records
+- **Lifecycle & Approvals** — when enabled for the project
+- **Comments** — threaded discussion
+
+**Action buttons** — Edit, Delete (when allowed), Create Link, Create Change Request, Create Issue (as implemented for your role).
 
 Close the drawer with the × button or by pressing **Escape**.
 
@@ -152,16 +156,16 @@ Close the drawer with the × button or by pressing **Escape**.
 
 | Modal | Triggered by |
 |-------|-------------|
-| Create Requirement | **New Requirement** button |
+| Create Requirement | **Create Requirement** button |
 | Edit Requirement | **Edit** icon on a row or in the detail drawer |
 | Delete Confirmation | **Delete** icon — shows cascade impact before confirming |
 | Create Link | **Create Link** in the detail drawer |
 | Create Change Request | **Create Change Request** in the detail drawer or bulk actions |
 | Create Issue | **Create Issue** in the detail drawer |
 | Lock Warning | Opening an edit modal on a baselined or lifecycle-locked requirement |
-| Baseline Manager | **Data → Baseline Manager** |
-| Export Builder | **Data → Export Builder** |
-| Import Wizard | **Data → Import Wizard** |
+| Baseline Manager | **Manage → Baselines** |
+| Export Builder | **Manage → Export** |
+| Import Wizard | **Manage → Import** |
 
 ---
 
@@ -169,7 +173,7 @@ Close the drawer with the × button or by pressing **Escape**.
 
 ### How to create a requirement
 
-1. Click **New Requirement** (top-right of the toolbar).
+1. Click **Create Requirement** (top of the page).
 2. Enter a **Title** (required).
 3. Optionally write a **Description** using the rich-text editor.
 4. Set **Status**, **Priority**, and **Owner** as needed.
@@ -209,12 +213,11 @@ Close the drawer with the × button or by pressing **Escape**.
 
 ### How to search and filter
 
-1. Type in the **Search** bar to match requirements by title or description text.
-2. Click **Filter** to open the filter panel.
-3. Select one or more values for any filter (Status, Priority, Owner, etc.).
-4. The table updates immediately.
+1. Type in the **Search** bar (broad field search — see tooltip in the app).
+2. Adjust **Status**, **Priority**, **Type**, and use **More Filters** for Category, Owner, Source, Verification, and Review.
+3. The table updates as you change filters.
 
-To remove a single filter, click the × on its chip. To clear all filters, click **Clear filters**.
+Use **×** on the **Scope** chip to clear only left-panel scope, or **Clear all** for everything.
 
 ---
 
@@ -222,8 +225,8 @@ To remove a single filter, click the × on its chip. To clear all filters, click
 
 1. Click the **PBS**, **Functions**, or **Verification** tab in the left panel.
 2. Click any node in the tree to filter the main table to requirements associated with that node.
-3. The active filter appears as a chip in the filter bar ("PBS: Propulsion Unit").
-4. Click another node to change the filter, or click **Clear filters** to see all requirements again.
+3. The active scope appears as a **Scope** chip above the filter row.
+4. Click another node to change the filter, or **Clear all** to reset filters and scope.
 
 ---
 
@@ -242,21 +245,20 @@ To remove a single filter, click the × on its chip. To clear all filters, click
 ### How to bulk-create change requests from requirements
 
 1. Select two or more requirements using the row checkboxes.
-2. Open **Bulk actions** in the toolbar.
-3. Click **Create Change Requests**.
-4. Fill in the shared change request fields in the modal.
-5. Click **Create**.
+2. In the **Bulk Actions** banner, click **Create Change Request(s)** and confirm if prompted.
+3. Fill in the shared change request fields in the modal.
+4. Click **Create**.
 
 **Result:** One change request is created per selected requirement, all pre-linked.
 
 ---
 
-### How to allocate requirements to a function (bulk)
+### How to allocate requirements to a function
 
-1. Select the requirements to allocate.
-2. Open **Bulk actions → Allocate to Function**.
-3. Select the target function.
-4. Click **Allocate**.
+1. Open the **Functions** tab in the left panel.
+2. Drag selected requirement rows from the table onto the target **function** in the tree (drop target), or use add actions in the tree where available.
+
+**Result:** Requirements are allocated to that function; you can scope the table by selecting the function.
 
 ---
 
@@ -271,7 +273,7 @@ To remove a single filter, click the × on its chip. To clear all filters, click
 
 ### How to review suspect links
 
-1. Open **Analysis → Suspect Links Review** in the toolbar.
+1. Open **Analysis → Suspect link review** in the toolbar.
 2. The view lists all links where the source or target artifact has changed since the link was last reviewed.
 3. For each suspect link, click **Mark as Reviewed** to clear it, or **Remove Link** to delete it.
 
@@ -279,7 +281,7 @@ To remove a single filter, click the × on its chip. To clear all filters, click
 
 ### How to create and manage baselines
 
-1. Open **Data → Baseline Manager**.
+1. Open **Manage → Baselines**.
 2. Click **Create Baseline**.
 3. Enter a **Name** and optional **Description**.
 4. Click **Create**.
@@ -290,7 +292,7 @@ To remove a single filter, click the × on its chip. To clear all filters, click
 
 ### How to export requirements
 
-1. Open **Data → Export Builder**.
+1. Open **Manage → Export**.
 2. Select the **Format** (PDF, Excel, Word, CSV, JSON).
 3. Optionally scope to selected requirements, a PBS component, or a baseline.
 4. Choose which columns to include.
@@ -302,7 +304,7 @@ The file downloads to your browser's default download location.
 
 ### How to import requirements
 
-1. Open **Data → Import Wizard**.
+1. Open **Manage → Import**.
 2. Upload a **CSV** or **Excel** file.
 3. Review the field mapping preview.
 4. Click **Import**.
@@ -313,7 +315,7 @@ See the import template in the wizard for the required column format.
 
 ### How to view the requirement quality panel
 
-1. Open **Analysis → Quality Panel** in the toolbar.
+1. Open **Analysis → Requirement quality** in the toolbar.
 2. The panel shows completeness and consistency metrics for the current requirement set.
 3. Click on any metric to drill down to the affected requirements.
 
@@ -333,7 +335,7 @@ See the import template in the wizard for the required column format.
 
 > **Admin only:** Creating, locking, and deleting baselines requires Project Admin permissions.
 
-> **Note:** The **Suspect Links Review** only flags links where the linked artifact has been modified after the link was created. It does not automatically detect semantic drift — that requires manual review.
+> **Note:** **Suspect link review** only flags links where the linked artifact has been modified after the link was created. It does not automatically detect semantic drift — that requires manual review.
 
 ---
 
