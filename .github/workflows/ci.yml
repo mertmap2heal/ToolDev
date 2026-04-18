@@ -366,6 +366,26 @@ jobs:
           fi
           exit $fail
 
+      - name: Guard Dashboard bulk-delete requires confirmation (#260)
+        run: |
+          set -e
+          f=frontend/src/pages/Dashboard/DashboardPage.tsx
+          fail=0
+          # Pre-fix shape iterated deleteProjectMutation.mutate in a forEach.
+          if grep -qE "selectedProjectIds\.forEach\(id =>\s*deleteProjectMutation\.mutate\(id\)\)" "$f"; then
+            echo "::error file=$f::bulk delete must not fire-and-forget (see issue #260)"
+            fail=1
+          fi
+          if ! grep -q "bulkDeleteConfirm" "$f"; then
+            echo "::error file=$f::bulk delete must go through a confirmation modal (see issue #260)"
+            fail=1
+          fi
+          if ! grep -q "Promise.allSettled" "$f"; then
+            echo "::error file=$f::bulk delete must use Promise.allSettled (see issue #260)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Run PBS sync cross-project regression (#293)
         run: cd backend && npx vitest run src/__tests__/pbsSync.validation.test.ts
         env:
