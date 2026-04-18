@@ -5,29 +5,26 @@ import jwt from 'jsonwebtoken'
 import { prisma } from '../lib/prisma'
 import type { AuthRequest } from '../middleware/auth.middleware'
 import { sendInviteEmail, sendForgotPasswordEmail } from '../services/email.service'
-import { resolveIsAdmin } from '../lib/adminAuth'
+import { isAdminUser, resolveIsAdmin } from '../lib/adminAuth'
 
 
-async function requireAdmin(req: AuthRequest, res: Response): Promise<{ email: string } | null> {
+async function requireAdmin(req: AuthRequest, res: Response): Promise<{ email: string; role: string | null } | null> {
   const currentUserId = req.userId
   if (!currentUserId) {
     res.status(401).json({ success: false, error: 'Unauthorized' })
     return null
   }
-  const currentUser = await prisma.user.findUnique({
-    where: { id: currentUserId },
-    select: { email: true },
-  })
-  if (!currentUser) {
-    res.status(401).json({ success: false, error: 'User not found' })
-    return null
-  }
-  const isAdmin = await resolveIsAdmin(currentUser.email)
-  if (!isAdmin) {
+  const admin = await isAdminUser(currentUserId)
+  if (!admin) {
+    const exists = await prisma.user.findUnique({ where: { id: currentUserId }, select: { id: true } })
+    if (!exists) {
+      res.status(401).json({ success: false, error: 'User not found' })
+      return null
+    }
     res.status(403).json({ success: false, error: 'Admin access required' })
     return null
   }
-  return currentUser
+  return admin
 }
 
 function randomTempPassword(length = 14): string {
@@ -118,8 +115,11 @@ export const register = async (req: Request, res: Response) => {
     })
 
     const token = generateToken(user.id)
-    const isAdmin = await resolveIsAdmin(user.email)
     const role = user.role ?? null
+    const isAdmin =
+      role === 'SUPERIOR_ADMIN' ||
+      role === 'COMPANY_ADMIN' ||
+      (await resolveIsAdmin(user.email))
     const isSuperiorAdmin = role === 'SUPERIOR_ADMIN'
 
     res.status(201).json({
@@ -175,8 +175,11 @@ export const login = async (req: Request, res: Response) => {
     })
 
     const token = generateToken(user.id)
-    const isAdmin = await resolveIsAdmin(user.email)
     const role = (user as { role?: string | null }).role ?? null
+    const isAdmin =
+      role === 'SUPERIOR_ADMIN' ||
+      role === 'COMPANY_ADMIN' ||
+      (await resolveIsAdmin(user.email))
     const isSuperiorAdmin = role === 'SUPERIOR_ADMIN'
 
     const mustChange = (user as { mustChangePasswordOnFirstLogin?: boolean }).mustChangePasswordOnFirstLogin ?? false
@@ -408,18 +411,12 @@ export const resetUserPassword = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ success: false, error: 'Unauthorized' })
     }
 
-    const currentUser = await prisma.user.findUnique({
-      where: { id: currentUserId },
-      select: { email: true, role: true },
-    })
+    const currentUser = await isAdminUser(currentUserId)
     if (!currentUser) {
-      return res.status(401).json({ success: false, error: 'User not found' })
-    }
-
-    const isAdmin =
-      currentUser.role === 'SUPERIOR_ADMIN' ||
-      (await resolveIsAdmin(currentUser.email))
-    if (!isAdmin) {
+      const exists = await prisma.user.findUnique({ where: { id: currentUserId }, select: { id: true } })
+      if (!exists) {
+        return res.status(401).json({ success: false, error: 'User not found' })
+      }
       return res.status(403).json({ success: false, error: 'Admin access required' })
     }
 
