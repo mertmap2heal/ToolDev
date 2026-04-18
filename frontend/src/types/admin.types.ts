@@ -135,6 +135,8 @@ export interface AuditLogEntry {
   action: string
   target: string
   summary: string
+  /** verification | tasks | inventory | project | saved_views */
+  source?: string
 }
 
 // --- Create user ---

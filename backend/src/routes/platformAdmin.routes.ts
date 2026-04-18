@@ -3,6 +3,10 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '../lib/prisma'
 import { authenticateToken, requireSuperiorAdmin, type AuthRequest } from '../middleware/auth.middleware'
 import { checkCompanyUserLimit } from '../controllers/auth.controller'
+import {
+  queryProjectAuditLogPlatformEntries,
+  querySavedViewAuditPlatformEntries,
+} from '../utils/unifiedAuditLogQueries'
 
 const router = Router()
 
@@ -619,6 +623,24 @@ router.get('/audit-logs', async (req: AuthRequest, res: Response) => {
         companyKey: null,
         companyName: null,
       })
+    }
+
+    const platformAuditFilters = {
+      limit,
+      fromDate,
+      toDate,
+      actorFilter,
+      actionFilter,
+      targetFilter,
+      companyFilter,
+    }
+    const projectAuditEntries = await queryProjectAuditLogPlatformEntries(platformAuditFilters)
+    for (const e of projectAuditEntries) {
+      entries.push(e)
+    }
+    const savedViewPlatformEntries = await querySavedViewAuditPlatformEntries(platformAuditFilters)
+    for (const e of savedViewPlatformEntries) {
+      entries.push(e)
     }
 
     entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())

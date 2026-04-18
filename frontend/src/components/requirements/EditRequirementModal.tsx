@@ -45,6 +45,7 @@ import { issueAdapter } from '../../linkage/adapters/issueAdapter'
 import { requirementAdapter } from '../../linkage/adapters/requirementAdapter'
 import { functionAdapter } from '../../linkage/adapters/functionAdapter'
 import { LINKAGE_V1 } from '../../config/featureFlags'
+import { sideEditorPanelStyle } from './qualityWorkbenchLayout'
 
 interface Moc {
   code?: string | number
@@ -57,6 +58,8 @@ interface EditRequirementModalProps {
   onClose: () => void
   projectId: string
   requirement: Requirement | null
+  /** Right-hand drawer above the quality workbench; left area stays interactive */
+  variant?: 'centered' | 'sidePanel'
 }
 
 const defaultRequirementTypes = [
@@ -244,7 +247,9 @@ export default function EditRequirementModal({
   onClose,
   projectId,
   requirement,
+  variant = 'centered',
 }: EditRequirementModalProps) {
+  const isSidePanel = variant === 'sidePanel'
   const onDiscardRef = useRef<() => void>()
   const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
   const [formData, setFormDataBase] = useState<UpdateRequirementDto>({})
@@ -1073,11 +1078,40 @@ export default function EditRequirementModal({
   })
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-black dark:bg-opacity-70 flex items-center justify-center z-50" onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}>
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto m-4" onClick={(e) => e.stopPropagation()}>
+    <div
+      className={clsx(
+        isSidePanel
+          ? 'fixed inset-0 z-[60] flex justify-end pointer-events-none'
+          : 'fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 dark:bg-black dark:bg-opacity-70'
+      )}
+      onClick={(e) => {
+        if (isSidePanel) return
+        if (e.target === e.currentTarget) guardClose()
+      }}
+      role="presentation"
+    >
+      <div
+        className={clsx(
+          isSidePanel
+            ? 'pointer-events-auto flex h-full max-h-screen min-w-[300px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800'
+            : 'm-4 max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-white shadow-xl dark:bg-gray-800'
+        )}
+        style={isSidePanel ? sideEditorPanelStyle() : undefined}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-requirement-title"
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Edit Requirement</h2>
+        <div
+          className={clsx(
+            'flex items-center justify-between border-b border-gray-200 p-6 dark:border-gray-700',
+            isSidePanel && 'shrink-0'
+          )}
+        >
+          <h2 id="edit-requirement-title" className="text-xl font-bold text-gray-900 dark:text-white">
+            Edit Requirement
+          </h2>
           <div className="flex items-center gap-2">
             {draftBanner}
             <button onClick={guardClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
@@ -1087,7 +1121,12 @@ export default function EditRequirementModal({
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-gray-200 dark:border-gray-700 px-6 overflow-x-auto">
+        <div
+          className={clsx(
+            'flex overflow-x-auto border-b border-gray-200 px-6 dark:border-gray-700',
+            isSidePanel && 'shrink-0'
+          )}
+        >
           {[
             { id: 'general', label: 'Overview', icon: Layers },
             { id: 'traceability', label: 'Traceability', icon: LinkIcon },
@@ -1114,7 +1153,7 @@ export default function EditRequirementModal({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className={clsx('p-6', isSidePanel && 'min-h-0 flex-1 overflow-y-auto')}>
           <form id="edit-req-form" onSubmit={handleSubmit} className="space-y-6">
 
             {/* General Tab (Overview) */}
@@ -2498,7 +2537,12 @@ export default function EditRequirementModal({
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-gray-800/50">
+        <div
+          className={clsx(
+            'flex justify-end gap-3 border-t border-gray-200 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800/50',
+            isSidePanel && 'shrink-0'
+          )}
+        >
           <button
             type="button"
             onClick={guardClose}

@@ -1,6 +1,10 @@
 import { Response } from 'express'
 import { prisma } from '../lib/prisma'
 import type { AuthRequest } from '../middleware/auth.middleware'
+import {
+  queryProjectAuditLogEntries,
+  querySavedViewAuditEntries,
+} from '../utils/unifiedAuditLogQueries'
 
 
 const DEFAULT_COMPANY_KEY = '__default__'
@@ -295,6 +299,18 @@ export const getAuditLog = async (req: AuthRequest, res: Response) => {
         source: 'inventory',
       })
     }
+
+    const auditFilters = {
+      limit,
+      fromDate,
+      toDate,
+      actorFilter,
+      actionFilter,
+      targetFilter,
+    }
+    const projectEntries = await queryProjectAuditLogEntries(auditFilters)
+    const savedViewEntries = await querySavedViewAuditEntries(auditFilters)
+    entries.push(...projectEntries, ...savedViewEntries)
 
     entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     const data = entries.slice(0, limit)

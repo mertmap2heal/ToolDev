@@ -40,6 +40,9 @@ export default function AuditLogTable() {
 
   return (
     <div className="space-y-4">
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        Unified trail: verification, tasks, inventory, project actions (requirements, baselines, quality dismissals, etc.), and saved-view changes.
+      </p>
       <div className="flex flex-wrap items-center gap-3">
         <input
           type="text"
@@ -96,6 +99,7 @@ export default function AuditLogTable() {
         <thead>
           <tr className="border-b border-gray-200 dark:border-gray-700">
             <th className="py-3 px-4 font-medium text-gray-900 dark:text-white">Timestamp</th>
+            <th className="py-3 px-4 font-medium text-gray-900 dark:text-white">Source</th>
             <th className="py-3 px-4 font-medium text-gray-900 dark:text-white">Actor</th>
             <th className="py-3 px-4 font-medium text-gray-900 dark:text-white">Action</th>
             <th className="py-3 px-4 font-medium text-gray-900 dark:text-white">Target</th>
@@ -110,6 +114,9 @@ export default function AuditLogTable() {
             >
               <td className="py-3 px-4 text-gray-600 dark:text-gray-400 whitespace-nowrap">
                 {formatDate(entry.timestamp)}
+              </td>
+              <td className="py-3 px-4 text-gray-600 dark:text-gray-400 capitalize">
+                {entry.source ?? '—'}
               </td>
               <td className="py-3 px-4 font-medium text-gray-900 dark:text-white">
                 {entry.actor}

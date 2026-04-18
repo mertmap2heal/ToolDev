@@ -4718,15 +4718,6 @@ export default function RequirementsPage() {
             />
           )}
 
-          {editingRequirement && projectId && (
-            <EditRequirementModal
-              isOpen={!!editingRequirement}
-              onClose={() => setEditingRequirement(null)}
-              projectId={projectId}
-              requirement={editingRequirement}
-            />
-          )}
-
           {LIFECYCLE_V1 && changeStatusAnchor && projectId && (
             <ChangeStatusPopover
               requirement={changeStatusAnchor.requirement}
@@ -4896,6 +4887,7 @@ export default function RequirementsPage() {
               projectId={projectId}
               initialSelectedRequirementId={focusRequirementId ?? undefined}
               projectDisplayName={projectForQuality?.name ?? 'Project'}
+              squeezeForSideEditor={!!editingRequirement}
               onClose={() => setIsQualityPanelOpen(false)}
               onRequirementClick={(requirementId) => {
                 const req = requirements.find((r) => r.id === requirementId)
@@ -4906,6 +4898,16 @@ export default function RequirementsPage() {
               onRequirementUpdated={() => {
                 queryClient.invalidateQueries({ queryKey: ['requirements', projectId] })
               }}
+            />
+          )}
+
+          {editingRequirement && projectId && (
+            <EditRequirementModal
+              isOpen={!!editingRequirement}
+              onClose={() => setEditingRequirement(null)}
+              projectId={projectId}
+              requirement={editingRequirement}
+              variant={isQualityPanelOpen ? 'sidePanel' : 'centered'}
             />
           )}
 

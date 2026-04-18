@@ -48,6 +48,7 @@ import {
   type QualityDismissalRow,
 } from '../../services/requirementQualityWorkbench'
 import { useFocusTrap } from '../../hooks/useFocusTrap'
+import { qualityWorkbenchSqueezeStyle } from './qualityWorkbenchLayout'
 import { downloadQualityCsv, downloadQualityPdf } from '../../utils/exportQualityReport'
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -118,6 +119,8 @@ interface RequirementQualityPanelProps {
   initialSelectedRequirementId?: string | null
   /** Label for exported filenames */
   projectDisplayName?: string
+  /** Shrink workbench to the left when the full editor is open beside it */
+  squeezeForSideEditor?: boolean
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -547,6 +550,7 @@ export default function RequirementQualityPanel({
   onRequirementUpdated,
   initialSelectedRequirementId,
   projectDisplayName = 'Project',
+  squeezeForSideEditor = false,
 }: RequirementQualityPanelProps) {
   const queryClient = useQueryClient()
 
@@ -563,6 +567,7 @@ export default function RequirementQualityPanel({
   const [showDismissed, setShowDismissed] = useState(false)
   const [skipTarget, setSkipTarget] = useState<{ reqId: string; issue: ValidationIssue } | null>(null)
   const [skipReasonDraft, setSkipReasonDraft] = useState('')
+  const [clearAllSkipsConfirmOpen, setClearAllSkipsConfirmOpen] = useState(false)
   const preRevalidationSnapshot = useRef<Record<string, ValidationIssue[]>>({})
   const localDismissalsMigrated = useRef(false)
   const listRef = useRef<HTMLDivElement>(null)
@@ -972,6 +977,11 @@ export default function RequirementQualityPanel({
   // ─── Keyboard handling ───
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (clearAllSkipsConfirmOpen && e.key === 'Escape') {
+        e.preventDefault()
+        setClearAllSkipsConfirmOpen(false)
+        return
+      }
       if (skipTarget && e.key === 'Escape') {
         e.preventDefault()
         setSkipTarget(null)
@@ -1002,7 +1012,7 @@ export default function RequirementQualityPanel({
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [filteredChecks, selectedIndex, selectedId, onClose, skipTarget])
+  }, [filteredChecks, selectedIndex, selectedId, onClose, skipTarget, clearAllSkipsConfirmOpen])
 
   // ─── Scroll selected into view ───
   useEffect(() => {
@@ -1240,7 +1250,11 @@ export default function RequirementQualityPanel({
   // ─── Render ───
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      className={clsx(
+        'fixed z-50 flex items-center justify-center bg-black/50',
+        squeezeForSideEditor ? 'left-0 top-0 bottom-0 min-w-0 overflow-x-hidden' : 'inset-0'
+      )}
+      style={squeezeForSideEditor ? qualityWorkbenchSqueezeStyle() : undefined}
       data-testid="requirement-quality-workbench"
       role="dialog"
       aria-modal="true"
@@ -1250,7 +1264,10 @@ export default function RequirementQualityPanel({
       <div
         ref={panelInnerRef}
         tabIndex={-1}
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[95vw] h-[90vh] flex flex-col outline-none relative"
+        className={clsx(
+          'relative flex h-[90vh] flex-col rounded-lg bg-white shadow-xl outline-none dark:bg-gray-800',
+          squeezeForSideEditor ? 'w-[95%] max-w-[min(1200px,100%)]' : 'w-[95vw]'
+        )}
       >
         <p id="rq-quality-help" className="sr-only">
           Keyboard: Escape clears the selected requirement or closes the workbench. Tab moves focus within the dialog.
@@ -1367,11 +1384,7 @@ export default function RequirementQualityPanel({
             <button
               type="button"
               className="text-xs text-gray-500 hover:text-gray-800 dark:text-gray-400 underline focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
-              onClick={() => {
-                if (window.confirm('Clear all skipped suggestions for this project?')) {
-                  clearProjectDismissalsMutation.mutate()
-                }
-              }}
+              onClick={() => setClearAllSkipsConfirmOpen(true)}
               disabled={clearProjectDismissalsMutation.isPending || totalDismissedCount === 0}
             >
               Clear all skips
@@ -1786,6 +1799,52 @@ export default function RequirementQualityPanel({
                 )}
               </div>
             )}
+          </div>
+        )}
+        {clearAllSkipsConfirmOpen && (
+          <div
+            className="absolute inset-0 z-[70] flex items-center justify-center bg-black/40 p-4"
+            role="presentation"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setClearAllSkipsConfirmOpen(false)
+            }}
+          >
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="rq-clear-skips-title"
+              aria-describedby="rq-clear-skips-desc"
+              className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-4 border border-gray-200 dark:border-gray-700"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <h3 id="rq-clear-skips-title" className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                Clear all skips?
+              </h3>
+              <p id="rq-clear-skips-desc" className="text-xs text-gray-600 dark:text-gray-400 mb-4">
+                This removes every skipped quality suggestion for this project for your account. You can skip items again later if needed.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 focus-visible:ring-2 focus-visible:ring-blue-500"
+                  onClick={() => setClearAllSkipsConfirmOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-red-500"
+                  disabled={clearProjectDismissalsMutation.isPending}
+                  onClick={() => {
+                    clearProjectDismissalsMutation.mutate(undefined, {
+                      onSuccess: () => setClearAllSkipsConfirmOpen(false),
+                    })
+                  }}
+                >
+                  {clearProjectDismissalsMutation.isPending ? 'Clearing…' : 'Clear all skips'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
         {skipTarget && (

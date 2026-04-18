@@ -64,7 +64,7 @@ export default function AuditLogsPage() {
         Global audit logs
       </h1>
       <p className="text-gray-600 dark:text-gray-400 mb-6">
-        Platform-wide audit trail across verification, tasks, and inventory. Filter by company, actor, action, or date range.
+        Platform-wide audit trail: verification, tasks, inventory, project-scoped actions (requirements, baselines, quality dismissals, etc.), and saved-view events. Filter by company, actor, action, or date range.
       </p>
 
       <div className="space-y-4">
