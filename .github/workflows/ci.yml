@@ -211,6 +211,32 @@ jobs:
             exit 1
           fi
 
+      - name: Run engineering-role tenant regression (#287)
+        run: cd backend && npx vitest run src/__tests__/engineeringRole.tenant.test.ts
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret
+
+      - name: Guard engineering-role controller tenant scopes (#287)
+        run: |
+          set -e
+          f=backend/src/controllers/engineeringRoles.controller.ts
+          fail=0
+          if ! grep -q "resolveCallerCompany" "$f"; then
+            echo "::error file=$f::resolveCallerCompany helper missing (see issue #287)"
+            fail=1
+          fi
+          # assign / unassign must compare the caller's company against target users.
+          if ! grep -q "Cannot assign roles to users outside your company" "$f"; then
+            echo "::error file=$f::assignEngineeringRole must reject cross-company targets (see issue #287)"
+            fail=1
+          fi
+          if ! grep -q "Cannot unassign roles for users outside your company" "$f"; then
+            echo "::error file=$f::unassignEngineeringRole must reject cross-company targets (see issue #287)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Run csv import/export IDOR regression (#291)
         run: cd backend && npx vitest run src/__tests__/csvImportExport.idor.test.ts
         env:
