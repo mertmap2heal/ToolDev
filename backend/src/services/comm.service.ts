@@ -92,11 +92,19 @@ export async function createBus(
   }
 }
 
+// #289: verify ownership BEFORE mutating. The previous implementation wrote
+// with prisma.update and then compared projectId after the fact — the mutation
+// had already applied by that point.
 export async function updateBus(
   id: string,
   projectId: string,
   data: { name?: string; description?: string; protocol?: string; config?: Record<string, unknown> | null }
 ): Promise<CommBusRecord> {
+  const existing = await prisma.commBus.findFirst({
+    where: { id, projectId },
+    select: { id: true },
+  })
+  if (!existing) throw new Error('Not found')
   const row = await prisma.commBus.update({
     where: { id },
     data: {
@@ -107,7 +115,6 @@ export async function updateBus(
     },
     include: { _count: { select: { messages: true } } },
   })
-  if (row.projectId !== projectId) throw new Error('Not found')
   return {
     id: row.id, projectId: row.projectId, name: row.name, description: row.description,
     protocol: row.protocol, config: row.config as Record<string, unknown> | null,
@@ -117,14 +124,39 @@ export async function updateBus(
 }
 
 export async function deleteBus(id: string, projectId: string): Promise<void> {
-  const row = await prisma.commBus.findUnique({ where: { id } })
-  if (!row || row.projectId !== projectId) throw new Error('Not found')
+  const row = await prisma.commBus.findFirst({ where: { id, projectId }, select: { id: true } })
+  if (!row) throw new Error('Not found')
   await prisma.commBus.delete({ where: { id } })
 }
 
 // ── Messages ─────────────────────────────────────────────────────────────────
 
-export async function listMessages(busId: string): Promise<CommMessageRecord[]> {
+async function assertBusInProject(busId: string, projectId: string): Promise<void> {
+  const bus = await prisma.commBus.findFirst({
+    where: { id: busId, projectId },
+    select: { id: true },
+  })
+  if (!bus) throw new Error('Not found')
+}
+
+async function assertMessageInProject(messageId: string, projectId: string): Promise<void> {
+  const msg = await prisma.commMessage.findFirst({
+    where: { id: messageId, bus: { projectId } },
+    select: { id: true },
+  })
+  if (!msg) throw new Error('Not found')
+}
+
+async function assertFieldInProject(fieldId: string, projectId: string): Promise<void> {
+  const fld = await prisma.commField.findFirst({
+    where: { id: fieldId, message: { bus: { projectId } } },
+    select: { id: true },
+  })
+  if (!fld) throw new Error('Not found')
+}
+
+export async function listMessages(projectId: string, busId: string): Promise<CommMessageRecord[]> {
+  await assertBusInProject(busId, projectId)
   const rows = await prisma.commMessage.findMany({
     where: { busId },
     orderBy: { name: 'asc' },
@@ -140,9 +172,11 @@ export async function listMessages(busId: string): Promise<CommMessageRecord[]> 
 }
 
 export async function createMessage(
+  projectId: string,
   busId: string,
   data: { name: string; messageId?: string; direction?: string; description?: string; metadata?: Record<string, unknown> }
 ): Promise<CommMessageRecord> {
+  await assertBusInProject(busId, projectId)
   const row = await prisma.commMessage.create({
     data: {
       busId,
@@ -164,10 +198,11 @@ export async function createMessage(
 }
 
 export async function updateMessage(
+  projectId: string,
   id: string,
-  busId: string,
   data: { name?: string; messageId?: string | null; direction?: string | null; description?: string; metadata?: Record<string, unknown> | null }
 ): Promise<CommMessageRecord> {
+  await assertMessageInProject(id, projectId)
   const row = await prisma.commMessage.update({
     where: { id },
     data: {
@@ -179,7 +214,6 @@ export async function updateMessage(
     },
     include: { _count: { select: { fields: true } } },
   })
-  if (row.busId !== busId) throw new Error('Not found')
   return {
     id: row.id, busId: row.busId, name: row.name, messageId: row.messageId,
     direction: row.direction, description: row.description,
@@ -189,13 +223,15 @@ export async function updateMessage(
   }
 }
 
-export async function deleteMessage(id: string): Promise<void> {
+export async function deleteMessage(projectId: string, id: string): Promise<void> {
+  await assertMessageInProject(id, projectId)
   await prisma.commMessage.delete({ where: { id } })
 }
 
 // ── Fields ────────────────────────────────────────────────────────────────────
 
-export async function listFields(messageId: string): Promise<CommFieldRecord[]> {
+export async function listFields(projectId: string, messageId: string): Promise<CommFieldRecord[]> {
+  await assertMessageInProject(messageId, projectId)
   const rows = await prisma.commField.findMany({
     where: { messageId },
     orderBy: { order: 'asc' },
@@ -216,9 +252,11 @@ export async function listFields(messageId: string): Promise<CommFieldRecord[]> 
 }
 
 export async function createField(
+  projectId: string,
   messageId: string,
   data: { fieldName: string; parameterId?: string | null; description?: string; dataType?: string; order?: number; config?: Record<string, unknown> }
 ): Promise<CommFieldRecord> {
+  await assertMessageInProject(messageId, projectId)
   const row = await prisma.commField.create({
     data: {
       messageId,
@@ -244,9 +282,11 @@ export async function createField(
 }
 
 export async function updateField(
+  projectId: string,
   id: string,
   data: { fieldName?: string; parameterId?: string | null; description?: string; dataType?: string | null; order?: number; config?: Record<string, unknown> | null }
 ): Promise<CommFieldRecord> {
+  await assertFieldInProject(id, projectId)
   const row = await prisma.commField.update({
     where: { id },
     data: {
@@ -271,13 +311,26 @@ export async function updateField(
   }
 }
 
-export async function deleteField(id: string): Promise<void> {
+export async function deleteField(projectId: string, id: string): Promise<void> {
+  await assertFieldInProject(id, projectId)
   await prisma.commField.delete({ where: { id } })
 }
 
-export async function reorderFields(messageId: string, orderedIds: string[]): Promise<void> {
-  await Promise.all(
-    orderedIds.map((id, idx) =>
+// #289: restrict reorder to fields whose message belongs to the project AND
+// to the given message. An attacker supplying foreign ids used to silently
+// shuffle columns in a different project.
+export async function reorderFields(projectId: string, messageId: string, orderedIds: string[]): Promise<void> {
+  await assertMessageInProject(messageId, projectId)
+  // Ensure every id supplied actually lives on THIS message (and thus this project).
+  const valid = await prisma.commField.findMany({
+    where: { id: { in: orderedIds }, messageId },
+    select: { id: true },
+  })
+  const validSet = new Set(valid.map(v => v.id))
+  const scoped = orderedIds.filter(id => validSet.has(id))
+  if (scoped.length === 0) return
+  await prisma.$transaction(
+    scoped.map((id, idx) =>
       prisma.commField.update({ where: { id }, data: { order: idx } })
     )
   )

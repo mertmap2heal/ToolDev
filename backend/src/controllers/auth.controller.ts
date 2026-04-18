@@ -327,7 +327,14 @@ export const getCurrentUser = async (req: Request, res: Response) => {
   }
 }
 
-/** Authenticated user: change own password (e.g. after first login with temp password). */
+/**
+ * Authenticated user: change own password.
+ *
+ * Requires currentPassword verification to prevent session-hijack account
+ * takeover (issue #274). Applies to both normal password changes and the
+ * post-first-login forced change: in the latter case the user proved
+ * possession of their temp password at login and can supply it here.
+ */
 export const changeMyPassword = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId
@@ -335,7 +342,13 @@ export const changeMyPassword = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ success: false, error: 'Unauthorized' })
     }
 
-    const { newPassword } = req.body
+    const { currentPassword, newPassword } = req.body
+    if (!currentPassword || typeof currentPassword !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'currentPassword is required',
+      })
+    }
     if (!newPassword || typeof newPassword !== 'string') {
       return res.status(400).json({
         success: false,
@@ -347,6 +360,21 @@ export const changeMyPassword = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({
         success: false,
         error: 'Password must be at least 8 characters',
+      })
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { password: true },
+    })
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' })
+    }
+    const ok = await bcrypt.compare(currentPassword, user.password)
+    if (!ok) {
+      return res.status(401).json({
+        success: false,
+        error: 'Current password is incorrect',
       })
     }
 

@@ -7,6 +7,10 @@ import {
   getFields, createField, updateField, deleteField, reorderFields,
 } from '../controllers/comm.controller'
 
+// #289: every route carries :projectId so projectIdParam enforces membership
+// on the nested bus/message/field tiers. Previously only bus-level routes
+// had :projectId — the nested tiers skipped the middleware entirely, which
+// allowed cross-project IDOR on messages and fields.
 const router = Router()
 router.use(authenticateToken)
 router.param('projectId', projectIdParam)
@@ -17,17 +21,17 @@ router.post('/:projectId/buses', createBus)
 router.patch('/:projectId/buses/:id', updateBus)
 router.delete('/:projectId/buses/:id', deleteBus)
 
-// Messages (under a bus)
-router.get('/buses/:busId/messages', getMessages)
-router.post('/buses/:busId/messages', createMessage)
-router.patch('/messages/:id/buses/:busId', updateMessage)
-router.delete('/messages/:id', deleteMessage)
+// Messages (under a bus, scoped to project)
+router.get('/:projectId/buses/:busId/messages', getMessages)
+router.post('/:projectId/buses/:busId/messages', createMessage)
+router.patch('/:projectId/messages/:id', updateMessage)
+router.delete('/:projectId/messages/:id', deleteMessage)
 
-// Fields (under a message)
-router.get('/messages/:messageId/fields', getFields)
-router.post('/messages/:messageId/fields', createField)
-router.put('/messages/:messageId/fields/reorder', reorderFields)
-router.patch('/fields/:id', updateField)
-router.delete('/fields/:id', deleteField)
+// Fields (under a message, scoped to project)
+router.get('/:projectId/messages/:messageId/fields', getFields)
+router.post('/:projectId/messages/:messageId/fields', createField)
+router.put('/:projectId/messages/:messageId/fields/reorder', reorderFields)
+router.patch('/:projectId/fields/:id', updateField)
+router.delete('/:projectId/fields/:id', deleteField)
 
 export default router
