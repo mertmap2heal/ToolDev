@@ -36,7 +36,10 @@ import ParameterDetailDrawer from '../../components/parameters/ParameterDetailDr
 import SourceDetailsModal from '../../components/parameters/SourceDetailsModal'
 import CreateParameterModal from '../../components/parameters/CreateParameterModal'
 import CreateChangeRequestModal from '../../components/changeRequests/CreateChangeRequestModal'
-import PublishToGitModal, { type GitPublishStoredConfig } from '../../components/parameters/PublishToGitModal'
+import PublishToGitModal, {
+  type GitPublishStoredConfig,
+  clearLegacyGitPublishStorage,
+} from '../../components/parameters/PublishToGitModal'
 import ParameterDependencyGraph from '../../components/parameters/ParameterDependencyGraph'
 import ImportParameterModal from '../../components/parameters/ImportParameterModal'
 import CommunicationsTab from './CommunicationsTab'
@@ -402,51 +405,25 @@ export default function ParametersPage() {
   const [isPublishOpen, setIsPublishOpen] = useState(false)
   const [isBannerSyncing, setIsBannerSyncing] = useState(false)
 
-  // Load persisted Git publish config
+  // Load persisted Git publish config.
+  // #272: token is no longer persisted; if the stored object still has one
+  // (legacy data written before the fix) it's scrubbed before first use.
   useEffect(() => {
     if (!gitPublishKey) return
     try {
+      clearLegacyGitPublishStorage(gitPublishKey)
       const stored = localStorage.getItem(gitPublishKey)
       if (stored) setStoredGitConfig(JSON.parse(stored))
     } catch { /* ignore */ }
   }, [gitPublishKey])
 
-  // Direct sync from staleness banner — no modal needed
+  // #272: banner-sync used to pull the token from localStorage and push
+  // silently. Post-fix we cannot do that — open the modal instead so the
+  // user re-enters the token and we only keep it in-memory.
   const handleBannerSync = async () => {
     if (!projectId || !storedGitConfig || isBannerSyncing) return
-    setIsBannerSyncing(true)
-    try {
-      const res = await parameterService.gitPublishSync(projectId, {
-        platform: storedGitConfig.platform,
-        baseUrl: storedGitConfig.baseUrl,
-        token: storedGitConfig.token,
-        repoId: storedGitConfig.repoId,
-        branch: storedGitConfig.defaultBranch,
-        selectedFormats: storedGitConfig.selectedFormats,
-        ...(storedGitConfig.selectedTags?.length ? { selectedTags: storedGitConfig.selectedTags } : {}),
-        username: storedGitConfig.username,
-        workspace: storedGitConfig.workspace,
-        org: storedGitConfig.org,
-        project: storedGitConfig.project,
-      })
-      if (res.success && res.data) {
-        const updated: GitPublishStoredConfig = {
-          ...storedGitConfig,
-          lastSyncedAt: res.data.pushedAt ?? new Date().toISOString(),
-          lastCommitSha: res.data.commitSha,
-          parameterCount: res.data.parameterCount,
-        }
-        setStoredGitConfig(updated)
-        if (gitPublishKey) localStorage.setItem(gitPublishKey, JSON.stringify(updated))
-      } else {
-        // Show modal so user can see the error
-        setIsPublishOpen(true)
-      }
-    } catch {
-      setIsPublishOpen(true)
-    } finally {
-      setIsBannerSyncing(false)
-    }
+    setIsPublishOpen(true)
+    return
   }
 
   // Close export dropdown and column menu on outside click
@@ -889,34 +866,13 @@ export default function ParametersPage() {
     setInlineEditValue('')
   }
 
-  // Git pull handler
+  // Git pull handler.
+  // #272: token is no longer persisted; open the Publish modal so the user
+  // re-enters it. The pull happens only after the user supplies the token
+  // in the modal's flow.
   const handleGitPull = async () => {
     if (!projectId || !storedGitConfig || isPulling) return
-    setIsPulling(true)
-    setPullResult(null)
-    try {
-      const res = await parameterService.gitPull(projectId, {
-        platform: storedGitConfig.platform,
-        baseUrl: storedGitConfig.baseUrl,
-        token: storedGitConfig.token,
-        repoId: storedGitConfig.repoId,
-        branch: storedGitConfig.defaultBranch,
-        username: storedGitConfig.username,
-        workspace: storedGitConfig.workspace,
-        org: storedGitConfig.org,
-        project: storedGitConfig.project,
-      })
-      if (res.success && res.data) {
-        setPullResult(res.data)
-        queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
-      } else {
-        alert(res.error ?? 'Pull failed')
-      }
-    } catch (err) {
-      alert(`Pull failed: ${(err as Error).message}`)
-    } finally {
-      setIsPulling(false)
-    }
+    setIsPublishOpen(true)
   }
 
   const handleDeleteClick = (e: React.MouseEvent, id: string, name: string) => {

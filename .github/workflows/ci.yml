@@ -53,6 +53,37 @@ jobs:
           fi
           echo "OK: certification controllers do not read signer identity from request body."
 
+      - name: Guard Git publish config does not persist token (#272)
+        run: |
+          set -e
+          modal=frontend/src/components/parameters/PublishToGitModal.tsx
+          page=frontend/src/pages/Parameters/ParametersPage.tsx
+          fail=0
+          # The persisted config type must NOT declare a `token` field.
+          if grep -qE "^\s*token:\s*string$" "$modal"; then
+            echo "::error file=$modal::GitPublishStoredConfig must not declare a persisted token (see issue #272)"
+            fail=1
+          fi
+          # Legacy storage sweeper must exist.
+          if ! grep -q "clearLegacyGitPublishStorage" "$modal"; then
+            echo "::error file=$modal::missing clearLegacyGitPublishStorage helper (see issue #272)"
+            fail=1
+          fi
+          if ! grep -q "clearLegacyGitPublishStorage" "$page"; then
+            echo "::error file=$page::ParametersPage must purge legacy token storage on mount (see issue #272)"
+            fail=1
+          fi
+          # Persisted config reads must not restore the token field.
+          if grep -qE "setToken\(cfg\.token" "$modal"; then
+            echo "::error file=$modal::must not restore persisted token (see issue #272)"
+            fail=1
+          fi
+          if grep -qE "storedGitConfig\.token" "$page"; then
+            echo "::error file=$page::ParametersPage must not reference storedGitConfig.token (see issue #272)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Guard CSV/Excel exports neutralise formula triggers (#269)
         run: |
           set -e
