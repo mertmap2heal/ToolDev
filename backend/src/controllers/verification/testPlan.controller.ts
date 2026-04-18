@@ -7,6 +7,7 @@ import { verificationService } from '../../services/verification/verification.se
 import { traceabilityService } from '../../services/traceability.service'
 import { linkageAuditService } from '../../services/linkageAudit.service'
 import { AuditAction, TestPlanStatus } from '../../types/verification.types'
+import { allocateTestPlanKey } from '../../lib/verificationKey'
 
 
 export const getTestPlans = async (req: AuthRequest, res: Response) => {
@@ -123,44 +124,53 @@ export const createTestPlan = async (req: AuthRequest, res: Response) => {
       docAppendices,
     } = req.body
     if (!name) return res.status(400).json({ success: false, error: 'Name is required' })
-    const planKey = key || await verificationService.generateTestPlanKey(projectId)
-    const existing = await prisma.verTestPlan.findFirst({ where: { projectId, key: planKey } })
-    if (existing) return res.status(400).json({ success: false, error: 'Test plan key already exists' })
-    const plan = await prisma.verTestPlan.create({
-      data: {
-        projectId,
-        key: planKey,
-        name,
-        description,
-        scope,
-        entryCriteria,
-        exitCriteria,
-        ownerUserId: req.userId,
-        testingEnvironmentIds: (Array.isArray(testingEnvironmentIds) ? testingEnvironmentIds : null) as any,
-        testingToolIds: (Array.isArray(testingToolIds) ? testingToolIds : null) as any,
-        docNumber,
-        docConfidentiality,
-        docProjectCode,
-        docRevision,
-        docPlanDate: docPlanDate ? new Date(docPlanDate) : null,
-        docPreparedByName,
-        docQaByName,
-        docApprovedByName,
-        docApprovedAt: docApprovedAt ? new Date(docApprovedAt) : null,
-        docPurpose,
-        docOverview,
-        docStatementOfConformity,
-        docChangesPolicy,
-        docDistribution,
-        docAcronymsNote,
-        docApplicableDocuments: (docApplicableDocuments && typeof docApplicableDocuments === 'object') ? (docApplicableDocuments as any) : null,
-        docGeneralPrecautions,
-        docGeneralConditions: (docGeneralConditions && typeof docGeneralConditions === 'object') ? (docGeneralConditions as any) : null,
-        docTools: (docTools && typeof docTools === 'object') ? (docTools as any) : null,
-        docTestSetupNotes,
-        docAppendices: (docAppendices && typeof docAppendices === 'object') ? (docAppendices as any) : null,
-        status: TestPlanStatus.DRAFT,
-      },
+
+    const plan = await prisma.$transaction(async (tx) => {
+      const planKey = key || (await allocateTestPlanKey(tx, projectId))
+
+      if (key) {
+        const existing = await tx.verTestPlan.findFirst({ where: { projectId, key: planKey } })
+        if (existing) {
+          throw Object.assign(new Error('Test plan key already exists'), { status: 409 })
+        }
+      }
+
+      return tx.verTestPlan.create({
+        data: {
+          projectId,
+          key: planKey,
+          name,
+          description,
+          scope,
+          entryCriteria,
+          exitCriteria,
+          ownerUserId: req.userId,
+          testingEnvironmentIds: (Array.isArray(testingEnvironmentIds) ? testingEnvironmentIds : null) as any,
+          testingToolIds: (Array.isArray(testingToolIds) ? testingToolIds : null) as any,
+          docNumber,
+          docConfidentiality,
+          docProjectCode,
+          docRevision,
+          docPlanDate: docPlanDate ? new Date(docPlanDate) : null,
+          docPreparedByName,
+          docQaByName,
+          docApprovedByName,
+          docApprovedAt: docApprovedAt ? new Date(docApprovedAt) : null,
+          docPurpose,
+          docOverview,
+          docStatementOfConformity,
+          docChangesPolicy,
+          docDistribution,
+          docAcronymsNote,
+          docApplicableDocuments: (docApplicableDocuments && typeof docApplicableDocuments === 'object') ? (docApplicableDocuments as any) : null,
+          docGeneralPrecautions,
+          docGeneralConditions: (docGeneralConditions && typeof docGeneralConditions === 'object') ? (docGeneralConditions as any) : null,
+          docTools: (docTools && typeof docTools === 'object') ? (docTools as any) : null,
+          docTestSetupNotes,
+          docAppendices: (docAppendices && typeof docAppendices === 'object') ? (docAppendices as any) : null,
+          status: TestPlanStatus.DRAFT,
+        },
+      })
     })
     await auditService.logEvent({
       projectId,
@@ -624,27 +634,42 @@ export const getVerificationLinks = async (req: AuthRequest, res: Response) => {
       orderBy: { createdAt: 'desc' },
     })
 
-    // Fetch the linked requirements and functions
-    const linkedElements = await Promise.all(
-      links.map(async (link) => {
-        if (link.targetType === 'requirement') {
-          const requirement = await prisma.requirement.findFirst({
-            where: { id: link.targetId, projectId },
+    // Batch the N+1 fetch into two findMany calls (#137).
+    const reqIds = links.filter((l) => l.targetType === 'requirement').map((l) => l.targetId)
+    const fnIds = links.filter((l) => l.targetType === 'function').map((l) => l.targetId)
+
+    const [reqRows, fnRows] = await Promise.all([
+      reqIds.length
+        ? prisma.requirement.findMany({
+            where: { id: { in: reqIds }, projectId },
             select: { id: true, requirementId: true, title: true, description: true },
           })
-          return requirement ? { ...link, targetElement: requirement } : null
-        } else if (link.targetType === 'function') {
-          const function_ = await prisma.systemFunction.findFirst({
-            where: { id: link.targetId, projectId },
+        : [],
+      fnIds.length
+        ? prisma.systemFunction.findMany({
+            where: { id: { in: fnIds }, projectId },
             select: { id: true, functionId: true, name: true, description: true },
           })
-          return function_ ? { ...link, targetElement: function_ } : null
+        : [],
+    ])
+
+    const reqById = new Map(reqRows.map((r) => [r.id, r]))
+    const fnById = new Map(fnRows.map((f) => [f.id, f]))
+
+    const validLinks = links
+      .map((link) => {
+        if (link.targetType === 'requirement') {
+          const target = reqById.get(link.targetId)
+          return target ? { ...link, targetElement: target } : null
+        }
+        if (link.targetType === 'function') {
+          const target = fnById.get(link.targetId)
+          return target ? { ...link, targetElement: target } : null
         }
         return null
       })
-    )
+      .filter((l) => l !== null)
 
-    const validLinks = linkedElements.filter((link) => link !== null)
     res.json({ success: true, data: validLinks })
   } catch (error: any) {
     console.error('Get verification links error:', error)

@@ -8,6 +8,7 @@
 import type { Locator, Page } from '@playwright/test'
 import { test, expect } from './helpers/fixtures'
 import { ensurePbsChildComponent, openTraceabilityMatrixFromToolbar, readAuthToken } from './helpers/requirementsUi'
+import { E2E_API_V1 } from './helpers/api'
 
 function matrixModalRoot(page: Page): Locator {
   return page
@@ -56,7 +57,7 @@ test.describe('Requirements / Traceability matrix', () => {
     await page.waitForLoadState('domcontentloaded')
     const token = await readAuthToken(page)
 
-    const reqResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+    const reqResp = await page.request.post(`${E2E_API_V1}/requirements/${projectId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: {
         title: `E2E Matrix Baseline ${Date.now()}`,
@@ -69,7 +70,7 @@ test.describe('Requirements / Traceability matrix', () => {
     const requirementId: string = req?.id
     expect(requirementId).toBeTruthy()
 
-    const baselineResp = await page.request.post(`http://localhost:5000/api/v1/baselines/${projectId}`, {
+    const baselineResp = await page.request.post(`${E2E_API_V1}/baselines/${projectId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: {
         name: `E2E Baseline Matrix ${Date.now()}`,
@@ -208,7 +209,7 @@ test.describe('Requirements / Traceability matrix', () => {
     test('matrix: stats bar shows Total Links and coverage labels', async ({ page, projectId }) => {
       const token = await readAuthToken(page)
       const title = `E2E matrix stats ${Date.now()}`
-      const reqResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+      const reqResp = await page.request.post(`${E2E_API_V1}/requirements/${projectId}`, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
           title,
@@ -242,7 +243,7 @@ test.describe('Requirements / Traceability matrix', () => {
       const token = await readAuthToken(page)
       const stamp = Date.now()
       const seedTitle = `E2E matrix link ${stamp}`
-      const reqResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+      const reqResp = await page.request.post(`${E2E_API_V1}/requirements/${projectId}`, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
           title: seedTitle,

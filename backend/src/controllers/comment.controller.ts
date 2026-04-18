@@ -31,7 +31,7 @@ export const getComments = async (req: AuthRequest, res: Response) => {
 export const createComment = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
-    const { body_rich, author_name } = req.body
+    const { body_rich } = req.body
     const idempotencyKey = req.headers['idempotency-key'] as string
     const correlationId = idempotencyKey || randomUUID()
 
@@ -42,11 +42,26 @@ export const createComment = async (req: AuthRequest, res: Response) => {
       })
     }
 
+    const userId = req.user?.userId
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+
+    // Authorship is derived from the authenticated session, never from the
+    // request body — client-supplied author_name is ignored to prevent
+    // impersonation (#160).
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true },
+    })
+    const authorName = user?.name?.trim() || user?.email?.trim() || 'Unknown'
+
     const comment = await prisma.taskComment.create({
       data: {
         taskId: id,
         bodyRich: body_rich,
-        authorName: author_name || null,
+        authorId: userId,
+        authorName,
       },
     })
 
@@ -55,7 +70,11 @@ export const createComment = async (req: AuthRequest, res: Response) => {
       data: {
         taskId: id,
         eventType: 'comment_added',
-        payloadJson: JSON.stringify({ commentId: comment.id, authorName: author_name }),
+        payloadJson: JSON.stringify({
+          commentId: comment.id,
+          authorId: userId,
+          authorName,
+        }),
         correlationId,
       },
     })

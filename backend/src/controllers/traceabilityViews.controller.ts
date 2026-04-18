@@ -207,7 +207,7 @@ async function wouldCreateCycle(projectId: string, folderId: string, newParentId
     if (!cur) return false
     if (cur === folderId) return true
     // eslint-disable-next-line no-await-in-loop
-    const parent = await (prisma as any).savedViewFolder.findFirst({
+    const parent: { parentId: string | null } | null = await (prisma as any).savedViewFolder.findFirst({
       where: { id: cur, projectId },
       select: { parentId: true },
     })
