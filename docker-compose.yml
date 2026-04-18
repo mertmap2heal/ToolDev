@@ -4,19 +4,30 @@ services:
   postgres:
     image: postgres:15-alpine
     container_name: engineering-tool-db
+    # #283: credentials via env substitution. The ":-" default keeps the dev
+    # workflow working out of the box; in production, set DB_USER /
+    # DB_PASSWORD / DB_NAME in a .env file or shell environment. The
+    # backup service already uses the same pattern.
     environment:
-      POSTGRES_USER: engineering_user
-      POSTGRES_PASSWORD: engineering_password
-      POSTGRES_DB: engineering_tool
+      POSTGRES_USER: ${DB_USER:-engineering_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-engineering_password}
+      POSTGRES_DB: ${DB_NAME:-engineering_tool}
     ports:
+      # Dev convenience: expose 5432 to the host so Prisma Studio / local
+      # psql work. Production deploys should override this file with a
+      # docker-compose.prod.yml that drops the host port mapping (see
+      # #283 follow-up).
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U engineering_user"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    # #283: restart policy so a DB crash self-recovers without manual
+    # intervention (backup service already has this).
+    restart: unless-stopped
 
   backup:
     image: postgres:15-alpine

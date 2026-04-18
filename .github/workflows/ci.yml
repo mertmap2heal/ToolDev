@@ -849,6 +849,29 @@ jobs:
             exit 1
           fi
 
+      - name: Guard docker-compose postgres creds are env-substituted (#283)
+        run: |
+          set -e
+          f=docker-compose.yml
+          fail=0
+          # Pre-fix shape: literal POSTGRES_PASSWORD value with no ${VAR}
+          # substitution. Literal user/password commits are also bad.
+          if grep -qE "POSTGRES_PASSWORD:\s*[^$\s][^\n]*$" "$f"; then
+            if ! grep -qE 'POSTGRES_PASSWORD:\s*\$\{' "$f"; then
+              echo "::error file=$f::POSTGRES_PASSWORD must use env substitution (see issue #283)"
+              fail=1
+            fi
+          fi
+          if ! grep -qE 'POSTGRES_USER:\s*\$\{' "$f"; then
+            echo "::error file=$f::POSTGRES_USER must use env substitution (see issue #283)"
+            fail=1
+          fi
+          if ! grep -qE 'POSTGRES_DB:\s*\$\{' "$f"; then
+            echo "::error file=$f::POSTGRES_DB must use env substitution (see issue #283)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Guard destructive scripts require env + confirmation (#300,#301)
         run: |
           set -e
