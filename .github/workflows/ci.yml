@@ -53,6 +53,34 @@ jobs:
           fi
           echo "OK: certification controllers do not read signer identity from request body."
 
+      - name: Guard CSV/Excel exports neutralise formula triggers (#269)
+        run: |
+          set -e
+          helper=frontend/src/utils/csvExport.ts
+          fail=0
+          if [ ! -f "$helper" ]; then
+            echo "::error file=$helper::csvExport helper missing (see issue #269)"
+            fail=1
+          else
+            for needle in csvSafeValue csvSafeField csvSafeRow csvSafeRows FORMULA_PREFIXES; do
+              if ! grep -q "$needle" "$helper"; then
+                echo "::error file=$helper::missing export $needle (see issue #269)"
+                fail=1
+              fi
+            done
+          fi
+          cr=frontend/src/pages/ChangeRequests/ChangeRequestsPage.tsx
+          if ! grep -q "csvSafeField" "$cr"; then
+            echo "::error file=$cr::change-request CSV export must use csvSafeField (see issue #269)"
+            fail=1
+          fi
+          tm=frontend/src/pages/Verification/TraceabilityMatrixView.tsx
+          if ! grep -q "csvSafeRows" "$tm"; then
+            echo "::error file=$tm::traceability matrix export must use csvSafeRows (see issue #269)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Guard against unsanitized dangerouslySetInnerHTML (#169)
         run: |
           set -e
