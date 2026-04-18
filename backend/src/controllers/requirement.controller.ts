@@ -14,6 +14,17 @@ import { parseReqIF } from '../services/reqifParser'
 import { collectComponentIdAndDescendants } from '../utils/componentHelpers'
 import { filterIdsExcluding } from '../utils/requirementScopeMerge'
 import { htmlToPlainText, truncatePlainText } from '../utils/htmlToPlainText'
+import {
+  validateCreateRow,
+  validateUpdateRow,
+  type CreateRowContext,
+  type CreateRowInput,
+  type RowError,
+  type UpdateRowContext,
+  type UpdateRowInput,
+  type ValidatedCreate,
+  type ValidatedUpdate,
+} from '../services/requirementBulkImport.helpers'
 import fs from 'fs'
 import path from 'path'
 
@@ -2799,6 +2810,9 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
       })
     }
 
+    const createRows: CreateRowInput[] = Array.isArray(create) ? create : []
+    const updateRows: UpdateRowInput[] = Array.isArray(update) ? update : []
+
     // Audit: import started (project-wide)
     await linkageAuditService.log({
       projectId,
@@ -2808,258 +2822,116 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
       oldValue: null,
       newValue: {
         kind: 'bulk_import',
-        createCount: Array.isArray(create) ? create.length : 0,
-        updateCount: Array.isArray(update) ? update.length : 0,
+        createCount: createRows.length,
+        updateCount: updateRows.length,
       },
       performedByUserId: req.userId,
     })
 
-    const errors: Array<{ row: number; errors: string[] }> = []
+    const errors: RowError[] = []
+
+    // ─── Phase 1: pre-fetch lookup state once, then validate every row ────────
+    const allProjectReqs = await prisma.requirement.findMany({
+      where: { projectId },
+      select: { id: true, requirementId: true },
+    })
+    const existingRequirementIds = new Set(
+      allProjectReqs.map((r) => (r.requirementId ?? '').toLowerCase()).filter(Boolean),
+    )
+    const existingRequirementUuids = new Set(allProjectReqs.map((r) => r.id))
+
+    const updateIds = updateRows.map((r) => r.id).filter(Boolean)
+    const existingUpdateRows = updateIds.length
+      ? await prisma.requirement.findMany({ where: { projectId, id: { in: updateIds } } })
+      : []
+    const existingByUuid = new Map(existingUpdateRows.map((r) => [r.id, r]))
+
+    const validCreates: ValidatedCreate[] = []
+    const validUpdates: ValidatedUpdate[] = []
+
+    const createCtx: CreateRowContext = {
+      projectId,
+      existingRequirementIds,
+      existingRequirementUuids,
+      generateRequirementId: () => generateRequirementId(projectId),
+      checkCircularReference,
+    }
+    const updateCtx: UpdateRowContext = {
+      projectId,
+      existingByUuid,
+      existingRequirementUuids,
+      checkCircularReference,
+    }
+
+    for (let i = 0; i < createRows.length; i++) {
+      const result = await validateCreateRow(createRows[i], i, createCtx)
+      if ('valid' in result) {
+        validCreates.push(result.valid)
+        // Reserve the new id locally so a duplicate later in the same batch is caught.
+        const newId = result.valid.data.requirementId as string
+        if (newId) existingRequirementIds.add(newId.toLowerCase())
+      } else {
+        errors.push({ row: i, errors: result.invalid })
+      }
+    }
+    for (let i = 0; i < updateRows.length; i++) {
+      const result = await validateUpdateRow(updateRows[i], i, updateCtx)
+      if ('valid' in result) {
+        validUpdates.push(result.valid)
+      } else {
+        errors.push({ row: createRows.length + i, errors: result.invalid })
+      }
+    }
+
     let createdCount = 0
     let updatedCount = 0
-    let skippedCount = 0
+    const skippedCount = errors.length
 
-    // Process creates
-    if (create && Array.isArray(create)) {
-      for (let i = 0; i < create.length; i++) {
-        const reqData = create[i]
-        try {
-          // Validate required fields
-          if (!reqData.title || !reqData.description) {
-            errors.push({
-              row: i,
-              errors: ['Title and description are required'],
-            })
-            skippedCount++
-            continue
-          }
-
-          // Check for duplicate requirementId if provided
-          if (reqData.requirementId) {
-            const existing = await prisma.requirement.findFirst({
-              where: {
-                projectId,
-                requirementId: reqData.requirementId,
-              },
-            })
-
-            if (existing) {
-              errors.push({
-                row: i,
-                errors: [`Requirement ID "${reqData.requirementId}" already exists`],
-              })
-              skippedCount++
-              continue
-            }
-          }
-
-          // Validate parent if provided
-          if (reqData.parentId) {
-            const parent = await prisma.requirement.findFirst({
-              where: {
-                projectId,
-                id: reqData.parentId,
-              },
-            })
-
-            if (!parent) {
-              errors.push({
-                row: i,
-                errors: [`Parent requirement not found`],
-              })
-              skippedCount++
-              continue
-            }
-
-            // Check for circular reference
-            const hasCircular = await checkCircularReference(reqData.parentId, reqData.parentId)
-            if (hasCircular) {
-              errors.push({
-                row: i,
-                errors: ['Circular reference detected'],
-              })
-              skippedCount++
-              continue
-            }
-          }
-
-          // Generate requirementId if not provided
-          // Uses requirementType (classification) as primary, category as fallback
-          let requirementId = reqData.requirementId
-          if (!requirementId) {
-            requirementId = await generateRequirementId(projectId)
-          }
-
-          // Create requirement
-          await prisma.requirement.create({
-            data: {
-              projectId,
-              requirementId,
-              title: reqData.title,
-              description: reqData.description,
-              priority: reqData.priority || 'medium',
-              status: reqData.status || 'draft',
-              stage: reqData.stage || '',
-              owner: reqData.owner || null,
-              category: reqData.category || null,
-              source: reqData.source || null,
-              verificationMethod: reqData.verificationMethod || null,
-              acceptanceCriteria: reqData.acceptanceCriteria || null,
-              tags: reqData.tags || [],
-              parentId: reqData.parentId || null,
-              requirementType: reqData.requirementType || null,
-              requirementLevel: reqData.requirementLevel || null,
-              risk: reqData.risk || null,
-              complexity: reqData.complexity || null,
-              rationale: reqData.rationale || null,
-              assumptions: reqData.assumptions || null,
-              dependencies: reqData.dependencies || [],
-              conflicts: reqData.conflicts || [],
-              stakeholders: reqData.stakeholders || [],
-              verificationStatus: reqData.verificationStatus || null,
-              verificationDate: reqData.verificationDate ? new Date(reqData.verificationDate) : null,
-              verificationNotes: reqData.verificationNotes || null,
-            },
-          })
-
+    // ─── Phase 2: commit every valid row in a single transaction (#226) ──────
+    // Any DB-level failure (locked row P2025, unique-constraint collision, etc.)
+    // throws here and rolls back the entire batch — no partial imports (#92).
+    const updateNotifications: Array<() => void> = []
+    if (validCreates.length || validUpdates.length) {
+      await prisma.$transaction(async (tx) => {
+        for (const c of validCreates) {
+          await tx.requirement.create({ data: c.data as any })
           createdCount++
-        } catch (error: any) {
-          console.error(`Error creating requirement at row ${i}:`, error)
-          errors.push({
-            row: i,
-            errors: [error.message || 'Failed to create requirement'],
-          })
-          skippedCount++
         }
-      }
-    }
-
-    // Process updates
-    if (update && Array.isArray(update)) {
-      for (let i = 0; i < update.length; i++) {
-        const { id, data: updateData } = update[i]
-        try {
-          // Find existing requirement
-          const existing = await prisma.requirement.findFirst({
-            where: {
-              projectId,
-              id,
-            },
-          })
-
-          if (!existing) {
-            errors.push({
-              row: create ? create.length + i : i,
-              errors: ['Requirement not found'],
-            })
-            skippedCount++
-            continue
-          }
-
-          // Validate parent if being changed
-          if (updateData.parentId !== undefined && updateData.parentId !== existing.parentId) {
-            if (updateData.parentId) {
-              const parent = await prisma.requirement.findFirst({
-                where: {
-                  projectId,
-                  id: updateData.parentId,
-                },
-              })
-
-              if (!parent) {
-                errors.push({
-                  row: create ? create.length + i : i,
-                  errors: ['Parent requirement not found'],
-                })
-                skippedCount++
-                continue
-              }
-
-              // Check for circular reference
-              const hasCircular = await checkCircularReference(existing.id, updateData.parentId)
-              if (hasCircular) {
-                errors.push({
-                  row: create ? create.length + i : i,
-                  errors: ['Circular reference detected'],
-                })
-                skippedCount++
-                continue
-              }
-            }
-          }
-
-          // Create version snapshot before updating
-          try {
-            await createVersionSnapshot(
-              existing.id,
-              projectId,
-              req.userId,
-              undefined,
-              'Updated via bulk import'
-            )
-          } catch (versionError) {
-            console.warn('Failed to create version snapshot:', versionError)
-          }
-
-          // Update requirement — isLocked: false prevents overwriting locked records (#34)
-          const updatedRequirement = await prisma.requirement.update({
-            where: { id: existing.id, isLocked: false },
-            data: {
-              title: updateData.title !== undefined ? updateData.title : existing.title,
-              description: updateData.description !== undefined ? updateData.description : existing.description,
-              priority: updateData.priority !== undefined ? updateData.priority : existing.priority,
-              status: updateData.status !== undefined ? updateData.status : existing.status,
-              stage: updateData.stage !== undefined ? updateData.stage : existing.stage,
-              owner: updateData.owner !== undefined ? (updateData.owner || null) : existing.owner,
-              category: updateData.category !== undefined ? (updateData.category || null) : existing.category,
-              source: updateData.source !== undefined ? (updateData.source || null) : existing.source,
-              verificationMethod: updateData.verificationMethod !== undefined ? (updateData.verificationMethod || null) : existing.verificationMethod,
-              acceptanceCriteria: updateData.acceptanceCriteria !== undefined ? (updateData.acceptanceCriteria || null) : existing.acceptanceCriteria,
-              tags: updateData.tags !== undefined ? updateData.tags : existing.tags,
-              parentId: updateData.parentId !== undefined ? (updateData.parentId || null) : existing.parentId,
-              requirementType: updateData.requirementType !== undefined ? (updateData.requirementType || null) : existing.requirementType,
-              requirementLevel: updateData.requirementLevel !== undefined ? (updateData.requirementLevel || null) : existing.requirementLevel,
-              risk: updateData.risk !== undefined ? (updateData.risk || null) : existing.risk,
-              complexity: updateData.complexity !== undefined ? (updateData.complexity || null) : existing.complexity,
-              rationale: updateData.rationale !== undefined ? (updateData.rationale || null) : existing.rationale,
-              assumptions: updateData.assumptions !== undefined ? (updateData.assumptions || null) : existing.assumptions,
-              dependencies: updateData.dependencies !== undefined ? updateData.dependencies : existing.dependencies,
-              conflicts: updateData.conflicts !== undefined ? updateData.conflicts : existing.conflicts,
-              stakeholders: updateData.stakeholders !== undefined ? updateData.stakeholders : existing.stakeholders,
-              verificationStatus: updateData.verificationStatus !== undefined ? (updateData.verificationStatus || null) : existing.verificationStatus,
-              verificationDate: updateData.verificationDate !== undefined ? (updateData.verificationDate ? new Date(updateData.verificationDate) : null) : existing.verificationDate,
-              verificationNotes: updateData.verificationNotes !== undefined ? (updateData.verificationNotes || null) : existing.verificationNotes,
-            },
-          })
-
-          const changes = buildRequirementChangeSummary(existing, updatedRequirement as any)
-          notifyRequirementSubscribers({
+        for (const u of validUpdates) {
+          // Snapshot threaded with tx (#224) — rolls back with the parent batch.
+          await createVersionSnapshot(
+            u.existing.id,
             projectId,
-            requirementId: updatedRequirement.id,
-            actorUserId: req.userId,
-            changes,
-            requirementSnapshot: {
-              id: updatedRequirement.id,
-              requirementId: updatedRequirement.requirementId,
-              title: updatedRequirement.title,
-            },
-          }).catch(console.error)
-
-          updatedCount++
-        } catch (error: any) {
-          // P2025: requirement was locked between our findFirst and the update — skip gracefully
-          const errorMsg = error?.code === 'P2025'
-            ? `Requirement is locked and cannot be updated via import`
-            : (error.message || 'Failed to update requirement')
-          console.error(`Error updating requirement at row ${i}:`, error)
-          errors.push({
-            row: create ? create.length + i : i,
-            errors: [errorMsg],
+            req.userId,
+            undefined,
+            'Updated via bulk import',
+            tx,
+          )
+          // isLocked: false guard preserves #34 behaviour — locked rows abort the tx.
+          const updatedRequirement = await tx.requirement.update({
+            where: { id: u.existing.id, isLocked: false },
+            data: u.data as any,
           })
-          skippedCount++
+          const changes = buildRequirementChangeSummary(u.existing, updatedRequirement as any)
+          updateNotifications.push(() => {
+            notifyRequirementSubscribers({
+              projectId,
+              requirementId: updatedRequirement.id,
+              actorUserId: req.userId,
+              changes,
+              requirementSnapshot: {
+                id: updatedRequirement.id,
+                requirementId: updatedRequirement.requirementId,
+                title: updatedRequirement.title,
+              },
+            }).catch(console.error)
+          })
+          updatedCount++
         }
-      }
+      })
     }
+    // Notifications fire only after commit — never publish state that rolled back.
+    for (const fn of updateNotifications) fn()
 
     res.json({
       success: true,
@@ -3088,6 +2960,12 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
       performedByUserId: req.userId,
     })
   } catch (error: any) {
+    // P2025: a row was locked between phase 1 and the tx — surface as user error,
+    // not 500. Treats #34 lock-respect behaviour as a precondition failure.
+    const isLocked = error?.code === 'P2025'
+    const errorMsg = isLocked
+      ? 'A requirement was locked and the import was rolled back. No changes applied.'
+      : (error?.message || 'Internal server error')
     console.error('Bulk import requirements error:', error)
 
     try {
@@ -3098,7 +2976,7 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
         entityId: projectId,
         action: 'REQUIREMENTS_IMPORT_FAILED',
         oldValue: null,
-        newValue: { kind: 'bulk_import', error: error?.message || 'Internal server error' },
+        newValue: { kind: 'bulk_import', error: errorMsg },
         performedByUserId: req.userId,
       })
     } catch {
@@ -3107,7 +2985,7 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
 
     res.status(500).json({
       success: false,
-      error: error.message || 'Internal server error',
+      error: errorMsg,
     })
   }
 }
