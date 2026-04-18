@@ -57,7 +57,7 @@ export const MODULES: ModuleDefinition[] = [
     { id: 'archive', label: 'Archive', icon: Archive, route: 'archive', category: 'development', minPackage: 'core' },
 
     // Assurance & Certification
-    { id: 'verification', label: 'Verification', icon: CheckCircle2, route: 'verification', category: 'assurance', minPackage: 'advanced' },
+    { id: 'verification', label: 'Verification', icon: CheckCircle2, route: 'verification', category: 'assurance', minPackage: 'core' },
     { id: 'validation', label: 'Validation', icon: FlaskConical, route: 'validation', category: 'assurance', minPackage: 'complete' },
     { id: 'safety-analysis', label: 'Safety Analysis', icon: Shield, route: 'safety-analysis', category: 'assurance', minPackage: 'complete' },
     { id: 'risk-management', label: 'Risk Management', icon: AlertTriangle, route: 'risk-management', category: 'assurance', minPackage: 'core' },
