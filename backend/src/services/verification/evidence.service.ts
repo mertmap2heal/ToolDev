@@ -61,8 +61,9 @@ export const evidenceService = {
     linkedEntityType: LinkedEntityType
     linkedEntityId: string
     relation?: EvidenceRelation
+    userId: string
   }): Promise<void> {
-    const { evidenceId, linkedEntityType, linkedEntityId, relation = EvidenceRelation.PRIMARY } = params
+    const { evidenceId, linkedEntityType, linkedEntityId, relation = EvidenceRelation.PRIMARY, userId } = params
 
     await prisma.verEvidenceLink.create({
       data: {
@@ -70,8 +71,8 @@ export const evidenceService = {
         linkedEntityType,
         linkedEntityId,
         relation,
-        userId: null,
-      } as any,
+        userId,
+      },
     })
   },
 

@@ -75,7 +75,8 @@ export const linkEvidence = async (req: AuthRequest, res: Response) => {
     const { linkedEntityType, linkedEntityId, relation } = req.body
     const evidence = await prisma.verEvidence.findFirst({ where: { id, projectId } })
     if (!evidence) return res.status(404).json({ success: false, error: 'Evidence not found' })
-    await evidenceService.linkEvidence({ evidenceId: id, linkedEntityType, linkedEntityId, relation })
+    if (!req.userId) return res.status(401).json({ success: false, error: 'Authentication required' })
+    await evidenceService.linkEvidence({ evidenceId: id, linkedEntityType, linkedEntityId, relation, userId: req.userId })
     await auditService.logEvidenceLink({
       projectId,
       evidenceId: id,
