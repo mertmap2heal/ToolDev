@@ -1,9 +1,10 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
-import { formatIssueKey, getMaxIssueSequenceNumber, isIssueKeyUniqueViolation } from '../lib/issueKey'
+import { allocateIssueKey } from '../lib/issueKey'
 import { linkageAuditService } from '../services/linkageAudit.service'
 import { traceabilityService } from '../services/traceability.service'
+import { randomUUID } from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -14,6 +15,40 @@ const issueUploadsDir = path.join(__dirname, '../../uploads/issues')
 if (!fs.existsSync(issueUploadsDir)) {
   fs.mkdirSync(issueUploadsDir, { recursive: true })
 }
+
+// Permitted MIME types mapped to their canonical file extension.
+// Executables, scripts, HTML, and SVG are deliberately excluded.
+// Extension is derived from this map (not from client-supplied filename) to prevent
+// double-extension attacks like "document.pdf.exe". Mirrors attachment.controller.ts (#27).
+const MIME_TO_EXT: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+  'application/pdf': '.pdf',
+  'text/plain': '.txt',
+  'text/csv': '.csv',
+  'application/json': '.json',
+  'application/msword': '.doc',
+  'application/vnd.ms-excel': '.xls',
+  'application/vnd.ms-powerpoint': '.ppt',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+  'application/zip': '.zip',
+  'application/x-zip-compressed': '.zip',
+}
+
+const ALLOWED_MIME_TYPES = new Set(Object.keys(MIME_TO_EXT))
+
+// Safe filename: letters, numbers, spaces, dots, hyphens, underscores, parens, square brackets
+const SAFE_FILENAME_RE = /^[a-zA-Z0-9 ._\-()\[\]]+$/
+
+// Max raw file size (10 MB). Guard on base64 length BEFORE decoding so a malicious
+// payload cannot exhaust memory. Base64 encodes 3 bytes to 4 chars, so the encoded
+// string is ~1.37x the raw byte size; we use a 1.5x buffer to be safe.
+const MAX_FILE_BYTES = 10 * 1024 * 1024
+const MAX_BASE64_CHARS = Math.ceil(MAX_FILE_BYTES * 1.5)
 
 // Helper to create system notes
 const createSystemNote = async (
@@ -64,47 +99,32 @@ export const createIssue = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    // Generate unique issue key (ISS-0001). Use numeric MAX (not string sort: ISS-10000 < ISS-9999 lexically)
-    // and retry on P2002 for concurrent creates.
-    const maxAttempts = 12
-    let issue: Awaited<ReturnType<typeof prisma.issue.create>> | null = null
-    let lastKeyError: unknown
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const nextSeq = (await getMaxIssueSequenceNumber()) + 1
-      const issueKey = formatIssueKey(nextSeq)
-      try {
-        issue = await prisma.issue.create({
-          data: {
-            projectId,
-            issueKey,
-            title,
-            description,
-            priority: priority || 'medium',
-            issueType: issueType || null,
-            owner: owner || '',
-            assigneeId,
-            createdBy: req.userId,
-            updatedBy: req.userId,
-            relatedFunctionIds: relatedFunctionIds || [],
-            relatedParameterIds: relatedParameterIds || [],
-            labelIds: labelIds || [],
-            startDate: startDate ? new Date(startDate) : null,
-            dueDate: dueDate ? new Date(dueDate) : null,
-            estimatedTime,
-          },
-        })
-        break
-      } catch (e) {
-        if (isIssueKeyUniqueViolation(e)) {
-          lastKeyError = e
-          continue
-        }
-        throw e
-      }
-    }
-    if (!issue) {
-      throw lastKeyError ?? new Error('Could not allocate a unique issue key')
-    }
+    // Allocate a unique issue key atomically using a Postgres advisory lock (#38).
+    // pg_advisory_xact_lock serializes concurrent creates so every INSERT receives
+    // a unique sequence number — no retry loop needed.
+    const issue = await prisma.$transaction(async (tx) => {
+      const issueKey = await allocateIssueKey(tx)
+      return tx.issue.create({
+        data: {
+          projectId,
+          issueKey,
+          title,
+          description,
+          priority: priority || 'medium',
+          issueType: issueType || null,
+          owner: owner || '',
+          assigneeId,
+          createdBy: req.userId,
+          updatedBy: req.userId,
+          relatedFunctionIds: relatedFunctionIds || [],
+          relatedParameterIds: relatedParameterIds || [],
+          labelIds: labelIds || [],
+          startDate: startDate ? new Date(startDate) : null,
+          dueDate: dueDate ? new Date(dueDate) : null,
+          estimatedTime,
+        },
+      })
+    })
 
     // Subscribe creator automatically
     if (req.userId) {
@@ -835,6 +855,23 @@ export const uploadIssueAttachment = async (req: AuthRequest, res: Response) => 
       return res.status(400).json({ success: false, error: 'fileName and fileData are required' })
     }
 
+    // Validate MIME type against allowlist (client-supplied but defence-in-depth)
+    if (!mimeType || !ALLOWED_MIME_TYPES.has(mimeType)) {
+      return res.status(400).json({ success: false, error: 'File type not permitted' })
+    }
+
+    // Validate filename - only safe characters, max 255 chars. Rejects path traversal
+    // (../), NUL bytes, control chars, and overflow DoS.
+    if (typeof fileName !== 'string' || fileName.length > 255 || !SAFE_FILENAME_RE.test(fileName)) {
+      return res.status(400).json({ success: false, error: 'Invalid file name' })
+    }
+
+    // Guard on raw base64 length BEFORE decoding so a huge payload cannot be
+    // buffered into memory to trigger OOM.
+    if (typeof fileData !== 'string' || fileData.length > MAX_BASE64_CHARS) {
+      return res.status(400).json({ success: false, error: 'File too large' })
+    }
+
     const issue = await prisma.issue.findFirst({
       where: { id: issueId, projectId },
     })
@@ -842,16 +879,26 @@ export const uploadIssueAttachment = async (req: AuthRequest, res: Response) => 
       return res.status(404).json({ success: false, error: 'Issue not found' })
     }
 
+    // Derive the stored file extension from the validated MIME type, NOT the
+    // user-supplied filename. Prevents double-extension attacks (e.g. foo.pdf.exe).
+    const fileExtension = MIME_TO_EXT[mimeType] ?? '.bin'
+
     let fileUrl: string
     let fileSize: number
 
     if (fileData.startsWith('data:')) {
       const base64Data = fileData.split(',')[1]
+      if (!base64Data) {
+        return res.status(400).json({ success: false, error: 'Invalid file data' })
+      }
       const buffer = Buffer.from(base64Data, 'base64')
       fileSize = buffer.length
+      // Final decoded-size check (base64 char-count guard is an estimate only)
+      if (fileSize > MAX_FILE_BYTES) {
+        return res.status(400).json({ success: false, error: 'File too large' })
+      }
       if (fileSize > 1024 * 1024) {
-        const fileExtension = path.extname(fileName)
-        const uniqueFileName = `${issueId}-${Date.now()}${fileExtension}`
+        const uniqueFileName = `${randomUUID()}${fileExtension}`
         const filePath = path.join(issueUploadsDir, uniqueFileName)
         fs.writeFileSync(filePath, buffer)
         fileUrl = `/uploads/issues/${uniqueFileName}`
@@ -861,8 +908,10 @@ export const uploadIssueAttachment = async (req: AuthRequest, res: Response) => 
     } else {
       const buffer = Buffer.from(fileData, 'base64')
       fileSize = buffer.length
-      const fileExtension = path.extname(fileName)
-      const uniqueFileName = `${issueId}-${Date.now()}${fileExtension}`
+      if (fileSize > MAX_FILE_BYTES) {
+        return res.status(400).json({ success: false, error: 'File too large' })
+      }
+      const uniqueFileName = `${randomUUID()}${fileExtension}`
       const filePath = path.join(issueUploadsDir, uniqueFileName)
       fs.writeFileSync(filePath, buffer)
       fileUrl = `/uploads/issues/${uniqueFileName}`
@@ -876,7 +925,7 @@ export const uploadIssueAttachment = async (req: AuthRequest, res: Response) => 
         fileName,
         fileUrl,
         fileSize,
-        mimeType: mimeType || 'application/octet-stream',
+        mimeType,
         uploadedBy: req.userId || null,
         uploadedByName: user?.name || null,
       },

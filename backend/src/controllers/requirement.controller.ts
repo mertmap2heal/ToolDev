@@ -1486,7 +1486,13 @@ export const unlockRequirement = async (req: AuthRequest, res: Response) => {
       return res.json({ success: true, data: requirement })
     }
 
-    if (requirement.lockedByUserId !== userId) {
+    // Allow admins to force-unlock any requirement (prevents lock-based DoS)
+    const isAdmin = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    }).then(u => u?.role === 'SUPERIOR_ADMIN' || u?.role === 'COMPANY_ADMIN').catch(() => false)
+
+    if (requirement.lockedByUserId !== userId && !isAdmin) {
       return res.status(403).json({
         success: false,
         error: 'Only the user who locked the requirement can unlock it',
@@ -1555,6 +1561,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       thresholdValue,
       objectiveValue,
       customAttributes,
+      version: clientVersion,
     } = req.body
 
     // Find the requirement
@@ -1572,6 +1579,15 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({
         success: false,
         error: 'Requirement not found',
+      })
+    }
+
+    // Optimistic locking: if client supplies a version, it must match the stored version
+    if (clientVersion !== undefined && clientVersion !== requirement.version) {
+      return res.status(409).json({
+        success: false,
+        error: 'Requirement was modified by another user. Please refresh and try again.',
+        currentVersion: requirement.version,
       })
     }
 
@@ -1664,21 +1680,6 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Create version snapshot before updating (for version history)
-    // Wrap in try-catch to prevent version creation from blocking updates
-    try {
-      await createVersionSnapshot(
-        requirement.id,
-        projectId,
-        req.userId,
-        undefined,
-        'Updated via API'
-      )
-    } catch (versionError) {
-      // Log but don't fail the update if version creation fails
-      console.warn('Failed to create version snapshot:', versionError)
-    }
-
     let transitionChecklistSubmissionResults:
       | Array<{
           assignmentId: string
@@ -1688,6 +1689,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
 
     // Build update data object, conditionally including requirementId only when it should be updated
     const updateData: any = {
+      version: { increment: 1 },
       title,
       description,
       parentId: parentId !== undefined ? (parentId || null) : undefined,
@@ -1877,29 +1879,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const updatedRequirement = await prisma.requirement.update({
-      where: { id: requirement.id },
-      data: updateData,
-      include: {
-        parent: {
-          select: {
-            id: true,
-            requirementId: true,
-            title: true,
-          },
-        },
-        children: {
-          select: {
-            id: true,
-            requirementId: true,
-            title: true,
-          },
-        },
-        moc: true,
-      },
-    })
-
-    // Mark downstream trace links as suspect when meaningful fields change
+    // Determine which meaningful fields are changing (depends only on request body)
     const changedFields: string[] = []
     if (title !== undefined) changedFields.push('title')
     if (description !== undefined) changedFields.push('description')
@@ -1922,6 +1902,80 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
       changedFields.push('requirementId')
     }
 
+    // Atomic core: snapshot + update + trace-link suspect-marking in one transaction
+    // so a mid-flight crash cannot leave a version snapshot for a change that never
+    // committed, and cannot leave traceability state inconsistent (#23).
+    const updatedRequirement = await prisma.$transaction(async (tx) => {
+      // Capture the pre-update state inside the transaction so the snapshot is only
+      // written if the update itself succeeds (#23 fix — was previously outside the tx).
+      await createVersionSnapshot(
+        requirement.id,
+        projectId,
+        req.userId,
+        undefined,
+        'Updated via API',
+        tx
+      )
+
+      // isLocked: false enforces the lock at the DB level — if a concurrent request
+      // locked the requirement between our fetch and this write, Prisma throws P2025
+      // instead of silently overwriting the locked record (#34).
+      const updated = await tx.requirement.update({
+        where: { id: requirement.id, isLocked: false },
+        data: updateData,
+        include: {
+          parent: {
+            select: {
+              id: true,
+              requirementId: true,
+              title: true,
+            },
+          },
+          children: {
+            select: {
+              id: true,
+              requirementId: true,
+              title: true,
+            },
+          },
+          moc: true,
+        },
+      })
+
+      if (changedFields.length > 0) {
+        // Mark all requirement-to-requirement trace links suspect
+        await tx.traceLink.updateMany({
+          where: {
+            projectId,
+            OR: [
+              { sourceId: requirement.id, sourceType: 'requirement' },
+              { targetId: requirement.id, targetType: 'requirement' },
+            ],
+          },
+          data: { isSuspect: true },
+        })
+
+        // DO-178C Impact Analysis: mark linked VerTestCases suspect
+        const testCaseLinks = await tx.traceLink.findMany({
+          where: {
+            projectId,
+            targetId: requirement.id,
+            targetType: 'requirement',
+            sourceType: 'test_case',
+          },
+          select: { sourceId: true },
+        })
+        if (testCaseLinks.length > 0) {
+          await tx.verTestCase.updateMany({
+            where: { id: { in: testCaseLinks.map(l => l.sourceId) }, projectId },
+            data: { isSuspect: true, invalidatedAt: new Date() },
+          })
+        }
+      }
+
+      return updated
+    })
+
     await syncRequirementParameterLinks(
       projectId,
       requirement.id,
@@ -1936,39 +1990,6 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
         requirement.id,
         changedFields
       )
-      // Also mark all requirement-to-requirement links (both directions) for full coverage
-      await prisma.traceLink.updateMany({
-        where: {
-          projectId,
-          OR: [
-            { sourceId: requirement.id, sourceType: 'requirement' },
-            { targetId: requirement.id, targetType: 'requirement' },
-          ],
-        },
-        data: { isSuspect: true },
-      })
-
-      // DO-178C Impact Analysis - Mark linked VerTestCases as suspect
-      const testCaseLinks = await prisma.traceLink.findMany({
-        where: {
-          projectId,
-          targetId: requirement.id,
-          targetType: 'requirement',
-          sourceType: 'test_case'
-        },
-        select: { sourceId: true }
-      })
-
-      if (testCaseLinks.length > 0) {
-        const testCaseIds = testCaseLinks.map(l => l.sourceId)
-        await prisma.verTestCase.updateMany({
-          where: { id: { in: testCaseIds }, projectId },
-          data: {
-            isSuspect: true,
-            invalidatedAt: new Date()
-          }
-        })
-      }
     }
 
     await linkageAuditService.log({
@@ -1994,7 +2015,8 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
     }
 
     const changes = buildRequirementChangeSummary(requirement, updatedRequirement as any)
-    await notifyRequirementSubscribers({
+    // Fire-and-forget: notification failure must not cause the update endpoint to return 500
+    notifyRequirementSubscribers({
       projectId,
       requirementId: requirement.id,
       actorUserId: req.userId,
@@ -2004,7 +2026,7 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
         requirementId: updatedRequirement.requirementId,
         title: updatedRequirement.title,
       },
-    })
+    }).catch(err => console.error('[updateRequirement] Notification failed (non-fatal):', err))
 
     res.json({
       success: true,
@@ -2015,6 +2037,22 @@ export const updateRequirement = async (req: AuthRequest, res: Response) => {
     })
   } catch (error: any) {
     console.error('Update requirement error:', error)
+
+    // P2025 = Prisma record-not-found. Re-query to distinguish two cases (#34):
+    //   locked between fetch and write → 409 Conflict
+    //   deleted between fetch and write → 404 Not Found
+    // Guard on modelName to avoid misidentifying a nested-write P2025 as a lock failure.
+    if (error?.code === 'P2025' && (!error?.meta?.modelName || error?.meta?.modelName === 'Requirement')) {
+      const { projectId, requirementId } = req.params
+      const check = await prisma.requirement.findFirst({
+        where: { projectId, OR: [{ id: requirementId }, { requirementId }] },
+        select: { isLocked: true },
+      }).catch(() => null)
+      if (check?.isLocked) {
+        return res.status(409).json({ success: false, error: 'Requirement was locked by a concurrent request. Please refresh and try again.' })
+      }
+      return res.status(404).json({ success: false, error: 'Requirement not found' })
+    }
 
     let errorMessage = 'Internal server error'
     if (error?.message) {
@@ -2074,12 +2112,13 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
     if (requirement.children.length > 0) {
       const childrenToDelete = req.body.childrenToDelete || [] // IDs of children to delete
 
-      // 1. Soft delete selected children
+      // 1. Soft delete selected children — skip any that are locked (#34)
       if (childrenToDelete.length > 0) {
         await prisma.requirement.updateMany({
           where: {
             id: { in: childrenToDelete },
-            parentId: requirement.id
+            parentId: requirement.id,
+            isLocked: false,
           },
           data: {
             deletedAt: new Date(),
@@ -2104,87 +2143,89 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    // 3. Process Linked Items (Issues, Change Requests)
-    // The frontend passes a list of items that the user explicitly selected for deletion.
-    // We will hard delete them to match the behavior of their respective controllers.
+    // 3. Process Linked Items atomically — collect IDs by type, then run a single
+    //    $transaction so either all deletes succeed or none do (#31).
     const { linkedItemsToDelete } = req.body
+
+    // Pre-fetch CR attachments outside the transaction (needed for filesystem cleanup)
+    const crAttachmentFiles: string[] = []
 
     if (linkedItemsToDelete && Array.isArray(linkedItemsToDelete) && linkedItemsToDelete.length > 0) {
       console.log(`[Delete Requirement] Processing ${linkedItemsToDelete.length} linked items for deletion`)
 
+      const issueIds: string[] = []
+      const crIds: string[] = []
+      const functionIds: string[] = []
+      const linkedReqIds: string[] = []
+      const testCaseIds: string[] = []
+      const pbsIds: string[] = []
+
       for (const item of linkedItemsToDelete) {
+        if (item.type === 'issue') issueIds.push(item.id)
+        else if (item.type === 'change_request') crIds.push(item.id)
+        else if (item.type === 'function') functionIds.push(item.id)
+        else if (item.type === 'requirement' || item.type === 'hazard' || item.type === 'risk') linkedReqIds.push(item.id)
+        else if (item.type === 'test_case') testCaseIds.push(item.id)
+        else if (item.type === 'pbs_component') pbsIds.push(item.id)
+      }
+
+      // Pre-fetch CR attachment file paths (best-effort — failure must not abort the delete)
+      if (crIds.length > 0) {
         try {
-          if (item.type === 'issue') {
-            // Hard delete issue
-            await prisma.issue.delete({ where: { id: item.id } }).catch(e => {
-              console.error(`Failed to delete linked issue ${item.id}:`, e)
-            })
-          } else if (item.type === 'change_request') {
-            // Find CR to delete attachments first
-            const cr = await prisma.changeRequest.findUnique({
-              where: { id: item.id },
-              include: { attachments: true }
-            })
-
-            if (cr) {
-              // Delete attachments from FS
-              const uploadsDir = path.join(__dirname, '../../uploads/change-requests')
-              for (const attachment of cr.attachments) {
-                if (attachment.fileUrl && !attachment.fileUrl.startsWith('data:')) {
-                  const filePath = path.join(uploadsDir, path.basename(attachment.fileUrl))
-                  if (fs.existsSync(filePath)) {
-                    try { fs.unlinkSync(filePath) } catch (e) { console.error('Failed to unlink file:', e) }
-                  }
-                }
+          const crs = await prisma.changeRequest.findMany({
+            where: { id: { in: crIds }, projectId },
+            include: { attachments: true },
+          })
+          const uploadsDir = path.join(__dirname, '../../uploads/change-requests')
+          for (const cr of crs) {
+            for (const att of cr.attachments) {
+              if (att.fileUrl && !att.fileUrl.startsWith('data:')) {
+                crAttachmentFiles.push(path.join(uploadsDir, path.basename(att.fileUrl)))
               }
-
-              // Hard delete CR
-              await prisma.changeRequest.delete({ where: { id: item.id } }).catch(e => {
-                console.error(`Failed to delete linked change request ${item.id}:`, e)
-              })
             }
-          } else if (item.type === 'function') {
-            // Hard delete function
-            await prisma.systemFunction.delete({ where: { id: item.id } }).catch(e => {
-              console.error(`Failed to delete linked function ${item.id}:`, e)
-            })
-          } else if (item.type === 'requirement' || item.type === 'hazard' || item.type === 'risk') {
-            // Soft delete linked requirement (or hazard/risk if they are requirements)
-            await prisma.requirement.update({
-              where: { id: item.id },
-              data: {
-                deletedAt: new Date(),
-                deletedById: req.userId,
-                deleteReason: `Deleted as linked item of ${requirement.requirementId || requirement.title}`,
-              }
-            }).catch(e => {
-              console.error(`Failed to delete linked requirement/item ${item.id}:`, e)
-            })
-          } else if (item.type === 'test_case') {
-            // Hard delete verification test case
-            await prisma.verTestCase.delete({ where: { id: item.id } }).catch(e => {
-              console.error(`Failed to delete linked test case ${item.id}:`, e)
-            })
-          } else if (item.type === 'pbs_component') {
-            // Hard delete PBS component
-            await prisma.component.delete({ where: { id: item.id } }).catch(e => {
-              console.error(`Failed to delete linked PBS component ${item.id}:`, e)
-            })
           }
-        } catch (error) {
-          console.error(`Error processing linked item deletion for ${item.type}:${item.id}`, error)
-          // Continue processing other items even if one fails
+        } catch (prefetchErr) {
+          console.error('[Delete Requirement] Failed to pre-fetch CR attachments; filesystem cleanup will be skipped:', prefetchErr)
+        }
+      }
+
+      // Execute all DB deletes atomically — if any step throws, all are rolled back.
+      // projectId is included in every where clause to prevent cross-project deletion (#31 security).
+      await prisma.$transaction(async (tx) => {
+        if (issueIds.length > 0) await tx.issue.deleteMany({ where: { id: { in: issueIds }, projectId } })
+        if (crIds.length > 0) await tx.changeRequest.deleteMany({ where: { id: { in: crIds }, projectId } })
+        if (functionIds.length > 0) await tx.systemFunction.deleteMany({ where: { id: { in: functionIds }, projectId } })
+        if (testCaseIds.length > 0) await tx.verTestCase.deleteMany({ where: { id: { in: testCaseIds }, projectId } })
+        if (pbsIds.length > 0) await tx.component.deleteMany({ where: { id: { in: pbsIds }, projectId } })
+        if (linkedReqIds.length > 0) {
+          await tx.requirement.updateMany({
+            where: { id: { in: linkedReqIds }, projectId },
+            data: {
+              deletedAt: new Date(),
+              deletedById: req.userId,
+              deleteReason: `Deleted as linked item of ${requirement.requirementId || requirement.title}`,
+            },
+          })
+        }
+      })
+
+      // Remove CR attachment files from filesystem (best-effort, after DB transaction committed)
+      for (const filePath of crAttachmentFiles) {
+        if (fs.existsSync(filePath)) {
+          try { fs.unlinkSync(filePath) } catch (e) { console.error('Failed to unlink CR attachment:', e) }
         }
       }
     }
 
-    // Soft delete the requirement
+    // Soft delete the requirement — isLocked: false enforces the lock at DB level (#34)
+    const softDeletedAt = new Date()
+    const softDeleteReason = req.body.reason || null
     const deletedRequirement = await prisma.requirement.update({
-      where: { id: requirement.id },
+      where: { id: requirement.id, isLocked: false },
       data: {
-        deletedAt: new Date(),
+        deletedAt: softDeletedAt,
         deletedById: req.userId,
-        deleteReason: req.body.reason || null,
+        deleteReason: softDeleteReason,
       },
     })
 
@@ -2203,7 +2244,7 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
       performedByUserId: req.userId,
     })
 
-    await notifyRequirementSubscribers({
+    notifyRequirementSubscribers({
       projectId,
       requirementId: requirement.id,
       actorUserId: req.userId,
@@ -2214,14 +2255,25 @@ export const deleteRequirement = async (req: AuthRequest, res: Response) => {
         requirementId: requirement.requirementId,
         title: requirement.title,
       },
-    })
+    }).catch(console.error)
 
     res.json({
       success: true,
       message: 'Requirement moved to trash successfully',
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Delete requirement error:', error)
+    if (error?.code === 'P2025' && (!error?.meta?.modelName || error?.meta?.modelName === 'Requirement')) {
+      const { projectId, requirementId } = req.params
+      const check = await prisma.requirement.findFirst({
+        where: { projectId, OR: [{ id: requirementId }, { requirementId }] },
+        select: { isLocked: true },
+      }).catch(() => null)
+      if (check?.isLocked) {
+        return res.status(409).json({ success: false, error: 'Requirement was locked by a concurrent request. Please refresh and try again.' })
+      }
+      return res.status(404).json({ success: false, error: 'Requirement not found' })
+    }
     res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -2625,7 +2677,7 @@ export const updateRequirementParent = async (req: AuthRequest, res: Response) =
     }
 
     const updatedRequirement = await prisma.requirement.update({
-      where: { id: requirement.id },
+      where: { id: requirement.id, isLocked: false },
       data: {
         parentId: newParentId || null,
       },
@@ -2649,7 +2701,7 @@ export const updateRequirementParent = async (req: AuthRequest, res: Response) =
     })
 
     const changes = buildRequirementChangeSummary(requirement, updatedRequirement as any)
-    await notifyRequirementSubscribers({
+    notifyRequirementSubscribers({
       projectId,
       requirementId: requirement.id,
       actorUserId: req.userId,
@@ -2659,7 +2711,7 @@ export const updateRequirementParent = async (req: AuthRequest, res: Response) =
         requirementId: updatedRequirement.requirementId,
         title: updatedRequirement.title,
       },
-    })
+    }).catch(console.error)
 
     res.json({
       success: true,
@@ -2667,6 +2719,17 @@ export const updateRequirementParent = async (req: AuthRequest, res: Response) =
     })
   } catch (error: any) {
     console.error('Update requirement parent error:', error)
+    if (error?.code === 'P2025' && (!error?.meta?.modelName || error?.meta?.modelName === 'Requirement')) {
+      const { projectId, requirementId } = req.params
+      const check = await prisma.requirement.findFirst({
+        where: { projectId, OR: [{ id: requirementId }, { requirementId }] },
+        select: { isLocked: true },
+      }).catch(() => null)
+      if (check?.isLocked) {
+        return res.status(409).json({ success: false, error: 'Requirement was locked by a concurrent request. Please refresh and try again.' })
+      }
+      return res.status(404).json({ success: false, error: 'Requirement not found' })
+    }
     res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -2707,12 +2770,14 @@ export const bulkUpdateRequirements = async (req: AuthRequest, res: Response) =>
       },
     })
 
+    // isLocked: false ensures locked requirements are silently skipped rather than overwritten (#34)
     const result = await prisma.requirement.updateMany({
       where: {
         projectId,
         id: {
           in: requirementIds,
         },
+        isLocked: false,
       },
       data: updateData,
     })
@@ -2725,29 +2790,30 @@ export const bulkUpdateRequirements = async (req: AuthRequest, res: Response) =>
     })
 
     const afterById = new Map(afterRequirements.map((req) => [req.id, req]))
-    await Promise.all(
-      beforeRequirements.map(async (before) => {
-        const after = afterById.get(before.id)
-        if (!after) return
-        const changes = buildRequirementChangeSummary(before, after)
-        await notifyRequirementSubscribers({
-          projectId,
-          requirementId: before.id,
-          actorUserId: req.userId,
-          changes,
-          requirementSnapshot: {
-            id: after.id,
-            requirementId: after.requirementId,
-            title: after.title,
-          },
-        })
-      })
-    )
+    beforeRequirements.forEach((before) => {
+      const after = afterById.get(before.id)
+      if (!after) return
+      const changes = buildRequirementChangeSummary(before, after)
+      notifyRequirementSubscribers({
+        projectId,
+        requirementId: before.id,
+        actorUserId: req.userId,
+        changes,
+        requirementSnapshot: {
+          id: after.id,
+          requirementId: after.requirementId,
+          title: after.title,
+        },
+      }).catch(console.error)
+    })
+
+    const skippedDueToLock = beforeRequirements.filter(r => r.isLocked).length
 
     res.json({
       success: true,
-      message: `Updated ${result.count} requirement(s)`,
+      message: `Updated ${result.count} requirement(s)${skippedDueToLock > 0 ? `, ${skippedDueToLock} skipped (locked)` : ''}`,
       count: result.count,
+      skippedDueToLock,
     })
   } catch (error) {
     console.error('Bulk update requirements error:', error)
@@ -2972,9 +3038,9 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
             console.warn('Failed to create version snapshot:', versionError)
           }
 
-          // Update requirement
+          // Update requirement — isLocked: false prevents overwriting locked records (#34)
           const updatedRequirement = await prisma.requirement.update({
-            where: { id: existing.id },
+            where: { id: existing.id, isLocked: false },
             data: {
               title: updateData.title !== undefined ? updateData.title : existing.title,
               description: updateData.description !== undefined ? updateData.description : existing.description,
@@ -3004,7 +3070,7 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
           })
 
           const changes = buildRequirementChangeSummary(existing, updatedRequirement as any)
-          await notifyRequirementSubscribers({
+          notifyRequirementSubscribers({
             projectId,
             requirementId: updatedRequirement.id,
             actorUserId: req.userId,
@@ -3014,14 +3080,18 @@ export const bulkImportRequirements = async (req: AuthRequest, res: Response) =>
               requirementId: updatedRequirement.requirementId,
               title: updatedRequirement.title,
             },
-          })
+          }).catch(console.error)
 
           updatedCount++
         } catch (error: any) {
+          // P2025: requirement was locked between our findFirst and the update — skip gracefully
+          const errorMsg = error?.code === 'P2025'
+            ? `Requirement is locked and cannot be updated via import`
+            : (error.message || 'Failed to update requirement')
           console.error(`Error updating requirement at row ${i}:`, error)
           errors.push({
             row: create ? create.length + i : i,
-            errors: [error.message || 'Failed to update requirement'],
+            errors: [errorMsg],
           })
           skippedCount++
         }
@@ -3281,7 +3351,7 @@ export const updateRequirementComponent = async (req: AuthRequest, res: Response
     }
 
     const updated = await prisma.requirement.update({
-      where: { id: requirement.id },
+      where: { id: requirement.id, isLocked: false },
       data: {
         componentId: componentId || null,
       },
@@ -3339,7 +3409,7 @@ export const updateRequirementComponent = async (req: AuthRequest, res: Response
     })
 
     const changes = buildRequirementChangeSummary(requirement, updated as any)
-    await notifyRequirementSubscribers({
+    notifyRequirementSubscribers({
       projectId,
       requirementId: requirement.id,
       actorUserId: req.userId,
@@ -3349,14 +3419,25 @@ export const updateRequirementComponent = async (req: AuthRequest, res: Response
         requirementId: updated.requirementId,
         title: updated.title,
       },
-    })
+    }).catch(console.error)
 
     res.json({
       success: true,
       data: updated,
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Update requirement component error:', error)
+    if (error?.code === 'P2025' && (!error?.meta?.modelName || error?.meta?.modelName === 'Requirement')) {
+      const { projectId, requirementId } = req.params
+      const check = await prisma.requirement.findFirst({
+        where: { projectId, OR: [{ id: requirementId }, { requirementId }] },
+        select: { isLocked: true },
+      }).catch(() => null)
+      if (check?.isLocked) {
+        return res.status(409).json({ success: false, error: 'Requirement was locked by a concurrent request. Please refresh and try again.' })
+      }
+      return res.status(404).json({ success: false, error: 'Requirement not found' })
+    }
     res.status(500).json({
       success: false,
       error: 'Internal server error',

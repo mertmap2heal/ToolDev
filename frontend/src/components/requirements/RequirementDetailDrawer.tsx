@@ -42,6 +42,7 @@ import { resolveParameterPlaceholders, editorSpansToPlaceholders } from '../../u
 import { parameterService } from '../../services/parameter.service'
 import { definitionEntryService } from '../../services/definitionEntry.service'
 import { injectGlossaryTerms } from '../../utils/glossaryTerms'
+import { sanitizeHtml } from '../../utils/richText'
 import RequirementRichTextField from './RequirementRichTextField'
 
 interface RequirementDetailDrawerProps {
@@ -1555,7 +1556,7 @@ export default function RequirementDetailDrawer({
                   <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Description</h3>
                   <div
                     className="prose prose-sm dark:prose-invert max-w-none text-gray-900 dark:text-gray-100 [&_p]:mb-2 [&_ul]:list-disc [&_ol]:list-decimal [&_ul]:pl-5 [&_ol]:pl-5"
-                    dangerouslySetInnerHTML={{ __html: descriptionWithGlossary }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(descriptionWithGlossary) }}
                   />
                 </div>
 
@@ -2642,7 +2643,7 @@ export default function RequirementDetailDrawer({
 
                               <div
                                 className="prose prose-sm dark:prose-invert max-w-none border-none p-0 min-h-0 bg-transparent"
-                                dangerouslySetInnerHTML={{ __html: comment.content }}
+                                dangerouslySetInnerHTML={{ __html: sanitizeHtml(comment.content) }}
                               />
                             </div>
                           </div>

@@ -1,0 +1,80 @@
+name: Weekly dev -> master sync
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'  # Every Monday at 08:00 UTC
+  workflow_dispatch:       # Allow manual trigger from GitHub UI
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if dev is ahead of master
+        id: check
+        run: |
+          git fetch origin
+          AHEAD=$(git rev-list --count origin/master..origin/dev)
+          echo "ahead=$AHEAD" >> $GITHUB_OUTPUT
+          echo "dev is $AHEAD commit(s) ahead of master"
+
+      - name: Check for existing open PR
+        id: existing
+        if: steps.check.outputs.ahead != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=$(gh pr list \
+            --base master \
+            --head dev \
+            --state open \
+            --json number \
+            --jq '.[0].number // ""')
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+
+      - name: Open PR and enable auto-merge
+        if: steps.check.outputs.ahead != '0' && steps.existing.outputs.pr_number == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DATE=$(date +%Y-%m-%d)
+          AHEAD=${{ steps.check.outputs.ahead }}
+
+          PR_URL=$(gh pr create \
+            --base master \
+            --head dev \
+            --title "chore(release): weekly sync dev -> master ($DATE)" \
+            --body "## Weekly automated release
+
+          This PR was opened automatically by the weekly sync workflow.
+          It will self-merge once all CI checks (lint, test, e2e) pass.
+
+          - **Commits ahead:** $AHEAD
+          - **Date:** $DATE
+          - **Triggered by:** scheduled workflow")
+
+          PR_NUMBER="${PR_URL##*/}"
+          echo "Opened PR #$PR_NUMBER"
+
+          gh pr merge "$PR_NUMBER" --auto --merge
+          echo "Auto-merge enabled on PR #$PR_NUMBER"
+
+      - name: Already in sync
+        if: steps.check.outputs.ahead == '0'
+        run: echo "dev is already in sync with master -- nothing to do."
+
+      - name: PR already open
+        if: steps.check.outputs.ahead != '0' && steps.existing.outputs.pr_number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=${{ steps.existing.outputs.pr_number }}
+          echo "PR #$PR_NUMBER already open -- ensuring auto-merge is enabled"
+          gh pr merge "$PR_NUMBER" --auto --merge || true

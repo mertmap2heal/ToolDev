@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken'
 import { prisma } from '../lib/prisma'
 import type { AuthRequest } from '../middleware/auth.middleware'
 import { sendInviteEmail, sendForgotPasswordEmail } from '../services/email.service'
+import { resolveIsAdmin } from '../lib/adminAuth'
 
 
 async function requireAdmin(req: AuthRequest, res: Response): Promise<{ email: string } | null> {
@@ -546,10 +547,33 @@ export const createAdminUser = async (req: AuthRequest, res: Response) => {
   }
 }
 
-/** List users (id, name, email, inviteEmail, lastLoginAt) for invite dropdowns and admin. Requires authentication. */
-export const getUsers = async (_req: Request, res: Response) => {
+/**
+ * List users (id, name, email, inviteEmail, lastLoginAt) for invite dropdowns and admin.
+ * Scoped to the requesting user's company; platform admins (SUPERIOR_ADMIN, ADMIN_EMAILS,
+ * or first-user) see all users (#150).
+ */
+export const getUsers = async (req: AuthRequest, res: Response) => {
   try {
+    const userId = req.userId
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+    const requester = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, role: true, company: true },
+    })
+    if (!requester) {
+      return res.status(401).json({ success: false, error: 'User not found' })
+    }
+    const isPlatformAdmin =
+      requester.role === 'SUPERIOR_ADMIN' ||
+      requester.role === 'COMPANY_ADMIN' ||
+      (await resolveIsAdmin(requester.email))
+
+    const where = isPlatformAdmin ? {} : { company: requester.company ?? null }
+
     const users = await prisma.user.findMany({
+      where,
       select: {
         id: true,
         name: true,
@@ -690,20 +714,7 @@ export const sendUserInvite = async (req: AuthRequest, res: Response) => {
   }
 }
 
-/** Derive admin flag: comma-separated ADMIN_EMAILS env, or first user in DB (by createdAt). */
-async function resolveIsAdmin(email: string | null): Promise<boolean> {
-  if (!email) return false
-  const list = process.env.ADMIN_EMAILS
-  if (list) {
-    const emails = list.split(',').map((e) => e.trim().toLowerCase())
-    return emails.includes(email.toLowerCase())
-  }
-  const first = await prisma.user.findFirst({
-    orderBy: { createdAt: 'asc' },
-    select: { email: true },
-  })
-  return first?.email?.toLowerCase() === email.toLowerCase()
-}
+// resolveIsAdmin moved to backend/src/lib/adminAuth.ts (#151)
 
 function generateToken(userId: string): string {
   const secret = process.env.JWT_SECRET
