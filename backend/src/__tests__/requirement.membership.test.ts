@@ -4,12 +4,13 @@ import { app } from '../server'
 import { prisma } from '../lib/prisma'
 import jwt from 'jsonwebtoken'
 
-describe('Requirements — project membership enforcement (#90)', () => {
+describe('Requirements — project membership enforcement (#90, #97)', () => {
   let projectId: string
   let memberId: string
   let memberToken: string
   let outsiderId: string
   let outsiderToken: string
+  let seedRequirementId: string
 
   beforeAll(async () => {
     const ts = Date.now()
@@ -36,6 +37,19 @@ describe('Requirements — project membership enforcement (#90)', () => {
       data: { projectId, userId: memberId, role: 'member', status: 'accepted' },
     })
     // outsider has no ProjectMember record
+
+    const seedReq = await prisma.requirement.create({
+      data: {
+        projectId,
+        title: 'Seed Requirement',
+        description: 'for isolation tests',
+        status: 'Draft',
+        priority: 'Medium',
+        stage: 'Analysis',
+        requirementId: `REQ-ISOLATION-${ts}`,
+      },
+    })
+    seedRequirementId = seedReq.id
   })
 
   afterAll(async () => {
@@ -72,6 +86,46 @@ describe('Requirements — project membership enforcement (#90)', () => {
       .post(`/api/v1/requirements/${projectId}`)
       .set('Authorization', `Bearer ${outsiderToken}`)
       .send({ title: 'Injected', description: 'Bad', stage: 'Analysis' })
+    expect(res.status).toBe(403)
+  })
+
+  // ---------------------------------------------------------------------------
+  // PUT / DELETE / audit log — cross-project isolation (#97)
+  // ---------------------------------------------------------------------------
+
+  it('PUT /requirements/:projectId/:id returns 403 for non-member', async () => {
+    const res = await request(app)
+      .put(`/api/v1/requirements/${projectId}/${seedRequirementId}`)
+      .set('Authorization', `Bearer ${outsiderToken}`)
+      .send({ title: 'Hijacked via PUT' })
+    expect(res.status).toBe(403)
+
+    const still = await prisma.requirement.findUnique({ where: { id: seedRequirementId } })
+    expect(still?.title).toBe('Seed Requirement')
+  })
+
+  it('DELETE /requirements/:projectId/:id returns 403 for non-member', async () => {
+    const res = await request(app)
+      .delete(`/api/v1/requirements/${projectId}/${seedRequirementId}`)
+      .set('Authorization', `Bearer ${outsiderToken}`)
+    expect(res.status).toBe(403)
+
+    const still = await prisma.requirement.findUnique({ where: { id: seedRequirementId } })
+    expect(still).not.toBeNull()
+    expect(still?.deletedAt).toBeNull()
+  })
+
+  it('GET /requirements/:projectId/audit returns 403 for non-member', async () => {
+    const res = await request(app)
+      .get(`/api/v1/requirements/${projectId}/audit`)
+      .set('Authorization', `Bearer ${outsiderToken}`)
+    expect(res.status).toBe(403)
+  })
+
+  it('GET /requirements/:projectId/audit/project returns 403 for non-member', async () => {
+    const res = await request(app)
+      .get(`/api/v1/requirements/${projectId}/audit/project`)
+      .set('Authorization', `Bearer ${outsiderToken}`)
     expect(res.status).toBe(403)
   })
 })
