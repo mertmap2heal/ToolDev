@@ -34,6 +34,11 @@ const SCAN_TARGETS: string[] = [
   '.github/workflows',
 ]
 
+// Individual files to scan (not directories).
+const SCAN_FILES: string[] = [
+  'start.ps1',
+]
+
 function walk(dir: string): string[] {
   if (!fs.existsSync(dir)) return []
   const out: string[] = []
@@ -49,18 +54,25 @@ function walk(dir: string): string[] {
 }
 
 describe('credential leak guard (issue #173)', () => {
-  it('no forbidden credential literals in e2e helpers or CI workflows', () => {
+  it('no forbidden credential literals in e2e helpers, CI workflows, or start script (#145, #173)', () => {
     const offenders: Array<{ file: string; literal: string }> = []
+    const scanFile = (absPath: string) => {
+      if (!fs.existsSync(absPath)) return
+      const content = fs.readFileSync(absPath, 'utf8')
+      for (const literal of FORBIDDEN_LITERALS) {
+        if (content.includes(literal)) {
+          offenders.push({ file: path.relative(REPO_ROOT, absPath), literal })
+        }
+      }
+    }
     for (const target of SCAN_TARGETS) {
       const files = walk(path.join(REPO_ROOT, target))
       for (const file of files) {
-        const content = fs.readFileSync(file, 'utf8')
-        for (const literal of FORBIDDEN_LITERALS) {
-          if (content.includes(literal)) {
-            offenders.push({ file: path.relative(REPO_ROOT, file), literal })
-          }
-        }
+        scanFile(file)
       }
+    }
+    for (const file of SCAN_FILES) {
+      scanFile(path.join(REPO_ROOT, file))
     }
     expect(
       offenders,

@@ -189,9 +189,9 @@ if ($userCount -eq "0") {
         Write-Host "  WARNING: seed:users failed - you can run it manually: cd backend && npm run seed:users"
     } else {
         Write-Host "  Default accounts created:"
-        Write-Host "    admin            / password      (Platform Admin)"
-        Write-Host "    mert.caferoglu   / Mmcf_6378     (User)"
-        Write-Host "    christian.mandle / mandle1998    (User)"
+        Write-Host "    admin, mert.caferoglu, christian.mandle"
+        Write-Host "  Passwords use the values of SEED_PASSWORD_ADMIN / SEED_PASSWORD_MERT / SEED_PASSWORD_CHRISTIAN"
+        Write-Host "  from backend/.env (never committed). Rotate freely."
     }
 } else {
     Write-Host "  Users already exist - skipping seed."
