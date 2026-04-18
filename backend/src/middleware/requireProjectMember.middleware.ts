@@ -43,18 +43,30 @@ export async function requireProjectMember(
     const [project, user] = await Promise.all([
       prisma.project.findUnique({
         where: { id: projectId },
-        select: { userId: true },
+        select: { userId: true, companyName: true },
       }),
       prisma.user.findUnique({
         where: { id: userId },
-        select: { email: true, role: true },
+        select: { email: true, role: true, company: true },
       }),
     ])
     if (project?.userId === userId) {
       next()
       return
     }
-    if (user?.role === 'SUPERIOR_ADMIN' || user?.role === 'COMPANY_ADMIN') {
+    // #281: SUPERIOR_ADMIN bypass is platform-wide; COMPANY_ADMIN bypass
+    // only applies when the caller's company matches the project's
+    // companyName. Previously COMPANY_ADMIN bypassed every project.
+    if (user?.role === 'SUPERIOR_ADMIN') {
+      next()
+      return
+    }
+    if (
+      user?.role === 'COMPANY_ADMIN' &&
+      project?.companyName != null &&
+      user.company != null &&
+      project.companyName === user.company
+    ) {
       next()
       return
     }

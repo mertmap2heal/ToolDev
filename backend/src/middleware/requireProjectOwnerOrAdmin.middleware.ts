@@ -32,11 +32,11 @@ export async function requireProjectOwnerOrAdmin(
     const [project, user] = await Promise.all([
       prisma.project.findUnique({
         where: { id: projectId },
-        select: { userId: true },
+        select: { userId: true, companyName: true },
       }),
       prisma.user.findUnique({
         where: { id: userId },
-        select: { email: true, role: true },
+        select: { email: true, role: true, company: true },
       }),
     ])
 
@@ -50,7 +50,19 @@ export async function requireProjectOwnerOrAdmin(
       return
     }
 
-    if (user?.role === 'SUPERIOR_ADMIN' || user?.role === 'COMPANY_ADMIN') {
+    // #281: COMPANY_ADMIN bypass is tenant-scoped — only the admin for
+    // the project's companyName qualifies. SUPERIOR_ADMIN keeps
+    // platform-wide bypass.
+    if (user?.role === 'SUPERIOR_ADMIN') {
+      next()
+      return
+    }
+    if (
+      user?.role === 'COMPANY_ADMIN' &&
+      project.companyName != null &&
+      user.company != null &&
+      project.companyName === user.company
+    ) {
       next()
       return
     }
