@@ -12,6 +12,7 @@
     "interface-management",
     "parameters",
     "risk-management",
-    "audit"
+    "audit",
+    "verification"
   ]
 }
