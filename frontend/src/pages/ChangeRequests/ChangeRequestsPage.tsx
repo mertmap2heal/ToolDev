@@ -7,6 +7,7 @@ import CreateChangeRequestModal from '../../components/changeRequests/CreateChan
 import ChangeRequestDetailDrawer from '../../components/changeRequests/ChangeRequestDetailDrawer'
 import { format, isValid } from 'date-fns'
 import clsx from 'clsx'
+import { csvSafeField } from '../../utils/csvExport'
 import type { ChangeRequest } from 'shared/types/engineering.types'
 
 const stripHtml = (html: string): string => (html || '').replace(/<[^>]*>/g, '').trim()
@@ -152,14 +153,11 @@ export default function ChangeRequestsPage() {
   }, [changeRequests, searchQuery, statusFilter, priorityFilter, sortField, sortOrder])
 
   // CSV export (#125). Dumps the currently-filtered view rather than the
-  // full table so filters double as an export scope. CR-style fields are
-  // quoted; embedded quotes are escaped per RFC 4180.
+  // full table so filters double as an export scope.
+  // #269: uses csvSafeField which neutralises formula triggers (=, +, -,
+  // @, tab, CR) in addition to RFC-4180 quoting.
   const handleExport = () => {
     if (filteredChangeRequests.length === 0) return
-    const escape = (v: unknown): string => {
-      const s = v == null ? '' : String(v)
-      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-    }
     const header = ['CR ID', 'Title', 'Status', 'Priority', 'Requested By', 'Owner', 'Source Type', 'Updated']
     const lines = [header.join(',')]
     for (const cr of filteredChangeRequests) {
@@ -168,7 +166,7 @@ export default function ChangeRequestsPage() {
         : ''
       lines.push(
         [cr.crId ?? '', cr.title, cr.status, cr.priority, cr.requestedBy, cr.owner ?? '', cr.sourceType, updatedAt]
-          .map(escape)
+          .map(csvSafeField)
           .join(','),
       )
     }
