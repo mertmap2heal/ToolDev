@@ -28,6 +28,7 @@ import clsx from 'clsx'
 import * as XLSX from 'xlsx'
 import Papa from 'papaparse'
 import { jsPDF } from 'jspdf'
+import { csvSafeRows } from '../../utils/csvExport'
 
 let autoTableModule: any = null
 async function loadAutoTable() {
@@ -512,7 +513,9 @@ export default function TraceabilityMatrixView() {
   const exportData = useCallback(() => flattenForExport(sortedRows, showGapsOnly ? [] : unlinkedRequirements), [sortedRows, unlinkedRequirements, showGapsOnly])
 
   const handleExportCsv = () => {
-    const csv = Papa.unparse(exportData())
+    // #269: every string cell is passed through csvSafeRow so formula
+    // triggers get a leading single-quote before Papa.unparse writes them.
+    const csv = Papa.unparse(csvSafeRows(exportData()))
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -523,7 +526,9 @@ export default function TraceabilityMatrixView() {
   }
 
   const handleExportExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(exportData())
+    // #269: Excel honours formulas too — neutralise triggers before
+    // handing rows to XLSX.
+    const ws = XLSX.utils.json_to_sheet(csvSafeRows(exportData()))
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Traceability Matrix')
     XLSX.writeFile(wb, `Traceability_Matrix_${new Date().toISOString().slice(0, 10)}.xlsx`)
@@ -536,7 +541,10 @@ export default function TraceabilityMatrixView() {
     doc.text('Verification Traceability Matrix', 14, 18)
     doc.setFontSize(9)
     doc.text(`Generated ${new Date().toLocaleString()} — ${summary.totalRequirements} requirements, ${summary.verified} verified, ${summary.gaps} gaps`, 14, 24)
-    const flat = exportData()
+    // PDF exports are static tables so there is no formula trigger
+    // risk, but neutralising keeps the apostrophe visible if the cell
+    // was malicious-looking — consistent with the CSV / XLSX output.
+    const flat = csvSafeRows(exportData())
     const cols = Object.keys(flat[0] || {})
     autoTable(doc, {
       startY: 30,
