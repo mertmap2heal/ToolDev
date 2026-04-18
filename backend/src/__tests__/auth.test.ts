@@ -192,17 +192,35 @@ describe('POST /api/v1/auth/forgot-password', () => {
     expect(res.body.message).toMatch(/temporary password/i)
   })
 
-  it('sets mustChangePasswordOnFirstLogin=true after a successful reset', async () => {
-    await request(app)
+  it('leaves the user DB row untouched when SMTP delivery fails (#107 regression)', async () => {
+    // The test env has no SMTP configured, so sendForgotPasswordEmail throws
+    // ECONNREFUSED. After the fix for #107, the handler must return the
+    // generic success message but NOT rotate the password — otherwise a
+    // transient SMTP outage locks every requester out of their real password.
+    const before = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        password: true,
+        mustChangePasswordOnFirstLogin: true,
+      },
+    })
+
+    const res = await request(app)
       .post('/api/v1/auth/forgot-password')
       .send({ email })
-    const updated = await prisma.user.findUnique({
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+    expect(res.body.message).toMatch(/temporary password/i)
+
+    const after = await prisma.user.findUnique({
       where: { id: userId },
-      select: { mustChangePasswordOnFirstLogin: true, password: true },
+      select: {
+        password: true,
+        mustChangePasswordOnFirstLogin: true,
+      },
     })
-    expect(updated?.mustChangePasswordOnFirstLogin).toBe(true)
-    const unchanged = await bcrypt.compare('original-pw-123', updated!.password)
-    expect(unchanged).toBe(false)
+    expect(after!.password).toBe(before!.password)
+    expect(after!.mustChangePasswordOnFirstLogin).toBe(before!.mustChangePasswordOnFirstLogin)
   })
 })
 

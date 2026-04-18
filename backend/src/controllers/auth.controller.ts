@@ -235,13 +235,12 @@ export const forgotPassword = async (req: Request, res: Response) => {
       return res.status(200).json({ success: true, message: FORGOT_PASSWORD_MESSAGE })
     }
 
+    // #107: send the reset email BEFORE committing the new password. If SMTP
+    // fails we must leave the user's existing credentials intact — otherwise
+    // the account is locked out of its current password while no reset email
+    // was delivered. The response stays a fixed generic message either way so
+    // attackers cannot use it to probe whether an account exists.
     const tempPassword = randomTempPassword(14)
-    const hashedPassword = await bcrypt.hash(tempPassword, 10)
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { password: hashedPassword, mustChangePasswordOnFirstLogin: true },
-    })
-
     try {
       await sendForgotPasswordEmail({
         to: recipient,
@@ -250,7 +249,14 @@ export const forgotPassword = async (req: Request, res: Response) => {
       })
     } catch (sendError) {
       console.error('Forgot password email error:', sendError)
+      return res.status(200).json({ success: true, message: FORGOT_PASSWORD_MESSAGE })
     }
+
+    const hashedPassword = await bcrypt.hash(tempPassword, 10)
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashedPassword, mustChangePasswordOnFirstLogin: true },
+    })
 
     return res.status(200).json({ success: true, message: FORGOT_PASSWORD_MESSAGE })
   } catch (error) {
