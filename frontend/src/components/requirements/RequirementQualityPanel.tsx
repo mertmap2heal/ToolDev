@@ -19,6 +19,8 @@ import {
   EyeOff,
   Eye,
   Download,
+  FileText,
+  FileSpreadsheet,
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../../services/api'
@@ -49,7 +51,7 @@ import {
 } from '../../services/requirementQualityWorkbench'
 import { useFocusTrap } from '../../hooks/useFocusTrap'
 import { qualityWorkbenchSqueezeStyle } from './qualityWorkbenchLayout'
-import { downloadQualityCsv, downloadQualityPdf } from '../../utils/exportQualityReport'
+import { downloadQualityExcel, downloadQualityPdf } from '../../utils/exportQualityReport'
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -565,6 +567,8 @@ export default function RequirementQualityPanel({
   const [skipTarget, setSkipTarget] = useState<{ reqId: string; issue: ValidationIssue } | null>(null)
   const [skipReasonDraft, setSkipReasonDraft] = useState('')
   const [clearAllSkipsConfirmOpen, setClearAllSkipsConfirmOpen] = useState(false)
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
+  const exportMenuRef = useRef<HTMLDivElement>(null)
   const preRevalidationSnapshot = useRef<Record<string, ValidationIssue[]>>({})
   const localDismissalsMigrated = useRef(false)
   const listRef = useRef<HTMLDivElement>(null)
@@ -970,6 +974,11 @@ export default function RequirementQualityPanel({
   // ─── Keyboard handling ───
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (exportMenuOpen && e.key === 'Escape') {
+        e.preventDefault()
+        setExportMenuOpen(false)
+        return
+      }
       if (clearAllSkipsConfirmOpen && e.key === 'Escape') {
         e.preventDefault()
         setClearAllSkipsConfirmOpen(false)
@@ -1005,7 +1014,7 @@ export default function RequirementQualityPanel({
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [filteredChecks, selectedIndex, selectedId, onClose, skipTarget, clearAllSkipsConfirmOpen])
+  }, [filteredChecks, selectedIndex, selectedId, onClose, skipTarget, clearAllSkipsConfirmOpen, exportMenuOpen])
 
   // ─── Scroll selected into view ───
   useEffect(() => {
@@ -1013,6 +1022,17 @@ export default function RequirementQualityPanel({
     const el = listRef.current.querySelector(`[data-req-id="${selectedId}"]`)
     if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [selectedId])
+
+  useEffect(() => {
+    if (!exportMenuOpen) return
+    const onDoc = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setExportMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [exportMenuOpen])
 
   const deepLinkSelectDone = useRef(false)
   useEffect(() => {
@@ -1269,51 +1289,103 @@ export default function RequirementQualityPanel({
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 dark:border-gray-700">
           <div>
             <h2 className="text-lg font-bold text-gray-900 dark:text-white">Requirement Quality Workbench</h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400">SMART criteria and quality validation — fix issues in place</p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() =>
-                downloadQualityCsv(projectDisplayName, qualityChecks, dismissedIssues, dismissalReasonMap)
-              }
-              disabled={showLoadingSkeleton}
-              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-blue-500"
-              title="Export CSV"
-              aria-label="Export quality report as CSV"
-            >
-              <Download size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                downloadQualityPdf(
-                  projectDisplayName,
-                  qualityChecks,
-                  dismissedIssues,
-                  dismissalReasonMap,
-                  compareRun,
-                  adjustedOverallScore
-                )
-              }
-              disabled={showLoadingSkeleton}
-              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-blue-500"
-              title="Export PDF"
-              aria-label="Export quality report as PDF"
-            >
-              <span className="text-xs font-semibold px-0.5">PDF</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => refetch()}
-              disabled={isLoading}
-              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
-              title="Re-analyze all"
-              aria-label="Re-analyze all requirements"
-              data-testid="rq-quality-refresh-all"
-            >
-              <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-            </button>
+            <div className="relative" ref={exportMenuRef}>
+              <button
+                type="button"
+                data-testid="rq-quality-export-trigger"
+                disabled={showLoadingSkeleton}
+                aria-haspopup="menu"
+                aria-expanded={exportMenuOpen}
+                aria-controls="rq-quality-export-menu"
+                onClick={() => setExportMenuOpen((o) => !o)}
+                className={clsx(
+                  'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors',
+                  'border-gray-300 bg-white text-gray-800 hover:bg-gray-50',
+                  'dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700/80',
+                  'disabled:cursor-not-allowed disabled:opacity-40',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-gray-900',
+                  exportMenuOpen && 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-gray-900'
+                )}
+              >
+                <Download size={15} className="shrink-0 text-blue-600 dark:text-blue-400" aria-hidden />
+                <span>Export</span>
+                <ChevronDown
+                  size={14}
+                  className={clsx('shrink-0 opacity-70 transition-transform duration-150', exportMenuOpen && 'rotate-180')}
+                  aria-hidden
+                />
+              </button>
+              {exportMenuOpen && (
+                <div
+                  id="rq-quality-export-menu"
+                  role="menu"
+                  aria-label="Export format"
+                  className="absolute right-0 top-full z-[80] mt-1.5 min-w-[13.5rem] overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg ring-1 ring-black/5 dark:border-gray-600 dark:bg-gray-800 dark:ring-white/10"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid="rq-quality-export-excel"
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-gray-800 hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-700/80"
+                    onClick={() => {
+                      downloadQualityExcel(
+                        projectDisplayName,
+                        qualityChecks,
+                        dismissedIssues,
+                        dismissalReasonMap,
+                        {
+                          adjustedAverageScore: adjustedOverallScore,
+                          requirementCount: qualityChecks.length,
+                          errorIssueCount: errorCount,
+                          warningIssueCount: warningCount,
+                          passingRequirementCount: passingCount,
+                          dismissedIssueCount: totalDismissedCount,
+                        },
+                        compareRun
+                      )
+                      setExportMenuOpen(false)
+                    }}
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                      <FileSpreadsheet size={15} strokeWidth={2} aria-hidden />
+                    </span>
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span className="font-semibold">Excel workbook</span>
+                      <span className="text-[11px] font-normal text-gray-500 dark:text-gray-400">
+                        Summary + detailed findings (.xlsx)
+                      </span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid="rq-quality-export-pdf"
+                    className="flex w-full items-center gap-2.5 border-t border-gray-100 px-3 py-2 text-left text-xs text-gray-800 hover:bg-gray-50 dark:border-gray-700/80 dark:text-gray-100 dark:hover:bg-gray-700/80"
+                    onClick={() => {
+                      downloadQualityPdf(
+                        projectDisplayName,
+                        qualityChecks,
+                        dismissedIssues,
+                        dismissalReasonMap,
+                        compareRun,
+                        adjustedOverallScore
+                      )
+                      setExportMenuOpen(false)
+                    }}
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">
+                      <FileText size={15} strokeWidth={2} aria-hidden />
+                    </span>
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span className="font-semibold">PDF report</span>
+                      <span className="text-[11px] font-normal text-gray-500 dark:text-gray-400">Printable summary and tables</span>
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
             <button
               type="button"
               onClick={onClose}
@@ -1381,6 +1453,18 @@ export default function RequirementQualityPanel({
               disabled={clearProjectDismissalsMutation.isPending || totalDismissedCount === 0}
             >
               Clear all skips
+            </button>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              disabled={isLoading}
+              className="inline-flex items-center gap-1 text-xs font-medium text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 focus-visible:ring-2 focus-visible:ring-blue-500 rounded px-1 disabled:opacity-50"
+              title="Run validation again for all listed requirements"
+              aria-label="Re-analyze all requirements"
+              data-testid="rq-quality-refresh-all"
+            >
+              <RefreshCw size={13} className={isLoading ? 'animate-spin shrink-0' : 'shrink-0'} aria-hidden />
+              Re-analyze all
             </button>
             <div className="flex-1" />
             {/* Progress bar */}

@@ -897,7 +897,7 @@ test.describe('Requirements', () => {
     return panel
   }
 
-  test('quality workbench: page identity — browse route, dialog, title and SMART subtitle', async ({
+  test('quality workbench: page identity — browse route, dialog, and title', async ({
     page,
     projectId,
   }) => {
@@ -914,9 +914,7 @@ test.describe('Requirements', () => {
     const panel = page.getByTestId('requirement-quality-workbench')
     await expect(panel).toHaveAttribute('role', 'dialog')
     await expect(page.getByRole('heading', { name: /requirement quality workbench/i })).toBeVisible()
-    await expect(
-      page.getByText(/SMART criteria and quality validation/i),
-    ).toBeVisible()
+    await expect(page.getByTestId('rq-quality-export-trigger')).toBeVisible()
 
     expect(errors, errors.join('; ')).toEqual([])
   })
@@ -1157,7 +1155,7 @@ test.describe('Requirements', () => {
     await page.waitForLoadState('domcontentloaded')
     await expect(page.getByTestId('requirement-quality-workbench')).toBeVisible({ timeout: 15_000 })
     await expect(page).not.toHaveURL(/qualityWorkbench=/)
-    await expect(page.getByRole('button', { name: /export quality report as csv/i })).toBeVisible()
+    await expect(page.getByTestId('rq-quality-export-trigger')).toBeVisible()
   })
 
   test('quality workbench: deep link with requirementId selects list row', async ({ page, projectId }) => {

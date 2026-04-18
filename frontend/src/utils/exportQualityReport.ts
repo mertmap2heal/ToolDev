@@ -1,12 +1,25 @@
-import Papa from 'papaparse'
+import * as XLSX from 'xlsx'
+import { format } from 'date-fns'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
-type CompareLite = {
+type QualityExportCompare = {
   hasPrevious: boolean
   avgScoreDelta: number
   avgScorePrevious: number | null
   avgScoreCurrent: number
+  improvedCount: number
+  regressedCount: number
+  previousCapturedAt: string | null
+}
+
+export type QualityExportStats = {
+  adjustedAverageScore: number
+  requirementCount: number
+  errorIssueCount: number
+  warningIssueCount: number
+  passingRequirementCount: number
+  dismissedIssueCount: number
 }
 
 type ReqRow = {
@@ -65,7 +78,7 @@ function buildRows(
         issueMessage: iss.message,
         severity: iss.severity,
         fixType: iss.fixType,
-        skipped: dset.has(key) ? 'yes' : 'no',
+        skipped: dset.has(key) ? 'Yes' : 'No',
         skipReason: dset.has(key) ? reason(r.requirementId, key) : '',
       })
     }
@@ -73,36 +86,92 @@ function buildRows(
   return rows
 }
 
-export function downloadQualityCsv(
+function slugFileBase(projectName: string) {
+  return `quality-report-${projectName.replace(/\s+/g, '-')}-${format(new Date(), 'yyyy-MM-dd-HHmm')}`
+}
+
+/** Multi-sheet .xlsx: executive summary + detailed findings for review and sharing. */
+export function downloadQualityExcel(
   projectName: string,
   requirements: Parameters<typeof buildRows>[0],
   dismissedMap: Record<string, string[]>,
-  reasonMap: Record<string, Record<string, string | undefined>>
+  reasonMap: Record<string, Record<string, string | undefined>>,
+  stats: QualityExportStats,
+  compare?: QualityExportCompare | undefined
 ) {
   const rows = buildRows(requirements, dismissedMap, reasonMap)
-  const csv = Papa.unparse(
-    rows.map((r) => ({
-      project: projectName,
-      displayId: r.displayId ?? '',
-      requirementUuid: r.requirementId,
-      title: r.title,
-      baseScore: r.baseScore,
-      adjustedScore: r.adjustedScore,
-      issue: r.issueMessage,
-      severity: r.severity,
-      fixType: r.fixType,
-      skipped: r.skipped,
-      skipReason: r.skipReason,
-    })),
-    { header: true }
-  )
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `quality-report-${projectName.replace(/\s+/g, '-')}-${Date.now()}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  const wb = XLSX.utils.book_new()
+
+  const generated = new Date().toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' })
+
+  const summaryRows: (string | number)[][] = [
+    ['REQUIREMENT QUALITY REPORT'],
+    [],
+    ['Project', projectName],
+    ['Report generated', generated],
+    ['Tool', 'Engineering Tool — Requirement Quality Workbench'],
+    [],
+    ['Roll-up metrics', ''],
+    ['Adjusted average score (0–100)', stats.adjustedAverageScore],
+    ['Requirements analyzed', stats.requirementCount],
+    ['Requirements passing validation', stats.passingRequirementCount],
+    ['Open error-level findings', stats.errorIssueCount],
+    ['Open warning-level findings', stats.warningIssueCount],
+    ['Findings marked dismissed / skipped', stats.dismissedIssueCount],
+    ['Detailed issue rows (this workbook)', rows.length],
+  ]
+  if (compare?.hasPrevious) {
+    summaryRows.push(
+      [],
+      ['Trend vs previous analysis', ''],
+      [
+        'Average score change',
+        `${compare.avgScoreDelta >= 0 ? '+' : ''}${compare.avgScoreDelta} (previous ${compare.avgScorePrevious ?? '—'}, current ${compare.avgScoreCurrent})`,
+      ],
+      ['Requirements improved', compare.improvedCount],
+      ['Requirements regressed', compare.regressedCount]
+    )
+    if (compare.previousCapturedAt) {
+      summaryRows.push(['Previous snapshot captured at', compare.previousCapturedAt])
+    }
+  }
+
+  const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows)
+  wsSummary['!cols'] = [{ wch: 38 }, { wch: 52 }]
+  XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary')
+
+  const detailObjects = rows.map((r) => ({
+    Project: projectName,
+    'Display ID': r.displayId ?? '',
+    'Requirement ID': r.requirementId,
+    'Requirement title': r.title,
+    'Validation score': r.baseScore,
+    'Finding / issue': r.issueMessage,
+    Severity: r.severity,
+    'Recommended fix type': r.fixType,
+    Dismissed: r.skipped,
+    'Dismissal rationale': r.skipReason,
+  }))
+  const wsDetail = XLSX.utils.json_to_sheet(detailObjects)
+  wsDetail['!cols'] = [
+    { wch: 18 },
+    { wch: 12 },
+    { wch: 36 },
+    { wch: 40 },
+    { wch: 10 },
+    { wch: 48 },
+    { wch: 12 },
+    { wch: 18 },
+    { wch: 10 },
+    { wch: 32 },
+  ]
+  if (wsDetail['!ref']) {
+    const range = XLSX.utils.decode_range(wsDetail['!ref'])
+    wsDetail['!autofilter'] = { ref: XLSX.utils.encode_range(range) }
+  }
+  XLSX.utils.book_append_sheet(wb, wsDetail, 'Detailed findings')
+
+  XLSX.writeFile(wb, `${slugFileBase(projectName)}.xlsx`)
 }
 
 export function downloadQualityPdf(
@@ -110,7 +179,7 @@ export function downloadQualityPdf(
   requirements: Parameters<typeof buildRows>[0],
   dismissedMap: Record<string, string[]>,
   reasonMap: Record<string, Record<string, string | undefined>>,
-  compare?: CompareLite | undefined,
+  compare?: QualityExportCompare | undefined,
   adjustedAvg?: number
 ) {
   const rows = buildRows(requirements, dismissedMap, reasonMap)
@@ -151,5 +220,5 @@ export function downloadQualityPdf(
     headStyles: { fillColor: [59, 130, 246] },
   })
 
-  doc.save(`quality-report-${projectName.replace(/\s+/g, '-')}-${Date.now()}.pdf`)
+  doc.save(`${slugFileBase(projectName)}.pdf`)
 }
