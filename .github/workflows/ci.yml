@@ -821,6 +821,15 @@ jobs:
             fi
           done
 
+      - name: Guard send-invite script does not leak temp password (#303)
+        run: |
+          set -e
+          f=backend/src/scripts/send-invite-to-email.ts
+          if grep -qE "console\.log\(.*tempPassword" "$f"; then
+            echo "::error file=$f::temp password must not be written to stdout (see issue #303)"
+            exit 1
+          fi
+
       - name: Guard destructive scripts require env + confirmation (#300,#301)
         run: |
           set -e
