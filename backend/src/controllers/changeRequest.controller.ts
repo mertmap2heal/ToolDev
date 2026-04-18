@@ -353,19 +353,35 @@ export const deleteChangeRequest = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    // Delete associated files
+    // #126: Collect file paths BEFORE the DB delete so we can unlink them
+    // afterwards. The DB delete must run first — if we unlink files up front
+    // and the subsequent DB delete throws, we lose the files forever while
+    // the CR row and its attachment rows still reference URLs that no longer
+    // exist on disk. Ordering DB-then-disk means a mid-delete failure leaves
+    // the record + files intact for a retry.
+    const filePathsToUnlink: string[] = []
     for (const attachment of changeRequest.attachments) {
       if (attachment.fileUrl && !attachment.fileUrl.startsWith('data:')) {
-        const filePath = path.join(uploadsDir, path.basename(attachment.fileUrl))
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath)
-        }
+        filePathsToUnlink.push(path.join(uploadsDir, path.basename(attachment.fileUrl)))
       }
     }
 
     await prisma.changeRequest.delete({
       where: { id },
     })
+
+    // DB commit succeeded — best-effort file cleanup. Any unlink failure
+    // leaves an orphan file on disk (recoverable by ops) but does NOT
+    // roll back the DB delete, since the row is already gone.
+    for (const filePath of filePathsToUnlink) {
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath)
+        }
+      } catch (unlinkErr) {
+        console.error('Failed to unlink change-request attachment after delete:', filePath, unlinkErr)
+      }
+    }
 
     res.json({
       success: true,
