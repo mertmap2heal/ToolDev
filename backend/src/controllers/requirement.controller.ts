@@ -3422,14 +3422,24 @@ export const getRequirementsDashboard = async (req: AuthRequest, res: Response) 
 
     const baseWhere = { projectId, deletedAt: null }
 
+    // #94: replace the in-memory trace-link scan with a single SQL aggregate.
+    // The previous implementation loaded every TraceLink row into Node heap
+    // to derive requirementIdsWithTestLink — unbounded by project size and
+    // guaranteed to OOM on large certification projects.
+    // `test_case` / `testcase` variants are both accepted because historic
+    // rows used either spelling; the normalisation is applied inside SQL
+    // so we do not need a post-query filter step.
+    //
+    // Suspect-link count is likewise replaced with a COUNT query — the
+    // dashboard only used .length on the original array.
     const [
       totalRequirements,
       reviewStatusGroups,
       verificationStatusGroups,
       baselineCount,
       recentBaselines,
-      allLinks,
-      suspectLinks,
+      coverageRows,
+      suspectCountRows,
     ] = await Promise.all([
       prisma.requirement.count({ where: baseWhere }),
       prisma.requirement.groupBy({
@@ -3449,25 +3459,30 @@ export const getRequirementsDashboard = async (req: AuthRequest, res: Response) 
         take: 5,
         select: { id: true, name: true, createdAt: true, status: true },
       }),
-      traceabilityService.getTraceLinks(projectId),
-      traceabilityService.getSuspectLinks(projectId),
+      prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(DISTINCT
+          CASE
+            WHEN lower(replace(tl."sourceType", '-', '_')) = 'requirement'
+             AND lower(replace(tl."targetType", '-', '_')) IN ('test_case', 'testcase')
+              THEN tl."sourceId"
+            WHEN lower(replace(tl."targetType", '-', '_')) = 'requirement'
+             AND lower(replace(tl."sourceType", '-', '_')) IN ('test_case', 'testcase')
+              THEN tl."targetId"
+          END
+        ) AS count
+        FROM "TraceLink" tl
+        WHERE tl."projectId" = ${projectId}
+      `,
+      prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*)::bigint AS count
+        FROM "TraceLink" tl
+        WHERE tl."projectId" = ${projectId}
+          AND tl."isSuspect" = TRUE
+      `,
     ])
 
-    const normType = (t: string) => (t ?? '').toLowerCase().replace(/-/g, '_')
-    const isTestCase = (t: string) => {
-      const n = normType(t)
-      return n === 'test_case' || n === 'testcase'
-    }
-    const requirementIdsWithTestLink = new Set<string>()
-    for (const link of allLinks) {
-      const st = (link as any).sourceType
-      const tt = (link as any).targetType
-      const sid = (link as any).sourceId
-      const tid = (link as any).targetId
-      if (st === 'requirement' && isTestCase(tt)) requirementIdsWithTestLink.add(sid)
-      if (tt === 'requirement' && isTestCase(st)) requirementIdsWithTestLink.add(tid)
-    }
-    const totalWithTestLink = requirementIdsWithTestLink.size
+    const totalWithTestLink = Number(coverageRows[0]?.count ?? 0)
+    const suspectLinksCount = Number(suspectCountRows[0]?.count ?? 0)
     const coveragePercent =
       totalRequirements > 0 ? Math.round((totalWithTestLink / totalRequirements) * 100) : 0
 
@@ -3491,7 +3506,7 @@ export const getRequirementsDashboard = async (req: AuthRequest, res: Response) 
         coveragePercent,
         coverageCount: totalWithTestLink,
         totalWithTestLink,
-        suspectLinksCount: suspectLinks.length,
+        suspectLinksCount,
         baselineCount,
         recentBaselines: recentBaselines.map((b) => ({
           id: b.id,
