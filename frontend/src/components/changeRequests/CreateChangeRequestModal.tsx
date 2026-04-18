@@ -20,6 +20,11 @@ interface CreateChangeRequestModalProps {
   sourceName?: string
   sourceTitle?: string
   sourceDescription?: string
+  /**
+   * When set, the modal switches to edit mode: it fetches the existing CR,
+   * pre-fills the form, and PATCHes on submit instead of POSTing (#253).
+   */
+  editingChangeRequestId?: string
 }
 
 type SourceItem = {
@@ -40,7 +45,9 @@ export default function CreateChangeRequestModal({
   sourceName: initialSourceName,
   sourceTitle: initialSourceTitle,
   sourceDescription: initialSourceDescription,
+  editingChangeRequestId,
 }: CreateChangeRequestModalProps) {
+  const isEditMode = Boolean(editingChangeRequestId)
   const onDiscardRef = useRef<() => void>()
   const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, isOpen, () => onDiscardRef.current?.())
   const [formDataBase, setFormDataBase] = useState<CreateChangeRequestDto>({
@@ -155,6 +162,13 @@ export default function CreateChangeRequestModal({
     enabled: isOpen,
   })
 
+  // Fetch existing CR when in edit mode (#253)
+  const { data: existingCRResp } = useQuery({
+    queryKey: ['change-request', projectId, editingChangeRequestId],
+    queryFn: () => changeRequestService.getChangeRequest(projectId, editingChangeRequestId!),
+    enabled: isOpen && Boolean(editingChangeRequestId),
+  })
+
   useEffect(() => {
     if (!userData?.success || !userData?.data || !isOpen) return
     const name = userData.data.name
@@ -233,8 +247,44 @@ export default function CreateChangeRequestModal({
     }
   }, [showSourceDropdown, showImpactedDropdown])
 
+  // Edit mode: pre-fill the form ONCE per open from the fetched CR (#253).
+  // Guarded by a ref so a background React-Query refetch doesn't clobber
+  // user-typed edits.
+  const prefilledForIdRef = useRef<string | null>(null)
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) {
+      prefilledForIdRef.current = null
+      return
+    }
+    if (!isEditMode || !editingChangeRequestId) return
+    if (prefilledForIdRef.current === editingChangeRequestId) return
+    if (!existingCRResp?.success || !existingCRResp.data) return
+    const cr = existingCRResp.data
+    const sourceItem: SourceItem = {
+      id: cr.sourceId ?? '',
+      type: (cr.sourceType as SourceItem['type']) ?? 'function',
+      name: cr.title,
+    }
+    setSelectedSource(sourceItem)
+    setFormDataBase({
+      title: cr.title ?? '',
+      description: cr.description ?? '',
+      sourceType: (cr.sourceType as CreateChangeRequestDto['sourceType']) ?? 'function',
+      sourceId: cr.sourceId ?? '',
+      priority: (cr.priority as CreateChangeRequestDto['priority']) ?? 'medium',
+      requestedBy: cr.requestedBy ?? '',
+      risk: cr.risk as CreateChangeRequestDto['risk'],
+      effort: cr.effort as CreateChangeRequestDto['effort'],
+      justification: cr.justification ?? '',
+      impactedRequirementIds: (cr.requirementLinks ?? []).map((l) => l.requirement?.id).filter(Boolean) as string[],
+    })
+    setErrors({})
+    resetDirty()
+    prefilledForIdRef.current = editingChangeRequestId
+  }, [isOpen, isEditMode, editingChangeRequestId, existingCRResp, resetDirty])
+
+  useEffect(() => {
+    if (isOpen && !isEditMode) {
       if (initialSourceType && initialSourceId && (initialSourceName || initialSourceTitle)) {
         setSelectedSource({
           id: initialSourceId,
@@ -276,7 +326,7 @@ export default function CreateChangeRequestModal({
       setShowImpactedDropdown(false)
       setFormDataBase((prev) => ({ ...prev, impactedRequirementIds: [] }))
     }
-  }, [isOpen, initialSourceType, initialSourceId, initialSourceName, initialSourceTitle, initialSourceDescription])
+  }, [isOpen, isEditMode, initialSourceType, initialSourceId, initialSourceName, initialSourceTitle, initialSourceDescription])
 
   const handleSourceSelect = (source: SourceItem) => {
     setSelectedSource(source)
@@ -295,6 +345,33 @@ export default function CreateChangeRequestModal({
       })
     }
   }
+
+  const updateChangeRequestMutation = useMutation({
+    mutationFn: (data: Partial<CreateChangeRequestDto>) =>
+      changeRequestService.updateChangeRequest(projectId, editingChangeRequestId!, data),
+    onSuccess: async (response) => {
+      queryClient.invalidateQueries({ queryKey: ['change-requests', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['change-request', projectId, editingChangeRequestId] })
+      invalidateLinkCaches(queryClient, projectId)
+      const sourceType = response.data?.sourceType
+      const sourceId = response.data?.sourceId
+      if (sourceType === 'requirement' && sourceId) {
+        queryClient.invalidateQueries({ queryKey: ['requirement', projectId, sourceId] })
+      }
+      resetDirty()
+      onClose()
+    },
+    onError: (error: unknown) => {
+      console.error('Update change request error:', error)
+      let submit = 'Failed to update change request'
+      if (error && typeof error === 'object') {
+        const e = error as { error?: unknown; message?: unknown }
+        if (typeof e.error === 'string') submit = e.error
+        else if (typeof e.message === 'string') submit = e.message
+      }
+      setErrors({ submit })
+    },
+  })
 
   const createChangeRequestMutation = useMutation({
     mutationFn: (data: CreateChangeRequestDto) => changeRequestService.createChangeRequest(projectId, data),
@@ -371,7 +448,11 @@ export default function CreateChangeRequestModal({
         (formData.impactedRequirementIds?.length ?? 0) > 0 ? formData.impactedRequirementIds : undefined,
     }
 
-    createChangeRequestMutation.mutate(submitData)
+    if (isEditMode) {
+      updateChangeRequestMutation.mutate(submitData)
+    } else {
+      createChangeRequestMutation.mutate(submitData)
+    }
   }
 
   const handleImpactedToggle = (req: Requirement) => {
@@ -417,7 +498,7 @@ export default function CreateChangeRequestModal({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}>
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Create Change Request</h2>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{isEditMode ? 'Edit Change Request' : 'Create Change Request'}</h2>
           <div className="flex items-center gap-2">
             {draftBanner}
             <button
@@ -788,7 +869,10 @@ export default function CreateChangeRequestModal({
             </div>
           </div>
 
-          {/* Document Attachments Section */}
+          {/* Document Attachments Section — hidden in edit mode (#253):
+              upload wiring lives in the create mutation only. Existing
+              attachments are shown inside the detail drawer's Attachments tab. */}
+          {!isEditMode && (
           <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-gray-700">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
               Document Attachments
@@ -854,6 +938,7 @@ export default function CreateChangeRequestModal({
               </p>
             </div>
           </div>
+          )}
 
           {/* Error Message */}
           {errors.submit && (
@@ -874,7 +959,7 @@ export default function CreateChangeRequestModal({
             </button>
             <button
               type="submit"
-              disabled={createChangeRequestMutation.isPending || uploadingFiles}
+              disabled={createChangeRequestMutation.isPending || updateChangeRequestMutation.isPending || uploadingFiles}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {uploadingFiles ? (
@@ -882,13 +967,13 @@ export default function CreateChangeRequestModal({
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                   <span>Uploading files...</span>
                 </>
-              ) : createChangeRequestMutation.isPending ? (
+              ) : (isEditMode ? updateChangeRequestMutation.isPending : createChangeRequestMutation.isPending) ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Creating...</span>
+                  <span>{isEditMode ? 'Saving...' : 'Creating...'}</span>
                 </>
               ) : (
-                'Create Change Request'
+                isEditMode ? 'Save Changes' : 'Create Change Request'
               )}
             </button>
           </div>
