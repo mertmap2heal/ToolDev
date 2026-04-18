@@ -291,6 +291,44 @@ jobs:
             exit 1
           fi
 
+      - name: Guard DataFlowAdminPanel confirms destructive commands (#266)
+        run: |
+          set -e
+          f=frontend/src/pages/PlatformAdmin/DataFlowAdminPanel.tsx
+          fail=0
+          # The ADMIN_COMMAND_SPECS table must exist so the set of allowed
+          # commands is explicit and auditable.
+          if ! grep -q "ADMIN_COMMAND_SPECS" "$f"; then
+            echo "::error file=$f::ADMIN_COMMAND_SPECS registry missing (see issue #266)"
+            fail=1
+          fi
+          # Halt and Rollout must gate on a typed confirmation phrase.
+          if ! grep -q "CONFIRM HALT" "$f"; then
+            echo "::error file=$f::Halt Sys must require typed 'CONFIRM HALT' (see issue #266)"
+            fail=1
+          fi
+          if ! grep -q "CONFIRM ROLLOUT" "$f"; then
+            echo "::error file=$f::Rollout must require typed 'CONFIRM ROLLOUT' (see issue #266)"
+            fail=1
+          fi
+          # Sidebar onCommand prop must be wired to requestCommand
+          # (the confirmation wrapper), never directly to executeCommand or
+          # to a bare emit.
+          if grep -q "onCommand={handleCommand}" "$f"; then
+            echo "::error file=$f::sidebar onCommand must go through requestCommand (see issue #266)"
+            fail=1
+          fi
+          if grep -q "onCommand={executeCommand}" "$f"; then
+            echo "::error file=$f::sidebar onCommand must not bypass the confirmation modal (see issue #266)"
+            fail=1
+          fi
+          # The ambiguous "Terminal Selected" label must not return.
+          if grep -q "Terminal Selected" "$f"; then
+            echo "::error file=$f::rename 'Terminal Selected' to 'Remove Node' (see issue #266)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Guard against duplicated resolveIsAdmin + auth console.log (#146,#151)
         run: |
           set -e
