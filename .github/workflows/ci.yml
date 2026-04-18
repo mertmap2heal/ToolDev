@@ -81,6 +81,25 @@ jobs:
           fi
           exit $fail
 
+      - name: Guard Issues module error handlers stay typed (#267)
+        run: |
+          set -e
+          fail=0
+          for f in \
+            frontend/src/pages/Issues/IssuesPage.tsx \
+            frontend/src/pages/Issues/IssueDetailPage.tsx \
+            frontend/src/components/issues/IssueSidebar.tsx; do
+            if grep -qE "onError:\s*\(error:\s*any\)" "$f"; then
+              echo "::error file=$f::onError must not use any (see issue #267)"
+              fail=1
+            fi
+          done
+          if ! grep -q "errorMessage" frontend/src/utils/errorMessage.ts; then
+            echo "::error::errorMessage helper missing (see issue #267)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Guard Git publish config does not persist token (#272)
         run: |
           set -e

@@ -25,10 +25,19 @@ const ISSUE_TYPE_OPTIONS: { value: IssueType; label: string }[] = [
   { value: 'other', label: 'Other' },
 ]
 
+// #267: replace `any` with a narrow view of the fields we actually read
+// (id / name / email). Using User from shared/types would be ideal but
+// that type is richer than the few fields this sidebar touches.
+interface IssueSidebarCurrentUser {
+  id?: string
+  name?: string | null
+  email?: string | null
+}
+
 interface IssueSidebarProps {
   issue: Issue
   projectId: string
-  currentUser: any
+  currentUser: IssueSidebarCurrentUser | null | undefined
 }
 
 export default function IssueSidebar({ issue, projectId, currentUser }: IssueSidebarProps) {
@@ -145,7 +154,7 @@ export default function IssueSidebar({ issue, projectId, currentUser }: IssueSid
               className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Unassigned</option>
-              {users.map((user: any) => (
+              {users.map((user: { id: string; name?: string | null; email?: string | null }) => (
                 <option key={user.id} value={user.id}>
                   {user.name || user.email}
                 </option>

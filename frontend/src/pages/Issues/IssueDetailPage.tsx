@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { issueService } from '../../services/issue.service'
 import { authService } from '../../services/auth.service'
+import { errorMessage } from '../../utils/errorMessage'
 
 import IssueActivityFeed from '../../components/issues/IssueActivityFeed'
 import IssueCommentComposer from '../../components/issues/IssueCommentComposer'
@@ -146,9 +147,9 @@ export default function IssueDetailPage() {
       const queryString = listParams.toString()
       navigate(`/projects/${projectId}/issues${queryString ? `?${queryString}` : ''}`)
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('Delete issue error:', error)
-      alert(error?.error || 'Failed to delete issue')
+      alert(errorMessage(error, 'Failed to delete issue'))
       setDeleteConfirmation(false)
     },
   })
