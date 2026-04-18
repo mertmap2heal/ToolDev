@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client'
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
+import { allocateParameterId } from '../lib/paramId'
 import {
   exportParameters as formatExport,
   exportParametersBinary,
@@ -60,23 +61,91 @@ import {
 } from '../services/azuredevops.service'
 
 
-async function generateParameterId(projectId: string): Promise<string> {
-  const prefix = 'PARAM'
-  const all = await prisma.parameter.findMany({
-    where: { projectId },
-    select: { parameterId: true },
-  })
-  let maxNumber = 0
-  for (const p of all) {
-    if (p.parameterId && /^PARAM-\d+$/.test(p.parameterId)) {
-      const m = p.parameterId.match(/-(\d+)$/)
-      if (m) {
-        const n = parseInt(m[1], 10)
-        if (n > maxNumber) maxNumber = n
-      }
+// ---------------------------------------------------------------------------
+// SSRF protection — validateBaseUrl (#75)
+// Called before every outbound HTTP request in git publish endpoints.
+// ---------------------------------------------------------------------------
+
+/**
+ * Known public-cloud git platform URL prefixes that are always allowed.
+ * Self-hosted instances pass allowCustom=true and get private-IP blocking instead.
+ */
+const KNOWN_GIT_HOSTS = [
+  'https://gitlab.com',
+  'https://api.github.com',
+  'https://github.com',
+  'https://bitbucket.org',
+  'https://dev.azure.com',
+  'https://visualstudio.com',
+]
+
+/**
+ * Regex that matches private/loopback/link-local IP ranges and reserved hostnames
+ * that should never be reachable from a server-side HTTP request in production.
+ */
+const PRIVATE_HOST_RE =
+  /^(localhost|127\.\d+\.\d+\.\d+|0\.0\.0\.0|::1|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+)/i
+
+/**
+ * Validate that a baseUrl is safe to use as an outbound HTTP target.
+ *
+ * Rules:
+ *   1. Must parse as a valid URL.
+ *   2. Protocol must be https: (not http:, file:, etc.).
+ *   3. For well-known public platforms the URL must start with a known prefix.
+ *   4. For self-hosted / custom instances (allowCustom=true) only the private-IP
+ *      blocklist is applied — the URL does not need to match a known host.
+ *
+ * Throws an Error with a human-readable message on validation failure.
+ */
+function validateBaseUrl(baseUrl: string, allowCustom = false): void {
+  let parsed: URL
+  try {
+    parsed = new URL(baseUrl)
+  } catch {
+    throw new Error(`Invalid baseUrl: "${baseUrl}" is not a valid URL`)
+  }
+
+  if (parsed.protocol !== 'https:') {
+    throw new Error(`baseUrl must use HTTPS (got "${parsed.protocol}")`)
+  }
+
+  if (allowCustom) {
+    // Self-hosted: block private/loopback/metadata addresses
+    if (PRIVATE_HOST_RE.test(parsed.hostname)) {
+      throw new Error(`baseUrl hostname "${parsed.hostname}" is a private or reserved address`)
+    }
+  } else {
+    // Public cloud: must start with a known host prefix
+    const isKnown = KNOWN_GIT_HOSTS.some((h) => baseUrl.startsWith(h))
+    if (!isKnown) {
+      throw new Error(
+        `baseUrl "${parsed.hostname}" is not in the list of allowed git platforms. ` +
+        `For self-hosted instances contact your administrator.`
+      )
     }
   }
-  return `${prefix}-${(maxNumber + 1).toString().padStart(3, '0')}`
+}
+
+/**
+ * Allocates the next PARAM-NNN identifier for a project.
+ *
+ * Uses a per-project Postgres advisory lock so concurrent creates cannot
+ * read the same maximum and generate duplicate IDs.  Also avoids a full
+ * table scan: the new implementation is O(log N) instead of O(N).
+ *
+ * @param tx  Optional transaction client.  When provided, the allocation joins
+ *            the caller's transaction (advisory lock released at commit time).
+ *            When omitted, a new transaction is opened automatically.
+ */
+async function generateParameterId(
+  projectId: string,
+  tx?: Prisma.TransactionClient
+): Promise<string> {
+  if (tx) {
+    return allocateParameterId(tx, projectId)
+  }
+  return prisma.$transaction((inner) => allocateParameterId(inner, projectId))
 }
 
 function buildParameterWhere(projectId: string, query: Record<string, string | undefined>) {
@@ -248,10 +317,10 @@ export const getParameters = async (req: AuthRequest, res: Response) => {
 
 export const getParameter = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params
+    const { projectId, id } = req.params
 
-    const parameter = await prisma.parameter.findUnique({
-      where: { id },
+    const parameter = await prisma.parameter.findFirst({
+      where: { id, projectId },
       include: {
         sourceFunction: { select: { id: true, functionId: true, name: true } },
         sourceParameter: { select: { id: true, name: true } },
@@ -272,7 +341,7 @@ export const getParameter = async (req: AuthRequest, res: Response) => {
 
 export const updateParameter = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params
+    const { projectId, id } = req.params
     const body = req.body as Record<string, unknown>
     const {
       name,
@@ -296,7 +365,7 @@ export const updateParameter = async (req: AuthRequest, res: Response) => {
       parameterId: parameterIdFromBody,
     } = body
 
-    const parameter = await prisma.parameter.findUnique({ where: { id } })
+    const parameter = await prisma.parameter.findFirst({ where: { id, projectId } })
     if (!parameter) {
       return res.status(404).json({ success: false, error: 'Parameter not found' })
     }
@@ -731,10 +800,10 @@ export const bulkDeleteParameters = async (req: AuthRequest, res: Response) => {
 
 export const deleteParameter = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params
+    const { projectId, id } = req.params
 
-    const parameter = await prisma.parameter.findUnique({
-      where: { id },
+    const parameter = await prisma.parameter.findFirst({
+      where: { id, projectId },
     })
 
     if (!parameter) {
@@ -918,13 +987,14 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
       if (cyclesFound.length > 0) warnings.push(...cyclesFound.map(c => `Circular dependency detected: ${c}`))
     }
 
-    let imported = 0
-    let skipped = 0
-    const errors: string[] = []
+    // Wrap all writes in a single transaction so that a mid-batch failure rolls
+    // back every row already processed — no partial-import state (#78).
+    const { imported, updated } = await prisma.$transaction(async (tx) => {
+      let imported = 0
+      let skipped = 0
 
-    for (const p of parsed) {
-      try {
-        const existing = await prisma.parameter.findFirst({
+      for (const p of parsed) {
+        const existing = await tx.parameter.findFirst({
           where: { projectId, name: p.name },
         })
 
@@ -968,7 +1038,7 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
           const newVersionStr = incrementMinorVersion(existing.version)
           const { major: newMajor, minor: newMinor } = parseVersionParts(newVersionStr)
 
-          const updatedParameter = await prisma.parameter.update({
+          const updatedParameter = await tx.parameter.update({
             where: { id: existing.id },
             data: {
               description:  newDesc,
@@ -987,7 +1057,7 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
 
           // Create version record with major.minor parts
           const snapshot = buildParameterVersionSnapshot(updatedParameter)
-          await prisma.parameterVersion.create({
+          await tx.parameterVersion.create({
             data: {
               parameterId: existing.id,
               version: newMajor,
@@ -999,8 +1069,8 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
 
           skipped++ // counted as "updated"
         } else {
-          const newParameterId = await generateParameterId(projectId)
-          const created = await prisma.parameter.create({
+          const newParameterId = await generateParameterId(projectId, tx)
+          const created = await tx.parameter.create({
             data: {
               projectId,
               parameterId: newParameterId,
@@ -1020,7 +1090,7 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
 
           // Create initial version record (1.0)
           const snapshot = buildParameterVersionSnapshot(created)
-          await prisma.parameterVersion.create({
+          await tx.parameterVersion.create({
             data: {
               parameterId: created.id,
               version: 1,
@@ -1032,15 +1102,15 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
 
           imported++
         }
-      } catch (err) {
-        errors.push(`"${p.name}": ${(err as Error).message}`)
       }
-    }
+
+      return { imported, updated: skipped }
+    }, { timeout: 30_000 })
 
     res.json({
       success: true,
-      data: { imported, updated: skipped, errors, warnings },
-      message: `Import complete: ${imported} created, ${skipped} updated${errors.length ? `, ${errors.length} errors` : ''}`,
+      data: { imported, updated, errors: [], warnings },
+      message: `Import complete: ${imported} created, ${updated} updated`,
     })
   } catch (error) {
     console.error('Import parameters error:', error)
@@ -1082,6 +1152,12 @@ export async function gitValidateTokenHandler(req: AuthRequest, res: Response) {
 
     if (!platform || !baseUrl || !token) {
       return res.status(400).json({ success: false, error: 'platform, baseUrl, and token are required' })
+    }
+
+    try {
+      validateBaseUrl(baseUrl, true)
+    } catch (urlErr) {
+      return res.status(400).json({ success: false, error: (urlErr as Error).message })
     }
 
     let result: { valid: boolean; username?: string; error?: string }
@@ -1152,6 +1228,10 @@ export async function gitPublishSetupHandler(req: AuthRequest, res: Response) {
 
     if (!platform || !baseUrl || !token || !repoName) {
       return res.status(400).json({ success: false, error: 'platform, baseUrl, token and repoName are required' })
+    }
+
+    try { validateBaseUrl(baseUrl, true) } catch (urlErr) {
+      return res.status(400).json({ success: false, error: (urlErr as Error).message })
     }
 
     const dbParams = await prisma.parameter.findMany({ where: { projectId }, orderBy: { name: 'asc' } })
@@ -1281,6 +1361,10 @@ export async function gitPublishSyncHandler(req: AuthRequest, res: Response) {
       return res.status(400).json({ success: false, error: 'platform, baseUrl, token and repoId are required' })
     }
 
+    try { validateBaseUrl(baseUrl, true) } catch (urlErr) {
+      return res.status(400).json({ success: false, error: (urlErr as Error).message })
+    }
+
     const dbParams = await prisma.parameter.findMany({ where: { projectId }, orderBy: { name: 'asc' } })
     const allParams = mapDbParams(dbParams)
     const params = selectedTags?.length
@@ -1349,18 +1433,24 @@ export async function gitPublishSyncHandler(req: AuthRequest, res: Response) {
 }
 
 // ---------------------------------------------------------------------------
-// Git Publish Status — GET /:projectId/git/status
-// Query: platform, baseUrl, token, repoId, branch?, username?, workspace?, org?, project?
+// Git Publish Status — POST /:projectId/git/status
+// Body: platform, baseUrl, token, repoId, branch?, username?, workspace?, org?, project?
+// Changed from GET to POST so the git token travels in the encrypted request
+// body rather than the URL query string (which is logged by access logs).
 // ---------------------------------------------------------------------------
 export async function gitPublishStatusHandler(req: AuthRequest, res: Response) {
   try {
     const {
       platform, baseUrl, token, repoId, branch,
       username, workspace, org, project,
-    } = req.query as Record<string, string>
+    } = req.body as Record<string, string>
 
     if (!platform || !baseUrl || !token || !repoId) {
       return res.status(400).json({ success: false, error: 'platform, baseUrl, token and repoId are required' })
+    }
+
+    try { validateBaseUrl(baseUrl, true) } catch (urlErr) {
+      return res.status(400).json({ success: false, error: (urlErr as Error).message })
     }
 
     let latestCommit: { sha: string; createdAt: string; message: string; webUrl: string }
@@ -1451,6 +1541,10 @@ export async function gitPullHandler(req: AuthRequest, res: Response) {
       return res.status(400).json({ success: false, error: 'platform, baseUrl, token and repoId are required' })
     }
 
+    try { validateBaseUrl(baseUrl, true) } catch (urlErr) {
+      return res.status(400).json({ success: false, error: (urlErr as Error).message })
+    }
+
     const resolvedFormat = format ?? 'json'
     const resolvedFilePath = filePath ?? 'parameters.json'
     const resolvedBranch = branch ?? 'main'
@@ -1493,17 +1587,16 @@ export async function gitPullHandler(req: AuthRequest, res: Response) {
       return res.status(422).json({ success: false, error: `No parameters found in ${resolvedFilePath}`, warnings })
     }
 
-    let imported = 0
-    let updated = 0
-    const errors: string[] = []
+    const { imported, updated } = await prisma.$transaction(async (tx) => {
+      let imported = 0
+      let updated = 0
 
-    for (const p of parsed) {
-      try {
-        const existing = await prisma.parameter.findFirst({ where: { projectId, name: p.name } })
+      for (const p of parsed) {
+        const existing = await tx.parameter.findFirst({ where: { projectId, name: p.name } })
         if (existing) {
           const newVersionStr = incrementMinorVersion(existing.version)
           const { major: maj, minor: min } = parseVersionParts(newVersionStr)
-          const up = await prisma.parameter.update({
+          const up = await tx.parameter.update({
             where: { id: existing.id },
             data: {
               description:  p.description  ?? existing.description,
@@ -1519,7 +1612,7 @@ export async function gitPullHandler(req: AuthRequest, res: Response) {
               ...(p.tags != null && { tags: p.tags }),
             },
           })
-          await prisma.parameterVersion.create({
+          await tx.parameterVersion.create({
             data: {
               parameterId: existing.id,
               version: maj,
@@ -1530,8 +1623,8 @@ export async function gitPullHandler(req: AuthRequest, res: Response) {
           })
           updated++
         } else {
-          const newParameterId = await generateParameterId(projectId)
-          const created = await prisma.parameter.create({
+          const newParameterId = await generateParameterId(projectId, tx)
+          const created = await tx.parameter.create({
             data: {
               projectId,
               parameterId: newParameterId,
@@ -1548,7 +1641,7 @@ export async function gitPullHandler(req: AuthRequest, res: Response) {
               status: p.status ?? 'draft',
             },
           })
-          await prisma.parameterVersion.create({
+          await tx.parameterVersion.create({
             data: {
               parameterId: created.id,
               version: 1,
@@ -1559,15 +1652,15 @@ export async function gitPullHandler(req: AuthRequest, res: Response) {
           })
           imported++
         }
-      } catch (err) {
-        errors.push(`"${p.name}": ${(err as Error).message}`)
       }
-    }
+
+      return { imported, updated }
+    }, { timeout: 30_000 })
 
     res.json({
       success: true,
-      data: { imported, updated, errors, warnings, filePath: resolvedFilePath, format: resolvedFormat },
-      message: `Pull complete: ${imported} created, ${updated} updated from ${platform}${errors.length ? `, ${errors.length} errors` : ''}`,
+      data: { imported, updated, errors: [], warnings, filePath: resolvedFilePath, format: resolvedFormat },
+      message: `Pull complete: ${imported} created, ${updated} updated from ${platform}`,
     })
   } catch (error) {
     console.error('Git pull error:', error)

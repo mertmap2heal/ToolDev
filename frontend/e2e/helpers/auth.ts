@@ -2,6 +2,7 @@ import { Page, expect } from '@playwright/test'
 import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
+import { E2E_API_V1 } from './api'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -14,10 +15,21 @@ function loadCreds() {
   return null
 }
 
-export const TEST_USER = {
-  username: process.env.E2E_USERNAME ?? loadCreds()?.username ?? 'christian.mandle',
-  password: process.env.E2E_PASSWORD ?? loadCreds()?.password ?? 'mandle1998',
+function resolveCreds(): { username: string; password: string } {
+  const fromFile = loadCreds()
+  const username = process.env.E2E_USERNAME ?? fromFile?.username
+  const password = process.env.E2E_PASSWORD ?? fromFile?.password
+  if (!username || !password) {
+    throw new Error(
+      'E2E credentials missing. Set E2E_USERNAME and E2E_PASSWORD environment variables, ' +
+      'or create frontend/e2e/.auth/creds.json with {"username":"...","password":"..."} ' +
+      '(see backend/.env.example for documentation).',
+    )
+  }
+  return { username, password }
 }
+
+export const TEST_USER = resolveCreds()
 
 export const AUTH_FILE = path.join(__dirname, '../.auth/user.json')
 
@@ -68,7 +80,7 @@ export async function getFirstProjectId(page: Page): Promise<string | null> {
   const token = await page.evaluate(() => localStorage.getItem('token'))
   if (!token) return null
 
-  const resp = await page.request.get('http://localhost:5000/api/v1/projects', {
+  const resp = await page.request.get('${E2E_API_V1}/projects', {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!resp.ok()) return null
@@ -89,7 +101,7 @@ export async function getOrCreateProjectId(page: Page): Promise<string> {
   if (!token) throw new Error('No auth token in localStorage — login must succeed before projectId fixture')
 
   // Try to find an existing project first
-  const listResp = await page.request.get('http://localhost:5000/api/v1/projects', {
+  const listResp = await page.request.get('${E2E_API_V1}/projects', {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (listResp.ok()) {
@@ -99,7 +111,7 @@ export async function getOrCreateProjectId(page: Page): Promise<string> {
   }
 
   // No project visible to this user — create one
-  const createResp = await page.request.post('http://localhost:5000/api/v1/projects', {
+  const createResp = await page.request.post('${E2E_API_V1}/projects', {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     data: { name: 'E2E Test Project', domain: 'E2E Testing', description: 'Auto-created by Playwright setup' },
   })

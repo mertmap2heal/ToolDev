@@ -34,6 +34,11 @@ describe('Parameter API', () => {
     })
     projectId = project.id
 
+    // Add the test user as a project member so requireProjectMember passes
+    await prisma.projectMember.create({
+      data: { projectId, userId, role: 'owner' },
+    })
+
     // Seed a parameter with a version
     const param = await prisma.parameter.create({
       data: {
@@ -70,14 +75,15 @@ describe('Parameter API', () => {
   afterAll(async () => {
     await prisma.parameterVersion.deleteMany({ where: { parameterId: parameterDbId } })
     await prisma.parameter.deleteMany({ where: { projectId } })
+    await prisma.projectMember.deleteMany({ where: { projectId } })
     await prisma.project.delete({ where: { id: projectId } })
     await prisma.user.delete({ where: { id: userId } })
     await prisma.$disconnect()
   })
 
   // ---------------------------------------------------------------------------
-  // Auth guard — every mutating and sensitive endpoint must reject unauthenticated
-  // requests with 401 (#79)
+  // Auth guards (#79): every mutating endpoint rejects unauthenticated (401).
+  // Membership guards (#90/#152): every read/write rejects non-members (403).
   // ---------------------------------------------------------------------------
   it('GET /parameters/:projectId returns 401 without auth', async () => {
     const res = await request(app).get(`/api/v1/parameters/${projectId}`)
@@ -123,6 +129,22 @@ describe('Parameter API', () => {
       .post(`/api/v1/parameters/${projectId}/import`)
       .send({ format: 'json', content: '[]' })
     expect(res.status).toBe(401)
+  })
+
+  it('GET /parameters/:projectId returns 403 for non-member user', async () => {
+    const nonMember = await prisma.user.create({
+      data: {
+        email: `non-member-${Date.now()}@example.com`,
+        password: 'hashedpassword',
+        name: 'Non Member',
+      },
+    })
+    const nonMemberToken = jwt.sign({ userId: nonMember.id }, process.env.JWT_SECRET || 'secret')
+    const res = await request(app)
+      .get(`/api/v1/parameters/${projectId}`)
+      .set('Authorization', `Bearer ${nonMemberToken}`)
+    await prisma.user.delete({ where: { id: nonMember.id } })
+    expect(res.status).toBe(403)
   })
 
   // ---------------------------------------------------------------------------
@@ -351,5 +373,86 @@ describe('Parameter API', () => {
       .get(`/api/v1/parameters/${projectId}/${toDelete.id}`)
       .set('Authorization', `Bearer ${token}`)
     expect(after.status).toBe(404)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// IDOR protection regression tests (#74 + #80)
+// Verifies that getParameter, updateParameter, deleteParameter all scope
+// their DB lookups to projectId and cannot be used cross-project.
+// ---------------------------------------------------------------------------
+describe('Parameter IDOR protection (#74)', () => {
+  let projectAId: string
+  let projectBId: string
+  let userAId: string
+  let tokenA: string
+  let projectBParamId: string
+
+  beforeAll(async () => {
+    const ts = Date.now()
+
+    const userA = await prisma.user.create({
+      data: { email: `idor-a-${ts}@example.com`, password: 'hash', name: 'IDOR User A' },
+    })
+    userAId = userA.id
+    tokenA = jwt.sign({ userId: userAId }, process.env.JWT_SECRET || 'secret')
+
+    const slugA = `idor-a-${ts}`
+    const projA = await prisma.project.create({
+      data: { name: `IDOR Project A ${ts}`, domain: slugA, slug: slugA, userId: userAId },
+    })
+    projectAId = projA.id
+
+    const slugB = `idor-b-${ts}`
+    const projB = await prisma.project.create({
+      data: { name: `IDOR Project B ${ts}`, domain: slugB, slug: slugB, userId: userAId },
+    })
+    projectBId = projB.id
+
+    // Create a parameter that belongs to project B
+    const paramB = await prisma.parameter.create({
+      data: {
+        projectId: projectBId,
+        parameterId: `IDOR-B-${ts}`,
+        name: `Project-B-Param-${ts}`,
+        status: 'draft',
+        version: '1.0',
+      },
+    })
+    projectBParamId = paramB.id
+  })
+
+  afterAll(async () => {
+    await prisma.parameterVersion.deleteMany({ where: { parameter: { projectId: projectBId } } })
+    await prisma.parameter.deleteMany({ where: { projectId: projectBId } })
+    await prisma.parameter.deleteMany({ where: { projectId: projectAId } })
+    await prisma.project.deleteMany({ where: { id: { in: [projectAId, projectBId] } } })
+    await prisma.user.delete({ where: { id: userAId } })
+  })
+
+  it('GET /parameters/:projectA-id/:projectB-param returns 404 (IDOR guard)', async () => {
+    const res = await request(app)
+      .get(`/api/v1/parameters/${projectAId}/${projectBParamId}`)
+      .set('Authorization', `Bearer ${tokenA}`)
+    // Must not return the parameter — 404 proves projectId scope is enforced
+    expect(res.status).toBe(404)
+  })
+
+  it('PUT /parameters/:projectA-id/:projectB-param returns 404 (IDOR guard)', async () => {
+    const res = await request(app)
+      .put(`/api/v1/parameters/${projectAId}/${projectBParamId}`)
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ description: 'IDOR attempt' })
+    expect(res.status).toBe(404)
+  })
+
+  it('DELETE /parameters/:projectA-id/:projectB-param returns 404 (IDOR guard)', async () => {
+    const res = await request(app)
+      .delete(`/api/v1/parameters/${projectAId}/${projectBParamId}`)
+      .set('Authorization', `Bearer ${tokenA}`)
+    expect(res.status).toBe(404)
+    // Verify the parameter still exists in project B
+    const stillExists = await prisma.parameter.findUnique({ where: { id: projectBParamId } })
+    expect(stillExists).not.toBeNull()
   })
 })

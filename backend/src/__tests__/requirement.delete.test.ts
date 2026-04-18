@@ -36,11 +36,16 @@ describe('Requirement Soft Delete Workflow', () => {
             },
         })
         projectId = project.id
+
+        await prisma.projectMember.create({
+            data: { projectId, userId, role: 'owner', status: 'accepted' },
+        })
     })
 
     afterAll(async () => {
         // Cleanup
         await prisma.requirement.deleteMany({ where: { projectId } })
+        await prisma.projectMember.deleteMany({ where: { projectId } })
         await prisma.project.delete({ where: { id: projectId } })
         await prisma.user.delete({ where: { id: userId } })
         await prisma.$disconnect()

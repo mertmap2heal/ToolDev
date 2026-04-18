@@ -4,6 +4,7 @@
 import type { Page } from '@playwright/test'
 import { test, expect } from './helpers/fixtures'
 import {
+  E2E_API_V1,
   MODAL_OVERLAY,
   clearE2eLifecycleSeed,
   ensureFunctionForProject,
@@ -22,7 +23,7 @@ const AFTER_OPEN_WAIT = 600
 async function ensureFirstRequirementId(page: Page, projectId: string): Promise<string | null> {
   const token = await readAuthToken(page)
   const listResp = await page.request.get(
-    `http://localhost:5000/api/v1/requirements/${projectId}?page=1&pageSize=50`,
+    `${E2E_API_V1}/requirements/${projectId}?page=1&pageSize=50`,
     { headers: { Authorization: `Bearer ${token}` } },
   )
   if (!listResp.ok()) return null
@@ -35,7 +36,7 @@ async function ensureFirstRequirementId(page: Page, projectId: string): Promise<
   const total: number = listBody?.data?.total ?? listBody?.total ?? 0
   if (total > 0) return null
 
-  const createResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+  const createResp = await page.request.post(`${E2E_API_V1}/requirements/${projectId}`, {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     data: {
       title: `E2E drawer seed ${Date.now()}`,
@@ -345,7 +346,7 @@ test.describe('Requirements', () => {
     const token = await readAuthToken(page)
 
     const seedTitle = `E2E inline-edit desc seed ${Date.now()}`
-    const createResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+    const createResp = await page.request.post(`${E2E_API_V1}/requirements/${projectId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: {
         title: seedTitle,
@@ -389,14 +390,14 @@ test.describe('Requirements', () => {
     const token = await readAuthToken(page)
 
     const listResp = await page.request.get(
-      `http://localhost:5000/api/v1/requirements/${projectId}?page=1&pageSize=1`,
+      `${E2E_API_V1}/requirements/${projectId}?page=1&pageSize=1`,
       { headers: { Authorization: `Bearer ${token}` } },
     )
     expect(listResp.ok()).toBeTruthy()
     const listBody = await listResp.json()
     const total: number = listBody?.data?.total ?? 0
     if (total === 0) {
-      const createResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+      const createResp = await page.request.post(`${E2E_API_V1}/requirements/${projectId}`, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
           title: 'E2E add-link seed',
@@ -441,10 +442,10 @@ test.describe('Requirements', () => {
 
     // /all returns every requirement; paginated / only returns root requirements (parentId: null)
     const [allResp, rootResp] = await Promise.all([
-      page.request.get(`http://localhost:5000/api/v1/requirements/${projectId}/all`, {
+      page.request.get(`${E2E_API_V1}/requirements/${projectId}/all`, {
         headers: { Authorization: `Bearer ${token}` },
       }),
-      page.request.get(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+      page.request.get(`${E2E_API_V1}/requirements/${projectId}`, {
         headers: { Authorization: `Bearer ${token}` },
       }),
     ])

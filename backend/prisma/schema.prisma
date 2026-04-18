@@ -27,6 +27,7 @@ model User {
   ownedProjects    Project[] @relation("ownedProjects")
   notifications    Notification[]
   engineeringRoles UserEngineeringRole[]
+  userAdminRoles   UserAdminRole[] @relation("UserAdminRoleMember")
   projectUserEngineeringRoles     ProjectUserEngineeringRole[] @relation("ProjectUserEngRoleMember")
   assignedProjectUserEngineeringRoles ProjectUserEngineeringRole[] @relation("ProjectUserEngRoleAssigner")
   requirementSubscriptions RequirementSubscription[]
@@ -38,6 +39,8 @@ model User {
   parameterVersions ParameterVersion[]
   checklistItemResponses TransitionChecklistItemResponse[] @relation("ChecklistItemResponder")
   checklistItemComments  ChecklistItemComment[]
+  certSignOffs          CertSignOff[] @relation("CertSignOffSigner")
+  certSignOffAssignments CertSignOff[] @relation("CertSignOffAssignedTo")
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -49,8 +52,26 @@ model AdminRole {
   createdAt          DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  userAdminRoles     UserAdminRole[]
+
   @@unique([companyKey, name])
   @@index([companyKey])
+}
+
+// Junction table: many-to-many User <-> AdminRole (admin permission role assignments).
+model UserAdminRole {
+  id          String   @id @default(cuid())
+  userId      String
+  adminRoleId String
+  assignedAt  DateTime @default(now())
+  assignedBy  String?
+
+  user      User      @relation("UserAdminRoleMember", fields: [userId], references: [id], onDelete: Cascade)
+  adminRole AdminRole @relation(fields: [adminRoleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, adminRoleId])
+  @@index([userId])
+  @@index([adminRoleId])
 }
 
 // Engineering roles: discipline-based roles (Systems Engineer, Test Engineer, etc.).
@@ -3499,15 +3520,24 @@ model CertSignOff {
   person      String   @default("")
   signedAt    DateTime?
   status      String   @default("Pending") // Pending | Signed | Delegated
+  // Identity verification (issue #163): server-derived from authenticated session, never from client body
+  signerId         String?
+  assignedToUserId String?
+  ipAddress        String?
+  userAgent        String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  checklist CertChecklist? @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  checklist    CertChecklist? @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  signer       User?          @relation("CertSignOffSigner", fields: [signerId], references: [id], onDelete: SetNull)
+  assignedTo   User?          @relation("CertSignOffAssignedTo", fields: [assignedToUserId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
   @@index([checklistId])
   @@index([milestoneId])
+  @@index([signerId])
+  @@index([assignedToUserId])
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

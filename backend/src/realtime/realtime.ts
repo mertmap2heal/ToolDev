@@ -1,28 +1,70 @@
-import { Server } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 import http from 'http';
 import { getDataFlowState, updateDataFlowState, FlowView, getAllViews } from './dataflowStore.js';
 import { AuditorEngine } from '../services/auditorEngine.js';
 import os from 'os';
 import process from 'process';
 import { PrismaClient } from '@prisma/client';
+import {
+  extractTokenFromHandshake,
+  verifySocketToken,
+  getAllowedOrigins,
+  isProjectMember,
+  type SocketUser,
+} from './realtimeAuth.js';
+
+/**
+ * Socket with the authenticated user attached. We read the user off
+ * socket.data so the outer types stay compatible with socket.io.
+ */
+interface AuthedSocketData {
+  user: SocketUser;
+}
 
 export function setupRealtime(server: http.Server, prisma: PrismaClient) {
+  const allowedOrigins = getAllowedOrigins();
   const io = new Server(server, {
     cors: {
-      origin: '*',
+      // Restrict Socket.IO CORS to known front-end origins. See #170.
+      origin: allowedOrigins,
       methods: ['GET', 'POST'],
+      credentials: true,
     },
   });
+
+  // --- Authentication middleware -----------------------------------------
+  // Rejects unauthenticated connections and attaches the verified user to
+  // socket.data. See realtimeAuth.ts for the pure logic being called here.
+  io.use(async (socket, next) => {
+    try {
+      const token = extractTokenFromHandshake(socket.handshake);
+      const result = await verifySocketToken(token, process.env.JWT_SECRET);
+      if (!result.ok || !result.user) {
+        return next(new Error(result.error || 'Authentication required'));
+      }
+      (socket.data as AuthedSocketData).user = result.user;
+      return next();
+    } catch (err) {
+      console.error('Realtime: auth middleware error', err);
+      return next(new Error('Authentication required'));
+    }
+  });
+
+  const getUser = (socket: Socket): SocketUser | undefined =>
+    (socket.data as AuthedSocketData | undefined)?.user;
 
   // Track connected sessions in real-time
   const getActiveSessions = () => {
     const sockets = Array.from(io.sockets.sockets.values());
-    return sockets.map(s => ({
-      id: s.id,
-      name: `Session_${s.id.slice(0, 4)}`,
-      entity: (s.handshake.query.view as string) || 'INFRA',
-      location: 'Local Host'
-    }));
+    return sockets.map(s => {
+      const user = getUser(s);
+      return {
+        id: s.id,
+        name: user?.email ? `User_${user.email}` : `Session_${s.id.slice(0, 4)}`,
+        entity: (s.handshake.query.view as string) || 'INFRA',
+        location: 'Local Host',
+      };
+    });
   };
 
   // Utility to broadcast events to the War Room Terminal
@@ -36,6 +78,9 @@ export function setupRealtime(server: http.Server, prisma: PrismaClient) {
   };
 
   // --- Metrics Instrumentation Loop (System Vitals) ---
+  // ADMIN_LOGS room is gated on join (admin role only). The raw dataflow
+  // view updates are emitted to room `view:<viewKey>` so only sockets that
+  // explicitly joined a view receive updates (replaces broadcast-to-all).
   setInterval(() => {
     const views = getAllViews();
     const sysLoad = os.loadavg()[0]; // 1 min load average
@@ -56,7 +101,7 @@ export function setupRealtime(server: http.Server, prisma: PrismaClient) {
         node.data.metrics.latency = Math.max(1, Math.round(node.data.metrics.latency * 0.9 + (Math.random() * 5)));
       });
 
-      io.emit('dataflow:update', {
+      io.to(`view:${viewKey}`).emit('dataflow:update', {
         view: viewKey,
         ...state
       });
@@ -115,7 +160,7 @@ export function setupRealtime(server: http.Server, prisma: PrismaClient) {
             node.data.metadata.records = count;
           }
         }
-        io.emit('dataflow:update', { view: 'DATA', ...dataState });
+        io.to('view:DATA').emit('dataflow:update', { view: 'DATA', ...dataState });
       }
     } catch (e) {
       console.error('Realtime: DB Polling failed', e);
@@ -134,18 +179,69 @@ export function setupRealtime(server: http.Server, prisma: PrismaClient) {
   }, 10000);
 
   io.on('connection', (socket) => {
-    console.log('Realtime: client connected', socket.id);
+    const user = getUser(socket);
+    console.log('Realtime: client connected', socket.id, 'user:', user?.userId);
 
-    if (socket.handshake.query.admin === 'true') {
+    // Admin room membership is driven by verified JWT role, never by a
+    // client-supplied query parameter. See #170.
+    if (user?.isAdmin) {
       socket.join('ADMIN_LOGS');
-      broadcastAdminLog('INFO', `Admin joined session: ${socket.id}`, { id: socket.id });
+      broadcastAdminLog('INFO', `Admin joined session: ${socket.id}`, {
+        id: socket.id,
+        userId: user.userId,
+      });
     }
 
+    // Per-view room join: every authenticated user can subscribe to a view
+    // (read-only). Replaces the previous io.emit broadcast.
     const currentView = (socket.handshake.query.view as FlowView) || 'INFRA';
+    socket.join(`view:${currentView}`);
     socket.emit('dataflow:init', getDataFlowState(currentView));
     broadcastAdminLog('DEBUG', `Init State Requested: ${currentView}`, { socket: socket.id, view: currentView });
 
+    // Project-scoped room join request. Verifies membership before joining.
+    socket.on('project:join', async (payload: { projectId?: string }, ack?: (res: { ok: boolean; error?: string }) => void) => {
+      try {
+        const u = getUser(socket);
+        const projectId = payload?.projectId;
+        if (!u || !projectId || typeof projectId !== 'string') {
+          ack?.({ ok: false, error: 'Invalid request' });
+          return;
+        }
+        // Admins bypass membership (they have platform-wide visibility).
+        if (!u.isAdmin) {
+          const allowed = await isProjectMember(u.userId, projectId);
+          if (!allowed) {
+            ack?.({ ok: false, error: 'Not a project member' });
+            return;
+          }
+        }
+        socket.join(`project:${projectId}`);
+        ack?.({ ok: true });
+      } catch (err) {
+        console.error('Realtime: project:join error', err);
+        ack?.({ ok: false, error: 'Internal error' });
+      }
+    });
+
+    socket.on('project:leave', (payload: { projectId?: string }) => {
+      const projectId = payload?.projectId;
+      if (typeof projectId === 'string' && projectId.length > 0) {
+        socket.leave(`project:${projectId}`);
+      }
+    });
+
+    // Admin-only: mutate dataflow state. Silently no-op (plus admin log) for
+    // non-admin sockets to avoid leaking that the room exists.
     socket.on('dataflow:update', (payload: { view: FlowView; nodes: any[]; edges: any[] }) => {
+      const u = getUser(socket);
+      if (!u?.isAdmin) {
+        broadcastAdminLog('WARN', `Rejected dataflow:update from non-admin socket`, {
+          socket: socket.id,
+          userId: u?.userId,
+        });
+        return;
+      }
       const viewToUpdate = payload.view || 'INFRA';
       updateDataFlowState(viewToUpdate, payload);
 
@@ -154,15 +250,24 @@ export function setupRealtime(server: http.Server, prisma: PrismaClient) {
         nodeCount: payload.nodes?.length
       });
 
-      io.emit('dataflow:update', {
+      io.to(`view:${viewToUpdate}`).emit('dataflow:update', {
         view: viewToUpdate,
         ...getDataFlowState(viewToUpdate)
       });
     });
 
     socket.on('admin:command', (payload: { command: string }) => {
+      const u = getUser(socket);
+      if (!u?.isAdmin) {
+        broadcastAdminLog('WARN', `Rejected admin:command from non-admin socket`, {
+          socket: socket.id,
+          userId: u?.userId,
+        });
+        return;
+      }
       broadcastAdminLog('WARN', `System Command Received: ${payload.command}`, {
         admin: socket.id,
+        userId: u.userId,
         command: payload.command
       });
 

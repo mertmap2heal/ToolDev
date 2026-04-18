@@ -1,5 +1,7 @@
-import { Router } from 'express'
-import { authenticateToken } from '../middleware/auth.middleware'
+import { Router, Request, Response } from 'express'
+import { authenticateToken, AuthRequest } from '../middleware/auth.middleware'
+import { requireProjectMember } from '../middleware/requireProjectMember.middleware'
+import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import { lifecycleControlTowerService } from '../services/lifecycleControlTower.service'
 
 const router = Router()
@@ -10,14 +12,14 @@ router.use(authenticateToken)
 // The frontend service falls back to Zustand store if these return empty or 404,
 // but explicit 200 OK with empty data is cleaner.
 
-router.get('/library', async (req, res) => {
+router.get('/library', async (_req: Request, res: Response) => {
     res.json({
         success: true,
         data: [], // Empty list
     })
 })
 
-router.get('/applicable', async (req, res) => {
+router.get('/applicable', async (_req: Request, res: Response) => {
     // Return success: false or empty data to trigger frontend fallback
     res.json({
         success: true,
@@ -25,7 +27,7 @@ router.get('/applicable', async (req, res) => {
     })
 })
 
-router.get('/transitions', async (req, res) => {
+router.get('/transitions', async (_req: Request, res: Response) => {
     res.json({
         success: true,
         data: { transitions: [] },
@@ -35,10 +37,34 @@ router.get('/transitions', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // CONTROL TOWER ENDPOINTS — Isolated lifecycle monitoring & governance
 // ═══════════════════════════════════════════════════════════════════════════
+//
+// Security (issue #164): every tenant-scoped endpoint requires project
+// membership. projectId is taken from the URL path (never query string),
+// resolved through projectIdParam (supports UUID and slug), then guarded by
+// requireProjectMember which returns 403 for non-members.
+// ═══════════════════════════════════════════════════════════════════════════
 
-router.get('/control-tower/overview', async (req, res) => {
+// Global (no project scope) — kept auth-only.
+router.get('/control-tower/benchmarks', async (_req: Request, res: Response) => {
     try {
-        const projectId = (req.query.projectId as string) ?? 'default'
+        const data = await lifecycleControlTowerService.getBenchmarks()
+        res.json({ success: true, data })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err.message })
+    }
+})
+
+// Register :projectId resolver on the parent router so it fires for the
+// sub-router's merged params as well.
+router.param('projectId', projectIdParam)
+
+// Project-scoped sub-router: all routes below require membership on :projectId.
+const ctProject = Router({ mergeParams: true })
+ctProject.use(requireProjectMember)
+
+ctProject.get('/overview', async (req: AuthRequest, res: Response) => {
+    try {
+        const { projectId } = req.params
         const data = await lifecycleControlTowerService.getOverview(projectId)
         res.json({ success: true, data })
     } catch (err: any) {
@@ -46,9 +72,9 @@ router.get('/control-tower/overview', async (req, res) => {
     }
 })
 
-router.get('/control-tower/trends', async (req, res) => {
+ctProject.get('/trends', async (req: AuthRequest, res: Response) => {
     try {
-        const projectId = (req.query.projectId as string) ?? 'default'
+        const { projectId } = req.params
         const days = parseInt(req.query.days as string) || 30
         const data = await lifecycleControlTowerService.getTrends(projectId, days)
         res.json({ success: true, data })
@@ -57,9 +83,9 @@ router.get('/control-tower/trends', async (req, res) => {
     }
 })
 
-router.get('/control-tower/heatmap', async (req, res) => {
+ctProject.get('/heatmap', async (req: AuthRequest, res: Response) => {
     try {
-        const projectId = (req.query.projectId as string) ?? 'default'
+        const { projectId } = req.params
         const data = await lifecycleControlTowerService.getHeatmap(projectId)
         res.json({ success: true, data })
     } catch (err: any) {
@@ -67,9 +93,10 @@ router.get('/control-tower/heatmap', async (req, res) => {
     }
 })
 
-router.get('/control-tower/function-health', async (req, res) => {
+// Legacy flat path.
+ctProject.get('/function-health', async (req: AuthRequest, res: Response) => {
     try {
-        const projectId = (req.query.projectId as string) ?? 'default'
+        const { projectId } = req.params
         const data = await lifecycleControlTowerService.getFunctionHealth(projectId)
         res.json({ success: true, data })
     } catch (err: any) {
@@ -77,9 +104,20 @@ router.get('/control-tower/function-health', async (req, res) => {
     }
 })
 
-router.get('/control-tower/pbs-health', async (req, res) => {
+// Frontend-matching path.
+ctProject.get('/health/functions', async (req: AuthRequest, res: Response) => {
     try {
-        const projectId = (req.query.projectId as string) ?? 'default'
+        const { projectId } = req.params
+        const data = await lifecycleControlTowerService.getFunctionHealth(projectId)
+        res.json({ success: true, data })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err.message })
+    }
+})
+
+ctProject.get('/pbs-health', async (req: AuthRequest, res: Response) => {
+    try {
+        const { projectId } = req.params
         const data = await lifecycleControlTowerService.getPBSHealth(projectId)
         res.json({ success: true, data })
     } catch (err: any) {
@@ -87,9 +125,19 @@ router.get('/control-tower/pbs-health', async (req, res) => {
     }
 })
 
-router.get('/control-tower/traceability', async (req, res) => {
+ctProject.get('/health/pbs', async (req: AuthRequest, res: Response) => {
     try {
-        const projectId = (req.query.projectId as string) ?? 'default'
+        const { projectId } = req.params
+        const data = await lifecycleControlTowerService.getPBSHealth(projectId)
+        res.json({ success: true, data })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err.message })
+    }
+})
+
+ctProject.get('/traceability', async (req: AuthRequest, res: Response) => {
+    try {
+        const { projectId } = req.params
         const page = parseInt(req.query.page as string) || 1
         const limit = parseInt(req.query.limit as string) || 50
         const data = await lifecycleControlTowerService.getTraceabilityTable(projectId, page, limit)
@@ -99,9 +147,9 @@ router.get('/control-tower/traceability', async (req, res) => {
     }
 })
 
-router.get('/control-tower/sla-breaches', async (req, res) => {
+ctProject.get('/sla-breaches', async (req: AuthRequest, res: Response) => {
     try {
-        const projectId = (req.query.projectId as string) ?? 'default'
+        const { projectId } = req.params
         const data = await lifecycleControlTowerService.getSlaBreaches(projectId)
         res.json({ success: true, data })
     } catch (err: any) {
@@ -109,9 +157,19 @@ router.get('/control-tower/sla-breaches', async (req, res) => {
     }
 })
 
-router.get('/control-tower/anomalies', async (req, res) => {
+ctProject.get('/sla/breaches', async (req: AuthRequest, res: Response) => {
     try {
-        const projectId = (req.query.projectId as string) ?? 'default'
+        const { projectId } = req.params
+        const data = await lifecycleControlTowerService.getSlaBreaches(projectId)
+        res.json({ success: true, data })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err.message })
+    }
+})
+
+ctProject.get('/anomalies', async (req: AuthRequest, res: Response) => {
+    try {
+        const { projectId } = req.params
         const data = await lifecycleControlTowerService.getAnomalies(projectId)
         res.json({ success: true, data })
     } catch (err: any) {
@@ -119,9 +177,9 @@ router.get('/control-tower/anomalies', async (req, res) => {
     }
 })
 
-router.get('/control-tower/integrity-violations', async (req, res) => {
+ctProject.get('/integrity-violations', async (req: AuthRequest, res: Response) => {
     try {
-        const projectId = (req.query.projectId as string) ?? 'default'
+        const { projectId } = req.params
         const data = await lifecycleControlTowerService.getIntegrityViolations(projectId)
         res.json({ success: true, data })
     } catch (err: any) {
@@ -129,9 +187,19 @@ router.get('/control-tower/integrity-violations', async (req, res) => {
     }
 })
 
-router.get('/control-tower/readiness', async (req, res) => {
+ctProject.get('/integrity', async (req: AuthRequest, res: Response) => {
     try {
-        const projectId = (req.query.projectId as string) ?? 'default'
+        const { projectId } = req.params
+        const data = await lifecycleControlTowerService.getIntegrityViolations(projectId)
+        res.json({ success: true, data })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err.message })
+    }
+})
+
+ctProject.get('/readiness', async (req: AuthRequest, res: Response) => {
+    try {
+        const { projectId } = req.params
         const data = await lifecycleControlTowerService.getReadinessScore(projectId)
         res.json({ success: true, data })
     } catch (err: any) {
@@ -139,9 +207,9 @@ router.get('/control-tower/readiness', async (req, res) => {
     }
 })
 
-router.get('/control-tower/pending-approvals', async (req, res) => {
+ctProject.get('/pending-approvals', async (req: AuthRequest, res: Response) => {
     try {
-        const projectId = (req.query.projectId as string) ?? 'default'
+        const { projectId } = req.params
         const data = await lifecycleControlTowerService.getPendingApprovals(projectId)
         res.json({ success: true, data })
     } catch (err: any) {
@@ -149,9 +217,19 @@ router.get('/control-tower/pending-approvals', async (req, res) => {
     }
 })
 
-router.get('/control-tower/audit-trail', async (req, res) => {
+ctProject.get('/approvals/pending', async (req: AuthRequest, res: Response) => {
     try {
-        const projectId = (req.query.projectId as string) ?? 'default'
+        const { projectId } = req.params
+        const data = await lifecycleControlTowerService.getPendingApprovals(projectId)
+        res.json({ success: true, data })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err.message })
+    }
+})
+
+ctProject.get('/audit-trail', async (req: AuthRequest, res: Response) => {
+    try {
+        const { projectId } = req.params
         const page = parseInt(req.query.page as string) || 1
         const limit = parseInt(req.query.limit as string) || 50
         const data = await lifecycleControlTowerService.getAuditTrail(projectId, page, limit)
@@ -161,13 +239,20 @@ router.get('/control-tower/audit-trail', async (req, res) => {
     }
 })
 
-router.get('/control-tower/benchmarks', async (req, res) => {
+ctProject.get('/audit', async (req: AuthRequest, res: Response) => {
     try {
-        const data = await lifecycleControlTowerService.getBenchmarks()
+        const { projectId } = req.params
+        const page = parseInt(req.query.page as string) || 1
+        const limit = parseInt(req.query.limit as string) || 50
+        const data = await lifecycleControlTowerService.getAuditTrail(projectId, page, limit)
         res.json({ success: true, data })
     } catch (err: any) {
         res.status(500).json({ success: false, error: err.message })
     }
 })
+
+// Mount the project-scoped sub-router. Any path on /control-tower/:projectId
+// goes through requireProjectMember before hitting a handler.
+router.use('/control-tower/:projectId', ctProject)
 
 export default router

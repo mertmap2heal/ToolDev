@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 import { PrismaClient } from '@prisma/client'
+import { resolveIsAdmin } from '../lib/adminAuth'
 
 const prisma = new PrismaClient()
 
@@ -14,10 +15,8 @@ export const authenticateToken = (
   res: Response,
   next: NextFunction
 ) => {
-  console.log('[Auth] Checking token for:', req.method, req.url)
   const authHeader = req.headers['authorization']
   const token = authHeader && authHeader.split(' ')[1]
-  console.log('[Auth] Token found:', !!token)
 
   if (!token) {
     return res.status(401).json({ success: false, error: 'No token provided' })
@@ -88,16 +87,3 @@ export const requireAdmin = async (
   next()
 }
 
-async function resolveIsAdmin(email: string | null): Promise<boolean> {
-  if (!email) return false
-  const list = process.env.ADMIN_EMAILS
-  if (list) {
-    const emails = list.split(',').map((e) => e.trim().toLowerCase())
-    return emails.includes(email.toLowerCase())
-  }
-  const first = await prisma.user.findFirst({
-    orderBy: { createdAt: 'asc' },
-    select: { email: true },
-  })
-  return first?.email?.toLowerCase() === email.toLowerCase()
-}
