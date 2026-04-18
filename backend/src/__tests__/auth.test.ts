@@ -461,6 +461,91 @@ describe('authenticateToken middleware via GET /api/v1/auth/me', () => {
   })
 })
 
+describe('PATCH /api/v1/auth/me/password — changeMyPassword (#274)', () => {
+  const initialPassword = 'old-pw-abc-123'
+  let userId: string
+  let token: string
+
+  beforeAll(async () => {
+    const email = uniqueEmail('chgpw')
+    const hash = await bcrypt.hash(initialPassword, 10)
+    const user = await prisma.user.create({
+      data: { email, password: hash, name: 'ChgPw User' },
+    })
+    userId = user.id
+    createdUserIds.push(userId)
+    const secret = process.env.JWT_SECRET
+    if (!secret) throw new Error('JWT_SECRET not set in test env')
+    token = jwt.sign({ userId }, secret, { expiresIn: '1h' })
+  })
+
+  it('returns 401 without an auth token', async () => {
+    const res = await request(app)
+      .patch('/api/v1/auth/me/password')
+      .send({ currentPassword: initialPassword, newPassword: 'new-pw-xyz-789' })
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 400 when currentPassword is missing (#274)', async () => {
+    const res = await request(app)
+      .patch('/api/v1/auth/me/password')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ newPassword: 'new-pw-xyz-789' })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/currentPassword/i)
+  })
+
+  it('returns 401 when currentPassword is wrong (#274)', async () => {
+    const before = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { password: true },
+    })
+    const res = await request(app)
+      .patch('/api/v1/auth/me/password')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ currentPassword: 'definitely-not-the-pw', newPassword: 'new-pw-xyz-789' })
+    expect(res.status).toBe(401)
+    expect(res.body.success).toBe(false)
+    expect(res.body.error).toMatch(/current password/i)
+    // Critical: wrong currentPassword must NOT mutate the stored hash.
+    const after = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { password: true },
+    })
+    expect(after!.password).toBe(before!.password)
+  })
+
+  it('returns 400 when newPassword is shorter than 8 chars', async () => {
+    const res = await request(app)
+      .patch('/api/v1/auth/me/password')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ currentPassword: initialPassword, newPassword: 'short' })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/8 characters/i)
+  })
+
+  it('returns 200 and updates the hash when currentPassword is correct', async () => {
+    const before = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { password: true },
+    })
+    const newPassword = 'new-pw-xyz-789'
+    const res = await request(app)
+      .patch('/api/v1/auth/me/password')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ currentPassword: initialPassword, newPassword })
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+    const after = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { password: true, mustChangePasswordOnFirstLogin: true },
+    })
+    expect(after!.password).not.toBe(before!.password)
+    expect(await bcrypt.compare(newPassword, after!.password)).toBe(true)
+    expect(after!.mustChangePasswordOnFirstLogin).toBe(false)
+  })
+})
+
 afterAll(async () => {
   if (createdUserIds.length) {
     await prisma.user

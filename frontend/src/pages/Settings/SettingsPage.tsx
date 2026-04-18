@@ -302,7 +302,7 @@ function SecuritySection({ showToast }: { showToast: (m: string, t: 'success' | 
     if (!canSubmit) return
     setSaving(true)
     try {
-      const res = await authService.changeMyPassword(newPw)
+      const res = await authService.changeMyPassword(currentPw, newPw)
       if (res.success) {
         showToast('Password changed successfully', 'success')
         setCurrentPw('')
