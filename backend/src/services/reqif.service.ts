@@ -348,6 +348,15 @@ export const reqifService = {
       throw new Error('Invalid ReqIF structure: SPEC-OBJECTS must be an array')
     }
 
+    // #298: cap the SPEC-OBJECT count so a single call cannot fire tens of
+    // thousands of synchronous Prisma round-trips.
+    const MAX_SPEC_OBJECTS = 5000
+    if (specObjects.length > MAX_SPEC_OBJECTS) {
+      throw new Error(
+        `ReqIF payload exceeds SPEC-OBJECT limit (${MAX_SPEC_OBJECTS} max, got ${specObjects.length})`,
+      )
+    }
+
     const created: number[] = []
     const updated: number[] = []
     const skipped: number[] = []

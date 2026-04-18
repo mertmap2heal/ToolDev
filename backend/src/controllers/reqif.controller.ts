@@ -29,6 +29,13 @@ export const exportToReqIF = async (req: AuthRequest, res: Response) => {
   }
 }
 
+// #298: hard cap on the XML payload to keep a single signed-in user from
+// pinning the backend event loop via an 8 MB+ crafted ReqIF. The Express
+// body limit (50 MB in server.ts) is too permissive for a synchronously
+// parsed XML document — fast-xml-parser will expand that to hundreds of
+// MB of heap during tree construction.
+const MAX_REQIF_CHARS = 8 * 1024 * 1024 // 8 MB of XML text
+
 /**
  * Import requirements from ReqIF format
  */
@@ -41,6 +48,20 @@ export const importFromReqIF = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({
         success: false,
         error: 'ReqIF XML content is required',
+      })
+    }
+
+    if (typeof req.body.reqifXml !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'reqifXml must be a string',
+      })
+    }
+
+    if (req.body.reqifXml.length > MAX_REQIF_CHARS) {
+      return res.status(413).json({
+        success: false,
+        error: `ReqIF payload exceeds size limit (${MAX_REQIF_CHARS} chars)`,
       })
     }
 
