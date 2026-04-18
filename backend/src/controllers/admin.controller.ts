@@ -194,6 +194,10 @@ interface AuditEntry {
 /** GET /admin/audit-log - unified audit log. Query: limit?, from?, to?, actor?, action?, target? */
 export const getAuditLog = async (req: AuthRequest, res: Response) => {
   try {
+    const callerId = req.userId
+    if (!callerId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
     const limit = Math.min(Math.max(parseInt(String(req.query.limit || 50), 10) || 50, 1), 200)
     const from = req.query.from as string | undefined
     const to = req.query.to as string | undefined
@@ -204,12 +208,54 @@ export const getAuditLog = async (req: AuthRequest, res: Response) => {
     const fromDate = from ? new Date(from) : null
     const toDate = to ? new Date(to) : null
 
+    // #288: scope audit results to the caller's company unless they are
+    // SUPERIOR_ADMIN. Resolve the set of project ids that belong to the
+    // caller's company so we can filter VerAuditEvent (direct projectId),
+    // TaskAuditLog (entityId -> Task.projectId), and InventoryAuditLog
+    // (entityId -> Item.projectId, with null-project items always hidden
+    // for non-SUPERIOR_ADMIN).
+    const me = await prisma.user.findUnique({
+      where: { id: callerId },
+      select: { company: true, role: true },
+    })
+    const isSuperior = me?.role === 'SUPERIOR_ADMIN'
+    const callerCompany = me?.company ?? null
+
+    let allowedProjectIds: string[] | null = null
+    let allowedTaskIds: Set<string> | null = null
+    let allowedItemIds: Set<string> | null = null
+    if (!isSuperior) {
+      const projects = await prisma.project.findMany({
+        where: { companyName: callerCompany },
+        select: { id: true },
+      })
+      allowedProjectIds = projects.map((p) => p.id)
+      const [tasks, items] = await Promise.all([
+        prisma.task.findMany({
+          where: { projectId: { in: allowedProjectIds } },
+          select: { id: true },
+        }),
+        prisma.item.findMany({
+          where: { projectId: { in: allowedProjectIds } },
+          select: { id: true },
+        }),
+      ])
+      allowedTaskIds = new Set(tasks.map((t) => t.id))
+      allowedItemIds = new Set(items.map((i) => i.id))
+    }
+
     const entries: AuditEntry[] = []
 
     // VerAuditEvent
-    const verWhere: { performedAt?: { gte?: Date; lte?: Date } } = {}
+    const verWhere: {
+      performedAt?: { gte?: Date; lte?: Date }
+      projectId?: { in: string[] }
+    } = {}
     if (fromDate) verWhere.performedAt = { ...verWhere.performedAt, gte: fromDate }
     if (toDate) verWhere.performedAt = { ...verWhere.performedAt, lte: toDate }
+    if (!isSuperior && allowedProjectIds !== null) {
+      verWhere.projectId = { in: allowedProjectIds }
+    }
 
     const verEvents = await prisma.verAuditEvent.findMany({
       where: Object.keys(verWhere).length > 0 ? verWhere : undefined,
@@ -252,6 +298,11 @@ export const getAuditLog = async (req: AuthRequest, res: Response) => {
       take: limit,
     })
     for (const e of taskEvents) {
+      // #288: TaskAuditLog has no projectId column — walk entityId to
+      // Task.projectId (via the pre-resolved allowedTaskIds set) to keep
+      // non-SUPERIOR_ADMIN inside their own tenant. Drop events whose
+      // entity is not a task we can identify as caller-company-owned.
+      if (!isSuperior && allowedTaskIds && !allowedTaskIds.has(e.entityId)) continue
       const actor = e.userName ?? e.userId ?? 'system'
       const target = `${e.entityType}:${e.entityId}`
       const summary = `${e.action} on ${e.entityType}`
@@ -279,6 +330,11 @@ export const getAuditLog = async (req: AuthRequest, res: Response) => {
       take: limit,
     })
     for (const e of invEvents) {
+      // #288: InventoryAuditLog has no projectId column either — walk
+      // entityId to Item.projectId via the pre-resolved allowedItemIds
+      // set. Entity types other than ITEM (rare) are dropped for non-
+      // SUPERIOR_ADMIN rather than guessed.
+      if (!isSuperior && allowedItemIds && !allowedItemIds.has(e.entityId)) continue
       const actor = e.userName ?? e.userId ?? 'system'
       const target = `${e.entityType}:${e.entityId}`
       const summary = `${e.action} on ${e.entityType}`
