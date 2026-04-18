@@ -183,6 +183,35 @@ jobs:
             exit 1
           fi
 
+      - name: Run /search cross-tenant regression (#296)
+        run: cd backend && npx vitest run src/__tests__/search.crossTenant.test.ts
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret
+
+      - name: Verify /search scopes queries by projectId (#296)
+        run: |
+          set -e
+          f=backend/src/routes/search.routes.ts
+          fail=0
+          # Admin bypass must remain in place.
+          if ! grep -q "isAdminUser" "$f"; then
+            echo "::error file=$f::search must consult isAdminUser for admin bypass (see issue #296)"
+            fail=1
+          fi
+          # Caller's project memberships must be loaded.
+          if ! grep -q "projectMember.findMany" "$f"; then
+            echo "::error file=$f::search must load projectMember.findMany for caller scope (see issue #296)"
+            fail=1
+          fi
+          # At minimum the shared projectScope name must be present in the
+          # handler so the 12 entity queries scope by projectId.
+          if ! grep -q "projectScope" "$f"; then
+            echo "::error file=$f::search must scope findMany queries by projectScope (see issue #296)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Run change-request concurrency regression suite (#162)
         run: cd backend && npx vitest run src/__tests__/changeRequest.key.test.ts
         env:
