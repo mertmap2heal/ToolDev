@@ -63,7 +63,6 @@ export const getMocByCode = async (req: AuthRequest, res: Response) => {
 
 export const createMoc = async (req: AuthRequest, res: Response) => {
   try {
-    // TODO: Check admin role
     const { code, name, description, requiresJustification, defaultRequiredEvidenceTypes, isActive } = req.body
 
     if (code === undefined || !name) {
@@ -108,7 +107,6 @@ export const createMoc = async (req: AuthRequest, res: Response) => {
 
 export const updateMoc = async (req: AuthRequest, res: Response) => {
   try {
-    // TODO: Check admin role
     const { code } = req.params
     const codeNum = parseInt(code, 10)
 

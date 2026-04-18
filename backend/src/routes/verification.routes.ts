@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { authenticateToken } from '../middleware/auth.middleware'
+import { authenticateToken, requireAdmin } from '../middleware/auth.middleware'
 import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import * as mocController from '../controllers/verification/moc.controller'
 import * as methodController from '../controllers/verification/method.controller'
@@ -32,10 +32,11 @@ router.use(authenticateToken)
 router.param('projectId', projectIdParam)
 
 // A) MoC Endpoints
+// MoC rows are system-wide compliance definitions; only admins may mutate them (#132).
 router.get('/moc', mocController.getMocs)
 router.get('/moc/:code', mocController.getMocByCode)
-router.post('/moc', mocController.createMoc)
-router.patch('/moc/:code', mocController.updateMoc)
+router.post('/moc', requireAdmin, mocController.createMoc)
+router.patch('/moc/:code', requireAdmin, mocController.updateMoc)
 
 // B) Methods
 router.get('/methods/:projectId', methodController.getMethods)
