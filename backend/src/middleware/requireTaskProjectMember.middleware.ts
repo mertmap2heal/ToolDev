@@ -111,6 +111,79 @@ export function requireTaskProjectMember(
 }
 
 /**
+ * Enforces project membership for TimeLog routes that identify the log by
+ * `req.params.id` (PATCH / DELETE `/time-tracking/:id`). Walks timeLog ->
+ * task -> projectId, then verifies ProjectMember. Issue #286.
+ *
+ * Attaches the resolved projectId to req.timeLogProjectId so the controller
+ * can enforce ownership rules (log.userId === caller unless owner/admin).
+ */
+export function requireTimeLogProjectMember() {
+  return async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const userId = req.user?.userId
+      const { id } = req.params
+
+      if (!userId) {
+        res.status(401).json({ success: false, error: 'Unauthorized' })
+        return
+      }
+      if (!id) {
+        res.status(400).json({ success: false, error: 'TimeLog id is required' })
+        return
+      }
+
+      const log = await prisma.timeLog.findUnique({
+        where: { id },
+        select: {
+          userId: true,
+          task: { select: { projectId: true } },
+        },
+      })
+      if (!log) {
+        res.status(404).json({ success: false, error: 'Time log not found' })
+        return
+      }
+
+      const projectId = log.task?.projectId
+      if (!projectId) {
+        res.status(403).json({
+          success: false,
+          error: 'Access denied: time log has no project scope',
+        })
+        return
+      }
+
+      const member = await prisma.projectMember.findFirst({
+        where: { projectId, userId },
+        select: { id: true },
+      })
+      if (!member) {
+        res
+          .status(403)
+          .json({ success: false, error: 'Access denied: not a member of this project' })
+        return
+      }
+
+      // Stash on req for controller-level ownership enforcement.
+      ;(req as AuthRequest & { timeLog?: { ownerUserId: string; projectId: string } }).timeLog = {
+        ownerUserId: log.userId,
+        projectId,
+      }
+
+      next()
+    } catch (err) {
+      console.error('requireTimeLogProjectMember error:', err)
+      res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+  }
+}
+
+/**
  * Enforces project membership using the task id in `req.body.task_id` (or
  * `req.body.taskId`). Used by `POST /board/move-task` where the task is
  * identified in the body rather than the URL.

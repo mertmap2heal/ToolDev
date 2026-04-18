@@ -1,6 +1,39 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import timeTrackingService from '../services/timeTracking.service'
+import { prisma } from '../lib/prisma'
+import { isAdminUser } from '../lib/adminAuth'
+
+// #286: controllers rely on route-level middleware to enforce project
+// membership. Update/delete additionally check that the caller owns the log,
+// unless they are a project owner or admin — a team member must not edit
+// someone else's billable hours.
+
+type TimeLogRequest = AuthRequest & {
+  timeLog?: { ownerUserId: string; projectId: string }
+}
+
+async function callerCanMutateLog(
+  req: TimeLogRequest,
+  log: { ownerUserId: string; projectId: string },
+): Promise<boolean> {
+  const userId = req.userId
+  if (!userId) return false
+  if (log.ownerUserId === userId) return true
+  if (await isAdminUser(userId)) return true
+  // Project owner via ProjectMember.role === 'owner' or legacy Project.userId.
+  const [member, ownerRow] = await Promise.all([
+    prisma.projectMember.findFirst({
+      where: { projectId: log.projectId, userId, role: 'owner' },
+      select: { id: true },
+    }),
+    prisma.project.findFirst({
+      where: { id: log.projectId, userId },
+      select: { id: true },
+    }),
+  ])
+  return Boolean(member || ownerRow)
+}
 
 export const logTime = async (req: AuthRequest, res: Response) => {
   try {
@@ -109,6 +142,18 @@ export const getTimeSummary = async (req: AuthRequest, res: Response) => {
 export const deleteTimeLog = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
+    const log = (req as TimeLogRequest).timeLog
+    if (!log) {
+      return res.status(500).json({ success: false, error: 'TimeLog context missing' })
+    }
+
+    // #286: only the log owner, a project owner, or an admin may mutate.
+    if (!(await callerCanMutateLog(req as TimeLogRequest, log))) {
+      return res.status(403).json({
+        success: false,
+        error: 'Only the log author or a project owner may delete this entry',
+      })
+    }
 
     await timeTrackingService.deleteTimeLog(id)
 
@@ -129,6 +174,17 @@ export const updateTimeLog = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
     const { durationMinutes, description, loggedAt, billable } = req.body
+    const log = (req as TimeLogRequest).timeLog
+    if (!log) {
+      return res.status(500).json({ success: false, error: 'TimeLog context missing' })
+    }
+
+    if (!(await callerCanMutateLog(req as TimeLogRequest, log))) {
+      return res.status(403).json({
+        success: false,
+        error: 'Only the log author or a project owner may edit this entry',
+      })
+    }
 
     const timeLog = await timeTrackingService.updateTimeLog(id, {
       durationMinutes,
