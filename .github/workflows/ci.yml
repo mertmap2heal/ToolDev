@@ -183,6 +183,34 @@ jobs:
             exit 1
           fi
 
+      - name: Run issue-controller cross-project IDOR regression (#285)
+        run: cd backend && npx vitest run src/__tests__/issue.idor.test.ts
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret
+
+      - name: Guard issue controllers scope lookups by projectId (#285)
+        run: |
+          set -e
+          f=backend/src/controllers/issue.controller.ts
+          fail=0
+          # No issue lookup may use findUnique({ where: { id } }) — that is the
+          # pre-fix IDOR shape. Authenticated lookups must go through findFirst
+          # with both id and projectId.
+          if grep -nE "prisma\.issue\.findUnique\(\s*\{\s*where:\s*\{\s*id\s*\}\s*\}\s*\)" "$f"; then
+            echo "::error file=$f::prisma.issue.findUnique({where:{id}}) missing projectId scope (see issue #285)"
+            fail=1
+          fi
+          if grep -nE "prisma\.issueComment\.findUnique\(\s*\{\s*where:\s*\{\s*id:\s*commentId\s*\}\s*\}\s*\)" "$f"; then
+            echo "::error file=$f::issueComment.findUnique({where:{id:commentId}}) missing projectId scope (see issue #285)"
+            fail=1
+          fi
+          if grep -nE "prisma\.issueLink\.findUnique\(\s*\{\s*where:\s*\{\s*id:\s*linkId\s*\}\s*\}\s*\)" "$f"; then
+            echo "::error file=$f::issueLink.findUnique({where:{id:linkId}}) missing projectId relation walk (see issue #285)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Run /search cross-tenant regression (#296)
         run: cd backend && npx vitest run src/__tests__/search.crossTenant.test.ts
         env:

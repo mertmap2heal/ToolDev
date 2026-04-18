@@ -254,10 +254,11 @@ export const getIssues = async (req: AuthRequest, res: Response) => {
 
 export const getIssue = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params
+    const { projectId, id } = req.params
 
-    const issue = await prisma.issue.findUnique({
-      where: { id },
+    // #285: scope lookup by projectId so cross-project issue ids return 404.
+    const issue = await prisma.issue.findFirst({
+      where: { id, projectId },
     })
 
     if (!issue) {
@@ -362,10 +363,11 @@ export const getIssue = async (req: AuthRequest, res: Response) => {
 
 export const getIssueActivity = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params
+    const { projectId, id } = req.params
     const { filter, sort } = req.query
 
-    const issue = await prisma.issue.findUnique({ where: { id } })
+    // #285: scope lookup by projectId to prevent cross-project activity reads.
+    const issue = await prisma.issue.findFirst({ where: { id, projectId } })
     if (!issue) {
       return res.status(404).json({ success: false, error: 'Issue not found' })
     }
@@ -433,7 +435,7 @@ export const getIssueActivity = async (req: AuthRequest, res: Response) => {
 
 export const updateIssue = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params
+    const { projectId, id } = req.params
     const {
       title,
       description,
@@ -450,8 +452,9 @@ export const updateIssue = async (req: AuthRequest, res: Response) => {
       actualTime
     } = req.body
 
-    const issue = await prisma.issue.findUnique({
-      where: { id },
+    // #285: cross-project update must 404, not silently mutate the foreign row.
+    const issue = await prisma.issue.findFirst({
+      where: { id, projectId },
     })
 
     if (!issue) {
@@ -547,10 +550,13 @@ export const updateIssue = async (req: AuthRequest, res: Response) => {
 
 export const deleteIssue = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params
+    const { projectId, id } = req.params
 
-    const issue = await prisma.issue.findUnique({
-      where: { id },
+    // #285: hard-delete must be scoped by projectId — the previous
+    // findUnique({id}) path allowed any member of any project to destroy
+    // any issue given its UUID.
+    const issue = await prisma.issue.findFirst({
+      where: { id, projectId },
     })
 
     if (!issue) {
@@ -579,10 +585,11 @@ export const deleteIssue = async (req: AuthRequest, res: Response) => {
 
 export const createIssueComment = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params
+    const { projectId, id } = req.params
     const { content, parentCommentId } = req.body
 
-    const issue = await prisma.issue.findUnique({ where: { id } })
+    // #285: can only comment on issues that live in the URL's projectId.
+    const issue = await prisma.issue.findFirst({ where: { id, projectId } })
     if (!issue) {
       return res.status(404).json({ success: false, error: 'Issue not found' })
     }
@@ -607,10 +614,16 @@ export const createIssueComment = async (req: AuthRequest, res: Response) => {
 
 export const updateIssueComment = async (req: AuthRequest, res: Response) => {
   try {
-    const { commentId } = req.params
+    const { projectId, commentId } = req.params
     const { content } = req.body
 
-    const comment = await prisma.issueComment.findUnique({ where: { id: commentId } })
+    // #285: comment edits must be scoped to the URL's projectId. The prior
+    // author-only gate allowed anyone who happened to have authored a comment
+    // in another project (e.g. before being removed) to keep editing it via
+    // any projectId prefix.
+    const comment = await prisma.issueComment.findFirst({
+      where: { id: commentId, projectId },
+    })
     if (!comment) {
       return res.status(404).json({ success: false, error: 'Comment not found' })
     }
@@ -634,9 +647,12 @@ export const updateIssueComment = async (req: AuthRequest, res: Response) => {
 
 export const deleteIssueComment = async (req: AuthRequest, res: Response) => {
   try {
-    const { commentId } = req.params
+    const { projectId, commentId } = req.params
 
-    const comment = await prisma.issueComment.findUnique({ where: { id: commentId } })
+    // #285: scope by projectId before the author check.
+    const comment = await prisma.issueComment.findFirst({
+      where: { id: commentId, projectId },
+    })
     if (!comment) {
       return res.status(404).json({ success: false, error: 'Comment not found' })
     }
@@ -657,9 +673,11 @@ export const deleteIssueComment = async (req: AuthRequest, res: Response) => {
 
 export const subscribeToIssue = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params
+    const { projectId, id } = req.params
 
-    const issue = await prisma.issue.findUnique({ where: { id } })
+    // #285: verify the issue lives in the URL's projectId before allowing
+    // the caller to start receiving its activity via subscription.
+    const issue = await prisma.issue.findFirst({ where: { id, projectId } })
     if (!issue) {
       return res.status(404).json({ success: false, error: 'Issue not found' })
     }
@@ -683,7 +701,13 @@ export const subscribeToIssue = async (req: AuthRequest, res: Response) => {
 
 export const unsubscribeFromIssue = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params
+    const { projectId, id } = req.params
+
+    // #285: verify issue/project match before touching the subscription row.
+    const issue = await prisma.issue.findFirst({ where: { id, projectId }, select: { id: true } })
+    if (!issue) {
+      return res.status(404).json({ success: false, error: 'Issue not found' })
+    }
 
     await prisma.issueSubscription.deleteMany({
       where: {
@@ -701,10 +725,11 @@ export const unsubscribeFromIssue = async (req: AuthRequest, res: Response) => {
 
 export const createIssueLink = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params
+    const { projectId, id } = req.params
     const { linkedType, linkedId, linkType, linkedRequirementKey, linkedRequirementTitle } = req.body
 
-    const issue = await prisma.issue.findUnique({ where: { id } })
+    // #285: only issues in the URL's project may gain new links.
+    const issue = await prisma.issue.findFirst({ where: { id, projectId } })
     if (!issue) {
       return res.status(404).json({ success: false, error: 'Issue not found' })
     }
@@ -757,9 +782,13 @@ export const createIssueLink = async (req: AuthRequest, res: Response) => {
 
 export const deleteIssueLink = async (req: AuthRequest, res: Response) => {
   try {
-    const { linkId } = req.params
+    const { projectId, linkId } = req.params
 
-    const link = await prisma.issueLink.findUnique({ where: { id: linkId } })
+    // #285: walk the relation link -> issue -> projectId so a foreign link
+    // id under a member's own projectId prefix returns 404.
+    const link = await prisma.issueLink.findFirst({
+      where: { id: linkId, issue: { projectId } },
+    })
     if (!link) {
       return res.status(404).json({ success: false, error: 'Link not found' })
     }
