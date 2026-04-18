@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
+import { requireProjectMember } from '../middleware/requireProjectMember.middleware'
 import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import {
   getRequirements,
@@ -38,6 +39,7 @@ const router = Router()
 
 router.use(authenticateToken)
 router.param('projectId', projectIdParam)
+router.use('/:projectId', requireProjectMember)
 
 // Custom Requirement Types - MUST be defined before /:projectId/:requirementId
 router.get('/:projectId/custom-types', getCustomRequirementTypes)

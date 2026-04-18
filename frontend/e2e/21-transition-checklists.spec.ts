@@ -2,6 +2,7 @@
  * Transition Checklists — CRUD, assignment, enforcement, audit
  */
 import { test, expect } from './helpers/fixtures'
+import { E2E_API_V1 } from './helpers/api'
 
 const MODAL = '.fixed.inset-0'
 
@@ -57,7 +58,7 @@ test.describe('Transition Checklists', () => {
     expect(token).toBeTruthy()
 
     const createResp = await page.request.post(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}`,
+      `${E2E_API_V1}/transition-checklists/${projectId}`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
@@ -95,7 +96,7 @@ test.describe('Transition Checklists', () => {
     const token = await page.evaluate(() => localStorage.getItem('token'))
 
     const listResp = await page.request.get(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}`,
+      `${E2E_API_V1}/transition-checklists/${projectId}`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     const listBody = await listResp.json()
@@ -106,7 +107,7 @@ test.describe('Transition Checklists', () => {
     }
 
     const updateResp = await page.request.put(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/checklist/${checklist.id}`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/checklist/${checklist.id}`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
@@ -125,7 +126,7 @@ test.describe('Transition Checklists', () => {
     const token = await page.evaluate(() => localStorage.getItem('token'))
 
     const listResp = await page.request.get(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}`,
+      `${E2E_API_V1}/transition-checklists/${projectId}`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     const listBody = await listResp.json()
@@ -136,7 +137,7 @@ test.describe('Transition Checklists', () => {
     }
 
     const assignResp = await page.request.post(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/assignments`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/assignments`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
@@ -153,7 +154,7 @@ test.describe('Transition Checklists', () => {
     expect(assignBody.data.id).toBeTruthy()
 
     const delResp = await page.request.delete(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/assignments/${assignBody.data.id}`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/assignments/${assignBody.data.id}`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     expect(delResp.ok()).toBeTruthy()
@@ -163,7 +164,7 @@ test.describe('Transition Checklists', () => {
     const token = await page.evaluate(() => localStorage.getItem('token'))
 
     const resp = await page.request.get(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/for-transition?lifecycleId=none&fromStatusId=a&toStatusId=b&itemType=Requirement`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/for-transition?lifecycleId=none&fromStatusId=a&toStatusId=b&itemType=Requirement`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     expect(resp.ok()).toBeTruthy()
@@ -175,7 +176,7 @@ test.describe('Transition Checklists', () => {
     const token = await page.evaluate(() => localStorage.getItem('token'))
 
     const reqListResp = await page.request.get(
-      `http://localhost:5000/api/v1/requirements/${projectId}`,
+      `${E2E_API_V1}/requirements/${projectId}`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     if (!reqListResp.ok()) {
@@ -191,7 +192,7 @@ test.describe('Transition Checklists', () => {
     const req = requirements[0]
 
     const evalResp = await page.request.post(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/evaluate`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/evaluate`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
@@ -214,7 +215,7 @@ test.describe('Transition Checklists', () => {
     const token = await page.evaluate(() => localStorage.getItem('token'))
 
     const listResp = await page.request.get(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}`,
+      `${E2E_API_V1}/transition-checklists/${projectId}`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     const listBody = await listResp.json()
@@ -225,7 +226,7 @@ test.describe('Transition Checklists', () => {
     }
 
     const delResp = await page.request.delete(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/checklist/${checklist.id}`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/checklist/${checklist.id}`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     expect(delResp.ok()).toBeTruthy()
@@ -235,7 +236,7 @@ test.describe('Transition Checklists', () => {
     const token = await page.evaluate(() => localStorage.getItem('token'))
 
     const resp = await page.request.get(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/completions/nonexistent-entity`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/completions/nonexistent-entity`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     expect(resp.ok()).toBeTruthy()
@@ -283,7 +284,7 @@ test.describe('Transition Checklists', () => {
     expect(token).toBeTruthy()
 
     const createResp = await page.request.post(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}`,
+      `${E2E_API_V1}/transition-checklists/${projectId}`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
@@ -301,7 +302,7 @@ test.describe('Transition Checklists', () => {
     const checklistItemId = createBody.data.items[0].id
 
     const reqListResp = await page.request.get(
-      `http://localhost:5000/api/v1/requirements/${projectId}`,
+      `${E2E_API_V1}/requirements/${projectId}`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     const reqBody = await reqListResp.json()
@@ -313,7 +314,7 @@ test.describe('Transition Checklists', () => {
     const reqId = requirements[0].id
 
     const issueResp = await page.request.post(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/checklist-items/${checklistItemId}/issues`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/checklist-items/${checklistItemId}/issues`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
@@ -339,7 +340,7 @@ test.describe('Transition Checklists', () => {
     expect(issueBody.data.link.entityId).toBe(reqId)
 
     const getIssuesResp = await page.request.get(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/checklist-items/${checklistItemId}/issues?entityId=${reqId}`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/checklist-items/${checklistItemId}/issues?entityId=${reqId}`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     expect(getIssuesResp.ok()).toBeTruthy()
@@ -348,7 +349,7 @@ test.describe('Transition Checklists', () => {
     expect(getIssuesBody.data[0].issue.issueKey).toMatch(/^ISS-/)
 
     await page.request.delete(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/checklist/${createBody.data.id}`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/checklist/${createBody.data.id}`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
   })
@@ -358,7 +359,7 @@ test.describe('Transition Checklists', () => {
     expect(token).toBeTruthy()
 
     const createResp = await page.request.post(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}`,
+      `${E2E_API_V1}/transition-checklists/${projectId}`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
@@ -375,7 +376,7 @@ test.describe('Transition Checklists', () => {
     const itemId = checklist.items[0].id
 
     const assignResp = await page.request.post(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/assignments`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/assignments`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
@@ -392,7 +393,7 @@ test.describe('Transition Checklists', () => {
     const assignmentId = assignBody.data.id
 
     const completeResp = await page.request.post(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/complete`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/complete`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
@@ -412,7 +413,7 @@ test.describe('Transition Checklists', () => {
     expect(completeBody.data.responses[0].passed).toBe(true)
 
     const historyResp = await page.request.get(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/completions/test-entity-for-completion`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/completions/test-entity-for-completion`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     expect(historyResp.ok()).toBeTruthy()
@@ -423,7 +424,7 @@ test.describe('Transition Checklists', () => {
     expect(latestCompletion.responses[0].respondedBy.name).toBeTruthy()
 
     await page.request.delete(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/checklist/${checklist.id}`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/checklist/${checklist.id}`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
   })
@@ -433,7 +434,7 @@ test.describe('Transition Checklists', () => {
     expect(token).toBeTruthy()
 
     const createResp = await page.request.post(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}`,
+      `${E2E_API_V1}/transition-checklists/${projectId}`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
@@ -450,7 +451,7 @@ test.describe('Transition Checklists', () => {
     const itemId = checklist.items[0].id
 
     const assignResp = await page.request.post(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/assignments`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/assignments`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
@@ -466,7 +467,7 @@ test.describe('Transition Checklists', () => {
     const assignBody = await assignResp.json()
 
     const completeResp = await page.request.post(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/complete`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/complete`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
@@ -484,7 +485,7 @@ test.describe('Transition Checklists', () => {
     const responseId = completeBody.data.responses[0].id
 
     const commentResp = await page.request.post(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/responses/${responseId}/comments`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/responses/${responseId}/comments`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: { content: 'This item needs further clarification.' },
@@ -497,7 +498,7 @@ test.describe('Transition Checklists', () => {
     expect(commentBody.data.responseId).toBe(responseId)
 
     const listCommentsResp = await page.request.get(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/responses/${responseId}/comments`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/responses/${responseId}/comments`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     expect(listCommentsResp.ok()).toBeTruthy()
@@ -506,20 +507,20 @@ test.describe('Transition Checklists', () => {
     expect(listCommentsBody.data[0].content).toBe('This item needs further clarification.')
 
     const deleteResp = await page.request.delete(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/comments/${commentBody.data.id}`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/comments/${commentBody.data.id}`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     expect(deleteResp.ok()).toBeTruthy()
 
     const listAfterDeleteResp = await page.request.get(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/responses/${responseId}/comments`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/responses/${responseId}/comments`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     const listAfterDeleteBody = await listAfterDeleteResp.json()
     expect(listAfterDeleteBody.data.length).toBe(0)
 
     await page.request.delete(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/checklist/${checklist.id}`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/checklist/${checklist.id}`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
   })
@@ -529,7 +530,7 @@ test.describe('Transition Checklists', () => {
     expect(token).toBeTruthy()
 
     const createResp = await page.request.post(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}`,
+      `${E2E_API_V1}/transition-checklists/${projectId}`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
@@ -544,7 +545,7 @@ test.describe('Transition Checklists', () => {
     const itemId = checklist.items[0].id
 
     const assignResp = await page.request.post(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/assignments`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/assignments`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
@@ -560,7 +561,7 @@ test.describe('Transition Checklists', () => {
     const assignBody = await assignResp.json()
 
     const completeResp = await page.request.post(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/complete`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/complete`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
@@ -578,7 +579,7 @@ test.describe('Transition Checklists', () => {
     expect(String(completeBody.error || '').toLowerCase()).toMatch(/invalid|override/)
 
     await page.request.delete(
-      `http://localhost:5000/api/v1/transition-checklists/${projectId}/checklist/${checklist.id}`,
+      `${E2E_API_V1}/transition-checklists/${projectId}/checklist/${checklist.id}`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
   })
@@ -592,7 +593,7 @@ test.describe('Transition Checklists', () => {
     const toS = 'e2e-miss-to'
 
     const mkChecklist = async (name: string) => {
-      const r = await page.request.post(`http://localhost:5000/api/v1/transition-checklists/${projectId}`, {
+      const r = await page.request.post(`${E2E_API_V1}/transition-checklists/${projectId}`, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
           name,
@@ -608,11 +609,11 @@ test.describe('Transition Checklists', () => {
     const item1 = c1.items[0].id
     const item2 = c2.items[0].id
 
-    const a1 = await page.request.post(`http://localhost:5000/api/v1/transition-checklists/${projectId}/assignments`, {
+    const a1 = await page.request.post(`${E2E_API_V1}/transition-checklists/${projectId}/assignments`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: { checklistId: c1.id, lifecycleId: lc, fromStatusId: fromS, toStatusId: toS, itemType: 'Requirement' },
     })
-    const a2 = await page.request.post(`http://localhost:5000/api/v1/transition-checklists/${projectId}/assignments`, {
+    const a2 = await page.request.post(`${E2E_API_V1}/transition-checklists/${projectId}/assignments`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: { checklistId: c2.id, lifecycleId: lc, fromStatusId: fromS, toStatusId: toS, itemType: 'Requirement' },
     })
@@ -621,7 +622,7 @@ test.describe('Transition Checklists', () => {
     const assign1Id = (await a1.json()).data.id
     const assign2Id = (await a2.json()).data.id
 
-    const createReqResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+    const createReqResp = await page.request.post(`${E2E_API_V1}/requirements/${projectId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: {
         title: 'E2E missing checklist assignments',
@@ -635,7 +636,7 @@ test.describe('Transition Checklists', () => {
     const reqRow = (await createReqResp.json()).data
 
     const putResp = await page.request.put(
-      `http://localhost:5000/api/v1/requirements/${projectId}/${reqRow.id}`,
+      `${E2E_API_V1}/requirements/${projectId}/${reqRow.id}`,
       {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
@@ -655,13 +656,13 @@ test.describe('Transition Checklists', () => {
     expect(putBody.success).toBeFalsy()
     expect(String(putBody.error || '')).toMatch(/Missing completions/i)
 
-    await page.request.delete(`http://localhost:5000/api/v1/requirements/${projectId}/${reqRow.id}`, {
+    await page.request.delete(`${E2E_API_V1}/requirements/${projectId}/${reqRow.id}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    await page.request.delete(`http://localhost:5000/api/v1/transition-checklists/${projectId}/checklist/${c1.id}`, {
+    await page.request.delete(`${E2E_API_V1}/transition-checklists/${projectId}/checklist/${c1.id}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    await page.request.delete(`http://localhost:5000/api/v1/transition-checklists/${projectId}/checklist/${c2.id}`, {
+    await page.request.delete(`${E2E_API_V1}/transition-checklists/${projectId}/checklist/${c2.id}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
   })
@@ -676,7 +677,7 @@ test.describe('Transition Checklists', () => {
     const fromS = 'e2e-role-from'
     const toS = 'e2e-role-to'
 
-    const rolesResp = await page.request.get(`http://localhost:5000/api/v1/projects/${projectId}/engineering-roles`, {
+    const rolesResp = await page.request.get(`${E2E_API_V1}/projects/${projectId}/engineering-roles`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(rolesResp.ok()).toBeTruthy()
@@ -689,7 +690,7 @@ test.describe('Transition Checklists', () => {
     const forbiddenRoleId = roles[0].id
 
     const meRolesResp = await page.request.get(
-      `http://localhost:5000/api/v1/projects/${projectId}/me/engineering-roles`,
+      `${E2E_API_V1}/projects/${projectId}/me/engineering-roles`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     expect(meRolesResp.ok()).toBeTruthy()
@@ -697,7 +698,7 @@ test.describe('Transition Checklists', () => {
     const hasForbidden = meRoles.some((r) => r.id === forbiddenRoleId)
     if (hasForbidden) {
       const unassign = await page.request.post(
-        `http://localhost:5000/api/v1/projects/${projectId}/engineering-roles/${forbiddenRoleId}/unassign`,
+        `${E2E_API_V1}/projects/${projectId}/engineering-roles/${forbiddenRoleId}/unassign`,
         {
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
           data: { userIds: [userId] },
@@ -706,14 +707,14 @@ test.describe('Transition Checklists', () => {
       expect(unassign.ok()).toBeTruthy()
     }
 
-    const projPut = await page.request.put(`http://localhost:5000/api/v1/projects/${projectId}`, {
+    const projPut = await page.request.put(`${E2E_API_V1}/projects/${projectId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: { strictLifecycleGates: true },
     })
     expect(projPut.ok()).toBeTruthy()
 
     try {
-      const createReqResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+      const createReqResp = await page.request.post(`${E2E_API_V1}/requirements/${projectId}`, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
           title: 'E2E role gate requirement',
@@ -727,7 +728,7 @@ test.describe('Transition Checklists', () => {
       const reqRow = (await createReqResp.json()).data
 
       const putResp = await page.request.put(
-        `http://localhost:5000/api/v1/requirements/${projectId}/${reqRow.id}`,
+        `${E2E_API_V1}/requirements/${projectId}/${reqRow.id}`,
         {
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
           data: {
@@ -741,16 +742,16 @@ test.describe('Transition Checklists', () => {
       const putBody = await putResp.json()
       expect(putBody.success).toBeFalsy()
 
-      await page.request.delete(`http://localhost:5000/api/v1/requirements/${projectId}/${reqRow.id}`, {
+      await page.request.delete(`${E2E_API_V1}/requirements/${projectId}/${reqRow.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
     } finally {
-      await page.request.put(`http://localhost:5000/api/v1/projects/${projectId}`, {
+      await page.request.put(`${E2E_API_V1}/projects/${projectId}`, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: { strictLifecycleGates: false },
       })
       await page.request.post(
-        `http://localhost:5000/api/v1/projects/${projectId}/engineering-roles/${forbiddenRoleId}/assign`,
+        `${E2E_API_V1}/projects/${projectId}/engineering-roles/${forbiddenRoleId}/assign`,
         {
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
           data: { userIds: [userId!] },
@@ -764,14 +765,14 @@ test.describe('Transition Checklists', () => {
     expect(token).toBeTruthy()
 
     const listResp = await page.request.get(
-      `http://localhost:5000/api/v1/requirements/${projectId}?page=1&pageSize=1`,
+      `${E2E_API_V1}/requirements/${projectId}?page=1&pageSize=1`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     expect(listResp.ok()).toBeTruthy()
     const listBody = await listResp.json()
     const total: number = listBody?.data?.total ?? 0
     if (total === 0) {
-      const createResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+      const createResp = await page.request.post(`${E2E_API_V1}/requirements/${projectId}`, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
           title: 'E2E lifecycle drawer seed',
@@ -814,14 +815,14 @@ test.describe('Transition Checklists', () => {
     expect(token).toBeTruthy()
 
     const listResp = await page.request.get(
-      `http://localhost:5000/api/v1/requirements/${projectId}?page=1&pageSize=1`,
+      `${E2E_API_V1}/requirements/${projectId}?page=1&pageSize=1`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     expect(listResp.ok()).toBeTruthy()
     const listBody = await listResp.json()
     const total: number = listBody?.data?.total ?? 0
     if (total === 0) {
-      const createResp = await page.request.post(`http://localhost:5000/api/v1/requirements/${projectId}`, {
+      const createResp = await page.request.post(`${E2E_API_V1}/requirements/${projectId}`, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: {
           title: 'E2E header lifecycle badge seed',
@@ -832,7 +833,7 @@ test.describe('Transition Checklists', () => {
     }
 
     const listResp2 = await page.request.get(
-      `http://localhost:5000/api/v1/requirements/${projectId}?page=1&pageSize=1`,
+      `${E2E_API_V1}/requirements/${projectId}?page=1&pageSize=1`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     expect(listResp2.ok()).toBeTruthy()
@@ -844,7 +845,7 @@ test.describe('Transition Checklists', () => {
     }
 
     const oneResp = await page.request.get(
-      `http://localhost:5000/api/v1/requirements/${projectId}/${row.id}`,
+      `${E2E_API_V1}/requirements/${projectId}/${row.id}`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
     expect(oneResp.ok()).toBeTruthy()

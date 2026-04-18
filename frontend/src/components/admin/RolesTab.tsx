@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Shield, Plus, AlertTriangle } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as adminService from '../../services/admin.service'
-import { authService, updateStoredAdminProfileRoles } from '../../services/auth.service'
+import { authService } from '../../services/auth.service'
+import * as adminUserRoleService from '../../services/adminUserRole.service'
 import type { Role, EngineeringRole } from '../../types/admin.types'
 import RoleEditorModal from './RoleEditorModal'
 import EngineeringRoleCard from './EngineeringRoleCard'
@@ -42,10 +43,17 @@ export default function RolesTab() {
     } else if (editorRole && editorRole.id) {
       await adminService.updateRole(editorRole.id, { name, defaultPermissions })
       if (selectedUserIds !== undefined) {
+        const roleId = editorRole.id
+        const nextMembers = new Set(selectedUserIds)
+        // Diff each user: add the role for newly-selected, revoke for deselected.
         for (const u of users) {
-          const newRoles = u.roles.filter((r) => r !== editorRole.id)
-          if (selectedUserIds.includes(u.id)) newRoles.push(editorRole.id)
-          updateStoredAdminProfileRoles(u.id, newRoles)
+          const hadRole = u.roles.includes(roleId)
+          const shouldHaveRole = nextMembers.has(u.id)
+          if (shouldHaveRole && !hadRole) {
+            await adminUserRoleService.assignRole(u.id, roleId)
+          } else if (!shouldHaveRole && hadRole) {
+            await adminUserRoleService.revokeRole(u.id, roleId)
+          }
         }
       }
     }

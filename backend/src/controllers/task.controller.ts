@@ -229,12 +229,45 @@ export const duplicateTask = async (req: AuthRequest, res: Response) => {
 
 export const bulkUpdateTasks = async (req: AuthRequest, res: Response) => {
   try {
+    const userId = req.user?.userId
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+
     const { task_ids, updates } = req.body
 
     if (!task_ids || !Array.isArray(task_ids) || task_ids.length === 0) {
       return res.status(400).json({
         success: false,
         error: 'task_ids array is required',
+      })
+    }
+
+    // Gate: every task must belong to a project the user is a member of.
+    // Prevents cross-project bulk mutations via a crafted task_ids array (#159).
+    const tasks = await prisma.task.findMany({
+      where: { id: { in: task_ids } },
+      select: { id: true, projectId: true },
+    })
+    if (tasks.length !== task_ids.length) {
+      return res.status(404).json({ success: false, error: 'One or more tasks not found' })
+    }
+    if (tasks.some((t) => !t.projectId)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied: task is not assigned to a project',
+      })
+    }
+    const projectIds = Array.from(new Set(tasks.map((t) => t.projectId as string)))
+    const memberships = await prisma.projectMember.findMany({
+      where: { userId, projectId: { in: projectIds } },
+      select: { projectId: true },
+    })
+    const memberProjectIds = new Set(memberships.map((m) => m.projectId))
+    if (projectIds.some((pid) => !memberProjectIds.has(pid))) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied: not a member of this project',
       })
     }
 

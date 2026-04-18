@@ -4,10 +4,10 @@ import { prisma } from '../../lib/prisma'
 import { auditService } from '../../services/verification/audit.service'
 import { statusTransitionService } from '../../services/verification/statusTransition.service'
 import { AuditAction, EntityStatus } from '../../types/verification.types'
-import { randomUUID } from 'crypto'
 import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
+import { validateUpload } from '../../lib/uploadValidation'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -192,10 +192,10 @@ export const uploadComponentManual = async (req: AuthRequest, res: Response) => 
     const { projectId, setupId, componentId } = req.params
     const { fileName, fileData, mimeType } = req.body
 
-    if (!fileName || !fileData) {
+    if (!fileName || !fileData || !mimeType) {
       return res.status(400).json({
         success: false,
-        error: 'fileName and fileData are required',
+        error: 'fileName, fileData, and mimeType are required',
       })
     }
 
@@ -214,7 +214,6 @@ export const uploadComponentManual = async (req: AuthRequest, res: Response) => 
     // Parse components array
     const components: any[] = Array.isArray(setup.components) ? (setup.components as any[]) : []
 
-    // Find the component
     const componentIndex = components.findIndex((c: any) => c.id === componentId)
     if (componentIndex === -1) {
       return res.status(404).json({
@@ -223,46 +222,30 @@ export const uploadComponentManual = async (req: AuthRequest, res: Response) => 
       })
     }
 
-    // Handle base64 file data
-    let fileUrl: string
-    let fileSize: number
-
-    if (fileData.startsWith('data:')) {
-      // Base64 data URL
-      const base64Data = fileData.split(',')[1]
-      const buffer = Buffer.from(base64Data, 'base64')
-      fileSize = buffer.length
-
-      // For files larger than 1MB, save to filesystem
-      if (fileSize > 1024 * 1024) {
-        const fileExtension = path.extname(fileName)
-        const uniqueFileName = `${randomUUID()}${fileExtension}`
-        const filePath = path.join(uploadsDir, uniqueFileName)
-        fs.writeFileSync(filePath, buffer)
-        fileUrl = `/uploads/verification/manuals/${uniqueFileName}`
-      } else {
-        // Store as data URL for small files
-        fileUrl = fileData
+    // Validate MIME + size BEFORE decoding (#131,#139).
+    let validated
+    try {
+      validated = validateUpload({ fileData, fileName, mimeType })
+    } catch (e: any) {
+      if (e?.name === 'UploadValidationError' || typeof e?.status === 'number') {
+        return res.status(e.status || 400).json({ success: false, error: e.message })
       }
-    } else {
-      // Plain base64
-      const buffer = Buffer.from(fileData, 'base64')
-      fileSize = buffer.length
-      const fileExtension = path.extname(fileName)
-      const uniqueFileName = `${randomUUID()}${fileExtension}`
-      const filePath = path.join(uploadsDir, uniqueFileName)
-      fs.writeFileSync(filePath, buffer)
-      fileUrl = `/uploads/verification/manuals/${uniqueFileName}`
+      throw e
     }
+
+    const filePath = path.join(uploadsDir, validated.uniqueFileName)
+    fs.writeFileSync(filePath, validated.buffer)
+    const fileUrl = `/uploads/verification/manuals/${validated.uniqueFileName}`
+    const fileSize = validated.fileSize
 
     // Update component with manual metadata
     const updatedComponent = {
       ...components[componentIndex],
       manual: {
-        fileName,
+        fileName: validated.safeDisplayName,
         fileUrl,
         fileSize,
-        mimeType: mimeType || null,
+        mimeType: validated.mimeType,
       },
     }
 

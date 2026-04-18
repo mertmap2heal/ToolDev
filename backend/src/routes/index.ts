@@ -51,6 +51,7 @@ import notificationsRoutes from './notifications.routes'
 import platformAdminRoutes from './platformAdmin.routes'
 import organizationRoutes from './organization.routes'
 import adminRoutes from './admin.routes'
+import adminUserRoleRoutes from './adminUserRole.routes'
 import lifecycleRoutes from './lifecycle.routes'
 import transitionChecklistRoutes from './transitionChecklist.routes'
 import searchRoutes from './search.routes'
@@ -60,6 +61,7 @@ const router = Router()
 
 router.use('/auth', authRoutes)
 router.use('/admin', adminRoutes)
+router.use('/admin', adminUserRoleRoutes)
 router.use('/organization', organizationRoutes)
 router.use('/platform-admin', platformAdminRoutes)
 router.use('/notifications', notificationsRoutes)

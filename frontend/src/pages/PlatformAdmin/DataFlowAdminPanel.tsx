@@ -288,11 +288,18 @@ const DataFlowAdminPanel: React.FC = () => {
   }, [addLog]);
 
   useEffect(() => {
+    // Issue #170: attach JWT from storage so the server can authenticate the
+    // handshake and decide admin room membership by verified role (never by
+    // a client-supplied query parameter).
+    const token =
+      (typeof localStorage !== 'undefined' && localStorage.getItem('token')) ||
+      (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('token')) ||
+      ''
     const socket = io('/', {
       path: '/socket.io',
+      auth: { token },
       query: {
         view: currentView,
-        admin: 'true'
       }
     });
     socketRef.current = socket;

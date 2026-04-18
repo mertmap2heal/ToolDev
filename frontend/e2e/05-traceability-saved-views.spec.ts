@@ -8,6 +8,7 @@
  */
 import { test, expect } from './helpers/fixtures'
 import { readAuthToken } from './helpers/requirementsUi'
+import { E2E_API_V1 } from './helpers/api'
 
 test.describe('Saved Traceability Views', () => {
   test('open saved view and export smoke', async ({ page, projectId }) => {
@@ -16,7 +17,7 @@ test.describe('Saved Traceability Views', () => {
     const token = await readAuthToken(page)
 
     // Create folder via API (avoids window.prompt in UI for folder creation)
-    const folderResp = await page.request.post(`http://localhost:5000/api/v1/traceability-views/${projectId}/folders`, {
+    const folderResp = await page.request.post(`${E2E_API_V1}/traceability-views/${projectId}/folders`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: { name: `E2E Folder ${Date.now()}` },
     })
@@ -28,7 +29,7 @@ test.describe('Saved Traceability Views', () => {
 
     // Seed a view (project-shared) with a saved definition
     const viewName = `E2E Trace View ${Date.now()}`
-    const viewResp = await page.request.post(`http://localhost:5000/api/v1/traceability-views/${projectId}/views`, {
+    const viewResp = await page.request.post(`${E2E_API_V1}/traceability-views/${projectId}/views`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: {
         name: viewName,

@@ -1,8 +1,8 @@
 import { prisma } from '../../lib/prisma'
-import { randomUUID } from 'crypto'
 import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
+import { validateUpload, UploadValidationError } from '../../lib/uploadValidation'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -27,48 +27,34 @@ export const customSectionService = {
     sectionId: string,
     fileData: string,
     fileName: string,
-    mimeType?: string
+    mimeType: string,
   ): Promise<{
     id: string
     fileUrl: string
     storageKey: string
     fileSize: number
   }> {
-    let buffer: Buffer
-    let fileSize: number
-
-    // Parse base64 data
-    if (fileData.startsWith('data:')) {
-      const base64Data = fileData.split(',')[1]
-      buffer = Buffer.from(base64Data, 'base64')
-    } else {
-      buffer = Buffer.from(fileData, 'base64')
+    // Validate MIME + size BEFORE decoding (#131,#139). Only image/* accepted.
+    const validated = validateUpload({ fileData, fileName, mimeType })
+    if (!validated.mimeType.startsWith('image/')) {
+      throw new UploadValidationError('Only image uploads are allowed here', 415)
     }
 
-    fileSize = buffer.length
+    const filePath = path.join(uploadsDir, validated.uniqueFileName)
+    fs.writeFileSync(filePath, validated.buffer)
 
-    // Generate unique filename
-    const fileExtension = path.extname(fileName)
-    const uniqueFileName = `${randomUUID()}${fileExtension}`
-    const filePath = path.join(uploadsDir, uniqueFileName)
+    const storageKey = `verification/custom-sections/${validated.uniqueFileName}`
+    const fileUrl = `/uploads/verification/custom-sections/${validated.uniqueFileName}`
 
-    // Save file to filesystem
-    fs.writeFileSync(filePath, buffer)
-
-    // Create storage key and URL
-    const storageKey = `verification/custom-sections/${uniqueFileName}`
-    const fileUrl = `/uploads/verification/custom-sections/${uniqueFileName}`
-
-    // Create image record in database
     const image = await prisma.verTestCaseSectionImage.create({
       data: {
         sectionId,
         projectId,
-        fileName,
+        fileName: validated.safeDisplayName,
         fileUrl,
         storageKey,
-        fileSize,
-        mimeType: mimeType || null,
+        fileSize: validated.fileSize,
+        mimeType: validated.mimeType,
       },
     })
 
@@ -76,7 +62,7 @@ export const customSectionService = {
       id: image.id,
       fileUrl,
       storageKey,
-      fileSize,
+      fileSize: validated.fileSize,
     }
   },
 

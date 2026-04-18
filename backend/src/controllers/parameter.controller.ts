@@ -61,6 +61,72 @@ import {
 } from '../services/azuredevops.service'
 
 
+// ---------------------------------------------------------------------------
+// SSRF protection — validateBaseUrl (#75)
+// Called before every outbound HTTP request in git publish endpoints.
+// ---------------------------------------------------------------------------
+
+/**
+ * Known public-cloud git platform URL prefixes that are always allowed.
+ * Self-hosted instances pass allowCustom=true and get private-IP blocking instead.
+ */
+const KNOWN_GIT_HOSTS = [
+  'https://gitlab.com',
+  'https://api.github.com',
+  'https://github.com',
+  'https://bitbucket.org',
+  'https://dev.azure.com',
+  'https://visualstudio.com',
+]
+
+/**
+ * Regex that matches private/loopback/link-local IP ranges and reserved hostnames
+ * that should never be reachable from a server-side HTTP request in production.
+ */
+const PRIVATE_HOST_RE =
+  /^(localhost|127\.\d+\.\d+\.\d+|0\.0\.0\.0|::1|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+)/i
+
+/**
+ * Validate that a baseUrl is safe to use as an outbound HTTP target.
+ *
+ * Rules:
+ *   1. Must parse as a valid URL.
+ *   2. Protocol must be https: (not http:, file:, etc.).
+ *   3. For well-known public platforms the URL must start with a known prefix.
+ *   4. For self-hosted / custom instances (allowCustom=true) only the private-IP
+ *      blocklist is applied — the URL does not need to match a known host.
+ *
+ * Throws an Error with a human-readable message on validation failure.
+ */
+function validateBaseUrl(baseUrl: string, allowCustom = false): void {
+  let parsed: URL
+  try {
+    parsed = new URL(baseUrl)
+  } catch {
+    throw new Error(`Invalid baseUrl: "${baseUrl}" is not a valid URL`)
+  }
+
+  if (parsed.protocol !== 'https:') {
+    throw new Error(`baseUrl must use HTTPS (got "${parsed.protocol}")`)
+  }
+
+  if (allowCustom) {
+    // Self-hosted: block private/loopback/metadata addresses
+    if (PRIVATE_HOST_RE.test(parsed.hostname)) {
+      throw new Error(`baseUrl hostname "${parsed.hostname}" is a private or reserved address`)
+    }
+  } else {
+    // Public cloud: must start with a known host prefix
+    const isKnown = KNOWN_GIT_HOSTS.some((h) => baseUrl.startsWith(h))
+    if (!isKnown) {
+      throw new Error(
+        `baseUrl "${parsed.hostname}" is not in the list of allowed git platforms. ` +
+        `For self-hosted instances contact your administrator.`
+      )
+    }
+  }
+}
+
 /**
  * Allocates the next PARAM-NNN identifier for a project.
  *
@@ -251,10 +317,10 @@ export const getParameters = async (req: AuthRequest, res: Response) => {
 
 export const getParameter = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params
+    const { projectId, id } = req.params
 
-    const parameter = await prisma.parameter.findUnique({
-      where: { id },
+    const parameter = await prisma.parameter.findFirst({
+      where: { id, projectId },
       include: {
         sourceFunction: { select: { id: true, functionId: true, name: true } },
         sourceParameter: { select: { id: true, name: true } },
@@ -275,7 +341,7 @@ export const getParameter = async (req: AuthRequest, res: Response) => {
 
 export const updateParameter = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params
+    const { projectId, id } = req.params
     const body = req.body as Record<string, unknown>
     const {
       name,
@@ -299,7 +365,7 @@ export const updateParameter = async (req: AuthRequest, res: Response) => {
       parameterId: parameterIdFromBody,
     } = body
 
-    const parameter = await prisma.parameter.findUnique({ where: { id } })
+    const parameter = await prisma.parameter.findFirst({ where: { id, projectId } })
     if (!parameter) {
       return res.status(404).json({ success: false, error: 'Parameter not found' })
     }
@@ -734,10 +800,10 @@ export const bulkDeleteParameters = async (req: AuthRequest, res: Response) => {
 
 export const deleteParameter = async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params
+    const { projectId, id } = req.params
 
-    const parameter = await prisma.parameter.findUnique({
-      where: { id },
+    const parameter = await prisma.parameter.findFirst({
+      where: { id, projectId },
     })
 
     if (!parameter) {
@@ -1087,6 +1153,12 @@ export async function gitValidateTokenHandler(req: AuthRequest, res: Response) {
       return res.status(400).json({ success: false, error: 'platform, baseUrl, and token are required' })
     }
 
+    try {
+      validateBaseUrl(baseUrl, true)
+    } catch (urlErr) {
+      return res.status(400).json({ success: false, error: (urlErr as Error).message })
+    }
+
     let result: { valid: boolean; username?: string; error?: string }
 
     switch (platform) {
@@ -1155,6 +1227,10 @@ export async function gitPublishSetupHandler(req: AuthRequest, res: Response) {
 
     if (!platform || !baseUrl || !token || !repoName) {
       return res.status(400).json({ success: false, error: 'platform, baseUrl, token and repoName are required' })
+    }
+
+    try { validateBaseUrl(baseUrl, true) } catch (urlErr) {
+      return res.status(400).json({ success: false, error: (urlErr as Error).message })
     }
 
     const dbParams = await prisma.parameter.findMany({ where: { projectId }, orderBy: { name: 'asc' } })
@@ -1284,6 +1360,10 @@ export async function gitPublishSyncHandler(req: AuthRequest, res: Response) {
       return res.status(400).json({ success: false, error: 'platform, baseUrl, token and repoId are required' })
     }
 
+    try { validateBaseUrl(baseUrl, true) } catch (urlErr) {
+      return res.status(400).json({ success: false, error: (urlErr as Error).message })
+    }
+
     const dbParams = await prisma.parameter.findMany({ where: { projectId }, orderBy: { name: 'asc' } })
     const allParams = mapDbParams(dbParams)
     const params = selectedTags?.length
@@ -1352,18 +1432,24 @@ export async function gitPublishSyncHandler(req: AuthRequest, res: Response) {
 }
 
 // ---------------------------------------------------------------------------
-// Git Publish Status — GET /:projectId/git/status
-// Query: platform, baseUrl, token, repoId, branch?, username?, workspace?, org?, project?
+// Git Publish Status — POST /:projectId/git/status
+// Body: platform, baseUrl, token, repoId, branch?, username?, workspace?, org?, project?
+// Changed from GET to POST so the git token travels in the encrypted request
+// body rather than the URL query string (which is logged by access logs).
 // ---------------------------------------------------------------------------
 export async function gitPublishStatusHandler(req: AuthRequest, res: Response) {
   try {
     const {
       platform, baseUrl, token, repoId, branch,
       username, workspace, org, project,
-    } = req.query as Record<string, string>
+    } = req.body as Record<string, string>
 
     if (!platform || !baseUrl || !token || !repoId) {
       return res.status(400).json({ success: false, error: 'platform, baseUrl, token and repoId are required' })
+    }
+
+    try { validateBaseUrl(baseUrl, true) } catch (urlErr) {
+      return res.status(400).json({ success: false, error: (urlErr as Error).message })
     }
 
     let latestCommit: { sha: string; createdAt: string; message: string; webUrl: string }
@@ -1452,6 +1538,10 @@ export async function gitPullHandler(req: AuthRequest, res: Response) {
 
     if (!platform || !baseUrl || !token || !repoId) {
       return res.status(400).json({ success: false, error: 'platform, baseUrl, token and repoId are required' })
+    }
+
+    try { validateBaseUrl(baseUrl, true) } catch (urlErr) {
+      return res.status(400).json({ success: false, error: (urlErr as Error).message })
     }
 
     const resolvedFormat = format ?? 'json'
