@@ -183,6 +183,29 @@ jobs:
             exit 1
           fi
 
+      - name: Run saved-view access-control regression (#294)
+        run: cd backend && npx vitest run src/__tests__/savedView.access.test.ts
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret
+
+      - name: Guard saved-view handlers enforce ownership (#294)
+        run: |
+          set -e
+          f=backend/src/controllers/savedView.controller.ts
+          fail=0
+          # Every mutating handler must call callerCanAccessView before the
+          # findFirst/update/delete. Absence of the helper is a red flag.
+          if ! grep -q "callerCanAccessView" "$f"; then
+            echo "::error file=$f::callerCanAccessView helper missing — handlers have no access control (see issue #294)"
+            fail=1
+          fi
+          if ! grep -q "isMemberOfProject" "$f"; then
+            echo "::error file=$f::isMemberOfProject missing — project-scoped views must enforce membership (see issue #294)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Run issue-controller cross-project IDOR regression (#285)
         run: cd backend && npx vitest run src/__tests__/issue.idor.test.ts
         env:
