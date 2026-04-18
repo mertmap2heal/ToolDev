@@ -1,6 +1,7 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
+import { allocateChangeRequestId } from '../lib/crId'
 import { linkageAuditService } from '../services/linkageAudit.service'
 import fs from 'fs'
 import path from 'path'
@@ -47,10 +48,6 @@ export const createChangeRequest = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    // Generate a simple CR ID
-    const count = await prisma.changeRequest.count({ where: { projectId } })
-    const crId = `CR-${(count + 1).toString().padStart(4, '0')}`
-
     // Auto-populate requestedBy if not provided
     let finalRequestedBy = requestedBy
     if (!finalRequestedBy && req.userId) {
@@ -71,44 +68,51 @@ export const createChangeRequest = async (req: AuthRequest, res: Response) => {
       impactedRequirementIds.forEach((id: string) => requirementIdsToLink.add(id))
     }
 
-    const changeRequest = await prisma.changeRequest.create({
-      data: {
-        projectId,
-        crId,
-        title,
-        description,
-        sourceType,
-        sourceId,
-        priority: priority || 'medium',
-        requestedBy: finalRequestedBy || 'system',
-        owner: owner || null,
-        risk: risk || null,
-        effort: effort || null,
-        justification: justification || null,
-        createdBy: req.userId || 'system',
-        updatedBy: req.userId || 'system',
-        requirementLinks: requirementIdsToLink.size > 0 ? {
-          create: Array.from(requirementIdsToLink).map((reqId) => ({
-            requirementId: reqId,
-            relationshipType: reqId === sourceId ? 'originates_from' : 'relates_to',
-            createdBy: req.userId || null,
-          }))
-        } : undefined,
-      },
-      include: {
-        attachments: true,
-        requirementLinks: {
-          include: {
-            requirement: {
-              select: {
-                id: true,
-                requirementId: true,
-                title: true,
+    // Allocate the CR ID atomically and create the row inside the same
+    // transaction. pg_advisory_xact_lock in allocateChangeRequestId serialises
+    // concurrent creates for this project so every insert receives a unique
+    // CR-NNNN — no retry loop needed (issue #162).
+    const changeRequest = await prisma.$transaction(async (tx) => {
+      const crId = await allocateChangeRequestId(tx, projectId)
+      return tx.changeRequest.create({
+        data: {
+          projectId,
+          crId,
+          title,
+          description,
+          sourceType,
+          sourceId,
+          priority: priority || 'medium',
+          requestedBy: finalRequestedBy || 'system',
+          owner: owner || null,
+          risk: risk || null,
+          effort: effort || null,
+          justification: justification || null,
+          createdBy: req.userId || 'system',
+          updatedBy: req.userId || 'system',
+          requirementLinks: requirementIdsToLink.size > 0 ? {
+            create: Array.from(requirementIdsToLink).map((reqId) => ({
+              requirementId: reqId,
+              relationshipType: reqId === sourceId ? 'originates_from' : 'relates_to',
+              createdBy: req.userId || null,
+            }))
+          } : undefined,
+        },
+        include: {
+          attachments: true,
+          requirementLinks: {
+            include: {
+              requirement: {
+                select: {
+                  id: true,
+                  requirementId: true,
+                  title: true,
+                }
               }
             }
-          }
+          },
         },
-      },
+      })
     })
 
     // Log linkage for Requirement version history

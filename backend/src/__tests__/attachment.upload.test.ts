@@ -10,6 +10,7 @@ const VALID_PNG_DATA_URL =
 
 describe('Attachment upload — MIME type and filename validation (#27)', () => {
   let userId: string
+  let projectId: string
   let token: string
   let taskId: string
 
@@ -26,8 +27,22 @@ describe('Attachment upload — MIME type and filename validation (#27)', () => 
     userId = user.id
     token = jwt.sign({ userId }, process.env.JWT_SECRET || 'secret')
 
+    const project = await prisma.project.create({
+      data: {
+        name: `upload-test-project-${ts}`,
+        domain: 'test',
+        slug: `upload-test-${ts}`,
+        userId,
+      },
+    })
+    projectId = project.id
+
+    await prisma.projectMember.create({
+      data: { projectId, userId, role: 'owner' },
+    })
+
     const task = await prisma.task.create({
-      data: { title: `upload-test-task-${ts}` },
+      data: { title: `upload-test-task-${ts}`, projectId },
     })
     taskId = task.id
   })
@@ -35,6 +50,8 @@ describe('Attachment upload — MIME type and filename validation (#27)', () => 
   afterAll(async () => {
     await prisma.taskAttachment.deleteMany({ where: { taskId } })
     await prisma.task.delete({ where: { id: taskId } })
+    await prisma.projectMember.deleteMany({ where: { projectId } })
+    await prisma.project.delete({ where: { id: projectId } })
     await prisma.user.delete({ where: { id: userId } })
     await prisma.$disconnect()
   })

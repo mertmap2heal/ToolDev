@@ -14,6 +14,7 @@ const UPLOADS_BASE = path.resolve(__dirname, '../../uploads')
 
 describe('Attachment DELETE — path traversal protection (#26)', () => {
   let userId: string
+  let projectId: string
   let token: string
   let taskId: string
 
@@ -30,8 +31,22 @@ describe('Attachment DELETE — path traversal protection (#26)', () => {
     userId = user.id
     token = jwt.sign({ userId }, process.env.JWT_SECRET || 'secret')
 
+    const project = await prisma.project.create({
+      data: {
+        name: `attach-test-project-${ts}`,
+        domain: 'test',
+        slug: `attach-test-${ts}`,
+        userId,
+      },
+    })
+    projectId = project.id
+
+    await prisma.projectMember.create({
+      data: { projectId, userId, role: 'owner' },
+    })
+
     const task = await prisma.task.create({
-      data: { title: `attach-test-task-${ts}` },
+      data: { title: `attach-test-task-${ts}`, projectId },
     })
     taskId = task.id
   })
@@ -39,6 +54,8 @@ describe('Attachment DELETE — path traversal protection (#26)', () => {
   afterAll(async () => {
     await prisma.taskAttachment.deleteMany({ where: { taskId } })
     await prisma.task.delete({ where: { id: taskId } })
+    await prisma.projectMember.deleteMany({ where: { projectId } })
+    await prisma.project.delete({ where: { id: projectId } })
     await prisma.user.delete({ where: { id: userId } })
     await prisma.$disconnect()
   })

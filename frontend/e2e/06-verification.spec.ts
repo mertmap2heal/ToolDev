@@ -775,4 +775,189 @@ test.describe('Verification', () => {
     await confirmCase.getByRole('button', { name: /^delete$/i }).click()
     await expect(confirmCase).not.toBeVisible({ timeout: 15_000 })
   })
+
+  test.describe('Overview — metrics', () => {
+    test('Overview tab: metric cards visible and Test Plans card navigates to plans', async ({ page, projectId }) => {
+      await forceVerificationTableListView(page)
+      await page.goto(`/projects/${projectId}/verification?tab=overview`)
+      await page.waitForLoadState('domcontentloaded')
+      await expect(page.getByRole('heading', { level: 2, name: 'Verification', exact: true })).toBeVisible({ timeout: 10_000 })
+      const metricsRow = page.locator('div.grid').filter({ has: page.getByText('Coverage', { exact: true }) }).first()
+      await expect(metricsRow.getByRole('button', { name: /Test Plans/i }).first()).toBeVisible({ timeout: 15_000 })
+      await expect(metricsRow.getByRole('button', { name: /Test Cases/i }).first()).toBeVisible()
+      await expect(metricsRow.getByRole('button', { name: /Coverage/i }).first()).toBeVisible()
+      await metricsRow.getByRole('button', { name: /Test Plans/i }).first().click()
+      await expect(page).toHaveURL(/tab=plans/)
+    })
+  })
+
+  test.describe('Verification settings', () => {
+    test('Create Baseline modal opens and Cancel closes', async ({ page, projectId }) => {
+      await page.goto(`/projects/${projectId}/verification/settings`)
+      await page.waitForLoadState('domcontentloaded')
+      await expect(page.getByRole('heading', { name: /verification settings/i })).toBeVisible({ timeout: 10_000 })
+      await page.getByRole('button', { name: /create baseline/i }).click()
+      const baselineModal = page.locator(MODAL).filter({ has: page.getByRole('heading', { name: /create baseline/i }) })
+      await expect(baselineModal).toBeVisible({ timeout: 5_000 })
+      await expect(baselineModal.getByPlaceholder(/release 1\.0/i)).toBeVisible()
+      await baselineModal.getByRole('button', { name: /^cancel$/i }).click()
+      await expect(baselineModal).not.toBeVisible({ timeout: 5_000 })
+    })
+  })
+
+  test.describe('Templates', () => {
+    test('New Template navigates to editor with Back to library', async ({ page, projectId }) => {
+      test.setTimeout(120_000)
+      await page.goto(`/projects/${projectId}/verification/templates`)
+      await page.waitForLoadState('domcontentloaded')
+      await expect(page.getByRole('heading', { name: 'Templates', exact: true })).toBeVisible({ timeout: 10_000 })
+      await Promise.all([
+        page.waitForURL(new RegExp(`/projects/${projectId}/verification/templates/[^/]+$`), { timeout: 90_000 }),
+        page.getByRole('button', { name: /new template/i }).click(),
+      ])
+      await expect(page.getByRole('button', { name: /back to library/i })).toBeVisible({ timeout: 30_000 })
+      await page.goto(`/projects/${projectId}/verification/templates`)
+      await page.waitForLoadState('domcontentloaded')
+      await expect(page.getByRole('heading', { name: 'Templates', exact: true })).toBeVisible({ timeout: 10_000 })
+    })
+  })
+
+  test.describe('Verification reports', () => {
+    test('Verification report page loads for a test plan', async ({ page, projectId }) => {
+      await forceVerificationTableListView(page)
+      await page.goto(`/projects/${projectId}/verification?tab=plans`)
+      await page.waitForLoadState('domcontentloaded')
+      await page.getByRole('button', { name: /create test plan/i }).click()
+      const planModal = createPlanModal(page)
+      await expect(planModal).toBeVisible({ timeout: 5_000 })
+      const planName = `E2E Report Plan ${Date.now()}`
+      const planPost = page.waitForResponse(
+        (r) =>
+          r.url().includes(`/verification/test-plans/${projectId}`) &&
+          r.request().method() === 'POST' &&
+          r.ok(),
+        { timeout: 25_000 },
+      )
+      await planModal.getByPlaceholder(/master verification plan/i).fill(planName)
+      await planModal.getByRole('button', { name: /^create test plan$/i }).click()
+      const res = await planPost
+      const body = (await res.json()) as { data?: { id?: string } }
+      const planId = body.data?.id
+      expect(planId).toBeTruthy()
+      await expect(planModal).not.toBeVisible({ timeout: 15_000 })
+
+      await page.goto(`/projects/${projectId}/verification/report/plan/${planId}`)
+      await page.waitForLoadState('domcontentloaded')
+      await expect(page.getByRole('link', { name: /back to verification/i })).toBeVisible({ timeout: 15_000 })
+      await expect(page.getByText(/failed to load report/i)).not.toBeVisible()
+      await expect(page.getByText(/loading report/i)).not.toBeVisible({ timeout: 30_000 })
+
+      await page.goto(`/projects/${projectId}/verification?tab=plans`)
+      await page.waitForLoadState('domcontentloaded')
+      const row = page.locator('table tbody tr').filter({ hasText: planName }).first()
+      await expect(row).toBeVisible({ timeout: 10_000 })
+      await row.getByRole('button', { name: /more actions for/i }).click()
+      await page.getByRole('menuitem', { name: /^delete$/i }).click()
+      const confirmDlg = confirmDeleteDialog(page)
+      await expect(confirmDlg).toBeVisible({ timeout: 5_000 })
+      await confirmDlg.getByRole('button', { name: /^delete$/i }).click()
+      await expect(confirmDlg).not.toBeVisible({ timeout: 15_000 })
+    })
+
+    test('Verification report page loads for a test run', async ({ page, projectId }) => {
+      await forceVerificationTableListView(page)
+      const ts = Date.now()
+      const planName = `E2E Report Run Plan ${ts}`
+      const caseTitle = `E2E Report Run Case ${ts}`
+      const runName = `E2E Report Run ${ts}`
+
+      await page.goto(`/projects/${projectId}/verification?tab=plans`)
+      await page.waitForLoadState('domcontentloaded')
+      await page.getByRole('button', { name: /create test plan/i }).click()
+      const planModal = createPlanModal(page)
+      await expect(planModal).toBeVisible({ timeout: 5_000 })
+      await planModal.getByPlaceholder(/master verification plan/i).fill(planName)
+      const planPost = page.waitForResponse(
+        (r) =>
+          r.url().includes(`/verification/test-plans/${projectId}`) &&
+          r.request().method() === 'POST' &&
+          r.ok(),
+        { timeout: 25_000 },
+      )
+      await planModal.getByRole('button', { name: /^create test plan$/i }).click()
+      await planPost
+      await expect(planModal).not.toBeVisible({ timeout: 15_000 })
+
+      await page.goto(`/projects/${projectId}/verification?tab=cases`)
+      await page.waitForLoadState('domcontentloaded')
+      await page.getByRole('button', { name: /create test case/i }).click()
+      const caseModal = createCaseModal(page)
+      await expect(caseModal).toBeVisible({ timeout: 5_000 })
+      await caseModal.getByPlaceholder(/enter test case title/i).fill(caseTitle)
+      await caseModal.getByRole('button', { name: /^create test case$/i }).click()
+      await expect(caseModal).not.toBeVisible({ timeout: 15_000 })
+
+      await page.goto(`/projects/${projectId}/verification?tab=plans`)
+      await page.waitForLoadState('domcontentloaded')
+      const planRow = page.locator('table tbody tr').filter({ hasText: planName }).first()
+      await expect(planRow).toBeVisible({ timeout: 15_000 })
+      await planRow.locator('td').nth(2).click()
+      await page.getByRole('button', { name: 'Cases', exact: true }).click()
+      const addSelect = page.locator('select').filter({ has: page.locator('option', { hasText: 'Add test case...' }) })
+      await expect(addSelect).toBeVisible({ timeout: 15_000 })
+      const caseOpt = addSelect.locator('option').filter({ hasText: caseTitle })
+      await addSelect.selectOption((await caseOpt.getAttribute('value'))!)
+
+      await page.goto(`/projects/${projectId}/verification?tab=runs`)
+      await page.waitForLoadState('domcontentloaded')
+      await page.getByRole('button', { name: /^start new run$/i }).first().click()
+      const runModal = startNewRunModal(page)
+      await expect(runModal).toBeVisible({ timeout: 5_000 })
+      const planSelect = runModal.locator('select').first()
+      const planOpt = planSelect.locator('option').filter({ hasText: planName })
+      await planSelect.selectOption((await planOpt.getAttribute('value'))!)
+      await runModal.locator('input[type="text"]').fill(runName)
+      await runModal.getByRole('button', { name: /^create run$/i }).click()
+      await expect(runModal).not.toBeVisible({ timeout: 20_000 })
+      await page.waitForURL(/runId=/, { timeout: 20_000 })
+      const runId = new URL(page.url()).searchParams.get('runId')
+      expect(runId).toBeTruthy()
+
+      await page.goto(`/projects/${projectId}/verification/report/run/${runId}`)
+      await page.waitForLoadState('domcontentloaded')
+      await expect(page.getByRole('link', { name: /back to verification/i })).toBeVisible({ timeout: 15_000 })
+      await expect(page.getByText(/failed to load report/i)).not.toBeVisible()
+      await expect(page.getByText(/loading report/i)).not.toBeVisible({ timeout: 30_000 })
+
+      await page.goto(`/projects/${projectId}/verification?tab=runs`)
+      await page.waitForLoadState('domcontentloaded')
+      const runRow = page.locator('table tbody tr').filter({ hasText: runName }).first()
+      await expect(runRow).toBeVisible({ timeout: 15_000 })
+      await runRow.getByTitle('Archive Run (preserves audit record)').click()
+      await expect(page.getByRole('heading', { name: /archive test run/i })).toBeVisible({ timeout: 5_000 })
+      await page.getByRole('button', { name: /^archive$/i }).click()
+      await expect(page.getByRole('heading', { name: /archive test run/i })).not.toBeVisible({ timeout: 15_000 })
+
+      await page.goto(`/projects/${projectId}/verification?tab=plans`)
+      await page.waitForLoadState('domcontentloaded')
+      const planRow2 = page.locator('table tbody tr').filter({ hasText: planName }).first()
+      await expect(planRow2).toBeVisible({ timeout: 10_000 })
+      await planRow2.getByRole('button', { name: /more actions for/i }).click()
+      await page.getByRole('menuitem', { name: /^delete$/i }).click()
+      const confirmPlan = confirmDeleteDialog(page)
+      await expect(confirmPlan).toBeVisible({ timeout: 5_000 })
+      await confirmPlan.getByRole('button', { name: /^delete$/i }).click()
+      await expect(confirmPlan).not.toBeVisible({ timeout: 15_000 })
+
+      await page.goto(`/projects/${projectId}/verification?tab=cases`)
+      await page.waitForLoadState('domcontentloaded')
+      const caseRow = page.locator('table tbody tr').filter({ hasText: caseTitle }).first()
+      await expect(caseRow).toBeVisible({ timeout: 10_000 })
+      await caseRow.locator('button[title="Delete"]').click()
+      const confirmCase = confirmDeleteDialog(page)
+      await expect(confirmCase).toBeVisible({ timeout: 5_000 })
+      await confirmCase.getByRole('button', { name: /^delete$/i }).click()
+      await expect(confirmCase).not.toBeVisible({ timeout: 15_000 })
+    })
+  })
 })

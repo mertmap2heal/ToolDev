@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { Eye, EyeOff, Loader2, AlertCircle, X } from 'lucide-react'
 import AuthLayout from './AuthLayout'
 import LoginCard from './LoginCard'
@@ -305,18 +305,18 @@ export default function LoginPage() {
             <SecurityNote />
 
             <div className="pt-4 flex justify-center gap-4 text-sm">
-              <a
-                href="#"
+              <Link
+                to="/privacy"
                 className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
               >
                 Privacy Policy
-              </a>
-              <a
-                href="#"
+              </Link>
+              <Link
+                to="/terms"
                 className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
               >
                 Terms of Use
-              </a>
+              </Link>
             </div>
           </form>
       </LoginCard>

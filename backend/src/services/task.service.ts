@@ -2,9 +2,10 @@ import { prisma } from '../lib/prisma'
 import { randomUUID } from 'crypto'
 
 
-// Access Control Placeholder (future):
-// RBAC/permissions will be implemented later.
-// For MVP, all authenticated users can access all tasks.
+// Access control:
+// Project membership is enforced at the route layer via
+// requireTaskProjectMember / requireBodyProjectMember middleware.
+// See backend/src/middleware/requireTaskProjectMember.middleware.ts.
 
 export interface CreateTaskDto {
   projectId?: string

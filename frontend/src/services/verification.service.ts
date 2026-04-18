@@ -74,15 +74,16 @@ export const verificationService = {
     if (options?.type) params.set('type', options.type)
     if (options?.includeArchived !== undefined) params.set('includeArchived', String(options.includeArchived))
     const q = params.toString()
-    return apiClient.get(`/templates/${projectId}${q ? `?${q}` : ''}`)
+    return apiClient.get(`/verification/templates/${projectId}${q ? `?${q}` : ''}`)
   },
-  createTemplate: (projectId: string, data: unknown) => apiClient.post(`/templates/${projectId}`, data),
-  duplicateTemplate: (projectId: string, id: string) => apiClient.post(`/templates/${projectId}/${id}/duplicate`),
-  publishTemplate: (projectId: string, id: string) => apiClient.post(`/templates/${projectId}/${id}/publish`),
-  archiveTemplate: (projectId: string, id: string) => apiClient.post(`/templates/${projectId}/${id}/archive`),
-  deleteTemplate: (projectId: string, id: string) => apiClient.delete(`/templates/${projectId}/${id}`),
-  getTemplate: (projectId: string, templateId: string) => apiClient.get(`/templates/${projectId}/${templateId}`),
-  updateTemplate: (projectId: string, templateId: string, payload: unknown) => apiClient.patch(`/templates/${projectId}/${templateId}`, payload),
+  createTemplate: (projectId: string, data: unknown) => apiClient.post(`/verification/templates/${projectId}`, data),
+  duplicateTemplate: (projectId: string, id: string) => apiClient.post(`/verification/templates/${projectId}/${id}/duplicate`),
+  publishTemplate: (projectId: string, id: string) => apiClient.post(`/verification/templates/${projectId}/${id}/publish`),
+  archiveTemplate: (projectId: string, id: string) => apiClient.post(`/verification/templates/${projectId}/${id}/archive`),
+  deleteTemplate: (projectId: string, id: string) => apiClient.delete(`/verification/templates/${projectId}/${id}`),
+  getTemplate: (projectId: string, templateId: string) => apiClient.get(`/verification/templates/${projectId}/${templateId}`),
+  updateTemplate: (projectId: string, templateId: string, payload: unknown) =>
+    apiClient.patch(`/verification/templates/${projectId}/${templateId}`, payload),
   getOverview: (projectId: string) => apiClient.get(`/verification/overview/${projectId}`),
   getVerificationEntityAudit: (
     projectId: string,

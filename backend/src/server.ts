@@ -23,25 +23,34 @@ const app = express()
 const PORT = process.env.PORT || 5000
 const server = http.createServer(app)
 
-// CORS — restrict to the configured frontend origin (#35)
-// In dev, APP_URL defaults to localhost:3000.
-// In production, set APP_URL to the deployed frontend origin.
-const allowedOrigins = new Set<string>([
-  process.env.APP_URL || 'http://localhost:3000',
-  'http://localhost:3000', // always allow local dev
-])
-
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow same-origin requests (no Origin header) and known origins
-    if (!origin || allowedOrigins.has(origin)) {
-      callback(null, true)
-    } else {
-      callback(new Error(`CORS: origin '${origin}' not allowed`))
+// CORS — env-driven allowlist (#35, #149). Localhost is only permitted when
+// NODE_ENV !== 'production'. Production must set APP_URL (and optionally
+// SOCKET_IO_ALLOWED_ORIGINS, comma-separated) or startup throws.
+export const buildCorsOrigins = (env: NodeJS.ProcessEnv = process.env): string[] => {
+  const configured = [
+    env.APP_URL,
+    ...(env.SOCKET_IO_ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()),
+  ].filter((v): v is string => Boolean(v))
+  if (env.NODE_ENV === 'production') {
+    if (configured.length === 0) {
+      throw new Error('CORS configuration error: set APP_URL (and/or SOCKET_IO_ALLOWED_ORIGINS) in production')
     }
-  },
-  credentials: true,
-}))
+    return configured
+  }
+  return [...configured, 'http://localhost:3000', 'http://127.0.0.1:3000']
+}
+
+const corsAllowlist = buildCorsOrigins()
+
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true)
+      return cb(null, corsAllowlist.includes(origin))
+    },
+    credentials: true,
+  }),
+)
 
 // Request ID middleware — attaches a unique ID to every request for log correlation (#42)
 app.use((req, res, next) => {
@@ -51,6 +60,7 @@ app.use((req, res, next) => {
   res.on('finish', () => setRequestId(undefined))
   next()
 })
+
 
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ extended: true, limit: '50mb' }))

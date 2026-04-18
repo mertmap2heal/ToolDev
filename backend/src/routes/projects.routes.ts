@@ -16,8 +16,10 @@ import {
   exportProjects,
   importProjects,
 } from '../controllers/project.controller'
-import { authenticateToken } from '../middleware/auth.middleware'
+import { authenticateToken, requireAdmin } from '../middleware/auth.middleware'
 import { resolveProjectParam } from '../middleware/resolveProjectParam.middleware'
+import { requireProjectMember } from '../middleware/requireProjectMember.middleware'
+import { requireProjectOwnerOrAdmin } from '../middleware/requireProjectOwnerOrAdmin.middleware'
 import {
   listProjectEngineeringRoles,
   listProjectUsersWithRoles,
@@ -28,60 +30,67 @@ import {
 
 const router = Router()
 
-// Bulk actions (must be before :id routes)
-router.post('/bulk-update', authenticateToken, bulkUpdateProjects)
+// Bulk actions (must be before :id routes).  Gated to admins because they
+// can mutate or exfiltrate every project (#152, #153, #154).
+router.post('/bulk-update', authenticateToken, requireAdmin, bulkUpdateProjects)
 router.post('/import', authenticateToken, importProjects)
-router.get('/export', authenticateToken, exportProjects)
+router.get('/export', authenticateToken, requireAdmin, exportProjects)
 
 // Project CRUD
 router.post('/', authenticateToken, createProject)
 router.get('/', authenticateToken, getProjects)
 
-// Stakeholder / engineering roles (project-scoped) — auth required
+// Stakeholder / engineering roles (project-scoped) — auth + member required
 router.get(
   '/:id/engineering-roles',
   authenticateToken,
   resolveProjectParam,
+  requireProjectMember,
   listProjectEngineeringRoles
 )
 router.get(
   '/:id/users-with-roles',
   authenticateToken,
   resolveProjectParam,
+  requireProjectMember,
   listProjectUsersWithRoles
 )
 router.get(
   '/:id/me/engineering-roles',
   authenticateToken,
   resolveProjectParam,
+  requireProjectMember,
   getMyProjectEngineeringRoles
 )
 router.post(
   '/:id/engineering-roles/:roleId/assign',
   authenticateToken,
   resolveProjectParam,
+  requireProjectOwnerOrAdmin,
   assignProjectEngineeringRole
 )
 router.post(
   '/:id/engineering-roles/:roleId/unassign',
   authenticateToken,
   resolveProjectParam,
+  requireProjectOwnerOrAdmin,
   unassignProjectEngineeringRole
 )
 
-router.get('/:id', authenticateToken, resolveProjectParam, getProject)
-router.put('/:id', authenticateToken, resolveProjectParam, updateProject)
-router.delete('/:id', authenticateToken, resolveProjectParam, deleteProject)
+// Project read requires project membership; mutate/delete requires owner or admin (#152).
+router.get('/:id', authenticateToken, resolveProjectParam, requireProjectMember, getProject)
+router.put('/:id', authenticateToken, resolveProjectParam, requireProjectOwnerOrAdmin, updateProject)
+router.delete('/:id', authenticateToken, resolveProjectParam, requireProjectOwnerOrAdmin, deleteProject)
 
-// Team management
-router.get('/:id/members', authenticateToken, resolveProjectParam, getProjectMembers)
-router.post('/:id/members', authenticateToken, resolveProjectParam, addProjectMember)
-router.delete('/:id/members/:userId', authenticateToken, resolveProjectParam, removeProjectMember)
+// Team management — reading membership requires membership (#153); writes require owner/admin.
+router.get('/:id/members', authenticateToken, resolveProjectParam, requireProjectMember, getProjectMembers)
+router.post('/:id/members', authenticateToken, resolveProjectParam, requireProjectOwnerOrAdmin, addProjectMember)
+router.delete('/:id/members/:userId', authenticateToken, resolveProjectParam, requireProjectOwnerOrAdmin, removeProjectMember)
 router.post('/:id/invitations/accept', authenticateToken, resolveProjectParam, acceptProjectInvitation)
 router.post('/:id/invitations/decline', authenticateToken, resolveProjectParam, declineProjectInvitation)
 
-// Audit logs and analytics
-router.get('/:id/audit-logs', authenticateToken, resolveProjectParam, getProjectAuditLogs)
-router.get('/:id/analytics', authenticateToken, resolveProjectParam, getProjectAnalytics)
+// Audit logs and analytics — project-scoped reads, members only (#153).
+router.get('/:id/audit-logs', authenticateToken, resolveProjectParam, requireProjectMember, getProjectAuditLogs)
+router.get('/:id/analytics', authenticateToken, resolveProjectParam, requireProjectMember, getProjectAnalytics)
 
 export default router
