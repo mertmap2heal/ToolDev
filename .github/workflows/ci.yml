@@ -184,12 +184,13 @@ jobs:
           done
           exit $missing
 
-      - name: Verify upload handlers enforce MIME allowlist + size guard (#161, #27)
+      - name: Verify upload handlers enforce MIME allowlist + size guard (#161, #27, #295)
         run: |
           set -e
           missing=0
           for f in \
-            backend/src/controllers/issue.controller.ts; do
+            backend/src/controllers/issue.controller.ts \
+            backend/src/controllers/attachment.controller.ts; do
             if ! grep -q "ALLOWED_MIME_TYPES" "$f"; then
               echo "::error file=$f::upload handler missing MIME allowlist (see issue #161)"
               missing=1
@@ -199,7 +200,7 @@ jobs:
               missing=1
             fi
             if ! grep -q "MAX_BASE64_CHARS" "$f"; then
-              echo "::error file=$f::upload handler missing pre-decode size guard (see issue #161)"
+              echo "::error file=$f::upload handler missing pre-decode size guard (see issues #161, #295)"
               missing=1
             fi
             if grep -qE "path\.extname\(fileName\)" "$f"; then

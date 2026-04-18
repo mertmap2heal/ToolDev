@@ -61,6 +61,18 @@ describe('Attachment upload — MIME type and filename validation (#27)', () => 
     expect(res.status).toBe(401)
   })
 
+  it('returns 413 when base64 payload exceeds MAX_BASE64_CHARS (#295)', async () => {
+    // MAX_BASE64_CHARS = 14 * 1024 * 1024. Build a payload that is one byte
+    // over the limit to trigger the pre-decode rejection.
+    const oversize = 'A'.repeat(14 * 1024 * 1024 + 1)
+    const res = await request(app)
+      .post(`/api/v1/tasks/${taskId}/attachments`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ fileName: 'big.png', fileData: oversize, mimeType: 'image/png' })
+    expect(res.status).toBe(413)
+    expect(res.body.error).toMatch(/size limit/i)
+  })
+
   it('rejects upload when mimeType is missing', async () => {
     const res = await request(app)
       .post(`/api/v1/tasks/${taskId}/attachments`)

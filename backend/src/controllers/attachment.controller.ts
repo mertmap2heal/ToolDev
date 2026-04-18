@@ -40,6 +40,12 @@ const ALLOWED_MIME_TYPES = new Set(Object.keys(MIME_TO_EXT))
 // Safe filename: letters, numbers, spaces, dots, hyphens, underscores, parens — max 255 chars
 const SAFE_FILENAME_RE = /^[a-zA-Z0-9 ._\-()\[\]]+$/
 
+// #295: pre-decode size guard. Without this any signed-in user could ship
+// up to 50 MB of base64 per request (Express body limit) and force a ~37 MB
+// Buffer allocation before the MIME / filename checks completed. Matches
+// the existing MAX_BASE64_CHARS guard in issue.controller.ts.
+const MAX_BASE64_CHARS = 14 * 1024 * 1024 // ~10 MB decoded
+
 // Ensure uploads directory exists
 const uploadsDir = path.join(UPLOADS_BASE, 'tasks')
 if (!fs.existsSync(uploadsDir)) {
@@ -98,6 +104,17 @@ export const uploadAttachment = async (req: AuthRequest, res: Response) => {
       })
     }
 
+    // #295: pre-decode size guard. Reject before Buffer.from allocates.
+    const base64Data: string = fileData.startsWith('data:')
+      ? (fileData.split(',')[1] ?? '')
+      : fileData
+    if (!base64Data || base64Data.length > MAX_BASE64_CHARS) {
+      return res.status(413).json({
+        success: false,
+        error: 'Attachment exceeds size limit',
+      })
+    }
+
     const correlationId = randomUUID()
 
     // Handle base64 file data
@@ -107,7 +124,6 @@ export const uploadAttachment = async (req: AuthRequest, res: Response) => {
 
     if (fileData.startsWith('data:')) {
       // Base64 data URL
-      const base64Data = fileData.split(',')[1]
       const buffer = Buffer.from(base64Data, 'base64')
       fileSize = buffer.length
 
@@ -126,7 +142,7 @@ export const uploadAttachment = async (req: AuthRequest, res: Response) => {
       }
     } else {
       // Plain base64
-      const buffer = Buffer.from(fileData, 'base64')
+      const buffer = Buffer.from(base64Data, 'base64')
       fileSize = buffer.length
       const fileExtension = MIME_TO_EXT[mimeType] ?? '.bin'
       const uniqueFileName = `${randomUUID()}${fileExtension}`
