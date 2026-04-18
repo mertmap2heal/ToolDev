@@ -4,6 +4,28 @@ import { prisma } from '../lib/prisma'
 import { randomUUID } from 'crypto'
 import taskService from '../services/task.service'
 
+/**
+ * #291 (CSV injection, CWE-1236): neutralise Excel/LibreOffice formula
+ * triggers by prefixing them with a single apostrophe before applying
+ * the RFC-4180 quote/escape rules. Without this, an attacker who can set
+ * a task title can ship =HYPERLINK / =IMPORTXML / DDE payloads into an
+ * auditor's spreadsheet.
+ */
+const FORMULA_PREFIXES = /^[=+\-@\t\r]/
+
+function csvSafeCell(raw: string): string {
+  const neutralised = FORMULA_PREFIXES.test(raw) ? `'${raw}` : raw
+  if (
+    neutralised.includes(',') ||
+    neutralised.includes('"') ||
+    neutralised.includes('\n') ||
+    neutralised.includes('\r')
+  ) {
+    return `"${neutralised.replace(/"/g, '""')}"`
+  }
+  return neutralised
+}
+
 
 export const exportTasks = async (req: AuthRequest, res: Response) => {
   try {
@@ -16,8 +38,15 @@ export const exportTasks = async (req: AuthRequest, res: Response) => {
       columns,
     } = req.body
 
+    // #291: projectId is validated by requireBodyProjectMember upstream.
+    // Force the filter to exactly that id so the controller cannot be
+    // talked into an unscoped dump by setting project_id = undefined.
+    if (!project_id) {
+      return res.status(400).json({ success: false, error: 'project_id is required' })
+    }
+
     const filters: any = {
-      projectId: project_id || undefined,
+      projectId: project_id,
       status: status || undefined,
       priority: priority || undefined,
       dueFrom: due_from || undefined,
@@ -70,11 +99,8 @@ export const exportTasks = async (req: AuthRequest, res: Response) => {
           default:
             value = ''
         }
-        // Escape commas and quotes in CSV
-        if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-          value = `"${value.replace(/"/g, '""')}"`
-        }
-        row.push(value)
+        // #291: neutralise formula triggers, then RFC-4180 quote.
+        row.push(csvSafeCell(value))
       }
       csvRows.push(row.join(','))
     }
@@ -102,6 +128,12 @@ export const importTasks = async (req: AuthRequest, res: Response) => {
         success: false,
         error: 'csv_data is required',
       })
+    }
+    // #291: must scope imports to a specific project. The route-level
+    // requireBodyProjectMember middleware guarantees membership, but we
+    // assert again here for defense-in-depth.
+    if (!project_id) {
+      return res.status(400).json({ success: false, error: 'project_id is required' })
     }
 
     // Parse CSV (simple parsing for MVP)
@@ -135,7 +167,7 @@ export const importTasks = async (req: AuthRequest, res: Response) => {
 
       try {
         const taskData: any = {
-          projectId: project_id || undefined,
+          projectId: project_id,
         }
 
         // Map columns
