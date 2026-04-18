@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import {
   LayoutDashboard,
-  Package,
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
@@ -631,7 +630,6 @@ export default function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       {/* Nav */}
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '4px 6px' }}>
         <NavItem icon={LayoutDashboard} label="Dashboard" to="/" collapsed={effectiveCollapsed} active={location.pathname === '/'} />
-        <NavItem icon={Package} label="Inventory" to="/inventory/items" collapsed={effectiveCollapsed} active={isActive('/inventory')} />
       </div>
 
       {bottomArea}
