@@ -59,7 +59,7 @@
 ```ts
 import { prisma } from '../lib/prisma'   // always use the singleton
 ```
-> `auth.middleware.ts` has its own `PrismaClient` instance — known duplication; do not remove it.
+Every backend module imports the same singleton — middleware included (#147 removed the last `new PrismaClient()` duplicate in `auth.middleware.ts`). Never instantiate `PrismaClient` outside `lib/prisma.ts`.
 
 ### Controller → Route → Service pattern
 ```

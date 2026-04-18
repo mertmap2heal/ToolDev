@@ -20,9 +20,7 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 ```
 
-**Exception:** `auth.middleware.ts` has its own `PrismaClient` instance. This is a
-known legacy duplication — do not remove it (auth middleware runs at startup before
-the singleton is guaranteed to be ready), but also do not copy the pattern.
+No exceptions — every module imports the singleton, including middleware. The previous duplicate in `auth.middleware.ts` was removed in #147 (the singleton is always ready at import time; the startup-ordering concern that motivated the original duplication never applied).
 
 ---
 
