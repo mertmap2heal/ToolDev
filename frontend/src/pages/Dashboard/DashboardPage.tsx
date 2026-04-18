@@ -182,6 +182,12 @@ export default function DashboardPage() {
   const [teamModalProject, setTeamModalProject] = useState<Project | null>(null)
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([])
   const [showBulkMenu, setShowBulkMenu] = useState(false)
+  // #260: bulk-delete used to fire N parallel mutations with no confirmation.
+  // `bulkDeleteConfirm` holds the staged delete set until the user explicitly
+  // confirms; `bulkDeleteInFlight` disables the Confirm button while the
+  // Promise.allSettled run is in progress.
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState<{ id: string; name: string }[] | null>(null)
+  const [bulkDeleteInFlight, setBulkDeleteInFlight] = useState(false)
   const [analyticsModalProject, setAnalyticsModalProject] = useState<Project | null>(null)
   const [auditLogModalProject, setAuditLogModalProject] = useState<Project | null>(null)
   const [dateRange, setDateRange] = useState<{ from: string; to: string } | null>(null)
@@ -239,9 +245,41 @@ export default function DashboardPage() {
   const handleSelectAll = (checked: boolean) => {
     setSelectedProjectIds(checked ? displayedProjects.map(p => p.id) : [])
   }
+  // #260: open the confirmation modal instead of deleting immediately.
   const handleBulkDelete = () => {
-    selectedProjectIds.forEach(id => deleteProjectMutation.mutate(id))
+    if (selectedProjectIds.length === 0) return
+    const byId = new Map((projectsData || projects || []).map((p) => [p.id, p.name] as const))
+    const staged = selectedProjectIds.map((id) => ({ id, name: byId.get(id) ?? id }))
+    setBulkDeleteConfirm(staged)
+    setShowBulkMenu(false)
+  }
+
+  const cancelBulkDelete = () => {
+    setBulkDeleteConfirm(null)
+    setBulkDeleteInFlight(false)
+  }
+
+  // #260: Promise.allSettled so a single failure no longer stops the rest
+  // and the user sees a consolidated error instead of a silent stall.
+  const confirmBulkDelete = async () => {
+    if (!bulkDeleteConfirm) return
+    setBulkDeleteInFlight(true)
+    const results = await Promise.allSettled(
+      bulkDeleteConfirm.map((p) => projectService.deleteProject(p.id)),
+    )
+    queryClient.invalidateQueries({ queryKey: ['projects'] })
     setSelectedProjectIds([])
+    setBulkDeleteConfirm(null)
+    setBulkDeleteInFlight(false)
+    const failures = results
+      .map((r, idx) => ({ r, name: bulkDeleteConfirm[idx]!.name }))
+      .filter(({ r }) => r.status === 'rejected' || (r.status === 'fulfilled' && r.value?.success === false))
+    if (failures.length > 0) {
+      alert(
+        `Deleted ${results.length - failures.length} of ${results.length} project(s). ` +
+          `${failures.length} failed: ${failures.map((f) => f.name).join(', ')}`,
+      )
+    }
   }
   const handleBulkExport = async () => {
     const res = await projectService.exportProjects()
@@ -477,6 +515,54 @@ export default function DashboardPage() {
         onCancel={handleCancelDelete}
         isDeleting={deleteProjectMutation.isPending}
       />
+
+      {/* #260: bulk-delete confirmation. Plain inline modal so we can list
+          every affected project rather than a single name. */}
+      {bulkDeleteConfirm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bulk-delete-title"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+          onClick={cancelBulkDelete}
+        >
+          <div
+            className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-md p-6 border border-red-500/30"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="bulk-delete-title" className="text-base font-bold text-red-600 dark:text-red-400 mb-2">
+              Delete {bulkDeleteConfirm.length} project{bulkDeleteConfirm.length === 1 ? '' : 's'}?
+            </h2>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+              This permanently removes each project and every requirement, verification run,
+              change request, and audit record it contains. This cannot be undone.
+            </p>
+            <ul className="mb-4 max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-xs text-gray-700 dark:text-gray-300 space-y-0.5">
+              {bulkDeleteConfirm.map((p) => (
+                <li key={p.id} className="truncate">• {p.name}</li>
+              ))}
+            </ul>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={cancelBulkDelete}
+                disabled={bulkDeleteInFlight}
+                className="px-4 py-2 text-xs font-bold rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmBulkDelete}
+                disabled={bulkDeleteInFlight}
+                className="px-4 py-2 text-xs font-bold rounded-lg bg-red-600 hover:bg-red-500 text-white transition-colors disabled:opacity-50"
+              >
+                {bulkDeleteInFlight ? 'Deleting…' : `Delete ${bulkDeleteConfirm.length}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <ProjectTeamModal
         project={teamModalProject}
         onClose={() => setTeamModalProject(null)}
