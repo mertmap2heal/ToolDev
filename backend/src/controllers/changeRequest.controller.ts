@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
 import { allocateChangeRequestId } from '../lib/crId'
 import { linkageAuditService } from '../services/linkageAudit.service'
+import { validateUpload, UploadValidationError } from '../lib/uploadValidation'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -406,46 +407,30 @@ export const uploadAttachment = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    // Handle base64 file data
-    let fileUrl: string
-    let fileSize: number
-
-    if (fileData.startsWith('data:')) {
-      // Data URL format: data:mimeType;base64,data
-      const base64Data = fileData.split(',')[1]
-      const buffer = Buffer.from(base64Data, 'base64')
-      fileSize = buffer.length
-
-      // For files larger than 1MB, save to filesystem
-      if (fileSize > 1024 * 1024) {
-        const fileExtension = path.extname(fileName)
-        const uniqueFileName = `${changeRequestId}-${Date.now()}${fileExtension}`
-        const filePath = path.join(uploadsDir, uniqueFileName)
-        fs.writeFileSync(filePath, buffer)
-        fileUrl = `/uploads/change-requests/${uniqueFileName}`
-      } else {
-        // Store as data URL for small files
-        fileUrl = fileData
+    // Allowlist MIME type, cap size, generate safe filename with server-derived
+    // extension (no client-controlled filename reaches disk).
+    let validated
+    try {
+      validated = validateUpload({ fileData, fileName, mimeType })
+    } catch (e) {
+      if (e instanceof UploadValidationError) {
+        return res.status(e.status).json({ success: false, error: e.message })
       }
-    } else {
-      // Assume it's already base64 without data URL prefix
-      const buffer = Buffer.from(fileData, 'base64')
-      fileSize = buffer.length
-      const fileExtension = path.extname(fileName)
-      const uniqueFileName = `${changeRequestId}-${Date.now()}${fileExtension}`
-      const filePath = path.join(uploadsDir, uniqueFileName)
-      fs.writeFileSync(filePath, buffer)
-      fileUrl = `/uploads/change-requests/${uniqueFileName}`
+      throw e
     }
+
+    const filePath = path.join(uploadsDir, validated.uniqueFileName)
+    fs.writeFileSync(filePath, validated.buffer)
+    const fileUrl = `/uploads/change-requests/${validated.uniqueFileName}`
 
     const attachment = await prisma.changeRequestAttachment.create({
       data: {
         changeRequestId,
         projectId,
-        fileName,
+        fileName: validated.safeDisplayName,
         fileUrl,
-        fileSize,
-        mimeType: mimeType || 'application/octet-stream',
+        fileSize: validated.fileSize,
+        mimeType: validated.mimeType,
         uploadedBy: req.userId || null,
         uploadedByName: null, // Can be populated from user lookup if needed
       },
