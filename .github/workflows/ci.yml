@@ -242,6 +242,28 @@ jobs:
             exit 1
           fi
 
+      - name: Run ReqIF DoS regression (#298)
+        run: cd backend && npx vitest run src/__tests__/reqif.dos.test.ts
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret
+
+      - name: Guard ReqIF import enforces size + count caps (#298)
+        run: |
+          set -e
+          ctrl=backend/src/controllers/reqif.controller.ts
+          svc=backend/src/services/reqif.service.ts
+          fail=0
+          if ! grep -q "MAX_REQIF_CHARS" "$ctrl"; then
+            echo "::error file=$ctrl::ReqIF import must enforce MAX_REQIF_CHARS (see issue #298)"
+            fail=1
+          fi
+          if ! grep -q "MAX_SPEC_OBJECTS" "$svc"; then
+            echo "::error file=$svc::ReqIF import must enforce MAX_SPEC_OBJECTS (see issue #298)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Run COMPANY_ADMIN tenant regression (#281)
         run: cd backend && npx vitest run src/__tests__/companyAdmin.tenant.test.ts
         env:
