@@ -14,8 +14,9 @@ export async function listChecklists(req: AuthRequest, res: Response) {
 
 export async function getChecklist(req: AuthRequest, res: Response) {
   try {
-    const { checklistId } = req.params
-    const data = await transitionChecklistService.getById(checklistId)
+    const { projectId, checklistId } = req.params
+    // #297: scope by projectId so cross-project checklist ids return 404.
+    const data = await transitionChecklistService.getById(projectId, checklistId)
     if (!data) return res.status(404).json({ success: false, error: 'Checklist not found' })
     res.json({ success: true, data })
   } catch (e) {
@@ -45,9 +46,10 @@ export async function createChecklist(req: AuthRequest, res: Response) {
 
 export async function updateChecklist(req: AuthRequest, res: Response) {
   try {
-    const { checklistId } = req.params
+    const { projectId, checklistId } = req.params
     const { name, description, isActive, items } = req.body
-    const data = await transitionChecklistService.update(checklistId, {
+    // #297: scope by projectId — cross-project updates throw 'Checklist not found'.
+    const data = await transitionChecklistService.update(projectId, checklistId, {
       name,
       description,
       isActive,
@@ -55,17 +57,22 @@ export async function updateChecklist(req: AuthRequest, res: Response) {
     })
     res.json({ success: true, data })
   } catch (e) {
-    res.status(500).json({ success: false, error: (e as Error).message })
+    const msg = (e as Error).message
+    if (msg === 'Checklist not found') return res.status(404).json({ success: false, error: msg })
+    res.status(500).json({ success: false, error: msg })
   }
 }
 
 export async function deleteChecklist(req: AuthRequest, res: Response) {
   try {
-    const { checklistId } = req.params
-    await transitionChecklistService.deleteChecklist(checklistId)
+    const { projectId, checklistId } = req.params
+    // #297: cross-project hard-delete must 404 rather than destroy the row.
+    await transitionChecklistService.deleteChecklist(projectId, checklistId)
     res.json({ success: true, message: 'Checklist deleted' })
   } catch (e) {
-    res.status(500).json({ success: false, error: (e as Error).message })
+    const msg = (e as Error).message
+    if (msg === 'Checklist not found') return res.status(404).json({ success: false, error: msg })
+    res.status(500).json({ success: false, error: msg })
   }
 }
 
@@ -121,11 +128,14 @@ export async function createAssignment(req: AuthRequest, res: Response) {
 
 export async function deleteAssignment(req: AuthRequest, res: Response) {
   try {
-    const { assignmentId } = req.params
-    await transitionChecklistService.deleteAssignment(assignmentId)
+    const { projectId, assignmentId } = req.params
+    // #297: scope assignment delete to caller's project.
+    await transitionChecklistService.deleteAssignment(projectId, assignmentId)
     res.json({ success: true, message: 'Assignment removed' })
   } catch (e) {
-    res.status(500).json({ success: false, error: (e as Error).message })
+    const msg = (e as Error).message
+    if (msg === 'Assignment not found') return res.status(404).json({ success: false, error: msg })
+    res.status(500).json({ success: false, error: msg })
   }
 }
 
@@ -217,12 +227,15 @@ export async function createChecklistItemIssue(req: AuthRequest, res: Response) 
 
 export async function getChecklistItemIssues(req: AuthRequest, res: Response) {
   try {
-    const { checklistItemId } = req.params
+    const { projectId, checklistItemId } = req.params
     const entityId = req.query.entityId as string | undefined
-    const data = await transitionChecklistService.getChecklistItemIssues(checklistItemId, entityId)
+    // #297: scope by projectId via checklist -> item relation walk.
+    const data = await transitionChecklistService.getChecklistItemIssues(projectId, checklistItemId, entityId)
     res.json({ success: true, data })
   } catch (e) {
-    res.status(500).json({ success: false, error: (e as Error).message })
+    const msg = (e as Error).message
+    if (msg === 'Checklist item not found') return res.status(404).json({ success: false, error: msg })
+    res.status(500).json({ success: false, error: msg })
   }
 }
 
@@ -251,19 +264,23 @@ export async function addChecklistItemComment(req: AuthRequest, res: Response) {
 
 export async function getChecklistItemComments(req: AuthRequest, res: Response) {
   try {
-    const { responseId } = req.params
-    const data = await transitionChecklistService.getChecklistItemComments(responseId)
+    const { projectId, responseId } = req.params
+    // #297: scope by projectId through response -> completion chain.
+    const data = await transitionChecklistService.getChecklistItemComments(projectId, responseId)
     res.json({ success: true, data })
   } catch (e) {
-    res.status(500).json({ success: false, error: (e as Error).message })
+    const msg = (e as Error).message
+    if (msg === 'Response not found') return res.status(404).json({ success: false, error: msg })
+    res.status(500).json({ success: false, error: msg })
   }
 }
 
 export async function deleteChecklistItemComment(req: AuthRequest, res: Response) {
   try {
-    const { commentId } = req.params
+    const { projectId, commentId } = req.params
     const isAdmin = !!(req as any).isAdmin || !!(req as any).isSuperiorAdmin
-    await transitionChecklistService.deleteChecklistItemComment(commentId, req.userId || '', isAdmin)
+    // #297: scope by projectId before the author-or-admin gate.
+    await transitionChecklistService.deleteChecklistItemComment(projectId, commentId, req.userId || '', isAdmin)
     res.json({ success: true, message: 'Comment deleted' })
   } catch (e: any) {
     if (e.message === 'Comment not found') return res.status(404).json({ success: false, error: e.message })

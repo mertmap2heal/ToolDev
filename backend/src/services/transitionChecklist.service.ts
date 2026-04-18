@@ -96,9 +96,10 @@ export const transitionChecklistService = {
     })
   },
 
-  async getById(checklistId: string) {
-    return prisma.transitionChecklist.findUnique({
-      where: { id: checklistId },
+  async getById(projectId: string, checklistId: string) {
+    // #297: scope by projectId so cross-project lookups return null.
+    return prisma.transitionChecklist.findFirst({
+      where: { id: checklistId, projectId },
       include: checklistInclude,
     })
   },
@@ -127,9 +128,10 @@ export const transitionChecklistService = {
     })
   },
 
-  async update(checklistId: string, input: UpdateChecklistInput) {
-    const existing = await prisma.transitionChecklist.findUnique({
-      where: { id: checklistId },
+  async update(projectId: string, checklistId: string, input: UpdateChecklistInput) {
+    // #297: cross-project update must not locate the row.
+    const existing = await prisma.transitionChecklist.findFirst({
+      where: { id: checklistId, projectId },
       include: { items: true },
     })
     if (!existing) throw new Error('Checklist not found')
@@ -190,7 +192,13 @@ export const transitionChecklistService = {
     })
   },
 
-  async deleteChecklist(checklistId: string) {
+  async deleteChecklist(projectId: string, checklistId: string) {
+    // #297: refuse cross-project hard delete.
+    const existing = await prisma.transitionChecklist.findFirst({
+      where: { id: checklistId, projectId },
+      select: { id: true },
+    })
+    if (!existing) throw new Error('Checklist not found')
     return prisma.transitionChecklist.delete({
       where: { id: checklistId },
     })
@@ -210,7 +218,13 @@ export const transitionChecklistService = {
     })
   },
 
-  async deleteAssignment(assignmentId: string) {
+  async deleteAssignment(projectId: string, assignmentId: string) {
+    // #297: scope by projectId.
+    const existing = await prisma.checklistAssignment.findFirst({
+      where: { id: assignmentId, projectId },
+      select: { id: true },
+    })
+    if (!existing) throw new Error('Assignment not found')
     return prisma.checklistAssignment.delete({
       where: { id: assignmentId },
     })
@@ -534,8 +548,16 @@ export const transitionChecklistService = {
     return { issue, link }
   },
 
-  async getChecklistItemIssues(checklistItemId: string, entityId?: string) {
-    const where: Record<string, unknown> = { checklistItemId }
+  async getChecklistItemIssues(projectId: string, checklistItemId: string, entityId?: string) {
+    // #297: verify the checklist item belongs to the caller's project by
+    // walking item -> checklist -> projectId.
+    const item = await prisma.transitionChecklistItem.findFirst({
+      where: { id: checklistItemId, checklist: { projectId } },
+      select: { id: true },
+    })
+    if (!item) throw new Error('Checklist item not found')
+
+    const where: Record<string, unknown> = { checklistItemId, projectId }
     if (entityId) where.entityId = entityId
 
     return prisma.checklistItemIssue.findMany({
@@ -559,15 +581,26 @@ export const transitionChecklistService = {
     })
   },
 
-  async getChecklistItemComments(responseId: string) {
+  async getChecklistItemComments(projectId: string, responseId: string) {
+    // #297: verify the response belongs to the caller's project through the
+    // response -> completion chain.
+    const response = await prisma.transitionChecklistItemResponse.findFirst({
+      where: { id: responseId, completion: { projectId } },
+      select: { id: true },
+    })
+    if (!response) throw new Error('Response not found')
+
     return prisma.checklistItemComment.findMany({
-      where: { responseId },
+      where: { responseId, projectId },
       orderBy: { createdAt: 'asc' },
     })
   },
 
-  async deleteChecklistItemComment(commentId: string, requesterId: string, isAdmin: boolean) {
-    const comment = await prisma.checklistItemComment.findUnique({ where: { id: commentId } })
+  async deleteChecklistItemComment(projectId: string, commentId: string, requesterId: string, isAdmin: boolean) {
+    // #297: scope by projectId before the author-or-admin gate.
+    const comment = await prisma.checklistItemComment.findFirst({
+      where: { id: commentId, projectId },
+    })
     if (!comment) throw new Error('Comment not found')
     if (comment.authorId !== requesterId && !isAdmin) throw new Error('Not authorized to delete this comment')
     return prisma.checklistItemComment.delete({ where: { id: commentId } })
