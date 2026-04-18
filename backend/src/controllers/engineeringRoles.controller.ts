@@ -2,6 +2,30 @@ import { Response } from 'express'
 import { prisma } from '../lib/prisma'
 import type { AuthRequest } from '../middleware/auth.middleware'
 
+/**
+ * #287: engineering-role assignments and the stakeholder directory must be
+ * tenant-scoped. The role catalog is still global for now — adding a
+ * companyKey column is a schema change tracked separately. What we can do
+ * without a migration:
+ *   - getUsersWithRoles filters out users from other companies (admin bypass
+ *     for SUPERIOR_ADMIN)
+ *   - assign / unassign reject userIds that do not belong to the caller's
+ *     company (admin bypass for SUPERIOR_ADMIN)
+ */
+async function resolveCallerCompany(userId: string): Promise<{
+  company: string | null
+  isSuperior: boolean
+}> {
+  const me = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { company: true, role: true },
+  })
+  return {
+    company: me?.company ?? null,
+    isSuperior: me?.role === 'SUPERIOR_ADMIN',
+  }
+}
+
 
 const PREDEFINED_ROLES = [
     'Systems Engineer',
@@ -188,6 +212,11 @@ export const deleteEngineeringRole = async (req: AuthRequest, res: Response) => 
 /** POST /admin/engineering-roles/:id/assign — assign role to users. Body: { userIds: string[] } */
 export const assignEngineeringRole = async (req: AuthRequest, res: Response) => {
     try {
+        const callerId = req.userId
+        if (!callerId) {
+            res.status(401).json({ success: false, error: 'Unauthorized' })
+            return
+        }
         const { id } = req.params
         const { userIds } = req.body
         if (!Array.isArray(userIds) || userIds.length === 0) {
@@ -199,6 +228,24 @@ export const assignEngineeringRole = async (req: AuthRequest, res: Response) => 
             res.status(404).json({ success: false, error: 'Role not found' })
             return
         }
+
+        // #287: reject any userId whose company !== caller's (SUPERIOR_ADMIN bypass).
+        const { company: callerCompany, isSuperior } = await resolveCallerCompany(callerId)
+        if (!isSuperior) {
+            const targets = await prisma.user.findMany({
+                where: { id: { in: userIds } },
+                select: { id: true, company: true },
+            })
+            const foreign = targets.filter((t) => (t.company ?? null) !== callerCompany)
+            if (foreign.length > 0 || targets.length !== userIds.length) {
+                res.status(403).json({
+                    success: false,
+                    error: 'Cannot assign roles to users outside your company',
+                })
+                return
+            }
+        }
+
         // Use createMany with skipDuplicates so re-assigns are idempotent
         await prisma.userEngineeringRole.createMany({
             data: userIds.map((userId: string) => ({ userId, roleId: id })),
@@ -215,14 +262,40 @@ export const assignEngineeringRole = async (req: AuthRequest, res: Response) => 
 /** POST /admin/engineering-roles/:id/unassign — remove role from users. Body: { userIds: string[] } */
 export const unassignEngineeringRole = async (req: AuthRequest, res: Response) => {
     try {
+        const callerId = req.userId
+        if (!callerId) {
+            res.status(401).json({ success: false, error: 'Unauthorized' })
+            return
+        }
         const { id } = req.params
         const { userIds } = req.body
         if (!Array.isArray(userIds) || userIds.length === 0) {
             res.status(400).json({ success: false, error: 'userIds array is required' })
             return
         }
+
+        // #287: non-SUPERIOR_ADMIN must only touch users in their own company.
+        const { company: callerCompany, isSuperior } = await resolveCallerCompany(callerId)
+        let allowedUserIds = userIds as string[]
+        if (!isSuperior) {
+            const targets = await prisma.user.findMany({
+                where: { id: { in: userIds } },
+                select: { id: true, company: true },
+            })
+            allowedUserIds = targets
+                .filter((t) => (t.company ?? null) === callerCompany)
+                .map((t) => t.id)
+            if (allowedUserIds.length === 0) {
+                res.status(403).json({
+                    success: false,
+                    error: 'Cannot unassign roles for users outside your company',
+                })
+                return
+            }
+        }
+
         await prisma.userEngineeringRole.deleteMany({
-            where: { roleId: id, userId: { in: userIds } },
+            where: { roleId: id, userId: { in: allowedUserIds } },
         })
         const userCount = await prisma.userEngineeringRole.count({ where: { roleId: id } })
         res.json({ success: true, data: { roleId: id, userCount } })
@@ -233,9 +306,20 @@ export const unassignEngineeringRole = async (req: AuthRequest, res: Response) =
 }
 
 /** GET /admin/users-with-roles — list all users with their engineering roles (for stakeholder directory) */
-export const getUsersWithRoles = async (_req: AuthRequest, res: Response) => {
+export const getUsersWithRoles = async (req: AuthRequest, res: Response) => {
     try {
+        const callerId = req.userId
+        if (!callerId) {
+            res.status(401).json({ success: false, error: 'Unauthorized' })
+            return
+        }
+        const { company: callerCompany, isSuperior } = await resolveCallerCompany(callerId)
+
+        // #287: tenant-scope the directory. SUPERIOR_ADMIN keeps full view;
+        // everyone else sees only users in their own company.
+        const where = isSuperior ? {} : { company: callerCompany }
         const users = await prisma.user.findMany({
+            where,
             select: {
                 id: true,
                 name: true,
