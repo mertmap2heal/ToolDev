@@ -2,7 +2,6 @@ import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
 import { requireProjectMember } from '../middleware/requireProjectMember.middleware'
 import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
-import { requireProjectMember } from '../middleware/requireProjectMember.middleware'
 import * as validationController from '../controllers/requirementValidation.controller'
 import * as qualityWorkbenchController from '../controllers/requirementQualityWorkbench.controller'
 
