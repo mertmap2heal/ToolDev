@@ -99,6 +99,28 @@ jobs:
           fi
           exit $fail
 
+      - name: Guard Issues label colours pass through safeHexColor (#268)
+        run: |
+          set -e
+          f=frontend/src/pages/Issues/IssuesPage.tsx
+          helper=frontend/src/utils/safeColor.ts
+          fail=0
+          if [ ! -f "$helper" ]; then
+            echo "::error file=$helper::safeColor helper missing (see issue #268)"
+            fail=1
+          fi
+          # Direct interpolation of l.color / lab.color into style is the
+          # pre-fix shape.
+          if grep -qE 'backgroundColor:\s*`\$\{(?:l|lab)\.color\}20`' "$f"; then
+            echo "::error file=$f::label color must pass through safeHexColorTint (see issue #268)"
+            fail=1
+          fi
+          if ! grep -q "safeHexColor" "$f"; then
+            echo "::error file=$f::must use safeHexColor helpers (see issue #268)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Guard Issues module error handlers stay typed (#267)
         run: |
           set -e
