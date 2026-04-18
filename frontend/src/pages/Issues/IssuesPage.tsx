@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { issueService } from '../../services/issue.service'
 import { functionService } from '../../services/function.service'
+import { errorMessage } from '../../utils/errorMessage'
 import DeleteConfirmationModal from '../../components/projects/DeleteConfirmationModal'
 import IssueSourceDetailsModal from '../../components/issues/IssueSourceDetailsModal'
 import CreateIssueModal from '../../components/issues/CreateIssueModal'
@@ -220,9 +221,10 @@ export default function IssuesPage() {
       setEditingIssueId(null)
       setEditingStatus('')
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('Update issue status error:', error)
-      alert(error?.error || 'Failed to update issue status')
+      const msg = errorMessage(error, 'Failed to update issue status')
+      alert(msg)
       setEditingIssueId(null)
       setEditingStatus('')
     },
@@ -237,9 +239,10 @@ export default function IssuesPage() {
       queryClient.invalidateQueries({ queryKey: ['issues', projectId] })
       setDeleteConfirmation(null)
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('Delete issue error:', error)
-      alert(error?.error || 'Failed to delete issue')
+      const msg = errorMessage(error, 'Failed to delete issue')
+      alert(msg)
       setDeleteConfirmation(null)
     },
   })
