@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { issueService } from '../../services/issue.service'
 import { functionService } from '../../services/function.service'
 import { errorMessage } from '../../utils/errorMessage'
+import { safeHexColor, safeHexColorTint } from '../../utils/safeColor'
 import DeleteConfirmationModal from '../../components/projects/DeleteConfirmationModal'
 import IssueSourceDetailsModal from '../../components/issues/IssueSourceDetailsModal'
 import CreateIssueModal from '../../components/issues/CreateIssueModal'
@@ -836,8 +837,9 @@ export default function IssuesPage() {
                                 key={l.id}
                                 className="inline-flex px-2 py-0.5 text-xs font-medium rounded"
                                 style={{
-                                  backgroundColor: `${l.color}20`,
-                                  color: l.color,
+                                  // #268: validate the hex literal before inlining.
+                                  backgroundColor: safeHexColorTint(l.color),
+                                  color: safeHexColor(l.color),
                                 }}
                               >
                                 {l.name}
@@ -851,8 +853,8 @@ export default function IssuesPage() {
                                   key={lab.id}
                                   className="inline-flex px-2 py-0.5 text-xs font-medium rounded"
                                   style={{
-                                    backgroundColor: `${lab.color}20`,
-                                    color: lab.color,
+                                    backgroundColor: safeHexColorTint(lab.color),
+                                    color: safeHexColor(lab.color),
                                   }}
                                 >
                                   {lab.name}
