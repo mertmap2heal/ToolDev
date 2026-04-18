@@ -585,6 +585,40 @@ export const syncPBSToComponents = async (req: AuthRequest, res: Response) => {
     })
     const existingIds = new Set(existingComponents.map((c) => c.id))
 
+    // #293: all supplied node ids + parentIds must resolve inside the
+    // current project. Collect the complete allowed-id set (existing
+    // project components + ids being created in this same batch) so
+    // parentId validation works for both pre-existing and newly-created
+    // parents within the same sync call.
+    const incomingNodeIds = new Set(nodes.map((n: any) => String(n.id)))
+    const allowedIds = new Set<string>([...existingIds, ...incomingNodeIds])
+
+    for (const node of nodes) {
+      if (node.parentId && !allowedIds.has(String(node.parentId))) {
+        return res.status(400).json({
+          success: false,
+          error: `parentId ${node.parentId} is not a component of this project`,
+        })
+      }
+
+      // #293: if the node id is new, verify it does not collide with an
+      // existing component in ANY project (Component.id is globally
+      // unique). Collisions would otherwise leak existence of foreign
+      // components via Prisma's unique-constraint 409/P2002.
+      if (!existingIds.has(node.id)) {
+        const clash = await prisma.component.findUnique({
+          where: { id: node.id },
+          select: { id: true, projectId: true },
+        })
+        if (clash && clash.projectId !== projectId) {
+          return res.status(400).json({
+            success: false,
+            error: 'Component id collision with a foreign project',
+          })
+        }
+      }
+    }
+
     // Process nodes: create or update each one
     for (const node of nodes) {
       const data = {

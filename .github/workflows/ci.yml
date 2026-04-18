@@ -320,6 +320,27 @@ jobs:
           done
           exit $fail
 
+      - name: Run PBS sync cross-project regression (#293)
+        run: cd backend && npx vitest run src/__tests__/pbsSync.validation.test.ts
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret
+
+      - name: Guard syncPBSToComponents validates parentId + ids (#293)
+        run: |
+          set -e
+          f=backend/src/controllers/component.controller.ts
+          fail=0
+          if ! grep -q "parentId is not a component of this project" "$f"; then
+            echo "::error file=$f::syncPBSToComponents must reject foreign parentId (see issue #293)"
+            fail=1
+          fi
+          if ! grep -q "Component id collision with a foreign project" "$f"; then
+            echo "::error file=$f::syncPBSToComponents must reject foreign id collisions (see issue #293)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Run admin audit-log tenant regression (#288)
         run: cd backend && npx vitest run src/__tests__/adminAudit.tenant.test.ts
         env:
