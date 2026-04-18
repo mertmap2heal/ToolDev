@@ -2,29 +2,68 @@ import { Router, Response } from 'express'
 import { prisma } from '../lib/prisma'
 import { authenticateToken } from '../middleware/auth.middleware'
 import type { AuthRequest } from '../middleware/auth.middleware'
+import { isAdminUser } from '../lib/adminAuth'
 
 const router = Router()
 
 /**
  * GET /search?q=<query>&limit=<n>
  *
- * Searches across all major entity tables (projects, requirements, tasks,
- * issues, functions, parameters, change-requests, use-cases, diagrams,
- * components, verification test-cases, inventory items).
+ * Searches across the major entity tables. Results are strictly scoped to
+ * projects the caller is a member of — plus projects the caller owns via
+ * the legacy Project.userId column (backwards-compat with #144). Admin
+ * users (SUPERIOR_ADMIN / COMPANY_ADMIN / AdminRole with admin rights)
+ * continue to see everything.
  *
- * Returns grouped results by category, limited per category.
+ * Issue #296: the previous implementation ran twelve findMany queries with
+ * no projectId filter, leaking every tenant's requirement / issue / task /
+ * parameter / change-request / component / diagram / test-case / inventory
+ * titles and ids to any authenticated user.
  */
 router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
+    const userId = req.userId
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' })
+    }
+
     const q = String(req.query.q ?? '').trim()
     if (!q || q.length < 2) {
       return res.json({ success: true, data: { results: [], query: q } })
     }
 
     const perCategory = Math.min(Number(req.query.limit) || 5, 20)
-    const pattern = `%${q}%`
+    const mode = 'insensitive' as const
 
-    // Run all queries in parallel for speed
+    // Build the set of project IDs the caller may search.
+    // Admins get `null` (no scope filter). Everyone else gets their membership
+    // list unioned with projects they own via Project.userId (legacy owner
+    // column that pre-dates ProjectMember rows).
+    const isAdmin = await isAdminUser(userId)
+    let projectIds: string[] | null = null
+    if (!isAdmin) {
+      const [memberships, owned] = await Promise.all([
+        prisma.projectMember.findMany({
+          where: { userId },
+          select: { projectId: true },
+        }),
+        prisma.project.findMany({
+          where: { userId },
+          select: { id: true },
+        }),
+      ])
+      const ids = new Set<string>()
+      memberships.forEach((m) => ids.add(m.projectId))
+      owned.forEach((p) => ids.add(p.id))
+      projectIds = Array.from(ids)
+      if (projectIds.length === 0) {
+        return res.json({ success: true, data: { results: [], query: q } })
+      }
+    }
+
+    // Reused project-scope clause for every table that carries projectId.
+    const projectScope = projectIds === null ? {} : { projectId: { in: projectIds } }
+
     const [
       projects,
       requirements,
@@ -42,9 +81,10 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       // ── Projects ──
       prisma.project.findMany({
         where: {
+          ...(projectIds === null ? {} : { id: { in: projectIds } }),
           OR: [
-            { name: { contains: q, mode: 'insensitive' } },
-            { description: { contains: q, mode: 'insensitive' } },
+            { name: { contains: q, mode } },
+            { description: { contains: q, mode } },
           ],
         },
         select: { id: true, slug: true, name: true, description: true, status: true },
@@ -54,10 +94,11 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       // ── Requirements ──
       prisma.requirement.findMany({
         where: {
+          ...projectScope,
           OR: [
-            { requirementId: { contains: q, mode: 'insensitive' } },
-            { title: { contains: q, mode: 'insensitive' } },
-            { description: { contains: q, mode: 'insensitive' } },
+            { requirementId: { contains: q, mode } },
+            { title: { contains: q, mode } },
+            { description: { contains: q, mode } },
           ],
         },
         select: {
@@ -73,9 +114,10 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       // ── Tasks ──
       prisma.task.findMany({
         where: {
+          ...projectScope,
           OR: [
-            { title: { contains: q, mode: 'insensitive' } },
-            { descriptionRich: { contains: q, mode: 'insensitive' } },
+            { title: { contains: q, mode } },
+            { descriptionRich: { contains: q, mode } },
           ],
         },
         select: {
@@ -91,10 +133,11 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       // ── Issues ──
       prisma.issue.findMany({
         where: {
+          ...projectScope,
           OR: [
-            { issueKey: { contains: q, mode: 'insensitive' } },
-            { title: { contains: q, mode: 'insensitive' } },
-            { description: { contains: q, mode: 'insensitive' } },
+            { issueKey: { contains: q, mode } },
+            { title: { contains: q, mode } },
+            { description: { contains: q, mode } },
           ],
         },
         select: {
@@ -111,10 +154,11 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       // ── System Functions ──
       prisma.systemFunction.findMany({
         where: {
+          ...projectScope,
           OR: [
-            { functionId: { contains: q, mode: 'insensitive' } },
-            { name: { contains: q, mode: 'insensitive' } },
-            { description: { contains: q, mode: 'insensitive' } },
+            { functionId: { contains: q, mode } },
+            { name: { contains: q, mode } },
+            { description: { contains: q, mode } },
           ],
         },
         select: {
@@ -130,9 +174,10 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       // ── Parameters ──
       prisma.parameter.findMany({
         where: {
+          ...projectScope,
           OR: [
-            { name: { contains: q, mode: 'insensitive' } },
-            { description: { contains: q, mode: 'insensitive' } },
+            { name: { contains: q, mode } },
+            { description: { contains: q, mode } },
           ],
         },
         select: {
@@ -147,10 +192,11 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       // ── Change Requests ──
       prisma.changeRequest.findMany({
         where: {
+          ...projectScope,
           OR: [
-            { crId: { contains: q, mode: 'insensitive' } },
-            { title: { contains: q, mode: 'insensitive' } },
-            { description: { contains: q, mode: 'insensitive' } },
+            { crId: { contains: q, mode } },
+            { title: { contains: q, mode } },
+            { description: { contains: q, mode } },
           ],
         },
         select: {
@@ -167,10 +213,11 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       // ── Use Cases ──
       prisma.useCase.findMany({
         where: {
+          ...projectScope,
           OR: [
-            { useCaseId: { contains: q, mode: 'insensitive' } },
-            { name: { contains: q, mode: 'insensitive' } },
-            { description: { contains: q, mode: 'insensitive' } },
+            { useCaseId: { contains: q, mode } },
+            { name: { contains: q, mode } },
+            { description: { contains: q, mode } },
           ],
         },
         select: {
@@ -186,9 +233,10 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       // ── Diagrams ──
       prisma.diagram.findMany({
         where: {
+          ...projectScope,
           OR: [
-            { name: { contains: q, mode: 'insensitive' } },
-            { description: { contains: q, mode: 'insensitive' } },
+            { name: { contains: q, mode } },
+            { description: { contains: q, mode } },
           ],
         },
         select: {
@@ -203,9 +251,10 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       // ── Components (PBS) ──
       prisma.component.findMany({
         where: {
+          ...projectScope,
           OR: [
-            { name: { contains: q, mode: 'insensitive' } },
-            { description: { contains: q, mode: 'insensitive' } },
+            { name: { contains: q, mode } },
+            { description: { contains: q, mode } },
           ],
         },
         select: {
@@ -220,10 +269,11 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       // ── Verification Test Cases ──
       prisma.verTestCase.findMany({
         where: {
+          ...projectScope,
           OR: [
-            { key: { contains: q, mode: 'insensitive' } },
-            { title: { contains: q, mode: 'insensitive' } },
-            { objective: { contains: q, mode: 'insensitive' } },
+            { key: { contains: q, mode } },
+            { title: { contains: q, mode } },
+            { objective: { contains: q, mode } },
           ],
         },
         select: {
@@ -237,12 +287,27 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       }),
 
       // ── Inventory Items ──
+      // Items can be globally shared (projectId null) OR project-scoped.
+      // Non-admins see only the shared bucket plus items in projects they
+      // belong to.
       prisma.item.findMany({
         where: {
-          OR: [
-            { sku: { contains: q, mode: 'insensitive' } },
-            { name: { contains: q, mode: 'insensitive' } },
-            { description: { contains: q, mode: 'insensitive' } },
+          AND: [
+            {
+              OR: [
+                { sku: { contains: q, mode } },
+                { name: { contains: q, mode } },
+                { description: { contains: q, mode } },
+              ],
+            },
+            projectIds === null
+              ? {}
+              : {
+                  OR: [
+                    { projectId: { in: projectIds } },
+                    { projectId: null },
+                  ],
+                },
           ],
         },
         select: {
