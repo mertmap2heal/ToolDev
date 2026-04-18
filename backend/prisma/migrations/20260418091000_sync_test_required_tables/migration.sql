@@ -15,38 +15,38 @@ CREATE TABLE "UserAdminRole" (
     CONSTRAINT "UserAdminRole_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
-CREATE INDEX "UserAdminRole_userId_idx" ON "UserAdminRole"("userId");
+-- CreateIndex (IF NOT EXISTS: DB may already have indexes from prisma db push / drift)
+CREATE INDEX IF NOT EXISTS "UserAdminRole_userId_idx" ON "UserAdminRole"("userId");
 
 -- CreateIndex
-CREATE INDEX "UserAdminRole_adminRoleId_idx" ON "UserAdminRole"("adminRoleId");
+CREATE INDEX IF NOT EXISTS "UserAdminRole_adminRoleId_idx" ON "UserAdminRole"("adminRoleId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "UserAdminRole_userId_adminRoleId_key" ON "UserAdminRole"("userId", "adminRoleId");
+CREATE UNIQUE INDEX IF NOT EXISTS "UserAdminRole_userId_adminRoleId_key" ON "UserAdminRole"("userId", "adminRoleId");
 
 -- CreateIndex
-CREATE INDEX "CertSignOff_signerId_idx" ON "CertSignOff"("signerId");
+CREATE INDEX IF NOT EXISTS "CertSignOff_signerId_idx" ON "CertSignOff"("signerId");
 
 -- CreateIndex
-CREATE INDEX "CertSignOff_assignedToUserId_idx" ON "CertSignOff"("assignedToUserId");
+CREATE INDEX IF NOT EXISTS "CertSignOff_assignedToUserId_idx" ON "CertSignOff"("assignedToUserId");
 
 -- CreateIndex
-CREATE INDEX "Requirement_projectId_deletedAt_idx" ON "Requirement"("projectId", "deletedAt");
+CREATE INDEX IF NOT EXISTS "Requirement_projectId_deletedAt_idx" ON "Requirement"("projectId", "deletedAt");
 
 -- CreateIndex
-CREATE INDEX "Requirement_lockedByUserId_idx" ON "Requirement"("lockedByUserId");
+CREATE INDEX IF NOT EXISTS "Requirement_lockedByUserId_idx" ON "Requirement"("lockedByUserId");
 
 -- CreateIndex
-CREATE INDEX "Requirement_statusId_idx" ON "Requirement"("statusId");
+CREATE INDEX IF NOT EXISTS "Requirement_statusId_idx" ON "Requirement"("statusId");
 
 -- CreateIndex
-CREATE INDEX "Requirement_statusChangedBy_idx" ON "Requirement"("statusChangedBy");
+CREATE INDEX IF NOT EXISTS "Requirement_statusChangedBy_idx" ON "Requirement"("statusChangedBy");
 
 -- CreateIndex
-CREATE INDEX "Requirement_deletedById_idx" ON "Requirement"("deletedById");
+CREATE INDEX IF NOT EXISTS "Requirement_deletedById_idx" ON "Requirement"("deletedById");
 
 -- CreateIndex
-CREATE INDEX "RequirementExportTemplate_projectId_deletedAt_idx" ON "RequirementExportTemplate"("projectId", "deletedAt");
+CREATE INDEX IF NOT EXISTS "RequirementExportTemplate_projectId_deletedAt_idx" ON "RequirementExportTemplate"("projectId", "deletedAt");
 
 -- AddForeignKey
 ALTER TABLE "UserAdminRole" ADD CONSTRAINT "UserAdminRole_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
