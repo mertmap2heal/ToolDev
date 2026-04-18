@@ -9,7 +9,8 @@ import { requirementService } from '../../services/requirement.service'
 import { authService } from '../../services/auth.service'
 import { useAuthStore } from '../../store/authStore'
 import { invalidateLinkCaches } from '../../utils/invalidateLinkCaches'
-import type { CreateIssueDto, IssueType, SystemFunction, Parameter } from 'shared/types/engineering.types'
+import axios from 'axios'
+import type { CreateIssueDto, IssueType } from 'shared/types/engineering.types'
 
 interface CreateIssueModalProps {
   isOpen: boolean
@@ -53,7 +54,10 @@ export default function CreateIssueModal({
     relatedFunctionIds: initialSourceType === 'function' && initialSourceId ? [initialSourceId] : [],
     relatedParameterIds: initialSourceType === 'parameter' && initialSourceId ? [initialSourceId] : [],
   })
-  const setFormData = (v: CreateIssueDto | ((prev: CreateIssueDto) => CreateIssueDto)) => { setFormDataBase(v as any); markDirty() }
+  const setFormData = (v: CreateIssueDto | ((prev: CreateIssueDto) => CreateIssueDto)) => {
+    setFormDataBase(v)
+    markDirty()
+  }
   const formData = formDataBase
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [sourceSearchQuery, setSourceSearchQuery] = useState('')
@@ -218,18 +222,20 @@ export default function CreateIssueModal({
         setErrors({ submit: response.error || 'Failed to create issue' })
       }
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('Create issue error:', error)
       let errorMessage = 'Failed to create issue.'
-
-      if (error?.error) {
-        errorMessage = error.error
-      } else if (error?.message) {
+      if (axios.isAxiosError(error)) {
+        const data = error.response?.data as { error?: string } | undefined
+        errorMessage = data?.error ?? error.message
+      } else if (error && typeof error === 'object') {
+        const e = error as { error?: string; message?: string; response?: { data?: { error?: string } } }
+        if (e.error) errorMessage = e.error
+        else if (e.message) errorMessage = e.message
+        else if (e.response?.data?.error) errorMessage = e.response.data.error
+      } else if (error instanceof Error) {
         errorMessage = error.message
-      } else if (error?.response?.data?.error) {
-        errorMessage = error.response.data.error
       }
-
       setErrors({ submit: errorMessage })
     },
   })
@@ -266,7 +272,7 @@ export default function CreateIssueModal({
   }
 
   const handleChange = (field: keyof CreateIssueDto, value: string | string[] | undefined) => {
-    setFormData((prev) => ({ ...prev, [field]: value as any }))
+    setFormData((prev) => ({ ...prev, [field]: value } as CreateIssueDto))
     if (errors[field]) {
       setErrors((prev) => {
         const newErrors = { ...prev }
