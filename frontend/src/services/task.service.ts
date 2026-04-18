@@ -300,25 +300,19 @@ export const taskService = {
   },
 
   // CSV Import/Export methods
+  // #299: use apiClient.postBlob so the response goes through the central
+  // request/response interceptor — token read from localStorage OR
+  // sessionStorage, and 401/403 triggers the token-expired flow.
   async exportTasks(data: {
     projectId?: string
     filters?: any
     columns?: string[]
   }): Promise<Blob> {
-    const apiBase = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api/v1' : 'http://localhost:5000/api/v1')
-    const response = await fetch(`${apiBase}/csv/export`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
-      },
-      body: JSON.stringify({
-        project_id: data.projectId,
-        ...data.filters,
-        columns: data.columns || ['title', 'status', 'priority', 'due_date', 'tags'],
-      }),
+    return apiClient.postBlob('/csv/export', {
+      project_id: data.projectId,
+      ...data.filters,
+      columns: data.columns || ['title', 'status', 'priority', 'due_date', 'tags'],
     })
-    return response.blob()
   },
 
   async importTasks(data: {
