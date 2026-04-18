@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
 import { requireProjectMember } from '../middleware/requireProjectMember.middleware'
+import { requireProjectOwnerOrAdmin } from '../middleware/requireProjectOwnerOrAdmin.middleware'
 import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import {
   getRequirements,
@@ -95,6 +96,7 @@ router.post(
 
 router.delete(
   '/:projectId/:requirementId/permanent',
+  requireProjectOwnerOrAdmin,
   permanentDeleteRequirement
 )
 
