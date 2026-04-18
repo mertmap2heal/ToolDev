@@ -17,10 +17,18 @@ import { parameterService } from '../../services/parameter.service'
 
 type GitPlatform = 'gitlab' | 'github' | 'bitbucket' | 'azuredevops'
 
+/**
+ * Persisted Git publish config.
+ *
+ * #272: the Git personal-access token is intentionally **not** part of the
+ * persisted shape. Tokens stay in React state only — any XSS / shared-
+ * workstation threat that could read localStorage would otherwise leak a
+ * source-repo PAT. Callers that need the token (setup, sync, pull) must
+ * prompt the user to re-enter it via the modal each session.
+ */
 export interface GitPublishStoredConfig {
   platform: GitPlatform
   baseUrl: string
-  token: string
   username?: string
   workspace?: string
   org?: string
@@ -36,6 +44,27 @@ export interface GitPublishStoredConfig {
   lastCommitSha: string
   parameterCount: number
   instructions: { https: string; ssh: string; updateCmd: string }
+}
+
+/** Storage key versioning: v2 persists without token (#272). */
+export const GIT_PUBLISH_STORAGE_VERSION = 'v2'
+
+/**
+ * Drop any pre-fix storage that still carries a token from before #272 was
+ * deployed. Call once at mount; idempotent.
+ */
+export function clearLegacyGitPublishStorage(storageKey: string): void {
+  try {
+    const raw = localStorage.getItem(storageKey)
+    if (!raw) return
+    const parsed = JSON.parse(raw) as { token?: unknown }
+    if (typeof parsed?.token === 'string' && parsed.token.length > 0) {
+      localStorage.removeItem(storageKey)
+    }
+  } catch {
+    // bad JSON — remove defensively.
+    localStorage.removeItem(storageKey)
+  }
 }
 
 interface Props {
@@ -207,9 +236,12 @@ export default function PublishToGitModal({
   const [error, setError] = useState<string | null>(null)
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null)
 
-  // Load persisted config on mount
+  // Load persisted config on mount.
+  // #272: the token is NOT restored — user must re-enter it each session.
   useEffect(() => {
     if (!isOpen) return
+    // Purge any pre-fix storage that still contains a token.
+    clearLegacyGitPublishStorage(storageKey)
     try {
       const stored = localStorage.getItem(storageKey)
       if (stored) {
@@ -217,7 +249,7 @@ export default function PublishToGitModal({
         setStoredConfig(cfg)
         setPlatform(cfg.platform)
         setBaseUrl(cfg.baseUrl)
-        setToken(cfg.token)
+        // setToken intentionally skipped — prompt user.
         setUsername(cfg.username ?? '')
         setWorkspace(cfg.workspace ?? '')
         setOrg(cfg.org ?? '')
@@ -323,7 +355,6 @@ export default function PublishToGitModal({
       const config: GitPublishStoredConfig = {
         platform,
         baseUrl: baseUrl.trim().replace(/\/$/, ''),
-        token: token.trim(),
         ...(username ? { username: username.trim() } : {}),
         ...(workspace ? { workspace: workspace.trim() } : {}),
         ...(org ? { org: org.trim() } : {}),
@@ -341,6 +372,8 @@ export default function PublishToGitModal({
         instructions: res.data.instructions,
       }
 
+      // #272: persist only non-secret config. The token stays in React state
+      // for the lifetime of this modal session and is never written to disk.
       localStorage.setItem(storageKey, JSON.stringify(config))
       setStoredConfig(config)
       onConfigChange?.(config)
@@ -357,12 +390,17 @@ export default function PublishToGitModal({
   const handleSync = async () => {
     if (!storedConfig) return
     setError(null)
+    // #272: token is no longer persisted. Require the user to re-enter it.
+    if (!token.trim()) {
+      setError('Re-enter your access token to sync')
+      return
+    }
     setIsSyncing(true)
     try {
       const res = await parameterService.gitPublishSync(projectId, {
         platform: storedConfig.platform,
         baseUrl: storedConfig.baseUrl,
-        token: storedConfig.token,
+        token: token.trim(),
         repoId: storedConfig.repoId,
         branch: storedConfig.defaultBranch,
         selectedFormats: storedConfig.selectedFormats,
