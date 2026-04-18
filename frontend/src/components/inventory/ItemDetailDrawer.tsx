@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Package, MapPin, History, TrendingUp } from 'lucide-react'
+import { X, Package, MapPin, History } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { inventoryService, Item } from '../../services/inventory.service'
 

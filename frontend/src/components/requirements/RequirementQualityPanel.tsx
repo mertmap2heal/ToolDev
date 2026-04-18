@@ -579,7 +579,8 @@ export default function RequirementQualityPanel({
   const availableRequirementTypes = useMemo(() => {
     const merged = [...defaultRequirementTypes]
     if (customTypesData) {
-      ;(customTypesData as any[]).forEach((item: any) => {
+      const items = customTypesData as Array<string | { name?: string; value?: string }>
+      items.forEach((item) => {
         const name = typeof item === 'string' ? item : item.name || item.value
         if (name && !merged.some(t => t.toLowerCase() === name.toLowerCase())) merged.push(name)
       })

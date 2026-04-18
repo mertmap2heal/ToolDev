@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, type SetStateAction } from 'react'
 import { X, Plus, Trash2 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { inventoryService } from '../../../services/inventory.service'
@@ -30,7 +30,10 @@ export default function CreatePurchaseOrderModal({
       locationId: string
     }>,
   })
-  const setFormData = (v: typeof formData | ((prev: typeof formData) => typeof formData)) => { setFormDataBase(v as any); markDirty() }
+  const setFormData = (v: SetStateAction<typeof formData>) => {
+    setFormDataBase(v)
+    markDirty()
+  }
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

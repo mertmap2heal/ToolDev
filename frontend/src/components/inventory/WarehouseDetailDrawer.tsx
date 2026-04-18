@@ -1,11 +1,32 @@
 import { useState } from 'react'
-import { X, Warehouse, MapPin, Plus, Edit, Trash2 } from 'lucide-react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { X, Warehouse, Plus } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { inventoryService } from '../../services/inventory.service'
 import CreateLocationModal from './CreateLocationModal'
 
+interface WarehouseSummary {
+  id: string
+  name: string
+  code: string
+  isActive?: boolean
+  address?: string
+  city?: string
+  state?: string
+  zipCode?: string
+  country?: string
+  negativeStockPolicy?: string
+}
+
+interface LocationTreeNode {
+  id: string
+  code: string
+  name?: string
+  locationType?: string
+  children?: LocationTreeNode[]
+}
+
 interface WarehouseDetailDrawerProps {
-  warehouse: any
+  warehouse: WarehouseSummary
   isOpen: boolean
   onClose: () => void
 }
@@ -27,9 +48,9 @@ export default function WarehouseDetailDrawer({ warehouse, isOpen, onClose }: Wa
     enabled: isOpen && activeTab === 'locations',
   })
 
-  const locationTree = locationTreeData?.data || []
+  const locationTree = (locationTreeData?.data || []) as LocationTreeNode[]
 
-  const renderLocationTree = (locations: any[], level = 0) => {
+  const renderLocationTree = (locations: LocationTreeNode[]) => {
     return locations.map((location) => (
       <div key={location.id} className="ml-4">
         <div className="flex items-center gap-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded">
@@ -45,7 +66,7 @@ export default function WarehouseDetailDrawer({ warehouse, isOpen, onClose }: Wa
         </div>
         {location.children && location.children.length > 0 && (
           <div className="ml-4 border-l-2 border-gray-200 dark:border-gray-700 pl-2">
-            {renderLocationTree(location.children, level + 1)}
+            {renderLocationTree(location.children)}
           </div>
         )}
       </div>
