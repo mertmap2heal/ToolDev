@@ -211,6 +211,33 @@ jobs:
             exit 1
           fi
 
+      - name: Run admin audit-log tenant regression (#288)
+        run: cd backend && npx vitest run src/__tests__/adminAudit.tenant.test.ts
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret
+
+      - name: Guard admin audit-log tenant scope (#288)
+        run: |
+          set -e
+          f=backend/src/controllers/admin.controller.ts
+          fail=0
+          # Must consult caller's company + SUPERIOR_ADMIN status.
+          if ! grep -q "SUPERIOR_ADMIN" "$f"; then
+            echo "::error file=$f::getAuditLog must check SUPERIOR_ADMIN bypass (see issue #288)"
+            fail=1
+          fi
+          if ! grep -q "allowedProjectIds" "$f"; then
+            echo "::error file=$f::getAuditLog must scope by allowedProjectIds (see issue #288)"
+            fail=1
+          fi
+          svc=backend/src/services/adminUserRole.service.ts
+          if ! grep -q "callerCompany" "$svc"; then
+            echo "::error file=$svc::listAssignments must accept a callerCompany filter (see issue #288)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Run engineering-role tenant regression (#287)
         run: cd backend && npx vitest run src/__tests__/engineeringRole.tenant.test.ts
         env:
