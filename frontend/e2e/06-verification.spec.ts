@@ -221,8 +221,9 @@ test.describe('Verification', () => {
     const gapSelect = page.locator('select').filter({ hasText: /all.*ok.*no run/i })
     if (await gapSelect.isVisible()) {
       await gapSelect.selectOption({ value: 'OK' })
-      await page.waitForTimeout(300)
+      await expect(gapSelect).toHaveValue('OK')
       await gapSelect.selectOption({ value: '' })
+      await expect(gapSelect).toHaveValue('')
     }
   })
 
@@ -246,10 +247,11 @@ test.describe('Verification', () => {
     const groupSelect = page.locator('select').filter({ hasText: /flat.*requirement.*test plan/i })
     if (await groupSelect.isVisible()) {
       await groupSelect.selectOption({ value: 'requirement' })
-      await page.waitForTimeout(300)
+      await expect(groupSelect).toHaveValue('requirement')
       await groupSelect.selectOption({ value: 'plan' })
-      await page.waitForTimeout(300)
+      await expect(groupSelect).toHaveValue('plan')
       await groupSelect.selectOption({ value: 'flat' })
+      await expect(groupSelect).toHaveValue('flat')
     }
   })
 
@@ -273,7 +275,7 @@ test.describe('Verification', () => {
     // Toggle show all test cases
     if (!(await showAllCheckbox.isChecked())) {
       await showAllCheckbox.check()
-      await page.waitForTimeout(500)
+      await expect(showAllCheckbox).toBeChecked()
     }
 
     // After toggling, should still see the grid (table element)
@@ -294,7 +296,7 @@ test.describe('Verification', () => {
     await expect(showAllCheckbox).toBeVisible({ timeout: 5_000 })
     if (!(await showAllCheckbox.isChecked())) {
       await showAllCheckbox.check()
-      await page.waitForTimeout(500)
+      await expect(showAllCheckbox).toBeChecked()
     }
 
     // Find an empty cell (one with the plus icon) and click it
