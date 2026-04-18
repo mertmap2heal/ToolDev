@@ -26,6 +26,7 @@ export default function ChangeRequestsPage() {
 
   // State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [editingChangeRequestId, setEditingChangeRequestId] = useState<string | null>(null)
   const [selectedChangeRequest, setSelectedChangeRequest] = useState<ChangeRequest | null>(null)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
 
@@ -533,8 +534,12 @@ export default function ChangeRequestsPage() {
           {/* Modals placed within scrolling container like RequirementsPage */}
           <CreateChangeRequestModal
             isOpen={isCreateModalOpen}
-            onClose={() => setIsCreateModalOpen(false)}
+            onClose={() => {
+              setIsCreateModalOpen(false)
+              setEditingChangeRequestId(null)
+            }}
             projectId={projectId!}
+            editingChangeRequestId={editingChangeRequestId ?? undefined}
           />
         </div>
 
@@ -545,7 +550,8 @@ export default function ChangeRequestsPage() {
           projectId={projectId!}
           requirementIdMap={reqIdMap}
           onClose={() => setIsDrawerOpen(false)}
-          onEdit={() => {
+          onEdit={(cr) => {
+            setEditingChangeRequestId(cr.id)
             setIsCreateModalOpen(true)
           }}
           onDelete={handleDelete}

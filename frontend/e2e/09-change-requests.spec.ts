@@ -108,29 +108,56 @@ test.describe('Change Requests', () => {
     })
   })
 
-  test.describe('#228 — edit flow (current behaviour)', () => {
-    test('clicking the drawer Edit icon opens the create modal (limitation documented in #228)', async ({
-      page,
-      projectId,
-    }) => {
+  test.describe('#228 — edit flow', () => {
+    test('drawer Edit opens modal in edit mode pre-filled with the CR', async ({ page, projectId }) => {
+      await ensureSourceForCR(page, projectId)
       await page.goto(`/projects/${projectId}/change-requests`)
       await page.waitForLoadState('domcontentloaded')
 
-      const firstDataRow = page.locator('table tbody tr').first()
-      if ((await firstDataRow.count()) === 0) {
-        test.skip(true, 'No existing CRs to exercise edit flow')
+      // Seed a fresh CR so we know its title without depending on demo data.
+      const stamp = Date.now()
+      const original = `e2e_cr_edit_orig_${stamp}`
+      await page.getByRole('button', { name: /new change request/i }).first().click()
+      let modal = page.locator(MODAL).last()
+      await expect(modal).toBeVisible()
+      const sourceSearch = modal.getByPlaceholder(/Search functions, issues, parameters, or requirements/i)
+      await sourceSearch.click()
+      const firstSource = modal.locator('button').filter({ hasText: /Function|Issue|Parameter|Requirement/ }).first()
+      if (!(await firstSource.isVisible({ timeout: 3_000 }).catch(() => false))) {
+        test.skip(true, 'No source artifacts available')
         return
       }
-      // Click on the title cell (3rd td) — whole row has onClick but td:nth-child(1) is checkbox.
-      await firstDataRow.locator('td').nth(2).click()
+      await firstSource.click()
+      await modal.getByPlaceholder(/Brief summary of the change request/i).fill(original)
+      await modal.getByPlaceholder(/Describe in detail what change is being requested/i).fill('orig description')
+      await modal.getByRole('button', { name: /create change request/i }).click()
+      await expect(modal).toBeHidden({ timeout: 8_000 })
+
+      // Open the row drawer and click Edit.
+      const row = page.locator('table tbody tr').filter({ hasText: original }).first()
+      await expect(row).toBeVisible({ timeout: 8_000 })
+      await row.locator('td').nth(2).click()
       const drawer = page.locator('[class*="rounded-2xl"]').filter({ has: page.getByRole('button', { name: /Edit Change Request/i }) }).first()
       await expect(drawer).toBeVisible({ timeout: 5_000 })
       await drawer.getByRole('button', { name: /Edit Change Request/i }).click()
-      const modal = page.locator(MODAL).last()
+
+      modal = page.locator(MODAL).last()
       await expect(modal).toBeVisible()
-      // Modal title is Create — confirms the limitation in #228.
-      await expect(modal.getByRole('heading', { name: /create change request/i })).toBeVisible()
-      await page.keyboard.press('Escape').catch(() => {})
+      // Heading flips to Edit.
+      await expect(modal.getByRole('heading', { name: /^edit change request$/i })).toBeVisible({ timeout: 5_000 })
+      // Title field pre-filled with the original.
+      const titleInput = modal.getByPlaceholder(/Brief summary of the change request/i)
+      await expect(titleInput).toHaveValue(original, { timeout: 5_000 })
+
+      // Change the title and submit -> Save Changes button (not Create).
+      const updated = `e2e_cr_edit_updated_${stamp}`
+      await titleInput.fill(updated)
+      await modal.getByRole('button', { name: /^save changes$/i }).click()
+      await expect(modal).toBeHidden({ timeout: 8_000 })
+
+      // Original row gone, updated row present.
+      await expect(page.locator('table tbody tr').filter({ hasText: original })).toHaveCount(0, { timeout: 8_000 })
+      await expect(page.locator('table tbody tr').filter({ hasText: updated }).first()).toBeVisible({ timeout: 8_000 })
     })
   })
 
