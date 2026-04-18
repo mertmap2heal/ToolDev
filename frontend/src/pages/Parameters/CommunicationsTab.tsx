@@ -166,10 +166,12 @@ function BusPanel({
 // ── Message panel ─────────────────────────────────────────────────────────────
 
 function MessagePanel({
+  projectId,
   busId,
   selectedMessageId,
   onSelect,
 }: {
+  projectId: string
   busId: string
   selectedMessageId: string | null
   onSelect: (id: string | null) => void
@@ -180,34 +182,34 @@ function MessagePanel({
   const [form, setForm] = useState({ name: '', messageId: '', direction: '', description: '' })
 
   const { data: messages = [], isLoading } = useQuery({
-    queryKey: ['comm-messages', busId],
-    queryFn: () => commService.getMessages(busId),
+    queryKey: ['comm-messages', projectId, busId],
+    queryFn: () => commService.getMessages(projectId, busId),
   })
 
   const createMut = useMutation({
-    mutationFn: () => commService.createMessage(busId, {
+    mutationFn: () => commService.createMessage(projectId, busId, {
       name: form.name.trim(),
       messageId: form.messageId.trim() || undefined,
       direction: form.direction || undefined,
       description: form.description.trim() || undefined,
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['comm-messages', busId] }); setCreating(false); setForm({ name: '', messageId: '', direction: '', description: '' }) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['comm-messages', projectId, busId] }); setCreating(false); setForm({ name: '', messageId: '', direction: '', description: '' }) },
   })
 
   const updateMut = useMutation({
-    mutationFn: (m: CommMessage) => commService.updateMessage(m.id, busId, {
+    mutationFn: (m: CommMessage) => commService.updateMessage(projectId, m.id, {
       name: form.name.trim(),
       messageId: form.messageId.trim() || null,
       direction: form.direction || null,
       description: form.description.trim() || undefined,
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['comm-messages', busId] }); setEditing(null) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['comm-messages', projectId, busId] }); setEditing(null) },
   })
 
   const deleteMut = useMutation({
-    mutationFn: (id: string) => commService.deleteMessage(id),
+    mutationFn: (id: string) => commService.deleteMessage(projectId, id),
     onSuccess: (_d, id) => {
-      qc.invalidateQueries({ queryKey: ['comm-messages', busId] })
+      qc.invalidateQueries({ queryKey: ['comm-messages', projectId, busId] })
       if (selectedMessageId === id) onSelect(null)
     },
   })
@@ -309,8 +311,8 @@ function FieldEditor({
   const [form, setForm] = useState(blank)
 
   const { data: fields = [], isLoading } = useQuery({
-    queryKey: ['comm-fields', messageId],
-    queryFn: () => commService.getFields(messageId),
+    queryKey: ['comm-fields', projectId, messageId],
+    queryFn: () => commService.getFields(projectId, messageId),
   })
 
   const { data: parametersRes } = useQuery({
@@ -321,29 +323,29 @@ function FieldEditor({
   const parameters = parametersRes ?? []
 
   const createMut = useMutation({
-    mutationFn: () => commService.createField(messageId, {
+    mutationFn: () => commService.createField(projectId, messageId, {
       fieldName: form.fieldName.trim(),
       dataType: form.dataType.trim() || undefined,
       parameterId: form.parameterId || null,
       description: form.description.trim() || undefined,
       order: fields.length,
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['comm-fields', messageId] }); setCreating(false); setForm(blank) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['comm-fields', projectId, messageId] }); setCreating(false); setForm(blank) },
   })
 
   const updateMut = useMutation({
-    mutationFn: (id: string) => commService.updateField(id, {
+    mutationFn: (id: string) => commService.updateField(projectId, id, {
       fieldName: form.fieldName.trim(),
       dataType: form.dataType.trim() || null,
       parameterId: form.parameterId || null,
       description: form.description.trim() || null,
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['comm-fields', messageId] }); setEditingId(null) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['comm-fields', projectId, messageId] }); setEditingId(null) },
   })
 
   const deleteMut = useMutation({
-    mutationFn: (id: string) => commService.deleteField(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['comm-fields', messageId] }),
+    mutationFn: (id: string) => commService.deleteField(projectId, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comm-fields', projectId, messageId] }),
   })
 
   function startEdit(f: CommField) {
@@ -505,7 +507,7 @@ export default function CommunicationsTab({ projectId }: { projectId: string }) 
       {/* Message list */}
       <div className="w-64 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         {selectedBusId ? (
-          <MessagePanel busId={selectedBusId} selectedMessageId={selectedMessageId} onSelect={setSelectedMessageId} />
+          <MessagePanel projectId={projectId} busId={selectedBusId} selectedMessageId={selectedMessageId} onSelect={setSelectedMessageId} />
         ) : (
           <div className="flex items-center justify-center h-full">
             <p className="text-xs text-gray-400 dark:text-gray-500 text-center px-4">Select a bus to view its messages</p>
