@@ -1,13 +1,44 @@
 import { useState, useRef, type SetStateAction } from 'react'
+import axios from 'axios'
 import { X, Plus, Trash2 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { inventoryService } from '../../../services/inventory.service'
+import { inventoryService, type Item } from '../../../services/inventory.service'
 import { useUnsavedChanges } from '../../../hooks/useUnsavedChanges'
 
 interface CreatePurchaseOrderModalProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
+}
+
+type PurchaseOrderLineForm = {
+  itemId: string
+  qtyOrdered: number
+  unitPrice: number
+  uomId: string
+  locationId: string
+}
+
+interface SupplierOption {
+  id: string
+  code: string
+  name: string
+}
+
+interface UomOption {
+  id: string
+  code: string
+}
+
+interface LocationOption {
+  id: string
+  code: string
+}
+
+interface WarehouseWithLocations {
+  id: string
+  code: string
+  locations?: LocationOption[]
 }
 
 export default function CreatePurchaseOrderModal({
@@ -22,13 +53,7 @@ export default function CreatePurchaseOrderModal({
     orderedAt: new Date().toISOString().split('T')[0],
     expectedAt: '',
     notes: '',
-    lines: [] as Array<{
-      itemId: string
-      qtyOrdered: number
-      unitPrice: number
-      uomId: string
-      locationId: string
-    }>,
+    lines: [] as PurchaseOrderLineForm[],
   })
   const setFormData = (v: SetStateAction<typeof formData>) => {
     setFormDataBase(v)
@@ -72,10 +97,10 @@ export default function CreatePurchaseOrderModal({
     enabled: isOpen,
   })
 
-  const suppliers = suppliersData?.data || []
-  const items = itemsData?.data?.items || []
-  const warehouses = warehousesData?.data || []
-  const uoms = uomsData?.data || []
+  const suppliers = (suppliersData?.data || []) as SupplierOption[]
+  const items = (itemsData?.data?.items || []) as Item[]
+  const warehouses = (warehousesData?.data || []) as WarehouseWithLocations[]
+  const uoms = (uomsData?.data || []) as UomOption[]
 
   const addLine = () => {
     setFormData({
@@ -100,7 +125,11 @@ export default function CreatePurchaseOrderModal({
     })
   }
 
-  const updateLine = (index: number, field: string, value: any) => {
+  const updateLine = <K extends keyof PurchaseOrderLineForm>(
+    index: number,
+    field: K,
+    value: PurchaseOrderLineForm[K]
+  ) => {
     const newLines = [...formData.lines]
     newLines[index] = { ...newLines[index], [field]: value }
     setFormData({ ...formData, lines: newLines })
@@ -137,8 +166,13 @@ export default function CreatePurchaseOrderModal({
       })
       resetDirty()
       onSuccess()
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to create purchase order'
+    } catch (err: unknown) {
+      const raw = axios.isAxiosError(err)
+        ? (err.response?.data as { error?: string } | undefined)?.error ?? err.message
+        : err instanceof Error
+          ? err.message
+          : 'Failed to create purchase order'
+      const errorMessage = raw || 'Failed to create purchase order'
       setError(errorMessage)
       console.error('Error creating purchase order:', err)
     } finally {
@@ -183,7 +217,7 @@ export default function CreatePurchaseOrderModal({
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">Select Supplier</option>
-                {suppliers.map((supplier: any) => (
+                {suppliers.map((supplier) => (
                   <option key={supplier.id} value={supplier.id}>
                     {supplier.code} - {supplier.name}
                   </option>
@@ -274,7 +308,7 @@ export default function CreatePurchaseOrderModal({
                           className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800"
                         >
                           <option value="">Select</option>
-                          {items.map((item: any) => (
+                          {items.map((item) => (
                             <option key={item.id} value={item.id}>
                               {item.sku} - {item.name}
                             </option>
@@ -314,7 +348,7 @@ export default function CreatePurchaseOrderModal({
                           className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800"
                         >
                           <option value="">Select</option>
-                          {uoms.map((uom: any) => (
+                          {uoms.map((uom) => (
                             <option key={uom.id} value={uom.id}>
                               {uom.code}
                             </option>
@@ -330,8 +364,8 @@ export default function CreatePurchaseOrderModal({
                           className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800"
                         >
                           <option value="">Select</option>
-                          {warehouses.map((wh: any) =>
-                            wh.locations?.map((loc: any) => (
+                          {warehouses.flatMap((wh) =>
+                            (wh.locations ?? []).map((loc) => (
                               <option key={loc.id} value={loc.id}>
                                 {wh.code} - {loc.code}
                               </option>

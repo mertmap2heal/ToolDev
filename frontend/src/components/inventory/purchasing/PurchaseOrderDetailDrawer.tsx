@@ -1,11 +1,30 @@
 import { useState } from 'react'
+import axios from 'axios'
 import { X, Package, Plus, CheckCircle } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { inventoryService } from '../../../services/inventory.service'
 import CreateReceiptModal from './CreateReceiptModal'
 
+interface PurchaseOrderLineView {
+  id: string
+  qtyOrdered: number
+  qtyReceived: number
+  unitPrice: number
+  item?: { sku?: string; name?: string }
+}
+
+interface PurchaseOrderSummary {
+  id: string
+  number: string
+  status: string
+  orderedAt: string
+  expectedAt?: string | null
+  supplier?: { name?: string }
+  lines?: PurchaseOrderLineView[]
+}
+
 interface PurchaseOrderDetailDrawerProps {
-  purchaseOrder: any
+  purchaseOrder: PurchaseOrderSummary
   isOpen: boolean
   onClose: () => void
 }
@@ -36,8 +55,13 @@ export default function PurchaseOrderDetailDrawer({
     if (window.confirm(`Approve purchase order ${po?.number}?`)) {
       try {
         await approveMutation.mutateAsync(po.id)
-      } catch (error: any) {
-        alert(error.response?.data?.error || 'Failed to approve purchase order')
+      } catch (err: unknown) {
+        const raw = axios.isAxiosError(err)
+          ? (err.response?.data as { error?: string } | undefined)?.error ?? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Failed to approve purchase order'
+        alert(raw || 'Failed to approve purchase order')
       }
     }
   }
@@ -172,7 +196,7 @@ export default function PurchaseOrderDetailDrawer({
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {po.lines?.map((line: any) => (
+                      {po.lines?.map((line) => (
                         <tr key={line.id}>
                           <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
                             {line.item?.sku} - {line.item?.name}

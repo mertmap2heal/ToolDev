@@ -1,4 +1,5 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, type SetStateAction } from 'react'
+import axios from 'axios'
 import { X } from 'lucide-react'
 import { inventoryService } from '../../../services/inventory.service'
 import { useUnsavedChanges } from '../../../hooks/useUnsavedChanges'
@@ -24,7 +25,10 @@ export default function CreateSupplierModal({ isOpen, onClose, onSuccess }: Crea
     zipCode: '',
     country: '',
   })
-  const setFormData = (v: typeof formData | ((prev: typeof formData) => typeof formData)) => { setFormDataBase(v as any); markDirty() }
+  const setFormData = (v: SetStateAction<typeof formData>) => {
+    setFormDataBase(v)
+    markDirty()
+  }
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -59,8 +63,13 @@ export default function CreateSupplierModal({ isOpen, onClose, onSuccess }: Crea
       await inventoryService.createSupplier(formData)
       resetDirty()
       onSuccess()
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to create supplier'
+    } catch (err: unknown) {
+      const raw = axios.isAxiosError(err)
+        ? (err.response?.data as { error?: string } | undefined)?.error ?? err.message
+        : err instanceof Error
+          ? err.message
+          : 'Failed to create supplier'
+      const errorMessage = raw || 'Failed to create supplier'
       setError(errorMessage)
       console.error('Error creating supplier:', err)
     } finally {
