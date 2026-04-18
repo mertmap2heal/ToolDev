@@ -211,6 +211,28 @@ jobs:
             exit 1
           fi
 
+      - name: Run csv import/export IDOR regression (#291)
+        run: cd backend && npx vitest run src/__tests__/csvImportExport.idor.test.ts
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          JWT_SECRET: ci-test-secret
+
+      - name: Guard csv routes gate by body project membership (#291)
+        run: |
+          set -e
+          f=backend/src/routes/importExport.routes.ts
+          fail=0
+          if ! grep -q "requireBodyProjectMember" "$f"; then
+            echo "::error file=$f::csv import/export routes must use requireBodyProjectMember (see issue #291)"
+            fail=1
+          fi
+          ctrl=backend/src/controllers/importExport.controller.ts
+          if ! grep -q "csvSafeCell" "$ctrl"; then
+            echo "::error file=$ctrl::csv export must neutralise formula triggers via csvSafeCell (see issue #291)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Run function-delete cascade regression (#290)
         run: cd backend && npx vitest run src/__tests__/function.deleteCascade.test.ts
         env:
