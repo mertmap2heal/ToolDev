@@ -1,7 +1,17 @@
 {
+  "name": "engineering-tool",
+  "private": true,
+  "scripts": {
+    "prepare": "husky",
+    "check:prepush": "npm run lint --prefix frontend && npm run build --prefix shared"
+  },
   "dependencies": {
     "reactflow": "^11.11.4",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.4.3"
   }
 }

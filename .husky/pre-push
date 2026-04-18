@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# Mirrors CI lint job (frontend) + shared tsc — no DB. Backend tsc omitted (known drift; CI uses continue-on-error).
+npm run check:prepush || exit 1

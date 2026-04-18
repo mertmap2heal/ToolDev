@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# Auto-fix + re-stage: ESLint on staged frontend files; verify shared if touched
+npx lint-staged
