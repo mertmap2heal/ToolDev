@@ -79,11 +79,6 @@ router.post('/:projectId/bulk-import', bulkImportRequirements)
 router.post('/:projectId/:requirementId/comments', createRequirementComment)
 router.delete('/:projectId/comments/:commentId', deleteRequirementComment)
 
-// Custom Requirement Types (Moved to top)
-
-// Migration endpoint
-router.post('/:projectId/migrate-category-to-type', migrateCategoryToRequirementType)
-
 // Component assignment (drag-and-drop)
 router.patch('/:projectId/:requirementId/component', updateRequirementComponent)
 
