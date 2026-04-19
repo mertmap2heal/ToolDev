@@ -12,6 +12,7 @@ import aiRoutes from './ai.routes'
 import documentationRoutes from './documentation.routes'
 import issuesRoutes from './issues.routes'
 import parametersRoutes from './parameters.routes'
+import aiParameterRoutes from './aiParameter.routes'
 import commRoutes from './comm.routes'
 import definitionEntriesRoutes from './definitionEntries.routes'
 import changeRequestsRoutes from './changeRequests.routes'
@@ -83,6 +84,11 @@ router.use('/ai', aiRoutes)
 router.use('/documentation', documentationRoutes)
 router.use('/issues', issuesRoutes)
 router.use('/parameters', parametersRoutes)
+// AI-tier parameter routes. Mounted at the same /parameters prefix so the
+// /:projectId prefix is consistent with the rest of the parameters API.
+// The middleware chain inside this router enforces the three-layer AI
+// feature gate (env -> project -> package).
+router.use('/parameters', aiParameterRoutes)
 router.use('/comm', commRoutes)
 router.use('/definitions', definitionEntriesRoutes)
 router.use('/change-requests', changeRequestsRoutes)
