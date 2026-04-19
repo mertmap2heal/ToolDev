@@ -22,3 +22,7 @@ Detailed reference guides for patterns, pitfalls, and conventions:
 @.claude/kb/infrastructure.md
 @.claude/kb/user-manual-standards.md
 @.claude/kb/feature-flags.md
+@.claude/kb/safety-standards.md
+@.claude/kb/configuration-management.md
+@.claude/kb/interface-management.md
+@.claude/kb/documentation-model.md

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git stash *)",
+      "Bash(git add *)",
+      "Bash(npm run *)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "playwright",
+    "code-review-graph"
+  ]
+}
