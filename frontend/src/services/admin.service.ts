@@ -27,9 +27,9 @@ import { emptyPermissionMap } from '../types/admin.types'
  * tenant rows. The lists are now empty — populated only when the UI
  * creates entries — and the fake seed has been removed.
  */
-let users: AdminUser[] = []
-let projects: AdminProject[] = []
-let authorities: Authority[] = []
+const users: AdminUser[] = []
+const projects: AdminProject[] = []
+const authorities: Authority[] = []
 
 function uuid(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
