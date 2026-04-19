@@ -406,6 +406,21 @@ jobs:
           fi
           exit $fail
 
+      - name: Guard Markov page does not render fake safety metrics (#275)
+        run: |
+          set -e
+          f=frontend/src/pages/Safety/MarkovPage.tsx
+          fail=0
+          if grep -qE ">0\.9999<" "$f"; then
+            echo "::error file=$f::Markov Availability must not be a hardcoded 0.9999 (see issue #275)"
+            fail=1
+          fi
+          if grep -qE ">1e-6<" "$f"; then
+            echo "::error file=$f::Markov Failure probability must not be a hardcoded 1e-6 (see issue #275)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Guard lifecycle apply/clone/library handlers are not silent (#279)
         run: |
           set -e
