@@ -496,8 +496,7 @@ export default function CommunicationsTab({ projectId }: { projectId: string }) 
 
   return (
     <div
-      className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700"
-      style={{ height: 520 }}
+      className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 h-[520px]"
     >
       {/* Bus list */}
       <div className="w-60 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">

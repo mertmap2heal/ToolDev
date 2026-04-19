@@ -444,6 +444,26 @@ jobs:
           fi
           exit $fail
 
+      - name: Guard ParametersPage inline-style count ratchets down (#278)
+        run: |
+          set -e
+          # Ratchet: inline style count may only go DOWN. Current ceiling
+          # reflects the delivered partial refactor; follow-up PRs lower
+          # this ceiling region by region until ~15 (dnd-kit transform +
+          # dynamic folder colours + computed indents) is reached.
+          params=$(grep -c "style={{" frontend/src/pages/Parameters/ParametersPage.tsx || true)
+          comm=$(grep -c "style={{" frontend/src/pages/Parameters/CommunicationsTab.tsx || true)
+          ok=0
+          if [ "$params" -gt 211 ]; then
+            echo "::error file=frontend/src/pages/Parameters/ParametersPage.tsx::inline style count ($params) exceeds ratchet ceiling 211 (see issue #278)"
+            ok=1
+          fi
+          if [ "$comm" -gt 1 ]; then
+            echo "::error file=frontend/src/pages/Parameters/CommunicationsTab.tsx::inline style count ($comm) exceeds ratchet ceiling 1 (see issue #278)"
+            ok=1
+          fi
+          exit $ok
+
       - name: Guard admin.service does not fake authority-apply success (#302)
         run: |
           set -e
