@@ -47,6 +47,7 @@ const ParameterDependencyGraph = lazy(
 )
 import ImportParameterModal from '../../components/parameters/ImportParameterModal'
 import CommunicationsTab from './CommunicationsTab'
+import ParameterCommandPalette from '../../components/parameters/ParameterCommandPalette'
 import type { Parameter, ParameterFolder } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
@@ -301,6 +302,16 @@ export default function ParametersPage() {
           searchInputRef.current.select()
         }
       }
+      // Cmd/Ctrl + K opens the command palette. Block when an input is
+      // focused so native browser find / editor shortcuts still work.
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        const target = e.target as HTMLElement | null
+        const tag = target?.tagName
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !target?.isContentEditable) {
+          e.preventDefault()
+          setIsPaletteOpen((v) => !v)
+        }
+      }
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
@@ -331,6 +342,7 @@ export default function ParametersPage() {
   const [detailParameter, setDetailParameter] = useState<Parameter | null>(null)
   const [viewingSource, setViewingSource] = useState<Parameter | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'parameters' | 'communications'>('parameters')
   const [changeRequestModal, setChangeRequestModal] = useState<{ isOpen: boolean; sourceId: string; sourceName: string } | null>(null)
   const [dataTypeFilter, setDataTypeFilter] = useState<string>('all')
@@ -2191,6 +2203,23 @@ export default function ParametersPage() {
             allParameters={parameters}
           />
         )}
+
+        {/* Command palette (Cmd/Ctrl + K). Receives the parameter + folder
+            lists and wires the four main actions. Closes after any pick. */}
+        <ParameterCommandPalette
+          open={isPaletteOpen}
+          onClose={() => setIsPaletteOpen(false)}
+          parameters={parameters}
+          folders={folders}
+          onOpenParameter={(id) => {
+            const p = parameters.find((x) => x.id === id)
+            if (p) setDetailParameter(p)
+          }}
+          onFilterToFolder={(folderId) => setSelectedFolderId(folderId)}
+          onCreate={() => setIsCreateModalOpen(true)}
+          onImport={() => setIsImportOpen(true)}
+          onExport={() => setIsExportOpen(true)}
+        />
       </div>{/* end folders + content layout */}
       <DragOverlay>
         {activeDragParamId ? (
