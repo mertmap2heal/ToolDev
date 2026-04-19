@@ -1024,7 +1024,7 @@ export default function ParametersPage() {
           const hasChildren = childIds.length > 0
           const isExpanded = expandedParents.has(folder.id)
           const isCreatingChild = creatingSubFolderIn === folder.id
-          const paddingLeft = depth * 12
+          const paddingLeft = depth * 18
           return (
             <div key={folder.id}>
               <SortableFolderWrapper folderId={folder.id} isOver={overFolderId === folder.id && !isNestTarget}>
@@ -1111,14 +1111,13 @@ export default function ParametersPage() {
                         <button
                           onClick={() => setSelectedFolderId(folder.id)}
                           className={clsx(
-                            'flex-1 flex items-center gap-[5px] min-w-0 py-[5px] px-[3px] border-none cursor-pointer text-left bg-transparent',
-                            depth === 0 ? 'text-xs font-medium' : 'text-[11px] font-normal',
+                            'flex-1 flex items-center gap-[5px] min-w-0 py-[5px] px-[3px] border-none cursor-pointer text-left bg-transparent text-xs font-medium',
                             isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-gray-100',
                           )}
                         >
                           <FolderOpen
-                            size={depth === 0 ? 13 : 11}
-                            className={clsx('shrink-0', depth === 0 ? 'opacity-100' : 'opacity-80')}
+                            size={13}
+                            className="shrink-0"
                             style={{ color: folder.color ?? '#6366f1' }} // user-chosen folder colour
                           />
                           <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
