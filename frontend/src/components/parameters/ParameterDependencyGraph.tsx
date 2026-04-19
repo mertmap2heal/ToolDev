@@ -10,10 +10,9 @@ import ReactFlow, {
   ReactFlowProvider,
   NodeTypes,
   Node,
-  Edge,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
-import { GitBranch, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react'
+import { GitBranch } from 'lucide-react'
 import type { Parameter } from 'shared/types/engineering.types'
 import ParameterGraphNode from './ParameterGraphNode'
 import { buildParameterGraph } from './buildParameterGraph'
@@ -145,14 +144,14 @@ function DependencyGraphInner({ parameters }: ParameterDependencyGraphProps) {
 
   if (parameters.length === 0) {
     return (
-      <div className="flex items-center justify-center h-[600px]" style={{ color: 'var(--theme-text-muted)', fontSize: 14 }}>
+      <div className="flex items-center justify-center h-[600px] text-sm text-gray-600 dark:text-gray-400">
         No parameters yet.
       </div>
     )
   }
 
   return (
-    <div style={{ position: 'relative', height: 600 }}>
+    <div className="relative h-[600px] bg-white dark:bg-gray-950">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -166,38 +165,23 @@ function DependencyGraphInner({ parameters }: ParameterDependencyGraphProps) {
         minZoom={0.2}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
-        style={{ backgroundColor: 'var(--theme-bg, #f9fafb)' }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="var(--theme-border, #e5e7eb)" />
+        <Background variant={BackgroundVariant.Dots} gap={16} size={1} className="!bg-white dark:!bg-gray-950" />
         <Controls showInteractive={false} />
         <MiniMap
-          style={{
-            backgroundColor: 'var(--theme-surface, #fff)',
-            border: '1px solid var(--theme-border, #e5e7eb)',
-          }}
+          className="!bg-gray-50 dark:!bg-gray-800 !border !border-gray-200 dark:!border-gray-700"
           nodeColor={() => '#6366f1'}
           maskColor="rgba(0,0,0,0.06)"
         />
 
         {/* Empty-formula hint panel */}
         {!hasFormulas && (
-          <div
-            style={{
-              position: 'absolute', top: '50%', left: '50%',
-              transform: 'translate(-50%, -50%)',
-              pointerEvents: 'none',
-              textAlign: 'center',
-              zIndex: 5,
-            }}
-          >
-            <GitBranch
-              size={36}
-              style={{ color: 'var(--theme-text-muted, #9ca3af)', margin: '0 auto 8px' }}
-            />
-            <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--theme-text-muted, #9ca3af)', margin: 0 }}>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none text-center z-[5]">
+            <GitBranch size={36} className="text-gray-600 dark:text-gray-400 mx-auto mb-2" />
+            <p className="text-[13px] font-semibold text-gray-600 dark:text-gray-400 m-0">
               No formula dependencies found.
             </p>
-            <p style={{ fontSize: 12, color: 'var(--theme-text-muted, #9ca3af)', margin: '4px 0 0' }}>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 m-0">
               Add formulas to parameters to see relationships.
             </p>
           </div>
@@ -206,19 +190,8 @@ function DependencyGraphInner({ parameters }: ParameterDependencyGraphProps) {
 
       {/* Selected node info panel */}
       {selectedInfo && (
-        <div
-          style={{
-            position: 'absolute', top: 12, right: 12, zIndex: 10,
-            width: 240,
-            backgroundColor: 'var(--theme-surface, #fff)',
-            border: '1px solid var(--theme-border, #e5e7eb)',
-            borderRadius: 8,
-            boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-            padding: 12,
-            fontSize: 12,
-          }}
-        >
-          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--theme-text, #111827)', marginBottom: 8, wordBreak: 'break-word' }}>
+        <div className="absolute top-3 right-3 z-10 w-60 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-xs">
+          <div className="font-bold text-[13px] text-gray-900 dark:text-gray-100 mb-2 break-words">
             {selectedInfo.param.name}
           </div>
 
@@ -228,17 +201,11 @@ function DependencyGraphInner({ parameters }: ParameterDependencyGraphProps) {
           <InfoRow label="Status" value={selectedInfo.param.status ?? 'draft'} />
 
           {selectedInfo.param.formula && (
-            <div style={{ marginTop: 6 }}>
-              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--theme-text-muted, #6b7280)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <div className="mt-1.5">
+              <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
                 Formula
               </span>
-              <div style={{
-                fontFamily: 'monospace', fontSize: 10,
-                backgroundColor: 'var(--theme-bg, #f9fafb)',
-                border: '1px solid var(--theme-border, #e5e7eb)',
-                borderRadius: 4, padding: '4px 6px', marginTop: 2,
-                wordBreak: 'break-all', color: 'var(--theme-text, #111827)',
-              }}>
+              <div className="font-mono text-[10px] bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 rounded px-1.5 py-1 mt-0.5 break-all text-gray-900 dark:text-gray-100">
                 {selectedInfo.param.formula}
               </div>
             </div>
@@ -269,11 +236,11 @@ function DependencyGraphInner({ parameters }: ParameterDependencyGraphProps) {
 // ---------------------------------------------------------------------------
 function InfoRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, marginBottom: 3 }}>
-      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--theme-text-muted, #6b7280)', textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>
+    <div className="flex justify-between gap-1.5 mb-[3px]">
+      <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider shrink-0">
         {label}
       </span>
-      <span style={{ fontSize: 11, color: 'var(--theme-text, #111827)', fontFamily: mono ? 'monospace' : undefined, textAlign: 'right', wordBreak: 'break-all' }}>
+      <span className={`text-[11px] text-gray-900 dark:text-gray-100 text-right break-all ${mono ? 'font-mono' : ''}`}>
         {value}
       </span>
     </div>
@@ -290,13 +257,13 @@ function CountRow({
   paramMap: Map<string, Parameter>
 }) {
   return (
-    <div style={{ marginTop: 6 }}>
-      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--theme-text-muted, #6b7280)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+    <div className="mt-1.5">
+      <span className="text-[10px] font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
         {label} ({ids.length})
       </span>
-      <ul style={{ margin: '3px 0 0', padding: '0 0 0 12px', fontSize: 11, color: 'var(--theme-text, #111827)' }}>
+      <ul className="mt-[3px] pl-3 text-[11px] text-gray-900 dark:text-gray-100 list-none">
         {ids.map((id) => (
-          <li key={id} style={{ marginBottom: 1 }}>
+          <li key={id} className="mb-px">
             {paramMap.get(id)?.name ?? id}
           </li>
         ))}

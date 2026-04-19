@@ -1562,7 +1562,7 @@ export default function ParametersPage() {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-      <div className="flex gap-3 items-start">
+      <div className="flex gap-3 items-stretch min-h-[calc(100vh-280px)]">
 
         {/* ── Folder sidebar ── */}
         {isFolderSidebarOpen ? (
@@ -2110,6 +2110,18 @@ export default function ParametersPage() {
       )}
 
         </div>{/* end right column */}
+
+        {/* Inline detail drawer — side-by-side with table, matches Requirements page */}
+        {projectId && (
+          <ParameterDetailDrawer
+            isOpen={!!detailParameter}
+            onClose={() => setDetailParameter(null)}
+            projectId={projectId}
+            parameter={detailParameter}
+            onEdit={setEditingParameter}
+            allParameters={parameters}
+          />
+        )}
       </div>{/* end folders + content layout */}
       <DragOverlay>
         {activeDragParamId ? (
@@ -2294,14 +2306,6 @@ export default function ParametersPage() {
 
       {projectId && (
         <>
-          <ParameterDetailDrawer
-            isOpen={!!detailParameter}
-            onClose={() => setDetailParameter(null)}
-            projectId={projectId}
-            parameter={detailParameter}
-            onEdit={setEditingParameter}
-            allParameters={parameters}
-          />
           <EditParameterModal
             isOpen={!!editingParameter}
             onClose={() => setEditingParameter(null)}
