@@ -320,22 +320,32 @@ export default function MarkovPage() {
         </ReactFlowProvider>
       </div>
 
+      {/*
+        #275: pre-fix this card rendered hardcoded 0.9999 / 1e-6 values
+        that could be screenshot-ed into a report and presented as
+        compliant-looking safety metrics. FAR/CS 25.1309 uses these
+        exact thresholds, so a fake number on screen is actively
+        dangerous. Replace the numeric cells with em-dashes and a clear
+        "solver not implemented" status line until a real Markov solver
+        ships in the backend.
+      */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
           <BarChart3 size={16} />
           Results
         </h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-          Results will be computed later. No Markov solver implemented.
+        <p className="text-sm text-amber-700 dark:text-amber-400 mb-4">
+          Not available — Markov solver is not implemented. Do not quote these
+          cells in any safety evidence; they are intentionally blank.
         </p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-900/50">
-            <div className="text-xs text-gray-500 dark:text-gray-400">Availability (placeholder)</div>
-            <div className="text-lg font-semibold text-gray-900 dark:text-white">0.9999</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Availability</div>
+            <div className="text-lg font-semibold text-gray-400 dark:text-gray-500">—</div>
           </div>
           <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-900/50">
-            <div className="text-xs text-gray-500 dark:text-gray-400">Failure probability (placeholder)</div>
-            <div className="text-lg font-semibold text-gray-900 dark:text-white">1e-6</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Failure probability</div>
+            <div className="text-lg font-semibold text-gray-400 dark:text-gray-500">—</div>
           </div>
         </div>
       </div>
