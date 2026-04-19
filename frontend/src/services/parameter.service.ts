@@ -22,6 +22,35 @@ export interface GetParametersQuery {
   includeUsageCounts?: boolean
 }
 
+export interface GetParametersPageQuery {
+  page: number
+  pageSize?: number
+  q?: string
+  status?: string
+  dataType?: string
+  unit?: string
+  hasFormula?: 'true' | 'false'
+  folderId?: string
+  sort?: string
+  order?: 'asc' | 'desc'
+  includeUsageCounts?: boolean
+}
+
+export interface PagedParameters {
+  data: ParameterWithUsage[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export interface ParameterFacets {
+  dataType: string[]
+  unit: string[]
+  status: string[]
+  tag: string[]
+  total: number
+}
+
 export type ParameterWithUsage = Parameter & { requirementCount?: number }
 
 export const parameterService = {
@@ -44,6 +73,67 @@ export const parameterService = {
 
   async getParameter(projectId: string, parameterId: string): Promise<ApiResponse<Parameter>> {
     return apiClient.get<Parameter>(`/parameters/${projectId}/${parameterId}`)
+  },
+
+  // Phase 2-finish: paged + server-side filter + sort. Returns
+  // { data, total, page, pageSize }. Opt-in (triggered by `page` param);
+  // callers that never set `page` keep using the legacy unbounded
+  // `getParameters` path.
+  async getParametersPage(
+    projectId: string,
+    query: GetParametersPageQuery,
+  ): Promise<ApiResponse<PagedParameters>> {
+    const params = new URLSearchParams()
+    params.set('page', String(query.page))
+    params.set('pageSize', String(query.pageSize ?? 200))
+    if (query.q) params.set('q', query.q)
+    if (query.status) params.set('status', query.status)
+    if (query.dataType) params.set('dataType', query.dataType)
+    if (query.unit) params.set('unit', query.unit)
+    if (query.hasFormula) params.set('hasFormula', query.hasFormula)
+    if (query.folderId !== undefined) params.set('folderId', query.folderId)
+    if (query.sort) params.set('sort', query.sort)
+    if (query.order) params.set('order', query.order)
+    if (query.includeUsageCounts) params.set('includeUsageCounts', 'true')
+    const res = await apiClient.get<ParameterWithUsage[]>(
+      `/parameters/${projectId}?${params.toString()}`,
+    )
+    // The paged backend wraps `data, total, page, pageSize` into the
+    // outer ApiResponse shape. apiClient.get returns the outer shape
+    // verbatim, but `data` is the array + the page fields are on the
+    // outer object, not inside `data`. Normalise to a PagedParameters
+    // shape the caller can consume cleanly.
+    const anyRes = res as unknown as {
+      success: boolean
+      data?: ParameterWithUsage[]
+      total?: number
+      page?: number
+      pageSize?: number
+      error?: string
+      code?: string
+      statusCode?: number
+    }
+    if (!anyRes.success) {
+      return {
+        success: false,
+        error: anyRes.error,
+        code: anyRes.code,
+        statusCode: anyRes.statusCode,
+      }
+    }
+    return {
+      success: true,
+      data: {
+        data: anyRes.data ?? [],
+        total: anyRes.total ?? 0,
+        page: anyRes.page ?? query.page,
+        pageSize: anyRes.pageSize ?? (query.pageSize ?? 200),
+      },
+    }
+  },
+
+  async getFacets(projectId: string): Promise<ApiResponse<ParameterFacets>> {
+    return apiClient.get<ParameterFacets>(`/parameters/${projectId}/facets`)
   },
 
   async createParameter(projectId: string, data: CreateParameterDto): Promise<ApiResponse<Parameter>> {

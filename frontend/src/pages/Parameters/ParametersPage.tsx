@@ -7,7 +7,7 @@ import {
   AlertTriangle, Settings, Radio, List, Share2,
   Folder, FolderOpen, MoreHorizontal, Layers, ArrowUpDown, ArrowUp, ArrowDown,
 } from 'lucide-react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   DndContext,
   DragEndEvent,
@@ -480,24 +480,71 @@ export default function ParametersPage() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const { data: parameters = [], isLoading } = useQuery({
-    queryKey: ['parameters', projectId, true, sortField, sortOrder],
-    queryFn: async () => {
+  // Phase 2-finish: server-paged infinite query. Backend returns
+  // { data, total, page, pageSize } per page; the frontend flattens
+  // pages into one continuous array the virtualiser iterates. Filter
+  // inputs (q / status / dataType / unit / hasFormula) belong in the
+  // query key so any change invalidates + refetches page 1. The current
+  // multi-value client filters (sourceFilter, tagFilter, etc.) stay on
+  // the client for now and apply to the flattened result.
+  const PAGE_SIZE = 200
+  const trimmedQ = debouncedSearch.trim()
+  const serverQuery = {
+    q: trimmedQ || undefined,
+    // Only single-value filters go to the server (keeps compatible with
+    // the existing backend controller that accepts one value per param).
+    // Multi-value selects still filter on the client over the paged set.
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    dataType:
+      dataTypeFilter !== 'all' && dataTypeFilter !== 'unassigned' ? dataTypeFilter : undefined,
+    unit: unitFilter !== 'all' && unitFilter !== 'unassigned' ? unitFilter : undefined,
+  }
+  const {
+    data: paramPages,
+    isLoading,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
+    queryKey: ['parameters', projectId, sortField, sortOrder, serverQuery],
+    queryFn: async ({ pageParam }: { pageParam: number }) => {
       if (!projectId) throw new Error('Project ID required')
-      const response = await parameterService.getParameters(projectId, {
-        includeUsageCounts: true,
+      const response = await parameterService.getParametersPage(projectId, {
+        page: pageParam,
+        pageSize: PAGE_SIZE,
         sort: sortField,
         order: sortOrder,
+        includeUsageCounts: true,
+        ...serverQuery,
       })
-      if (response.success && response.data) return response.data as ParameterWithUsage[]
+      if (response.success && response.data) return response.data
       throw new Error(response.error || 'Failed to load parameters')
     },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, pages) => {
+      const loaded = pages.reduce((n, p) => n + p.data.length, 0)
+      return loaded < lastPage.total ? pages.length + 1 : undefined
+    },
     enabled: !!projectId,
-    // Phase 2c-i: keep the list hot for 30 s and render the previous
-    // data while a sort / filter change is in flight (plan §Pillar 5).
     staleTime: 30_000,
-    placeholderData: (prev) => prev,
   })
+  // Flatten + dedupe by id. Page boundaries in the backend can
+  // theoretically serve the same row on two pages if a write races
+  // between page fetches; dedupe makes the UI robust either way.
+  const parameters: ParameterWithUsage[] = useMemo(() => {
+    const seen = new Set<string>()
+    const out: ParameterWithUsage[] = []
+    for (const page of paramPages?.pages ?? []) {
+      for (const p of page.data) {
+        if (!seen.has(p.id)) {
+          seen.add(p.id)
+          out.push(p)
+        }
+      }
+    }
+    return out
+  }, [paramPages])
+  const totalParameters = paramPages?.pages[0]?.total ?? parameters.length
 
   // Folder queries and mutations
   const { data: foldersData } = useQuery({
@@ -1181,6 +1228,23 @@ export default function ParametersPage() {
     overscan: 40,
     getItemKey: (index) => flatRowItems[index]?.key ?? index,
   })
+
+  // Infinite-append trigger. When the virtualiser's visible window
+  // reaches the end of the loaded pages, fetch the next page. The
+  // React Query cache keeps pages under `staleTime`, so scrolling
+  // back up stays cheap.
+  const virtualItemsForPaging = rowVirtualizer.getVirtualItems()
+  useEffect(() => {
+    if (virtualItemsForPaging.length === 0) return
+    const lastIdx = virtualItemsForPaging[virtualItemsForPaging.length - 1].index
+    if (
+      lastIdx >= flatRowItems.length - 20 &&
+      hasNextPage &&
+      !isFetchingNextPage
+    ) {
+      fetchNextPage()
+    }
+  }, [virtualItemsForPaging, flatRowItems.length, hasNextPage, isFetchingNextPage, fetchNextPage])
 
   // ---------------------------------------------------------------------------
   // Recursive folder tree rendering — arbitrary depth, sortable at every level

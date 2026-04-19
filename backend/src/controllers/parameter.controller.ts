@@ -341,7 +341,13 @@ export const getParameters = async (req: AuthRequest, res: Response) => {
       sourceFunction: { select: { id: true, functionId: true, name: true } },
       sourceParameter: { select: { id: true, name: true } },
     } as const
-    const orderBy = { [orderField]: orderDir } as const
+    // Stable secondary sort by id so paged responses never put the
+    // same row on two adjacent pages when many rows share the primary
+    // sort key (e.g. bulk-seeded rows with identical updatedAt).
+    const orderBy = [
+      { [orderField]: orderDir },
+      { id: 'asc' },
+    ] as unknown as Record<string, 'asc' | 'desc'>[]
 
     const [parameters, total] = paginated && pageSize !== undefined
       ? await Promise.all([
