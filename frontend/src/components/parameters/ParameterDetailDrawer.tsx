@@ -135,48 +135,112 @@ export default function ParameterDetailDrawer({
     setCompareB(null)
   }, [parameter?.id])
 
-  if (!isOpen) return null
-  if (!parameter) return null
-
   const requirements = impact?.requirements ?? []
+  const showShell = isOpen && !!parameter
+
+  // Drag-to-resize drawer width. Persisted per tab; defaults to ~36rem.
+  const [drawerWidth, setDrawerWidth] = useState<number>(() => {
+    if (typeof window === 'undefined') return 576
+    const stored = window.localStorage.getItem('parameter-drawer-width')
+    const n = stored ? parseInt(stored, 10) : NaN
+    return Number.isFinite(n) && n >= 384 ? n : 576
+  })
+  const handleResizeStart = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = drawerWidth
+    const onMove = (ev: MouseEvent) => {
+      const next = Math.max(384, Math.min(window.innerWidth - 240, startW + (startX - ev.clientX)))
+      setDrawerWidth(next)
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      setDrawerWidth(w => {
+        if (typeof window !== 'undefined') window.localStorage.setItem('parameter-drawer-width', String(w))
+        return w
+      })
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
 
   return (
-    <>
-      <div className="fixed inset-0 bg-black/30 z-40" aria-hidden onClick={onClose} />
-      <div
-        className="fixed right-2 top-2 bottom-2 w-full max-w-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm z-50 flex flex-col overflow-hidden"
-        role="dialog"
-        aria-label="Parameter details"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm shrink-0">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white truncate pr-2">
-            {parameter.parameterId || parameter.name}
-          </h2>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                onEdit(parameter)
-                onClose()
-              }}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
-              title="Edit parameter"
-            >
-              <Edit2 size={18} />
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
-              aria-label="Close"
-            >
-              <X size={20} />
-            </button>
+    <div
+      className={clsx(
+        'flex flex-col overflow-hidden relative',
+        showShell
+          ? 'h-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm flex-shrink-0'
+          : 'w-0 min-w-0 h-full transition-all duration-300 ease-in-out'
+      )}
+      style={showShell ? { width: drawerWidth, minWidth: 384 } : undefined}
+      role={showShell ? 'dialog' : undefined}
+      aria-label={showShell ? 'Parameter details' : undefined}
+    >
+      {showShell && parameter && (
+        <>
+          {/* Resize handle on left edge */}
+          <div
+            className="absolute top-0 left-0 w-2 h-full cursor-col-resize hover:bg-blue-400/50 active:bg-blue-500 transition-colors z-20 group"
+            onMouseDown={handleResizeStart}
+          >
+            <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[1px] bg-gray-200 dark:bg-gray-700 group-hover:bg-blue-400 transition-colors" />
           </div>
-        </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+          {/* Header */}
+          <div className="px-4 py-4 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm flex items-center justify-between flex-shrink-0">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <span className="font-mono text-sm text-gray-600 dark:text-gray-400">
+                  {parameter.parameterId || parameter.id.substring(0, 8)}
+                </span>
+                <span
+                  className={clsx(
+                    'px-2 py-0.5 rounded-full text-xs font-medium',
+                    (parameter.status ?? 'draft') === 'approved' && 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200',
+                    (parameter.status ?? 'draft') === 'obsolete' && 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400',
+                    (parameter.status ?? 'draft') === 'draft' && 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200',
+                  )}
+                >
+                  {parameter.status ?? 'draft'}
+                </span>
+                {parameter.dataType && (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800 dark:bg-slate-700/60 dark:text-slate-200">
+                    {parameter.dataType}
+                  </span>
+                )}
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2 min-w-0">
+                <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400 inline-flex shrink-0">
+                  <FunctionSquare className="w-5 h-5" />
+                </div>
+                <span className="truncate">{parameter.name}</span>
+              </h2>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 ml-2">
+              <button
+                type="button"
+                onClick={() => {
+                  onEdit(parameter)
+                  onClose()
+                }}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
+                title="Edit parameter"
+              >
+                <Edit2 size={18} />
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400"
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-6">
           {/* Summary */}
           <section>
             <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
@@ -633,8 +697,9 @@ export default function ParameterDetailDrawer({
               </div>
             )}
           </section>
-        </div>
-      </div>
-    </>
+          </div>
+        </>
+      )}
+    </div>
   )
 }
