@@ -271,9 +271,29 @@ export default function InterfaceManagementPage() {
           <div>
             <h1 className="text-lg font-bold text-gray-900 dark:text-white">Interfaces</h1>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              Define and manage system interface contracts (UI placeholder)
+              Define and manage system interface contracts
             </p>
           </div>
+        </div>
+
+        {/* #276: every mutation on this page writes to React state only —
+            there is no backend route, controller, or service for the
+            Interface entity yet. The prior UI had a small "(UI placeholder)"
+            parenthetical on the header which users missed, so entries
+            appeared saved until a refresh. Surface an amber warning banner
+            instead so the state of the module is unambiguous. */}
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-4 py-3"
+        >
+          <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
+            Demo data only — nothing is saved
+          </p>
+          <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">
+            Interfaces you create, edit, or delete here are held in memory
+            for this session only and will be lost on refresh. Backend
+            persistence is not yet implemented for this module.
+          </p>
         </div>
 
         {/* Utilities row */}
