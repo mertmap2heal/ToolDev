@@ -22,6 +22,7 @@
     "seed:test-run-real": "tsx src/scripts/seed-realistic-test-run-and-export.ts",
     "seed:demo": "tsx src/scripts/seed-demo-project.ts",
     "seed:full-demo": "tsx src/scripts/seed-full-demo.ts",
+    "seed:scale-params": "tsx src/scripts/seed-scale-params.ts",
     "backfill:parameter-ids": "tsx src/scripts/backfill-parameter-ids.ts",
     "db:push": "prisma db push --accept-data-loss",
     "db:gen": "prisma generate",
