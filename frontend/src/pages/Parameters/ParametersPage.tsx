@@ -490,6 +490,10 @@ export default function ParametersPage() {
       throw new Error(response.error || 'Failed to load parameters')
     },
     enabled: !!projectId,
+    // Phase 2c-i: keep the list hot for 30 s and render the previous
+    // data while a sort / filter change is in flight (plan §Pillar 5).
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
   })
 
   // Folder queries and mutations
@@ -502,8 +506,17 @@ export default function ParametersPage() {
       throw new Error(response.error || 'Failed to load folders')
     },
     enabled: !!projectId,
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
   })
   const folders: ParameterFolder[] = foldersData ?? []
+  // O(1) folder lookups. Before this, every row's .find() over the
+  // folders array turned the table render into O(n * folders). With
+  // hundreds of folders that was the dominant cost.
+  const foldersById = useMemo(
+    () => new Map<string, ParameterFolder>(folders.map((f) => [f.id, f])),
+    [folders],
+  )
 
   const createFolderMutation = useMutation({
     mutationFn: async (name: string) => {
@@ -715,7 +728,7 @@ export default function ParametersPage() {
       if (!targetId || targetId === activeFolder) return
 
       // Find which parent level this folder belongs to
-      const activeFolderData = folders.find(f => f.id === activeFolder)
+      const activeFolderData = foldersById.get(activeFolder)
       const parentId = activeFolderData?.parentId ?? null
       const levelOrder = folderOrderByParent.get(parentId) ?? []
 
@@ -1010,7 +1023,7 @@ export default function ParametersPage() {
     const visit = (parentId: string | null, depth: number) => {
       const ids = folderOrderByParent.get(parentId) ?? []
       for (const id of ids) {
-        const f = folders.find(x => x.id === id)
+        const f = foldersById.get(id)
         if (!f) continue
         const prefix = depth === 0 ? '' : '\u00a0\u00a0'.repeat(depth) + '\u2514 '
         result.push({ value: f.id, label: prefix + f.name })
@@ -1030,7 +1043,7 @@ export default function ParametersPage() {
     return (
       <SortableContext items={levelIds.map(id => `sortfolder-${id}`)} strategy={verticalListSortingStrategy}>
         {levelIds.map(folderId => {
-          const folder = folders.find(f => f.id === folderId)
+          const folder = foldersById.get(folderId)
           if (!folder) return null
           const isSelected = selectedFolderId === folder.id
           const isMenuOpen = folderMenuOpen === folder.id
@@ -1715,7 +1728,7 @@ export default function ParametersPage() {
                 )
                 queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
                 queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
-                setToastMessage(`Moved ${selectedIds.size} parameter${selectedIds.size > 1 ? 's' : ''} to ${folderId ? (folders.find(f => f.id === folderId)?.name ?? 'folder') : 'root'}`)
+                setToastMessage(`Moved ${selectedIds.size} parameter${selectedIds.size > 1 ? 's' : ''} to ${folderId ? (foldersById.get(folderId)?.name ?? 'folder') : 'root'}`)
                 setSelectedIds(new Set())
               }}
               className="px-2 py-1 rounded-md text-xs font-medium border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 cursor-pointer"
@@ -1874,7 +1887,7 @@ export default function ParametersPage() {
                     if (ungrouped.length > 0) flatGroups.push({ id: '__none__', label: 'Ungrouped', color: null, params: ungrouped, depth: 0 })
                     walk(null, 0)
                   } else {
-                    const root = folders.find(f => f.id === selectedFolderId)
+                    const root = foldersById.get(selectedFolderId)
                     if (root) {
                       const ownParams = filteredParameters.filter(p => p.folderId === root.id)
                       flatGroups.push({ id: root.id, label: root.name, color: root.color ?? null, params: ownParams, depth: 0 })
@@ -1927,8 +1940,8 @@ export default function ParametersPage() {
                   if (isCollapsed) return groupHeaderRow ? [groupHeaderRow] : []
 
                   const dataRows = group.params.map((param) => {
-                const folder = folders.find(f => f.id === param.folderId)
-                const parentFolder = folder?.parentId ? folders.find(f => f.id === folder.parentId) : null
+                const folder = param.folderId ? foldersById.get(param.folderId) : undefined
+                const parentFolder = folder?.parentId ? foldersById.get(folder.parentId) : null
                 const folderPath = folder
                   ? parentFolder ? `${parentFolder.name} / ${folder.name}` : folder.name
                   : null
@@ -2127,9 +2140,9 @@ export default function ParametersPage() {
           <div className="px-2.5 py-[5px] rounded-md bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs font-medium opacity-90 shadow-lg border border-gray-200 dark:border-gray-700 flex items-center gap-1.5">
             <FolderOpen
               size={13}
-              style={{ color: folders.find(f => f.id === activeDragFolderId)?.color ?? '#6366f1' }} // user-chosen hex
+              style={{ color: (activeDragFolderId ? foldersById.get(activeDragFolderId) : null)?.color ?? '#6366f1' }} // user-chosen hex
             />
-            {folders.find(f => f.id === activeDragFolderId)?.name ?? 'Folder'}
+            {(activeDragFolderId ? foldersById.get(activeDragFolderId) : null)?.name ?? 'Folder'}
           </div>
         ) : null}
       </DragOverlay>
@@ -2137,8 +2150,8 @@ export default function ParametersPage() {
 
       {/* ── Subfolder confirmation modal ── */}
       {pendingSubfolder && (() => {
-        const child = folders.find(f => f.id === pendingSubfolder.childId)
-        const parent = folders.find(f => f.id === pendingSubfolder.parentId)
+        const child = foldersById.get(pendingSubfolder.childId)
+        const parent = foldersById.get(pendingSubfolder.parentId)
         if (!child || !parent) return null
         return (
           <div
