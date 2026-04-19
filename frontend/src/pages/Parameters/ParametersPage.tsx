@@ -50,6 +50,7 @@ import type { Parameter, ParameterFolder } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
 import { AiFeatureProvider } from '../../contexts/AiFeatureContext'
+import ParameterFilterBar from '../../components/parameters/ParameterFilterBar'
 
 // ---------------------------------------------------------------------------
 // Preset folder colors
@@ -328,7 +329,6 @@ export default function ParametersPage() {
   const [detailParameter, setDetailParameter] = useState<Parameter | null>(null)
   const [viewingSource, setViewingSource] = useState<Parameter | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
   const [activeTab, setActiveTab] = useState<'parameters' | 'communications'>('parameters')
   const [changeRequestModal, setChangeRequestModal] = useState<{ isOpen: boolean; sourceId: string; sourceName: string } | null>(null)
   const [dataTypeFilter, setDataTypeFilter] = useState<string>('all')
@@ -867,6 +867,18 @@ export default function ParametersPage() {
     if (statusFilter !== 'all' && (param.status ?? 'draft') !== statusFilter) return false
     return true
   })
+
+  // Facet-style distinct-value lists for filter pills. Phase 2c will
+  // replace these with the /parameters/:id/facets endpoint so they
+  // don't depend on the in-memory list.
+  const availableDataTypes = useMemo(
+    () => Array.from(new Set(parameters.map((p) => p.dataType).filter((v): v is string => !!v))).sort(),
+    [parameters],
+  )
+  const availableUnits = useMemo(
+    () => Array.from(new Set(parameters.map((p) => p.unit).filter((v): v is string => !!v))).sort(),
+    [parameters],
+  )
 
   // Precompute formula results (memoized) — only for parameters with formulas
   const formulaResults = useMemo(() => {
@@ -1509,55 +1521,25 @@ export default function ParametersPage() {
         </div>
       </div>
 
-      {/* ── Filters ── */}
-      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-hidden">
-        <button
-          onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
-          className="w-full flex items-center justify-between px-3.5 py-2.5 bg-transparent border-none cursor-pointer"
-        >
-          <div className="flex items-center gap-2">
-            <Filter size={13} className="text-gray-600 dark:text-gray-400" />
-            <span className="text-xs font-medium text-gray-900 dark:text-gray-100">Filters</span>
-          </div>
-          {isFiltersExpanded
-            ? <ChevronUp size={14} className="text-gray-600 dark:text-gray-400" />
-            : <ChevronDown size={14} className="text-gray-600 dark:text-gray-400" />
-          }
-        </button>
-        {isFiltersExpanded && (
-          <div className="px-3.5 py-2.5 border-t border-gray-200 dark:border-gray-700">
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2.5">
-              {[
-                { label: 'Data Type', value: dataTypeFilter, onChange: setDataTypeFilter, options: [
-                  { value: 'all', label: 'All Data Types' }, { value: 'unassigned', label: 'Unassigned' },
-                  ...Array.from(new Set(parameters.map(p => p.dataType).filter(Boolean))).map(v => ({ value: v!, label: v! }))
-                ]},
-                { label: 'Unit', value: unitFilter, onChange: setUnitFilter, options: [
-                  { value: 'all', label: 'All Units' }, { value: 'unassigned', label: 'Unassigned' },
-                  ...Array.from(new Set(parameters.map(p => p.unit).filter(Boolean))).map(v => ({ value: v!, label: v! }))
-                ]},
-                { label: 'Source', value: sourceFilter, onChange: setSourceFilter, options: [
-                  { value: 'all', label: 'All Sources' }, { value: 'has-source', label: 'Has Source' }, { value: 'unassigned', label: 'Unassigned' }
-                ]},
-                { label: 'Status', value: statusFilter, onChange: setStatusFilter, options: [
-                  { value: 'all', label: 'All Statuses' }, { value: 'draft', label: 'Draft' }, { value: 'approved', label: 'Approved' }, { value: 'obsolete', label: 'Obsolete' }
-                ]},
-              ].map(filter => (
-                <div key={filter.label}>
-                  <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 mb-1">{filter.label}</label>
-                  <select
-                    value={filter.value}
-                    onChange={e => filter.onChange(e.target.value)}
-                    className="settings-input"
-                  >
-                    {filter.options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                  </select>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      {/* ── Filters (pill chips, parity with Requirements page) ── */}
+      <ParameterFilterBar
+        statusFilter={statusFilter}
+        onStatusChange={setStatusFilter}
+        dataTypeFilter={dataTypeFilter}
+        onDataTypeChange={setDataTypeFilter}
+        unitFilter={unitFilter}
+        onUnitChange={setUnitFilter}
+        sourceFilter={sourceFilter}
+        onSourceChange={setSourceFilter}
+        availableDataTypes={availableDataTypes}
+        availableUnits={availableUnits}
+        onClearAll={() => {
+          setStatusFilter('all')
+          setDataTypeFilter('all')
+          setUnitFilter('all')
+          setSourceFilter('all')
+        }}
+      />
 
 
       {/* ── Folders + content layout ── */}
