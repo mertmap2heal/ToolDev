@@ -152,6 +152,11 @@ if (process.env.NODE_ENV !== 'test') {
   logger.info('server_starting', { port: PORT })
   // Start real-time server
   const io = setupRealtime(server, prisma)
+
+  // #282: capture the cleanup interval handle so we can clear it on
+  // shutdown; an orphaned setInterval was holding the event loop open.
+  let cleanupIntervalHandle: NodeJS.Timeout | null = null
+
   server.listen(PORT, () => {
     logger.info('server_ready', { port: PORT })
 
@@ -167,12 +172,57 @@ if (process.env.NODE_ENV !== 'test') {
       runCleanup('startup')
 
       // Schedule daily (86400000 ms)
-      setInterval(() => runCleanup('scheduled'), 24 * 60 * 60 * 1000)
+      cleanupIntervalHandle = setInterval(() => runCleanup('scheduled'), 24 * 60 * 60 * 1000)
     })
   }).on('error', (err: NodeJS.ErrnoException) => {
     logger.error('server_listen_failed', { error: err.message, code: err.code })
     if (err.code === 'EADDRINUSE') logger.error('port_in_use', { port: PORT })
   })
+
+  // #282: graceful shutdown. On SIGTERM / SIGINT, stop accepting new
+  // connections, let in-flight requests drain, close Socket.IO + the
+  // cleanup interval, and $disconnect() Prisma before exiting. A
+  // 10s hard-kill timer catches hung sockets so the orchestrator
+  // doesn't wait forever.
+  let shuttingDown = false
+  const shutdown = async (signal: string) => {
+    if (shuttingDown) return
+    shuttingDown = true
+    logger.info('server_shutting_down', { signal })
+
+    // Hard-kill fallback in case server.close() hangs on a long request.
+    const hardKill = setTimeout(() => {
+      logger.error('server_shutdown_forced', { signal })
+      process.exit(1)
+    }, 10_000)
+    hardKill.unref()
+
+    server.close(async (closeErr?: Error) => {
+      if (closeErr) {
+        logger.error('server_close_failed', { error: closeErr.message })
+      }
+      try {
+        io.close()
+      } catch (e) {
+        logger.error('io_close_failed', { error: (e as Error).message })
+      }
+      if (cleanupIntervalHandle) {
+        clearInterval(cleanupIntervalHandle)
+        cleanupIntervalHandle = null
+      }
+      try {
+        await prisma.$disconnect()
+      } catch (e) {
+        logger.error('prisma_disconnect_failed', { error: (e as Error).message })
+      }
+      clearTimeout(hardKill)
+      logger.info('server_shutdown_complete', { signal })
+      process.exit(0)
+    })
+  }
+
+  process.on('SIGTERM', () => void shutdown('SIGTERM'))
+  process.on('SIGINT', () => void shutdown('SIGINT'))
 }
 
 export { app }

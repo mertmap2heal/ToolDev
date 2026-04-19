@@ -406,6 +406,29 @@ jobs:
           fi
           exit $fail
 
+      - name: Guard backend registers graceful shutdown (#282)
+        run: |
+          set -e
+          f=backend/src/server.ts
+          fail=0
+          if ! grep -q "process.on('SIGTERM'" "$f"; then
+            echo "::error file=$f::SIGTERM handler required (see issue #282)"
+            fail=1
+          fi
+          if ! grep -q "process.on('SIGINT'" "$f"; then
+            echo "::error file=$f::SIGINT handler required (see issue #282)"
+            fail=1
+          fi
+          if ! grep -q "prisma.\$disconnect" "$f"; then
+            echo "::error file=$f::shutdown must \$disconnect Prisma (see issue #282)"
+            fail=1
+          fi
+          if ! grep -q "clearInterval(cleanupIntervalHandle" "$f"; then
+            echo "::error file=$f::shutdown must clear the cleanup interval (see issue #282)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Guard Markov page does not render fake safety metrics (#275)
         run: |
           set -e
