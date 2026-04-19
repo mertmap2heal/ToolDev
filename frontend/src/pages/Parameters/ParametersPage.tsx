@@ -66,6 +66,10 @@ const BTN_PRIMARY =
   'inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-500 transition-colors disabled:opacity-50'
 const BTN_GHOST =
   'inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors'
+const BTN_TOOLBAR =
+  'flex items-center gap-1.5 px-2.5 py-[5px] rounded-md text-xs font-medium border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed'
+const MENU_POPOVER =
+  'absolute right-0 z-[200] rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 shadow-lg overflow-hidden'
 const BTN_ICON =
   'p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors'
 const LABEL_CLS =
@@ -1026,27 +1030,27 @@ export default function ParametersPage() {
               <SortableFolderWrapper folderId={folder.id} isOver={overFolderId === folder.id && !isNestTarget}>
                 {(dragHandleProps) => (
                   <div
-                    style={{
-                      display: 'flex', alignItems: 'center',
-                      paddingLeft,
-                      borderRadius: 5,
-                      backgroundColor: isSelected
-                        ? 'var(--theme-sidebar-item-active)'
+                    className={clsx(
+                      'group flex items-center rounded-[5px] transition-colors',
+                      isSelected
+                        ? 'bg-gray-200/30 dark:bg-gray-400/15'
                         : isNestTarget
-                          ? 'rgba(99,102,241,0.12)'
-                          : 'transparent',
-                      outline: isNestTarget ? '2px dashed var(--theme-accent)' : undefined,
-                      outlineOffset: -2,
-                    }}
-                    onMouseEnter={e => { if (!isSelected && !isNestTarget) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'var(--theme-sidebar-item-hover)' }}
-                    onMouseLeave={e => { if (!isSelected && !isNestTarget) (e.currentTarget as HTMLDivElement).style.backgroundColor = 'transparent' }}
+                          ? 'bg-indigo-500/10 outline outline-2 outline-dashed -outline-offset-2 outline-blue-600 dark:outline-blue-400'
+                          : 'hover:bg-gray-200/20 dark:hover:bg-gray-400/10',
+                    )}
+                    style={{ paddingLeft }} // depth-computed indent
                   >
                     {isRenaming ? (
-                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 3, padding: '4px 4px' }}>
-                        <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', flexShrink: 0 }}>
+                      <div className="flex-1 flex items-center gap-[3px] p-1">
+                        <div className="flex gap-0.5 flex-wrap shrink-0">
                           {FOLDER_COLORS.map(c => (
                             <button key={c} onClick={() => setRenamingColor(c)}
-                              style={{ width: 11, height: 11, borderRadius: '50%', border: renamingColor === c ? '2px solid var(--theme-text)' : '1px solid transparent', backgroundColor: c, cursor: 'pointer', padding: 0 }} />
+                              className={clsx(
+                                'w-[11px] h-[11px] rounded-full cursor-pointer p-0',
+                                renamingColor === c ? 'border-2 border-gray-900 dark:border-gray-100' : 'border border-transparent',
+                              )}
+                              style={{ backgroundColor: c }} // user-chosen hex
+                            />
                           ))}
                         </div>
                         <input
@@ -1059,23 +1063,19 @@ export default function ParametersPage() {
                             }
                             if (e.key === 'Escape') setRenamingFolder(null)
                           }}
-                          style={{
-                            flex: 1, minWidth: 0, fontSize: 11, padding: '2px 4px',
-                            border: '1px solid var(--theme-border)', borderRadius: 4,
-                            backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)',
-                          }}
+                          className="flex-1 min-w-0 text-[11px] px-1 py-0.5 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100"
                         />
                         <button
                           onClick={() => { if (renamingFolder?.name.trim()) updateFolderMutation.mutate({ folderId: folder.id, data: { name: renamingFolder.name, color: renamingColor } }) }}
                           title="Save"
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-accent)', padding: 1, flexShrink: 0 }}
+                          className="bg-transparent border-none cursor-pointer text-blue-600 dark:text-blue-400 p-px shrink-0"
                         >
                           <Check size={11} />
                         </button>
                         <button
                           onClick={() => setRenamingFolder(null)}
                           title="Cancel"
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-text-muted)', padding: 1, flexShrink: 0 }}
+                          className="bg-transparent border-none cursor-pointer text-gray-600 dark:text-gray-400 p-px shrink-0"
                         >
                           <X size={11} />
                         </button>
@@ -1084,7 +1084,7 @@ export default function ParametersPage() {
                       <>
                         <span
                           {...dragHandleProps}
-                          style={{ cursor: 'grab', padding: '4px 2px 4px 4px', color: 'var(--theme-text-muted)', opacity: 0.4, display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                          className="cursor-grab pt-1 pr-0.5 pb-1 pl-1 text-gray-600 dark:text-gray-400 opacity-40 flex items-center shrink-0"
                           title="Drag to reorder; hold 650ms over another folder to nest"
                         >
                           ⠿
@@ -1101,59 +1101,48 @@ export default function ParametersPage() {
                               })
                             }}
                             title={isExpanded ? 'Collapse' : 'Expand'}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--theme-text-muted)', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                            className="bg-transparent border-none cursor-pointer p-0.5 text-gray-600 dark:text-gray-400 flex items-center shrink-0"
                           >
-                            <ChevronDown size={10} style={!isExpanded ? { transform: 'rotate(-90deg)' } : undefined} />
+                            <ChevronDown size={10} className={clsx('transition-transform', !isExpanded && '-rotate-90')} />
                           </button>
                         ) : (
-                          <span style={{ width: 14, flexShrink: 0 }} />
+                          <span className="w-[14px] shrink-0" />
                         )}
                         <button
                           onClick={() => setSelectedFolderId(folder.id)}
-                          style={{
-                            flex: 1, display: 'flex', alignItems: 'center', gap: 5, minWidth: 0,
-                            padding: '5px 3px', fontSize: depth === 0 ? 12 : 11, fontWeight: depth === 0 ? 500 : 400,
-                            border: 'none', cursor: 'pointer', textAlign: 'left', background: 'none',
-                            color: isSelected ? 'var(--theme-accent)' : 'var(--theme-text)',
-                          }}
+                          className={clsx(
+                            'flex-1 flex items-center gap-[5px] min-w-0 py-[5px] px-[3px] border-none cursor-pointer text-left bg-transparent',
+                            depth === 0 ? 'text-xs font-medium' : 'text-[11px] font-normal',
+                            isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-gray-100',
+                          )}
                         >
-                          <FolderOpen size={depth === 0 ? 13 : 11} style={{ flexShrink: 0, color: folder.color ?? '#6366f1', opacity: depth === 0 ? 1 : 0.8 }} />
-                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <FolderOpen
+                            size={depth === 0 ? 13 : 11}
+                            className={clsx('shrink-0', depth === 0 ? 'opacity-100' : 'opacity-80')}
+                            style={{ color: folder.color ?? '#6366f1' }} // user-chosen folder colour
+                          />
+                          <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
                             {folder.name}
                           </span>
-                          <span style={{ fontSize: 10, color: 'var(--theme-text-muted)', flexShrink: 0 }}>
+                          <span className="text-[10px] text-gray-600 dark:text-gray-400 shrink-0">
                             {folder._count?.parameters ?? 0}
                           </span>
                         </button>
-                        <div style={{ position: 'relative' }} ref={folderMenuOpen === folder.id ? folderMenuRef : undefined}>
+                        <div className="relative" ref={folderMenuOpen === folder.id ? folderMenuRef : undefined}>
                           <button
                             onClick={e => { e.stopPropagation(); setFolderMenuOpen(isMenuOpen ? null : folder.id); setRenamingColor(folder.color ?? FOLDER_COLORS[0]) }}
-                            style={{
-                              background: 'none', border: 'none', cursor: 'pointer',
-                              padding: '4px 4px', color: 'var(--theme-text-muted)',
-                              opacity: isMenuOpen ? 1 : 0,
-                              borderRadius: 4, flexShrink: 0,
-                            }}
-                            className="folder-menu-btn"
-                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1' }}
-                            onMouseLeave={e => { if (!isMenuOpen) (e.currentTarget as HTMLButtonElement).style.opacity = '0' }}
+                            className={clsx(
+                              'folder-menu-btn bg-transparent border-none cursor-pointer p-1 text-gray-600 dark:text-gray-400 rounded shrink-0 transition-opacity',
+                              isMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus:opacity-100',
+                            )}
                           >
                             <MoreHorizontal size={11} />
                           </button>
                           {isMenuOpen && (
-                            <div style={{
-                              position: 'absolute', right: 0, top: '100%', zIndex: 300,
-                              width: 158, borderRadius: 6,
-                              border: '1px solid var(--theme-border)',
-                              backgroundColor: 'var(--theme-surface)',
-                              boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-                              overflow: 'hidden',
-                            }}>
+                            <div className="absolute right-0 top-full z-[300] w-[158px] rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 shadow-lg overflow-hidden">
                               <button
                                 onClick={() => { setRenamingFolder({ id: folder.id, name: folder.name }); setFolderMenuOpen(null) }}
-                                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', fontSize: 12, border: 'none', cursor: 'pointer', backgroundColor: 'transparent', color: 'var(--theme-text)', textAlign: 'left' }}
-                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
-                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                className="w-full flex items-center gap-[7px] px-2.5 py-[7px] text-xs border-none cursor-pointer bg-transparent text-gray-900 dark:text-gray-100 text-left hover:bg-gray-200/20 dark:hover:bg-gray-400/10"
                               >
                                 <Edit2 size={11} /> Rename
                               </button>
@@ -1165,27 +1154,21 @@ export default function ParametersPage() {
                                   setExpandedParents(prev => new Set([...prev, folder.id]))
                                   setFolderMenuOpen(null)
                                 }}
-                                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', fontSize: 12, border: 'none', cursor: 'pointer', backgroundColor: 'transparent', color: 'var(--theme-text)', textAlign: 'left' }}
-                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
-                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                className="w-full flex items-center gap-[7px] px-2.5 py-[7px] text-xs border-none cursor-pointer bg-transparent text-gray-900 dark:text-gray-100 text-left hover:bg-gray-200/20 dark:hover:bg-gray-400/10"
                               >
                                 <Plus size={11} /> New sub-folder
                               </button>
                               {folder.parentId && (
                                 <button
                                   onClick={() => { updateFolderMutation.mutate({ folderId: folder.id, data: { parentId: null } }); setFolderMenuOpen(null) }}
-                                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', fontSize: 12, border: 'none', cursor: 'pointer', backgroundColor: 'transparent', color: 'var(--theme-text)', textAlign: 'left' }}
-                                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
-                                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                  className="w-full flex items-center gap-[7px] px-2.5 py-[7px] text-xs border-none cursor-pointer bg-transparent text-gray-900 dark:text-gray-100 text-left hover:bg-gray-200/20 dark:hover:bg-gray-400/10"
                                 >
                                   <FolderOpen size={11} /> Move to root
                                 </button>
                               )}
                               <button
                                 onClick={() => { deleteFolderMutation.mutate(folder.id); setFolderMenuOpen(null) }}
-                                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', fontSize: 12, border: 'none', cursor: 'pointer', backgroundColor: 'transparent', color: '#ef4444', textAlign: 'left' }}
-                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.06)')}
-                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                className="w-full flex items-center gap-[7px] px-2.5 py-[7px] text-xs border-none cursor-pointer bg-transparent text-red-500 text-left hover:bg-red-500/10"
                               >
                                 <Trash2 size={11} /> Delete
                               </button>
@@ -1199,11 +1182,19 @@ export default function ParametersPage() {
               </SortableFolderWrapper>
               {/* Inline sub-folder creation form */}
               {isCreatingChild && (
-                <div style={{ paddingLeft: (depth + 1) * 12 + 8, paddingRight: 6, paddingTop: 4, paddingBottom: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                <div
+                  className="pr-1.5 py-1 flex flex-col gap-1"
+                  style={{ paddingLeft: (depth + 1) * 12 + 8 }} // depth-computed indent
+                >
+                  <div className="flex gap-[3px] flex-wrap">
                     {FOLDER_COLORS.map(c => (
                       <button key={c} onClick={() => setSubFolderColor(c)}
-                        style={{ width: 12, height: 12, borderRadius: '50%', border: subFolderColor === c ? '2px solid var(--theme-text)' : '1px solid transparent', backgroundColor: c, cursor: 'pointer', padding: 0 }} />
+                        className={clsx(
+                          'w-3 h-3 rounded-full cursor-pointer p-0',
+                          subFolderColor === c ? 'border-2 border-gray-900 dark:border-gray-100' : 'border border-transparent',
+                        )}
+                        style={{ backgroundColor: c }} // user-chosen hex
+                      />
                     ))}
                   </div>
                   <input
@@ -1215,24 +1206,22 @@ export default function ParametersPage() {
                       if (e.key === 'Escape') setCreatingSubFolderIn(null)
                     }}
                     placeholder="Sub-folder name"
-                    style={{
-                      width: '100%', fontSize: 11, padding: '3px 6px',
-                      border: '1px solid var(--theme-border)', borderRadius: 4,
-                      backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)',
-                      boxSizing: 'border-box',
-                    }}
+                    className="w-full text-[11px] px-1.5 py-[3px] border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 box-border"
                   />
-                  <div style={{ display: 'flex', gap: 3 }}>
+                  <div className="flex gap-[3px]">
                     <button
                       onClick={() => { if (subFolderName.trim()) createSubFolderMutation.mutate({ name: subFolderName.trim(), parentId: folder.id, color: subFolderColor }) }}
                       disabled={!subFolderName.trim()}
-                      style={{ flex: 1, padding: '2px 0', fontSize: 11, fontWeight: 600, borderRadius: 4, border: 'none', backgroundColor: 'var(--theme-accent)', color: '#fff', cursor: subFolderName.trim() ? 'pointer' : 'not-allowed', opacity: subFolderName.trim() ? 1 : 0.5 }}
+                      className={clsx(
+                        'flex-1 py-0.5 text-[11px] font-semibold rounded border-none bg-blue-600 text-white',
+                        subFolderName.trim() ? 'cursor-pointer opacity-100' : 'cursor-not-allowed opacity-50',
+                      )}
                     >
                       Create
                     </button>
                     <button
                       onClick={() => setCreatingSubFolderIn(null)}
-                      style={{ padding: '2px 6px', fontSize: 11, borderRadius: 4, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', color: 'var(--theme-text)', cursor: 'pointer' }}
+                      className="px-1.5 py-0.5 text-[11px] rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 cursor-pointer"
                     >
                       Cancel
                     </button>
@@ -1255,7 +1244,7 @@ export default function ParametersPage() {
     <div className="space-y-4">
 
       {/* ── Tab navigation ── */}
-      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--theme-border)', paddingBottom: 0 }}>
+      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
         {([
           { key: 'parameters', label: 'Parameters', icon: null },
           { key: 'communications', label: 'Communications', icon: <Radio size={13} /> },
@@ -1263,14 +1252,12 @@ export default function ParametersPage() {
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '7px 14px', fontSize: 13, fontWeight: 500,
-              border: 'none', borderBottom: activeTab === tab.key ? '2px solid var(--theme-accent)' : '2px solid transparent',
-              backgroundColor: 'transparent', cursor: 'pointer',
-              color: activeTab === tab.key ? 'var(--theme-accent)' : 'var(--theme-text-muted)',
-              marginBottom: -1,
-            }}
+            className={clsx(
+              'flex items-center gap-[5px] px-3.5 py-[7px] text-[13px] font-medium border-none bg-transparent cursor-pointer -mb-px border-b-2',
+              activeTab === tab.key
+                ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-600 dark:text-gray-400',
+            )}
           >
             {tab.icon}
             {tab.label}
@@ -1288,25 +1275,18 @@ export default function ParametersPage() {
 
       {/* ── Staleness banner ── */}
       {isStale && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
-          borderRadius: 8, border: '1px solid #f59e0b', backgroundColor: 'rgba(245,158,11,0.08)',
-          fontSize: 12, color: '#92400e',
-        }}>
-          <AlertTriangle size={14} style={{ color: '#f59e0b', flexShrink: 0 }} />
-          <span style={{ flex: 1 }}>Parameters have been updated since the last Git sync.</span>
+        <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg border border-amber-500 bg-amber-500/10 text-xs text-amber-900 dark:text-amber-200">
+          <AlertTriangle size={14} className="text-amber-500 shrink-0" />
+          <span className="flex-1">Parameters have been updated since the last Git sync.</span>
           <button
             onClick={handleBannerSync}
             disabled={isBannerSyncing}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
-              borderRadius: 5, border: '1px solid #f59e0b', backgroundColor: '#fef3c7',
-              color: '#92400e', fontSize: 11, fontWeight: 600,
-              cursor: isBannerSyncing ? 'not-allowed' : 'pointer',
-              opacity: isBannerSyncing ? 0.7 : 1,
-            }}
+            className={clsx(
+              'flex items-center gap-[5px] px-2.5 py-1 rounded-[5px] border border-amber-500 bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200 text-[11px] font-semibold',
+              isBannerSyncing ? 'cursor-not-allowed opacity-70' : 'cursor-pointer opacity-100',
+            )}
           >
-            <RefreshCw size={11} style={isBannerSyncing ? { animation: 'spin 1s linear infinite' } : undefined} />
+            <RefreshCw size={11} className={clsx(isBannerSyncing && 'animate-spin')} />
             {isBannerSyncing ? 'Syncing…' : 'Sync Now'}
           </button>
         </div>
@@ -1314,10 +1294,10 @@ export default function ParametersPage() {
 
       {/* ── Toolbar ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h2 className="text-lg font-bold" style={{ color: 'var(--theme-text)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
           Parameters
           {!isLoading && (
-            <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--theme-text-muted)', background: 'var(--theme-sidebar-item-active)', padding: '2px 7px', borderRadius: 10 }}>
+            <span className="text-xs font-normal text-gray-600 dark:text-gray-400 bg-gray-200/30 dark:bg-gray-400/15 px-[7px] py-0.5 rounded-[10px]">
               {filteredParameters.length !== parameters.length
                 ? `${filteredParameters.length} / ${parameters.length}`
                 : parameters.length}
@@ -1331,14 +1311,7 @@ export default function ParametersPage() {
           {projectId && (
             <Link
               to={`/projects/${projectId}/parameters/settings`}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
-                border: '1px solid var(--theme-border)',
-                backgroundColor: 'var(--theme-surface)',
-                color: 'var(--theme-text-muted)',
-                textDecoration: 'none',
-              }}
+              className={clsx(BTN_TOOLBAR, 'no-underline')}
               title="Parameter settings — type registry, unit registry"
             >
               <Settings size={13} />
@@ -1349,19 +1322,19 @@ export default function ParametersPage() {
           {/* Publish to Git */}
           <button
             onClick={() => setIsPublishOpen(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
-              border: '1px solid var(--theme-border)',
-              backgroundColor: 'var(--theme-surface)',
-              color: 'var(--theme-text-muted)',
-              cursor: 'pointer',
-            }}
+            className={BTN_TOOLBAR}
             title={storedGitConfig ? `Connected: ${storedGitConfig.repoUrl}` : 'Publish parameters to Git'}
           >
             <GitBranch size={13} />
             Publish to Git
-            {storedGitConfig && <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: isStale ? '#f59e0b' : '#22c55e', marginLeft: 2 }} />}
+            {storedGitConfig && (
+              <span
+                className={clsx(
+                  'w-1.5 h-1.5 rounded-full ml-0.5',
+                  isStale ? 'bg-amber-500' : 'bg-green-500',
+                )}
+              />
+            )}
           </button>
 
           {/* Pull from Git — import round-trip */}
@@ -1369,18 +1342,10 @@ export default function ParametersPage() {
             <button
               onClick={handleGitPull}
               disabled={isPulling}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
-                border: '1px solid var(--theme-border)',
-                backgroundColor: 'var(--theme-surface)',
-                color: isPulling ? 'var(--theme-text-muted)' : 'var(--theme-accent)',
-                cursor: isPulling ? 'not-allowed' : 'pointer',
-                opacity: isPulling ? 0.7 : 1,
-              }}
+              className={clsx(BTN_TOOLBAR, !isPulling && 'text-blue-600 dark:text-blue-400')}
               title={`Pull latest parameters.json from ${storedGitConfig.platform}`}
             >
-              <RefreshCw size={13} style={isPulling ? { animation: 'spin 1s linear infinite' } : undefined} />
+              <RefreshCw size={13} className={clsx(isPulling && 'animate-spin')} />
               {isPulling ? 'Pulling…' : 'Pull from Git'}
             </button>
           )}
@@ -1388,69 +1353,49 @@ export default function ParametersPage() {
           {/* Import — opens the guided CSV import modal */}
           <button
             onClick={() => setIsCsvImportOpen(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
-              border: '1px solid var(--theme-border)',
-              backgroundColor: 'var(--theme-surface)',
-              color: 'var(--theme-text-muted)',
-              cursor: 'pointer',
-            }}
+            className={BTN_TOOLBAR}
           >
             <Upload size={13} />
             Import
           </button>
 
           {/* Column visibility toggle */}
-          <div ref={colMenuRef} style={{ position: 'relative' }}>
+          <div ref={colMenuRef} className="relative">
             <button
               onClick={() => setIsColMenuOpen(v => !v)}
               title="Show / hide columns"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
-                border: '1px solid var(--theme-border)',
-                backgroundColor: 'var(--theme-surface)',
-                color: 'var(--theme-text-muted)',
-                cursor: 'pointer',
-              }}
+              className={BTN_TOOLBAR}
             >
               <Layers size={13} />
               Columns
               {visibleCols.size < ALL_COLS.length && (
-                <span style={{ padding: '0 4px', borderRadius: 8, fontSize: 10, fontWeight: 700, backgroundColor: 'var(--theme-accent)', color: '#fff' }}>
+                <span className="px-1 rounded-lg text-[10px] font-bold bg-blue-600 text-white">
                   {ALL_COLS.length - visibleCols.size} hidden
                 </span>
               )}
             </button>
             {isColMenuOpen && (
-              <div style={{
-                position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 200,
-                width: 180, borderRadius: 8, padding: '6px 0',
-                border: '1px solid var(--theme-border)',
-                backgroundColor: 'var(--theme-surface)',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-              }}>
-                <div style={{ padding: '4px 12px 6px', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--theme-text-muted)', borderBottom: '1px solid var(--theme-border)', marginBottom: 4 }}>
+              <div className={clsx(MENU_POPOVER, 'top-[calc(100%+4px)] w-[180px] py-1.5')}>
+                <div className="px-3 pt-1 pb-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 mb-1">
                   Visible columns
                 </div>
                 {ALL_COLS.map(col => (
-                  <label key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', cursor: 'pointer', fontSize: 12, color: 'var(--theme-text)' }}
-                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
-                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  <label
+                    key={col.key}
+                    className="flex items-center gap-2 px-3 py-[5px] cursor-pointer text-xs text-gray-900 dark:text-gray-100 hover:bg-gray-200/20 dark:hover:bg-gray-400/10"
                   >
-                    <input type="checkbox" checked={visibleCols.has(col.key)} onChange={() => toggleCol(col.key)} style={{ cursor: 'pointer' }} />
+                    <input type="checkbox" checked={visibleCols.has(col.key)} onChange={() => toggleCol(col.key)} className="cursor-pointer" />
                     {col.label}
                   </label>
                 ))}
-                <div style={{ borderTop: '1px solid var(--theme-border)', marginTop: 4, padding: '5px 12px' }}>
+                <div className="border-t border-gray-200 dark:border-gray-700 mt-1 px-3 py-[5px]">
                   <button
                     onClick={() => {
                       const all = new Set(DEFAULT_COLS)
                       setVisibleCols(all)
                       if (COL_STORAGE_KEY) localStorage.setItem(COL_STORAGE_KEY, JSON.stringify([...all]))
                     }}
-                    style={{ fontSize: 11, color: 'var(--theme-accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                    className="text-[11px] text-blue-600 dark:text-blue-400 bg-transparent border-none cursor-pointer p-0"
                   >
                     Reset to default
                   </button>
@@ -1460,60 +1405,30 @@ export default function ParametersPage() {
           </div>
 
           {/* Export dropdown */}
-          <div ref={exportRef} style={{ position: 'relative' }}>
+          <div ref={exportRef} className="relative">
             <button
               onClick={() => setIsExportOpen(v => !v)}
               disabled={!!exportingFormat}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '5px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
-                border: '1px solid var(--theme-border)',
-                backgroundColor: 'var(--theme-surface)',
-                color: 'var(--theme-text-muted)',
-                cursor: exportingFormat ? 'not-allowed' : 'pointer',
-                opacity: exportingFormat ? 0.6 : 1,
-              }}
+              className={BTN_TOOLBAR}
             >
               <Download size={13} />
               {exportingFormat ? 'Exporting…' : 'Export'}
               <ChevronDown size={11} />
             </button>
             {isExportOpen && (
-              <div style={{
-                position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 200,
-                width: 280, borderRadius: 8,
-                border: '1px solid var(--theme-border)',
-                backgroundColor: 'var(--theme-surface)',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                overflow: 'hidden',
-              }}>
+              <div className={clsx(MENU_POPOVER, 'top-[calc(100%+4px)] w-[280px]')}>
                 {EXPORT_GROUPS.map(group => (
                   <div key={group.label}>
-                    <div style={{
-                      padding: '6px 12px 4px',
-                      fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
-                      textTransform: 'uppercase', color: 'var(--theme-text-muted)',
-                      backgroundColor: 'var(--theme-bg)',
-                      borderBottom: '1px solid var(--theme-border)',
-                    }}>
+                    <div className="px-3 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-[0.06em] text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700">
                       {group.label}
                     </div>
                     {group.formats.map(f => (
                       <button
                         key={f.key}
                         onClick={() => handleExport(f.key)}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 8,
-                          width: '100%', padding: '7px 12px',
-                          fontSize: 12, textAlign: 'left',
-                          color: 'var(--theme-text)',
-                          backgroundColor: 'transparent',
-                          border: 'none', cursor: 'pointer',
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
-                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                        className="flex items-center gap-2 w-full px-3 py-[7px] text-xs text-left text-gray-900 dark:text-gray-100 bg-transparent border-none cursor-pointer hover:bg-gray-200/20 dark:hover:bg-gray-400/10"
                       >
-                        <Download size={12} style={{ color: 'var(--theme-accent)', flexShrink: 0 }} />
+                        <Download size={12} className="text-blue-600 dark:text-blue-400 shrink-0" />
                         {f.label}
                       </button>
                     ))}
@@ -1524,18 +1439,16 @@ export default function ParametersPage() {
           </div>
 
           {/* View toggle: List / Graph */}
-          <div style={{ display: 'flex', border: '1px solid var(--theme-border)', borderRadius: 6, overflow: 'hidden' }}>
+          <div className="flex border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden">
             <button
               onClick={() => setParamViewMode('list')}
               title="List view"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                padding: '5px 10px', fontSize: 12, fontWeight: 500,
-                border: 'none', cursor: 'pointer',
-                backgroundColor: paramViewMode === 'list' ? 'var(--theme-accent)' : 'var(--theme-surface)',
-                color: paramViewMode === 'list' ? '#fff' : 'var(--theme-text-muted)',
-                borderRight: '1px solid var(--theme-border)',
-              }}
+              className={clsx(
+                'flex items-center gap-[5px] px-2.5 py-[5px] text-xs font-medium border-none cursor-pointer border-r border-gray-200 dark:border-gray-700',
+                paramViewMode === 'list'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400',
+              )}
             >
               <List size={13} />
               List
@@ -1543,13 +1456,12 @@ export default function ParametersPage() {
             <button
               onClick={() => setParamViewMode('graph')}
               title="Dependency graph view"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                padding: '5px 10px', fontSize: 12, fontWeight: 500,
-                border: 'none', cursor: 'pointer',
-                backgroundColor: paramViewMode === 'graph' ? 'var(--theme-accent)' : 'var(--theme-surface)',
-                color: paramViewMode === 'graph' ? '#fff' : 'var(--theme-text-muted)',
-              }}
+              className={clsx(
+                'flex items-center gap-[5px] px-2.5 py-[5px] text-xs font-medium border-none cursor-pointer',
+                paramViewMode === 'graph'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400',
+              )}
             >
               <Share2 size={13} />
               Graph
@@ -1559,11 +1471,7 @@ export default function ParametersPage() {
           {/* Create */}
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-              border: 'none', backgroundColor: 'var(--theme-accent)', color: '#fff', cursor: 'pointer',
-            }}
+            className="flex items-center gap-1.5 px-3 py-[5px] rounded-md text-xs font-semibold border-none bg-blue-600 hover:bg-blue-500 text-white cursor-pointer transition-colors"
           >
             <Plus size={13} />
             New Parameter
@@ -1572,30 +1480,24 @@ export default function ParametersPage() {
       </div>
 
       {/* ── Search ── */}
-      <div style={{
-        borderRadius: 8, border: '1px solid var(--theme-border)',
-        backgroundColor: 'var(--theme-surface)', padding: 12,
-      }}>
-        <div style={{ position: 'relative' }}>
-          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--theme-text-muted)' }} />
+      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-3">
+        <div className="relative">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-600 dark:text-gray-400" />
           <input
             ref={searchInputRef}
             type="text"
             placeholder="Search parameters… (Ctrl+F)"
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
-            style={{
-              width: '100%', paddingLeft: 32, paddingRight: searchQuery ? 32 : 10,
-              paddingTop: 6, paddingBottom: 6,
-              border: '1px solid var(--theme-border)', borderRadius: 6,
-              backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)',
-              fontSize: 12, outline: 'none', boxSizing: 'border-box',
-            }}
+            className={clsx(
+              'w-full pl-8 py-1.5 border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 text-xs outline-none box-border',
+              searchQuery ? 'pr-8' : 'pr-2.5',
+            )}
           />
           {searchQuery && (
             <button
               onClick={() => { setSearchQuery(''); setDebouncedSearch('') }}
-              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-text-muted)', padding: 0 }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-gray-600 dark:text-gray-400 p-0"
             >
               <X size={13} />
             </button>
@@ -1604,26 +1506,23 @@ export default function ParametersPage() {
       </div>
 
       {/* ── Filters ── */}
-      <div style={{ borderRadius: 8, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', overflow: 'hidden' }}>
+      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-hidden">
         <button
           onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
-          style={{
-            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer',
-          }}
+          className="w-full flex items-center justify-between px-3.5 py-2.5 bg-transparent border-none cursor-pointer"
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Filter size={13} style={{ color: 'var(--theme-text-muted)' }} />
-            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--theme-text)' }}>Filters</span>
+          <div className="flex items-center gap-2">
+            <Filter size={13} className="text-gray-600 dark:text-gray-400" />
+            <span className="text-xs font-medium text-gray-900 dark:text-gray-100">Filters</span>
           </div>
           {isFiltersExpanded
-            ? <ChevronUp size={14} style={{ color: 'var(--theme-text-muted)' }} />
-            : <ChevronDown size={14} style={{ color: 'var(--theme-text-muted)' }} />
+            ? <ChevronUp size={14} className="text-gray-600 dark:text-gray-400" />
+            : <ChevronDown size={14} className="text-gray-600 dark:text-gray-400" />
           }
         </button>
         {isFiltersExpanded && (
-          <div style={{ padding: '10px 14px', borderTop: '1px solid var(--theme-border)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+          <div className="px-3.5 py-2.5 border-t border-gray-200 dark:border-gray-700">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2.5">
               {[
                 { label: 'Data Type', value: dataTypeFilter, onChange: setDataTypeFilter, options: [
                   { value: 'all', label: 'All Data Types' }, { value: 'unassigned', label: 'Unassigned' },
@@ -1641,7 +1540,7 @@ export default function ParametersPage() {
                 ]},
               ].map(filter => (
                 <div key={filter.label}>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--theme-text-muted)', marginBottom: 4 }}>{filter.label}</label>
+                  <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 mb-1">{filter.label}</label>
                   <select
                     value={filter.value}
                     onChange={e => filter.onChange(e.target.value)}
@@ -1664,73 +1563,73 @@ export default function ParametersPage() {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+      <div className="flex gap-3 items-start">
 
         {/* ── Folder sidebar ── */}
         {isFolderSidebarOpen ? (
-          <div style={{
-            width: 200, flexShrink: 0,
-            borderRadius: 8, border: '1px solid var(--theme-border)',
-            backgroundColor: 'var(--theme-surface)',
-            overflow: 'hidden',
-          }}>
+          <div className="w-[200px] shrink-0 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-hidden">
             {/* Sidebar header */}
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '8px 10px', borderBottom: '1px solid var(--theme-border)',
-              backgroundColor: 'var(--theme-bg)',
-            }}>
-              <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--theme-text-muted)' }}>Folders</span>
+            <div className="flex items-center justify-between px-2.5 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">Folders</span>
               <button
                 onClick={() => setIsFolderSidebarOpen(false)}
                 title="Collapse sidebar"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-text-muted)', padding: 2, display: 'flex', alignItems: 'center' }}
+                className="bg-transparent border-none cursor-pointer text-gray-600 dark:text-gray-400 p-0.5 flex items-center"
               >
-                <ChevronDown size={12} style={{ transform: 'rotate(90deg)' }} />
+                <ChevronDown size={12} className="rotate-90" />
               </button>
             </div>
-            <div style={{ padding: '4px 4px' }}>
+            <div className="p-1">
               {/* All Parameters */}
               <button
                 onClick={() => setSelectedFolderId(null)}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '6px 8px', borderRadius: 5, fontSize: 12, fontWeight: 500,
-                  border: 'none', cursor: 'pointer', textAlign: 'left',
-                  backgroundColor: selectedFolderId === null ? 'var(--theme-sidebar-item-active)' : 'transparent',
-                  color: selectedFolderId === null ? 'var(--theme-accent)' : 'var(--theme-text)',
-                }}
+                className={clsx(
+                  'w-full flex items-center gap-1.5 px-2 py-1.5 rounded-[5px] text-xs font-medium border-none cursor-pointer text-left',
+                  selectedFolderId === null
+                    ? 'bg-gray-200/30 dark:bg-gray-400/15 text-blue-600 dark:text-blue-400'
+                    : 'bg-transparent text-gray-900 dark:text-gray-100',
+                )}
               >
-                <Layers size={13} style={{ flexShrink: 0, color: selectedFolderId === null ? 'var(--theme-accent)' : 'var(--theme-text-muted)' }} />
-                <span style={{ flex: 1 }}>All Parameters</span>
-                <span style={{ fontSize: 10, color: 'var(--theme-text-muted)' }}>{parameters.length}</span>
+                <Layers
+                  size={13}
+                  className={clsx(
+                    'shrink-0',
+                    selectedFolderId === null ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400',
+                  )}
+                />
+                <span className="flex-1">All Parameters</span>
+                <span className="text-[10px] text-gray-600 dark:text-gray-400">{parameters.length}</span>
               </button>
               {/* Ungrouped — droppable zone */}
               <DroppableFolder folderId="ungrouped" isOver={overFolderId === 'ungrouped'}>
                 <button
                   onClick={() => setSelectedFolderId('__none__')}
-                  style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '6px 8px', borderRadius: 5, fontSize: 12, fontWeight: 500,
-                    border: 'none', cursor: 'pointer', textAlign: 'left',
-                    backgroundColor: selectedFolderId === '__none__' ? 'var(--theme-sidebar-item-active)' : 'transparent',
-                    color: selectedFolderId === '__none__' ? 'var(--theme-accent)' : 'var(--theme-text-muted)',
-                  }}
+                  className={clsx(
+                    'w-full flex items-center gap-1.5 px-2 py-1.5 rounded-[5px] text-xs font-medium border-none cursor-pointer text-left',
+                    selectedFolderId === '__none__'
+                      ? 'bg-gray-200/30 dark:bg-gray-400/15 text-blue-600 dark:text-blue-400'
+                      : 'bg-transparent text-gray-600 dark:text-gray-400',
+                  )}
                 >
-                  <Folder size={13} style={{ flexShrink: 0 }} />
-                  <span style={{ flex: 1 }}>Ungrouped</span>
-                  <span style={{ fontSize: 10 }}>{parameters.filter(p => !p.folderId).length}</span>
+                  <Folder size={13} className="shrink-0" />
+                  <span className="flex-1">Ungrouped</span>
+                  <span className="text-[10px]">{parameters.filter(p => !p.folderId).length}</span>
                 </button>
               </DroppableFolder>
               {/* Named folders — recursive tree, sortable at every depth level */}
               {renderFolderTree(null, 0)}
               {/* New folder */}
               {isCreatingFolder ? (
-                <div style={{ padding: '6px 6px', display: 'flex', flexDirection: 'column', gap: 5 }}>
-                  <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                <div className="p-1.5 flex flex-col gap-[5px]">
+                  <div className="flex gap-[3px] flex-wrap">
                     {FOLDER_COLORS.map(c => (
                       <button key={c} onClick={() => setCreateFolderColor(c)}
-                        style={{ width: 14, height: 14, borderRadius: '50%', border: createFolderColor === c ? '2px solid var(--theme-text)' : '1px solid transparent', backgroundColor: c, cursor: 'pointer', padding: 0 }} />
+                        className={clsx(
+                          'w-3.5 h-3.5 rounded-full cursor-pointer p-0',
+                          createFolderColor === c ? 'border-2 border-gray-900 dark:border-gray-100' : 'border border-transparent',
+                        )}
+                        style={{ backgroundColor: c }} // user-chosen hex
+                      />
                     ))}
                   </div>
                   <input
@@ -1742,24 +1641,22 @@ export default function ParametersPage() {
                       if (e.key === 'Escape') { setIsCreatingFolder(false); setCreateFolderName('') }
                     }}
                     placeholder="Folder name"
-                    style={{
-                      width: '100%', fontSize: 11, padding: '4px 7px',
-                      border: '1px solid var(--theme-border)', borderRadius: 4,
-                      backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)',
-                      boxSizing: 'border-box',
-                    }}
+                    className="w-full text-[11px] px-[7px] py-1 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 box-border"
                   />
-                  <div style={{ display: 'flex', gap: 4 }}>
+                  <div className="flex gap-1">
                     <button
                       onClick={() => { if (createFolderName.trim()) createFolderMutation.mutate(createFolderName.trim()) }}
                       disabled={!createFolderName.trim()}
-                      style={{ flex: 1, padding: '3px 0', fontSize: 11, fontWeight: 600, borderRadius: 4, border: 'none', backgroundColor: 'var(--theme-accent)', color: '#fff', cursor: createFolderName.trim() ? 'pointer' : 'not-allowed', opacity: createFolderName.trim() ? 1 : 0.5 }}
+                      className={clsx(
+                        'flex-1 py-[3px] text-[11px] font-semibold rounded border-none bg-blue-600 text-white',
+                        createFolderName.trim() ? 'cursor-pointer opacity-100' : 'cursor-not-allowed opacity-50',
+                      )}
                     >
                       Create
                     </button>
                     <button
                       onClick={() => { setIsCreatingFolder(false); setCreateFolderName('') }}
-                      style={{ padding: '3px 7px', fontSize: 11, borderRadius: 4, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', color: 'var(--theme-text)', cursor: 'pointer' }}
+                      className="px-[7px] py-[3px] text-[11px] rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 cursor-pointer"
                     >
                       Cancel
                     </button>
@@ -1768,15 +1665,7 @@ export default function ParametersPage() {
               ) : (
                 <button
                   onClick={() => setIsCreatingFolder(true)}
-                  style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: 5,
-                    padding: '5px 8px', borderRadius: 5, fontSize: 11, fontWeight: 500,
-                    border: 'none', cursor: 'pointer', textAlign: 'left',
-                    backgroundColor: 'transparent', color: 'var(--theme-text-muted)',
-                    marginTop: 2,
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
-                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  className="w-full flex items-center gap-[5px] px-2 py-[5px] rounded-[5px] text-[11px] font-medium border-none cursor-pointer text-left bg-transparent text-gray-600 dark:text-gray-400 mt-0.5 hover:bg-gray-200/20 dark:hover:bg-gray-400/10"
                 >
                   <Plus size={11} />
                   New folder
@@ -1789,45 +1678,34 @@ export default function ParametersPage() {
           <button
             onClick={() => setIsFolderSidebarOpen(true)}
             title="Expand folder sidebar"
-            style={{
-              flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              width: 24, minHeight: 40, borderRadius: 6,
-              border: '1px solid var(--theme-border)',
-              backgroundColor: 'var(--theme-surface)',
-              cursor: 'pointer', color: 'var(--theme-text-muted)',
-            }}
+            className="shrink-0 flex items-center justify-center w-6 min-h-[40px] rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-pointer text-gray-600 dark:text-gray-400"
           >
             <Folder size={13} />
           </button>
         )}
 
         {/* ── Right: tip / graph / bulk bar / table ── */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="flex-1 min-w-0 flex flex-col gap-3">
 
       {/* ── Info / tip ── */}
       {parameters.length === 0 && !isLoading && (
-        <div style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', fontSize: 12, color: 'var(--theme-text-muted)' }}>
-          <strong>Tip:</strong> Parameters are automatically extracted when you use the pattern <code style={{ backgroundColor: 'var(--theme-sidebar-item-active)', padding: '1px 4px', borderRadius: 3 }}>@parameterName@</code> in function descriptions.
+        <div className="px-3.5 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-xs text-gray-600 dark:text-gray-400">
+          <strong>Tip:</strong> Parameters are automatically extracted when you use the pattern <code className="bg-gray-200/30 dark:bg-gray-400/15 px-1 py-px rounded">@parameterName@</code> in function descriptions.
           You can also import an existing parameter set using the <strong>Import</strong> button.
         </div>
       )}
 
       {/* ── Dependency Graph view ── */}
       {paramViewMode === 'graph' && (
-        <div style={{ borderRadius: 8, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', overflow: 'hidden' }}>
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-hidden">
           <ParameterDependencyGraph parameters={filteredParameters} />
         </div>
       )}
 
       {/* ── Bulk action toolbar ── */}
       {selectedIds.size > 0 && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-          padding: '8px 12px', borderRadius: 8,
-          border: '1px solid var(--theme-accent)',
-          backgroundColor: 'var(--theme-accent-subtle)',
-        }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--theme-text)', marginRight: 4 }}>
+        <div className="flex items-center gap-2 flex-wrap px-3 py-2 rounded-lg border border-blue-600 dark:border-blue-400 bg-blue-100 dark:bg-blue-950">
+          <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 mr-1">
             {selectedIds.size} selected
           </span>
           {/* Bulk move to folder */}
@@ -1846,13 +1724,7 @@ export default function ParametersPage() {
                 setToastMessage(`Moved ${selectedIds.size} parameter${selectedIds.size > 1 ? 's' : ''} to ${folderId ? (folders.find(f => f.id === folderId)?.name ?? 'folder') : 'root'}`)
                 setSelectedIds(new Set())
               }}
-              style={{
-                padding: '4px 8px', borderRadius: 6, fontSize: 12, fontWeight: 500,
-                border: '1px solid var(--theme-border)',
-                backgroundColor: 'var(--theme-surface)',
-                color: 'var(--theme-text)',
-                cursor: 'pointer',
-              }}
+              className="px-2 py-1 rounded-md text-xs font-medium border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 cursor-pointer"
             >
               <option value="">Move to folder…</option>
               <option value="">— Root (ungrouped)</option>
@@ -1864,54 +1736,54 @@ export default function ParametersPage() {
           <button
             onClick={() => bulkUpdateMutation.mutate({ ids: Array.from(selectedIds), updates: { status: 'approved' } })}
             disabled={bulkUpdateMutation.isPending}
-            style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: '1px solid rgba(34,197,94,0.4)', backgroundColor: 'rgba(34,197,94,0.12)', color: '#15803d' }}
+            className="px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer border border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-400"
           >
             Approve
           </button>
           <button
             onClick={() => bulkUpdateMutation.mutate({ ids: Array.from(selectedIds), updates: { status: 'draft' } })}
             disabled={bulkUpdateMutation.isPending}
-            style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: '1px solid rgba(245,158,11,0.4)', backgroundColor: 'rgba(245,158,11,0.12)', color: '#b45309' }}
+            className="px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"
           >
             Set Draft
           </button>
           <button
             onClick={() => bulkUpdateMutation.mutate({ ids: Array.from(selectedIds), updates: { status: 'obsolete' } })}
             disabled={bulkUpdateMutation.isPending}
-            style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', color: 'var(--theme-text-muted)' }}
+            className="px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
           >
             Obsolete
           </button>
           {!bulkDeleteConfirm ? (
             <button
               onClick={() => setBulkDeleteConfirm(true)}
-              style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: '1px solid rgba(239,68,68,0.4)', backgroundColor: 'rgba(239,68,68,0.08)', color: '#ef4444' }}
+              className="px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer border border-red-500/40 bg-red-500/10 text-red-500"
             >
               Delete
             </button>
           ) : (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 12, color: '#ef4444', fontWeight: 500 }}>Are you sure?</span>
+            <span className="flex items-center gap-1.5">
+              <span className="text-xs text-red-500 font-medium">Are you sure?</span>
               <button
                 onClick={() => bulkDeleteMutation.mutate(Array.from(selectedIds))}
                 disabled={bulkDeleteMutation.isPending}
-                style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', backgroundColor: '#ef4444', color: '#fff' }}
+                className="px-2.5 py-1 rounded-md text-xs font-semibold cursor-pointer border-none bg-red-500 text-white"
               >
                 Confirm
               </button>
               <button
                 onClick={() => setBulkDeleteConfirm(false)}
-                style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', color: 'var(--theme-text)' }}
+                className="px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
               >
                 Cancel
               </button>
             </span>
           )}
-          <span style={{ flex: 1 }} />
+          <span className="flex-1" />
           <button
             onClick={() => { setSelectedIds(new Set()); setBulkDeleteConfirm(false) }}
             title="Clear selection"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-text-muted)', padding: 2, display: 'flex', alignItems: 'center' }}
+            className="bg-transparent border-none cursor-pointer text-gray-600 dark:text-gray-400 p-0.5 flex items-center"
           >
             <X size={14} />
           </button>
@@ -1920,12 +1792,12 @@ export default function ParametersPage() {
 
       {/* ── Table ── */}
       {paramViewMode === 'list' && (
-      <div style={{ borderRadius: 8, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', overflow: 'hidden' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-xs">
             <thead>
-              <tr style={{ backgroundColor: 'var(--theme-bg)', borderBottom: '1px solid var(--theme-border)' }}>
-                <th style={{ padding: '8px 12px', width: 32, position: 'sticky', left: 0, zIndex: 2, backgroundColor: 'var(--theme-bg)' }}>
+              <tr className="bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700">
+                <th className="px-3 py-2 w-8 sticky left-0 z-[2] bg-white dark:bg-gray-950">
                   <input
                     type="checkbox"
                     checked={filteredParameters.length > 0 && filteredParameters.every(p => selectedIds.has(p.id))}
@@ -1936,7 +1808,7 @@ export default function ParametersPage() {
                         setSelectedIds(new Set())
                       }
                     }}
-                    style={{ cursor: 'pointer' }}
+                    className="cursor-pointer"
                   />
                 </th>
                 {([
@@ -1957,23 +1829,21 @@ export default function ParametersPage() {
                   <th
                     key={h.label || 'actions'}
                     onClick={h.field ? () => handleSortBy(h.field!) : undefined}
-                    style={{
-                      padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700,
-                      letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--theme-text-muted)',
-                      whiteSpace: 'nowrap', cursor: h.field ? 'pointer' : 'default',
-                      userSelect: 'none',
-                      ...(h.sticky ? { position: 'sticky', left: 32, zIndex: 2, backgroundColor: 'var(--theme-bg)', boxShadow: '2px 0 4px rgba(0,0,0,0.06)' } : {}),
-                    }}
+                    className={clsx(
+                      'px-3 py-2 text-left text-[10px] font-bold tracking-wider uppercase text-gray-600 dark:text-gray-400 whitespace-nowrap select-none',
+                      h.field ? 'cursor-pointer' : 'cursor-default',
+                      h.sticky && 'sticky left-8 z-[2] bg-white dark:bg-gray-950 shadow-[2px_0_4px_rgba(0,0,0,0.06)]',
+                    )}
                     title={h.field ? `Sort by ${h.label}` : undefined}
                   >
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span className="inline-flex items-center gap-1">
                       {h.label}
                       {h.field && (
                         sortField === h.field
                           ? sortOrder === 'asc'
-                            ? <ArrowUp size={10} style={{ color: 'var(--theme-accent)' }} />
-                            : <ArrowDown size={10} style={{ color: 'var(--theme-accent)' }} />
-                          : <ArrowUpDown size={10} style={{ opacity: 0.4 }} />
+                            ? <ArrowUp size={10} className="text-blue-600 dark:text-blue-400" />
+                            : <ArrowDown size={10} className="text-blue-600 dark:text-blue-400" />
+                          : <ArrowUpDown size={10} className="opacity-40" />
                       )}
                     </span>
                   </th>
@@ -1982,9 +1852,9 @@ export default function ParametersPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={2 + visibleCols.size} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>Loading parameters…</td></tr>
+                <tr><td colSpan={2 + visibleCols.size} className="px-3 py-8 text-center text-gray-600 dark:text-gray-400">Loading parameters…</td></tr>
               ) : filteredParameters.length === 0 ? (
-                <tr><td colSpan={2 + visibleCols.size} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--theme-text-muted)' }}>
+                <tr><td colSpan={2 + visibleCols.size} className="px-3 py-8 text-center text-gray-600 dark:text-gray-400">
                   {parameters.length === 0 ? 'No parameters yet. Create one or import a file.' : 'No parameters match your filters.'}
                 </td></tr>
               ) : (() => {
@@ -2007,22 +1877,22 @@ export default function ParametersPage() {
                 return groups.flatMap(group => {
                   const isCollapsed = collapsedGroups.has(group.id)
                   const groupHeaderRow = showGroups ? (
-                    <tr key={`group-${group.id}`} style={{ backgroundColor: 'var(--theme-bg)', borderBottom: '1px solid var(--theme-border)' }}>
-                      <td colSpan={2 + visibleCols.size} style={{ padding: '5px 12px' }}>
+                    <tr key={`group-${group.id}`} className="bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700">
+                      <td colSpan={2 + visibleCols.size} className="px-3 py-[5px]">
                         <button
                           type="button"
                           onClick={() => toggleGroup(group.id)}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: 6,
-                            background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                            fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
-                            color: 'var(--theme-text-muted)',
-                          }}
+                          className="flex items-center gap-1.5 bg-transparent border-none cursor-pointer p-0 text-[11px] font-bold tracking-wider uppercase text-gray-600 dark:text-gray-400"
                         >
-                          {group.color && <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: group.color, display: 'inline-block', flexShrink: 0 }} />}
+                          {group.color && (
+                            <span
+                              className="w-2 h-2 rounded-full inline-block shrink-0"
+                              style={{ backgroundColor: group.color }} // user-chosen hex
+                            />
+                          )}
                           {isCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
                           {group.label}
-                          <span style={{ fontSize: 10, color: 'var(--theme-text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>
+                          <span className="text-[10px] text-gray-600 dark:text-gray-400 font-normal normal-case tracking-normal">
                             ({group.params.length})
                           </span>
                         </button>
@@ -2047,7 +1917,7 @@ export default function ParametersPage() {
                 const isInlineEditing = inlineEditingId === param.id
                 return (
                 <DraggableRow key={param.id} parameterId={param.id} folderColor={showGroups ? null : folder?.color}>
-                  <td style={{ padding: '8px 12px', width: 32, position: 'sticky', left: 0, zIndex: 1, backgroundColor: 'var(--theme-surface)' }} onClick={e => e.stopPropagation()}>
+                  <td className="px-3 py-2 w-8 sticky left-0 z-[1] bg-gray-50 dark:bg-gray-800" onClick={e => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selectedIds.has(param.id)}
@@ -2059,38 +1929,37 @@ export default function ParametersPage() {
                           return next
                         })
                       }}
-                      style={{ cursor: 'pointer' }}
+                      className="cursor-pointer"
                     />
                   </td>
-                  <td style={{ padding: '6px 12px', position: 'sticky', left: 32, zIndex: 1, backgroundColor: 'var(--theme-surface)', boxShadow: '2px 0 4px rgba(0,0,0,0.06)' }}>
+                  <td className="px-3 py-1.5 sticky left-8 z-[1] bg-gray-50 dark:bg-gray-800 shadow-[2px_0_4px_rgba(0,0,0,0.06)]">
                     <button type="button" onClick={() => setDetailParameter(param)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-accent)', fontWeight: 600, fontSize: 12, padding: 0, whiteSpace: 'nowrap', display: 'block' }}>
+                      className="bg-transparent border-none cursor-pointer text-blue-600 dark:text-blue-400 font-semibold text-xs p-0 whitespace-nowrap block">
                       {param.name}
                     </button>
                     {showFolderBadge && folderPath && (
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 3,
-                        fontSize: 10, color: folder?.color ?? 'var(--theme-text-muted)',
-                        marginTop: 1,
-                      }}>
-                        <Folder size={9} style={{ flexShrink: 0 }} />
+                      <span
+                        className="inline-flex items-center gap-[3px] text-[10px] mt-px text-gray-600 dark:text-gray-400"
+                        style={folder?.color ? { color: folder.color } : undefined} // user-chosen hex
+                      >
+                        <Folder size={9} className="shrink-0" />
                         {folderPath}
                       </span>
                     )}
                   </td>
                   {visibleCols.has('description') && (
-                    <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)', maxWidth: 200 }}>
-                      <span style={{ overflow: 'hidden', display: 'block', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={param.description ?? ''}>
+                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400 max-w-[200px]">
+                      <span className="overflow-hidden block text-ellipsis whitespace-nowrap" title={param.description ?? ''}>
                         {param.description || '—'}
                       </span>
                     </td>
                   )}
                   {visibleCols.has('type') && (
-                    <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)' }}>{param.dataType || '—'}</td>
+                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{param.dataType || '—'}</td>
                   )}
                   {visibleCols.has('value') && (
                     <td
-                      style={{ padding: '8px 12px', fontFamily: 'monospace', color: 'var(--theme-text)', minWidth: 80 }}
+                      className="px-3 py-2 font-mono text-gray-900 dark:text-gray-100 min-w-[80px]"
                       onClick={e => {
                         if (!isInlineEditing) {
                           e.stopPropagation()
@@ -2110,29 +1979,15 @@ export default function ParametersPage() {
                             if (e.key === 'Escape') { e.stopPropagation(); setInlineEditingId(null) }
                           }}
                           onClick={e => e.stopPropagation()}
-                          style={{
-                            width: '100%', padding: '2px 5px', fontFamily: 'monospace', fontSize: 12,
-                            border: '1px solid var(--theme-accent)', borderRadius: 4,
-                            backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)',
-                            outline: 'none',
-                          }}
+                          className="w-full px-1.5 py-0.5 font-mono text-xs border border-blue-600 dark:border-blue-400 rounded bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 outline-none"
                         />
                       ) : (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span className="flex items-center gap-[5px]">
                           <span>{param.defaultValue || '—'}</span>
                           {param.formula && (
                             <span
                               title={param.formula}
-                              style={{
-                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                padding: '1px 5px', borderRadius: 4, fontSize: 10, fontWeight: 700,
-                                fontFamily: 'serif', fontStyle: 'italic',
-                                backgroundColor: 'rgba(245,158,11,0.12)',
-                                color: '#b45309',
-                                border: '1px solid rgba(245,158,11,0.3)',
-                                cursor: 'default',
-                                flexShrink: 0,
-                              }}
+                              className="inline-flex items-center justify-center px-1.5 py-px rounded text-[10px] font-bold font-serif italic bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 cursor-default shrink-0"
                             >
                               f
                             </span>
@@ -2142,68 +1997,72 @@ export default function ParametersPage() {
                     </td>
                   )}
                   {visibleCols.has('computed') && (
-                    <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 11, color: computedVal ? 'var(--theme-accent)' : 'var(--theme-text-muted)' }}>
+                    <td className={clsx(
+                      'px-3 py-2 font-mono text-[11px]',
+                      computedVal ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400',
+                    )}>
                       {computedVal ?? (param.formula ? '…' : '—')}
                     </td>
                   )}
                   {visibleCols.has('unit') && (
-                    <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)' }}>{param.unit || '—'}</td>
+                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{param.unit || '—'}</td>
                   )}
                   {visibleCols.has('source') && (
-                    <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)' }}>
+                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400">
                       {param.sourceFunction ? (
                         <button type="button" onClick={() => setViewingSource(param)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-accent)', fontSize: 12, padding: 0 }}>
+                          className="bg-transparent border-none cursor-pointer text-blue-600 dark:text-blue-400 text-xs p-0">
                           {param.sourceFunction.functionId || 'N/A'}: {param.sourceFunction.name}
                         </button>
                       ) : '—'}
                     </td>
                   )}
                   {visibleCols.has('status') && (
-                    <td style={{ padding: '8px 12px' }}>
-                      <span style={{
-                        padding: '2px 7px', borderRadius: 10, fontSize: 10, fontWeight: 600,
-                        backgroundColor: (param.status ?? 'draft') === 'approved' ? 'rgba(34,197,94,0.12)' : (param.status ?? 'draft') === 'obsolete' ? 'var(--theme-sidebar-item-active)' : 'rgba(245,158,11,0.12)',
-                        color: (param.status ?? 'draft') === 'approved' ? '#15803d' : (param.status ?? 'draft') === 'obsolete' ? 'var(--theme-text-muted)' : '#b45309',
-                      }}>
+                    <td className="px-3 py-2">
+                      <span className={clsx(
+                        'px-[7px] py-0.5 rounded-[10px] text-[10px] font-semibold',
+                        (param.status ?? 'draft') === 'approved' && 'bg-green-500/10 text-green-700 dark:text-green-400',
+                        (param.status ?? 'draft') === 'obsolete' && 'bg-gray-200/30 dark:bg-gray-400/15 text-gray-600 dark:text-gray-400',
+                        (param.status ?? 'draft') === 'draft' && 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+                      )}>
                         {param.status ?? 'draft'}
                       </span>
                     </td>
                   )}
                   {visibleCols.has('usedIn') && (
-                    <td style={{ padding: '8px 12px' }}>
+                    <td className="px-3 py-2">
                       {(param as ParameterWithUsage).requirementCount != null ? (
                         <button type="button" onClick={() => setDetailParameter(param)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-accent)', fontWeight: 600, fontSize: 12, padding: 0 }}>
+                          className="bg-transparent border-none cursor-pointer text-blue-600 dark:text-blue-400 font-semibold text-xs p-0">
                           {(param as ParameterWithUsage).requirementCount}
                         </button>
                       ) : '—'}
                     </td>
                   )}
                   {visibleCols.has('created') && (
-                    <td style={{ padding: '8px 12px', color: 'var(--theme-text-muted)', whiteSpace: 'nowrap' }}>
+                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">
                       {format(new Date(param.createdAt), 'MMM dd, yyyy')}
                     </td>
                   )}
-                  <td style={{ padding: '8px 12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1">
                       <button onClick={(e) => { e.stopPropagation(); setChangeRequestModal({ isOpen: true, sourceId: param.id, sourceName: param.name }) }}
-                        title="Change Request" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, borderRadius: 4, color: '#22c55e' }}
-                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(34,197,94,0.1)')}
-                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>
+                        title="Change Request"
+                        className="bg-transparent border-none cursor-pointer p-[3px] rounded text-green-500 hover:bg-green-500/10 transition-colors">
                         <FileText size={14} />
                       </button>
                       <button onClick={(e) => handleEditClick(e, param)}
-                        title="Edit" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, borderRadius: 4, color: 'var(--theme-accent)' }}
-                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-accent-subtle)')}
-                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>
+                        title="Edit"
+                        className="bg-transparent border-none cursor-pointer p-[3px] rounded text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950 transition-colors">
                         <Edit2 size={14} />
                       </button>
                       <button onClick={(e) => handleDeleteClick(e, param.id, param.name)}
                         disabled={deleteParameterMutation.isPending && deleteConfirmation?.id === param.id}
-                        title="Delete" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, borderRadius: 4, color: '#ef4444', opacity: (deleteParameterMutation.isPending && deleteConfirmation?.id === param.id) ? 0.4 : 1 }}
-                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.1)')}
-                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}>
+                        title="Delete"
+                        className={clsx(
+                          'bg-transparent border-none cursor-pointer p-[3px] rounded text-red-500 hover:bg-red-500/10 transition-colors',
+                          deleteParameterMutation.isPending && deleteConfirmation?.id === param.id && 'opacity-40',
+                        )}>
                         <Trash2 size={14} />
                       </button>
                     </div>
@@ -2224,24 +2083,15 @@ export default function ParametersPage() {
       </div>{/* end folders + content layout */}
       <DragOverlay>
         {activeDragParamId ? (
-          <div style={{
-            padding: '6px 12px', borderRadius: 6,
-            backgroundColor: 'var(--theme-accent)', color: '#fff',
-            fontSize: 12, fontWeight: 600, opacity: 0.9,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-          }}>
+          <div className="px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs font-semibold opacity-90 shadow-lg">
             {parameters.find(p => p.id === activeDragParamId)?.name ?? 'Parameter'}
           </div>
         ) : activeDragFolderId ? (
-          <div style={{
-            padding: '5px 10px', borderRadius: 6,
-            backgroundColor: 'var(--theme-surface)', color: 'var(--theme-text)',
-            fontSize: 12, fontWeight: 500, opacity: 0.9,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-            border: '1px solid var(--theme-border)',
-            display: 'flex', alignItems: 'center', gap: 6,
-          }}>
-            <FolderOpen size={13} style={{ color: folders.find(f => f.id === activeDragFolderId)?.color ?? '#6366f1' }} />
+          <div className="px-2.5 py-[5px] rounded-md bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-xs font-medium opacity-90 shadow-lg border border-gray-200 dark:border-gray-700 flex items-center gap-1.5">
+            <FolderOpen
+              size={13}
+              style={{ color: folders.find(f => f.id === activeDragFolderId)?.color ?? '#6366f1' }} // user-chosen hex
+            />
             {folders.find(f => f.id === activeDragFolderId)?.name ?? 'Folder'}
           </div>
         ) : null}
@@ -2254,30 +2104,26 @@ export default function ParametersPage() {
         const parent = folders.find(f => f.id === pendingSubfolder.parentId)
         if (!child || !parent) return null
         return (
-          <div style={{
-            position: 'fixed', inset: 0, zIndex: 1000,
-            backgroundColor: 'rgba(0,0,0,0.4)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }} onClick={() => setPendingSubfolder(null)}>
-            <div style={{
-              backgroundColor: 'var(--theme-bg)', borderRadius: 10,
-              border: '1px solid var(--theme-border)',
-              boxShadow: '0 16px 48px rgba(0,0,0,0.24)',
-              width: 360, padding: '20px 22px',
-              display: 'flex', flexDirection: 'column', gap: 16,
-            }} onClick={e => e.stopPropagation()}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <FolderOpen size={18} style={{ color: 'var(--theme-accent)', flexShrink: 0 }} />
-                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--theme-text)' }}>Move into folder?</span>
+          <div
+            className="fixed inset-0 z-[1000] bg-black/40 flex items-center justify-center"
+            onClick={() => setPendingSubfolder(null)}
+          >
+            <div
+              className="bg-white dark:bg-gray-950 rounded-[10px] border border-gray-200 dark:border-gray-700 shadow-2xl w-[360px] px-[22px] py-5 flex flex-col gap-4"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2.5">
+                <FolderOpen size={18} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">Move into folder?</span>
               </div>
-              <p style={{ fontSize: 13, color: 'var(--theme-text-muted)', margin: 0, lineHeight: 1.5 }}>
-                Do you want to move <strong style={{ color: 'var(--theme-text)' }}>{child.name}</strong> into{' '}
-                <strong style={{ color: 'var(--theme-text)' }}>{parent.name}</strong> as a subfolder?
+              <p className="text-[13px] text-gray-600 dark:text-gray-400 m-0 leading-relaxed">
+                Do you want to move <strong className="text-gray-900 dark:text-gray-100">{child.name}</strong> into{' '}
+                <strong className="text-gray-900 dark:text-gray-100">{parent.name}</strong> as a subfolder?
               </p>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <div className="flex gap-2 justify-end">
                 <button
                   onClick={() => setPendingSubfolder(null)}
-                  style={{ padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 500, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', color: 'var(--theme-text)', cursor: 'pointer' }}
+                  className="px-3.5 py-1.5 rounded-md text-xs font-medium border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -2286,7 +2132,7 @@ export default function ParametersPage() {
                     makeFolderChildMutation.mutate({ childId: pendingSubfolder.childId, parentId: pendingSubfolder.parentId })
                     setPendingSubfolder(null)
                   }}
-                  style={{ padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600, border: 'none', backgroundColor: 'var(--theme-accent)', color: '#fff', cursor: 'pointer' }}
+                  className="px-3.5 py-1.5 rounded-md text-xs font-semibold border-none bg-blue-600 hover:bg-blue-500 text-white cursor-pointer transition-colors"
                 >
                   Yes, move it
                 </button>
@@ -2298,59 +2144,53 @@ export default function ParametersPage() {
 
       {/* ── Import Modal ── */}
       {isImportOpen && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 1000,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: 20,
-        }} onClick={() => setIsImportOpen(false)}>
-          <div style={{
-            backgroundColor: 'var(--theme-bg)', borderRadius: 10,
-            border: '1px solid var(--theme-border)',
-            boxShadow: '0 16px 48px rgba(0,0,0,0.24)',
-            width: '100%', maxWidth: 560, maxHeight: '80vh',
-            display: 'flex', flexDirection: 'column',
-            overflow: 'hidden',
-          }} onClick={e => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-[1000] bg-black/50 flex items-center justify-center p-5"
+          onClick={() => setIsImportOpen(false)}
+        >
+          <div
+            className="bg-white dark:bg-gray-950 rounded-[10px] border border-gray-200 dark:border-gray-700 shadow-2xl w-full max-w-[560px] max-h-[80vh] flex flex-col overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: '1px solid var(--theme-border)' }}>
-              <Upload size={16} style={{ color: 'var(--theme-accent)' }} />
-              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--theme-text)' }}>Import Parameters</span>
-              <span style={{ flex: 1 }} />
-              <button onClick={() => setIsImportOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-text-muted)', padding: 4 }}><X size={16} /></button>
+            <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-gray-200 dark:border-gray-700">
+              <Upload size={16} className="text-blue-600 dark:text-blue-400" />
+              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">Import Parameters</span>
+              <span className="flex-1" />
+              <button onClick={() => setIsImportOpen(false)} className="bg-transparent border-none cursor-pointer text-gray-600 dark:text-gray-400 p-1"><X size={16} /></button>
             </div>
 
-            <div style={{ padding: 16, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="p-4 overflow-y-auto flex flex-col gap-3.5">
               {importResult ? (
                 /* Success view */
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 8, backgroundColor: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)' }}>
-                    <CheckCircle size={18} style={{ color: '#22c55e' }} />
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center gap-2.5 px-3.5 py-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                    <CheckCircle size={18} className="text-green-500" />
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--theme-text)' }}>Import complete</div>
-                      <div style={{ fontSize: 12, color: 'var(--theme-text-muted)' }}>
+                      <div className="text-[13px] font-semibold text-gray-900 dark:text-gray-100">Import complete</div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400">
                         {importResult.imported} created · {importResult.updated} updated
                         {importResult.errors.length > 0 && ` · ${importResult.errors.length} errors`}
                       </div>
                     </div>
                   </div>
                   {importResult.warnings.length > 0 && (
-                    <div style={{ fontSize: 11, color: '#b45309', backgroundColor: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 6, padding: '8px 10px' }}>
+                    <div className="text-[11px] text-amber-700 dark:text-amber-400 bg-amber-500/5 border border-amber-500/20 rounded-md px-2.5 py-2">
                       {importResult.warnings.map((w, i) => <div key={i}>{w}</div>)}
                     </div>
                   )}
                   {importResult.errors.length > 0 && (
-                    <div style={{ fontSize: 11, color: '#b91c1c', backgroundColor: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 6, padding: '8px 10px' }}>
+                    <div className="text-[11px] text-red-700 dark:text-red-400 bg-red-500/5 border border-red-500/20 rounded-md px-2.5 py-2">
                       {importResult.errors.map((e, i) => <div key={i}>{e}</div>)}
                     </div>
                   )}
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div className="flex gap-2">
                     <button onClick={() => { resetImport() }}
-                      style={{ padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 500, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', color: 'var(--theme-text)', cursor: 'pointer' }}>
+                      className="px-3.5 py-1.5 rounded-md text-xs font-medium border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 cursor-pointer">
                       Import another file
                     </button>
                     <button onClick={() => setIsImportOpen(false)}
-                      style={{ padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600, border: 'none', backgroundColor: 'var(--theme-accent)', color: '#fff', cursor: 'pointer' }}>
+                      className="px-3.5 py-1.5 rounded-md text-xs font-semibold border-none bg-blue-600 hover:bg-blue-500 text-white cursor-pointer transition-colors">
                       Done
                     </button>
                   </div>
@@ -2359,23 +2199,17 @@ export default function ParametersPage() {
                 /* Upload form */
                 <>
                   <div>
-                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--theme-text-muted)', marginBottom: 6 }}>File</label>
-                    <label style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                      padding: '20px 16px', borderRadius: 8,
-                      border: '2px dashed var(--theme-border)',
-                      backgroundColor: 'var(--theme-surface)', cursor: 'pointer',
-                      fontSize: 12, color: 'var(--theme-text-muted)',
-                    }}>
+                    <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 mb-1.5">File</label>
+                    <label className="flex items-center justify-center gap-2 px-4 py-5 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-pointer text-xs text-gray-600 dark:text-gray-400">
                       <Upload size={16} />
                       {importFilename ? importFilename : 'Click to upload or drop a file'}
-                      <input type="file" accept=".csv,.json,.h,.hpp,.m" onChange={handleFileChange} style={{ display: 'none' }} />
+                      <input type="file" accept=".csv,.json,.h,.hpp,.m" onChange={handleFileChange} className="hidden" />
                     </label>
-                    <p style={{ fontSize: 11, color: 'var(--theme-text-muted)', marginTop: 5 }}>Supported: CSV, JSON, C/C++ header (.h), MATLAB script (.m)</p>
+                    <p className="text-[11px] text-gray-600 dark:text-gray-400 mt-1">Supported: CSV, JSON, C/C++ header (.h), MATLAB script (.m)</p>
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--theme-text-muted)', marginBottom: 6 }}>Format <span style={{ fontWeight: 400 }}>(auto-detected from extension)</span></label>
+                    <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 mb-1.5">Format <span className="font-normal">(auto-detected from extension)</span></label>
                     <select className="settings-input" value={importFormat} onChange={e => setImportFormat(e.target.value)}>
                       <option value="">Auto-detect</option>
                       {IMPORT_FORMATS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
@@ -2384,30 +2218,27 @@ export default function ParametersPage() {
 
                   {!importFilename && (
                     <div>
-                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--theme-text-muted)', marginBottom: 6 }}>Or paste content</label>
+                      <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-400 mb-1.5">Or paste content</label>
                       <textarea
                         value={importContent}
                         onChange={e => setImportContent(e.target.value)}
                         placeholder="Paste CSV, JSON, C header, or MATLAB content here…"
                         rows={8}
-                        style={{
-                          width: '100%', fontFamily: 'monospace', fontSize: 11,
-                          padding: '8px 10px', borderRadius: 6,
-                          border: '1px solid var(--theme-border)',
-                          backgroundColor: 'var(--theme-bg)', color: 'var(--theme-text)',
-                          resize: 'vertical', boxSizing: 'border-box',
-                        }}
+                        className="w-full font-mono text-[11px] px-2.5 py-2 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 resize-y box-border"
                       />
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <div className="flex gap-2 justify-end">
                     <button onClick={() => setIsImportOpen(false)}
-                      style={{ padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 500, border: '1px solid var(--theme-border)', backgroundColor: 'var(--theme-surface)', color: 'var(--theme-text)', cursor: 'pointer' }}>
+                      className="px-3.5 py-1.5 rounded-md text-xs font-medium border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 cursor-pointer">
                       Cancel
                     </button>
                     <button onClick={handleImport} disabled={isImporting || !importContent}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600, border: 'none', backgroundColor: 'var(--theme-accent)', color: '#fff', cursor: (!importContent || isImporting) ? 'not-allowed' : 'pointer', opacity: (!importContent || isImporting) ? 0.5 : 1 }}>
+                      className={clsx(
+                        'flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-semibold border-none bg-blue-600 hover:bg-blue-500 text-white transition-colors',
+                        (!importContent || isImporting) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer opacity-100',
+                      )}>
                       <Upload size={13} />
                       {isImporting ? 'Importing…' : 'Import'}
                     </button>
@@ -2492,36 +2323,21 @@ export default function ParametersPage() {
 
       {/* ── Toast notification ── */}
       {toastMessage && (
-        <div style={{
-          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          zIndex: 2000,
-          padding: '10px 18px', borderRadius: 8,
-          backgroundColor: 'var(--theme-text)', color: 'var(--theme-bg)',
-          fontSize: 13, fontWeight: 500,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
-          pointerEvents: 'none',
-        }}>
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[2000] px-4.5 py-2.5 rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-[13px] font-medium shadow-lg pointer-events-none">
           {toastMessage}
         </div>
       )}
 
       {/* ── Pull from Git result ── */}
       {pullResult && (
-        <div style={{
-          position: 'fixed', bottom: 24, right: 24, zIndex: 2000,
-          padding: '12px 16px', borderRadius: 8, maxWidth: 340,
-          backgroundColor: 'var(--theme-surface)', color: 'var(--theme-text)',
-          border: '1px solid var(--theme-border)',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
-          fontSize: 12,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <div className="fixed bottom-6 right-6 z-[2000] px-4 py-3 rounded-lg max-w-[340px] bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 shadow-lg text-xs">
+          <div className="flex items-center justify-between mb-1.5">
             <strong>Pull from Git complete</strong>
-            <button onClick={() => setPullResult(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--theme-text-muted)', padding: 2 }}><X size={13} /></button>
+            <button onClick={() => setPullResult(null)} className="bg-transparent border-none cursor-pointer text-gray-600 dark:text-gray-400 p-0.5"><X size={13} /></button>
           </div>
           <div>Created: {pullResult.imported} | Updated: {pullResult.updated}</div>
-          {pullResult.errors.length > 0 && <div style={{ color: '#ef4444', marginTop: 4 }}>{pullResult.errors.length} errors</div>}
-          {pullResult.warnings.length > 0 && <div style={{ color: '#f59e0b', marginTop: 4 }}>{pullResult.warnings.length} warnings</div>}
+          {pullResult.errors.length > 0 && <div className="text-red-500 mt-1">{pullResult.errors.length} errors</div>}
+          {pullResult.warnings.length > 0 && <div className="text-amber-500 mt-1">{pullResult.warnings.length} warnings</div>}
         </div>
       )}
     </div>

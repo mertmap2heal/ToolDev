@@ -447,15 +447,16 @@ jobs:
       - name: Guard ParametersPage inline-style count ratchets down (#278)
         run: |
           set -e
-          # Ratchet: inline style count may only go DOWN. Current ceiling
-          # reflects the delivered partial refactor; follow-up PRs lower
-          # this ceiling region by region until ~15 (dnd-kit transform +
-          # dynamic folder colours + computed indents) is reached.
+          # Ratchet: inline style count may only go DOWN. The remaining
+          # sites are all annotated as dynamic values (dnd-kit transform,
+          # user-chosen folder colours, depth-computed indents). Any new
+          # inline style on this page must replace an existing dynamic one,
+          # not add to the total.
           params=$(grep -c "style={{" frontend/src/pages/Parameters/ParametersPage.tsx || true)
           comm=$(grep -c "style={{" frontend/src/pages/Parameters/CommunicationsTab.tsx || true)
           ok=0
-          if [ "$params" -gt 211 ]; then
-            echo "::error file=frontend/src/pages/Parameters/ParametersPage.tsx::inline style count ($params) exceeds ratchet ceiling 211 (see issue #278)"
+          if [ "$params" -gt 10 ]; then
+            echo "::error file=frontend/src/pages/Parameters/ParametersPage.tsx::inline style count ($params) exceeds ratchet ceiling 10 (see issue #278)"
             ok=1
           fi
           if [ "$comm" -gt 1 ]; then
