@@ -1,6 +1,6 @@
 import { createHash } from 'crypto'
 import { prisma } from '../lib/prisma'
-import { resolveProvider } from './aiProvider'
+import { resolveProviderForUser } from './aiProvider'
 
 const DRAFT_PROMPT_ID = 'prompt_v1_parameter_draft'
 const DRAFT_SYSTEM = `You are an aerospace / automotive requirements engineer drafting parameters for a safety-critical engineering lifecycle tool.
@@ -74,7 +74,10 @@ export async function draftParameter(args: {
   const contextHash = sha256(user)
   const inputHash = sha256(JSON.stringify({ prompt: DRAFT_PROMPT_ID, user }))
   const started = Date.now()
-  const adapter = resolveProvider({})
+  const { adapter } = await resolveProviderForUser({
+    userId: args.userId,
+    projectId: args.projectId,
+  })
   let success = true
   let errorMessage: string | null = null
   let text = ''

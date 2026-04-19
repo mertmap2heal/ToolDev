@@ -1,4 +1,5 @@
 import { anthropicAdapter } from './anthropic.adapter'
+import { resolveUserKey } from '../aiCredentials.service'
 
 /**
  * Shared provider interface. Every adapter exposes a single `chat`
@@ -46,5 +47,36 @@ export function resolveProvider(opts: {
     // openai / azure / google / selfHosted adapters land in follow-up PRs
     default:
       throw new Error(`Unsupported AI provider: ${provider}`)
+  }
+}
+
+/**
+ * Async resolver that consults the user's BYOK UserAiCredential first
+ * (Option B in plan §2.5) and falls back to env defaults (Option C).
+ *
+ * Routes that have an authenticated user should prefer this over
+ * `resolveProvider`. The returned object carries the provider id so
+ * the caller can record which path was taken in the audit row.
+ */
+export async function resolveProviderForUser(args: {
+  userId: string | null
+  projectId: string | null
+}): Promise<{ adapter: AiProviderAdapter; provider: string; source: 'byok' | 'env-default' }> {
+  if (args.userId) {
+    const byokProvider = process.env.AI_DEFAULT_PROVIDER ?? 'anthropic'
+    const key = await resolveUserKey(args.userId, byokProvider)
+    if (key) {
+      return {
+        adapter: resolveProvider({ provider: byokProvider, apiKey: key }),
+        provider: byokProvider,
+        source: 'byok',
+      }
+    }
+  }
+  const provider = process.env.AI_DEFAULT_PROVIDER ?? 'anthropic'
+  return {
+    adapter: resolveProvider({ provider }),
+    provider,
+    source: 'env-default',
   }
 }

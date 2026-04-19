@@ -13,6 +13,7 @@ import documentationRoutes from './documentation.routes'
 import issuesRoutes from './issues.routes'
 import parametersRoutes from './parameters.routes'
 import aiParameterRoutes from './aiParameter.routes'
+import aiCredentialRoutes from './aiCredential.routes'
 import commRoutes from './comm.routes'
 import definitionEntriesRoutes from './definitionEntries.routes'
 import changeRequestsRoutes from './changeRequests.routes'
@@ -89,6 +90,9 @@ router.use('/parameters', parametersRoutes)
 // The middleware chain inside this router enforces the three-layer AI
 // feature gate (env -> project -> package).
 router.use('/parameters', aiParameterRoutes)
+// BYOK user-scoped AI credentials. Mounted at /ai so the URLs are
+// /api/v1/ai/credentials regardless of which project is active.
+router.use('/ai', aiCredentialRoutes)
 router.use('/comm', commRoutes)
 router.use('/definitions', definitionEntriesRoutes)
 router.use('/change-requests', changeRequestsRoutes)
