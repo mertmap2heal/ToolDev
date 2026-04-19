@@ -1857,27 +1857,35 @@ export default function ParametersPage() {
                   {parameters.length === 0 ? 'No parameters yet. Create one or import a file.' : 'No parameters match your filters.'}
                 </td></tr>
               ) : (() => {
-                // Build groups only when showing All Parameters; otherwise flat list.
-                // Groups mirror the sidebar folder tree — sub-folders indent under their parent.
-                const showGroups = selectedFolderId === null && folders.length > 0
+                // Group layout mirrors the sidebar folder tree. All folders in scope
+                // render as group headers — including empty ones — so the hierarchy is
+                // always visible, not just the folders that happen to carry parameters.
+                // - selectedFolderId === null        -> walk from roots (All Parameters)
+                // - selectedFolderId === '__none__'  -> flat list of Ungrouped params
+                // - selectedFolderId === <folderId>  -> that folder as depth-0 root + its subtree
+                const showGroups = selectedFolderId !== '__none__' && folders.length > 0
                 type FlatGroup = { id: string; label: string; color: string | null; params: typeof filteredParameters; depth: number }
                 const flatGroups: FlatGroup[] = []
                 if (showGroups) {
-                  const ungrouped = filteredParameters.filter(p => !p.folderId)
-                  if (ungrouped.length > 0) flatGroups.push({ id: '__none__', label: 'Ungrouped', color: null, params: ungrouped, depth: 0 })
-                  const hasDescendantParams = (pid: string): boolean => {
-                    if (filteredParameters.some(p => p.folderId === pid)) return true
-                    return folders.filter(f => f.parentId === pid).some(c => hasDescendantParams(c.id))
-                  }
                   const walk = (parentId: string | null, depth: number): void => {
                     for (const folder of folders.filter(f => (f.parentId ?? null) === parentId)) {
-                      if (!hasDescendantParams(folder.id)) continue
                       const ownParams = filteredParameters.filter(p => p.folderId === folder.id)
                       flatGroups.push({ id: folder.id, label: folder.name, color: folder.color ?? null, params: ownParams, depth })
                       walk(folder.id, depth + 1)
                     }
                   }
-                  walk(null, 0)
+                  if (selectedFolderId === null) {
+                    const ungrouped = filteredParameters.filter(p => !p.folderId)
+                    if (ungrouped.length > 0) flatGroups.push({ id: '__none__', label: 'Ungrouped', color: null, params: ungrouped, depth: 0 })
+                    walk(null, 0)
+                  } else {
+                    const root = folders.find(f => f.id === selectedFolderId)
+                    if (root) {
+                      const ownParams = filteredParameters.filter(p => p.folderId === root.id)
+                      flatGroups.push({ id: root.id, label: root.name, color: root.color ?? null, params: ownParams, depth: 0 })
+                      walk(root.id, 1)
+                    }
+                  }
                 } else {
                   flatGroups.push({ id: '__all__', label: '', color: null, params: filteredParameters, depth: 0 })
                 }
