@@ -8,39 +8,42 @@ datasource db {
 }
 
 model User {
-    auditLogs AuditLog[]
-    verEvidenceLinks VerEvidenceLink[]
-  id                           String    @id @default(uuid())
-  email                        String    @unique
-  inviteEmail                  String?   @unique
-  name                         String
-  company                      String?
-  avatarUrl                    String?
-  password                     String
-  role                         String?   // e.g. SUPERIOR_ADMIN; null = normal user
-  lastLoginAt                  DateTime?
-  mustChangePasswordOnFirstLogin Boolean @default(false)
-  createdAt                    DateTime  @default(now())
-  updatedAt                    DateTime  @updatedAt
+  auditLogs                      AuditLog[]
+  verEvidenceLinks               VerEvidenceLink[]
+  id                             String            @id @default(uuid())
+  email                          String            @unique
+  inviteEmail                    String?           @unique
+  name                           String
+  company                        String?
+  avatarUrl                      String?
+  password                       String
+  role                           String? // e.g. SUPERIOR_ADMIN; null = normal user
+  lastLoginAt                    DateTime?
+  mustChangePasswordOnFirstLogin Boolean           @default(false)
+  createdAt                      DateTime          @default(now())
+  updatedAt                      DateTime          @updatedAt
 
-  projects         ProjectMember[]
-  ownedProjects    Project[] @relation("ownedProjects")
-  notifications    Notification[]
-  engineeringRoles UserEngineeringRole[]
-  userAdminRoles   UserAdminRole[] @relation("UserAdminRoleMember")
-  projectUserEngineeringRoles     ProjectUserEngineeringRole[] @relation("ProjectUserEngRoleMember")
-  assignedProjectUserEngineeringRoles ProjectUserEngineeringRole[] @relation("ProjectUserEngRoleAssigner")
-  requirementSubscriptions RequirementSubscription[]
-  issueSubscriptions IssueSubscription[]
-  issueComments    IssueComment[]
-  issueSystemNotes IssueSystemNote[]
-  assignedIssues   Issue[]           @relation("IssueAssignee")
-  createdIssues    Issue[]           @relation("IssueCreator")
-  parameterVersions ParameterVersion[]
-  checklistItemResponses TransitionChecklistItemResponse[] @relation("ChecklistItemResponder")
-  checklistItemComments  ChecklistItemComment[]
-  certSignOffs          CertSignOff[] @relation("CertSignOffSigner")
-  certSignOffAssignments CertSignOff[] @relation("CertSignOffAssignedTo")
+  projects                            ProjectMember[]
+  ownedProjects                       Project[]                         @relation("ownedProjects")
+  notifications                       Notification[]
+  engineeringRoles                    UserEngineeringRole[]
+  userAdminRoles                      UserAdminRole[]                   @relation("UserAdminRoleMember")
+  projectUserEngineeringRoles         ProjectUserEngineeringRole[]      @relation("ProjectUserEngRoleMember")
+  assignedProjectUserEngineeringRoles ProjectUserEngineeringRole[]      @relation("ProjectUserEngRoleAssigner")
+  requirementSubscriptions            RequirementSubscription[]
+  issueSubscriptions                  IssueSubscription[]
+  issueComments                       IssueComment[]
+  issueSystemNotes                    IssueSystemNote[]
+  assignedIssues                      Issue[]                           @relation("IssueAssignee")
+  createdIssues                       Issue[]                           @relation("IssueCreator")
+  parameterVersions                   ParameterVersion[]
+  checklistItemResponses              TransitionChecklistItemResponse[] @relation("ChecklistItemResponder")
+  checklistItemComments               ChecklistItemComment[]
+  certSignOffs                        CertSignOff[]                     @relation("CertSignOffSigner")
+  certSignOffAssignments              CertSignOff[]                     @relation("CertSignOffAssignedTo")
+  parameterMcpKeys                    ParameterMcpKey[]
+  aiInvocations                       AiInvocation[]
+  submittedBulkJobs                   ParameterBulkJob[]
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -48,11 +51,11 @@ model AdminRole {
   id                 String   @id @default(uuid())
   companyKey         String   @default("__default__") // __default__ = shared/default roles
   name               String
-  defaultPermissions Json     // PermissionMap: { requirements: { view: true }, ... }
+  defaultPermissions Json // PermissionMap: { requirements: { view: true }, ... }
   createdAt          DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  updatedAt          DateTime @updatedAt
 
-  userAdminRoles     UserAdminRole[]
+  userAdminRoles UserAdminRole[]
 
   @@unique([companyKey, name])
   @@index([companyKey])
@@ -83,7 +86,7 @@ model EngineeringRole {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  users UserEngineeringRole[]
+  users              UserEngineeringRole[]
   projectAssignments ProjectUserEngineeringRole[]
 }
 
@@ -133,115 +136,126 @@ model CompanyLimit {
 
 // Enterprise organization profile; one row per company (companyKey = name or __null__ for unnamed).
 model Organization {
-  id          String   @id @default(uuid())
-  companyKey  String   @unique
-  name        String
-  displayName String?
-  description String?
+  id           String   @id @default(uuid())
+  companyKey   String   @unique
+  name         String
+  displayName  String?
+  description  String?
   contactEmail String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model Project {
-    projectAnalytics ProjectAnalytics?
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  domain      String
-  slug        String   @unique
-  companyName String?
-  progress    Float    @default(0)
-  status      String   @default("active")
-  deadline    DateTime?
-  strictLifecycleGates Boolean?  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  userId      String
-  user        User     @relation("ownedProjects", fields: [userId], references: [id])
-  teamMembers            ProjectMember[]
-  requirements           Requirement[]
-  functions              SystemFunction[]
-  architectures          Architecture[]
-  verifications          VerificationPlan[]
-  documents              Document[]
-  traceLinks             TraceLink[]
-  issues                 Issue[]
-  parameters             Parameter[]
-  changeRequests         ChangeRequest[]
-  savedViews             SavedView[]
-  savedViewFolders       SavedViewFolder[]
-  savedViewRevisions     SavedViewRevision[]
-  savedViewAuditEvents   SavedViewAuditEvent[]
-  baselines              Baseline[]
-  useCases               UseCase[]
-  actors                 Actor[]
-  requirementTemplates   RequirementTemplate[]
-  requirementExportTemplates RequirementExportTemplate[]
-  exportJobs             ExportJob[]
-  corporateDocxTemplates CorporateDocxTemplate[]
-  excelColumnMappings    ExcelColumnMapping[]
-  scheduledExports       ScheduledExport[]
-  diagrams               Diagram[]
-  customRequirementTypes CustomRequirementType[]
-  items                  Item[]
-  verTestResults         VerTestResult[]
-  tasks                  Task[]
-  taskSavedViews         TaskSavedView[]
-  auditLogs   AuditLog[]
-  boardColumns           BoardColumn[]
-  taskTemplates          TaskTemplate[]
-  verMethods             VerMethod[]
-  verTestSetups          VerTestSetup[]
-  verTestCases           VerTestCase[]
-  verTestPlans           VerTestPlan[]
-  verTestPlanRevisions   VerTestPlanRevision[]
-  verTestRuns            VerTestRun[]
-  verTestProcedures      VerTestProcedure[]
-  verTestEnvironments    VerTestEnvironment[]
-  verTestLogs            VerTestLog[]
-  verEvidence            VerEvidence[]
-  verReviews             VerReview[]
-  verNonconformities     VerNonconformity[]
-  verBaselines           VerBaseline[]
-  verSettings            VerSettings?
-  verAuditEvents         VerAuditEvent[]
-  verTestCaseCustomSections VerTestCaseCustomSection[]
-  verTestCaseSectionImages  VerTestCaseSectionImage[]
-  verCustomOptions       VerCustomOption[]
-  verTemplates          VerTemplate[]
-  complianceRules            ComplianceRule[]
+  projectAnalytics     ProjectAnalytics?
+  id                   String            @id @default(uuid())
+  name                 String
+  description          String?
+  domain               String
+  slug                 String            @unique
+  companyName          String?
+  progress             Float             @default(0)
+  status               String            @default("active")
+  deadline             DateTime?
+  strictLifecycleGates Boolean?          @default(false)
+
+  // AI feature flag (ai-ready-vision.md §5). Global env kill-switch
+  // (FEATURES_AI_ENABLED) overrides this; this field is the per-project
+  // opt-in that a project admin sets.
+  aiEnabled   Boolean   @default(false)
+  aiEnabledAt DateTime?
+  aiEnabledBy String?
+
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
+  userId                      String
+  user                        User                         @relation("ownedProjects", fields: [userId], references: [id])
+  teamMembers                 ProjectMember[]
+  requirements                Requirement[]
+  functions                   SystemFunction[]
+  architectures               Architecture[]
+  verifications               VerificationPlan[]
+  documents                   Document[]
+  traceLinks                  TraceLink[]
+  issues                      Issue[]
+  parameters                  Parameter[]
+  changeRequests              ChangeRequest[]
+  savedViews                  SavedView[]
+  savedViewFolders            SavedViewFolder[]
+  savedViewRevisions          SavedViewRevision[]
+  savedViewAuditEvents        SavedViewAuditEvent[]
+  baselines                   Baseline[]
+  useCases                    UseCase[]
+  actors                      Actor[]
+  requirementTemplates        RequirementTemplate[]
+  requirementExportTemplates  RequirementExportTemplate[]
+  exportJobs                  ExportJob[]
+  corporateDocxTemplates      CorporateDocxTemplate[]
+  excelColumnMappings         ExcelColumnMapping[]
+  scheduledExports            ScheduledExport[]
+  diagrams                    Diagram[]
+  customRequirementTypes      CustomRequirementType[]
+  parameterMcpKeys            ParameterMcpKey[]
+  aiInvocations               AiInvocation[]
+  parameterBulkJobs           ParameterBulkJob[]
+  items                       Item[]
+  verTestResults              VerTestResult[]
+  tasks                       Task[]
+  taskSavedViews              TaskSavedView[]
+  auditLogs                   AuditLog[]
+  boardColumns                BoardColumn[]
+  taskTemplates               TaskTemplate[]
+  verMethods                  VerMethod[]
+  verTestSetups               VerTestSetup[]
+  verTestCases                VerTestCase[]
+  verTestPlans                VerTestPlan[]
+  verTestPlanRevisions        VerTestPlanRevision[]
+  verTestRuns                 VerTestRun[]
+  verTestProcedures           VerTestProcedure[]
+  verTestEnvironments         VerTestEnvironment[]
+  verTestLogs                 VerTestLog[]
+  verEvidence                 VerEvidence[]
+  verReviews                  VerReview[]
+  verNonconformities          VerNonconformity[]
+  verBaselines                VerBaseline[]
+  verSettings                 VerSettings?
+  verAuditEvents              VerAuditEvent[]
+  verTestCaseCustomSections   VerTestCaseCustomSection[]
+  verTestCaseSectionImages    VerTestCaseSectionImage[]
+  verCustomOptions            VerCustomOption[]
+  verTemplates                VerTemplate[]
+  complianceRules             ComplianceRule[]
   complianceRegulationFolders ComplianceRegulationFolder[]
-  complianceCheckRuns        ComplianceCheckRun[]
-  complianceFindings         ComplianceFinding[]
-  components            Component[]
-  certContext           CertContext?
-  certBaselines         CertBaseline[]
-  certReleases          CertRelease[]
-  certObjectives        CertObjective[]
-  certComplianceMatrixRows CertComplianceMatrixRow[]
-  certFindings          CertFinding[]
-  certReviewLogEntries  CertReviewLogEntry[]
-  certActivityLogEntries CertActivityLogEntry[]
-  certReadinessGates    CertReadinessGate[]
-  certPackages          CertPackage[]
-  certCorrespondences   CertCorrespondence[]
-  certMeetings          CertMeeting[]
-  certPlan              CertPlan?
-  certMilestones        CertMilestone[]
-  certChecklists        CertChecklist[]
-  certSignOffs          CertSignOff[]
-  transitionChecklists  TransitionChecklist[]
-  checklistAssignments  ChecklistAssignment[]
-  checklistCompletions  ChecklistCompletion[]
-  checklistItemComments ChecklistItemComment[]
-  checklistItemIssues   ChecklistItemIssue[]
-  definitionEntries     DefinitionEntry[]
-  parameterTypes        ParameterType[]
-  projectUnits          ProjectUnit[]
-  commBuses             CommBus[]
+  complianceCheckRuns         ComplianceCheckRun[]
+  complianceFindings          ComplianceFinding[]
+  components                  Component[]
+  certContext                 CertContext?
+  certBaselines               CertBaseline[]
+  certReleases                CertRelease[]
+  certObjectives              CertObjective[]
+  certComplianceMatrixRows    CertComplianceMatrixRow[]
+  certFindings                CertFinding[]
+  certReviewLogEntries        CertReviewLogEntry[]
+  certActivityLogEntries      CertActivityLogEntry[]
+  certReadinessGates          CertReadinessGate[]
+  certPackages                CertPackage[]
+  certCorrespondences         CertCorrespondence[]
+  certMeetings                CertMeeting[]
+  certPlan                    CertPlan?
+  certMilestones              CertMilestone[]
+  certChecklists              CertChecklist[]
+  certSignOffs                CertSignOff[]
+  transitionChecklists        TransitionChecklist[]
+  checklistAssignments        ChecklistAssignment[]
+  checklistCompletions        ChecklistCompletion[]
+  checklistItemComments       ChecklistItemComment[]
+  checklistItemIssues         ChecklistItemIssue[]
+  definitionEntries           DefinitionEntry[]
+  parameterTypes              ParameterType[]
+  projectUnits                ProjectUnit[]
+  commBuses                   CommBus[]
   projectUserEngineeringRoles ProjectUserEngineeringRole[]
-  parameterFolders      ParameterFolder[]
+  parameterFolders            ParameterFolder[]
 }
 
 // Requirements export templates (ExportBuilder) - enterprise export wizard presets.
@@ -250,8 +264,8 @@ model RequirementExportTemplate {
   id          String    @id @default(uuid())
   projectId   String
   name        String
-  format      String    // csv | excel | pdf | word | reqif
-  payload     Json      // full template config (columns, scope, filters, sections, documentStyle, etc.)
+  format      String // csv | excel | pdf | word | reqif
+  payload     Json // full template config (columns, scope, filters, sections, documentStyle, etc.)
   visibility  String    @default("project") // private | project | org
   createdById String?
   createdAt   DateTime  @default(now())
@@ -275,12 +289,12 @@ model ExportJob {
   id          String   @id @default(uuid())
   projectId   String
   createdById String?
-  format      String   // csv | excel | pdf | word | reqif
+  format      String // csv | excel | pdf | word | reqif
   status      String   @default("pending") // pending | running | done | failed
   progress    Int      @default(0) // 0-100
   totalCount  Int      @default(0)
   doneCount   Int      @default(0)
-  label       String?  // human-readable label e.g. "All reqs – PDF export"
+  label       String? // human-readable label e.g. "All reqs – PDF export"
   error       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -298,8 +312,8 @@ model CorporateDocxTemplate {
   projectId    String
   name         String
   description  String?
-  fileBase64   String   // Base64-encoded .docx file
-  placeholders String?  // JSON array of placeholder names found in the template
+  fileBase64   String // Base64-encoded .docx file
+  placeholders String? // JSON array of placeholder names found in the template
   createdById  String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -316,7 +330,7 @@ model ExcelColumnMapping {
   projectId   String
   name        String
   description String?
-  mappings    Json     // Array of { systemField: string; excelColumn: string; namedRange?: string }
+  mappings    Json // Array of { systemField: string; excelColumn: string; namedRange?: string }
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -333,12 +347,12 @@ model ScheduledExport {
   projectId     String
   name          String
   description   String?
-  templateId    String?   // optional reference to RequirementExportTemplate.id
-  scheduleExpr  String?   // cron expression placeholder (not executed server-side yet)
+  templateId    String? // optional reference to RequirementExportTemplate.id
+  scheduleExpr  String? // cron expression placeholder (not executed server-side yet)
   format        String    @default("pdf") // csv | excel | pdf | word | reqif
   enabled       Boolean   @default(false)
   lastRunAt     DateTime?
-  lastRunStatus String?   // pending | done | failed
+  lastRunStatus String? // pending | done | failed
   createdById   String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -351,15 +365,15 @@ model ScheduledExport {
 }
 
 model Component {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   projectId   String
   parentId    String?
   name        String
   pbsCode     String?
   description String?
-  sortOrder   Int       @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   parent       Component?    @relation("ComponentHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
@@ -373,9 +387,9 @@ model Component {
 model DefinitionEntry {
   id          String   @id @default(uuid())
   projectId   String
-  type        String   // glossary | abbreviation
+  type        String // glossary | abbreviation
   term        String
-  definition  String   // rich text / HTML
+  definition  String // rich text / HTML
   notes       String?
   source      String?
   createdById String?
@@ -407,7 +421,7 @@ model ProjectMember {
 model Notification {
   id        String   @id @default(uuid())
   userId    String
-  type      String   // project_invitation
+  type      String // project_invitation
   title     String
   message   String
   projectId String?
@@ -454,44 +468,44 @@ model Requirement {
   linkedMocCode      Int?
 
   // Premium / Extended Fields
-  thresholdValue     String? // for performance requirements
-  objectiveValue     String? // for performance requirements
-  customAttributes   Json?   // key-value pairs for extendable properties
-  
-  // Locking mechanism
-  isLocked           Boolean   @default(false)
-  lockedByUserId     String?
-  lockedAt           DateTime?
+  thresholdValue   String? // for performance requirements
+  objectiveValue   String? // for performance requirements
+  customAttributes Json? // key-value pairs for extendable properties
 
-  lifecycleId        String?
-  statusId           String?
-  statusChangedAt    DateTime?
-  statusChangedBy    String?
-  
+  // Locking mechanism
+  isLocked       Boolean   @default(false)
+  lockedByUserId String?
+  lockedAt       DateTime?
+
+  lifecycleId     String?
+  statusId        String?
+  statusChangedAt DateTime?
+  statusChangedBy String?
+
   // Soft delete fields
-  deletedAt          DateTime?
-  deletedById        String?
-  deleteReason       String?
-  restoredAt         DateTime?
-  restoredById       String?
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+  restoredAt   DateTime?
+  restoredById String?
 
   // Optimistic locking — increment on every write; client must echo current value
-  version            Int       @default(1)
+  version Int @default(1)
 
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  project     Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent      Requirement?            @relation("RequirementHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children    Requirement[]           @relation("RequirementHierarchy")
-  component   Component?              @relation(fields: [componentId], references: [id], onDelete: SetNull)
-  comments    RequirementComment[]
-  attachments RequirementAttachment[]
-  reviews     RequirementReview[]
-  moc         VerMoc?                 @relation(fields: [linkedMocCode], references: [code], onDelete: SetNull)
+  project            Project                        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent             Requirement?                   @relation("RequirementHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children           Requirement[]                  @relation("RequirementHierarchy")
+  component          Component?                     @relation(fields: [componentId], references: [id], onDelete: SetNull)
+  comments           RequirementComment[]
+  attachments        RequirementAttachment[]
+  reviews            RequirementReview[]
+  moc                VerMoc?                        @relation(fields: [linkedMocCode], references: [code], onDelete: SetNull)
   certObjectiveLinks CertObjectiveRequirementLink[]
   changeRequestLinks RequirementChangeRequestLink[]
-  subscriptions RequirementSubscription[]
+  subscriptions      RequirementSubscription[]
 
   @@unique([projectId, requirementId])
   @@index([projectId])
@@ -508,11 +522,11 @@ model Requirement {
 }
 
 model RequirementSubscription {
-  id              String   @id @default(uuid())
-  requirementId   String
-  userId          String
-  createdAt       DateTime @default(now())
-  lastNotifiedAt  DateTime?
+  id             String    @id @default(uuid())
+  requirementId  String
+  userId         String
+  createdAt      DateTime  @default(now())
+  lastNotifiedAt DateTime?
 
   requirement Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -607,26 +621,26 @@ model VerificationPlan {
 }
 
 model TraceLink {
-  id          String    @id @default(uuid())
-  projectId   String
-  sourceType  String
-  sourceId    String
-  targetType  String
-  targetId    String
-  linkType    String // satisfies, implements, verifies, derives, refines, copy, trace, allocate
-  direction   String? // source → target relationship direction (for clarity)
-  rationale   String? // why this relationship exists
-  confidence  Float?
-  createdBy   String?
-  isAuto      Boolean   @default(false)
-  isSuspect   Boolean   @default(false)
-  lastChecked DateTime?
-  createdAt   DateTime  @default(now())
+  id                    String    @id @default(uuid())
+  projectId             String
+  sourceType            String
+  sourceId              String
+  targetType            String
+  targetId              String
+  linkType              String // satisfies, implements, verifies, derives, refines, copy, trace, allocate
+  direction             String? // source → target relationship direction (for clarity)
+  rationale             String? // why this relationship exists
+  confidence            Float?
+  createdBy             String?
+  isAuto                Boolean   @default(false)
+  isSuspect             Boolean   @default(false)
+  lastChecked           DateTime?
+  createdAt             DateTime  @default(now())
   // Denormalized display snapshots (migration 20260322160000_trace_link_display_cache)
-  cachedSourceDisplayId String? @db.VarChar(255)
-  cachedSourceTitle     String? @db.VarChar(1024)
-  cachedTargetDisplayId String? @db.VarChar(255)
-  cachedTargetTitle     String? @db.VarChar(1024)
+  cachedSourceDisplayId String?   @db.VarChar(255)
+  cachedSourceTitle     String?   @db.VarChar(1024)
+  cachedTargetDisplayId String?   @db.VarChar(255)
+  cachedTargetTitle     String?   @db.VarChar(1024)
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -650,38 +664,38 @@ model Document {
 }
 
 model Issue {
-  id                  String   @id @default(uuid())
+  id                  String    @id @default(uuid())
   projectId           String
-  issueKey            String?  @unique // e.g., ISS-0001
+  issueKey            String?   @unique // e.g., ISS-0001
   title               String
   description         String
-  priority            String   @default("medium")
-  status              String   @default("open")
-  issueType           String?  // Problem Report classification: specification_error, design_error, coding_error, documentation_error, interface_error, other
+  priority            String    @default("medium")
+  status              String    @default("open")
+  issueType           String? // Problem Report classification: specification_error, design_error, coding_error, documentation_error, interface_error, other
   owner               String?
   assigneeId          String?
   createdBy           String?
   updatedBy           String?
   closedAt            DateTime?
   closedBy            String?
-  relatedFunctionIds  String[] @default([])
-  relatedParameterIds String[] @default([])
-  labelIds            String[] @default([])
+  relatedFunctionIds  String[]  @default([])
+  relatedParameterIds String[]  @default([])
+  labelIds            String[]  @default([])
   startDate           DateTime?
   dueDate             DateTime?
-  estimatedTime       String?  // e.g., "2h", "1d"
+  estimatedTime       String? // e.g., "2h", "1d"
   actualTime          String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignee      User?               @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  createdByUser User?               @relation("IssueCreator", fields: [createdBy], references: [id], onDelete: SetNull)
-  comments      IssueComment[]
-  systemNotes   IssueSystemNote[]
-  subscriptions IssueSubscription[]
-  links              IssueLink[]         @relation("IssueToLink")
-  attachments        IssueAttachment[]
+  project             Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee            User?                @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdByUser       User?                @relation("IssueCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  comments            IssueComment[]
+  systemNotes         IssueSystemNote[]
+  subscriptions       IssueSubscription[]
+  links               IssueLink[]          @relation("IssueToLink")
+  attachments         IssueAttachment[]
   checklistItemIssues ChecklistItemIssue[]
 
   @@index([projectId])
@@ -701,10 +715,10 @@ model IssueComment {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  issue         Issue           @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  author        User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  parentComment IssueComment?   @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
-  replies       IssueComment[]  @relation("CommentReplies")
+  issue         Issue          @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author        User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parentComment IssueComment?  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies       IssueComment[] @relation("CommentReplies")
 
   @@index([issueId])
   @@index([authorId])
@@ -715,7 +729,7 @@ model IssueSystemNote {
   id        String   @id @default(uuid())
   issueId   String
   projectId String
-  action    String   // e.g., "status_changed", "closed", "reopened", "description_updated", "assignee_changed", "label_added"
+  action    String // e.g., "status_changed", "closed", "reopened", "description_updated", "assignee_changed", "label_added"
   oldValue  String?
   newValue  String?
   userId    String?
@@ -744,16 +758,16 @@ model IssueSubscription {
 }
 
 model IssueAttachment {
-  id              String   @id @default(uuid())
-  issueId         String
-  projectId       String
-  fileName        String
-  fileUrl         String
-  fileSize        Int?
-  mimeType        String?
-  uploadedBy      String?
-  uploadedByName  String?
-  createdAt       DateTime @default(now())
+  id             String   @id @default(uuid())
+  issueId        String
+  projectId      String
+  fileName       String
+  fileUrl        String
+  fileSize       Int?
+  mimeType       String?
+  uploadedBy     String?
+  uploadedByName String?
+  createdAt      DateTime @default(now())
 
   issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
 
@@ -773,69 +787,93 @@ model IssueLabel {
 }
 
 model IssueLink {
-  id                    String   @id @default(uuid())
-  issueId               String
-  linkedType            String   // "issue", "requirement", "function", "parameter"
-  linkedId              String
-  linkType              String   @default("relates_to") // "relates_to", "blocks", "blocked_by", "duplicates", "parent_of", "child_of"
-  linkedRequirementKey  String?  // For display: REQ-003
+  id                     String   @id @default(uuid())
+  issueId                String
+  linkedType             String // "issue", "requirement", "function", "parameter"
+  linkedId               String
+  linkType               String   @default("relates_to") // "relates_to", "blocks", "blocked_by", "duplicates", "parent_of", "child_of"
+  linkedRequirementKey   String? // For display: REQ-003
   linkedRequirementTitle String?
-  createdBy             String?
-  createdAt             DateTime @default(now())
+  createdBy              String?
+  createdAt              DateTime @default(now())
 
-  issue       Issue  @relation("IssueToLink", fields: [issueId], references: [id], onDelete: Cascade)
+  issue Issue @relation("IssueToLink", fields: [issueId], references: [id], onDelete: Cascade)
 
   @@index([issueId])
   @@index([linkedType, linkedId])
 }
 
 model Parameter {
-  id               String   @id @default(uuid())
-  projectId        String
-  parameterId      String?  // unique display ID per project (e.g. PARAM-001)
-  name             String
-  description      String?
-  dataType         String?
-  defaultValue     String?
-  unit             String?
-  tolerance        String?
-  minValue         String?
-  maxValue         String?
-  version          String   @default("1.0")
-  status           String   @default("draft") // draft | approved | obsolete
-  ownerType        String?  // component | function | system | team
-  tags             Json?    // array of strings
-  folderId         String?
-  sourceParameterId String?  // for derived parameters
-  formula          String?  // optional formula/rule (display or future evaluation)
-  enumValues       String?  // JSON: [{name,value}] for enum types
-  dimensions       String?  // shape/size for vector/matrix types, e.g. "3x1", "4x4"
-  platforms        Json?    // string[] — target keys this param is available for; null = all
-  sourceFunctionId String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                String   @id @default(uuid())
+  projectId         String
+  parameterId       String? // unique display ID per project (e.g. PARAM-001)
+  name              String
+  description       String?
+  dataType          String?
+  defaultValue      String?
+  unit              String?
+  tolerance         String?
+  minValue          String?
+  maxValue          String?
+  version           String   @default("1.0")
+  status            String   @default("draft") // draft | approved | obsolete
+  ownerType         String? // component | function | system | team
+  tags              Json? // array of strings
+  folderId          String?
+  sourceParameterId String? // for derived parameters
+  formula           String? // optional formula/rule (display or future evaluation)
+  enumValues        String? // JSON: [{name,value}] for enum types
+  dimensions        String? // shape/size for vector/matrix types, e.g. "3x1", "4x4"
+  platforms         Json? // string[] — target keys this param is available for; null = all
+  sourceFunctionId  String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  project          Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  sourceFunction   SystemFunction? @relation(fields: [sourceFunctionId], references: [id], onDelete: SetNull)
-  sourceParameter  Parameter?      @relation("DerivedParameter", fields: [sourceParameterId], references: [id], onDelete: SetNull)
-  derivedParameters Parameter[]    @relation("DerivedParameter")
-  versions        ParameterVersion[]
-  commFields      CommField[]
-  folder          ParameterFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  // AI provenance (ai-ready-vision.md §6.1). authorType marks whether a
+  // human, an AI suggestion, an accepted AI suggestion, or an applied
+  // auto-maintenance action last wrote to the object. Review fields
+  // capture who last reviewed this record.
+  authorType          String    @default("human")
+  authorAiModel       String?
+  authorAiVersion     String?
+  authorAiPromptId    String?
+  authorAiContextHash String?
+  reviewStatus        String    @default("reviewed")
+  reviewerUserId      String?
+  reviewTimestamp     DateTime?
+
+  // ITAR / security classification gate (plan §2.1 item 18). The RAG
+  // indexer and MCP search tool exclude itar rows unless the calling
+  // key holds an itar scope.
+  classification String @default("internal")
+
+  // Optimistic concurrency token (plan §2.1 item 14). Every write
+  // compares and bumps. Stale writes rejected with HTTP 409.
+  lockVersion Int @default(0)
+
+  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceFunction    SystemFunction?    @relation(fields: [sourceFunctionId], references: [id], onDelete: SetNull)
+  sourceParameter   Parameter?         @relation("DerivedParameter", fields: [sourceParameterId], references: [id], onDelete: SetNull)
+  derivedParameters Parameter[]        @relation("DerivedParameter")
+  versions          ParameterVersion[]
+  commFields        CommField[]
+  folder            ParameterFolder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
   @@unique([projectId, name])
   @@unique([projectId, parameterId])
   @@index([projectId, status])
   @@index([projectId, folderId])
+  @@index([projectId, authorType])
+  @@index([projectId, classification])
   @@index([sourceParameterId])
 }
 
 model ParameterVersion {
   id           String   @id @default(uuid())
   parameterId  String
-  version      Int      // major version — increments when parameter is approved
+  version      Int // major version — increments when parameter is approved
   minorVersion Int      @default(0) // minor version — increments on every non-approval change; resets to 0 on approval
-  snapshot     Json     // full auditable fields: name, description, dataType, defaultValue, unit, tolerance, minValue, maxValue, status, ownerType, formula, version, etc.
+  snapshot     Json // full auditable fields: name, description, dataType, defaultValue, unit, tolerance, minValue, maxValue, status, ownerType, formula, version, etc.
   createdAt    DateTime @default(now())
   createdById  String?
 
@@ -853,13 +891,13 @@ model ParameterType {
   projectId    String
   name         String
   description  String?
-  color        String?  // hex colour for UI badge, e.g. "#0ea5e9"
-  translations Json?    // { c_header, matlab, python, ada, simulink, ros, dds, autosar, xtce }
-  valueFormat  Json?    // { template, example, hint, pattern, dimensions, structure }
+  color        String? // hex colour for UI badge, e.g. "#0ea5e9"
+  translations Json? // { c_header, matlab, python, ada, simulink, ros, dds, autosar, xtce }
+  valueFormat  Json? // { template, example, hint, pattern, dimensions, structure }
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, name])
   @@index([projectId])
@@ -871,11 +909,11 @@ model ProjectUnit {
   name        String
   symbol      String
   description String?
-  category    String?  // e.g. "length", "mass", "custom"
+  category    String? // e.g. "length", "mass", "custom"
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, symbol])
   @@index([projectId])
@@ -892,8 +930,8 @@ model ParameterFolder {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  project    Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent     ParameterFolder? @relation("ParameterFolderChildren", fields: [parentId], references: [id])
+  project    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent     ParameterFolder?  @relation("ParameterFolderChildren", fields: [parentId], references: [id])
   children   ParameterFolder[] @relation("ParameterFolderChildren")
   parameters Parameter[]
 
@@ -909,13 +947,13 @@ model CommBus {
   projectId   String
   name        String
   description String?
-  protocol    String   // can | ros | dds | xtce | mavlink | autosar | mqtt | custom
-  config      Json?    // protocol-specific config: { baudrate, namespace, domain, ... }
+  protocol    String // can | ros | dds | xtce | mavlink | autosar | mqtt | custom
+  config      Json? // protocol-specific config: { baudrate, namespace, domain, ... }
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  messages    CommMessage[]
+  project  Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  messages CommMessage[]
 
   @@index([projectId])
 }
@@ -925,15 +963,15 @@ model CommMessage {
   id          String   @id @default(uuid())
   busId       String
   name        String
-  messageId   String?  // CAN frame ID (hex), ROS topic, DDS topic, MAVLink msg ID, etc.
-  direction   String?  // publish | subscribe | send | receive | bidirectional
+  messageId   String? // CAN frame ID (hex), ROS topic, DDS topic, MAVLink msg ID, etc.
+  direction   String? // publish | subscribe | send | receive | bidirectional
   description String?
-  metadata    Json?    // protocol-specific: { dlc, cycleTime, sender } for CAN; { queueSize, msgType } for ROS; etc.
+  metadata    Json? // protocol-specific: { dlc, cycleTime, sender } for CAN; { queueSize, msgType } for ROS; etc.
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  bus         CommBus    @relation(fields: [busId], references: [id], onDelete: Cascade)
-  fields      CommField[]
+  bus    CommBus     @relation(fields: [busId], references: [id], onDelete: Cascade)
+  fields CommField[]
 
   @@index([busId])
 }
@@ -942,57 +980,57 @@ model CommMessage {
 model CommField {
   id          String   @id @default(uuid())
   messageId   String
-  parameterId String?  // optional link — null for standalone fields (padding, counters, etc.)
+  parameterId String? // optional link — null for standalone fields (padding, counters, etc.)
   fieldName   String
   description String?
-  dataType    String?  // overrides parameter dataType if set
+  dataType    String? // overrides parameter dataType if set
   order       Int      @default(0)
-  config      Json?    // protocol-specific: CAN { startBit, bitLength, scale, offset, byteOrder, valueType }; ROS { rosType }; etc.
+  config      Json? // protocol-specific: CAN { startBit, bitLength, scale, offset, byteOrder, valueType }; ROS { rosType }; etc.
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  message     CommMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  parameter   Parameter?  @relation(fields: [parameterId], references: [id], onDelete: SetNull)
+  message   CommMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  parameter Parameter?  @relation(fields: [parameterId], references: [id], onDelete: SetNull)
 
   @@index([messageId])
   @@index([parameterId])
 }
 
 model ChangeRequest {
-  id             String   @id @default(uuid())
-  projectId      String
-  crId           String?   // Human readable ID (e.g. CR-001), unique per project
-  title          String
-  description    String
-  sourceType     String // 'function' | 'issue' | 'parameter' | 'requirement'
-  sourceId       String
-  priority       String   @default("medium")
-  status         String   @default("pending") // 'pending' | 'approved' | 'rejected' | 'in-review'
-  
-  requestedBy    String?
-  owner          String?
-  
+  id          String  @id @default(uuid())
+  projectId   String
+  crId        String? // Human readable ID (e.g. CR-001), unique per project
+  title       String
+  description String
+  sourceType  String // 'function' | 'issue' | 'parameter' | 'requirement'
+  sourceId    String
+  priority    String  @default("medium")
+  status      String  @default("pending") // 'pending' | 'approved' | 'rejected' | 'in-review'
+
+  requestedBy String?
+  owner       String?
+
   reviewedBy     String?
   reviewComments String?
-  
-  risk           String? // 'low' | 'medium' | 'high' | 'critical'
-  effort         String? // 'low' | 'medium' | 'high'
-  justification  String?
-  
-  createdBy      String?
-  updatedBy      String?
-  
-  createdAt      DateTime @default(now())
 
-  project     Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  attachments ChangeRequestAttachment[]
+  risk          String? // 'low' | 'medium' | 'high' | 'critical'
+  effort        String? // 'low' | 'medium' | 'high'
+  justification String?
+
+  createdBy String?
+  updatedBy String?
+
+  createdAt DateTime @default(now())
+
+  project          Project                        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  attachments      ChangeRequestAttachment[]
   requirementLinks RequirementChangeRequestLink[]
-  
+
+  @@unique([projectId, crId], map: "ChangeRequest_projectId_crId_key")
   @@index([projectId])
   @@index([sourceType, sourceId])
   @@index([status])
   @@index([crId])
-  @@unique([projectId, crId], map: "ChangeRequest_projectId_crId_key")
 }
 
 model ChangeRequestAttachment {
@@ -1014,16 +1052,16 @@ model ChangeRequestAttachment {
 }
 
 model RequirementChangeRequestLink {
-  id              String   @id @default(uuid())
-  requirementId   String
-  changeRequestId String
+  id               String   @id @default(uuid())
+  requirementId    String
+  changeRequestId  String
   relationshipType String   @default("originates_from") // originates_from | relates_to
-  note            String?
-  createdBy       String?
-  createdAt       DateTime @default(now())
+  note             String?
+  createdBy        String?
+  createdAt        DateTime @default(now())
 
-  requirement     Requirement   @relation(fields: [requirementId], references: [id], onDelete: Cascade)
-  changeRequest   ChangeRequest @relation(fields: [changeRequestId], references: [id], onDelete: Cascade)
+  requirement   Requirement   @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  changeRequest ChangeRequest @relation(fields: [changeRequestId], references: [id], onDelete: Cascade)
 
   @@unique([requirementId, changeRequestId])
   @@index([requirementId])
@@ -1031,27 +1069,27 @@ model RequirementChangeRequestLink {
 }
 
 model SavedView {
-  id        String   @id @default(uuid())
-  projectId String
-  userId    String?
-  folderId  String?
-  name      String
-  type      String   @default("personal") // 'personal' | 'project' | 'organization'
-  viewKind  String?  // e.g. 'traceability_matrix'
-  filters   String? // JSON string of filter criteria
-  columns   String? // JSON string of column configuration
-  sortBy    String?
-  sortOrder String?
-  viewpoint String? // stakeholder, system, verification, etc. (ISO/IEC/IEEE 42010)
-  concerns  String? // what the view addresses
-  viewType  String? // diagram, table, matrix, report
+  id             String   @id @default(uuid())
+  projectId      String
+  userId         String?
+  folderId       String?
+  name           String
+  type           String   @default("personal") // 'personal' | 'project' | 'organization'
+  viewKind       String? // e.g. 'traceability_matrix'
+  filters        String? // JSON string of filter criteria
+  columns        String? // JSON string of column configuration
+  sortBy         String?
+  sortOrder      String?
+  viewpoint      String? // stakeholder, system, verification, etc. (ISO/IEC/IEEE 42010)
+  concerns       String? // what the view addresses
+  viewType       String? // diagram, table, matrix, report
   definitionJson String? // JSON blob for view-specific definitions (e.g. traceability matrix saved definitions)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  folder  SavedViewFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  revisions SavedViewRevision[]
+  project     Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  folder      SavedViewFolder?      @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  revisions   SavedViewRevision[]
   auditEvents SavedViewAuditEvent[]
 
   @@index([projectId])
@@ -1062,17 +1100,17 @@ model SavedView {
 }
 
 model SavedViewRevision {
-  id                    String   @id @default(uuid())
-  projectId             String
-  viewId                String
-  revisionNumber        Int
-  nameSnapshot          String
-  folderIdSnapshot      String?
+  id                     String   @id @default(uuid())
+  projectId              String
+  viewId                 String
+  revisionNumber         Int
+  nameSnapshot           String
+  folderIdSnapshot       String?
   definitionJsonSnapshot String?
-  createdByUserId       String?
-  createdAt             DateTime @default(now())
+  createdByUserId        String?
+  createdAt              DateTime @default(now())
 
-  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   view    SavedView @relation(fields: [viewId], references: [id], onDelete: Cascade)
 
   @@unique([viewId, revisionNumber])
@@ -1082,16 +1120,16 @@ model SavedViewRevision {
 }
 
 model SavedViewAuditEvent {
-  id              String   @id @default(uuid())
-  projectId       String
-  viewId          String
-  action          String
-  oldValueJson    Json?
-  newValueJson    Json?
+  id                String   @id @default(uuid())
+  projectId         String
+  viewId            String
+  action            String
+  oldValueJson      Json?
+  newValueJson      Json?
   performedByUserId String?
-  performedAt     DateTime @default(now())
+  performedAt       DateTime @default(now())
 
-  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   view    SavedView @relation(fields: [viewId], references: [id], onDelete: Cascade)
 
   @@index([projectId, viewId])
@@ -1109,14 +1147,14 @@ model SavedViewFolder {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent  SavedViewFolder? @relation("SavedViewFolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  project  Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent   SavedViewFolder?  @relation("SavedViewFolderTree", fields: [parentId], references: [id], onDelete: Cascade)
   children SavedViewFolder[] @relation("SavedViewFolderTree")
-  views   SavedView[]
+  views    SavedView[]
 
+  @@unique([projectId, parentId, name])
   @@index([projectId])
   @@index([parentId])
-  @@unique([projectId, parentId, name])
 }
 
 model RequirementVersion {
@@ -1139,8 +1177,8 @@ model RequirementVersion {
   changedByName      String?
   changeReason       String?
   snapshot           String? // JSON string of full requirement data
-  baselineId         String?  // baseline that created this version (when included in a baseline)
-  baselineName       String?  // denormalized for display
+  baselineId         String? // baseline that created this version (when included in a baseline)
+  baselineName       String? // denormalized for display
   createdAt          DateTime @default(now())
 
   @@index([requirementId])
@@ -1149,27 +1187,27 @@ model RequirementVersion {
 }
 
 model Baseline {
-  id              String    @id @default(uuid())
-  projectId       String
-  name            String
-  description     String?
-  status          String    @default("active") // draft | submitted | approved | frozen | superseded | active | locked | archived
-  baselineType    String?   // functional | allocated | product | milestone | custom (aerospace)
-  reviewType      String?   // SRR | PDR | CDR (milestone linkage)
-  milestoneId     String?
-  approvedBy           String?
-  approvedByName       String?
-  approvedAt           DateTime?
-  approvalNotes        String?
-  supersedesBaselineId String?   // Links to prior baseline when superseded
+  id                     String    @id @default(uuid())
+  projectId              String
+  name                   String
+  description            String?
+  status                 String    @default("active") // draft | submitted | approved | frozen | superseded | active | locked | archived
+  baselineType           String? // functional | allocated | product | milestone | custom (aerospace)
+  reviewType             String? // SRR | PDR | CDR (milestone linkage)
+  milestoneId            String?
+  approvedBy             String?
+  approvedByName         String?
+  approvedAt             DateTime?
+  approvalNotes          String?
+  supersedesBaselineId   String? // Links to prior baseline when superseded
   configurationAuthority String? // government | contractor (defense)
-  fdAL                 String?   // Functional Design Assurance Level (A–E, aerospace)
-  createdBy            String?
-  createdByName   String?
-  lockedAt        DateTime?
-  linksSnapshot   Json?     // Snapshot of links where source or target is a requirement
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  fdAL                   String? // Functional Design Assurance Level (A–E, aerospace)
+  createdBy              String?
+  createdByName          String?
+  lockedAt               DateTime?
+  linksSnapshot          Json? // Snapshot of links where source or target is a requirement
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   items   BaselineItem[]
   project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1551,28 +1589,26 @@ model BarcodeDefinition {
   @@index([isPrimary])
 }
 
-
 model AuditLog {
-  id          String   @id @default(uuid())
-  projectId   String
-  project     Project  @relation(fields: [projectId], references: [id])
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  action      String
-  details     String?
-  createdAt   DateTime @default(now())
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  details   String?
+  createdAt DateTime @default(now())
 }
 
 model ProjectAnalytics {
-  id          String   @id @default(uuid())
-  projectId   String  @unique
-  project     Project @relation(fields: [projectId], references: [id])
-  totalTasks  Int     @default(0)
-  completedTasks Int  @default(0)
-  overdueTasks Int    @default(0)
+  id             String   @id @default(uuid())
+  projectId      String   @unique
+  project        Project  @relation(fields: [projectId], references: [id])
+  totalTasks     Int      @default(0)
+  completedTasks Int      @default(0)
+  overdueTasks   Int      @default(0)
   lastCalculated DateTime @default(now())
 }
-
 
 model SerialNumber {
   id                String   @id @default(uuid())
@@ -1620,16 +1656,16 @@ model InventoryBalance {
 
 /// FIFO cost layers for inventory valuation (optional lot reference as opaque id until Lot model exists)
 model InventoryCostLayer {
-  id           String   @id @default(uuid())
-  itemId       String
-  locationId   String
-  lotId        String?
-  qty          Decimal
-  consumedQty  Decimal  @default(0)
-  unitCost     Decimal
-  receivedAt   DateTime @default(now())
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(uuid())
+  itemId      String
+  locationId  String
+  lotId       String?
+  qty         Decimal
+  consumedQty Decimal  @default(0)
+  unitCost    Decimal
+  receivedAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   item     Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
   location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
@@ -2492,79 +2528,79 @@ model VerTestSetup {
 
 // Test Procedure (Automation Script)
 model VerTestProcedure {
-  id              String   @id @default(uuid())
-  projectId       String
-  testCaseId      String   @unique
-  scriptContent   String?  @db.Text
-  scriptVersion   String   @default("1.0")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String   @id @default(uuid())
+  projectId     String
+  testCaseId    String   @unique
+  scriptContent String?  @db.Text
+  scriptVersion String   @default("1.0")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  testCase        VerTestCase  @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  project  Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testCase VerTestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
 }
 
 // Test Environment (HIL Bench / Software Build context)
 model VerTestEnvironment {
-  id                 String   @id @default(uuid())
-  projectId          String
-  name               String
-  description        String?
-  hardwareVersion    String?
-  softwareBuild      String?
-  hilBenchConfig     Json?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id              String   @id @default(uuid())
+  projectId       String
+  name            String
+  description     String?
+  hardwareVersion String?
+  softwareBuild   String?
+  hilBenchConfig  Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  project            Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  testRuns           VerTestRun[]
+  project  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testRuns VerTestRun[]
 
   @@index([projectId])
 }
 
 // Test Log (Raw Output)
 model VerTestLog {
-  id                 String   @id @default(uuid())
-  testRunId          String   @unique
-  projectId          String
-  stdoutText         String?  @db.Text
-  jsonResult         Json?
-  storageRef         String?  
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id         String   @id @default(uuid())
+  testRunId  String   @unique
+  projectId  String
+  stdoutText String?  @db.Text
+  jsonResult Json?
+  storageRef String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  project            Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  testRun            VerTestRun   @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  project Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testRun VerTestRun @relation(fields: [testRunId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
 }
 
 // Test Case Definitions
 model VerTestCase {
-  id               String   @id @default(uuid())
+  id               String    @id @default(uuid())
   projectId        String
   key              String // Unique key like "TC-UAV-001"
   title            String
   objective        String?
-  preconditions    String?  @db.Text
+  preconditions    String?   @db.Text
   steps            Json? // JSON array of ordered steps
   expectedResults  Json? // JSON array of expected results
-  passFailCriteria String?  @db.Text
+  passFailCriteria String?   @db.Text
   linkedMocCode    Int?
   linkedMethodId   String?
   ownerUserId      String?
-  status           String   @default("DRAFT") // DRAFT, REVIEWED, APPROVED, READY
-  version          String   @default("1.0")
-  isSuspect        Boolean  @default(false)
+  status           String    @default("DRAFT") // DRAFT, REVIEWED, APPROVED, READY
+  version          String    @default("1.0")
+  isSuspect        Boolean   @default(false)
   invalidatedAt    DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  project        Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  moc            VerMoc?            @relation(fields: [linkedMocCode], references: [code], onDelete: SetNull)
-  method         VerMethod?         @relation(fields: [linkedMethodId], references: [id], onDelete: SetNull)
+  project        Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  moc            VerMoc?                    @relation(fields: [linkedMocCode], references: [code], onDelete: SetNull)
+  method         VerMethod?                 @relation(fields: [linkedMethodId], references: [id], onDelete: SetNull)
   testCaseSetups VerTestCaseSetup[]
   planCases      VerTestPlanCase[]
   runResults     VerTestRunResult[]
@@ -2596,49 +2632,49 @@ model VerTestCaseSetup {
 
 // Test Plan Container
 model VerTestPlan {
-  id            String   @id @default(uuid())
-  projectId     String
-  key           String // Unique key like "TP-UAV-001"
-  name          String
-  description   String?
-  scope         String?  @db.Text
-  entryCriteria String?  @db.Text
-  exitCriteria  String?  @db.Text
-  phase         String? // SRR, PDR, CDR, TRR, QUALIFICATION, CERTIFICATION, OTHER
-  ownerUserId   String?
-  testingEnvironmentIds Json? // Array of ENVIRONMENT_TYPE option values
-  testingToolIds        Json? // Array of TESTING_TOOL option values
-  status        String   @default("DRAFT") // DRAFT, REVIEWED, APPROVED, ACTIVE, CLOSED
+  id                       String    @id @default(uuid())
+  projectId                String
+  key                      String // Unique key like "TP-UAV-001"
+  name                     String
+  description              String?
+  scope                    String?   @db.Text
+  entryCriteria            String?   @db.Text
+  exitCriteria             String?   @db.Text
+  phase                    String? // SRR, PDR, CDR, TRR, QUALIFICATION, CERTIFICATION, OTHER
+  ownerUserId              String?
+  testingEnvironmentIds    Json? // Array of ENVIRONMENT_TYPE option values
+  testingToolIds           Json? // Array of TESTING_TOOL option values
+  status                   String    @default("DRAFT") // DRAFT, REVIEWED, APPROVED, ACTIVE, CLOSED
   // Document metadata (for structured PDF exports)
-  docNumber                 String?  // e.g. TPL-10279003A-08-01
-  docConfidentiality        String?  // e.g. AMDC - INTERN
-  docProjectCode            String?  // e.g. I2403
-  docRevision               String?  @default("1.0")
-  docPlanDate               DateTime? // "Test Plan from ..."
-  docPreparedByName         String?
-  docQaByName               String?
-  docApprovedByName         String?
-  docApprovedAt             DateTime?
-  docPurpose                String?  @db.Text
-  docOverview               String?  @db.Text
-  docStatementOfConformity  String?  @db.Text
-  docChangesPolicy          String?  @db.Text
-  docDistribution           String?  @db.Text
-  docAcronymsNote           String?  @db.Text
-  docApplicableDocuments    Json? // Array<{ title: string; revision?: string; date?: string; publisher?: string }>
-  docGeneralPrecautions     String?  @db.Text
-  docGeneralConditions      Json? // free-form object/table data
-  docTools                  Json? // Array<{ name: string; manufacturer?: string; partNumber?: string; serialNumber?: string; calibrationValidTill?: string }>
-  docTestSetupNotes         String?  @db.Text
-  docAppendices             Json? // Array<{ title: string; content: string }>
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  docNumber                String? // e.g. TPL-10279003A-08-01
+  docConfidentiality       String? // e.g. AMDC - INTERN
+  docProjectCode           String? // e.g. I2403
+  docRevision              String?   @default("1.0")
+  docPlanDate              DateTime? // "Test Plan from ..."
+  docPreparedByName        String?
+  docQaByName              String?
+  docApprovedByName        String?
+  docApprovedAt            DateTime?
+  docPurpose               String?   @db.Text
+  docOverview              String?   @db.Text
+  docStatementOfConformity String?   @db.Text
+  docChangesPolicy         String?   @db.Text
+  docDistribution          String?   @db.Text
+  docAcronymsNote          String?   @db.Text
+  docApplicableDocuments   Json? // Array<{ title: string; revision?: string; date?: string; publisher?: string }>
+  docGeneralPrecautions    String?   @db.Text
+  docGeneralConditions     Json? // free-form object/table data
+  docTools                 Json? // Array<{ name: string; manufacturer?: string; partNumber?: string; serialNumber?: string; calibrationValidTill?: string }>
+  docTestSetupNotes        String?   @db.Text
+  docAppendices            Json? // Array<{ title: string; content: string }>
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
-  project   Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  planCases VerTestPlanCase[]
+  project    Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  planCases  VerTestPlanCase[]
   planSetups VerTestPlanSetup[]
-  revisions VerTestPlanRevision[]
-  testRuns  VerTestRun[]
+  revisions  VerTestPlanRevision[]
+  testRuns   VerTestRun[]
 
   @@unique([projectId, key])
   @@index([projectId])
@@ -2647,7 +2683,7 @@ model VerTestPlan {
 
 // Revision control entries for a test plan document export
 model VerTestPlanRevision {
-  id               String   @id @default(uuid())
+  id               String    @id @default(uuid())
   projectId        String
   testPlanId       String
   revisionNumber   String
@@ -2655,15 +2691,15 @@ model VerTestPlanRevision {
   editedByName     String?
   approvedByName   String?
   approvedAt       DateTime?
-  summaryOfChanges String?  @db.Text
-  createdAt        DateTime @default(now())
+  summaryOfChanges String?   @db.Text
+  createdAt        DateTime  @default(now())
 
   project  Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   testPlan VerTestPlan @relation(fields: [testPlanId], references: [id], onDelete: Cascade)
 
+  @@unique([testPlanId, revisionNumber])
   @@index([projectId])
   @@index([testPlanId])
-  @@unique([testPlanId, revisionNumber])
 }
 
 // Join table: Test Plan ↔ Setup
@@ -2718,12 +2754,12 @@ model VerTestRun {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  testPlan    VerTestPlan?       @relation(fields: [testPlanId], references: [id], onDelete: SetNull)
-  environment VerTestEnvironment? @relation(fields: [environmentId], references: [id], onDelete: SetNull)
-  results     VerTestRunResult[]
-  testLog     VerTestLog?
-  timerSegments VerTestRunExecutionTimer[]
+  project             Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testPlan            VerTestPlan?               @relation(fields: [testPlanId], references: [id], onDelete: SetNull)
+  environment         VerTestEnvironment?        @relation(fields: [environmentId], references: [id], onDelete: SetNull)
+  results             VerTestRunResult[]
+  testLog             VerTestLog?
+  timerSegments       VerTestRunExecutionTimer[]
   exportedTestResults VerTestResult[] // Test results exported from this run
 
   @@index([projectId])
@@ -2735,27 +2771,27 @@ model VerTestRun {
 
 // Test Run Result (per test case execution)
 model VerTestRunResult {
-  id                            String    @id @default(uuid())
-  testRunId                     String
-  testCaseId                    String
-  testCaseVersionSnapshot       Json // Immutable snapshot of test case at execution
+  id                               String    @id @default(uuid())
+  testRunId                        String
+  testCaseId                       String
+  testCaseVersionSnapshot          Json // Immutable snapshot of test case at execution
   parentTestCaseVersionAtExecution String? // Version string at execution for sync comparison
-  setupVersionSnapshot          Json? // Immutable snapshot of setup used
-  resultStatus                  String    @default("NOT_RUN") // NOT_RUN, PASS, FAIL, BLOCKED, SKIPPED, PASSED_WITH_ERRORS
-  actualResults                 Json? // JSON or text (legacy)
-  notes                         String?   @db.Text
-  executedAt                    DateTime?
-  isSuspect                     Boolean   @default(false)
-  isOutOfSync                   Boolean   @default(false)
-  invalidatedAt                 DateTime?
-  createdAt                     DateTime  @default(now())
-  updatedAt                     DateTime  @updatedAt
+  setupVersionSnapshot             Json? // Immutable snapshot of setup used
+  resultStatus                     String    @default("NOT_RUN") // NOT_RUN, PASS, FAIL, BLOCKED, SKIPPED, PASSED_WITH_ERRORS
+  actualResults                    Json? // JSON or text (legacy)
+  notes                            String?   @db.Text
+  executedAt                       DateTime?
+  isSuspect                        Boolean   @default(false)
+  isOutOfSync                      Boolean   @default(false)
+  invalidatedAt                    DateTime?
+  createdAt                        DateTime  @default(now())
+  updatedAt                        DateTime  @updatedAt
 
-  testRun         VerTestRun         @relation(fields: [testRunId], references: [id], onDelete: Cascade)
-  testCase        VerTestCase        @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
-  nonconformities VerNonconformity[]
+  testRun            VerTestRun                      @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+  testCase           VerTestCase                     @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  nonconformities    VerNonconformity[]
   actualResultBlocks VerTestRunResultActualResult[]
-  statusHistory   VerTestRunResultStatusHistory[]
+  statusHistory      VerTestRunResultStatusHistory[]
 
   @@unique([testRunId, testCaseId])
   @@index([testRunId])
@@ -2797,13 +2833,13 @@ model VerTestRunExecutionTimer {
 
 // Status change audit stream (21 CFR Part 11)
 model VerTestRunResultStatusHistory {
-  id               String    @id @default(uuid())
-  testRunResultId  String
-  oldStatus        String
-  newStatus        String
+  id                String   @id @default(uuid())
+  testRunResultId   String
+  oldStatus         String
+  newStatus         String
   performedByUserId String?
-  performedAt      DateTime  @default(now())
-  reason           String?   @db.Text
+  performedAt       DateTime @default(now())
+  reason            String?  @db.Text
 
   testRunResult VerTestRunResult @relation(fields: [testRunResultId], references: [id], onDelete: Cascade)
 
@@ -2833,9 +2869,9 @@ model VerEvidence {
 
 // Polymorphic Evidence Linking
 model VerEvidenceLink {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
   evidenceId       String
   linkedEntityType String // TEST_RUN, TEST_RUN_RESULT, TEST_CASE, TEST_SETUP, METHOD, REVIEW, NONCONFORMITY
   linkedEntityId   String
@@ -2850,7 +2886,7 @@ model VerEvidenceLink {
 
 // Test Results
 model VerTestResult {
-  id               String   @id @default(uuid())
+  id               String    @id @default(uuid())
   projectId        String
   title            String
   description      String?   @db.Text
@@ -2859,21 +2895,21 @@ model VerTestResult {
   fileSize         Int? // Size in bytes
   mimeType         String?
   checksum         String? // File checksum for integrity
-  resultStatus     String   @default("NOT_RUN") // NOT_RUN, PASS, FAIL, BLOCKED, SKIPPED
+  resultStatus     String    @default("NOT_RUN") // NOT_RUN, PASS, FAIL, BLOCKED, SKIPPED
   executedAt       DateTime?
   executedByUserId String?
   executedByName   String?
   testEnvironment  String?   @db.Text
   linkedSetupId    String?
   notes            String?   @db.Text
-  sourceTestRunId  String?   // FK to VerTestRun when result was exported from a run
+  sourceTestRunId  String? // FK to VerTestRun when result was exported from a run
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  project    Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  setup      VerTestSetup?      @relation(fields: [linkedSetupId], references: [id], onDelete: SetNull)
-  sourceTestRun VerTestRun?     @relation(fields: [sourceTestRunId], references: [id], onDelete: SetNull)
-  links      VerTestResultLink[]
+  project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  setup         VerTestSetup?       @relation(fields: [linkedSetupId], references: [id], onDelete: SetNull)
+  sourceTestRun VerTestRun?         @relation(fields: [sourceTestRunId], references: [id], onDelete: SetNull)
+  links         VerTestResultLink[]
 
   @@index([projectId])
   @@index([resultStatus])
@@ -3035,7 +3071,7 @@ model VerCustomOption {
 model VerTemplate {
   id          String    @id @default(uuid())
   projectId   String
-  type        String    // TEST_CASE | TEST_PLAN
+  type        String // TEST_CASE | TEST_PLAN
   name        String
   status      String    @default("DRAFT") // DRAFT | PUBLISHED | ARCHIVED
   version     Int       @default(1)
@@ -3044,7 +3080,7 @@ model VerTemplate {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  project  Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project  Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
   versions VerTemplateVersion[]
 
   @@index([projectId])
@@ -3087,18 +3123,18 @@ model VerAuditEvent {
 
 // Custom Sections for Test Cases
 model VerTestCaseCustomSection {
-  id          String   @id @default(uuid())
-  testCaseId  String
-  projectId   String
-  title       String
-  content     String   @db.Text // HTML content from rich text editor
-  orderIndex  Int      @default(0) // For ordering sections
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(uuid())
+  testCaseId String
+  projectId  String
+  title      String
+  content    String   @db.Text // HTML content from rich text editor
+  orderIndex Int      @default(0) // For ordering sections
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  testCase    VerTestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
-  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  images      VerTestCaseSectionImage[]
+  testCase VerTestCase               @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  project  Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  images   VerTestCaseSectionImage[]
 
   @@index([testCaseId])
   @@index([projectId])
@@ -3107,18 +3143,18 @@ model VerTestCaseCustomSection {
 
 // Images for Custom Sections
 model VerTestCaseSectionImage {
-  id          String   @id @default(uuid())
-  sectionId   String
-  projectId   String
-  fileName    String
-  fileUrl     String   // Server URL path
-  storageKey  String   // Filesystem storage key
-  fileSize    Int      // Bytes
-  mimeType    String?
-  uploadedAt  DateTime @default(now())
+  id         String   @id @default(uuid())
+  sectionId  String
+  projectId  String
+  fileName   String
+  fileUrl    String // Server URL path
+  storageKey String // Filesystem storage key
+  fileSize   Int // Bytes
+  mimeType   String?
+  uploadedAt DateTime @default(now())
 
-  section     VerTestCaseCustomSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  project     Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  section VerTestCaseCustomSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  project Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([sectionId])
   @@index([projectId])
@@ -3150,9 +3186,9 @@ model ComplianceRule {
   projectId   String
   folderId    String?
   name        String
-  standard    String   // e.g. DO-178C, ISO 29148
+  standard    String // e.g. DO-178C, ISO 29148
   description String?
-  checkType   String   // e.g. requirement_has_acceptance_criteria, requirement_has_owner
+  checkType   String // e.g. requirement_has_acceptance_criteria, requirement_has_owner
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -3170,10 +3206,10 @@ model ComplianceCheckRun {
   projectId String
   name      String?
   status    String   @default("completed") // running | completed | failed
-  ruleIds   String[] @default([])          // rule IDs included in this run
+  ruleIds   String[] @default([]) // rule IDs included in this run
   createdAt DateTime @default(now())
 
-  project  Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project  Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   findings ComplianceFinding[]
 
   @@index([projectId])
@@ -3181,19 +3217,19 @@ model ComplianceCheckRun {
 }
 
 model ComplianceFinding {
-  id        String   @id @default(uuid())
-  projectId String
-  runId     String
-  ruleId    String
-  status    String   // pass | fail
-  entityType String  // requirement | function | parameter
+  id         String   @id @default(uuid())
+  projectId  String
+  runId      String
+  ruleId     String
+  status     String // pass | fail
+  entityType String // requirement | function | parameter
   entityId   String?
-  message   String?
-  createdAt DateTime @default(now())
+  message    String?
+  createdAt  DateTime @default(now())
 
-  project Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   run     ComplianceCheckRun @relation(fields: [runId], references: [id], onDelete: Cascade)
-  rule    ComplianceRule    @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  rule    ComplianceRule     @relation(fields: [ruleId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
   @@index([createdAt])
@@ -3201,15 +3237,15 @@ model ComplianceFinding {
 
 // ----- Certification module -----
 model CertContext {
-  id                   String   @id @default(uuid())
-  projectId            String   @unique
-  authority            String   @default("EASA") // EASA | FAA | Military | Customer
-  certBasis            String   @default("CS-25") // CS-25 | CS-23 | SC-VTOL | MIL-STD | Custom
-  standards            String[] @default(["ARP4754A", "DO-178C"]) // JSON array
-  selectedBaselineId   String?
-  selectedReleaseId    String?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  projectId          String   @unique
+  authority          String   @default("EASA") // EASA | FAA | Military | Customer
+  certBasis          String   @default("CS-25") // CS-25 | CS-23 | SC-VTOL | MIL-STD | Custom
+  standards          String[] @default(["ARP4754A", "DO-178C"]) // JSON array
+  selectedBaselineId String?
+  selectedReleaseId  String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -3217,12 +3253,12 @@ model CertContext {
 }
 
 model CertBaseline {
-  id        String   @id @default(uuid())
-  projectId String
-  baselineId String  // e.g. BL-2026-03-PDR
-  name      String
-  status    String   @default("Draft")
-  createdAt DateTime @default(now())
+  id         String   @id @default(uuid())
+  projectId  String
+  baselineId String // e.g. BL-2026-03-PDR
+  name       String
+  status     String   @default("Draft")
+  createdAt  DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -3231,12 +3267,12 @@ model CertBaseline {
 }
 
 model CertRelease {
-  id         String   @id @default(uuid())
-  projectId  String
-  releaseId  String   // e.g. REL-2026.04
-  name       String
-  status     String   @default("Draft")
-  createdAt  DateTime @default(now())
+  id        String   @id @default(uuid())
+  projectId String
+  releaseId String // e.g. REL-2026.04
+  name      String
+  status    String   @default("Draft")
+  createdAt DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -3245,21 +3281,21 @@ model CertRelease {
 }
 
 model CertObjective {
-  id                   String   @id @default(uuid())
-  projectId            String
-  objId                String   // e.g. OBJ-CS25-1309-01
-  regRef               String
-  title                String
-  moc                  String   // Test | Analysis | Inspection | Similarity | Simulation | Review
-  status               String   @default("Open") // Open | Partial | Complete | Blocked
-  criticality           String   @default("Medium") // Low | Medium | High
-  linkedEvidenceCount  Int      @default(0)
-  linkedCiCount        Int      @default(0)
-  notes                String   @default("")
-  reviewed             Boolean  @default(false)
-  safetyObjectiveRef   String?  // Optional link to safety objective / FHA item (e.g. ID or ref)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id                  String   @id @default(uuid())
+  projectId           String
+  objId               String // e.g. OBJ-CS25-1309-01
+  regRef              String
+  title               String
+  moc                 String // Test | Analysis | Inspection | Similarity | Simulation | Review
+  status              String   @default("Open") // Open | Partial | Complete | Blocked
+  criticality         String   @default("Medium") // Low | Medium | High
+  linkedEvidenceCount Int      @default(0)
+  linkedCiCount       Int      @default(0)
+  notes               String   @default("")
+  reviewed            Boolean  @default(false)
+  safetyObjectiveRef  String? // Optional link to safety objective / FHA item (e.g. ID or ref)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   project          Project                        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   requirementLinks CertObjectiveRequirementLink[]
@@ -3284,15 +3320,15 @@ model CertObjectiveRequirementLink {
 }
 
 model CertComplianceMatrixRow {
-  id              String   @id @default(uuid())
-  projectId       String
-  regRef          String
-  objectiveCount  Int      @default(0)
-  mocMix          Json     // { Test?: number, Analysis?: number, ... }
-  statusSummary   Json     // { complete, partial, open, blocked }
-  evidenceCount   Int      @default(0)
+  id             String   @id @default(uuid())
+  projectId      String
+  regRef         String
+  objectiveCount Int      @default(0)
+  mocMix         Json // { Test?: number, Analysis?: number, ... }
+  statusSummary  Json // { complete, partial, open, blocked }
+  evidenceCount  Int      @default(0)
   lastUpdated    DateTime @default(now())
-  createdAt       DateTime @default(now())
+  createdAt      DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -3303,7 +3339,7 @@ model CertComplianceMatrixRow {
 model CertFinding {
   id               String   @id @default(uuid())
   projectId        String
-  findingId        String   // e.g. FND-001
+  findingId        String // e.g. FND-001
   title            String
   severity         String   @default("Minor") // Minor | Major | Observation
   status           String   @default("Open") // Open | InProgress | Closed | Deferred
@@ -3314,7 +3350,7 @@ model CertFinding {
   dueDate          DateTime
   notes            String   @default("")
   safetyRelated    Boolean  @default(false) // Tag for safety-related findings
-  safetyNcrRef     String?  // Optional ref to safety NCR / hazard
+  safetyNcrRef     String? // Optional ref to safety NCR / hazard
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -3326,17 +3362,17 @@ model CertFinding {
 }
 
 model CertReviewLogEntry {
-  id              String   @id @default(uuid())
-  projectId       String
-  reviewId        String   // e.g. REV-001
-  date            DateTime @default(now())
-  reviewType      String   // Internal | Authority | Customer
-  scopeSummary    String   @default("")
-  findingsRaised  Int      @default(0)
-  findingsClosed  Int      @default(0)
-  notes           String   @default("")
-  status          String   @default("Draft") // Draft | Closed
-  createdAt       DateTime @default(now())
+  id             String   @id @default(uuid())
+  projectId      String
+  reviewId       String // e.g. REV-001
+  date           DateTime @default(now())
+  reviewType     String // Internal | Authority | Customer
+  scopeSummary   String   @default("")
+  findingsRaised Int      @default(0)
+  findingsClosed Int      @default(0)
+  notes          String   @default("")
+  status         String   @default("Draft") // Draft | Closed
+  createdAt      DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -3361,7 +3397,7 @@ model CertActivityLogEntry {
 model CertReadinessGate {
   id        String   @id @default(uuid())
   projectId String
-  gateId    String   // e.g. gate-1
+  gateId    String // e.g. gate-1
   label     String
   passed    Boolean  @default(false)
   reason    String?
@@ -3393,7 +3429,7 @@ model CertCorrespondence {
   id                  String   @id @default(uuid())
   projectId           String
   date                DateTime @default(now())
-  type                String   // Letter | Email | Meeting
+  type                String // Letter | Email | Meeting
   authority           String   @default("")
   subject             String   @default("")
   summary             String   @default("")
@@ -3411,32 +3447,32 @@ model CertCorrespondence {
 }
 
 model CertMeeting {
-  id         String   @id @default(uuid())
+  id        String   @id @default(uuid())
   projectId String
   date      DateTime @default(now())
-  type      String   // TCB | TC | Internal
+  type      String // TCB | TC | Internal
   attendees String[] @default([])
   summary   String   @default("")
 
-  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  actionItems  CertActionItem[]
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actionItems CertActionItem[]
 
   @@index([projectId])
   @@index([date])
 }
 
 model CertActionItem {
-  id                 String    @id @default(uuid())
-  projectId          String
+  id                String   @id @default(uuid())
+  projectId         String
   meetingId         String
-  owner              String    @default("")
-  dueDate            DateTime
-  status             String    @default("Open") // Open | Closed
-  description        String    @default("")
-  linkedFindingId    String?
-  linkedObjectiveId  String?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  owner             String   @default("")
+  dueDate           DateTime
+  status            String   @default("Open") // Open | Closed
+  description       String   @default("")
+  linkedFindingId   String?
+  linkedObjectiveId String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   meeting CertMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
@@ -3447,14 +3483,14 @@ model CertActionItem {
 }
 
 model CertPlan {
-  id                    String   @id @default(uuid())
-  projectId             String   @unique
-  version               String   @default("1.0")
-  scopeSummary          String   @default("")
-  complianceStrategyJson String?  // JSON: reg -> strategy summary
-  approvalStatus        String   @default("Draft") // Draft | UnderReview | Approved
-  lastUpdated           DateTime @updatedAt
-  createdAt             DateTime @default(now())
+  id                     String   @id @default(uuid())
+  projectId              String   @unique
+  version                String   @default("1.0")
+  scopeSummary           String   @default("")
+  complianceStrategyJson String? // JSON: reg -> strategy summary
+  approvalStatus         String   @default("Draft") // Draft | UnderReview | Approved
+  lastUpdated            DateTime @updatedAt
+  createdAt              DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -3462,16 +3498,16 @@ model CertPlan {
 }
 
 model CertMilestone {
-  id                String    @id @default(uuid())
-  projectId         String
-  name              String
-  date              DateTime
-  type              String    // PDR | CDR | TRR | TC submission | etc.
-  status            String    @default("Planned") // Planned | Completed | Deferred
-  relatedReviewId   String?
-  relatedPackageId  String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id               String   @id @default(uuid())
+  projectId        String
+  name             String
+  date             DateTime
+  type             String // PDR | CDR | TRR | TC submission | etc.
+  status           String   @default("Planned") // Planned | Completed | Deferred
+  relatedReviewId  String?
+  relatedPackageId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -3483,7 +3519,7 @@ model CertChecklist {
   id         String   @id @default(uuid())
   projectId  String
   name       String
-  phase      String   // PDR | CDR | TRR | etc.
+  phase      String // PDR | CDR | TRR | etc.
   baselineId String?
   releaseId  String?
   createdAt  DateTime @default(now())
@@ -3500,10 +3536,10 @@ model CertChecklist {
 model CertChecklistItem {
   id          String   @id @default(uuid())
   checklistId String
-  description String  @default("")
-  required    Boolean @default(true)
-  status      String  @default("Open") // Open | Complete
-  sortOrder   Int     @default(0)
+  description String   @default("")
+  required    Boolean  @default(true)
+  status      String   @default("Open") // Open | Complete
+  sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -3513,26 +3549,26 @@ model CertChecklistItem {
 }
 
 model CertSignOff {
-  id          String   @id @default(uuid())
-  projectId   String
-  checklistId String?
-  milestoneId String?
-  role        String   @default("")
-  person      String   @default("")
-  signedAt    DateTime?
-  status      String   @default("Pending") // Pending | Signed | Delegated
+  id               String    @id @default(uuid())
+  projectId        String
+  checklistId      String?
+  milestoneId      String?
+  role             String    @default("")
+  person           String    @default("")
+  signedAt         DateTime?
+  status           String    @default("Pending") // Pending | Signed | Delegated
   // Identity verification (issue #163): server-derived from authenticated session, never from client body
   signerId         String?
   assignedToUserId String?
   ipAddress        String?
   userAgent        String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  checklist    CertChecklist? @relation(fields: [checklistId], references: [id], onDelete: Cascade)
-  signer       User?          @relation("CertSignOffSigner", fields: [signerId], references: [id], onDelete: SetNull)
-  assignedTo   User?          @relation("CertSignOffAssignedTo", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  checklist  CertChecklist? @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  signer     User?          @relation("CertSignOffSigner", fields: [signerId], references: [id], onDelete: SetNull)
+  assignedTo User?          @relation("CertSignOffAssignedTo", fields: [assignedToUserId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
   @@index([checklistId])
@@ -3546,17 +3582,17 @@ model CertSignOff {
 // ═══════════════════════════════════════════════════════════════════════════
 
 model TransitionChecklist {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   projectId   String
   name        String
   description String?
-  version     Int       @default(1)
-  isActive    Boolean   @default(true)
+  version     Int      @default(1)
+  isActive    Boolean  @default(true)
   createdBy   String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  project     Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   items       TransitionChecklistItem[]
   assignments ChecklistAssignment[]
   versions    ChecklistVersion[]
@@ -3572,12 +3608,12 @@ model TransitionChecklistItem {
   label            String
   description      String?
   itemType         String   @default("BOOLEAN") // BOOLEAN | FIELD_VALIDATION | RULE_BASED | CONFIRMATION
-  validationConfig Json?    // { field, operator, value } for FIELD_VALIDATION; { rule } for RULE_BASED
+  validationConfig Json? // { field, operator, value } for FIELD_VALIDATION; { rule } for RULE_BASED
   isRequired       Boolean  @default(true)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  checklist TransitionChecklist           @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  checklist TransitionChecklist               @relation(fields: [checklistId], references: [id], onDelete: Cascade)
   responses TransitionChecklistItemResponse[]
   issues    ChecklistItemIssue[]
 
@@ -3596,8 +3632,8 @@ model ChecklistAssignment {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  checklist   TransitionChecklist  @relation(fields: [checklistId], references: [id], onDelete: Cascade)
-  project     Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  checklist   TransitionChecklist   @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  project     Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   completions ChecklistCompletion[]
 
   @@unique([projectId, lifecycleId, fromStatusId, toStatusId, checklistId])
@@ -3617,8 +3653,8 @@ model ChecklistCompletion {
   passed                Boolean   @default(false)
   projectId             String
 
-  assignment ChecklistAssignment              @relation(fields: [checklistAssignmentId], references: [id], onDelete: Cascade)
-  project    Project                          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignment ChecklistAssignment               @relation(fields: [checklistAssignmentId], references: [id], onDelete: Cascade)
+  project    Project                           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   responses  TransitionChecklistItemResponse[]
 
   @@index([checklistAssignmentId])
@@ -3631,14 +3667,14 @@ model TransitionChecklistItemResponse {
   id              String   @id @default(uuid())
   completionId    String
   checklistItemId String
-  value           Json?    // { checked: true } for BOOLEAN; { valid: true, message: "..." } for validations
+  value           Json? // { checked: true } for BOOLEAN; { valid: true, message: "..." } for validations
   passed          Boolean  @default(false)
   respondedAt     DateTime @default(now())
   respondedById   String?
 
-  completion    ChecklistCompletion       @relation(fields: [completionId], references: [id], onDelete: Cascade)
-  checklistItem TransitionChecklistItem   @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
-  respondedBy   User?                     @relation("ChecklistItemResponder", fields: [respondedById], references: [id], onDelete: SetNull)
+  completion    ChecklistCompletion     @relation(fields: [completionId], references: [id], onDelete: Cascade)
+  checklistItem TransitionChecklistItem @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
+  respondedBy   User?                   @relation("ChecklistItemResponder", fields: [respondedById], references: [id], onDelete: SetNull)
   comments      ChecklistItemComment[]
   issues        ChecklistItemIssue[]
 
@@ -3701,4 +3737,89 @@ model ChecklistItemIssue {
   @@index([checklistItemId])
   @@index([entityId])
   @@index([projectId])
+}
+
+// ---------------------------------------------------------------------------
+// AI-ready infrastructure (ai-ready-vision.md §6, §7). Parameters slice.
+// ---------------------------------------------------------------------------
+
+// Scoped API key issued to an MCP client for access to a single project.
+// Revocable. Every tool call writes into AiInvocation so callers can be
+// audited individually.
+model ParameterMcpKey {
+  id         String    @id @default(uuid())
+  projectId  String
+  issuedById String
+  name       String
+  keyHash    String    @unique
+  scopes     String[] // ["read","draft","review","impact"] subset
+  itarScope  Boolean   @default(false) // if true, may search itar-classified rows
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+  revokedBy  String?
+  createdAt  DateTime  @default(now())
+
+  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issuedBy     User           @relation(fields: [issuedById], references: [id], onDelete: Cascade)
+  AiInvocation AiInvocation[]
+
+  @@index([projectId])
+  @@index([issuedById])
+}
+
+// Every AI invocation - REST `/ai/*` hit, MCP tool call, server-side AI
+// job step - writes a row here. The export endpoint serves these in
+// NDJSON form for ISO/IEC 42001 Annex B audits.
+model AiInvocation {
+  id            String   @id @default(uuid())
+  projectId     String
+  userId        String?
+  agentKeyId    String?
+  toolName      String // e.g. "mcp.list_parameters" | "rest.ai.draft"
+  tier          String // "T0" | "T1" | "T2" | "T3" | "T4"
+  model         String?
+  modelVersion  String?
+  promptId      String?
+  contextHash   String?
+  inputHash     String
+  outputHash    String?
+  contextTokens Int?
+  outputTokens  Int?
+  success       Boolean
+  errorMessage  String?
+  durationMs    Int?
+  createdAt     DateTime @default(now())
+
+  project  Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user     User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  agentKey ParameterMcpKey? @relation(fields: [agentKeyId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([userId, createdAt])
+  @@index([toolName, createdAt])
+}
+
+// Background job runner (plan §2.1 item 15). Submit -> poll -> done.
+// Keeps bulk operations out of the single-request timeout.
+model ParameterBulkJob {
+  id          String    @id @default(uuid())
+  projectId   String
+  submittedBy String
+  operation   String // "bulk-status" | "bulk-delete" | "bulk-ai-draft" | ...
+  payload     Json
+  status      String    @default("pending") // pending | running | completed | failed | partial
+  totalItems  Int       @default(0)
+  doneItems   Int       @default(0)
+  failedItems Int       @default(0)
+  itemResults Json? // [{ id, status, error? }]
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  project         Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  submittedByUser User    @relation(fields: [submittedBy], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status])
+  @@index([submittedBy, createdAt])
 }
