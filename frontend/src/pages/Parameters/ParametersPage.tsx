@@ -1857,27 +1857,49 @@ export default function ParametersPage() {
                   {parameters.length === 0 ? 'No parameters yet. Create one or import a file.' : 'No parameters match your filters.'}
                 </td></tr>
               ) : (() => {
-                // Build groups only when showing All Parameters; otherwise flat list
+                // Build groups only when showing All Parameters; otherwise flat list.
+                // Groups mirror the sidebar folder tree — sub-folders indent under their parent.
                 const showGroups = selectedFolderId === null && folders.length > 0
-                type Group = { id: string; label: string; color: string | null; params: typeof filteredParameters }
-                const groups: Group[] = []
+                type FlatGroup = { id: string; label: string; color: string | null; params: typeof filteredParameters; depth: number }
+                const flatGroups: FlatGroup[] = []
                 if (showGroups) {
-                  // Ungrouped parameters first, then each named folder
                   const ungrouped = filteredParameters.filter(p => !p.folderId)
-                  if (ungrouped.length > 0) groups.push({ id: '__none__', label: 'Ungrouped', color: null, params: ungrouped })
-                  for (const folder of folders) {
-                    const inFolder = filteredParameters.filter(p => p.folderId === folder.id)
-                    if (inFolder.length > 0) groups.push({ id: folder.id, label: folder.name, color: folder.color ?? null, params: inFolder })
+                  if (ungrouped.length > 0) flatGroups.push({ id: '__none__', label: 'Ungrouped', color: null, params: ungrouped, depth: 0 })
+                  const hasDescendantParams = (pid: string): boolean => {
+                    if (filteredParameters.some(p => p.folderId === pid)) return true
+                    return folders.filter(f => f.parentId === pid).some(c => hasDescendantParams(c.id))
                   }
+                  const walk = (parentId: string | null, depth: number): void => {
+                    for (const folder of folders.filter(f => (f.parentId ?? null) === parentId)) {
+                      if (!hasDescendantParams(folder.id)) continue
+                      const ownParams = filteredParameters.filter(p => p.folderId === folder.id)
+                      flatGroups.push({ id: folder.id, label: folder.name, color: folder.color ?? null, params: ownParams, depth })
+                      walk(folder.id, depth + 1)
+                    }
+                  }
+                  walk(null, 0)
                 } else {
-                  groups.push({ id: '__all__', label: '', color: null, params: filteredParameters })
+                  flatGroups.push({ id: '__all__', label: '', color: null, params: filteredParameters, depth: 0 })
+                }
+                // Hide groups below any collapsed ancestor.
+                const visibleGroups: FlatGroup[] = []
+                let skipBelowDepth: number | null = null
+                for (const g of flatGroups) {
+                  if (skipBelowDepth !== null && g.depth > skipBelowDepth) continue
+                  skipBelowDepth = null
+                  visibleGroups.push(g)
+                  if (collapsedGroups.has(g.id)) skipBelowDepth = g.depth
                 }
 
-                return groups.flatMap(group => {
+                return visibleGroups.flatMap(group => {
                   const isCollapsed = collapsedGroups.has(group.id)
                   const groupHeaderRow = showGroups ? (
                     <tr key={`group-${group.id}`} className="bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700">
-                      <td colSpan={2 + visibleCols.size} className="px-3 py-[5px]">
+                      <td
+                        colSpan={2 + visibleCols.size}
+                        className="py-[5px] pr-3"
+                        style={{ paddingLeft: group.depth * 18 + 12 }} // depth-computed nesting
+                      >
                         <button
                           type="button"
                           onClick={() => toggleGroup(group.id)}
@@ -1907,10 +1929,11 @@ export default function ParametersPage() {
                 const folderPath = folder
                   ? parentFolder ? `${parentFolder.name} / ${folder.name}` : folder.name
                   : null
-                // Show folder badge when: viewing all params, OR viewing a parent folder (params from sub-folders)
-                const showFolderBadge = folder && (
-                  selectedFolderId === null ||
-                  (selectedFolderId !== null && selectedFolderId !== param.folderId)
+                // Show folder badge only when viewing a specific folder whose sub-folder
+                // contains this param. When showGroups is on, the nested group header
+                // already communicates the folder path, so the badge would be redundant.
+                const showFolderBadge = folder && !showGroups && (
+                  selectedFolderId !== null && selectedFolderId !== param.folderId
                 )
                 const computedVal = formulaResults.get(param.id)
                 const isInlineEditing = inlineEditingId === param.id
