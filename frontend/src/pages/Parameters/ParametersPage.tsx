@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
   Search, X, Check, Trash2, Edit2, Plus, Filter, ChevronDown, ChevronUp,
@@ -51,6 +51,7 @@ import clsx from 'clsx'
 import { format } from 'date-fns'
 import { AiFeatureProvider } from '../../contexts/AiFeatureContext'
 import ParameterFilterBar from '../../components/parameters/ParameterFilterBar'
+import ParameterRow from './ParameterRow'
 
 // ---------------------------------------------------------------------------
 // Preset folder colors
@@ -958,15 +959,46 @@ export default function ParametersPage() {
     setIsPublishOpen(true)
   }
 
-  const handleDeleteClick = (e: React.MouseEvent, id: string, name: string) => {
+  const handleDeleteClick = useCallback((e: React.MouseEvent, id: string, name: string) => {
     e.stopPropagation()
     setDeleteConfirmation({ id, name })
-  }
+  }, [])
 
-  const handleEditClick = (e: React.MouseEvent, parameter: Parameter) => {
+  // Stable per-row handlers so <ParameterRow memo> can skip re-renders
+  // when nothing about the row actually changed. These take `param` or
+  // an id so they don't need to be re-created per row.
+  const handleToggleSelection = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+  const handleOpenDetail = useCallback((param: Parameter) => setDetailParameter(param), [])
+  const handleStartInlineEdit = useCallback((param: Parameter) => {
+    setInlineEditingId(param.id)
+    setInlineEditValue(param.defaultValue ?? '')
+  }, [])
+  const handleInlineEditChange = useCallback((v: string) => setInlineEditValue(v), [])
+  const handleCancelInlineEdit = useCallback(() => setInlineEditingId(null), [])
+  const handleViewSource = useCallback((param: Parameter) => setViewingSource(param), [])
+  const handleOpenChangeRequest = useCallback((param: Parameter) => {
+    setChangeRequestModal({ isOpen: true, sourceId: param.id, sourceName: param.name })
+  }, [])
+
+  const handleEditClick = useCallback((e: React.MouseEvent, parameter: Parameter) => {
     e.stopPropagation()
     setEditingParameter(parameter)
-  }
+  }, [])
+
+  const handleSaveInlineEdit = useCallback((parameterId: string) => {
+    saveInlineValue(parameterId)
+  }, [saveInlineValue])
+
+  const handleMoveToFolderFromRow = useCallback((paramId: string, folderId: string | null) => {
+    moveToFolderMutation.mutate({ parameterId: paramId, folderId })
+  }, [moveToFolderMutation])
 
   const handleConfirmDelete = () => {
     if (deleteConfirmation) deleteParameterMutation.mutate(deleteConfirmation.id)
@@ -1039,7 +1071,11 @@ export default function ParametersPage() {
   // ---------------------------------------------------------------------------
   // Build a flat ordered list of folder options for dropdowns (any depth)
   // ---------------------------------------------------------------------------
-  const buildAllFolderOptions = (): Array<{ value: string; label: string }> => {
+  // Flattened folder options for dropdowns (bulk-move + per-row folder
+  // select). Memoised so the row <select>'s option list stays
+  // reference-stable across re-renders -- key for <ParameterRow> memo
+  // to skip rows whose data didn't actually change.
+  const folderOptions = useMemo((): Array<{ value: string; label: string }> => {
     const result: Array<{ value: string; label: string }> = []
     const visit = (parentId: string | null, depth: number) => {
       const ids = folderOrderByParent.get(parentId) ?? []
@@ -1053,7 +1089,8 @@ export default function ParametersPage() {
     }
     visit(null, 0)
     return result
-  }
+  }, [folderOrderByParent, foldersById])
+  const buildAllFolderOptions = () => folderOptions
 
   // ---------------------------------------------------------------------------
   // Recursive folder tree rendering — arbitrary depth, sortable at every level
@@ -1961,199 +1998,38 @@ export default function ParametersPage() {
 
                   if (isCollapsed) return groupHeaderRow ? [groupHeaderRow] : []
 
-                  const dataRows = group.params.map((param) => {
-                const folder = param.folderId ? foldersById.get(param.folderId) : undefined
-                const parentFolder = folder?.parentId ? foldersById.get(folder.parentId) : null
-                const folderPath = folder
-                  ? parentFolder ? `${parentFolder.name} / ${folder.name}` : folder.name
-                  : null
-                // Show folder badge only when viewing a specific folder whose sub-folder
-                // contains this param. When showGroups is on, the nested group header
-                // already communicates the folder path, so the badge would be redundant.
-                const showFolderBadge = folder && !showGroups && (
-                  selectedFolderId !== null && selectedFolderId !== param.folderId
-                )
-                const computedVal = formulaResults.get(param.id)
-                const isInlineEditing = inlineEditingId === param.id
-                return (
-                <DraggableRow key={param.id} parameterId={param.id} folderColor={showGroups ? null : folder?.color}>
-                  <td className="px-3 py-2 w-8 sticky left-0 z-[1] bg-gray-50 dark:bg-gray-800" onClick={e => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(param.id)}
-                      onChange={() => {
-                        setSelectedIds(prev => {
-                          const next = new Set(prev)
-                          if (next.has(param.id)) next.delete(param.id)
-                          else next.add(param.id)
-                          return next
-                        })
-                      }}
-                      className="cursor-pointer"
+                  const dataRows = group.params.map((param) => (
+                    <ParameterRow
+                      key={param.id}
+                      param={param as ParameterWithUsage}
+                      visibleCols={visibleCols}
+                      showGroups={showGroups}
+                      selectedFolderId={selectedFolderId}
+                      selected={selectedIds.has(param.id)}
+                      foldersById={foldersById}
+                      computedVal={formulaResults.get(param.id)}
+                      isInlineEditing={inlineEditingId === param.id}
+                      inlineEditValue={inlineEditValue}
+                      deleteConfirmPending={
+                        deleteParameterMutation.isPending && deleteConfirmation?.id === param.id
+                      }
+                      folderOptions={folderOptions}
+                      onToggleSelection={handleToggleSelection}
+                      onOpenDetail={handleOpenDetail}
+                      onStartInlineEdit={handleStartInlineEdit}
+                      onInlineEditChange={handleInlineEditChange}
+                      onSaveInlineEdit={handleSaveInlineEdit}
+                      onCancelInlineEdit={handleCancelInlineEdit}
+                      onViewSource={handleViewSource}
+                      onMoveToFolder={handleMoveToFolderFromRow}
+                      onOpenChangeRequest={handleOpenChangeRequest}
+                      onEditClick={handleEditClick}
+                      onDeleteClick={handleDeleteClick}
                     />
-                  </td>
-                  <td className="px-3 py-1.5 sticky left-8 z-[1] bg-gray-50 dark:bg-gray-800 shadow-[2px_0_4px_rgba(0,0,0,0.06)]">
-                    <button type="button" onClick={() => setDetailParameter(param)}
-                      className="bg-transparent border-none cursor-pointer text-blue-600 dark:text-blue-400 font-semibold text-xs p-0 whitespace-nowrap block">
-                      {param.name}
-                    </button>
-                    {showFolderBadge && folderPath && (
-                      <span
-                        className="inline-flex items-center gap-[3px] text-[10px] mt-px text-gray-600 dark:text-gray-400"
-                        style={folder?.color ? { color: folder.color } : undefined} // user-chosen hex
-                      >
-                        <Folder size={9} className="shrink-0" />
-                        {folderPath}
-                      </span>
-                    )}
-                  </td>
-                  {visibleCols.has('description') && (
-                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400 max-w-[200px]">
-                      <span className="overflow-hidden block text-ellipsis whitespace-nowrap" title={param.description ?? ''}>
-                        {param.description || '—'}
-                      </span>
-                    </td>
-                  )}
-                  {visibleCols.has('type') && (
-                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{param.dataType || '—'}</td>
-                  )}
-                  {visibleCols.has('value') && (
-                    <td
-                      className="px-3 py-2 font-mono text-gray-900 dark:text-gray-100 min-w-[80px]"
-                      onClick={e => {
-                        if (!isInlineEditing) {
-                          e.stopPropagation()
-                          setInlineEditingId(param.id)
-                          setInlineEditValue(param.defaultValue ?? '')
-                        }
-                      }}
-                      title={isInlineEditing ? undefined : 'Click to edit value'}
-                    >
-                      {isInlineEditing ? (
-                        <input
-                          autoFocus
-                          value={inlineEditValue}
-                          onChange={e => setInlineEditValue(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') { e.stopPropagation(); saveInlineValue(param.id) }
-                            if (e.key === 'Escape') { e.stopPropagation(); setInlineEditingId(null) }
-                          }}
-                          onClick={e => e.stopPropagation()}
-                          className="w-full px-1.5 py-0.5 font-mono text-xs border border-blue-600 dark:border-blue-400 rounded bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 outline-none"
-                        />
-                      ) : (
-                        <span className="flex items-center gap-[5px]">
-                          <span>{param.defaultValue || '—'}</span>
-                          {param.formula && (
-                            <span
-                              title={param.formula}
-                              className="inline-flex items-center justify-center px-1.5 py-px rounded text-[10px] font-bold font-serif italic bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 cursor-default shrink-0"
-                            >
-                              f
-                            </span>
-                          )}
-                        </span>
-                      )}
-                    </td>
-                  )}
-                  {visibleCols.has('computed') && (
-                    <td className={clsx(
-                      'px-3 py-2 font-mono text-[11px]',
-                      computedVal ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400',
-                    )}>
-                      {computedVal ?? (param.formula ? '…' : '—')}
-                    </td>
-                  )}
-                  {visibleCols.has('unit') && (
-                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{param.unit || '—'}</td>
-                  )}
-                  {visibleCols.has('folder') && (
-                    // Non-DnD folder assignment: inline select. Users who
-                    // prefer keyboard / click workflows can reassign
-                    // without dragging. Same endpoint the drag uses.
-                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400" onClick={(e) => e.stopPropagation()}>
-                      <select
-                        aria-label="Move parameter to folder"
-                        value={param.folderId ?? ''}
-                        onChange={(e) => {
-                          const v = e.target.value
-                          moveToFolderMutation.mutate({ parameterId: param.id, folderId: v === '' ? null : v })
-                        }}
-                        className="text-xs border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 px-1.5 py-0.5 max-w-[140px]"
-                      >
-                        <option value="">— Ungrouped</option>
-                        {buildAllFolderOptions().map((opt) => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                    </td>
-                  )}
-                  {visibleCols.has('source') && (
-                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400">
-                      {param.sourceFunction ? (
-                        <button type="button" onClick={() => setViewingSource(param)}
-                          className="bg-transparent border-none cursor-pointer text-blue-600 dark:text-blue-400 text-xs p-0">
-                          {param.sourceFunction.functionId || 'N/A'}: {param.sourceFunction.name}
-                        </button>
-                      ) : '—'}
-                    </td>
-                  )}
-                  {visibleCols.has('status') && (
-                    <td className="px-3 py-2">
-                      <span className={clsx(
-                        'px-[7px] py-0.5 rounded-[10px] text-[10px] font-semibold',
-                        (param.status ?? 'draft') === 'approved' && 'bg-green-500/10 text-green-700 dark:text-green-400',
-                        (param.status ?? 'draft') === 'obsolete' && 'bg-gray-200/30 dark:bg-gray-400/15 text-gray-600 dark:text-gray-400',
-                        (param.status ?? 'draft') === 'draft' && 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
-                      )}>
-                        {param.status ?? 'draft'}
-                      </span>
-                    </td>
-                  )}
-                  {visibleCols.has('usedIn') && (
-                    <td className="px-3 py-2">
-                      {(param as ParameterWithUsage).requirementCount != null ? (
-                        <button type="button" onClick={() => setDetailParameter(param)}
-                          className="bg-transparent border-none cursor-pointer text-blue-600 dark:text-blue-400 font-semibold text-xs p-0">
-                          {(param as ParameterWithUsage).requirementCount}
-                        </button>
-                      ) : '—'}
-                    </td>
-                  )}
-                  {visibleCols.has('created') && (
-                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">
-                      {format(new Date(param.createdAt), 'MMM dd, yyyy')}
-                    </td>
-                  )}
-                  <td className="px-3 py-2">
-                    <div className="flex items-center gap-1">
-                      <button onClick={(e) => { e.stopPropagation(); setChangeRequestModal({ isOpen: true, sourceId: param.id, sourceName: param.name }) }}
-                        title="Change Request"
-                        className="bg-transparent border-none cursor-pointer p-[3px] rounded text-green-500 hover:bg-green-500/10 transition-colors">
-                        <FileText size={14} />
-                      </button>
-                      <button onClick={(e) => handleEditClick(e, param)}
-                        title="Edit"
-                        className="bg-transparent border-none cursor-pointer p-[3px] rounded text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950 transition-colors">
-                        <Edit2 size={14} />
-                      </button>
-                      <button onClick={(e) => handleDeleteClick(e, param.id, param.name)}
-                        disabled={deleteParameterMutation.isPending && deleteConfirmation?.id === param.id}
-                        title="Delete"
-                        className={clsx(
-                          'bg-transparent border-none cursor-pointer p-[3px] rounded text-red-500 hover:bg-red-500/10 transition-colors',
-                          deleteParameterMutation.isPending && deleteConfirmation?.id === param.id && 'opacity-40',
-                        )}>
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </DraggableRow>
-                )
-              })
-              return groupHeaderRow ? [groupHeaderRow, ...dataRows] : dataRows
-            })
-          })()}
+                  ))
+                  return groupHeaderRow ? [groupHeaderRow, ...dataRows] : dataRows
+                })
+              })()}
             </tbody>
           </table>
         </div>
