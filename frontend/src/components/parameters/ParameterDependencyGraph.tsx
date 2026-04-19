@@ -15,17 +15,16 @@ import 'reactflow/dist/style.css'
 import { GitBranch } from 'lucide-react'
 import type { Parameter, ParameterFolder } from 'shared/types/engineering.types'
 import ParameterGraphNode from './ParameterGraphNode'
+import ParameterFolderGroupNode from './ParameterFolderGroupNode'
 import { buildParameterGraph } from './buildParameterGraph'
 
 const nodeTypes: NodeTypes = {
   paramNode: ParameterGraphNode,
+  folderGroup: ParameterFolderGroupNode,
 }
 
 interface ParameterDependencyGraphProps {
   parameters: Parameter[]
-  // Optional: when provided, the graph can render folder group containers
-  // (plan Pillar 3 / Phase 3). For phase 2a the prop is accepted and
-  // ignored so the surface is stable before the grouping work lands.
   folders?: ParameterFolder[]
 }
 
@@ -38,27 +37,27 @@ interface SelectedInfo {
 // ---------------------------------------------------------------------------
 // Inner component (needs ReactFlowProvider context)
 // ---------------------------------------------------------------------------
-function DependencyGraphInner({ parameters }: ParameterDependencyGraphProps) {
+function DependencyGraphInner({ parameters, folders }: ParameterDependencyGraphProps) {
   const { fitView } = useReactFlow()
 
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
-    () => buildParameterGraph(parameters),
-    [parameters],
+    () => buildParameterGraph(parameters, folders),
+    [parameters, folders],
   )
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [selectedInfo, setSelectedInfo] = useState<SelectedInfo | null>(null)
 
-  // Keep nodes/edges in sync when parameters prop changes
+  // Keep nodes/edges in sync when parameters or folders prop changes
   useEffect(() => {
-    const { nodes: newNodes, edges: newEdges } = buildParameterGraph(parameters)
+    const { nodes: newNodes, edges: newEdges } = buildParameterGraph(parameters, folders)
     setNodes(newNodes)
     setEdges(newEdges)
     setSelectedInfo(null)
     setTimeout(() => fitView({ padding: 0.15, duration: 400 }), 50)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parameters])
+  }, [parameters, folders])
 
   // Initial fit
   useEffect(() => {
@@ -73,15 +72,14 @@ function DependencyGraphInner({ parameters }: ParameterDependencyGraphProps) {
 
   const onNodeClick = useCallback(
     (_evt: React.MouseEvent, node: Node) => {
+      // Clicks on group containers should not trigger dependency highlight
+      if (node.type === 'folderGroup') return
       const param = paramMap.get(node.id)
       if (!param) return
 
-      // Collect direct dependencies (sources of edges going INTO this node)
       const directDeps = initialEdges
         .filter((e) => e.target === node.id)
         .map((e) => e.source)
-
-      // Collect direct dependants (targets of edges coming FROM this node)
       const directDeps2 = initialEdges
         .filter((e) => e.source === node.id)
         .map((e) => e.target)
@@ -92,30 +90,65 @@ function DependencyGraphInner({ parameters }: ParameterDependencyGraphProps) {
         directDependants: directDeps2,
       })
 
-      // Highlight related nodes / edges
+      // Diff-only setNodes - only touch nodes whose selected/highlighted/dimmed
+      // flags actually need to change. Keeps re-renders to O(affected) instead
+      // of O(all) so the graph stays smooth on large projects.
       const highlighted = new Set([node.id, ...directDeps, ...directDeps2])
       setNodes((nds) =>
-        nds.map((n) => ({
-          ...n,
-          data: {
-            ...n.data,
-            selected: n.id === node.id,
-            highlighted: highlighted.has(n.id) && n.id !== node.id,
-            dimmed: !highlighted.has(n.id),
-          },
-        })),
+        nds.map((n) => {
+          if (n.type === 'folderGroup') return n
+          const nextSelected = n.id === node.id
+          const nextHighlighted = highlighted.has(n.id) && n.id !== node.id
+          const nextDimmed = !highlighted.has(n.id)
+          const prev = n.data as {
+            selected?: boolean
+            highlighted?: boolean
+            dimmed?: boolean
+          }
+          if (
+            prev.selected === nextSelected &&
+            prev.highlighted === nextHighlighted &&
+            prev.dimmed === nextDimmed
+          ) {
+            return n
+          }
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              selected: nextSelected,
+              highlighted: nextHighlighted,
+              dimmed: nextDimmed,
+            },
+          }
+        }),
       )
       setEdges((eds) =>
         eds.map((e) => {
-          const isRelated =
-            (e.source === node.id || e.target === node.id)
+          const isRelated = e.source === node.id || e.target === node.id
+          const nextStroke = isRelated ? '#f59e0b' : '#d1d5db'
+          const nextWidth = isRelated ? 2 : 1
+          const nextOpacity = isRelated ? 1 : 0.3
+          const prevStyle = (e.style ?? {}) as {
+            stroke?: string
+            strokeWidth?: number
+            opacity?: number
+          }
+          if (
+            prevStyle.stroke === nextStroke &&
+            prevStyle.strokeWidth === nextWidth &&
+            prevStyle.opacity === nextOpacity &&
+            e.animated === isRelated
+          ) {
+            return e
+          }
           return {
             ...e,
             style: {
               ...e.style,
-              stroke: isRelated ? '#f59e0b' : '#d1d5db',
-              strokeWidth: isRelated ? 2 : 1,
-              opacity: isRelated ? 1 : 0.3,
+              stroke: nextStroke,
+              strokeWidth: nextWidth,
+              opacity: nextOpacity,
             },
             animated: isRelated,
           }
@@ -166,7 +199,7 @@ function DependencyGraphInner({ parameters }: ParameterDependencyGraphProps) {
         onPaneClick={onPaneClick}
         fitView
         fitViewOptions={{ padding: 0.15 }}
-        minZoom={0.2}
+        minZoom={0.1}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
       >
@@ -178,16 +211,14 @@ function DependencyGraphInner({ parameters }: ParameterDependencyGraphProps) {
           maskColor="rgba(0,0,0,0.06)"
         />
 
-        {/* Empty-formula hint panel */}
-        {!hasFormulas && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none text-center z-[5]">
-            <GitBranch size={36} className="text-gray-600 dark:text-gray-400 mx-auto mb-2" />
-            <p className="text-[13px] font-semibold text-gray-600 dark:text-gray-400 m-0">
-              No formula dependencies found.
-            </p>
-            <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 m-0">
-              Add formulas to parameters to see relationships.
-            </p>
+        {/* Empty-formula hint pill - only when no edges AND the project is
+            small enough that the user is unlikely to have missed them. */}
+        {!hasFormulas && parameters.length >= 2 && parameters.length <= 50 && (
+          <div className="absolute top-3 left-3 z-[5] pointer-events-none inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-full shadow-sm">
+            <GitBranch size={12} className="text-gray-500 dark:text-gray-400" />
+            <span className="text-[11px] text-gray-600 dark:text-gray-400">
+              Add formulas to see dependencies
+            </span>
           </div>
         )}
       </ReactFlow>
