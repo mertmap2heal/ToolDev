@@ -43,6 +43,11 @@ export interface ParameterRowProps {
   onOpenChangeRequest: (param: Parameter) => void
   onEditClick: (e: React.MouseEvent, param: Parameter) => void
   onDeleteClick: (e: React.MouseEvent, paramId: string, paramName: string) => void
+  // Virtualiser hooks (phase 2c-iii). When rendered inside TanStack
+  // Virtual, the parent supplies measureRef + dataIndex so the
+  // virtualiser can measure real heights via ResizeObserver.
+  measureRef?: (el: HTMLElement | null) => void
+  dataIndex?: number
 }
 
 function ParameterRowImpl(props: ParameterRowProps) {
@@ -69,6 +74,8 @@ function ParameterRowImpl(props: ParameterRowProps) {
     onOpenChangeRequest,
     onEditClick,
     onDeleteClick,
+    measureRef,
+    dataIndex,
   } = props
 
   const folder = param.folderId ? foldersById.get(param.folderId) : undefined
@@ -85,18 +92,28 @@ function ParameterRowImpl(props: ParameterRowProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `param-${param.id}`,
   })
+  const rowRef = (el: HTMLTableRowElement | null) => {
+    setNodeRef(el)
+    if (measureRef) measureRef(el)
+  }
 
   return (
     <tr
-      ref={setNodeRef}
+      ref={rowRef}
+      data-index={dataIndex}
       className={clsx(
         'cursor-grab border-b border-gray-200 dark:border-gray-700',
         ROW_HOVER,
         isDragging && 'opacity-40',
       )}
       // #278: folder colour is user-assigned hex, not a design token.
+      // Phase 2c-iii: height pinned to 36 px so the virtualizer's
+      // spacer-row math stays exact -- prevents drift + blank gaps
+      // on fast scroll without needing measureElement (which froze
+      // the tab via known tanstack/virtual #997 #1001).
       style={{
         borderLeft: folderColor ? `3px solid ${folderColor}` : '3px solid transparent',
+        height: 36,
       }}
       {...attributes}
       {...listeners}

@@ -1168,11 +1168,17 @@ export default function ParametersPage() {
   // rows render. Aerospace-scale projects (100k parameters) now only
   // touch ~30-40 DOM <tr>s at any moment instead of 100k.
   const tableScrollRef = useRef<HTMLDivElement>(null)
+  // Fixed 36 px row height. Group headers share the same height so the
+  // spacer-row math stays exact -- no drift, no blank gaps on fast
+  // scroll. (tanstack/virtual #659 #997 #1001: measureElement + dynamic
+  // heights + table layout is a known freeze path; we avoid it by
+  // locking heights at the DOM level via ROW_FIXED_HEIGHT_PX.)
+  const ROW_FIXED_HEIGHT_PX = 36
   const rowVirtualizer = useVirtualizer({
     count: flatRowItems.length,
     getScrollElement: () => tableScrollRef.current,
-    estimateSize: () => 36,
-    overscan: 10,
+    estimateSize: () => ROW_FIXED_HEIGHT_PX,
+    overscan: 40,
     getItemKey: (index) => flatRowItems[index]?.key ?? index,
   })
 
@@ -2033,6 +2039,7 @@ export default function ParametersPage() {
                         return (
                           <tr
                             key={item.key}
+                            style={{ height: ROW_FIXED_HEIGHT_PX }}
                             className="bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700"
                           >
                             <td
