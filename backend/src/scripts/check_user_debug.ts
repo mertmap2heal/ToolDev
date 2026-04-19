@@ -1,7 +1,6 @@
 
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 
-const prisma = new PrismaClient()
 
 async function main() {
     const email = 'mert.caferoglu' // Based on the screenshot username

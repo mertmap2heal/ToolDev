@@ -1,7 +1,6 @@
 
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 
-const prisma = new PrismaClient()
 
 async function main() {
     // 1. Get a project that is NOT the one with REQ-001 (assuming REQ-001 exists)

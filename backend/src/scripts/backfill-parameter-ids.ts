@@ -3,9 +3,8 @@
  * to all parameters that don't have one yet.
  * Run with: npx tsx src/scripts/backfill-parameter-ids.ts
  */
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 
-const prisma = new PrismaClient()
 
 async function main() {
   const withoutId = await prisma.parameter.findMany({

@@ -3,9 +3,8 @@
  * Usage: npx tsx src/scripts/seed-test-plan.ts [projectId]
  * If projectId is omitted, uses the first project found.
  */
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 
-const prisma = new PrismaClient()
 
 const FULLY_POPULATED_TEST_PLAN = {
   key: 'TP-SEED-001',
