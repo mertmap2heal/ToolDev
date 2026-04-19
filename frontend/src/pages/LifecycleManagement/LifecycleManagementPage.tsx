@@ -2812,10 +2812,14 @@ function ApplyLifecycleModal({ lifecycleId, lifecycle, onClose }: { lifecycleId:
   //   }
   // })
 
+  // #279: backend endpoint for lifecycle apply is not implemented. The
+  // modal used to silently close while logging to the console, which
+  // customers read as success. Surface a clear "not implemented" notice
+  // and keep the modal open so the user understands nothing happened.
   const handleApply = () => {
-    // Apply logic here
-    console.log('Applying lifecycle', lifecycleId, 'to', applyType, applyType === 'item-type' ? selectedItemType : selectedProject)
-    onClose()
+    alert(
+      'Applying a lifecycle to an item type or project is not yet implemented. Your configuration was NOT saved.',
+    )
   }
 
   return (
@@ -2925,10 +2929,11 @@ function CloneLifecycleModal({ lifecycleId, lifecycle, onClose }: { lifecycleId:
   const [newName, setNewName] = useState(`${lifecycle.name} (Copy)`)
   const [targetScope, setTargetScope] = useState<'organization' | 'project'>('organization')
 
+  // #279: clone-lifecycle backend endpoint is not implemented. See handleApply above.
   const handleClone = () => {
-    // Clone logic here
-    console.log('Cloning lifecycle', lifecycleId, 'as', newName, 'to', targetScope)
-    onClose()
+    alert(
+      'Cloning a lifecycle is not yet implemented. Your configuration was NOT saved.',
+    )
   }
 
   return (
@@ -3062,22 +3067,23 @@ function LifecycleBuilderContent() {
   const handleSave = () => {
     if (!validateForm()) return
 
+    // #279: library persistence is not implemented; the pre-fix flow
+    // mutated local state and logged debug output to the console so the
+    // change vanished on refresh while looking saved. We keep the
+    // optimistic local-state update so the in-session UI is usable, but
+    // warn the user explicitly that the library will not survive a reload
+    // until the backend endpoint ships.
     if (editingLibrary) {
-      // Update existing library
       const updatedLibrary = {
         ...editingLibrary,
         name: formData.name,
         description: formData.description,
-        lastModified: new Date().toLocaleDateString()
+        lastModified: new Date().toLocaleDateString(),
       }
       setLifecycles(lifecycles.map(lc => lc.id === editingLibrary.id ? updatedLibrary : lc))
-      // TODO: Update library via API
-      console.log('Updating library:', updatedLibrary)
     } else {
-      // Create new library object - defaults to 'project' type
-      // Libraries are containers, not lifecycles, so they don't have steps or transitionRules
       const newLibrary: Lifecycle = {
-        id: `library-${Date.now()}`, // Use 'library-' prefix to distinguish from lifecycles
+        id: `library-${Date.now()}`,
         name: formData.name,
         description: formData.description,
         type: 'project' as 'standard' | 'organization' | 'project',
@@ -3085,19 +3091,17 @@ function LifecycleBuilderContent() {
         itemCount: 0,
         version: '1.0',
         lastModified: new Date().toLocaleDateString(),
-        applicableItemTypes: [], // Libraries don't have applicable item types
-        steps: [], // Libraries don't have steps
-        transitionRules: [] // Libraries don't have transition rules
+        applicableItemTypes: [],
+        steps: [],
+        transitionRules: [],
       }
-
-      // Add to shared lifecycles state
       setLifecycles([...lifecycles, newLibrary])
-      // TODO: Save library via API
-      console.log('Creating library:', newLibrary)
-      console.log('Updated lifecycles array:', [...lifecycles, newLibrary])
     }
 
-    // Reset form after save
+    alert(
+      'Library saved to the current session only. Persisted libraries are not yet implemented; this entry will be lost on refresh.',
+    )
+
     handleCancel()
   }
 
