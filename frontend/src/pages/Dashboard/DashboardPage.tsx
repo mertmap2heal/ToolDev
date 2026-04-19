@@ -8,6 +8,7 @@ import ProjectTeamModal from '../../components/projects/ProjectTeamModal'
 import { projectService } from '../../services/project.service'
 import { useProjectStore } from '../../store/projectStore'
 import type { Project } from 'shared/types/project.types'
+import { errorMessage } from '../../utils/errorMessage'
 
 function StatCard({ label, value, subtitle }: { label: string; value: string | number; subtitle: string }) {
   return (
@@ -190,6 +191,8 @@ export default function DashboardPage() {
   const [bulkDeleteInFlight, setBulkDeleteInFlight] = useState(false)
   const [analyticsModalProject, setAnalyticsModalProject] = useState<Project | null>(null)
   const [auditLogModalProject, setAuditLogModalProject] = useState<Project | null>(null)
+  // #263: replaced window.alert() on delete failure with an inline banner.
+  const [deleteErrorBanner, setDeleteErrorBanner] = useState<string | null>(null)
   const [dateRange, setDateRange] = useState<{ from: string; to: string } | null>(null)
   const { setProjects, projects } = useProjectStore()
   const queryClient = useQueryClient()
@@ -218,8 +221,15 @@ export default function DashboardPage() {
       setProjectToDelete(null)
       setDeleteConfirmation(null)
     },
-    onError: (error: any) => {
-      alert(error?.error || 'Failed to delete project')
+    onError: (error: unknown) => {
+      // #263: replaced window.alert with an inline banner. Raw Prisma
+      // error strings (FK violations etc) are also mapped to a generic
+      // user-friendly message so we don't leak internals.
+      const raw = errorMessage(error, 'Failed to delete project')
+      const friendly = /foreign key|constraint|relation|prisma/i.test(raw)
+        ? 'This project cannot be deleted while dependent records exist.'
+        : raw
+      setDeleteErrorBanner(friendly)
       setProjectToDelete(null)
       setDeleteConfirmation(null)
     },
@@ -437,6 +447,35 @@ export default function DashboardPage() {
         )}
       </div>
 
+      {/* #263: inline banner for delete failures (previously window.alert). */}
+      {deleteErrorBanner && (
+        <div
+          role="alert"
+          style={{
+            padding: '10px 14px',
+            borderRadius: 6,
+            border: '1px solid #fca5a5',
+            backgroundColor: '#fef2f2',
+            color: '#b91c1c',
+            fontSize: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <span>{deleteErrorBanner}</span>
+          <button
+            type="button"
+            onClick={() => setDeleteErrorBanner(null)}
+            style={{ background: 'none', border: 'none', color: '#b91c1c', cursor: 'pointer', fontSize: 14 }}
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Content */}
       {isLoading ? (
         <div style={{ color: 'var(--theme-text-muted)', fontSize: 13, padding: '32px 0' }}>Loading projects...</div>
@@ -488,22 +527,49 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Analytics Modal */}
+      {/* #262: Analytics / Audit modals used to render just a title + Close
+          button with no actual content, making the features look broken.
+          Render an explicit Coming Soon body so the user knows the feature
+          is planned rather than failing. */}
       {analyticsModalProject && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-          <div style={{ backgroundColor: 'var(--theme-surface)', border: '1px solid var(--theme-border)', borderRadius: 8, padding: 24, width: '100%', maxWidth: 600, maxHeight: '90vh', overflowY: 'auto' }}>
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--theme-text)', marginBottom: 16 }}>Project Analytics: {analyticsModalProject.name}</h2>
-            <button onClick={() => setAnalyticsModalProject(null)} style={{ padding: '6px 14px', backgroundColor: 'var(--theme-accent)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Close</button>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
+             onClick={() => setAnalyticsModalProject(null)}>
+          <div
+            style={{ backgroundColor: 'var(--theme-surface)', border: '1px solid var(--theme-border)', borderRadius: 8, padding: 24, width: '100%', maxWidth: 600 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--theme-text)', marginBottom: 8 }}>
+              Project Analytics: {analyticsModalProject.name}
+            </h2>
+            <p style={{ fontSize: 13, color: 'var(--theme-text-muted)', marginBottom: 16 }}>
+              Coming soon — dashboards and charts for this project are not yet
+              implemented. Tracking for a future release.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={() => setAnalyticsModalProject(null)} style={{ padding: '6px 14px', backgroundColor: 'var(--theme-accent)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Close</button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Audit Log Modal */}
       {auditLogModalProject && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
-          <div style={{ backgroundColor: 'var(--theme-surface)', border: '1px solid var(--theme-border)', borderRadius: 8, padding: 24, width: '100%', maxWidth: 600, maxHeight: '90vh', overflowY: 'auto' }}>
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--theme-text)', marginBottom: 16 }}>Audit Log: {auditLogModalProject.name}</h2>
-            <button onClick={() => setAuditLogModalProject(null)} style={{ padding: '6px 14px', backgroundColor: 'var(--theme-accent)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Close</button>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
+             onClick={() => setAuditLogModalProject(null)}>
+          <div
+            style={{ backgroundColor: 'var(--theme-surface)', border: '1px solid var(--theme-border)', borderRadius: 8, padding: 24, width: '100%', maxWidth: 600 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--theme-text)', marginBottom: 8 }}>
+              Audit Log: {auditLogModalProject.name}
+            </h2>
+            <p style={{ fontSize: 13, color: 'var(--theme-text-muted)', marginBottom: 16 }}>
+              Coming soon — a per-project audit-log view is not yet
+              implemented on this page. Platform admins can access the
+              tenant-wide audit log via Platform Admin in the meantime.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={() => setAuditLogModalProject(null)} style={{ padding: '6px 14px', backgroundColor: 'var(--theme-accent)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Close</button>
+            </div>
           </div>
         </div>
       )}
