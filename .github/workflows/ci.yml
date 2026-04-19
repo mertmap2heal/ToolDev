@@ -993,6 +993,14 @@ jobs:
           fi
           exit $fail
 
+      - name: Guard backend scripts use the Prisma singleton (#304)
+        run: |
+          set -e
+          if grep -rqE "new PrismaClient\(" backend/src/scripts/; then
+            echo "::error::backend/src/scripts/* must use the shared prisma singleton from ../lib/prisma (see issue #304)"
+            exit 1
+          fi
+
       - name: Guard destructive scripts require env + confirmation (#300,#301)
         run: |
           set -e

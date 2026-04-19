@@ -4,10 +4,9 @@
  * Usage: npx tsx src/scripts/seed-test-run.ts [projectId]
  * If projectId is omitted, uses the first project found.
  */
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import { createTestCycleBuilder } from '../services/verification/TestCycleBuilder'
 
-const prisma = new PrismaClient()
 
 const SEED_RUN_NAME = 'Seed Run 1'
 

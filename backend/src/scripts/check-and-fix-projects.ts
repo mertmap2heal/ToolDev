@@ -2,9 +2,8 @@
  * Script to check database state and reassign projects to current user
  * Run with: npx tsx src/scripts/check-and-fix-projects.ts
  */
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 
-const prisma = new PrismaClient()
 
 async function main() {
   console.log('🔍 Checking database state...\n')

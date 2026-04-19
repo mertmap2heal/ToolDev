@@ -8,9 +8,8 @@
  * Usage: cd backend && npx tsx src/scripts/seed-full-demo.ts
  * Idempotent — safe to run multiple times.
  */
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 
-const prisma = new PrismaClient()
 
 const DEMO_SLUG = 'skybridge-x1-demo'
 const DEMO_NAME = 'SkyBridge-X1 Demo'

@@ -6,9 +6,8 @@
  *
  * If projectId is omitted, uses the first project found.
  */
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 
-const prisma = new PrismaClient()
 
 type SeedCase = {
   key: string

@@ -10,9 +10,8 @@
  * Usage:
  *   npm run seed:test-plan-real -- [projectId]
  */
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 
-const prisma = new PrismaClient()
 
 const formatDate = (date: Date) => date.toISOString().slice(0, 10)
 

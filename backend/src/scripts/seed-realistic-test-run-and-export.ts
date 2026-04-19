@@ -9,11 +9,10 @@
  * Usage:
  *   npm run seed:test-run-real -- [projectId]
  */
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import { createTestCycleBuilder } from '../services/verification/TestCycleBuilder'
 import { testExecutionService } from '../services/verification/TestExecutionService'
 
-const prisma = new PrismaClient()
 
 const PLAN_KEY = 'TP-UAV-QUAL-001'
 const RUN_NAME = 'Qualification Run – Build 2026.04.06-rc1'

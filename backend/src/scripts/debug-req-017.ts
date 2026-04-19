@@ -1,8 +1,7 @@
 
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 import { traceabilityService } from '../services/traceability.service'
 
-const prisma = new PrismaClient()
 
 async function debugReq() {
     try {

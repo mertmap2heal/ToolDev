@@ -3,9 +3,8 @@
  * Usage: npx tsx src/scripts/seed-demo-project.ts [projectId]
  * If projectId is omitted, creates or finds project with slug "demo-project".
  */
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 
-const prisma = new PrismaClient()
 
 const DEMO_SLUG = 'demo-project'
 const DEMO_NAME = 'Demo_Project'

@@ -3,9 +3,8 @@
  * Usage: npx tsx src/scripts/seed-certification.ts [projectId]
  * If projectId is omitted, uses the first project in the DB.
  */
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 
-const prisma = new PrismaClient()
 
 async function main() {
   const projectId = process.argv[2]
