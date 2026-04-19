@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { useParams, Link } from 'react-router-dom'
 import {
   Search, X, Check, Trash2, Edit2, Plus, Filter, ChevronDown, ChevronUp,
@@ -1141,6 +1142,40 @@ export default function ParametersPage() {
     return { showGroupsForTable: showGroups, visibleGroupsForTable: visibleGroups }
   }, [selectedFolderId, folders, filteredParameters, foldersById, collapsedGroups])
 
+  // Flat item list the virtualizer iterates over. Mixes group header
+  // rows and parameter rows; the render layer branches on `kind`.
+  type FlatRowItem =
+    | { kind: 'group-header'; group: FlatGroup; isCollapsed: boolean; key: string }
+    | { kind: 'data-row'; param: (typeof filteredParameters)[number]; group: FlatGroup; key: string }
+  const flatRowItems = useMemo<FlatRowItem[]>(() => {
+    const items: FlatRowItem[] = []
+    for (const group of visibleGroupsForTable) {
+      const isCollapsed = collapsedGroups.has(group.id)
+      if (showGroupsForTable) {
+        items.push({ kind: 'group-header', group, isCollapsed, key: `group-${group.id}` })
+      }
+      if (!isCollapsed) {
+        for (const param of group.params) {
+          items.push({ kind: 'data-row', param, group, key: param.id })
+        }
+      }
+    }
+    return items
+  }, [visibleGroupsForTable, collapsedGroups, showGroupsForTable])
+
+  // Window virtualizer for the parameters table. Scroll container is
+  // the div that wraps <table>; bounded by max-h so only on-screen
+  // rows render. Aerospace-scale projects (100k parameters) now only
+  // touch ~30-40 DOM <tr>s at any moment instead of 100k.
+  const tableScrollRef = useRef<HTMLDivElement>(null)
+  const rowVirtualizer = useVirtualizer({
+    count: flatRowItems.length,
+    getScrollElement: () => tableScrollRef.current,
+    estimateSize: () => 36,
+    overscan: 10,
+    getItemKey: (index) => flatRowItems[index]?.key ?? index,
+  })
+
   // ---------------------------------------------------------------------------
   // Recursive folder tree rendering — arbitrary depth, sortable at every level
   // ---------------------------------------------------------------------------
@@ -1907,9 +1942,12 @@ export default function ParametersPage() {
       {/* ── Table ── */}
       {paramViewMode === 'list' && (
       <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-hidden">
-        <div className="overflow-x-auto">
+        <div
+          ref={tableScrollRef}
+          className="overflow-auto max-h-[calc(100vh-360px)]"
+        >
           <table className="w-full border-collapse text-xs">
-            <thead>
+            <thead className="sticky top-0 z-[3]">
               <tr className="bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700">
                 <th className="px-3 py-2 w-8 sticky left-0 z-[2] bg-white dark:bg-gray-950">
                   <input
@@ -1972,20 +2010,40 @@ export default function ParametersPage() {
                 <tr><td colSpan={2 + visibleCols.size} className="px-3 py-8 text-center text-gray-600 dark:text-gray-400">
                   {parameters.length === 0 ? 'No parameters yet. Create one or import a file.' : 'No parameters match your filters.'}
                 </td></tr>
-              ) : (
-                visibleGroupsForTable.flatMap(group => {
-                  const isCollapsed = collapsedGroups.has(group.id)
-                  const groupHeaderRow = showGroupsForTable ? (
-                    <tr key={`group-${group.id}`} className="bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700">
-                      <td
-                        colSpan={2 + visibleCols.size}
-                        className="py-[5px] pr-3"
-                        style={{ paddingLeft: group.depth * 18 + 12 }} // depth-computed nesting
-                      >
-                        <button
-                          type="button"
-                          onClick={() => toggleGroup(group.id)}
-                          className="flex items-center gap-1.5 bg-transparent border-none cursor-pointer p-0 text-[11px] font-bold tracking-wider uppercase text-gray-600 dark:text-gray-400"
+              ) : (() => {
+                const virtualItems = rowVirtualizer.getVirtualItems()
+                const totalSize = rowVirtualizer.getTotalSize()
+                const topPad = virtualItems[0]?.start ?? 0
+                const lastEnd = virtualItems[virtualItems.length - 1]?.end ?? 0
+                const bottomPad = Math.max(0, totalSize - lastEnd)
+                const colSpanTotal = 2 + visibleCols.size
+                return (
+                  <>
+                    {topPad > 0 && (
+                      <tr aria-hidden="true" style={{ height: `${topPad}px` }}>
+                        <td colSpan={colSpanTotal} className="p-0" />
+                      </tr>
+                    )}
+                    {virtualItems.map((vi) => {
+                      const item = flatRowItems[vi.index]
+                      if (!item) return null
+                      if (item.kind === 'group-header') {
+                        const group = item.group
+                        const isCollapsed = item.isCollapsed
+                        return (
+                          <tr
+                            key={item.key}
+                            className="bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700"
+                          >
+                            <td
+                              colSpan={colSpanTotal}
+                              className="py-[5px] pr-3"
+                              style={{ paddingLeft: group.depth * 18 + 12 }}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => toggleGroup(group.id)}
+                                className="flex items-center gap-1.5 bg-transparent border-none cursor-pointer p-0 text-[11px] font-bold tracking-wider uppercase text-gray-600 dark:text-gray-400"
                         >
                           {group.color && (
                             <span
@@ -2001,42 +2059,48 @@ export default function ParametersPage() {
                         </button>
                       </td>
                     </tr>
-                  ) : null
-
-                  if (isCollapsed) return groupHeaderRow ? [groupHeaderRow] : []
-
-                  const dataRows = group.params.map((param) => (
-                    <ParameterRow
-                      key={param.id}
-                      param={param as ParameterWithUsage}
-                      visibleCols={visibleCols}
-                      showGroups={showGroupsForTable}
-                      selectedFolderId={selectedFolderId}
-                      selected={selectedIds.has(param.id)}
-                      foldersById={foldersById}
-                      computedVal={formulaResults.get(param.id)}
-                      isInlineEditing={inlineEditingId === param.id}
-                      inlineEditValue={inlineEditValue}
-                      deleteConfirmPending={
-                        deleteParameterMutation.isPending && deleteConfirmation?.id === param.id
+                        )
                       }
-                      folderOptions={folderOptions}
-                      onToggleSelection={handleToggleSelection}
-                      onOpenDetail={handleOpenDetail}
-                      onStartInlineEdit={handleStartInlineEdit}
-                      onInlineEditChange={handleInlineEditChange}
-                      onSaveInlineEdit={handleSaveInlineEdit}
-                      onCancelInlineEdit={handleCancelInlineEdit}
-                      onViewSource={handleViewSource}
-                      onMoveToFolder={handleMoveToFolderFromRow}
-                      onOpenChangeRequest={handleOpenChangeRequest}
-                      onEditClick={handleEditClick}
-                      onDeleteClick={handleDeleteClick}
-                    />
-                  ))
-                  return groupHeaderRow ? [groupHeaderRow, ...dataRows] : dataRows
-                })
-              )}
+                      // data-row branch
+                      const param = item.param
+                      return (
+                        <ParameterRow
+                          key={item.key}
+                          param={param as ParameterWithUsage}
+                          visibleCols={visibleCols}
+                          showGroups={showGroupsForTable}
+                          selectedFolderId={selectedFolderId}
+                          selected={selectedIds.has(param.id)}
+                          foldersById={foldersById}
+                          computedVal={formulaResults.get(param.id)}
+                          isInlineEditing={inlineEditingId === param.id}
+                          inlineEditValue={inlineEditValue}
+                          deleteConfirmPending={
+                            deleteParameterMutation.isPending && deleteConfirmation?.id === param.id
+                          }
+                          folderOptions={folderOptions}
+                          onToggleSelection={handleToggleSelection}
+                          onOpenDetail={handleOpenDetail}
+                          onStartInlineEdit={handleStartInlineEdit}
+                          onInlineEditChange={handleInlineEditChange}
+                          onSaveInlineEdit={handleSaveInlineEdit}
+                          onCancelInlineEdit={handleCancelInlineEdit}
+                          onViewSource={handleViewSource}
+                          onMoveToFolder={handleMoveToFolderFromRow}
+                          onOpenChangeRequest={handleOpenChangeRequest}
+                          onEditClick={handleEditClick}
+                          onDeleteClick={handleDeleteClick}
+                        />
+                      )
+                    })}
+                    {bottomPad > 0 && (
+                      <tr aria-hidden="true" style={{ height: `${bottomPad}px` }}>
+                        <td colSpan={colSpanTotal} className="p-0" />
+                      </tr>
+                    )}
+                  </>
+                )
+              })()}
             </tbody>
           </table>
         </div>
