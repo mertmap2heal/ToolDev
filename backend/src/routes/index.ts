@@ -61,7 +61,11 @@ const router = Router()
 
 router.use('/auth', authRoutes)
 router.use('/admin', adminRoutes)
-router.use('/admin', adminUserRoleRoutes)
+// #284: adminUserRoleRoutes used to share the `/admin` prefix with
+// adminRoutes. Express walks routers in order so any future path
+// collision would silently resolve to the first match and could bypass
+// a stricter middleware. Mount it on a disjoint subtree instead.
+router.use('/admin/user-roles', adminUserRoleRoutes)
 router.use('/organization', organizationRoutes)
 router.use('/platform-admin', platformAdminRoutes)
 router.use('/notifications', notificationsRoutes)
