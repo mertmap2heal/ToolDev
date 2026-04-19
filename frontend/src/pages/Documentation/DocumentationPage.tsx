@@ -474,9 +474,26 @@ export default function DocumentationPage() {
           <div>
             <h2 className="text-lg font-bold text-gray-900 dark:text-white">Documentation</h2>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              Create, control, and export project documentation and evidence (UI-only)
+              Create, control, and export project documentation and evidence
             </p>
           </div>
+        </div>
+
+        {/* #277: templates, evidence packs, export profiles and export
+            history are held in React state only. Warn users explicitly so
+            they don't treat any entry here as a saved artifact. */}
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-4 py-3"
+        >
+          <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
+            Demo data only — nothing is saved
+          </p>
+          <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">
+            Templates, evidence packs, export profiles and export history
+            on this page live in session state only and are lost on
+            refresh. Backend persistence is not yet implemented.
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-4">
           <div className="relative flex-1 w-full sm:min-w-[200px] sm:max-w-md">

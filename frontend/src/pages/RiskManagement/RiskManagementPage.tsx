@@ -302,6 +302,24 @@ export default function RiskManagementPage() {
           </div>
         </div>
 
+        {/* #265: risks / treatments / owners etc. live in React state
+            only. Prior UI looked fully wired but entries disappeared on
+            refresh. Surface an explicit demo-data banner until a backend
+            persistence layer ships. */}
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 mb-4"
+        >
+          <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
+            Demo data only — nothing is saved
+          </p>
+          <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">
+            Risks, treatments, and evaluations entered here are held in
+            session state only and are lost on refresh. Backend
+            persistence is not yet implemented.
+          </p>
+        </div>
+
         {/* Dashboard summary */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">

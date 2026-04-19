@@ -110,6 +110,26 @@ function ConfigurationManagementContent() {
             </p>
           </div>
         </div>
+
+        {/* #273: CIs / baselines / change requests / deviations / waivers
+            / releases all live in the client-only CM store. The audit
+            trail and approvals are mock. Warn users up front so entries
+            here are not mistaken for auditable CM evidence. */}
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-4 py-3"
+        >
+          <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
+            Demo data only — nothing is saved
+          </p>
+          <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">
+            Configuration items, baselines, change requests, deviations,
+            waivers, and releases on this page live in session state only
+            and are lost on refresh. The audit trail and approval
+            workflows shown here are not persisted and MUST NOT be used
+            as CM evidence. Backend persistence is not yet implemented.
+          </p>
+        </div>
         <div className="flex flex-wrap items-center gap-4">
           <div className="relative flex-1 w-full sm:min-w-[200px] sm:max-w-md">
             <Search
