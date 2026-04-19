@@ -202,7 +202,9 @@ jobs:
       - name: Guard against unsanitized dangerouslySetInnerHTML (#169)
         run: |
           set -e
-          unsanitized=$(grep -rn "dangerouslySetInnerHTML" frontend/src || true)
+          # Match only actual JSX prop assignments (dangerouslySetInnerHTML={...});
+          # documentation comments that mention the word never carry the `={`.
+          unsanitized=$(grep -rn "dangerouslySetInnerHTML={" frontend/src || true)
           if [ -z "$unsanitized" ]; then
             exit 0
           fi
@@ -542,7 +544,10 @@ jobs:
           set -e
           f=backend/src/controllers/component.controller.ts
           fail=0
-          if ! grep -q "parentId is not a component of this project" "$f"; then
+          # Error message uses a template literal with the bad parentId
+          # interpolated (`parentId ${id} is not a component of this project`);
+          # allow anything between the two anchor phrases.
+          if ! grep -qE "parentId .* is not a component of this project" "$f"; then
             echo "::error file=$f::syncPBSToComponents must reject foreign parentId (see issue #293)"
             fail=1
           fi
