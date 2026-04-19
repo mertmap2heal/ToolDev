@@ -406,6 +406,29 @@ jobs:
           fi
           exit $fail
 
+      - name: Guard lifecycle apply/clone/library handlers are not silent (#279)
+        run: |
+          set -e
+          f=frontend/src/pages/LifecycleManagement/LifecycleManagementPage.tsx
+          fail=0
+          if grep -q "console.log('Applying lifecycle'" "$f"; then
+            echo "::error file=$f::handleApply must not console.log + silently close (see issue #279)"
+            fail=1
+          fi
+          if grep -q "console.log('Cloning lifecycle'" "$f"; then
+            echo "::error file=$f::handleClone must not console.log + silently close (see issue #279)"
+            fail=1
+          fi
+          if grep -q "console.log('Creating library'" "$f" || grep -q "console.log('Updating library'" "$f"; then
+            echo "::error file=$f::library save must not log to console + return fake success (see issue #279)"
+            fail=1
+          fi
+          if ! grep -q "not yet implemented" "$f"; then
+            echo "::error file=$f::handlers must surface an explicit not-yet-implemented notice (see issue #279)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Guard Dashboard bulk-delete requires confirmation (#260)
         run: |
           set -e
