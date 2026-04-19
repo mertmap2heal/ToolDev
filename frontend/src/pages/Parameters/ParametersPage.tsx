@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
   Search, X, Check, Trash2, Edit2, Plus, Filter, ChevronDown, ChevronUp,
@@ -40,12 +40,16 @@ import PublishToGitModal, {
   type GitPublishStoredConfig,
   clearLegacyGitPublishStorage,
 } from '../../components/parameters/PublishToGitModal'
-import ParameterDependencyGraph from '../../components/parameters/ParameterDependencyGraph'
+// Reactflow (~350 KB gz) only loads when the Graph tab is active.
+const ParameterDependencyGraph = lazy(
+  () => import('../../components/parameters/ParameterDependencyGraph'),
+)
 import ImportParameterModal from '../../components/parameters/ImportParameterModal'
 import CommunicationsTab from './CommunicationsTab'
 import type { Parameter, ParameterFolder } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
+import { AiFeatureProvider } from '../../contexts/AiFeatureContext'
 
 // ---------------------------------------------------------------------------
 // Preset folder colors
@@ -1240,6 +1244,7 @@ export default function ParametersPage() {
   // Render
   // ============================================================
   return (
+    <AiFeatureProvider projectId={projectId ?? null}>
     <div className="space-y-4">
 
       {/* ── Tab navigation ── */}
@@ -1697,7 +1702,15 @@ export default function ParametersPage() {
       {/* ── Dependency Graph view ── */}
       {paramViewMode === 'graph' && (
         <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-hidden">
-          <ParameterDependencyGraph parameters={filteredParameters} />
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-[600px] text-sm text-gray-600 dark:text-gray-400">
+                Loading graph…
+              </div>
+            }
+          >
+            <ParameterDependencyGraph parameters={filteredParameters} folders={folders} />
+          </Suspense>
         </div>
       )}
 
@@ -2375,5 +2388,6 @@ export default function ParametersPage() {
         </div>
       )}
     </div>
+    </AiFeatureProvider>
   )
 }

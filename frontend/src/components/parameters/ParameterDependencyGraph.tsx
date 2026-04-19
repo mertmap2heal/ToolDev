@@ -13,7 +13,7 @@ import ReactFlow, {
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { GitBranch } from 'lucide-react'
-import type { Parameter } from 'shared/types/engineering.types'
+import type { Parameter, ParameterFolder } from 'shared/types/engineering.types'
 import ParameterGraphNode from './ParameterGraphNode'
 import { buildParameterGraph } from './buildParameterGraph'
 
@@ -23,6 +23,10 @@ const nodeTypes: NodeTypes = {
 
 interface ParameterDependencyGraphProps {
   parameters: Parameter[]
+  // Optional: when provided, the graph can render folder group containers
+  // (plan Pillar 3 / Phase 3). For phase 2a the prop is accepted and
+  // ignored so the surface is stable before the grouping work lands.
+  folders?: ParameterFolder[]
 }
 
 interface SelectedInfo {

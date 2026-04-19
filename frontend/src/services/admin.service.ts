@@ -159,6 +159,9 @@ export async function getProjects(): Promise<AdminProject[]> {
     id: p.id,
     name: p.name,
     members: p.teamMembers?.map((m) => m.userId) ?? [],
+    aiEnabled: p.aiEnabled ?? false,
+    aiEnabledAt: p.aiEnabledAt ?? null,
+    aiEnabledBy: p.aiEnabledBy ?? null,
   }))
 }
 
@@ -170,6 +173,9 @@ export async function getProject(id: string): Promise<AdminProject | null> {
     id: p.id,
     name: p.name,
     members: p.teamMembers?.map((m) => m.userId) ?? [],
+    aiEnabled: p.aiEnabled ?? false,
+    aiEnabledAt: p.aiEnabledAt ?? null,
+    aiEnabledBy: p.aiEnabledBy ?? null,
   }
 }
 
@@ -194,15 +200,19 @@ export async function createProject(name: string, members: string[] = []): Promi
     id: p.id,
     name: p.name,
     members: p.teamMembers?.map((m) => m.userId) ?? [],
+    aiEnabled: p.aiEnabled ?? false,
+    aiEnabledAt: p.aiEnabledAt ?? null,
+    aiEnabledBy: p.aiEnabledBy ?? null,
   }
 }
 
 export async function updateProject(
   id: string,
-  updates: Partial<Pick<AdminProject, 'name' | 'members'>>
+  updates: Partial<Pick<AdminProject, 'name' | 'members' | 'aiEnabled'>>
 ): Promise<AdminProject | null> {
   const res = await projectService.updateProject(id, {
     ...(updates.name !== undefined && { name: updates.name }),
+    ...(updates.aiEnabled !== undefined && { aiEnabled: updates.aiEnabled }),
   })
   if (!res.success || !res.data) return null
   const p = res.data
@@ -210,6 +220,9 @@ export async function updateProject(
     id: p.id,
     name: p.name,
     members: updates.members ?? p.teamMembers?.map((m) => m.userId) ?? [],
+    aiEnabled: p.aiEnabled ?? false,
+    aiEnabledAt: p.aiEnabledAt ?? null,
+    aiEnabledBy: p.aiEnabledBy ?? null,
   }
 }
 

@@ -93,6 +93,10 @@ export interface AdminProject {
   id: string
   name: string
   members: string[]
+  /** Per-project AI opt-in (ai-ready-vision.md §5). */
+  aiEnabled?: boolean
+  aiEnabledAt?: string | null
+  aiEnabledBy?: string | null
 }
 
 // --- Authority (permission template) ---

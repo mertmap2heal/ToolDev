@@ -7,7 +7,7 @@ interface ProjectEditorModalProps {
   project: AdminProject | null
   users: AdminUser[]
   onClose: () => void
-  onSave: (name: string, members: string[]) => Promise<void>
+  onSave: (name: string, members: string[], aiEnabled: boolean) => Promise<void>
 }
 
 export default function ProjectEditorModal({
@@ -20,18 +20,21 @@ export default function ProjectEditorModal({
   const { markDirty, resetDirty, guardClose, warningDialog, draftBanner } = useUnsavedChanges(onClose, true, () => onDiscardRef.current?.())
   const [name, setName] = useState(project?.name ?? '')
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>(project?.members ?? [])
+  const [aiEnabled, setAiEnabled] = useState<boolean>(project?.aiEnabled ?? false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
   onDiscardRef.current = () => {
     setName('')
     setSelectedMemberIds([])
+    setAiEnabled(false)
     setSaveError(null)
   }
 
   useEffect(() => {
     setName(project?.name ?? '')
     setSelectedMemberIds(project?.members ?? [])
+    setAiEnabled(project?.aiEnabled ?? false)
     setSaveError(null)
   }, [project])
 
@@ -46,7 +49,7 @@ export default function ProjectEditorModal({
     setSaving(true)
     setSaveError(null)
     try {
-      await onSave(name.trim(), selectedMemberIds)
+      await onSave(name.trim(), selectedMemberIds, aiEnabled)
       setSaveError(null)
       resetDirty()
       onClose()
@@ -92,6 +95,25 @@ export default function ProjectEditorModal({
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
               placeholder="Project name"
             />
+          </div>
+          <div>
+            <label className="flex items-start gap-3 px-3 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={aiEnabled}
+                onChange={(e) => { setAiEnabled(e.target.checked); markDirty() }}
+                className="mt-0.5 rounded text-blue-600"
+              />
+              <div className="flex-1">
+                <div className="text-sm font-medium text-gray-900 dark:text-white">AI features for this project</div>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                  Enables AI drafting, review, and impact analysis. Every AI action is logged with
+                  provenance and is advisory only — humans sign off. Global admin env
+                  <code className="mx-1 px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-[11px]">FEATURES_AI_ENABLED</code>
+                  must also be on.
+                </p>
+              </div>
+            </label>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

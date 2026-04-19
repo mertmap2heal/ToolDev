@@ -10,6 +10,13 @@ export interface ApiResponse<T = any> {
   error?: string
   message?: string
   statusCode?: number
+  /**
+   * Optional machine-readable error code. Set by handlers that need the
+   * client to branch on specific failure modes (e.g. AI_DISABLED_GLOBAL,
+   * AI_DISABLED_PROJECT, PROJECT_NOT_FOUND) without string-matching the
+   * human-readable `error`.
+   */
+  code?: string
   /** Present when a requirement update submitted transition checklist completions */
   transitionChecklistSubmissionResults?: TransitionChecklistSubmissionResults
 }

@@ -31,6 +31,11 @@ export interface Project {
   updatedAt: string
   userId: string
   teamMembers?: ProjectMember[]
+  /** Per-project AI opt-in (ai-ready-vision.md §5). */
+  aiEnabled?: boolean
+  aiEnabledAt?: string | null
+  aiEnabledBy?: string | null
+  strictLifecycleGates?: boolean | null
 }
 
 export interface ProjectMember {
@@ -70,6 +75,9 @@ export interface UpdateProjectDto {
   progress?: number
   status?: 'active' | 'completed' | 'archived'
   deadline?: string
+  /** Toggle per-project AI features. Tracked server-side with timestamp + user id. */
+  aiEnabled?: boolean
+  strictLifecycleGates?: boolean
 }
 
 // PBS (Product Breakdown Structure) / Component types

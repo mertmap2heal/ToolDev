@@ -131,10 +131,17 @@ class ApiClient {
         (typeof data === 'object' && data !== null && (data.error ?? data.message)) ||
         (typeof data === 'string' && data) ||
         'An error occurred'
+      // Preserve structured `code` if the backend set one (used by the
+      // AI feature gate and any future branchable error).
+      const code =
+        typeof data === 'object' && data !== null && typeof data.code === 'string'
+          ? data.code
+          : undefined
       return {
         success: false,
         error: String(message),
         statusCode: status,
+        ...(code ? { code } : {}),
       }
     }
 

@@ -32,16 +32,24 @@ export default function ProjectsTab() {
     [users]
   )
 
-  const handleSave = async (name: string, members: string[]) => {
+  const handleSave = async (name: string, members: string[], aiEnabled: boolean) => {
     if (editorProject === 'new') {
       const created = await adminService.createProject(name, members)
+      if (aiEnabled) {
+        await adminService.updateProject(created.id, { aiEnabled: true })
+      }
       for (const userId of members) {
         const res = await projectService.addProjectMember(created.id, userId, 'member')
         if (!res.success) throw new Error(res.error || 'Failed to add member')
       }
     } else if (editorProject?.id) {
-      if (name.trim() !== editorProject.name) {
-        await adminService.updateProject(editorProject.id, { name })
+      const nameChanged = name.trim() !== editorProject.name
+      const aiChanged = aiEnabled !== (editorProject.aiEnabled ?? false)
+      if (nameChanged || aiChanged) {
+        await adminService.updateProject(editorProject.id, {
+          ...(nameChanged ? { name } : {}),
+          ...(aiChanged ? { aiEnabled } : {}),
+        })
       }
       const previousIds = new Set(editorProject.members)
       const nextIds = new Set(members)
@@ -100,6 +108,7 @@ export default function ProjectsTab() {
               <tr className="border-b border-gray-200 dark:border-gray-700">
                 <th className="py-3 px-4 font-medium text-gray-900 dark:text-white">Name</th>
                 <th className="py-3 px-4 font-medium text-gray-900 dark:text-white">Members</th>
+                <th className="py-3 px-4 font-medium text-gray-900 dark:text-white">AI</th>
                 <th className="py-3 px-4 font-medium text-gray-900 dark:text-white">Actions</th>
               </tr>
             </thead>
@@ -122,6 +131,17 @@ export default function ProjectsTab() {
                           .map((id) => userNames[id] || id)
                           .filter(Boolean)
                           .join(', ')}
+                  </td>
+                  <td className="py-3 px-4">
+                    {project.aiEnabled ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300">
+                        On
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                        Off
+                      </span>
+                    )}
                   </td>
                   <td className="py-3 px-4">
                     <button

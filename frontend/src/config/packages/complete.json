@@ -21,6 +21,7 @@
     "validation",
     "safety-analysis",
     "compliance-check",
-    "certification"
+    "certification",
+    "ai"
   ]
 }
