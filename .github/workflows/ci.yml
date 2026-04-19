@@ -444,6 +444,29 @@ jobs:
           fi
           exit $fail
 
+      - name: Guard admin.service does not fake authority-apply success (#302)
+        run: |
+          set -e
+          f=frontend/src/services/admin.service.ts
+          fail=0
+          if grep -qE "applyAuthorityToUsers[^\}]*return true" "$f"; then
+            echo "::error file=$f::applyAuthorityToUsers must not return true without a backend call (see issue #302)"
+            fail=1
+          fi
+          if grep -qE "applyAuthorityToRoles[^\}]*return true" "$f"; then
+            echo "::error file=$f::applyAuthorityToRoles must not return true without a backend call (see issue #302)"
+            fail=1
+          fi
+          if grep -q "'admin.demo'" "$f"; then
+            echo "::error file=$f::fake admin.demo user must not be seeded (see issue #302)"
+            fail=1
+          fi
+          if grep -q "'Project Alpha'" "$f" || grep -q "'Project Beta'" "$f"; then
+            echo "::error file=$f::fake Project Alpha/Beta seed must not return (see issue #302)"
+            fail=1
+          fi
+          exit $fail
+
       - name: Guard lifecycle apply/clone/library handlers are not silent (#279)
         run: |
           set -e

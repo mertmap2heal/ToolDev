@@ -20,7 +20,13 @@ import type {
 } from '../types/admin.types'
 import { emptyPermissionMap } from '../types/admin.types'
 
-// --- In-memory store (mock) - for authorities until backend supports ---
+/**
+ * #302: the admin service used to seed fake `Project Alpha` / `admin.demo`
+ * rows into module-local arrays and serve them from getUsers / getUser /
+ * getAuthorities / etc. Real admins saw fake data mixed in with their
+ * tenant rows. The lists are now empty — populated only when the UI
+ * creates entries — and the fake seed has been removed.
+ */
 let users: AdminUser[] = []
 let projects: AdminProject[] = []
 let authorities: Authority[] = []
@@ -32,41 +38,6 @@ function uuid(): string {
     return v.toString(16)
   })
 }
-
-// Seed initial mock data for authorities and audit
-function seed() {
-  if (authorities.length > 0) return
-  authorities = [
-    {
-      id: 'auth-1',
-      name: 'Read-only template',
-      permissions: {
-        requirements: { view: true },
-        verification: { view: true },
-        documentation: { view: true },
-      },
-      version: '1',
-    },
-  ]
-  projects = [
-    { id: 'proj-1', name: 'Project Alpha', members: [] },
-    { id: 'proj-2', name: 'Project Beta', members: [] },
-  ]
-  users = [
-    {
-      id: 'user-1',
-      username: 'admin.demo',
-      status: 'active',
-      projects: ['proj-1', 'proj-2'],
-      roles: ['role-3'],
-      authorities: [],
-      permissions: emptyPermissionMap(),
-      lastLoginAt: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-    },
-  ]
-}
-seed()
 
 // --- Users ---
 export async function getUsers(): Promise<AdminUser[]> {
@@ -308,20 +279,27 @@ export async function getAuditLog(params: AuditLogParams | number = 50): Promise
 }
 
 // --- Helpers (apply template to users/roles — placeholder) ---
+// #302: these two functions used to return `true` without doing any
+// work. The Authorities tab called them and told the admin
+// "permissions applied" — but the backend was never contacted. An
+// admin could be confident a user was restricted when they were not.
+// Throw instead so callers must handle the not-implemented state.
 export async function applyAuthorityToUsers(
   _authorityId: string,
   _userIds: string[]
 ): Promise<boolean> {
-  // TODO: implement when backend supports it
-  return true
+  throw new Error(
+    'Apply authority to users is not implemented — no backend endpoint exists yet.',
+  )
 }
 
 export async function applyAuthorityToRoles(
   _authorityId: string,
   _roleIds: string[]
 ): Promise<boolean> {
-  // TODO: implement when backend supports it
-  return true
+  throw new Error(
+    'Apply authority to roles is not implemented — no backend endpoint exists yet.',
+  )
 }
 
 // --- Engineering Roles ---
