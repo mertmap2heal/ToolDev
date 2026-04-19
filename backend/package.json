@@ -30,6 +30,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.90.0",
     "@prisma/client": "^5.7.1",
     "archiver": "^7.0.1",
     "bcryptjs": "^2.4.3",
