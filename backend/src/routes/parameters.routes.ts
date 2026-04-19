@@ -18,6 +18,7 @@ import {
 } from '../controllers/projectUnit.controller'
 import {
   getParameters,
+  getParameterFacets,
   getParameter,
   createParameter,
   updateParameter,
@@ -85,6 +86,7 @@ router.post('/:projectId/import', importParametersHandler)
 router.post('/:projectId/git/setup', gitPublishSetupHandler)
 router.post('/:projectId/git/sync', gitPublishSyncHandler)
 router.post('/:projectId/:id/restore/:versionId', restoreParameterVersionHandler)
+router.get('/:projectId/facets', getParameterFacets)
 router.get('/:projectId', getParameters)
 router.get('/:projectId/:id', getParameter)
 router.post('/:projectId', createParameter)

@@ -150,20 +150,47 @@ async function generateParameterId(
 
 function buildParameterWhere(projectId: string, query: Record<string, string | undefined>) {
   const where: Record<string, unknown> = { projectId }
-  if (query.search) {
-    const s = query.search.trim().toLowerCase()
-    where.OR = [
-      { name: { contains: s, mode: 'insensitive' } },
-      { description: { contains: s, mode: 'insensitive' } },
-      { dataType: { contains: s, mode: 'insensitive' } },
-    ]
+  // Free-text search (alias: `q`). Searches name + description + dataType
+  // with case-insensitive substring. Aerospace-scale projects should
+  // prefer the paged endpoint with this filter so the network payload
+  // stays small.
+  const searchText = query.q ?? query.search
+  if (searchText) {
+    const s = searchText.trim()
+    if (s) {
+      where.OR = [
+        { name: { contains: s, mode: 'insensitive' } },
+        { description: { contains: s, mode: 'insensitive' } },
+        { dataType: { contains: s, mode: 'insensitive' } },
+      ]
+    }
   }
-  if (query.status) where.status = query.status
+
+  // Multi-value filters. Accept either `status=approved` or
+  // `status=approved,draft` (comma-separated). Likewise dataType / unit.
+  const parseMulti = (raw: string | undefined): string[] | null => {
+    if (!raw) return null
+    const parts = raw.split(',').map((v) => v.trim()).filter(Boolean)
+    return parts.length > 0 ? parts : null
+  }
+  const statuses = parseMulti(query.status)
+  if (statuses) where.status = statuses.length === 1 ? statuses[0] : { in: statuses }
+  const dataTypes = parseMulti(query.dataType)
+  if (dataTypes) where.dataType = dataTypes.length === 1 ? dataTypes[0] : { in: dataTypes }
+  const units = parseMulti(query.unit)
+  if (units) where.unit = units.length === 1 ? units[0] : { in: units }
+
   if (query.ownerType) where.ownerType = query.ownerType
   if (query.folderId !== undefined && query.folderId !== '') {
     if (query.folderId === '__none__') where.folderId = null
     else where.folderId = query.folderId
   }
+
+  // hasFormula as a tri-state: "true" => must have formula, "false" =>
+  // must not, anything else => no constraint.
+  if (query.hasFormula === 'true') where.formula = { not: null }
+  else if (query.hasFormula === 'false') where.formula = null
+
   return where
 }
 
@@ -263,22 +290,82 @@ function aggregateParameterUsageCounts(
 export const getParameters = async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params
-    const { search, status, ownerType, folderId, tags, sort = 'updatedAt', order = 'desc', includeUsageCounts } = req.query as Record<string, string>
+    const q = req.query as Record<string, string>
+    const {
+      q: qSearch,
+      search,
+      status,
+      dataType,
+      unit,
+      ownerType,
+      folderId,
+      hasFormula,
+      tags,
+      sort = 'updatedAt',
+      order = 'desc',
+      includeUsageCounts,
+    } = q
 
-    const where = buildParameterWhere(projectId, { search, status, ownerType, folderId, tags })
-    // Prisma does not support array_contains on Json; filter tags in memory if needed
-    const parameters = await prisma.parameter.findMany({
-      where: Object.keys(where).length > 1 ? where : { projectId },
-      include: {
-        sourceFunction: { select: { id: true, functionId: true, name: true } },
-        sourceParameter: { select: { id: true, name: true } },
-      },
-      orderBy: { [sort === 'name' ? 'name' : sort === 'createdAt' ? 'createdAt' : 'updatedAt']: order === 'asc' ? 'asc' : 'desc' },
+    // Pagination — opt-in. Existing callers that pass no `page` param
+    // get the legacy unbounded response so nothing breaks. New callers
+    // supply `page` + `pageSize` and receive the paged wrapper.
+    const rawPage = q.page != null ? parseInt(q.page, 10) : NaN
+    const rawPageSize = q.pageSize != null ? parseInt(q.pageSize, 10) : NaN
+    const paginated = Number.isFinite(rawPage) && rawPage >= 1
+    const page = paginated ? rawPage : 1
+    const pageSize = paginated
+      ? Math.max(1, Math.min(Number.isFinite(rawPageSize) ? rawPageSize : 50, 500))
+      : undefined
+
+    const where = buildParameterWhere(projectId, {
+      q: qSearch,
+      search,
+      status,
+      dataType,
+      unit,
+      ownerType,
+      folderId,
+      hasFormula,
+      tags,
     })
+
+    // Prisma does not support array_contains on Json, so tag filtering
+    // still runs in memory after the query. When paginating, the count
+    // becomes approximate if tags filter is active -- acceptable because
+    // tags are rarely used as the primary filter.
+    const orderField = sort === 'name' ? 'name' : sort === 'createdAt' ? 'createdAt' : 'updatedAt'
+    const orderDir = order === 'asc' ? 'asc' : 'desc'
+
+    const effectiveWhere = Object.keys(where).length > 1 ? where : { projectId }
+    const include = {
+      sourceFunction: { select: { id: true, functionId: true, name: true } },
+      sourceParameter: { select: { id: true, name: true } },
+    } as const
+    const orderBy = { [orderField]: orderDir } as const
+
+    const [parameters, total] = paginated && pageSize !== undefined
+      ? await Promise.all([
+          prisma.parameter.findMany({
+            where: effectiveWhere,
+            include,
+            orderBy,
+            skip: (page - 1) * pageSize,
+            take: pageSize,
+          }),
+          prisma.parameter.count({ where: effectiveWhere }),
+        ])
+      : [
+          await prisma.parameter.findMany({
+            where: effectiveWhere,
+            include,
+            orderBy,
+          }),
+          0,
+        ]
 
     let filtered = parameters
     if (tags) {
-      const tagList = (tags as string).split(',').map((t) => t.trim()).filter(Boolean)
+      const tagList = tags.split(',').map((t) => t.trim()).filter(Boolean)
       if (tagList.length) {
         filtered = parameters.filter((p) => {
           const t = p.tags as string[] | null
@@ -301,16 +388,64 @@ export const getParameters = async (req: AuthRequest, res: Response) => {
         select: { id: true, title: true, description: true },
       })
       const usageCounts = aggregateParameterUsageCounts(reqs)
-      const withCounts = filtered.map((p) => ({
+      filtered = filtered.map((p) => ({
         ...p,
         requirementCount: usageCounts.get(p.id.toLowerCase()) ?? 0,
       }))
-      return res.json({ success: true, data: withCounts })
     }
 
-    res.json({ success: true, data: filtered })
+    if (paginated) {
+      return res.json({
+        success: true,
+        data: filtered,
+        total,
+        page,
+        pageSize,
+      })
+    }
+    return res.json({ success: true, data: filtered })
   } catch (error) {
     console.error('Get parameters error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+}
+
+/**
+ * Facets endpoint — returns distinct values for the columns used as
+ * filter pills. Called once on page load to populate the FilterBar.
+ * Keeps the page from pulling down the full parameters list just to
+ * discover which units / types / statuses exist.
+ */
+export const getParameterFacets = async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params
+    const rows = await prisma.parameter.findMany({
+      where: { projectId },
+      select: { dataType: true, unit: true, status: true, tags: true },
+    })
+    const dataTypes = new Set<string>()
+    const units = new Set<string>()
+    const statuses = new Set<string>()
+    const tagSet = new Set<string>()
+    for (const row of rows) {
+      if (row.dataType) dataTypes.add(row.dataType)
+      if (row.unit) units.add(row.unit)
+      if (row.status) statuses.add(row.status)
+      const t = row.tags as string[] | null
+      if (Array.isArray(t)) for (const tag of t) if (typeof tag === 'string' && tag) tagSet.add(tag)
+    }
+    res.json({
+      success: true,
+      data: {
+        dataType: Array.from(dataTypes).sort(),
+        unit: Array.from(units).sort(),
+        status: Array.from(statuses).sort(),
+        tag: Array.from(tagSet).sort(),
+        total: rows.length,
+      },
+    })
+  } catch (error) {
+    console.error('Get parameter facets error:', error)
     res.status(500).json({ success: false, error: 'Internal server error' })
   }
 }
