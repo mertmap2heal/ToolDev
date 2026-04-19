@@ -372,19 +372,20 @@ export default function ParametersPage() {
 
   // Column visibility — persisted in localStorage per project
   const COL_STORAGE_KEY = projectId ? `param-cols-${projectId}` : null
-  type ColKey = 'description' | 'type' | 'value' | 'computed' | 'unit' | 'source' | 'status' | 'usedIn' | 'created'
+  type ColKey = 'description' | 'type' | 'value' | 'computed' | 'unit' | 'folder' | 'source' | 'status' | 'usedIn' | 'created'
   const ALL_COLS: { key: ColKey; label: string }[] = [
     { key: 'description', label: 'Description' },
     { key: 'type',        label: 'Type' },
     { key: 'value',       label: 'Value' },
     { key: 'computed',    label: 'Computed' },
     { key: 'unit',        label: 'Unit' },
+    { key: 'folder',      label: 'Folder' },
     { key: 'source',      label: 'Source' },
     { key: 'status',      label: 'Status' },
     { key: 'usedIn',      label: 'Used in' },
     { key: 'created',     label: 'Created' },
   ]
-  const DEFAULT_COLS: ColKey[] = ['description', 'type', 'value', 'computed', 'unit', 'source', 'status', 'usedIn', 'created']
+  const DEFAULT_COLS: ColKey[] = ['description', 'type', 'value', 'computed', 'unit', 'folder', 'source', 'status', 'usedIn', 'created']
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(() => {
     if (!COL_STORAGE_KEY) return new Set(DEFAULT_COLS)
     try {
@@ -677,9 +678,16 @@ export default function ParametersPage() {
     const overId = event.over ? String(event.over.id) : null
 
     if (activeDragParamId) {
-      // Param drag: track which folder we're hovering over
-      if (!overId || !overId.startsWith('folder-')) { setOverFolderId(null); return }
-      setOverFolderId(overId.replace('folder-', ''))
+      // Param drag: track which folder we're hovering over. Same dual-id
+      // quirk as handleDragEnd -- a folder row registers both `folder-`
+      // and `sortfolder-` droppables, so the hover can resolve to either.
+      let folderId: string | null = null
+      if (overId) {
+        if (overId === 'folder-ungrouped') folderId = 'ungrouped'
+        else if (overId.startsWith('folder-')) folderId = overId.replace('folder-', '')
+        else if (overId.startsWith('sortfolder-')) folderId = overId.replace('sortfolder-', '')
+      }
+      setOverFolderId(folderId)
       return
     }
 
@@ -753,10 +761,23 @@ export default function ParametersPage() {
 
     const paramId = String(active.id).replace('param-', '')
     const overId = String(over.id)
+
+    // Each folder row in the sidebar registers TWO droppable ids on the
+    // same DOM element: `folder-<id>` (from useDroppable, for parameter
+    // drops) and `sortfolder-<id>` (from useSortable, for folder
+    // reorder). dnd-kit's collision detection picks whichever sits
+    // topmost in the stack, which can be either depending on render
+    // order. When a parameter is the active drag, both prefixes mean
+    // "drop into this folder" -- normalise and dispatch.
+    let targetFolderId: string | null | undefined = undefined
     if (overId === 'folder-ungrouped') {
-      moveToFolderMutation.mutate({ parameterId: paramId, folderId: null })
+      targetFolderId = null
     } else if (overId.startsWith('folder-')) {
-      const targetFolderId = overId.replace('folder-', '')
+      targetFolderId = overId.replace('folder-', '')
+    } else if (overId.startsWith('sortfolder-')) {
+      targetFolderId = overId.replace('sortfolder-', '')
+    }
+    if (targetFolderId !== undefined) {
       moveToFolderMutation.mutate({ parameterId: paramId, folderId: targetFolderId })
     }
   }
@@ -1825,6 +1846,7 @@ export default function ParametersPage() {
                   { label: 'Value',       field: null,                 colKey: 'value' as ColKey,       sticky: false },
                   { label: 'Computed',    field: null,                 colKey: 'computed' as ColKey,    sticky: false },
                   { label: 'Unit',        field: null,                 colKey: 'unit' as ColKey,        sticky: false },
+                  { label: 'Folder',      field: null,                 colKey: 'folder' as ColKey,      sticky: false },
                   { label: 'Source',      field: null,                 colKey: 'source' as ColKey,      sticky: false },
                   { label: 'Status',      field: null,                 colKey: 'status' as ColKey,      sticky: false },
                   { label: 'Used in',     field: null,                 colKey: 'usedIn' as ColKey,      sticky: false },
@@ -2044,6 +2066,27 @@ export default function ParametersPage() {
                   )}
                   {visibleCols.has('unit') && (
                     <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{param.unit || '—'}</td>
+                  )}
+                  {visibleCols.has('folder') && (
+                    // Non-DnD folder assignment: inline select. Users who
+                    // prefer keyboard / click workflows can reassign
+                    // without dragging. Same endpoint the drag uses.
+                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400" onClick={(e) => e.stopPropagation()}>
+                      <select
+                        aria-label="Move parameter to folder"
+                        value={param.folderId ?? ''}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          moveToFolderMutation.mutate({ parameterId: param.id, folderId: v === '' ? null : v })
+                        }}
+                        className="text-xs border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 px-1.5 py-0.5 max-w-[140px]"
+                      >
+                        <option value="">— Ungrouped</option>
+                        {buildAllFolderOptions().map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </td>
                   )}
                   {visibleCols.has('source') && (
                     <td className="px-3 py-2 text-gray-600 dark:text-gray-400">

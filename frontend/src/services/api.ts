@@ -38,14 +38,28 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => {
-        // Handle both 401 (Unauthorized - no token) and 403 (Forbidden - invalid/expired token)
+        // Handle 401 (no token) and 403 (invalid/expired token).
+        // NOT every 403 is a token problem -- permission denials (e.g.
+        // requireAiEnabled returning AI_DISABLED_*, project-member
+        // checks, admin-only checks) are legitimate 403s for a logged-in
+        // user. Skip the token wipe when the backend sent a structured
+        // error code that names a non-auth cause.
         if (error.response?.status === 401 || error.response?.status === 403) {
-          const token = localStorage.getItem('token') ?? sessionStorage.getItem('token')
-          if (token) {
-            console.log('Token is invalid or expired, removing from storage')
-            localStorage.removeItem('token')
-            sessionStorage.removeItem('token')
-            window.dispatchEvent(new CustomEvent('token-expired'))
+          const data = error.response?.data as { code?: string } | undefined
+          const nonAuthCode = typeof data?.code === 'string' && (
+            data.code === 'AI_DISABLED_GLOBAL' ||
+            data.code === 'AI_DISABLED_PROJECT' ||
+            data.code === 'PROJECT_NOT_FOUND' ||
+            data.code === 'AI_MISSING_PROJECT_ID'
+          )
+          if (!nonAuthCode) {
+            const token = localStorage.getItem('token') ?? sessionStorage.getItem('token')
+            if (token) {
+              console.log('Token is invalid or expired, removing from storage')
+              localStorage.removeItem('token')
+              sessionStorage.removeItem('token')
+              window.dispatchEvent(new CustomEvent('token-expired'))
+            }
           }
         }
         // When user no longer has access to a project (e.g. removed from project) or project doesn't exist
