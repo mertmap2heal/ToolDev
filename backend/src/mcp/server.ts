@@ -18,6 +18,26 @@ import {
   searchParamsInputZod,
   handleSearchParameters,
 } from './tools/search_parameters'
+import {
+  draftParamInputSchema,
+  draftParamInputZod,
+  handleDraftParameter,
+} from './tools/draft_parameter'
+import {
+  acceptParamInputSchema,
+  acceptParamInputZod,
+  handleAcceptParameter,
+} from './tools/accept_parameter'
+import {
+  reviewParamInputSchema,
+  reviewParamInputZod,
+  handleReviewParameter,
+} from './tools/review_parameter'
+import {
+  impactParamInputSchema,
+  impactParamInputZod,
+  handleImpactParameter,
+} from './tools/impact_parameter'
 
 /**
  * Streamable HTTP MCP server for the parameters slice.
@@ -103,7 +123,70 @@ function buildServer(ctx: McpAuthContext): McpServer {
     )
   }
 
-  // Draft / review / impact / accept tools land in phase 1c step (d).
+  // Draft + accept (T1) — require the `draft` scope.
+  if (hasScope(ctx, 'draft')) {
+    server.registerTool(
+      'draft_parameter',
+      {
+        description:
+          'Ask the LLM to draft a parameter definition from a natural-language description. Does not persist - the caller must follow up with accept_parameter.',
+        inputSchema: anySchema(draftParamInputSchema),
+      },
+      async (rawInput: unknown) => {
+        const input = draftParamInputZod.parse(rawInput)
+        const result = await handleDraftParameter(ctx, input)
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
+      },
+    )
+
+    server.registerTool(
+      'accept_parameter',
+      {
+        description:
+          'Persist a previously-drafted parameter as authorType=ai_accepted. Requires the invocationId from draft_parameter.',
+        inputSchema: anySchema(acceptParamInputSchema),
+      },
+      async (rawInput: unknown) => {
+        const input = acceptParamInputZod.parse(rawInput)
+        const result = await handleAcceptParameter(ctx, input)
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
+      },
+    )
+  }
+
+  // Review (T2) — require the `review` scope.
+  if (hasScope(ctx, 'review')) {
+    server.registerTool(
+      'review_parameter',
+      {
+        description:
+          'Ask the LLM to review an existing parameter for issues (unit consistency, missing bounds, spelling). Does not mutate.',
+        inputSchema: anySchema(reviewParamInputSchema),
+      },
+      async (rawInput: unknown) => {
+        const input = reviewParamInputZod.parse(rawInput)
+        const result = await handleReviewParameter(ctx, input)
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
+      },
+    )
+  }
+
+  // Impact (T3) — require the `impact` scope. Deterministic, no LLM.
+  if (hasScope(ctx, 'impact')) {
+    server.registerTool(
+      'impact_parameter',
+      {
+        description:
+          'Walk the derived-parameter DAG to report every parameter whose value could change if the input changes.',
+        inputSchema: anySchema(impactParamInputSchema),
+      },
+      async (rawInput: unknown) => {
+        const input = impactParamInputZod.parse(rawInput)
+        const result = await handleImpactParameter(ctx, input)
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
+      },
+    )
+  }
 
   return server
 }
