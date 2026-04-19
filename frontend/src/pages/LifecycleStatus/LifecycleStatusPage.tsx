@@ -39,7 +39,11 @@ export default function LifecycleStatusPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const [searchQuery, setSearchQuery] = useState('')
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
-  const [activeTab, setActiveTab] = useState<TabId>('status')
+  // #280: the 'status' tab is a placeholder with hardcoded selects and no
+  // data fetching. Default to 'control-tower' (which is fully implemented)
+  // so first-time visitors land on working content. Deep-links that pass
+  // ?tab=status still work since setActiveTab accepts any TabId.
+  const [activeTab, setActiveTab] = useState<TabId>('control-tower')
 
   return (
     <div className="space-y-6">
