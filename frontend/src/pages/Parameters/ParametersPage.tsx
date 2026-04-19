@@ -1092,6 +1092,55 @@ export default function ParametersPage() {
   }, [folderOrderByParent, foldersById])
   const buildAllFolderOptions = () => folderOptions
 
+  // Group layout mirrors the sidebar folder tree. Hoisted out of the
+  // table JSX into a useMemo so (a) the computation doesn't re-run on
+  // every render, and (b) the resulting arrays are stable references
+  // ready for a future virtualizer to iterate (phase 2c-iii proper).
+  type FlatGroup = {
+    id: string
+    label: string
+    color: string | null
+    params: typeof filteredParameters
+    depth: number
+  }
+  const { showGroupsForTable, visibleGroupsForTable } = useMemo(() => {
+    const showGroups = selectedFolderId !== '__none__' && folders.length > 0
+    const flatGroups: FlatGroup[] = []
+    if (showGroups) {
+      const walk = (parentId: string | null, depth: number): void => {
+        for (const folder of folders.filter((f) => (f.parentId ?? null) === parentId)) {
+          const ownParams = filteredParameters.filter((p) => p.folderId === folder.id)
+          flatGroups.push({ id: folder.id, label: folder.name, color: folder.color ?? null, params: ownParams, depth })
+          walk(folder.id, depth + 1)
+        }
+      }
+      if (selectedFolderId === null) {
+        const ungrouped = filteredParameters.filter((p) => !p.folderId)
+        if (ungrouped.length > 0) flatGroups.push({ id: '__none__', label: 'Ungrouped', color: null, params: ungrouped, depth: 0 })
+        walk(null, 0)
+      } else {
+        const root = foldersById.get(selectedFolderId)
+        if (root) {
+          const ownParams = filteredParameters.filter((p) => p.folderId === root.id)
+          flatGroups.push({ id: root.id, label: root.name, color: root.color ?? null, params: ownParams, depth: 0 })
+          walk(root.id, 1)
+        }
+      }
+    } else {
+      flatGroups.push({ id: '__all__', label: '', color: null, params: filteredParameters, depth: 0 })
+    }
+    // Hide groups below any collapsed ancestor.
+    const visibleGroups: FlatGroup[] = []
+    let skipBelowDepth: number | null = null
+    for (const g of flatGroups) {
+      if (skipBelowDepth !== null && g.depth > skipBelowDepth) continue
+      skipBelowDepth = null
+      visibleGroups.push(g)
+      if (collapsedGroups.has(g.id)) skipBelowDepth = g.depth
+    }
+    return { showGroupsForTable: showGroups, visibleGroupsForTable: visibleGroups }
+  }, [selectedFolderId, folders, filteredParameters, foldersById, collapsedGroups])
+
   // ---------------------------------------------------------------------------
   // Recursive folder tree rendering — arbitrary depth, sortable at every level
   // ---------------------------------------------------------------------------
@@ -1923,52 +1972,10 @@ export default function ParametersPage() {
                 <tr><td colSpan={2 + visibleCols.size} className="px-3 py-8 text-center text-gray-600 dark:text-gray-400">
                   {parameters.length === 0 ? 'No parameters yet. Create one or import a file.' : 'No parameters match your filters.'}
                 </td></tr>
-              ) : (() => {
-                // Group layout mirrors the sidebar folder tree. All folders in scope
-                // render as group headers — including empty ones — so the hierarchy is
-                // always visible, not just the folders that happen to carry parameters.
-                // - selectedFolderId === null        -> walk from roots (All Parameters)
-                // - selectedFolderId === '__none__'  -> flat list of Ungrouped params
-                // - selectedFolderId === <folderId>  -> that folder as depth-0 root + its subtree
-                const showGroups = selectedFolderId !== '__none__' && folders.length > 0
-                type FlatGroup = { id: string; label: string; color: string | null; params: typeof filteredParameters; depth: number }
-                const flatGroups: FlatGroup[] = []
-                if (showGroups) {
-                  const walk = (parentId: string | null, depth: number): void => {
-                    for (const folder of folders.filter(f => (f.parentId ?? null) === parentId)) {
-                      const ownParams = filteredParameters.filter(p => p.folderId === folder.id)
-                      flatGroups.push({ id: folder.id, label: folder.name, color: folder.color ?? null, params: ownParams, depth })
-                      walk(folder.id, depth + 1)
-                    }
-                  }
-                  if (selectedFolderId === null) {
-                    const ungrouped = filteredParameters.filter(p => !p.folderId)
-                    if (ungrouped.length > 0) flatGroups.push({ id: '__none__', label: 'Ungrouped', color: null, params: ungrouped, depth: 0 })
-                    walk(null, 0)
-                  } else {
-                    const root = foldersById.get(selectedFolderId)
-                    if (root) {
-                      const ownParams = filteredParameters.filter(p => p.folderId === root.id)
-                      flatGroups.push({ id: root.id, label: root.name, color: root.color ?? null, params: ownParams, depth: 0 })
-                      walk(root.id, 1)
-                    }
-                  }
-                } else {
-                  flatGroups.push({ id: '__all__', label: '', color: null, params: filteredParameters, depth: 0 })
-                }
-                // Hide groups below any collapsed ancestor.
-                const visibleGroups: FlatGroup[] = []
-                let skipBelowDepth: number | null = null
-                for (const g of flatGroups) {
-                  if (skipBelowDepth !== null && g.depth > skipBelowDepth) continue
-                  skipBelowDepth = null
-                  visibleGroups.push(g)
-                  if (collapsedGroups.has(g.id)) skipBelowDepth = g.depth
-                }
-
-                return visibleGroups.flatMap(group => {
+              ) : (
+                visibleGroupsForTable.flatMap(group => {
                   const isCollapsed = collapsedGroups.has(group.id)
-                  const groupHeaderRow = showGroups ? (
+                  const groupHeaderRow = showGroupsForTable ? (
                     <tr key={`group-${group.id}`} className="bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700">
                       <td
                         colSpan={2 + visibleCols.size}
@@ -2003,7 +2010,7 @@ export default function ParametersPage() {
                       key={param.id}
                       param={param as ParameterWithUsage}
                       visibleCols={visibleCols}
-                      showGroups={showGroups}
+                      showGroups={showGroupsForTable}
                       selectedFolderId={selectedFolderId}
                       selected={selectedIds.has(param.id)}
                       foldersById={foldersById}
@@ -2029,7 +2036,7 @@ export default function ParametersPage() {
                   ))
                   return groupHeaderRow ? [groupHeaderRow, ...dataRows] : dataRows
                 })
-              })()}
+              )}
             </tbody>
           </table>
         </div>
