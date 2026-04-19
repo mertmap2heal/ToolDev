@@ -53,6 +53,28 @@ import { format } from 'date-fns'
 const FOLDER_COLORS = ['#6366f1', '#0ea5e9', '#22c55e', '#f59e0b', '#ef4444', '#ec4899']
 
 // ---------------------------------------------------------------------------
+// Shared class strings (issue #278 — migration off inline styles).
+// Each constant is a drop-in className for a common UI primitive on this page.
+// Token mapping table lives in the PR description; see index.css for CSS
+// custom-property values.
+// ---------------------------------------------------------------------------
+const CARD =
+  'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg'
+const INPUT_CLS =
+  'w-full text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
+const BTN_PRIMARY =
+  'inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-500 transition-colors disabled:opacity-50'
+const BTN_GHOST =
+  'inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors'
+const BTN_ICON =
+  'p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors'
+const LABEL_CLS =
+  'text-xs font-medium text-gray-700 dark:text-gray-300'
+const TEXT_MUTED = 'text-gray-600 dark:text-gray-400'
+const TEXT_STRONG = 'text-gray-900 dark:text-gray-100'
+const ROW_HOVER = 'hover:bg-gray-200/20 dark:hover:bg-gray-400/10'
+
+// ---------------------------------------------------------------------------
 // DraggableRow — wraps a parameter row so it can be dragged onto a folder
 // ---------------------------------------------------------------------------
 function DraggableRow({
@@ -68,14 +90,17 @@ function DraggableRow({
   return (
     <tr
       ref={setNodeRef}
+      className={clsx(
+        'cursor-grab border-b border-gray-200 dark:border-gray-700',
+        ROW_HOVER,
+        isDragging && 'opacity-40',
+      )}
+      // #278: folder colour is user-assigned hex, not a design token.
+      // Dynamic border-left stays inline; fixed transparent fallback also
+      // inline so the left gutter is always 3px regardless of folder state.
       style={{
-        opacity: isDragging ? 0.4 : 1,
-        cursor: 'grab',
-        borderBottom: '1px solid var(--theme-border)',
         borderLeft: folderColor ? `3px solid ${folderColor}` : '3px solid transparent',
       }}
-      onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'var(--theme-sidebar-item-hover)')}
-      onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
       {...attributes}
       {...listeners}
     >
@@ -100,12 +125,12 @@ function DroppableFolder({
   return (
     <div
       ref={setNodeRef}
-      style={{
-        outline: isOver ? '2px solid var(--theme-accent)' : 'none',
-        outlineOffset: -2,
-        borderRadius: 6,
-        transition: 'outline 0.1s',
-      }}
+      className={clsx(
+        'rounded-md transition-[outline] duration-100',
+        isOver
+          ? 'outline outline-2 -outline-offset-2 outline-blue-600 dark:outline-blue-400'
+          : '',
+      )}
     >
       {children}
     </div>
@@ -144,13 +169,17 @@ function SortableFolderWrapper({
   return (
     <div
       ref={setRefs}
+      className={clsx(
+        'rounded-md',
+        isDragging && 'opacity-50',
+        isOver && 'outline outline-2 -outline-offset-2 outline-blue-600 dark:outline-blue-400',
+      )}
+      // #278: transform + transition are runtime values from @dnd-kit/sortable
+      // describing the drag delta and snap animation. Cannot be expressed as
+      // Tailwind utilities — must stay inline.
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.5 : 1,
-        outline: isOver ? '2px solid var(--theme-accent)' : 'none',
-        outlineOffset: -2,
-        borderRadius: 6,
       }}
     >
       {children({ ...attributes, ...listeners })}
