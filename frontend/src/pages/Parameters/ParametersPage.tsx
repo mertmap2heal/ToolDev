@@ -31,6 +31,7 @@ import { CSS } from '@dnd-kit/utilities'
 
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import { parameterService, type ParameterWithUsage } from '../../services/parameter.service'
+import { parameterBulkJobService } from '../../services/parameterBulkJob.service'
 import { evaluateFormula } from '../../components/parameters/evaluateFormula'
 import DeleteConfirmationModal from '../../components/projects/DeleteConfirmationModal'
 import EditParameterModal from '../../components/parameters/EditParameterModal'
@@ -443,6 +444,14 @@ export default function ParametersPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  // Live progress for an in-flight async bulk job (delete > 50 items).
+  // null when no job is running.
+  const [bulkJobProgress, setBulkJobProgress] = useState<{
+    done: number
+    failed: number
+    total: number
+    status: 'pending' | 'running' | 'completed' | 'failed' | 'partial'
+  } | null>(null)
 
   // Export state
   const [isExportOpen, setIsExportOpen] = useState(false)
@@ -956,20 +965,58 @@ export default function ParametersPage() {
 
   // Bulk delete mutation
   const bulkDeleteMutation = useMutation({
-    mutationFn: (ids: string[]) => {
+    mutationFn: async (ids: string[]) => {
       if (!projectId) throw new Error('Project ID required')
-      return parameterService.bulkDelete(projectId, ids)
+      // Small batches stay synchronous for snappy feedback. Large
+      // batches go through the async job runner so the HTTP request
+      // returns immediately and the UI polls for progress.
+      if (ids.length <= 50) {
+        return parameterService.bulkDelete(projectId, ids)
+      }
+      const submitRes = await parameterBulkJobService.submit(projectId, {
+        operation: 'bulk-delete',
+        payload: { ids },
+      })
+      if (!submitRes.success || !submitRes.data) {
+        throw new Error(
+          (submitRes as { error?: string }).error || 'Bulk job submit failed',
+        )
+      }
+      const jobId = submitRes.data.id
+      // Poll every 1s until job leaves the running family (max 5 min).
+      for (let i = 0; i < 300; i++) {
+        await new Promise((r) => setTimeout(r, 1_000))
+        const statusRes = await parameterBulkJobService.get(projectId, jobId)
+        if (!statusRes.success || !statusRes.data) continue
+        const job = statusRes.data
+        setBulkJobProgress({
+          done: job.doneItems,
+          failed: job.failedItems,
+          total: job.totalItems,
+          status: job.status,
+        })
+        if (
+          job.status === 'completed' ||
+          job.status === 'failed' ||
+          job.status === 'partial'
+        ) {
+          return { success: true, data: job }
+        }
+      }
+      throw new Error('Bulk job timed out — check Recent jobs in admin')
     },
     onSuccess: (_data, ids) => {
       queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
       setSelectedIds(new Set())
       setBulkDeleteConfirm(false)
+      setBulkJobProgress(null)
       setToastMessage(`${ids.length} parameter${ids.length > 1 ? 's' : ''} deleted`)
     },
     onError: (error: any) => {
       console.error('Bulk delete error:', error)
-      alert(error?.error || 'Bulk delete failed')
+      alert(error?.error || error?.message || 'Bulk delete failed')
       setBulkDeleteConfirm(false)
+      setBulkJobProgress(null)
     },
   })
 
@@ -2736,6 +2783,31 @@ export default function ParametersPage() {
       {toastMessage && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[2000] px-4.5 py-2.5 rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-[13px] font-medium shadow-lg pointer-events-none">
           {toastMessage}
+        </div>
+      )}
+
+      {/* ── Bulk-job progress toast ── */}
+      {bulkJobProgress && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[2000] px-4 py-3 rounded-lg bg-blue-600 text-white text-xs font-medium shadow-lg min-w-[280px]">
+          <div className="flex items-center justify-between mb-2">
+            <span>
+              Bulk delete — {bulkJobProgress.done + bulkJobProgress.failed}/{bulkJobProgress.total}
+              {bulkJobProgress.failed > 0 && (
+                <span className="text-amber-200 ml-2">{bulkJobProgress.failed} failed</span>
+              )}
+            </span>
+            <span className="text-[10px] uppercase tracking-wider opacity-80">
+              {bulkJobProgress.status}
+            </span>
+          </div>
+          <div className="h-1.5 bg-blue-700 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-white rounded-full transition-all"
+              style={{
+                width: `${Math.min(100, ((bulkJobProgress.done + bulkJobProgress.failed) / Math.max(1, bulkJobProgress.total)) * 100)}%`,
+              }}
+            />
+          </div>
         </div>
       )}
 

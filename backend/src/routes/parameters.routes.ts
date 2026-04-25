@@ -46,6 +46,11 @@ import {
   reorderFolders,
   moveParameterToFolder,
 } from '../controllers/parameterFolder.controller'
+import {
+  submit as submitBulkJob,
+  get as getBulkJob,
+  list as listBulkJobs,
+} from '../controllers/parameterBulkJob.controller'
 
 const router = Router()
 
@@ -87,6 +92,12 @@ router.post('/:projectId/git/setup', gitPublishSetupHandler)
 router.post('/:projectId/git/sync', gitPublishSyncHandler)
 router.post('/:projectId/:id/restore/:versionId', restoreParameterVersionHandler)
 router.get('/:projectId/facets', getParameterFacets)
+// Async bulk-ops job runner endpoints. Live alongside the inline
+// /bulk PATCH/DELETE for backwards-compat; the UI prefers these for
+// jobs that exceed ~50 items.
+router.post('/:projectId/bulk-jobs', submitBulkJob)
+router.get('/:projectId/bulk-jobs', listBulkJobs)
+router.get('/:projectId/bulk-jobs/:jobId', getBulkJob)
 router.get('/:projectId', getParameters)
 router.get('/:projectId/:id', getParameter)
 router.post('/:projectId', createParameter)

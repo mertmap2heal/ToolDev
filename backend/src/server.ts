@@ -174,6 +174,13 @@ if (process.env.NODE_ENV !== 'test') {
       // Schedule daily (86400000 ms)
       cleanupIntervalHandle = setInterval(() => runCleanup('scheduled'), 24 * 60 * 60 * 1000)
     })
+
+    // Start the parameters bulk-ops job worker (singleton — safe to
+    // call repeatedly).
+    import('./services/parameterBulkJob.service.js').then(({ startBulkJobWorker }) => {
+      startBulkJobWorker()
+      logger.info('bulk_job_worker_started', {})
+    })
   }).on('error', (err: NodeJS.ErrnoException) => {
     logger.error('server_listen_failed', { error: err.message, code: err.code })
     if (err.code === 'EADDRINUSE') logger.error('port_in_use', { port: PORT })

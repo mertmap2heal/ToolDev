@@ -542,12 +542,37 @@ sum([cell_v_1, cell_v_2, cell_v_3])`}</CodeBlock>
         <li><strong>Approve</strong> — sets <code>status=approved</code> on all selected.</li>
         <li><strong>Set to draft</strong> — reverse.</li>
         <li><strong>Mark obsolete</strong> — sets <code>obsolete</code>; cannot be undone via bulk (use detail drawer).</li>
-        <li><strong>Move to folder</strong> — picker; one shot.</li>
+        <li><strong>Move to folder</strong> — picker; one shot. Supports nested sub-folders.</li>
         <li>
-          <strong>Delete</strong> — opens a confirm modal that lists the names of
-          everything to be deleted. Final confirmation requires typing{' '}
-          <code>delete</code>.
+          <strong>Delete</strong> — confirm prompt then deletion. Final confirm
+          requires explicit click.
         </li>
+      </ul>
+
+      <h3 id="bulk-async">Asynchronous job runner</h3>
+      <p>
+        Bulk delete on more than 50 rows automatically switches to the
+        async <strong>job runner</strong>. The HTTP request returns
+        immediately with a job id; a progress toast appears at the
+        bottom showing <code>done / total</code> with a live bar; the
+        backend worker (one at a time, polled every 2 seconds) processes
+        items in 25-row batches and persists progress so the UI never
+        looks stuck.
+      </p>
+      <Callout variant="note" title="Job statuses">
+        <code>pending</code> waiting for the worker; <code>running</code>{' '}
+        worker picked it up; <code>completed</code> all items succeeded;{' '}
+        <code>partial</code> some failed (per-item errors persisted in{' '}
+        <code>itemResults</code>); <code>failed</code> the worker
+        crashed or every item failed.
+      </Callout>
+      <p>
+        Backend-side endpoints (admin-internal):
+      </p>
+      <ul>
+        <li><code>POST /parameters/:projectId/bulk-jobs</code> — submit; body <code>{`{ operation, payload: { ids, ... } }`}</code></li>
+        <li><code>GET /parameters/:projectId/bulk-jobs/:jobId</code> — poll status + results</li>
+        <li><code>GET /parameters/:projectId/bulk-jobs</code> — last 20 jobs (history)</li>
       </ul>
 
       <h2 id="detail-drawer">Detail drawer</h2>
