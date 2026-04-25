@@ -16,6 +16,7 @@ import OverviewSection from './sections/OverviewSection'
 import ParametersSection from './sections/ParametersSection'
 import AiAndMcpSection from './sections/AiAndMcpSection'
 import AdminSection from './sections/AdminSection'
+import RequirementsSection from './sections/RequirementsSection'
 
 /**
  * Registry of help-system pages. Adding a new page = add an entry here
@@ -102,8 +103,9 @@ export const HELP_PAGES: HelpPage[] = [
     icon: ListChecks,
     group: 'Modules',
     title: 'Requirements',
-    blurb: 'Coming soon — author, trace, and review requirements with version history.',
-    Component: PlaceholderSection('Requirements'),
+    blurb:
+      "Author, trace, version, and review the project's formal requirements register.",
+    Component: RequirementsSection,
   },
   {
     slug: 'verification',
