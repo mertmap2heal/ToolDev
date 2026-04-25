@@ -72,6 +72,7 @@ import InventoryReportsPage from './pages/Inventory/Reports/ReportsPage'
 import InventoryDashboardPage from './pages/Inventory/Dashboard/DashboardPage'
 import AdminRouteGuard from './components/admin/AdminRouteGuard'
 import AdminPage from './pages/Admin/AdminPage'
+import AiInvocationsPage from './pages/Admin/AiInvocationsPage'
 import PlatformAdminRouteGuard from './components/platform-admin/PlatformAdminRouteGuard'
 import PlatformAdminLayout from './components/platform-admin/PlatformAdminLayout'
 import PlatformAdminPage from './pages/PlatformAdmin/PlatformAdminPage'
@@ -187,6 +188,7 @@ function App() {
             <Route path="help/:slug" element={<HelpLayout />} />
             <Route path="admin" element={<AdminRouteGuard />}>
               <Route index element={<AdminPage />} />
+              <Route path="ai-invocations" element={<AiInvocationsPage />} />
             </Route>
             <Route path="inventory">
             <Route index element={<Navigate to="/inventory/items" replace />} />

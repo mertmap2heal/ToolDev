@@ -360,6 +360,10 @@ export default function ParametersPage() {
   const [unitFilter, setUnitFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  // Built-in saved view: when on, filter to parameters touched by AI
+  // (authorType ∈ ai_suggestion | ai_accepted | ai_applied). Server-side
+  // via the authorType=CSV query param.
+  const [aiModifiedView, setAiModifiedView] = useState<boolean>(false)
   const [paramViewMode, setParamViewMode] = useState<'list' | 'board' | 'graph'>('list')
   const queryClient = useQueryClient()
 
@@ -580,6 +584,9 @@ export default function ParametersPage() {
       dataTypeFilter !== 'all' && dataTypeFilter !== 'unassigned' ? dataTypeFilter : undefined,
     unit: unitFilter !== 'all' && unitFilter !== 'unassigned' ? unitFilter : undefined,
     folderId: serverFolderId,
+    // Built-in "AI-modified recently" view — set authorType to the AI
+    // subset. Server's parameter.controller already accepts a CSV.
+    authorType: aiModifiedView ? 'ai_suggestion,ai_accepted,ai_applied' : undefined,
   }
   const {
     data: paramPages,
@@ -1931,6 +1938,21 @@ export default function ParametersPage() {
             >
               <Sparkles size={13} />
               {aiDrafting ? 'Drafting…' : 'AI draft'}
+            </button>
+            {/* Built-in saved view: AI-modified rows. Toggling sets the
+                authorType server filter to the AI subset. */}
+            <button
+              onClick={() => setAiModifiedView((v) => !v)}
+              title="Show only parameters touched by AI (suggested, accepted, or applied)"
+              className={clsx(
+                'flex items-center gap-1.5 px-3 py-[5px] rounded-md text-xs font-semibold border transition-colors',
+                aiModifiedView
+                  ? 'border-purple-500 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300'
+                  : 'border-purple-200 dark:border-purple-800 bg-transparent text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/20',
+              )}
+            >
+              <Sparkles size={13} />
+              {aiModifiedView ? 'AI rows ✓' : 'AI rows'}
             </button>
           </AiFeatureGuard>
 

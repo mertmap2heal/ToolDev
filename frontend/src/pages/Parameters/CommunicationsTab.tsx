@@ -15,6 +15,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { commService } from '../../services/comm.service'
 import { parameterService } from '../../services/parameter.service'
 import type { CommBus, CommMessage, CommField } from 'shared/types/engineering.types'
+import TypeaheadCombobox from '../../components/common/TypeaheadCombobox'
 
 // ── constants ────────────────────────────────────────────────────────────────
 
@@ -634,12 +635,17 @@ function FieldForm({
       </div>
       <div>
         <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Linked parameter (optional)</label>
-        <select className={SELECT} value={form.parameterId} onChange={e => setForm(p => ({ ...p, parameterId: e.target.value }))}>
-          <option value="">— None —</option>
-          {parameters.map(p => (
-            <option key={p.id} value={p.id}>{p.name}{p.dataType ? ` (${p.dataType})` : ''}</option>
-          ))}
-        </select>
+        <TypeaheadCombobox
+          ariaLabel="Linked parameter"
+          placeholder="Search parameters by name…"
+          value={form.parameterId || null}
+          onChange={(id) => setForm((p) => ({ ...p, parameterId: id ?? '' }))}
+          options={parameters.map((p) => ({
+            id: p.id,
+            label: p.name,
+            hint: p.dataType ?? undefined,
+          }))}
+        />
       </div>
       <div>
         <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Description</label>
