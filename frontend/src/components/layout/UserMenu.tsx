@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import type { LucideIcon } from 'lucide-react'
 import {
   LogOut,
@@ -122,8 +122,29 @@ export default function UserMenu({ onOpenFeedback }: UserMenuProps) {
   const [copiedEmail, setCopiedEmail] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
-  const { projectId } = useParams<{ projectId: string }>()
+  const location = useLocation()
   const { user, logout } = useAuthStore()
+
+  // Map the current route to a help slug. Order matters — first match
+  // wins. Routes with no entry fall through to the help overview page.
+  const helpSlug = (() => {
+    const p = location.pathname
+    const ROUTE_HELP: Array<[RegExp, string]> = [
+      [/\/parameters(\/|$)/, 'parameters'],
+      [/\/communications(\/|$)/, 'parameters'],
+      [/\/requirements(\/|$)/, 'requirements'],
+      [/\/verification(\/|$)/, 'verification'],
+      [/\/interface-management(\/|$)/, 'interfaces'],
+      [/\/configuration-management(\/|$)/, 'cm'],
+      [/\/safety-analysis(\/|$)/, 'security'],
+      [/\/admin\b/, 'ai-and-mcp'],
+      [/\/settings(\/|$)/, 'ai-and-mcp'],
+    ]
+    for (const [re, slug] of ROUTE_HELP) {
+      if (re.test(p)) return slug
+    }
+    return 'overview'
+  })()
   const { theme, setTheme } = useThemeStore()
 
   // Close on outside click
@@ -354,7 +375,7 @@ export default function UserMenu({ onOpenFeedback }: UserMenuProps) {
             icon={ExternalLink}
             label="Documentation"
             onClick={() => {
-              window.open('/help', '_blank', 'noopener,noreferrer')
+              window.open(`/help/${helpSlug}`, '_blank', 'noopener,noreferrer')
               setOpen(false)
             }}
           />
