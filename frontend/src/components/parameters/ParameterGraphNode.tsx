@@ -10,14 +10,15 @@ interface ParameterNodeData {
   dimmed?: boolean
 }
 
-const STATUS_COLORS: Record<ParameterStatus, { dot: string; bg: string; text: string }> = {
+const STATUS_COLORS: Record<string, { dot: string; bg: string; text: string }> = {
   approved: { dot: '#22c55e', bg: 'rgba(34,197,94,0.1)', text: '#15803d' },
   draft: { dot: '#f59e0b', bg: 'rgba(245,158,11,0.1)', text: '#b45309' },
+  review: { dot: '#3b82f6', bg: 'rgba(59,130,246,0.1)', text: '#1d4ed8' },
   obsolete: { dot: '#9ca3af', bg: 'rgba(156,163,175,0.1)', text: '#6b7280' },
 }
 
-function getStatusColors(status: ParameterStatus | undefined) {
-  return STATUS_COLORS[status ?? 'draft']
+function getStatusColors(status: ParameterStatus | string | undefined) {
+  return STATUS_COLORS[status ?? 'draft'] ?? STATUS_COLORS.draft
 }
 
 const ParameterGraphNode: React.FC<NodeProps<ParameterNodeData>> = ({ data, selected }) => {
