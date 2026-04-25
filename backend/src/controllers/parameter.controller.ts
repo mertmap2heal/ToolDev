@@ -204,9 +204,20 @@ function buildParameterWhere(
   if (units) where.unit = units.length === 1 ? units[0] : { in: units }
 
   if (query.ownerType) where.ownerType = query.ownerType
+  // folderId accepts:
+  //   "__none__"           -> only ungrouped (folderId = null)
+  //   "<uuid>"             -> exact folder
+  //   "<uuid>,<uuid>,..."  -> any of those folders (used for subtree selection)
   if (query.folderId !== undefined && query.folderId !== '') {
-    if (query.folderId === '__none__') where.folderId = null
-    else where.folderId = query.folderId
+    if (query.folderId === '__none__') {
+      where.folderId = null
+    } else if (typeof query.folderId === 'string' && query.folderId.includes(',')) {
+      const ids = query.folderId.split(',').map(s => s.trim()).filter(Boolean)
+      if (ids.length === 1) where.folderId = ids[0]
+      else if (ids.length > 1) where.folderId = { in: ids }
+    } else {
+      where.folderId = query.folderId
+    }
   }
 
   // hasFormula as a tri-state: "true" => must have formula, "false" =>

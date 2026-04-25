@@ -410,7 +410,11 @@ export default function ParametersPage() {
     { key: 'usedIn',      label: 'Used in' },
     { key: 'created',     label: 'Created' },
   ]
-  const DEFAULT_COLS: ColKey[] = ['description', 'type', 'value', 'computed', 'unit', 'folder', 'source', 'status', 'usedIn', 'created']
+  // Folder column is intentionally NOT in defaults — the folder sidebar
+  // already shows folder context, and dragging rows onto the sidebar is
+  // the primary move-to-folder gesture. Users can re-enable it from the
+  // Columns menu when they need bulk per-row folder editing.
+  const DEFAULT_COLS: ColKey[] = ['description', 'type', 'value', 'computed', 'unit', 'source', 'status', 'usedIn', 'created']
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(() => {
     if (!COL_STORAGE_KEY) return new Set(DEFAULT_COLS)
     try {
@@ -512,6 +516,60 @@ export default function ParametersPage() {
   // the client for now and apply to the flattened result.
   const PAGE_SIZE = 200
   const trimmedQ = debouncedSearch.trim()
+
+  // Folders are fetched first so the parameters paged query below can
+  // use them to expand a selected folder into its subtree before the
+  // server round-trip.
+  const { data: foldersData } = useQuery({
+    queryKey: ['parameter-folders', projectId],
+    queryFn: async () => {
+      if (!projectId) throw new Error('Project ID required')
+      const response = await parameterService.getFolders(projectId)
+      if (response.success && response.data) return response.data
+      throw new Error(response.error || 'Failed to load folders')
+    },
+    enabled: !!projectId,
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
+  })
+  const folders: ParameterFolder[] = foldersData ?? []
+  const foldersById = useMemo(
+    () => new Map<string, ParameterFolder>(folders.map((f) => [f.id, f])),
+    [folders],
+  )
+
+  // Unfiltered project total — used for the sidebar "All Parameters"
+  // count + the Ungrouped subtraction. Stays stable while a folder
+  // filter narrows the paged parameters query below.
+  const { data: facetsData } = useQuery({
+    queryKey: ['parameter-facets', projectId],
+    queryFn: async () => {
+      if (!projectId) return null
+      const response = await parameterService.getFacets(projectId)
+      if (response.success && response.data) return response.data
+      return null
+    },
+    enabled: !!projectId,
+    staleTime: 30_000,
+  })
+  const projectTotalParameters = facetsData?.total ?? 0
+
+  // Compute the folder filter to send to the server. The selectedFolderId
+  // is the user's pick; we expand to its subtree (so a top-level folder
+  // returns everything inside it including sub-folders). `__none__`
+  // forwards verbatim — the controller turns it into `folderId = null`.
+  const serverFolderId = (() => {
+    if (!selectedFolderId) return undefined
+    if (selectedFolderId === '__none__') return '__none__'
+    const ids: string[] = []
+    const queue = [selectedFolderId]
+    while (queue.length > 0) {
+      const id = queue.shift()!
+      ids.push(id)
+      for (const f of folders) if (f.parentId === id) queue.push(f.id)
+    }
+    return ids.join(',')
+  })()
   const serverQuery = {
     q: trimmedQ || undefined,
     // Only single-value filters go to the server (keeps compatible with
@@ -521,6 +579,7 @@ export default function ParametersPage() {
     dataType:
       dataTypeFilter !== 'all' && dataTypeFilter !== 'unassigned' ? dataTypeFilter : undefined,
     unit: unitFilter !== 'all' && unitFilter !== 'unassigned' ? unitFilter : undefined,
+    folderId: serverFolderId,
   }
   const {
     data: paramPages,
@@ -569,28 +628,9 @@ export default function ParametersPage() {
   }, [paramPages])
   const totalParameters = paramPages?.pages[0]?.total ?? parameters.length
 
-  // Folder queries and mutations
-  const { data: foldersData } = useQuery({
-    queryKey: ['parameter-folders', projectId],
-    queryFn: async () => {
-      if (!projectId) throw new Error('Project ID required')
-      const response = await parameterService.getFolders(projectId)
-      if (response.success && response.data) return response.data
-      throw new Error(response.error || 'Failed to load folders')
-    },
-    enabled: !!projectId,
-    staleTime: 30_000,
-    placeholderData: (prev) => prev,
-  })
-  const folders: ParameterFolder[] = foldersData ?? []
-  // O(1) folder lookups. Before this, every row's .find() over the
-  // folders array turned the table render into O(n * folders). With
-  // hundreds of folders that was the dominant cost.
-  const foldersById = useMemo(
-    () => new Map<string, ParameterFolder>(folders.map((f) => [f.id, f])),
-    [folders],
-  )
-
+  // Folder mutations (the fetch + foldersById are now hoisted earlier so
+  // the parameters paged query can expand a selected folder into its
+  // subtree before round-tripping the server).
   const createFolderMutation = useMutation({
     mutationFn: async (name: string) => {
       if (!projectId) throw new Error('Project ID required')
@@ -850,7 +890,26 @@ export default function ParametersPage() {
       targetFolderId = overId.replace('sortfolder-', '')
     }
     if (targetFolderId !== undefined) {
-      moveToFolderMutation.mutate({ parameterId: paramId, folderId: targetFolderId })
+      // If the dragged row is part of a multi-select, move every selected
+      // row in one batch instead of just the row under the cursor.
+      const ids = selectedIds.has(paramId) && selectedIds.size > 1
+        ? Array.from(selectedIds)
+        : [paramId]
+      if (ids.length === 1) {
+        moveToFolderMutation.mutate({ parameterId: ids[0], folderId: targetFolderId })
+      } else {
+        Promise.all(
+          ids.map(id => parameterService.moveParameterToFolder(projectId!, id, targetFolderId)),
+        ).then(() => {
+          queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
+          queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
+          const label = targetFolderId
+            ? (folderOptions.find(o => o.value === targetFolderId)?.label.trim() ?? 'folder')
+            : 'Ungrouped'
+          setToastMessage(`Moved ${ids.length} parameters to ${label}`)
+          setSelectedIds(new Set())
+        })
+      }
     }
   }
 
@@ -1168,6 +1227,31 @@ export default function ParametersPage() {
   }
 
   // ---------------------------------------------------------------------------
+  // Subtree parameter counts. Server returns _count.parameters as DIRECT
+  // children only; the sidebar shows the rolled-up total so a top-level
+  // folder reflects everything inside it. Computed once per folder set
+  // change.
+  // ---------------------------------------------------------------------------
+  const folderSubtreeCounts = useMemo((): Map<string, { direct: number; total: number }> => {
+    const childrenOf = new Map<string | null, string[]>()
+    for (const f of folders) {
+      const p = f.parentId ?? null
+      if (!childrenOf.has(p)) childrenOf.set(p, [])
+      childrenOf.get(p)!.push(f.id)
+    }
+    const counts = new Map<string, { direct: number; total: number }>()
+    const visit = (id: string): number => {
+      const direct = foldersById.get(id)?._count?.parameters ?? 0
+      let total = direct
+      for (const childId of childrenOf.get(id) ?? []) total += visit(childId)
+      counts.set(id, { direct, total })
+      return total
+    }
+    for (const rootId of childrenOf.get(null) ?? []) visit(rootId)
+    return counts
+  }, [folders, foldersById])
+
+  // ---------------------------------------------------------------------------
   // Build a flat ordered list of folder options for dropdowns (any depth)
   // ---------------------------------------------------------------------------
   // Flattened folder options for dropdowns (bulk-move + per-row folder
@@ -1220,9 +1304,21 @@ export default function ParametersPage() {
       } else {
         const root = foldersById.get(selectedFolderId)
         if (root) {
-          const ownParams = filteredParameters.filter((p) => p.folderId === root.id)
-          flatGroups.push({ id: root.id, label: root.name, color: root.color ?? null, params: ownParams, depth: 0 })
-          walk(root.id, 1)
+          // Roll the entire subtree into a single group. Picking a top
+          // folder should return everything inside it (including
+          // sub-folders) instead of fragmenting the view across
+          // sub-folder group headers — pick a sub-folder explicitly to
+          // narrow further.
+          const allInSubtree = filteredParameters.filter(
+            (p) => p.folderId && folderSubtreeIds?.has(p.folderId),
+          )
+          flatGroups.push({
+            id: root.id,
+            label: root.name,
+            color: root.color ?? null,
+            params: allInSubtree,
+            depth: 0,
+          })
         }
       }
     } else {
@@ -1238,7 +1334,7 @@ export default function ParametersPage() {
       if (collapsedGroups.has(g.id)) skipBelowDepth = g.depth
     }
     return { showGroupsForTable: showGroups, visibleGroupsForTable: visibleGroups }
-  }, [selectedFolderId, folders, filteredParameters, foldersById, collapsedGroups])
+  }, [selectedFolderId, folders, filteredParameters, foldersById, collapsedGroups, folderSubtreeIds])
 
   // Flat item list the virtualizer iterates over. Mixes group header
   // rows and parameter rows; the render layer branches on `kind`.
@@ -1415,9 +1511,20 @@ export default function ParametersPage() {
                           <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
                             {folder.name}
                           </span>
-                          <span className="text-[10px] text-gray-600 dark:text-gray-400 shrink-0">
-                            {folder._count?.parameters ?? 0}
-                          </span>
+                          {(() => {
+                            const c = folderSubtreeCounts.get(folder.id)
+                            const total = c?.total ?? folder._count?.parameters ?? 0
+                            const direct = c?.direct ?? folder._count?.parameters ?? 0
+                            const hasChildren = total !== direct
+                            return (
+                              <span
+                                className="text-[10px] text-gray-600 dark:text-gray-400 shrink-0"
+                                title={hasChildren ? `${direct} direct + ${total - direct} in sub-folders` : undefined}
+                              >
+                                {total}
+                              </span>
+                            )
+                          })()}
                         </button>
                         <div className="relative" ref={folderMenuOpen === folder.id ? folderMenuRef : undefined}>
                           <button
@@ -1589,10 +1696,17 @@ export default function ParametersPage() {
         <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
           Parameters
           {!isLoading && (
-            <span className="text-xs font-normal text-gray-600 dark:text-gray-400 bg-gray-200/30 dark:bg-gray-400/15 px-[7px] py-0.5 rounded-[10px]">
+            <span
+              className="text-xs font-normal text-gray-600 dark:text-gray-400 bg-gray-200/30 dark:bg-gray-400/15 px-[7px] py-0.5 rounded-[10px]"
+              title={
+                hasNextPage
+                  ? `${parameters.length} loaded of ${totalParameters} total`
+                  : undefined
+              }
+            >
               {filteredParameters.length !== parameters.length
-                ? `${filteredParameters.length} / ${parameters.length}`
-                : parameters.length}
+                ? `${filteredParameters.length} / ${totalParameters || parameters.length}`
+                : (totalParameters || parameters.length)}
             </span>
           )}
         </h2>
@@ -1889,7 +2003,7 @@ export default function ParametersPage() {
                   )}
                 />
                 <span className="flex-1">All Parameters</span>
-                <span className="text-[10px] text-gray-600 dark:text-gray-400">{parameters.length}</span>
+                <span className="text-[10px] text-gray-600 dark:text-gray-400">{projectTotalParameters || totalParameters}</span>
               </button>
               {/* Ungrouped — droppable zone */}
               <DroppableFolder folderId="ungrouped" isOver={overFolderId === 'ungrouped'}>
@@ -1904,7 +2018,17 @@ export default function ParametersPage() {
                 >
                   <Folder size={13} className="shrink-0" />
                   <span className="flex-1">Ungrouped</span>
-                  <span className="text-[10px]">{parameters.filter(p => !p.folderId).length}</span>
+                  {(() => {
+                    // unfiltered project total - sum of every folder's
+                    // direct count = ungrouped. Uses facetsData.total so
+                    // it stays correct even when a folder filter is
+                    // narrowing the parameters paged query.
+                    const total = projectTotalParameters || totalParameters
+                    let inFolders = 0
+                    for (const c of folderSubtreeCounts.values()) inFolders += c.direct
+                    const ungrouped = Math.max(0, total - inFolders)
+                    return <span className="text-[10px]">{ungrouped}</span>
+                  })()}
                 </button>
               </DroppableFolder>
               {/* Named folders — recursive tree, sortable at every depth level */}
@@ -2026,12 +2150,17 @@ export default function ParametersPage() {
           <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 mr-1">
             {selectedIds.size} selected
           </span>
-          {/* Bulk move to folder */}
+          {/* Bulk move to folder. Controlled select — value always resets
+              to "" after a pick so the same destination can be re-selected
+              for the next batch. Sentinel "__root__" represents Ungrouped. */}
           {folders.length > 0 && (
             <select
-              defaultValue=""
+              value=""
               onChange={async e => {
-                const folderId = e.target.value || null
+                const raw = e.target.value
+                if (!raw) return
+                const folderId = raw === '__root__' ? null : raw
+                const count = selectedIds.size
                 await Promise.all(
                   Array.from(selectedIds).map(id =>
                     parameterService.moveParameterToFolder(projectId!, id, folderId)
@@ -2039,13 +2168,16 @@ export default function ParametersPage() {
                 )
                 queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
                 queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
-                setToastMessage(`Moved ${selectedIds.size} parameter${selectedIds.size > 1 ? 's' : ''} to ${folderId ? (foldersById.get(folderId)?.name ?? 'folder') : 'root'}`)
+                const label = folderId
+                  ? (folderOptions.find(o => o.value === folderId)?.label.trim() ?? 'folder')
+                  : 'Ungrouped'
+                setToastMessage(`Moved ${count} parameter${count > 1 ? 's' : ''} to ${label}`)
                 setSelectedIds(new Set())
               }}
-              className="px-2 py-1 rounded-md text-xs font-medium border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 cursor-pointer"
+              className="px-2 py-1 rounded-md text-xs font-medium border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 cursor-pointer min-w-[160px]"
             >
-              <option value="">Move to folder…</option>
-              <option value="">— Root (ungrouped)</option>
+              <option value="" disabled>Move to folder…</option>
+              <option value="__root__">— Ungrouped (root)</option>
               {buildAllFolderOptions().map(opt => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
