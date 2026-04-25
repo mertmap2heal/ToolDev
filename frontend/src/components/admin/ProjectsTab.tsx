@@ -1,15 +1,17 @@
 import { useState, useMemo } from 'react'
-import { FolderOpen, Plus } from 'lucide-react'
+import { FolderOpen, Plus, Key } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as adminService from '../../services/admin.service'
 import { authService } from '../../services/auth.service'
 import { projectService } from '../../services/project.service'
 import type { AdminProject } from '../../types/admin.types'
 import ProjectEditorModal from './ProjectEditorModal'
+import McpKeysPanel from './McpKeysPanel'
 
 export default function ProjectsTab() {
   const queryClient = useQueryClient()
   const [editorProject, setEditorProject] = useState<AdminProject | null | 'new'>(null)
+  const [mcpProject, setMcpProject] = useState<AdminProject | null>(null)
 
   const {
     data: projects = [],
@@ -144,13 +146,26 @@ export default function ProjectsTab() {
                     )}
                   </td>
                   <td className="py-3 px-4">
-                    <button
-                      type="button"
-                      onClick={() => setEditorProject(project)}
-                      className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
-                    >
-                      Edit
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setEditorProject(project)}
+                        className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
+                      >
+                        Edit
+                      </button>
+                      {project.aiEnabled && (
+                        <button
+                          type="button"
+                          onClick={() => setMcpProject(project)}
+                          className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:underline text-sm"
+                          title="Manage MCP keys for Claude Desktop / MCP agents"
+                        >
+                          <Key size={12} />
+                          MCP keys
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -164,6 +179,13 @@ export default function ProjectsTab() {
           users={users}
           onClose={() => setEditorProject(null)}
           onSave={handleSave}
+        />
+      )}
+      {mcpProject && (
+        <McpKeysPanel
+          projectId={mcpProject.id}
+          projectName={mcpProject.name}
+          onClose={() => setMcpProject(null)}
         />
       )}
     </div>

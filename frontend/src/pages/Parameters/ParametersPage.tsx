@@ -51,6 +51,9 @@ import type { Parameter, ParameterFolder } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
 import { AiFeatureProvider } from '../../contexts/AiFeatureContext'
+import AiFeatureGuard from '../../components/ai/AiFeatureGuard'
+import { aiParameterService } from '../../services/aiParameter.service'
+import { Sparkles } from 'lucide-react'
 import ParameterFilterBar from '../../components/parameters/ParameterFilterBar'
 import ParameterRow from './ParameterRow'
 
@@ -331,6 +334,12 @@ export default function ParametersPage() {
   const [detailParameter, setDetailParameter] = useState<Parameter | null>(null)
   const [viewingSource, setViewingSource] = useState<Parameter | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  // AI draft flow (phase 1c): click toolbar button -> prompt for
+  // natural-language description -> backend returns draft -> show a
+  // JSON preview + open the blank CreateParameterModal. Modal seeding
+  // (pre-fill the form from the draft) lands in a follow-up PR once
+  // CreateParameterModal accepts an initial-values prop.
+  const [aiDrafting, setAiDrafting] = useState(false)
   const [activeTab, setActiveTab] = useState<'parameters' | 'communications'>('parameters')
   const [changeRequestModal, setChangeRequestModal] = useState<{ isOpen: boolean; sourceId: string; sourceName: string } | null>(null)
   const [dataTypeFilter, setDataTypeFilter] = useState<string>('all')
@@ -1048,6 +1057,34 @@ export default function ParametersPage() {
     moveToFolderMutation.mutate({ parameterId: paramId, folderId })
   }, [moveToFolderMutation])
 
+  const handleAiDraft = async () => {
+    if (!projectId) return
+    const description = window.prompt('Describe the parameter you want the AI to draft:')
+    if (!description || !description.trim()) return
+    setAiDrafting(true)
+    try {
+      const res = await aiParameterService.draft(projectId, description.trim())
+      if (!res.success || !res.data) {
+        alert(res.error || 'AI draft failed')
+        return
+      }
+      const d = res.data.draft
+      // v1: alert with the structured draft + open blank create
+      // modal. Follow-up PR adds initial-values plumbing so the
+      // modal shows the AI draft directly.
+      alert(
+        'AI draft:\n\n' +
+          JSON.stringify(d, null, 2) +
+          `\n\nTokens: ${res.data.provenance.tokensIn} in / ${res.data.provenance.tokensOut} out\nModel: ${res.data.provenance.modelVersion}`,
+      )
+      setIsCreateModalOpen(true)
+    } catch (e) {
+      alert(`AI draft failed: ${(e as Error).message}`)
+    } finally {
+      setAiDrafting(false)
+    }
+  }
+
   const handleConfirmDelete = () => {
     if (deleteConfirmation) deleteParameterMutation.mutate(deleteConfirmation.id)
   }
@@ -1708,6 +1745,22 @@ export default function ParametersPage() {
               Graph
             </button>
           </div>
+
+          {/* AI draft -- only renders when all three flags clear. */}
+          <AiFeatureGuard>
+            <button
+              onClick={handleAiDraft}
+              disabled={aiDrafting}
+              title="Generate a parameter from a natural-language description using AI"
+              className={clsx(
+                'flex items-center gap-1.5 px-3 py-[5px] rounded-md text-xs font-semibold border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 transition-colors',
+                aiDrafting ? 'cursor-wait opacity-60' : 'cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50',
+              )}
+            >
+              <Sparkles size={13} />
+              {aiDrafting ? 'Drafting…' : 'AI draft'}
+            </button>
+          </AiFeatureGuard>
 
           {/* Create */}
           <button

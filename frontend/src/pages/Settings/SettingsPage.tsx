@@ -17,13 +17,17 @@ import {
   Clock,
   Keyboard,
   Info,
+  Sparkles,
+  Trash2,
+  Plus,
 } from 'lucide-react'
 import { useThemeStore, type Theme } from '../../store/themeStore'
 import { useAuthStore } from '../../store/authStore'
 import { authService } from '../../services/auth.service'
+import { aiCredentialService, type AiCredentialSummary } from '../../services/aiCredential.service'
 
 /* ────────────────────────── Types ────────────────────────── */
-type Section = 'profile' | 'security' | 'notifications' | 'appearance' | 'accessibility'
+type Section = 'profile' | 'security' | 'ai-access' | 'notifications' | 'appearance' | 'accessibility'
 
 interface NavItem {
   id: Section
@@ -35,6 +39,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { id: 'profile', label: 'Profile', icon: UserIcon, description: 'Personal information & avatar' },
   { id: 'security', label: 'Security', icon: Lock, description: 'Password & authentication' },
+  { id: 'ai-access', label: 'AI Access', icon: Sparkles, description: 'BYO provider key & connectors' },
   { id: 'notifications', label: 'Notifications', icon: Bell, description: 'Email & in-app alerts' },
   { id: 'appearance', label: 'Appearance', icon: Monitor, description: 'Theme & display' },
   { id: 'accessibility', label: 'Accessibility', icon: Keyboard, description: 'Keyboard & display options' },
@@ -135,6 +140,7 @@ export default function SettingsPage() {
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {activeSection === 'profile' && <ProfileSection showToast={showToast} />}
           {activeSection === 'security' && <SecuritySection showToast={showToast} />}
+          {activeSection === 'ai-access' && <AiAccessSection showToast={showToast} />}
           {activeSection === 'notifications' && <NotificationsSection showToast={showToast} />}
           {activeSection === 'appearance' && <AppearanceSection />}
           {activeSection === 'accessibility' && <AccessibilitySection />}
@@ -717,6 +723,193 @@ function AccessibilitySection() {
           <KeyboardShortcut keys={['Ctrl', 'Shift', 'T']} description="Toggle theme" />
           <KeyboardShortcut keys={['Esc']} description="Close modal / drawer" />
         </div>
+      </div>
+    </div>
+  )
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━ AI ACCESS SECTION ━━━━━━━━━━━━━━━━━━━━━ */
+function AiAccessSection({ showToast }: { showToast: (m: string, t: 'success' | 'error') => void }) {
+  const [creds, setCreds] = useState<AiCredentialSummary[]>([])
+  const [loading, setLoading] = useState(true)
+  const [provider, setProvider] = useState<AiCredentialSummary['provider']>('anthropic')
+  const [label, setLabel] = useState('')
+  const [plaintextKey, setPlaintextKey] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [showKey, setShowKey] = useState(false)
+
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    const res = await aiCredentialService.list()
+    if (res.success && res.data) setCreds(res.data)
+    setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    refresh()
+  }, [refresh])
+
+  const handleCreate = async () => {
+    if (!label.trim() || plaintextKey.length < 8) return
+    setSaving(true)
+    try {
+      const res = await aiCredentialService.create({ provider, label: label.trim(), plaintextKey })
+      if (res.success && res.data) {
+        showToast('API key stored securely', 'success')
+        setLabel('')
+        setPlaintextKey('')
+        setShowKey(false)
+        await refresh()
+      } else {
+        showToast((res as any).error ?? 'Failed to save credential', 'error')
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleRevoke = async (id: string) => {
+    if (!window.confirm('Revoke this credential? AI calls using it will immediately fail.')) return
+    const res = await aiCredentialService.revoke(id)
+    if (res.success) {
+      showToast('Credential revoked', 'success')
+      await refresh()
+    } else {
+      showToast((res as any).error ?? 'Failed to revoke credential', 'error')
+    }
+  }
+
+  const active = creds.filter((c) => !c.revokedAt)
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      <SectionHeader icon={Sparkles} title="AI Access" subtitle="Connect your own AI provider or use the hosted default" />
+
+      <div
+        className="rounded-xl border p-5 space-y-3"
+        style={{ backgroundColor: 'var(--theme-surface)', borderColor: 'var(--theme-border)' }}
+      >
+        <div className="flex items-start gap-3">
+          <Info size={14} className="text-blue-500 flex-shrink-0 mt-0.5" />
+          <div className="text-xs text-gray-600 dark:text-gray-400">
+            <p>
+              Every AI call in the product is routed through the provider configured here. Keys are encrypted at
+              rest (AES-256-GCM), decrypted server-side for a single outbound request, and never sent back to the
+              browser.
+            </p>
+            <p className="mt-1 text-[10px] text-gray-400">
+              If no key is stored, the product uses the operator-configured hosted default (may be disabled for
+              ITAR / air-gapped deployments).
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Add new key */}
+      <div
+        className="rounded-xl border p-5 space-y-3"
+        style={{ backgroundColor: 'var(--theme-surface)', borderColor: 'var(--theme-border)' }}
+      >
+        <h3 className="text-xs font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Add Provider Key</h3>
+
+        <FieldGroup label="Provider" required>
+          <select
+            value={provider}
+            onChange={(e) => setProvider(e.target.value as AiCredentialSummary['provider'])}
+            className="settings-input"
+          >
+            <option value="anthropic">Anthropic (Claude)</option>
+            <option value="openai">OpenAI</option>
+            <option value="azure">Azure OpenAI</option>
+            <option value="google">Google Vertex</option>
+            <option value="self_hosted">Self-hosted (OpenAI-compatible)</option>
+          </select>
+        </FieldGroup>
+
+        <FieldGroup label="Label" required>
+          <input
+            type="text"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="e.g. Personal Claude key"
+            className="settings-input"
+          />
+        </FieldGroup>
+
+        <FieldGroup label="API Key" required hint="Stored encrypted; masked tail only shown below">
+          <div className="relative">
+            <input
+              type={showKey ? 'text' : 'password'}
+              value={plaintextKey}
+              onChange={(e) => setPlaintextKey(e.target.value)}
+              placeholder="sk-ant-..."
+              className="settings-input pr-8"
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey((v) => !v)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              {showKey ? <EyeOff size={13} /> : <Eye size={13} />}
+            </button>
+          </div>
+        </FieldGroup>
+
+        <div className="flex justify-end pt-2 border-t" style={{ borderColor: 'var(--theme-border)' }}>
+          <button
+            onClick={handleCreate}
+            disabled={saving || !label.trim() || plaintextKey.length < 8}
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors"
+          >
+            <Plus size={12} />
+            {saving ? 'Storing…' : 'Store Key'}
+          </button>
+        </div>
+      </div>
+
+      {/* Active keys */}
+      <div
+        className="rounded-xl border p-5"
+        style={{ backgroundColor: 'var(--theme-surface)', borderColor: 'var(--theme-border)' }}
+      >
+        <h3 className="text-xs font-semibold text-gray-900 dark:text-white uppercase tracking-wider mb-3">
+          Active Credentials
+        </h3>
+        {loading ? (
+          <p className="text-xs text-gray-400">Loading…</p>
+        ) : active.length === 0 ? (
+          <p className="text-xs text-gray-400">No provider keys stored. AI calls use the hosted default if enabled.</p>
+        ) : (
+          <ul className="space-y-2">
+            {active.map((c) => (
+              <li
+                key={c.id}
+                className="flex items-center justify-between py-2 border-b last:border-b-0"
+                style={{ borderColor: 'var(--theme-border)' }}
+              >
+                <div>
+                  <p className="text-xs font-medium text-gray-900 dark:text-white">
+                    {c.label}{' '}
+                    <span className="ml-1 text-[10px] text-gray-500">{c.provider}</span>
+                  </p>
+                  <p className="text-[10px] text-gray-400 font-mono">
+                    …{c.maskedTail} · added {new Date(c.createdAt).toLocaleDateString()}
+                    {c.lastUsedAt ? ` · last used ${new Date(c.lastUsedAt).toLocaleDateString()}` : ' · never used'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleRevoke(c.id)}
+                  className="inline-flex items-center gap-1 px-2 py-1 text-[10px] text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                  title="Revoke credential"
+                >
+                  <Trash2 size={11} />
+                  Revoke
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   )

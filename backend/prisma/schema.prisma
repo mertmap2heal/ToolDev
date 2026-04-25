@@ -44,6 +44,7 @@ model User {
   parameterMcpKeys                    ParameterMcpKey[]
   aiInvocations                       AiInvocation[]
   submittedBulkJobs                   ParameterBulkJob[]
+  aiCredentials                       UserAiCredential[]
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -3822,4 +3823,28 @@ model ParameterBulkJob {
 
   @@index([projectId, status])
   @@index([submittedBy, createdAt])
+}
+
+// BYOK — per-user encrypted AI provider API key. The plaintext key never
+// leaves `aiCredentials.service.ts`; it is decrypted only for a single
+// outbound call and zeroed from memory after use. `keyCiphertext` stores
+// the AES-256-GCM envelope (iv || tag || ciphertext, base64). `keyMeta`
+// carries non-secret hints the UI can display (masked tail, label).
+model UserAiCredential {
+  id             String    @id @default(uuid())
+  userId         String
+  provider       String // "anthropic" | "openai" | "azure" | "google" | "self_hosted"
+  label          String // user-supplied friendly name
+  keyCiphertext  String // base64 AES-256-GCM envelope
+  maskedTail     String // last 4 chars of the plaintext, for UI display
+  scopes         String[] // optional, provider-agnostic ("draft","review","impact")
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, provider])
+  @@index([userId, revokedAt])
 }
