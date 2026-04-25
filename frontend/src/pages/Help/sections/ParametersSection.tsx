@@ -914,6 +914,105 @@ Field  : soc_percent     (uint8,  start=32, length=8,  scale=0.5,  offset=0,
         <li><strong>JSON</strong> — generic dump for any protocol; round-trips through Import.</li>
       </ul>
 
+      <h2 id="matlab">MATLAB Toolbox</h2>
+      <p>
+        Aerospace and automotive engineers usually live inside MATLAB /
+        Simulink. The repo ships a first-class MATLAB-side client at{' '}
+        <code>matlab-toolbox/</code> so workspace variables and Simulink
+        Data Dictionary contents can round-trip through the parameter
+        store without leaving the IDE. Every value pushed via the toolbox
+        carries provenance (<code>source=matlab</code>,{' '}
+        <code>matlabVersion</code>, <code>hostname</code>) so the audit
+        trail records exactly which engineer's session the value came
+        from.
+      </p>
+
+      <h3 id="matlab-install">Install</h3>
+      <p>From the repo root, in MATLAB:</p>
+      <CodeBlock>{`addpath(genpath('matlab-toolbox'))
+savepath`}</CodeBlock>
+
+      <h3 id="matlab-quick-start">Quick start</h3>
+      <CodeBlock>{`% Configure once per session
+client = ptool.ParameterToolClient( ...
+    'https://app.example.com/api/v1', ...     % API base URL
+    'mcp_<token>', ...                        % MCP key or session JWT
+    'PROJECT-UUID');
+
+% Push every numeric / string / struct workspace variable as a parameter
+ptool.push(client);
+
+% Pull the latest parameter set into the workspace
+ws = ptool.pull(client);
+
+% Three-way sync (remote + local + last-baseline)
+report = ptool.sync(client);
+
+% Simulink Data Dictionary round-trip
+ptool.pushFromSldd(client, 'myDict.sldd');
+ptool.pullToSldd(client,  'myDict.sldd');`}</CodeBlock>
+
+      <h3 id="matlab-auth">Auth</h3>
+      <p>Three options in priority order:</p>
+      <ol>
+        <li>
+          <strong>OAuth device flow</strong> (planned): <code>ptool.login()</code>{' '}
+          opens a browser to the project's auth page; the resulting JWT
+          is cached under <code>prefdir</code>.
+        </li>
+        <li>
+          <strong>MCP API key</strong>: pass the key string when
+          constructing the client. Issued from{' '}
+          <Link to="/help/admin">Admin → MCP keys</Link>.
+        </li>
+        <li>
+          <strong>Project session JWT</strong> (short-lived): copy from{' '}
+          <Link to="/settings">Settings → AI Access</Link>.
+        </li>
+      </ol>
+
+      <h3 id="matlab-sldd">Simulink Data Dictionary bridge</h3>
+      <p>
+        <code>pushFromSldd</code> reads the dictionary in the running
+        MATLAB session via <code>Simulink.data.dictionary.open</code>{' '}
+        and posts every entry as a parameter (with{' '}
+        <code>description</code> auto-set to "Imported from &lt;path&gt;").{' '}
+        <code>pullToSldd</code> reverses the flow — existing entries are
+        updated, new ones appended; pass <code>Replace=true</code> to
+        prune entries that no longer exist on the server.
+      </p>
+      <Callout variant="note" title="Why no server-side .sldd parser">
+        Cross-version Simulink dictionary format is a graveyard — each
+        MATLAB R-release changes the on-disk format or the API. Letting
+        MATLAB's own version-correct API do the read keeps the toolbox
+        working as MATLAB evolves; the backend never needs to ship a
+        per-version parser.
+      </Callout>
+
+      <h3 id="matlab-tests">Verify the install</h3>
+      <p>From the repo root:</p>
+      <CodeBlock>{`matlab -batch "results = runtests('matlab-toolbox/tests'); assertSuccess(results)"`}</CodeBlock>
+      <p>
+        For the REST contract on the backend side, run{' '}
+        <code>cd backend && npm test -- matlab.toolbox.contract</code> —
+        every endpoint the toolbox depends on is pinned by a vitest
+        suite, so a future backend refactor that breaks the toolbox
+        trips CI.
+      </p>
+
+      <h3 id="matlab-non-goals">Non-goals</h3>
+      <ul>
+        <li>
+          <strong>No offline cache.</strong> The toolbox needs the main
+          backend on the network. Air-gapped customers should use ReqIF /
+          JSON export from the web app instead.
+        </li>
+        <li>
+          <strong>No server-side <code>.sldd</code> handling.</strong> See
+          callout above.
+        </li>
+      </ul>
+
       <h2 id="shortcuts">Keyboard shortcuts</h2>
       <table className="not-prose w-full mt-3 text-sm border-collapse">
         <thead>
