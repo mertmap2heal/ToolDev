@@ -52,6 +52,7 @@ import {
   list as listBulkJobs,
 } from '../controllers/parameterBulkJob.controller'
 import * as baselineCtrl from '../controllers/parameterBaseline.controller'
+import * as scenarioCtrl from '../controllers/parameterScenario.controller'
 
 const router = Router()
 
@@ -106,6 +107,14 @@ router.get('/:projectId/baselines/compare', baselineCtrl.compare)
 router.get('/:projectId/baselines/:baselineId', baselineCtrl.get)
 router.post('/:projectId/baselines/:baselineId/restore', baselineCtrl.restore)
 router.delete('/:projectId/baselines/:baselineId', baselineCtrl.remove)
+// Parameter scenarios — what-if overlays.
+router.get('/:projectId/scenarios', scenarioCtrl.list)
+router.post('/:projectId/scenarios', scenarioCtrl.create)
+router.get('/:projectId/scenarios/:scenarioId', scenarioCtrl.get)
+router.put('/:projectId/scenarios/:scenarioId', scenarioCtrl.update)
+router.delete('/:projectId/scenarios/:scenarioId', scenarioCtrl.remove)
+router.put('/:projectId/scenarios/:scenarioId/overrides/:parameterId', scenarioCtrl.setOverride)
+router.delete('/:projectId/scenarios/:scenarioId/overrides/:parameterId', scenarioCtrl.removeOverride)
 router.get('/:projectId', getParameters)
 router.get('/:projectId/:id', getParameter)
 router.post('/:projectId', createParameter)

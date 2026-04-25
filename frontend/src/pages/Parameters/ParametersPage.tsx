@@ -56,6 +56,7 @@ import CommunicationsTab from './CommunicationsTab'
 import ParameterCommandPalette from '../../components/parameters/ParameterCommandPalette'
 import ShortcutsOverlay from '../../components/parameters/ShortcutsOverlay'
 import ParameterBaselinesPanel from '../../components/parameters/ParameterBaselinesPanel'
+import { parameterScenarioService, type Scenario, type ScenarioSummary } from '../../services/parameterScenario.service'
 import type { Parameter, ParameterFolder } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
@@ -378,6 +379,10 @@ export default function ParametersPage() {
   const [isPaletteOpen, setIsPaletteOpen] = useState(false)
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false)
   const [isBaselinesOpen, setIsBaselinesOpen] = useState(false)
+  // Active what-if scenario. When non-null, the row default-value cell
+  // is overlaid by the scenario's override for that parameter (UI only —
+  // the underlying row stays untouched).
+  const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'parameters' | 'communications'>('parameters')
   const [changeRequestModal, setChangeRequestModal] = useState<{ isOpen: boolean; sourceId: string; sourceName: string } | null>(null)
   const [dataTypeFilter, setDataTypeFilter] = useState<string>('all')
@@ -589,6 +594,40 @@ export default function ParametersPage() {
     staleTime: 30_000,
   })
   const projectTotalParameters = facetsData?.total ?? 0
+
+  // Scenario list (for the toolbar dropdown).
+  const { data: scenarios = [] } = useQuery({
+    queryKey: ['parameter-scenarios', projectId],
+    queryFn: async () => {
+      if (!projectId) return [] as ScenarioSummary[]
+      const res = await parameterScenarioService.list(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    enabled: !!projectId,
+    staleTime: 30_000,
+  })
+
+  // Active scenario detail (override map) — fetched only while one is
+  // selected, so the toolbar dropdown stays cheap.
+  const { data: activeScenario } = useQuery({
+    queryKey: ['parameter-scenario', projectId, activeScenarioId],
+    queryFn: async () => {
+      if (!projectId || !activeScenarioId) return null
+      const res = await parameterScenarioService.get(projectId, activeScenarioId)
+      return res.success && res.data ? (res.data as Scenario) : null
+    },
+    enabled: !!projectId && !!activeScenarioId,
+    staleTime: 10_000,
+  })
+
+  // parameterId -> override value, derived once per scenario change.
+  const scenarioOverrides = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const o of activeScenario?.overrides ?? []) {
+      map.set(o.parameterId, o.value)
+    }
+    return map
+  }, [activeScenario])
 
   // Compute the folder filter to send to the server. The selectedFolderId
   // is the user's pick; we expand to its subtree (so a top-level folder
@@ -1843,6 +1882,30 @@ export default function ParametersPage() {
             Baselines
           </button>
 
+          {/* Scenario picker — what-if overlay over default-values. */}
+          <div className="relative">
+            <select
+              value={activeScenarioId ?? ''}
+              onChange={(e) => setActiveScenarioId(e.target.value || null)}
+              className={clsx(
+                BTN_TOOLBAR,
+                'appearance-none pr-7',
+                activeScenarioId
+                  ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                  : '',
+              )}
+              title="Apply a what-if scenario (overlay only — underlying values stay intact)"
+              aria-label="Active scenario"
+            >
+              <option value="">No scenario</option>
+              {scenarios.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({s.overrideCount})
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Publish to Git */}
           <button
             onClick={() => setIsPublishOpen(true)}
@@ -2529,6 +2592,7 @@ export default function ParametersPage() {
                           onCancelInlineEdit={handleCancelInlineEdit}
                           onViewSource={handleViewSource}
                           onMoveToFolder={handleMoveToFolderFromRow}
+                          scenarioOverride={scenarioOverrides.get(param.id)}
                           onOpenChangeRequest={handleOpenChangeRequest}
                           onEditClick={handleEditClick}
                           onDeleteClick={handleDeleteClick}

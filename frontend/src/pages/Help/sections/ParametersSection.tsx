@@ -721,6 +721,39 @@ sum([cell_v_1, cell_v_2, cell_v_3])`}</CodeBlock>
         reversible.
       </Callout>
 
+      <h2 id="scenarios">Scenarios (what-if overlays)</h2>
+      <p>
+        A <strong>scenario</strong> is a named collection of{' '}
+        <code>(parameterId → value)</code> overrides. Picking a scenario
+        from the toolbar dropdown overlays those values onto the live
+        parameter set in the list / board / graph — read-only. The
+        underlying rows stay untouched, so you can preview "what if the
+        thermal envelope is +20°C" without committing the change.
+      </p>
+      <p>
+        Cells carrying an overlay value render in purple with a small{' '}
+        <code>SCN</code> badge; the badge tooltip shows the original
+        live value for comparison.
+      </p>
+      <h3 id="scenarios-create">Create &amp; edit</h3>
+      <ol>
+        <li>
+          POST a new scenario via the REST API (UI for in-page create
+          modal lands in a follow-up — for now use the API or the
+          right-click menu on a parameter row).
+        </li>
+        <li>
+          Add overrides one at a time with{' '}
+          <code>PUT /scenarios/:id/overrides/:parameterId</code> body{' '}
+          <code>{`{ value }`}</code>, or replace the whole set with{' '}
+          <code>PUT /scenarios/:id</code> body <code>{`{ overrides: [...] }`}</code>.
+        </li>
+        <li>
+          Pick the scenario from the toolbar dropdown to apply. Pick{' '}
+          <strong>No scenario</strong> to clear.
+        </li>
+      </ol>
+
       <h2 id="versioning">Versions &amp; restore</h2>
       <p>
         Every save (UI, API, MCP, import, MATLAB push) writes a new{' '}

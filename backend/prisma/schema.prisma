@@ -205,6 +205,7 @@ model Project {
   aiInvocations               AiInvocation[]
   parameterBulkJobs           ParameterBulkJob[]
   parameterBaselines          ParameterBaseline[]
+  parameterScenarios          ParameterScenario[]
   items                       Item[]
   verTestResults              VerTestResult[]
   tasks                       Task[]
@@ -3889,4 +3890,41 @@ model ParameterBaselineItem {
 
   @@index([baselineId])
   @@index([parameterId])
+}
+
+// Parameter scenarios — named what-if overlays. A scenario carries a
+// list of (parameterId -> overrideValue) pairs that the UI overlays
+// on top of the live parameter set when the scenario is "active".
+// Pure projection — overlays never mutate the underlying parameter
+// row. Serialised next to parameters.json on Git publish so consumers
+// of the published file can replay a scenario offline.
+model ParameterScenario {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  description String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  overrides ParameterScenarioOverride[]
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, name])
+  @@index([projectId, createdAt])
+}
+
+model ParameterScenarioOverride {
+  id          String   @id @default(uuid())
+  scenarioId  String
+  parameterId String
+  // Override value as a string in the same encoding as
+  // Parameter.defaultValue so the apply step is a flat string swap.
+  value       String
+  createdAt   DateTime @default(now())
+
+  scenario ParameterScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  @@unique([scenarioId, parameterId])
+  @@index([scenarioId])
 }

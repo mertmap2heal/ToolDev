@@ -48,6 +48,9 @@ export interface ParameterRowProps {
   // virtualiser can measure real heights via ResizeObserver.
   measureRef?: (el: HTMLElement | null) => void
   dataIndex?: number
+  // Scenario overlay. When set, the value cell shows this instead of
+  // param.defaultValue with a purple "scenario" badge — read-only.
+  scenarioOverride?: string
 }
 
 function ParameterRowImpl(props: ParameterRowProps) {
@@ -76,6 +79,7 @@ function ParameterRowImpl(props: ParameterRowProps) {
     onDeleteClick,
     measureRef,
     dataIndex,
+    scenarioOverride,
   } = props
 
   const folder = param.folderId ? foldersById.get(param.folderId) : undefined
@@ -191,7 +195,21 @@ function ParameterRowImpl(props: ParameterRowProps) {
             />
           ) : (
             <span className="flex items-center gap-[5px]">
-              <span>{param.defaultValue || '—'}</span>
+              {scenarioOverride !== undefined ? (
+                <>
+                  <span className="text-purple-700 dark:text-purple-300 font-semibold">
+                    {scenarioOverride || '—'}
+                  </span>
+                  <span
+                    title={`Scenario overlay (was ${param.defaultValue || '—'})`}
+                    className="inline-flex items-center justify-center px-1.5 py-px rounded text-[9px] font-bold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/30 cursor-default shrink-0"
+                  >
+                    SCN
+                  </span>
+                </>
+              ) : (
+                <span>{param.defaultValue || '—'}</span>
+              )}
               {param.formula && (
                 <span
                   title={param.formula}
