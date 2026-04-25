@@ -54,6 +54,7 @@ const ParameterBoardView = lazy(
 import ImportParameterModal from '../../components/parameters/ImportParameterModal'
 import CommunicationsTab from './CommunicationsTab'
 import ParameterCommandPalette from '../../components/parameters/ParameterCommandPalette'
+import ShortcutsOverlay from '../../components/parameters/ShortcutsOverlay'
 import type { Parameter, ParameterFolder } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
@@ -323,6 +324,25 @@ export default function ParametersPage() {
           setIsPaletteOpen((v) => !v)
         }
       }
+      // ? alone opens the keyboard cheatsheet. Block when an input is
+      // focused so typing "?" into a field doesn't pop the overlay.
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const target = e.target as HTMLElement | null
+        const tag = target?.tagName
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !target?.isContentEditable) {
+          e.preventDefault()
+          setIsShortcutsOpen((v) => !v)
+        }
+      }
+      // Ctrl/Cmd + 1/2/3 switches view modes (List/Board/Graph).
+      if ((e.ctrlKey || e.metaKey) && (e.key === '1' || e.key === '2' || e.key === '3')) {
+        const target = e.target as HTMLElement | null
+        const tag = target?.tagName
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !target?.isContentEditable) {
+          e.preventDefault()
+          setParamViewMode(e.key === '1' ? 'list' : e.key === '2' ? 'board' : 'graph')
+        }
+      }
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
@@ -355,6 +375,7 @@ export default function ParametersPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [aiDrafting, setAiDrafting] = useState(false)
   const [isPaletteOpen, setIsPaletteOpen] = useState(false)
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'parameters' | 'communications'>('parameters')
   const [changeRequestModal, setChangeRequestModal] = useState<{ isOpen: boolean; sourceId: string; sourceName: string } | null>(null)
   const [dataTypeFilter, setDataTypeFilter] = useState<string>('all')
@@ -2545,6 +2566,10 @@ export default function ParametersPage() {
           onCreate={() => setIsCreateModalOpen(true)}
           onImport={() => setIsImportOpen(true)}
           onExport={() => setIsExportOpen(true)}
+        />
+        <ShortcutsOverlay
+          open={isShortcutsOpen}
+          onClose={() => setIsShortcutsOpen(false)}
         />
       </div>{/* end folders + content layout */}
       <DragOverlay>

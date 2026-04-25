@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
-import { X, Edit2, FileText, History, Link2, FunctionSquare, ChevronDown, ChevronRight, GitCompare, Copy, RotateCcw } from 'lucide-react'
+import { X, Edit2, FileText, History, Link2, FunctionSquare, ChevronDown, ChevronRight, GitCompare, Copy, RotateCcw, Eye } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
 import { evaluateFormula } from './evaluateFormula'
+import { useParameterPresence } from '../../hooks/useParameterPresence'
+import { useAuthStore } from '../../store/authStore'
 import type { Parameter } from 'shared/types/engineering.types'
 import { format } from 'date-fns'
 import clsx from 'clsx'
@@ -79,6 +81,15 @@ export default function ParameterDetailDrawer({
   // Compare mode: null = timeline view, otherwise two version IDs are selected
   const [compareMode, setCompareMode] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
+
+  // Multi-user presence — broadcast to anyone else viewing this same
+  // parameter and receive their viewer set in return.
+  const selfUser = useAuthStore((s) => s.user)
+  const otherViewers = useParameterPresence(
+    isOpen ? projectId : undefined,
+    isOpen ? parameter?.id ?? null : null,
+    selfUser?.id,
+  )
   const [restoringVersionId, setRestoringVersionId] = useState<string | null>(null)
   // Pending restore confirmation: versionId waiting for user to confirm
   const [pendingRestoreId, setPendingRestoreId] = useState<string | null>(null)
@@ -216,6 +227,17 @@ export default function ParameterDetailDrawer({
                 </div>
                 <span className="truncate">{parameter.name}</span>
               </h2>
+              {otherViewers.length > 0 && (
+                <div
+                  className="inline-flex items-center gap-1.5 mt-1.5 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 text-[11px] text-amber-800 dark:text-amber-300"
+                  title={otherViewers.map((v) => v.email ?? v.userId).join(', ')}
+                >
+                  <Eye size={11} />
+                  {otherViewers.length === 1
+                    ? `${otherViewers[0].email ?? 'Another user'} is also viewing`
+                    : `${otherViewers.length} others viewing`}
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-2">
               <button
