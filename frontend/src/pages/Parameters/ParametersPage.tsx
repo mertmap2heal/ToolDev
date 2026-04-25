@@ -1285,6 +1285,11 @@ export default function ParametersPage() {
     color: string | null
     params: typeof filteredParameters
     depth: number
+    /** Server-known total for this group (subtree-aware). Falls back to
+     *  params.length when not known. Surfaced in the group header so the
+     *  visible count doesn't drop below reality just because pagination
+     *  hasn't loaded the next page yet. */
+    totalKnown?: number
   }
   const { showGroupsForTable, visibleGroupsForTable } = useMemo(() => {
     const showGroups = selectedFolderId !== '__none__' && folders.length > 0
@@ -1293,7 +1298,15 @@ export default function ParametersPage() {
       const walk = (parentId: string | null, depth: number): void => {
         for (const folder of folders.filter((f) => (f.parentId ?? null) === parentId)) {
           const ownParams = filteredParameters.filter((p) => p.folderId === folder.id)
-          flatGroups.push({ id: folder.id, label: folder.name, color: folder.color ?? null, params: ownParams, depth })
+          const subtree = folderSubtreeCounts.get(folder.id)
+          flatGroups.push({
+            id: folder.id,
+            label: folder.name,
+            color: folder.color ?? null,
+            params: ownParams,
+            depth,
+            totalKnown: subtree?.direct ?? ownParams.length,
+          })
           walk(folder.id, depth + 1)
         }
       }
@@ -1318,6 +1331,10 @@ export default function ParametersPage() {
             color: root.color ?? null,
             params: allInSubtree,
             depth: 0,
+            // Use the rolled-up subtree total so the header stays
+            // accurate while the paged query is still loading rows.
+            totalKnown:
+              folderSubtreeCounts.get(root.id)?.total ?? allInSubtree.length,
           })
         }
       }
@@ -1334,7 +1351,7 @@ export default function ParametersPage() {
       if (collapsedGroups.has(g.id)) skipBelowDepth = g.depth
     }
     return { showGroupsForTable: showGroups, visibleGroupsForTable: visibleGroups }
-  }, [selectedFolderId, folders, filteredParameters, foldersById, collapsedGroups, folderSubtreeIds])
+  }, [selectedFolderId, folders, filteredParameters, foldersById, collapsedGroups, folderSubtreeIds, folderSubtreeCounts])
 
   // Flat item list the virtualizer iterates over. Mixes group header
   // rows and parameter rows; the render layer branches on `kind`.
@@ -2355,8 +2372,15 @@ export default function ParametersPage() {
                           )}
                           {isCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
                           {group.label}
-                          <span className="text-[10px] text-gray-600 dark:text-gray-400 font-normal normal-case tracking-normal">
-                            ({group.params.length})
+                          <span
+                            className="text-[10px] text-gray-600 dark:text-gray-400 font-normal normal-case tracking-normal"
+                            title={
+                              group.totalKnown !== undefined && group.totalKnown !== group.params.length
+                                ? `${group.params.length} loaded of ${group.totalKnown} total`
+                                : undefined
+                            }
+                          >
+                            ({group.totalKnown ?? group.params.length})
                           </span>
                         </button>
                       </td>
