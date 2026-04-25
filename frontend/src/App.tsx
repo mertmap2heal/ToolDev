@@ -19,7 +19,7 @@ import VerificationSettingsPage from './pages/Verification/VerificationSettingsP
 import TemplatesLandingPage from './pages/Verification/TemplatesLandingPage'
 import TemplateEditorPage from './pages/Verification/TemplateEditorPage'
 import DocumentationPage from './pages/Documentation/DocumentationPage'
-import HelpParametersPage from './pages/Help/HelpParametersPage'
+import HelpLayout from './pages/Help/HelpLayout'
 import ProjectLandingPage from './pages/ProjectLanding/ProjectLandingPage'
 import StakeholderPage from './pages/Stakeholder/StakeholderPage'
 import PBSPage from './modules/pbs/PBSPage'
@@ -183,7 +183,8 @@ function App() {
               <Route path="settings" element={<SafetySettingsPage />} />
             </Route>
             <Route path="settings" element={<SettingsPage />} />
-            <Route path="help/parameters" element={<HelpParametersPage />} />
+            <Route path="help" element={<HelpLayout />} />
+            <Route path="help/:slug" element={<HelpLayout />} />
             <Route path="admin" element={<AdminRouteGuard />}>
               <Route index element={<AdminPage />} />
             </Route>
