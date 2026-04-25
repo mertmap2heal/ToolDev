@@ -8,14 +8,12 @@ import {
   Workflow,
   ShieldCheck,
   Bot,
-  Radio,
   ShieldAlert,
 } from 'lucide-react'
 import type { ComponentType } from 'react'
 
 import OverviewSection from './sections/OverviewSection'
 import ParametersSection from './sections/ParametersSection'
-import CommunicationsSection from './sections/CommunicationsSection'
 import AiAndMcpSection from './sections/AiAndMcpSection'
 import AdminSection from './sections/AdminSection'
 
@@ -75,16 +73,6 @@ export const HELP_PAGES: HelpPage[] = [
     blurb:
       'Manage typed, versioned engineering parameters with virtualised list, kanban board, and dependency graph views.',
     Component: ParametersSection,
-  },
-  {
-    slug: 'communications',
-    label: 'Communications',
-    icon: Radio,
-    group: 'Modules',
-    title: 'Communications buses',
-    blurb:
-      'Model the message buses, messages, and fields that carry parameters between systems.',
-    Component: CommunicationsSection,
   },
   {
     slug: 'ai-and-mcp',
