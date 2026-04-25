@@ -6,6 +6,7 @@ import {
   FileText, Upload, Download, GitBranch, RefreshCw, CheckCircle,
   AlertTriangle, Settings, Radio, List, Share2,
   Folder, FolderOpen, MoreHorizontal, Layers, ArrowUpDown, ArrowUp, ArrowDown,
+  LayoutGrid,
 } from 'lucide-react'
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -44,6 +45,10 @@ import PublishToGitModal, {
 // Reactflow (~350 KB gz) only loads when the Graph tab is active.
 const ParameterDependencyGraph = lazy(
   () => import('../../components/parameters/ParameterDependencyGraph'),
+)
+// Board view is also lazy so the default List tab keeps its bundle lean.
+const ParameterBoardView = lazy(
+  () => import('../../components/parameters/ParameterBoardView'),
 )
 import ImportParameterModal from '../../components/parameters/ImportParameterModal'
 import CommunicationsTab from './CommunicationsTab'
@@ -346,7 +351,7 @@ export default function ParametersPage() {
   const [unitFilter, setUnitFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [paramViewMode, setParamViewMode] = useState<'list' | 'graph'>('list')
+  const [paramViewMode, setParamViewMode] = useState<'list' | 'board' | 'graph'>('list')
   const queryClient = useQueryClient()
 
   // Folder sidebar state
@@ -1716,7 +1721,7 @@ export default function ParametersPage() {
             )}
           </div>
 
-          {/* View toggle: List / Graph */}
+          {/* View toggle: List / Board / Graph */}
           <div className="flex border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden">
             <button
               onClick={() => setParamViewMode('list')}
@@ -1730,6 +1735,19 @@ export default function ParametersPage() {
             >
               <List size={13} />
               List
+            </button>
+            <button
+              onClick={() => setParamViewMode('board')}
+              title="Kanban board (Draft / Approved / Obsolete)"
+              className={clsx(
+                'flex items-center gap-[5px] px-2.5 py-[5px] text-xs font-medium border-none cursor-pointer border-r border-gray-200 dark:border-gray-700',
+                paramViewMode === 'board'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400',
+              )}
+            >
+              <LayoutGrid size={13} />
+              Board
             </button>
             <button
               onClick={() => setParamViewMode('graph')}
@@ -1970,6 +1988,25 @@ export default function ParametersPage() {
             }
           >
             <ParameterDependencyGraph parameters={filteredParameters} folders={folders} />
+          </Suspense>
+        </div>
+      )}
+
+      {/* ── Board view (Draft / Approved / Obsolete Kanban) ── */}
+      {paramViewMode === 'board' && projectId && (
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-hidden">
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-[400px] text-sm text-gray-600 dark:text-gray-400">
+                Loading board…
+              </div>
+            }
+          >
+            <ParameterBoardView
+              parameters={filteredParameters}
+              folders={folders}
+              projectId={projectId}
+            />
           </Suspense>
         </div>
       )}
