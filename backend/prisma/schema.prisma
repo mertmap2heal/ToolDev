@@ -199,6 +199,7 @@ model Project {
   parameterMcpKeys            ParameterMcpKey[]
   aiInvocations               AiInvocation[]
   parameterBulkJobs           ParameterBulkJob[]
+  parameterBaselines          ParameterBaseline[]
   items                       Item[]
   verTestResults              VerTestResult[]
   tasks                       Task[]
@@ -3847,4 +3848,40 @@ model UserAiCredential {
 
   @@index([userId, provider])
   @@index([userId, revokedAt])
+}
+
+// Parameter-only baseline. Captures a point-in-time snapshot of every
+// parameter in the project so authors can compare current state to a
+// baseline and roll back on demand. Distinct from the requirements
+// `Baseline` model — they live independently because they have different
+// approval flows and snapshot shapes.
+model ParameterBaseline {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  description String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  items       ParameterBaselineItem[]
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+}
+
+model ParameterBaselineItem {
+  id          String   @id @default(uuid())
+  baselineId  String
+  parameterId String
+  // Full Parameter row at baseline time (json). Restoring writes the
+  // contained name / dataType / defaultValue / unit / status / formula
+  // / etc back onto the live row, creating a new ParameterVersion in
+  // the process.
+  snapshot    Json
+  createdAt   DateTime @default(now())
+
+  baseline ParameterBaseline @relation(fields: [baselineId], references: [id], onDelete: Cascade)
+
+  @@index([baselineId])
+  @@index([parameterId])
 }

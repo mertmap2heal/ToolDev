@@ -51,6 +51,7 @@ import {
   get as getBulkJob,
   list as listBulkJobs,
 } from '../controllers/parameterBulkJob.controller'
+import * as baselineCtrl from '../controllers/parameterBaseline.controller'
 
 const router = Router()
 
@@ -98,6 +99,13 @@ router.get('/:projectId/facets', getParameterFacets)
 router.post('/:projectId/bulk-jobs', submitBulkJob)
 router.get('/:projectId/bulk-jobs', listBulkJobs)
 router.get('/:projectId/bulk-jobs/:jobId', getBulkJob)
+// Parameter baselines.
+router.post('/:projectId/baselines', baselineCtrl.create)
+router.get('/:projectId/baselines', baselineCtrl.list)
+router.get('/:projectId/baselines/compare', baselineCtrl.compare)
+router.get('/:projectId/baselines/:baselineId', baselineCtrl.get)
+router.post('/:projectId/baselines/:baselineId/restore', baselineCtrl.restore)
+router.delete('/:projectId/baselines/:baselineId', baselineCtrl.remove)
 router.get('/:projectId', getParameters)
 router.get('/:projectId/:id', getParameter)
 router.post('/:projectId', createParameter)

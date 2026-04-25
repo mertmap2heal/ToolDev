@@ -6,7 +6,7 @@ import {
   FileText, Upload, Download, GitBranch, RefreshCw, CheckCircle,
   AlertTriangle, Settings, Radio, List, Share2,
   Folder, FolderOpen, MoreHorizontal, Layers, ArrowUpDown, ArrowUp, ArrowDown,
-  LayoutGrid,
+  LayoutGrid, History,
 } from 'lucide-react'
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -55,6 +55,7 @@ import ImportParameterModal from '../../components/parameters/ImportParameterMod
 import CommunicationsTab from './CommunicationsTab'
 import ParameterCommandPalette from '../../components/parameters/ParameterCommandPalette'
 import ShortcutsOverlay from '../../components/parameters/ShortcutsOverlay'
+import ParameterBaselinesPanel from '../../components/parameters/ParameterBaselinesPanel'
 import type { Parameter, ParameterFolder } from 'shared/types/engineering.types'
 import clsx from 'clsx'
 import { format } from 'date-fns'
@@ -376,6 +377,7 @@ export default function ParametersPage() {
   const [aiDrafting, setAiDrafting] = useState(false)
   const [isPaletteOpen, setIsPaletteOpen] = useState(false)
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false)
+  const [isBaselinesOpen, setIsBaselinesOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'parameters' | 'communications'>('parameters')
   const [changeRequestModal, setChangeRequestModal] = useState<{ isOpen: boolean; sourceId: string; sourceName: string } | null>(null)
   const [dataTypeFilter, setDataTypeFilter] = useState<string>('all')
@@ -1831,6 +1833,16 @@ export default function ParametersPage() {
             </Link>
           )}
 
+          {/* Baselines */}
+          <button
+            onClick={() => setIsBaselinesOpen(true)}
+            className={BTN_TOOLBAR}
+            title="Create / compare / restore parameter baselines"
+          >
+            <History size={13} />
+            Baselines
+          </button>
+
           {/* Publish to Git */}
           <button
             onClick={() => setIsPublishOpen(true)}
@@ -2571,6 +2583,12 @@ export default function ParametersPage() {
           open={isShortcutsOpen}
           onClose={() => setIsShortcutsOpen(false)}
         />
+        {projectId && isBaselinesOpen && (
+          <ParameterBaselinesPanel
+            projectId={projectId}
+            onClose={() => setIsBaselinesOpen(false)}
+          />
+        )}
       </div>{/* end folders + content layout */}
       <DragOverlay>
         {activeDragParamId ? (

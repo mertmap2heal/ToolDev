@@ -677,6 +677,50 @@ sum([cell_v_1, cell_v_2, cell_v_3])`}</CodeBlock>
         (<em>SecurityOfficer</em>); for MCP keys it is set when the key is issued.
       </p>
 
+      <h2 id="baselines">Baselines</h2>
+      <p>
+        A <strong>baseline</strong> is a labelled snapshot of every
+        parameter in the project at one moment — name, value, unit,
+        formula, classification, etc. Use them at engineering
+        milestones (PDR, CDR, qualification) so you can compare what
+        changed since and roll the live state back if a change set
+        proves wrong.
+      </p>
+      <h3 id="baselines-create">Create a baseline</h3>
+      <ol>
+        <li>Click <strong>Baselines</strong> in the toolbar.</li>
+        <li>
+          Type a name (e.g. <code>PDR-2026-05</code>) and an optional
+          description, then <strong>Create</strong>. The snapshot is
+          taken server-side in one transaction so the entire project's
+          parameter state is captured atomically.
+        </li>
+      </ol>
+      <h3 id="baselines-compare">Compare</h3>
+      <p>
+        Click <strong>Compare</strong> on any baseline row. The diff
+        view shows every parameter that has changed since the baseline
+        was taken: <em>added</em>, <em>removed</em>, or{' '}
+        <em>changed</em> with the exact list of changed fields
+        (<code>defaultValue</code>, <code>unit</code>, <code>status</code>, …).
+      </p>
+      <h3 id="baselines-restore">Restore</h3>
+      <p>
+        <strong>Restore</strong> writes the baselined field values back
+        onto the live parameter rows, creating a new{' '}
+        <code>ParameterVersion</code> entry for each. By default
+        restore is <strong>additive</strong>: parameters that exist on
+        the live side but were not in the baseline are left alone. The
+        controller also accepts a <code>prune</code> flag (advanced
+        callers only) to delete those.
+      </p>
+      <Callout variant="warning" title="Restore overwrites live values">
+        Restore is destructive of in-flight edits. Compare first,
+        confirm the diff matches what you intend, and ideally take a
+        fresh "pre-restore" baseline so the operation itself is
+        reversible.
+      </Callout>
+
       <h2 id="versioning">Versions &amp; restore</h2>
       <p>
         Every save (UI, API, MCP, import, MATLAB push) writes a new{' '}
