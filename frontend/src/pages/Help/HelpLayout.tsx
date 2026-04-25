@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, NavLink, Navigate } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
-import { HELP_PAGES, getHelpPage } from './helpRegistry'
+import { HELP_PAGES, getHelpPage, canSeeHelpPage } from './helpRegistry'
+import { useAuthStore } from '../../store/authStore'
 
 /**
  * Multi-page help / documentation layout.
@@ -29,18 +30,33 @@ export default function HelpLayout() {
   const page = getHelpPage(slug)
   const [anchors, setAnchors] = useState<AnchorEntry[]>([])
   const [activeAnchor, setActiveAnchor] = useState<string | null>(null)
+  const user = useAuthStore((s) => s.user)
 
-  // Group sidebar entries
+  // Pages this viewer is allowed to see, for both sidebar + slug guard.
+  const visiblePages = useMemo(
+    () =>
+      HELP_PAGES.filter(
+        (p) =>
+          !p.hidden &&
+          canSeeHelpPage(p, {
+            isAdmin: user?.isAdmin,
+            isSuperiorAdmin: user?.isSuperiorAdmin,
+            role: user?.role,
+          }),
+      ),
+    [user?.isAdmin, user?.isSuperiorAdmin, user?.role],
+  )
+
+  // Group sidebar entries (already role-filtered)
   const groups = useMemo(() => {
     const map = new Map<string, typeof HELP_PAGES>()
-    for (const p of HELP_PAGES) {
-      if (p.hidden) continue
+    for (const p of visiblePages) {
       const g = p.group ?? 'Other'
       if (!map.has(g)) map.set(g, [])
       map.get(g)!.push(p)
     }
     return Array.from(map.entries())
-  }, [])
+  }, [visiblePages])
 
   // Read anchors from rendered headings whenever the page changes.
   useEffect(() => {
@@ -82,13 +98,17 @@ export default function HelpLayout() {
     }
   }, [anchors])
 
-  // Default route → first non-hidden page
+  // Default route → first visible page
   if (!slug) {
-    const first = HELP_PAGES.find((p) => !p.hidden)
+    const first = visiblePages[0]
     return <Navigate to={`/help/${first?.slug ?? 'overview'}`} replace />
   }
   if (!page) {
     return <Navigate to="/help" replace />
+  }
+  // Slug exists but the viewer is not allowed to see it → bounce to overview.
+  if (!visiblePages.find((p) => p.slug === slug)) {
+    return <Navigate to="/help/overview" replace />
   }
 
   const Body = page.Component

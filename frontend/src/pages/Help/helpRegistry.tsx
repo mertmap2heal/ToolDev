@@ -8,12 +8,16 @@ import {
   Workflow,
   ShieldCheck,
   Bot,
+  Radio,
+  ShieldAlert,
 } from 'lucide-react'
 import type { ComponentType } from 'react'
 
 import OverviewSection from './sections/OverviewSection'
 import ParametersSection from './sections/ParametersSection'
+import CommunicationsSection from './sections/CommunicationsSection'
 import AiAndMcpSection from './sections/AiAndMcpSection'
+import AdminSection from './sections/AdminSection'
 
 /**
  * Registry of help-system pages. Adding a new page = add an entry here
@@ -21,9 +25,15 @@ import AiAndMcpSection from './sections/AiAndMcpSection'
  * (HelpLayout) and the route table (App.tsx → /help/:slug) both read
  * from this list, so no other wiring is needed.
  *
- * The optional `group` field clusters entries in the sidebar; pages
- * without a group land in the default "Getting started" group.
+ * Visibility is gated by `audience`:
+ *   - 'member'         (default) any signed-in user sees it
+ *   - 'admin'          requires user.isAdmin / role===COMPANY_ADMIN
+ *   - 'platform-admin' requires user.isSuperiorAdmin
+ *
+ * Pages a user can't access are filtered out of the sidebar; the
+ * direct URL redirects to the overview.
  */
+export type HelpAudience = 'member' | 'admin' | 'platform-admin'
 
 export interface HelpPage {
   /** URL slug under /help (e.g. 'parameters') */
@@ -40,6 +50,8 @@ export interface HelpPage {
   blurb: string
   /** The component that renders the page body */
   Component: ComponentType
+  /** Who is allowed to see this page (default: 'member') */
+  audience?: HelpAudience
   /** Optional flag — hide from sidebar (still routable) */
   hidden?: boolean
 }
@@ -65,6 +77,16 @@ export const HELP_PAGES: HelpPage[] = [
     Component: ParametersSection,
   },
   {
+    slug: 'communications',
+    label: 'Communications',
+    icon: Radio,
+    group: 'Modules',
+    title: 'Communications buses',
+    blurb:
+      'Model the message buses, messages, and fields that carry parameters between systems.',
+    Component: CommunicationsSection,
+  },
+  {
     slug: 'ai-and-mcp',
     label: 'AI & MCP',
     icon: Bot,
@@ -73,6 +95,17 @@ export const HELP_PAGES: HelpPage[] = [
     blurb:
       'Connect Claude Desktop or any MCP-compliant client, bring your own provider key, or use the operator default.',
     Component: AiAndMcpSection,
+  },
+  {
+    slug: 'admin',
+    label: 'Admin & MCP keys',
+    icon: ShieldAlert,
+    group: 'Administration',
+    title: 'Administration',
+    blurb:
+      'Project AI toggle, MCP key issuance, role assignments, audit log access. Visible to admins only.',
+    Component: AdminSection,
+    audience: 'admin',
   },
   // Placeholders — sections to flesh out next:
   {
@@ -127,6 +160,31 @@ export const HELP_PAGES: HelpPage[] = [
 export function getHelpPage(slug: string | undefined): HelpPage | null {
   if (!slug) return null
   return HELP_PAGES.find((p) => p.slug === slug) ?? null
+}
+
+/**
+ * Resolve whether a viewer with the given flags can see a help page.
+ * Pages without an explicit audience are visible to every signed-in
+ * user.
+ */
+export function canSeeHelpPage(
+  page: HelpPage,
+  viewer: { isAdmin?: boolean; isSuperiorAdmin?: boolean; role?: string | null },
+): boolean {
+  const isAdminLike =
+    !!viewer.isAdmin ||
+    !!viewer.isSuperiorAdmin ||
+    viewer.role === 'COMPANY_ADMIN' ||
+    viewer.role === 'SUPERIOR_ADMIN'
+  const isPlatformAdmin = !!viewer.isSuperiorAdmin || viewer.role === 'SUPERIOR_ADMIN'
+  switch (page.audience) {
+    case 'platform-admin':
+      return isPlatformAdmin
+    case 'admin':
+      return isAdminLike
+    default:
+      return true
+  }
 }
 
 function PlaceholderSection(name: string): ComponentType {
