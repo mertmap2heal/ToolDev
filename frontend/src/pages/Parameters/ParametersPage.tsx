@@ -310,10 +310,11 @@ export default function ParametersPage() {
           searchInputRef.current.select()
         }
       }
-      // Cmd/Ctrl + Shift + P opens the parameter command palette. Cmd+K
-      // is reserved for the global app palette; Shift+P matches VSCode's
-      // command palette convention and avoids the collision.
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'p' || e.key === 'P')) {
+      // Cmd/Ctrl + / opens the parameter command palette. Cmd+K is the
+      // global app palette and Cmd+Shift+P is reserved by Firefox for
+      // Private Window. Cmd+/ is free in every major browser and matches
+      // GitHub/Slack/Linear shortcut conventions.
+      if ((e.ctrlKey || e.metaKey) && e.key === '/') {
         const target = e.target as HTMLElement | null
         const tag = target?.tagName
         if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !target?.isContentEditable) {

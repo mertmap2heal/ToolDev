@@ -6,21 +6,23 @@ import type { Parameter, ParameterFolder } from 'shared/types/engineering.types'
  * Command palette for the Parameters page (plan Phase 6).
  *
  * Keyboard:
- *   Cmd+Shift+P / Ctrl+Shift+P : open
- *   Esc                        : close
- *   ArrowUp/Down               : move selection
- *   Enter                      : activate selection
- *   Tab                        : next group
+ *   Cmd+/ / Ctrl+/ : open
+ *   Esc            : close
+ *   ArrowUp/Down   : move selection
+ *   Enter          : activate selection
+ *   Tab            : next group
  *
  * Items: parameters, folders, and page actions. Simple substring
  * scoring for v1 - a real fuzzy matcher can come later once we have
  * usage data on which hits matter.
  *
- * Scope: rendered ONLY by ParametersPage. A page-level Cmd+Shift+P
- * listener opens the modal (Cmd+K is reserved for the global app
- * palette to avoid collision). Inputs / textareas / contenteditable
- * targets are filtered out at the page-level listener to avoid
- * clobbering text editing.
+ * Scope: rendered ONLY by ParametersPage. A page-level Cmd+/ listener
+ * opens the modal. Cmd+K is reserved for the global app palette and
+ * Cmd+Shift+P is reserved by Firefox for Private Window — Cmd+/ is
+ * free in every major browser and matches GitHub/Slack/Linear
+ * shortcut conventions. Inputs / textareas / contenteditable targets
+ * are filtered out at the page-level listener so text editing stays
+ * intact.
  */
 
 export interface CommandAction {
