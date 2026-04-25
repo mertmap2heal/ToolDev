@@ -17,6 +17,10 @@ import ParametersSection from './sections/ParametersSection'
 import AiAndMcpSection from './sections/AiAndMcpSection'
 import AdminSection from './sections/AdminSection'
 import RequirementsSection from './sections/RequirementsSection'
+import VerificationSection from './sections/VerificationSection'
+import InterfacesSection from './sections/InterfacesSection'
+import CmSection from './sections/CmSection'
+import SecuritySection from './sections/SecuritySection'
 
 /**
  * Registry of help-system pages. Adding a new page = add an entry here
@@ -113,8 +117,9 @@ export const HELP_PAGES: HelpPage[] = [
     icon: CheckCircle2,
     group: 'Modules',
     title: 'Verification',
-    blurb: 'Coming soon — test cases, plans, runs, results, and methods of compliance.',
-    Component: PlaceholderSection('Verification'),
+    blurb:
+      'Test cases, plans, runs, results, and methods of compliance per ARP4754A.',
+    Component: VerificationSection,
   },
   {
     slug: 'interfaces',
@@ -122,8 +127,9 @@ export const HELP_PAGES: HelpPage[] = [
     icon: Network,
     group: 'Modules',
     title: 'Interface management',
-    blurb: 'Coming soon — interface control documents, ports, signals, and ICD export.',
-    Component: PlaceholderSection('Interfaces'),
+    blurb:
+      'Model the connections between system elements; generate Interface Control Documents.',
+    Component: InterfacesSection,
   },
   {
     slug: 'cm',
@@ -132,8 +138,8 @@ export const HELP_PAGES: HelpPage[] = [
     group: 'Modules',
     title: 'Configuration Management',
     blurb:
-      'Coming soon — configuration items, baselines, change requests, deviations, and waivers.',
-    Component: PlaceholderSection('Configuration Management'),
+      'Configuration items, baselines, change requests, deviations, and waivers per IEEE 828-2012.',
+    Component: CmSection,
   },
   {
     slug: 'security',
@@ -142,8 +148,8 @@ export const HELP_PAGES: HelpPage[] = [
     group: 'Platform',
     title: 'Security & access',
     blurb:
-      'Coming soon — package tiers, ITAR classification, BYOK encryption, MCP key issuance.',
-    Component: PlaceholderSection('Security & access'),
+      'Package tiers, ITAR classification, BYOK encryption, MCP key issuance, audit logs.',
+    Component: SecuritySection,
   },
 ]
 
