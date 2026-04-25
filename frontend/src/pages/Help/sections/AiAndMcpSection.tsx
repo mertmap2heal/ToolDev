@@ -66,7 +66,14 @@ export default function AiAndMcpSection() {
           no server-side call is made.
         </li>
         <li>The user has a non-revoked BYO credential (Settings → AI Access).</li>
-        <li>The project has a self-hosted endpoint configured.</li>
+        <li>
+          The project has a self-hosted endpoint configured
+          (<code>Project.aiSelfHostedUrl</code>) — the request is proxied to that
+          OpenAI-compatible URL using the optional{' '}
+          <code>AI_SELF_HOSTED_KEY</code> env var as Bearer auth. Air-gap and
+          ITAR customers point this at their own llama.cpp / vLLM /
+          Azure-OpenAI tenant.
+        </li>
         <li>The operator's hosted default is enabled.</li>
       </ol>
       <p>

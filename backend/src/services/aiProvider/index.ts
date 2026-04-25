@@ -1,5 +1,7 @@
 import { anthropicAdapter } from './anthropic.adapter'
+import { selfHostedAdapter } from './selfHosted.adapter'
 import { resolveUserKey } from '../aiCredentials.service'
+import { prisma } from '../../lib/prisma'
 
 /**
  * Shared provider interface. Every adapter exposes a single `chat`
@@ -61,7 +63,12 @@ export function resolveProvider(opts: {
 export async function resolveProviderForUser(args: {
   userId: string | null
   projectId: string | null
-}): Promise<{ adapter: AiProviderAdapter; provider: string; source: 'byok' | 'env-default' }> {
+}): Promise<{
+  adapter: AiProviderAdapter
+  provider: string
+  source: 'byok' | 'project-self-hosted' | 'env-default'
+}> {
+  // 1. User's stored BYOK credential.
   if (args.userId) {
     const byokProvider = process.env.AI_DEFAULT_PROVIDER ?? 'anthropic'
     const key = await resolveUserKey(args.userId, byokProvider)
@@ -73,6 +80,24 @@ export async function resolveProviderForUser(args: {
       }
     }
   }
+  // 2. Project's self-hosted endpoint, if configured.
+  if (args.projectId) {
+    const project = await prisma.project.findUnique({
+      where: { id: args.projectId },
+      select: { aiSelfHostedUrl: true },
+    })
+    if (project?.aiSelfHostedUrl) {
+      return {
+        adapter: selfHostedAdapter(
+          project.aiSelfHostedUrl,
+          process.env.AI_SELF_HOSTED_KEY || undefined,
+        ),
+        provider: 'self_hosted',
+        source: 'project-self-hosted',
+      }
+    }
+  }
+  // 3. Operator-configured env default.
   const provider = process.env.AI_DEFAULT_PROVIDER ?? 'anthropic'
   return {
     adapter: resolveProvider({ provider }),

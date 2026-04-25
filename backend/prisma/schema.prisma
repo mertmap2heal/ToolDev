@@ -166,6 +166,11 @@ model Project {
   aiEnabled   Boolean   @default(false)
   aiEnabledAt DateTime?
   aiEnabledBy String?
+  // Optional per-project self-hosted OpenAI-compatible endpoint URL.
+  // Slots into the provider precedence chain (see aiProvider/index.ts):
+  //   BYOK -> project self-hosted -> env default. Used by air-gap or
+  //   ITAR customers running their own llama.cpp / vLLM / Azure OpenAI.
+  aiSelfHostedUrl String?
 
   createdAt                   DateTime                     @default(now())
   updatedAt                   DateTime                     @updatedAt
