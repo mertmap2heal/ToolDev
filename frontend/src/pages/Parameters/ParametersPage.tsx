@@ -310,9 +310,10 @@ export default function ParametersPage() {
           searchInputRef.current.select()
         }
       }
-      // Cmd/Ctrl + K opens the command palette. Block when an input is
-      // focused so native browser find / editor shortcuts still work.
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+      // Cmd/Ctrl + Shift + P opens the parameter command palette. Cmd+K
+      // is reserved for the global app palette; Shift+P matches VSCode's
+      // command palette convention and avoids the collision.
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'p' || e.key === 'P')) {
         const target = e.target as HTMLElement | null
         const tag = target?.tagName
         if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !target?.isContentEditable) {
@@ -2289,7 +2290,7 @@ export default function ParametersPage() {
           />
         )}
 
-        {/* Command palette (Cmd/Ctrl + K). Receives the parameter + folder
+        {/* Command palette (Cmd/Ctrl + Shift + P). Receives the parameter + folder
             lists and wires the four main actions. Closes after any pick. */}
         <ParameterCommandPalette
           open={isPaletteOpen}
