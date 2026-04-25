@@ -16,6 +16,10 @@ export default function McpKeysPanel({ projectId, projectName, onClose }: Props)
   const [newName, setNewName] = useState('')
   const [newScopes, setNewScopes] = useState<string[]>(['read'])
   const [newItar, setNewItar] = useState(false)
+  // Expiry presets (days). 0 = no expiry. The backend stores an absolute
+  // DateTime; we convert at submit time so the chosen window is anchored
+  // to "now" rather than to render time.
+  const [newExpiryDays, setNewExpiryDays] = useState<number>(90)
   const [saving, setSaving] = useState(false)
   const [issuedPlaintext, setIssuedPlaintext] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -42,16 +46,22 @@ export default function McpKeysPanel({ projectId, projectName, onClose }: Props)
     setSaving(true)
     setError(null)
     try {
+      const expiresAt =
+        newExpiryDays > 0
+          ? new Date(Date.now() + newExpiryDays * 24 * 60 * 60 * 1000).toISOString()
+          : undefined
       const res = await mcpKeyService.create(projectId, {
         name: newName.trim(),
         scopes: newScopes,
         itarScope: newItar,
+        expiresAt,
       })
       if (res.success && res.data) {
         setIssuedPlaintext(res.data.plaintext)
         setNewName('')
         setNewScopes(['read'])
         setNewItar(false)
+        setNewExpiryDays(90)
         await refresh()
       } else {
         setError((res as any).error ?? 'Failed to issue key')
@@ -181,6 +191,23 @@ export default function McpKeysPanel({ projectId, projectName, onClose }: Props)
                 ))}
               </div>
             </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Expires
+              </label>
+              <select
+                value={newExpiryDays}
+                onChange={(e) => setNewExpiryDays(Number(e.target.value))}
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              >
+                <option value={7}>In 7 days</option>
+                <option value={30}>In 30 days</option>
+                <option value={90}>In 90 days (default)</option>
+                <option value={180}>In 180 days</option>
+                <option value={365}>In 1 year</option>
+                <option value={0}>Never (not recommended)</option>
+              </select>
+            </div>
             <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
               <input
                 type="checkbox"
@@ -211,38 +238,52 @@ export default function McpKeysPanel({ projectId, projectName, onClose }: Props)
               <p className="text-xs text-gray-400">No MCP keys issued for this project.</p>
             ) : (
               <ul className="space-y-2">
-                {keys.map((k) => (
-                  <li
-                    key={k.id}
-                    className={`flex items-start justify-between gap-3 p-3 rounded-lg border ${
-                      k.revokedAt
-                        ? 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 opacity-60'
-                        : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
-                    }`}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">{k.name}</p>
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
-                        scopes: {k.scopes.join(', ')}
-                        {k.itarScope ? ' · ITAR' : ''}
-                      </p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">
-                        added {new Date(k.createdAt).toLocaleDateString()}
-                        {k.lastUsedAt ? ` · last used ${new Date(k.lastUsedAt).toLocaleDateString()}` : ' · never used'}
-                        {k.revokedAt ? ` · revoked ${new Date(k.revokedAt).toLocaleDateString()}` : ''}
-                      </p>
-                    </div>
-                    {!k.revokedAt && (
-                      <button
-                        onClick={() => handleRevoke(k.id)}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-[10px] text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
-                      >
-                        <Trash2 size={11} />
-                        Revoke
-                      </button>
-                    )}
-                  </li>
-                ))}
+                {keys.map((k) => {
+                  const expired = !!k.expiresAt && new Date(k.expiresAt) < new Date()
+                  const inactive = !!k.revokedAt || expired
+                  return (
+                    <li
+                      key={k.id}
+                      className={`flex items-start justify-between gap-3 p-3 rounded-lg border ${
+                        inactive
+                          ? 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 opacity-60'
+                          : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                          {k.name}
+                          {expired && !k.revokedAt && (
+                            <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
+                              expired
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                          scopes: {k.scopes.join(', ')}
+                          {k.itarScope ? ' · ITAR' : ''}
+                        </p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">
+                          added {new Date(k.createdAt).toLocaleDateString()}
+                          {k.expiresAt
+                            ? ` · ${expired ? 'expired' : 'expires'} ${new Date(k.expiresAt).toLocaleDateString()}`
+                            : ' · no expiry'}
+                          {k.lastUsedAt ? ` · last used ${new Date(k.lastUsedAt).toLocaleDateString()}` : ' · never used'}
+                          {k.revokedAt ? ` · revoked ${new Date(k.revokedAt).toLocaleDateString()}` : ''}
+                        </p>
+                      </div>
+                      {!k.revokedAt && (
+                        <button
+                          onClick={() => handleRevoke(k.id)}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-[10px] text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                        >
+                          <Trash2 size={11} />
+                          Revoke
+                        </button>
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </div>
