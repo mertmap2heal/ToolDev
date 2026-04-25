@@ -15,6 +15,7 @@ import {
   Keyboard,
   HelpCircle,
   ExternalLink,
+  BookOpen,
   Activity,
   Zap,
   Monitor,
@@ -350,6 +351,11 @@ export default function UserMenu({ onOpenFeedback }: UserMenuProps) {
           <MenuSectionLabel>Help & Resources</MenuSectionLabel>
           <MenuItem icon={HelpCircle} label="Send Feedback" onClick={() => { onOpenFeedback(); setOpen(false); setView('main') }} />
           <MenuItem icon={Zap} label="What's New" badge={{ text: 'v2.4', color: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-300' }} onClick={() => { }} />
+          <MenuItem
+            icon={BookOpen}
+            label="User Guide"
+            onClick={() => handleNavigate('/help/parameters')}
+          />
           <MenuItem
             icon={ExternalLink}
             label="Documentation"
