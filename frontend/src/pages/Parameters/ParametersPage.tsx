@@ -1712,20 +1712,34 @@ export default function ParametersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
           Parameters
-          {!isLoading && (
-            <span
-              className="text-xs font-normal text-gray-600 dark:text-gray-400 bg-gray-200/30 dark:bg-gray-400/15 px-[7px] py-0.5 rounded-[10px]"
-              title={
-                hasNextPage
-                  ? `${parameters.length} loaded of ${totalParameters} total`
-                  : undefined
-              }
-            >
-              {filteredParameters.length !== parameters.length
-                ? `${filteredParameters.length} / ${totalParameters || parameters.length}`
-                : (totalParameters || parameters.length)}
-            </span>
-          )}
+          {!isLoading && (() => {
+            const projectTotal = projectTotalParameters || totalParameters || parameters.length
+            const filtered = filteredParameters.length
+            // "narrowed" = the user has an explicit filter narrowing the
+            // view (search text, pill, folder, secondary filter). A
+            // pagination-only state (loaded < total but no filter) is
+            // NOT narrowed and shows just the project total.
+            const hasActiveFilter =
+              trimmedQ.length > 0 ||
+              statusFilter !== 'all' ||
+              dataTypeFilter !== 'all' ||
+              unitFilter !== 'all' ||
+              sourceFilter !== 'all' ||
+              !!selectedFolderId
+            const narrowed = hasActiveFilter && filtered < projectTotal
+            return (
+              <span
+                className="text-xs font-normal text-gray-600 dark:text-gray-400 bg-gray-200/30 dark:bg-gray-400/15 px-[7px] py-0.5 rounded-[10px]"
+                title={
+                  hasNextPage
+                    ? `${parameters.length} loaded of ${totalParameters} matching, ${projectTotal} total in project`
+                    : undefined
+                }
+              >
+                {narrowed ? `${filtered} / ${projectTotal}` : projectTotal}
+              </span>
+            )
+          })()}
         </h2>
         <div className="flex flex-wrap items-center gap-2">
           {projectId && <SafetyLinkPanel variant="relevance" count={1} />}

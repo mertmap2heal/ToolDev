@@ -290,32 +290,30 @@ test.describe('Parameters — Search & Filter', () => {
   })
 
   test('filter by status: draft', async ({ page }) => {
-    // Expand the Filters panel
-    await page.getByRole('button', { name: /^filters$/i }).click()
-    await page.waitForTimeout(300)
+    // New filter UI: pill bar uses native <select> styled as pills. The
+    // status pill carries aria-label="Status" so we target it that way.
+    const statusPill = page.locator('select[aria-label="Status"]')
+    await expect(statusPill).toBeVisible()
+    await statusPill.selectOption('draft')
+    await page.waitForTimeout(500)
 
-    // Find the Status select and choose "Draft"
-    const filtersPanel = page.locator('select').filter({ has: page.locator('option[value="draft"]') }).first()
-    await filtersPanel.selectOption('draft')
-    await page.waitForTimeout(400)
-
-    // All visible status badges should show "draft" (or table should show empty state)
-    const rows = page.locator('tbody tr')
-    const rowCount = await rows.count()
-
+    // Filter is server-side now; check that every visible row's status
+    // badge reads "draft".
+    const dataRows = page
+      .locator('table tbody tr')
+      .filter({ has: page.locator('td:nth-child(2)') })
+    const rowCount = await dataRows.count()
     if (rowCount > 0) {
-      // Check each row's status badge content
-      // The status cell uses a span with the status text
-      const statusCells = page.locator('tbody tr td:nth-child(7) span')
-      const count = await statusCells.count()
-      for (let i = 0; i < Math.min(count, 10); i++) {
-        const text = await statusCells.nth(i).textContent()
-        expect(text?.toLowerCase()).toBe('draft')
+      const sample = Math.min(rowCount, 10)
+      for (let i = 0; i < sample; i++) {
+        const row = dataRows.nth(i)
+        const statusBadge = row.locator('span').filter({ hasText: /^draft$/i }).first()
+        await expect(statusBadge).toBeVisible()
       }
     }
 
-    // Reset filter
-    await filtersPanel.selectOption('all')
+    // Reset to "all" so subsequent tests start clean.
+    await statusPill.selectOption('all')
   })
 })
 
