@@ -353,7 +353,10 @@ export default function UserMenu({ onOpenFeedback }: UserMenuProps) {
           <MenuItem
             icon={ExternalLink}
             label="Documentation"
-            onClick={() => handleNavigate('/help')}
+            onClick={() => {
+              window.open('/help', '_blank', 'noopener,noreferrer')
+              setOpen(false)
+            }}
           />
         </div>
 
