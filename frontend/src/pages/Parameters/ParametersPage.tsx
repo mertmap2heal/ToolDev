@@ -1665,6 +1665,8 @@ export default function ParametersPage() {
                         <div className="relative" ref={folderMenuOpen === folder.id ? folderMenuRef : undefined}>
                           <button
                             onClick={e => { e.stopPropagation(); setFolderMenuOpen(isMenuOpen ? null : folder.id); setRenamingColor(folder.color ?? FOLDER_COLORS[0]) }}
+                            aria-label={`Folder actions for ${folder.name}`}
+                            title={`Folder actions for ${folder.name}`}
                             className={clsx(
                               'folder-menu-btn bg-transparent border-none cursor-pointer p-1 text-gray-600 dark:text-gray-400 rounded shrink-0 transition-opacity',
                               isMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus:opacity-100',
