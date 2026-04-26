@@ -68,8 +68,10 @@ export async function exportNdjson(req: AuthRequest, res: Response) {
     // Stream rows in chunks to avoid loading the whole table into memory.
     const CHUNK = 500
     let cursor: string | null = null
+    // Use a typed loop var so TS can infer the inner `rows` type cleanly.
+    // eslint-disable-next-line no-constant-condition
     while (true) {
-      const rows = await prisma.aiInvocation.findMany({
+      const rows: Array<Record<string, unknown>> = await prisma.aiInvocation.findMany({
         where,
         orderBy: { id: 'asc' },
         take: CHUNK,
@@ -92,7 +94,7 @@ export async function exportNdjson(req: AuthRequest, res: Response) {
       if (rows.length === 0) break
       for (const r of rows) res.write(JSON.stringify(r) + '\n')
       if (rows.length < CHUNK) break
-      cursor = rows[rows.length - 1].id
+      cursor = String(rows[rows.length - 1].id)
     }
     res.end()
   } catch (e) {

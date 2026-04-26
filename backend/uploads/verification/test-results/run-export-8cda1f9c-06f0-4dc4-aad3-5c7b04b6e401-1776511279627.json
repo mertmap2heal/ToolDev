@@ -1,0 +1,31 @@
+{
+  "runId": "8cda1f9c-06f0-4dc4-aad3-5c7b04b6e401",
+  "runName": "Export Run 1776511278379",
+  "planKey": "Manual",
+  "planId": null,
+  "planName": null,
+  "statusCounts": {
+    "PASS": 1
+  },
+  "aggregatedStatus": "PASS",
+  "executedAt": "2026-04-18T11:21:19.627Z",
+  "durationSeconds": 0,
+  "environment": null,
+  "scenarioResults": [
+    {
+      "testCaseId": "48629e40-498d-41b8-a274-13e2a29e3ded",
+      "testCaseKey": "TC-TR-A-1776511278379",
+      "testCaseTitle": "TR Seed TC A",
+      "testCaseVersion": "1.0",
+      "resultStatus": "PASS",
+      "testCaseVersionSnapshot": {
+        "version": "1.0"
+      },
+      "actualResults": null,
+      "actualResultBlocks": [],
+      "executedAt": "2026-04-18T11:21:19.546Z",
+      "isSuspect": false,
+      "isOutOfSync": false
+    }
+  ]
+}

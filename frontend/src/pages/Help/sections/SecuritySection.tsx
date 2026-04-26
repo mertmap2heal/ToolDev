@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Callout, Kbd, CodeBlock } from '../helpComponents'
+import { Callout } from '../helpComponents'
 
 export default function SecuritySection() {
   return (

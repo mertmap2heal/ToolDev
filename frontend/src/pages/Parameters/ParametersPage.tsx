@@ -576,7 +576,9 @@ export default function ParametersPage() {
     staleTime: 30_000,
     placeholderData: (prev) => prev,
   })
-  const folders: ParameterFolder[] = foldersData ?? []
+  // Stable reference so dependent useMemo / useEffect deps don't
+  // re-fire on every render with foldersData unchanged.
+  const folders: ParameterFolder[] = useMemo(() => foldersData ?? [], [foldersData])
   const foldersById = useMemo(
     () => new Map<string, ParameterFolder>(folders.map((f) => [f.id, f])),
     [folders],

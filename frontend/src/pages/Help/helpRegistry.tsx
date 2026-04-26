@@ -183,21 +183,3 @@ export function canSeeHelpPage(
   }
 }
 
-function PlaceholderSection(name: string): ComponentType {
-  return function Placeholder() {
-    return (
-      <div className="text-sm text-gray-600 dark:text-gray-400">
-        <p>
-          Documentation for <strong>{name}</strong> has not been written yet.
-        </p>
-        <p className="mt-2">
-          If you want to help, edit{' '}
-          <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-blue-600 dark:text-blue-400 text-[12px]">
-            frontend/src/pages/Help/sections/
-          </code>{' '}
-          and add your section to the registry.
-        </p>
-      </div>
-    )
-  }
-}

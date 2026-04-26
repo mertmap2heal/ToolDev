@@ -33,7 +33,7 @@ export const aiInvocationService = {
     return apiClient.get<AiInvocation[]>(`/admin/ai/invocations${qs ? '?' + qs : ''}`)
   },
 
-  exportNdjsonUrl: (projectId?: string, token?: string | null) => {
+  exportNdjsonUrl: (projectId?: string) => {
     const params = new URLSearchParams()
     if (projectId) params.set('projectId', projectId)
     return `/api/v1/admin/ai/invocations/export${params.toString() ? '?' + params.toString() : ''}`

@@ -81,7 +81,7 @@ export async function exportParametersAsReqIF(args: {
         { '@_THE-VALUE': p.status ?? 'draft', 'DEFINITION': { 'ATTRIBUTE-DEFINITION-STRING-REF': 'ATTR-STATUS' } },
         { '@_THE-VALUE': p.classification ?? 'internal', 'DEFINITION': { 'ATTRIBUTE-DEFINITION-STRING-REF': 'ATTR-CLASSIFICATION' } },
         { '@_THE-VALUE': p.formula ?? '', 'DEFINITION': { 'ATTRIBUTE-DEFINITION-STRING-REF': 'ATTR-FORMULA' } },
-        { '@_THE-VALUE': (p.tags ?? []).join(';'), 'DEFINITION': { 'ATTRIBUTE-DEFINITION-STRING-REF': 'ATTR-TAGS' } },
+        { '@_THE-VALUE': (Array.isArray(p.tags) ? (p.tags as string[]) : []).join(';'), 'DEFINITION': { 'ATTRIBUTE-DEFINITION-STRING-REF': 'ATTR-TAGS' } },
       ],
       'ATTRIBUTE-VALUE-XHTML': [
         {
@@ -261,8 +261,9 @@ export async function importParametersFromReqIF(args: {
         defaultValue: get('ATTR-DEFAULT') ?? '',
         unit: get('ATTR-UNIT') ?? null,
         tolerance: get('ATTR-TOLERANCE') ?? null,
-        minValue: get('ATTR-MIN') ? parseFloat(get('ATTR-MIN') as string) : null,
-        maxValue: get('ATTR-MAX') ? parseFloat(get('ATTR-MAX') as string) : null,
+        // Schema stores min/max as strings — keep them as written.
+        minValue: get('ATTR-MIN') || null,
+        maxValue: get('ATTR-MAX') || null,
         status: get('ATTR-STATUS') ?? 'draft',
         classification: get('ATTR-CLASSIFICATION') ?? 'internal',
         formula: get('ATTR-FORMULA') || null,
