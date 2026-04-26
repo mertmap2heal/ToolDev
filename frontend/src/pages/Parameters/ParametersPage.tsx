@@ -1531,6 +1531,16 @@ export default function ParametersPage() {
     }
   }, [virtualItemsForPaging, flatRowItems.length, hasNextPage, isFetchingNextPage, fetchNextPage])
 
+  // Board and Graph views render every parameter at once (no
+  // virtualisation), so they need the full result set in memory.
+  // Eagerly fetch the next page while the user is on those views.
+  useEffect(() => {
+    if (paramViewMode === 'list') return
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage()
+    }
+  }, [paramViewMode, hasNextPage, isFetchingNextPage, fetchNextPage])
+
   // ---------------------------------------------------------------------------
   // Recursive folder tree rendering — arbitrary depth, sortable at every level
   // ---------------------------------------------------------------------------
@@ -2316,6 +2326,12 @@ export default function ParametersPage() {
       {/* ── Dependency Graph view ── */}
       {paramViewMode === 'graph' && (
         <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-hidden">
+          {hasNextPage && (
+            <div className="px-3 py-1.5 text-[11px] text-gray-600 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 flex items-center gap-2">
+              <RefreshCw size={11} className="animate-spin" />
+              Loading {parameters.length} of {totalParameters || projectTotalParameters || '?'} parameters…
+            </div>
+          )}
           <Suspense
             fallback={
               <div className="flex items-center justify-center h-[600px] text-sm text-gray-600 dark:text-gray-400">
@@ -2331,6 +2347,12 @@ export default function ParametersPage() {
       {/* ── Board view (Draft / Approved / Obsolete Kanban) ── */}
       {paramViewMode === 'board' && projectId && (
         <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-hidden">
+          {hasNextPage && (
+            <div className="px-3 py-1.5 text-[11px] text-gray-600 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 flex items-center gap-2">
+              <RefreshCw size={11} className="animate-spin" />
+              Loading {parameters.length} of {totalParameters || projectTotalParameters || '?'} parameters…
+            </div>
+          )}
           <Suspense
             fallback={
               <div className="flex items-center justify-center h-[400px] text-sm text-gray-600 dark:text-gray-400">
