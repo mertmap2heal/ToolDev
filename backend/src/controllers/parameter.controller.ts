@@ -1060,9 +1060,18 @@ export async function exportParametersHandler(req: AuthRequest, res: Response) {
 
     const meta = getExportMeta(format)
     const isBinary = (BINARY_EXPORT_FORMATS as readonly string[]).includes(format)
-    const content = isBinary
-      ? await exportParametersBinary(format, params)
-      : formatExport(format, params)
+    let content: string | Buffer
+    if (format === 'reqif') {
+      // ReqIF needs the DB-level parameter (description, formula,
+      // classification) — bypass the ExportParameter mapping above and
+      // hit the dedicated builder.
+      const { exportParametersAsReqIF } = await import('../services/parameterReqif.service')
+      content = await exportParametersAsReqIF({ projectId })
+    } else if (isBinary) {
+      content = await exportParametersBinary(format, params)
+    } else {
+      content = formatExport(format, params)
+    }
     res.setHeader('Content-Type', meta.contentType)
     res.setHeader('Content-Disposition', `attachment; filename="${meta.filename}"`)
     res.send(content)
@@ -1087,6 +1096,28 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
 
     if (!content) {
       return res.status(400).json({ success: false, error: 'Missing "content" in request body' })
+    }
+
+    // ReqIF takes a different code path — it has its own match-by-name
+    // upsert logic and produces a different result envelope.
+    if (format === 'reqif' || (filename && filename.toLowerCase().endsWith('.reqif'))) {
+      const { importParametersFromReqIF } = await import('../services/parameterReqif.service')
+      const result = await importParametersFromReqIF({
+        projectId,
+        xml: content,
+        dryRun: false,
+      })
+      return res.json({
+        success: true,
+        data: {
+          format: 'reqif',
+          imported: result.imported,
+          updated: result.updated,
+          skipped: result.skipped,
+          errors: result.errors,
+          warnings: [],
+        },
+      })
     }
 
     const resolvedFormat = format ?? (filename ? detectFormat(filename, content) : null)

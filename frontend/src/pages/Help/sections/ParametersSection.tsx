@@ -190,14 +190,31 @@ export default function ParametersSection() {
 
       <h3 id="tb-export">Export</h3>
       <p>
-        Dropdown with three formats. Whatever filter / search is currently active
-        bounds the export — there is no "export all" toggle.
+        Dropdown grouped into three sections. Whatever filter / search is currently
+        active bounds the export — there is no "export all" toggle.
       </p>
       <ul>
-        <li><strong>CSV</strong> — UTF-8, comma-separated, header row matches column visibility.</li>
-        <li><strong>Excel</strong> (.xlsx) — same data; one sheet named <code>Parameters</code>; type styling on the value column.</li>
-        <li><strong>PDF</strong> — table-formatted, A4 portrait, project header + page numbers.</li>
+        <li>
+          <strong>Engineering / code</strong> — MATLAB, Simulink Data Dictionary,
+          MAT, Python, C header, Ada, XTCE, AUTOSAR, ROS, DDS IDL.
+        </li>
+        <li>
+          <strong>Data interchange</strong> — JSON, YAML, CSV, XML,{' '}
+          <strong>ReqIF 1.2</strong> (round-trips with DOORS / Polarion / Jama).
+        </li>
+        <li>
+          <strong>Reports</strong> — Excel workbook (one sheet, type-styled value
+          column) and PDF (A4 portrait, project header + page numbers).
+        </li>
       </ul>
+      <p>
+        ReqIF export emits one <code>SPEC-OBJECT</code> per parameter under a
+        single <code>Parameters</code> specification. Attribute set: ID, Name,
+        DataType, DefaultValue, Unit, Tolerance, MinValue, MaxValue, Status,
+        Classification, Description (XHTML), Formula, Tags. Importing the same
+        file matches by name and updates existing rows; new rows allocate a fresh{' '}
+        <code>parameterId</code>.
+      </p>
 
       <h3 id="tb-view-toggle">View tri-toggle</h3>
       <p>

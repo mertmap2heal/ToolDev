@@ -243,10 +243,11 @@ const EXPORT_GROUPS = [
   {
     label: 'Data interchange',
     formats: [
-      { key: 'json', label: 'JSON (.json)' },
-      { key: 'yaml', label: 'YAML (.yaml)' },
-      { key: 'csv',  label: 'CSV (.csv)' },
-      { key: 'xml',  label: 'XML (.xml)' },
+      { key: 'json',  label: 'JSON (.json)' },
+      { key: 'yaml',  label: 'YAML (.yaml)' },
+      { key: 'csv',   label: 'CSV (.csv)' },
+      { key: 'xml',   label: 'XML (.xml)' },
+      { key: 'reqif', label: 'ReqIF 1.2 (.reqif)' },
     ],
   },
   {
@@ -264,6 +265,7 @@ const FORMAT_EXTENSIONS: Record<string, string> = {
   xtce: 'parameters.xtce', autosar: 'parameters.arxml', ros: 'parameters_ros.yaml',
   dds: 'parameters.idl', json: 'parameters.json', yaml: 'parameters.yaml',
   csv: 'parameters.csv', xml: 'parameters.xml',
+  reqif: 'parameters.reqif',
   excel: 'parameters.xlsx', pdf: 'parameters.pdf',
 }
 
@@ -272,6 +274,7 @@ const IMPORT_FORMATS = [
   { key: 'json',     label: 'JSON (.json)' },
   { key: 'c_header', label: 'C/C++ header (.h)' },
   { key: 'matlab',   label: 'MATLAB script (.m)' },
+  { key: 'reqif',    label: 'ReqIF 1.2 (.reqif)' },
 ]
 
 // ---------------------------------------------------------------------------
