@@ -26,3 +26,4 @@ Detailed reference guides for patterns, pitfalls, and conventions:
 @.claude/kb/configuration-management.md
 @.claude/kb/interface-management.md
 @.claude/kb/documentation-model.md
+@.claude/kb/claude-design.md
