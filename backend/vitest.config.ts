@@ -30,10 +30,13 @@ export default defineConfig({
       // value so a no-op rebase does not flake; raise as new tests land.
       // Target to climb to: 50% lines.
       thresholds: {
-        statements: 45,
-        branches: 31,
-        functions: 46,
-        lines: 46,
+        // 50% target hit — lock in the floor at 48 lines / 47 stmts so
+        // a passing rebase has a 2-point cushion without inviting drift.
+        // Branches lag the others; raise gradually as fixes land.
+        statements: 47,
+        branches: 33,
+        functions: 49,
+        lines: 48,
       },
     },
   },
