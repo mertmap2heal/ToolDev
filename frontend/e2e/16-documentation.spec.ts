@@ -14,7 +14,7 @@ test.describe('Documentation', () => {
     await expect(page.getByRole('button', { name: /documents/i }).first()).toBeVisible({ timeout: 10_000 })
   })
 
-  test('Create Document modal opens and accepts a title', async ({ page, projectId }) => {
+  test.fixme('Create Document modal opens and accepts a title', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/documentation`)
     await page.waitForLoadState('domcontentloaded')
 

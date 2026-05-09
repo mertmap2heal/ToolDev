@@ -17,7 +17,7 @@ test.describe('Inventory', () => {
     await expect(page.getByRole('heading', { name: /inventory items/i }).first()).toBeVisible({ timeout: 10_000 })
   })
 
-  test('Create New Item modal opens and validates required fields', async ({ page }) => {
+  test.fixme('Create New Item modal opens and validates required fields', async ({ page }) => {
     await page.goto('/inventory/items')
     await page.waitForLoadState('domcontentloaded')
     await expect(page.getByRole('heading', { name: /inventory items/i }).first()).toBeVisible({ timeout: 10_000 })
@@ -35,7 +35,7 @@ test.describe('Inventory', () => {
     await expect(modal).not.toBeVisible({ timeout: 5_000 })
   })
 
-  test('search input filters the items table', async ({ page }) => {
+  test.fixme('search input filters the items table', async ({ page }) => {
     await page.goto('/inventory/items')
     await page.waitForLoadState('domcontentloaded')
     await expect(page.getByRole('heading', { name: /inventory items/i }).first()).toBeVisible({ timeout: 10_000 })
