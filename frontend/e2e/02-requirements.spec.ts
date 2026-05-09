@@ -273,6 +273,21 @@ test.describe('Requirements', () => {
     // After click: collapsed.
     await expect(toggle).toHaveAttribute('title', /Expand details/i, { timeout: 5_000 })
 
+    // The page debounces the prefs PUT at 800ms. Reloading before the
+    // server has the new docCollapsedSections re-hydrates with the OLD
+    // server value, which overwrites localStorage and the card boots
+    // expanded again. Wait for the next prefs PUT to land before reload.
+    await page
+      .waitForResponse(
+        (resp) =>
+          /\/api\/v1\/projects\/[^/]+\/requirements\/view-preferences/.test(resp.url()) &&
+          resp.request().method() === 'PUT' &&
+          resp.ok(),
+        { timeout: 5_000 },
+      )
+      .catch(() => { /* fall through to a hard wait */ })
+    await page.waitForTimeout(200)
+
     // Reload and ensure the collapse state was persisted in
     // docCollapsedSections (localStorage + server prefs).
     await page.reload({ waitUntil: 'domcontentloaded' })
