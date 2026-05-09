@@ -30,10 +30,10 @@ export default defineConfig({
       // value so a no-op rebase does not flake; raise as new tests land.
       // Target to climb to: 50% lines.
       thresholds: {
-        statements: 32,
-        branches: 19,
-        functions: 28,
-        lines: 32,
+        statements: 45,
+        branches: 31,
+        functions: 46,
+        lines: 46,
       },
     },
   },
