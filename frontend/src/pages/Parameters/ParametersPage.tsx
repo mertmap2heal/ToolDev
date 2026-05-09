@@ -1757,16 +1757,14 @@ export default function ParametersPage() {
                         <button
                           onClick={() => { if (renamingFolder?.name.trim()) updateFolderMutation.mutate({ folderId: folder.id, data: { name: renamingFolder.name, color: renamingColor } }) }}
                           title="Save"
-                          className="pv-icon-btn"
-                          style={{ width: 18, height: 18 }}
+                          className="pv-icon-btn w-[18px] h-[18px]"
                         >
                           <Check size={11} />
                         </button>
                         <button
                           onClick={() => setRenamingFolder(null)}
                           title="Cancel"
-                          className="pv-icon-btn"
-                          style={{ width: 18, height: 18 }}
+                          className="pv-icon-btn w-[18px] h-[18px]"
                         >
                           <X size={11} />
                         </button>
@@ -1835,10 +1833,9 @@ export default function ParametersPage() {
                             aria-label={`Folder actions for ${folder.name}`}
                             title={`Folder actions for ${folder.name}`}
                             className={clsx(
-                              'pv-icon-btn folder-menu-btn',
+                              'pv-icon-btn folder-menu-btn w-5 h-5',
                               isMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus:opacity-100',
                             )}
-                            style={{ width: 20, height: 20 }}
                           >
                             <MoreHorizontal size={12} />
                           </button>
@@ -1886,8 +1883,7 @@ export default function ParametersPage() {
               </SortableFolderWrapper>
               {isCreatingChild && (
                 <div
-                  className={clsx('pv-tnode', depth + 1 >= 3 ? 'depth-3' : depth + 1 >= 2 ? 'depth-2' : 'depth-1')}
-                  style={{ flexDirection: 'column', alignItems: 'stretch', gap: 4, padding: '4px 8px' }}
+                  className={clsx('pv-tnode flex-col items-stretch gap-1 px-2 py-1', depth + 1 >= 3 ? 'depth-3' : depth + 1 >= 2 ? 'depth-2' : 'depth-1')}
                 >
                   <div className="flex gap-[3px] flex-wrap">
                     {FOLDER_COLORS.map(c => (
@@ -1964,8 +1960,7 @@ export default function ParametersPage() {
         {projectId && (
           <Link
             to={`/projects/${projectId}/parameters/settings`}
-            className="pv-tab"
-            style={{ textDecoration: 'none' }}
+            className="pv-tab no-underline"
           >
             Settings
           </Link>
@@ -2257,7 +2252,7 @@ export default function ParametersPage() {
       {/* ── Subbar (v2): search + filter pills + view toggle ── */}
       <div className="pv-subbar">
         <div className="pv-search">
-          <Search size={14} style={{ color: 'var(--pv-fg-3)', flexShrink: 0 }} />
+          <Search size={14} className="text-[color:var(--pv-fg-3)] shrink-0" />
           <input
             ref={searchInputRef}
             type="text"
@@ -2269,8 +2264,7 @@ export default function ParametersPage() {
             <button
               type="button"
               onClick={() => { setSearchQuery(''); setDebouncedSearch('') }}
-              className="pv-icon-btn"
-              style={{ width: 18, height: 18 }}
+              className="pv-icon-btn w-[18px] h-[18px]"
               aria-label="Clear search"
             >
               <X size={12} />
@@ -2439,7 +2433,7 @@ export default function ParametersPage() {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-      <div className="pv-workspace" style={{ minHeight: 'calc(100vh - 240px)' }}>
+      <div className="pv-workspace min-h-[calc(100vh-240px)]">
 
         {/* ── Folder tree (v2) ── */}
         {isFolderSidebarOpen ? (
@@ -2447,11 +2441,10 @@ export default function ParametersPage() {
             <div className="pv-tree-head">
               <span className="pv-lbl">Folders</span>
               <span className="pv-ct">{folders.length}</span>
-              <span style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+              <span className="ml-auto flex gap-1">
                 <button
                   type="button"
-                  className="pv-icon-btn"
-                  style={{ width: 24, height: 24 }}
+                  className="pv-icon-btn w-6 h-6"
                   onClick={() => setIsCreatingFolder(true)}
                   title="New folder"
                 >
@@ -2459,8 +2452,7 @@ export default function ParametersPage() {
                 </button>
                 <button
                   type="button"
-                  className="pv-icon-btn"
-                  style={{ width: 24, height: 24 }}
+                  className="pv-icon-btn w-6 h-6"
                   onClick={() => setIsFolderSidebarOpen(false)}
                   title="Hide folder tree"
                 >
@@ -2470,7 +2462,7 @@ export default function ParametersPage() {
             </div>
             <div className="pv-tree-search">
               <div className="pv-tree-input">
-                <Search size={12} style={{ color: 'var(--pv-fg-3)', flexShrink: 0 }} />
+                <Search size={12} className="text-[color:var(--pv-fg-3)] shrink-0" />
                 <input
                   value={folderFilter}
                   onChange={(e) => setFolderFilter(e.target.value)}
@@ -2481,8 +2473,7 @@ export default function ParametersPage() {
                   <button
                     type="button"
                     onClick={() => setFolderFilter('')}
-                    className="pv-icon-btn"
-                    style={{ width: 16, height: 16 }}
+                    className="pv-icon-btn w-4 h-4"
                     aria-label="Clear filter"
                   >
                     <X size={10} />
@@ -2495,8 +2486,7 @@ export default function ParametersPage() {
               <button
                 type="button"
                 onClick={() => setSelectedFolderId(null)}
-                className={clsx('pv-tnode', selectedFolderId === null && 'is-selected')}
-                style={{ width: '100%', background: 'none', border: 0, font: 'inherit' }}
+                className={clsx('pv-tnode w-full bg-transparent border-0 [font:inherit]', selectedFolderId === null && 'is-selected')}
               >
                 <span className="pv-chev" />
                 <span className="pv-ico"><Layers size={13} /></span>
@@ -2508,8 +2498,7 @@ export default function ParametersPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedFolderId('__none__')}
-                  className={clsx('pv-tnode', selectedFolderId === '__none__' && 'is-selected')}
-                  style={{ width: '100%', background: 'none', border: 0, font: 'inherit' }}
+                  className={clsx('pv-tnode w-full bg-transparent border-0 [font:inherit]', selectedFolderId === '__none__' && 'is-selected')}
                 >
                   <span className="pv-chev" />
                   <span className="pv-ico"><Folder size={13} /></span>
@@ -2527,8 +2516,7 @@ export default function ParametersPage() {
               <button
                 type="button"
                 onClick={() => setSelectedFolderId('__starred__')}
-                className={clsx('pv-tnode', selectedFolderId === '__starred__' && 'is-selected')}
-                style={{ width: '100%', background: 'none', border: 0, font: 'inherit' }}
+                className={clsx('pv-tnode w-full bg-transparent border-0 [font:inherit]', selectedFolderId === '__starred__' && 'is-selected')}
               >
                 <span className="pv-chev" />
                 <span className="pv-ico"><Star size={13} /></span>
@@ -2539,15 +2527,14 @@ export default function ParametersPage() {
               <button
                 type="button"
                 onClick={() => setSelectedFolderId('__recent__')}
-                className={clsx('pv-tnode', selectedFolderId === '__recent__' && 'is-selected')}
-                style={{ width: '100%', background: 'none', border: 0, font: 'inherit' }}
+                className={clsx('pv-tnode w-full bg-transparent border-0 [font:inherit]', selectedFolderId === '__recent__' && 'is-selected')}
               >
                 <span className="pv-chev" />
                 <span className="pv-ico"><Clock size={13} /></span>
                 <span className="pv-name">Recently edited</span>
                 <span className="pv-count">{recentCount.toLocaleString()}</span>
               </button>
-              <div style={{ height: 1, borderTop: '1px solid var(--pv-line-soft)', margin: '6px 4px 4px' }} />
+              <div className="h-px border-t border-[color:var(--pv-line-soft)] mt-1.5 mx-1 mb-1" />
               {/* Named folders */}
               {renderFolderTree(null, 0)}
               {/* New folder */}
@@ -2610,15 +2597,14 @@ export default function ParametersPage() {
             type="button"
             onClick={() => setIsFolderSidebarOpen(true)}
             title="Show folder tree"
-            className="pv-icon-btn"
-            style={{ width: 28, height: 'auto', minHeight: 40, alignSelf: 'flex-start', marginTop: 8, marginLeft: 4, borderRadius: 6, border: '1px solid var(--pv-line)', background: 'var(--pv-bg)' }}
+            className="pv-icon-btn w-7 h-auto min-h-10 self-start mt-2 ml-1 rounded-md border border-[color:var(--pv-line)] bg-[color:var(--pv-bg)]"
           >
             <PanelLeftOpen size={14} />
           </button>
         )}
 
         {/* ── Right: tip / graph / bulk bar / table ── */}
-        <div className={clsx('pv-table-pane', !!detailParameter && 'drawer-open')} style={{ minWidth: 0 }}>
+        <div className={clsx('pv-table-pane min-w-0', !!detailParameter && 'drawer-open')}>
 
       {/* ── Info / tip ── */}
       {parameters.length === 0 && !isLoading && (
@@ -2682,7 +2668,7 @@ export default function ParametersPage() {
           </span>
           {/* Move */}
           {folders.length > 0 && (
-            <label className="b" style={{ position: 'relative' }}>
+            <label className="b relative">
               <FolderInput size={13} />
               Move
               <select
@@ -2720,7 +2706,7 @@ export default function ParametersPage() {
             </label>
           )}
           {/* Set status */}
-          <label className="b" style={{ position: 'relative' }}>
+          <label className="b relative">
             <CircleDot size={13} />
             Set status
             <select
@@ -2775,11 +2761,10 @@ export default function ParametersPage() {
             </button>
           ) : (
             <>
-              <span style={{ color: '#ff8e84', fontWeight: 500, padding: '0 6px' }}>Confirm?</span>
+              <span className="text-[#ff8e84] font-medium px-1.5">Confirm?</span>
               <button
                 type="button"
-                className="b"
-                style={{ background: '#B42318', color: '#fff' }}
+                className="b bg-[#B42318] text-white"
                 onClick={() => bulkDeleteMutation.mutate(Array.from(selectedIds))}
                 disabled={bulkDeleteMutation.isPending}
               >
@@ -2808,7 +2793,7 @@ export default function ParametersPage() {
 
       {/* ── Table (v2) ── */}
       {paramViewMode === 'list' && (
-      <div className="pv-scroll-area" ref={tableScrollRef} style={{ maxHeight: 'calc(100vh - 240px)' }}>
+      <div className="pv-scroll-area max-h-[calc(100vh-240px)]" ref={tableScrollRef}>
           <table className="pv-params">
             <thead>
               <tr>
@@ -2862,7 +2847,7 @@ export default function ParametersPage() {
                       </span>
                     )}
                     {h.field && sortField !== h.field && (
-                      <span className="sortmark" style={{ opacity: 0.35 }}>
+                      <span className="sortmark opacity-35">
                         <ArrowUpDown size={11} />
                       </span>
                     )}
@@ -2915,8 +2900,8 @@ export default function ParametersPage() {
                   </th>
                 )}
                 {visibleCols.has('value') && (
-                  <th style={{ textAlign: 'right' }}>
-                    <span className={clsx('qf', valueFilter && 'active')} style={{ padding: 0 }}>
+                  <th className="text-right">
+                    <span className={clsx('qf p-0', valueFilter && 'active')}>
                       <input
                         aria-label="Filter by value"
                         value={valueFilter}
@@ -2933,8 +2918,7 @@ export default function ParametersPage() {
                           type="button"
                           onClick={() => setValueFilter('')}
                           aria-label="Clear value filter"
-                          className="x"
-                          style={{ background: 'none', border: 0, cursor: 'pointer', padding: '0 4px' }}
+                          className="x bg-transparent border-0 cursor-pointer px-1"
                         >
                           <X size={10} />
                         </button>
@@ -2943,7 +2927,7 @@ export default function ParametersPage() {
                   </th>
                 )}
                 {visibleCols.has('computed') && (
-                  <th style={{ textAlign: 'right' }}>
+                  <th className="text-right">
                     <select
                       aria-label="Filter by computed"
                       value={computedFilter}
@@ -3083,9 +3067,9 @@ export default function ParametersPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={2 + visibleCols.size} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--pv-fg-3)' }}>Loading parameters…</td></tr>
+                <tr><td colSpan={2 + visibleCols.size} className="px-3 py-8 text-center text-[color:var(--pv-fg-3)]">Loading parameters…</td></tr>
               ) : filteredParameters.length === 0 ? (
-                <tr><td colSpan={2 + visibleCols.size} style={{ padding: '32px 12px', textAlign: 'center', color: 'var(--pv-fg-3)' }}>
+                <tr><td colSpan={2 + visibleCols.size} className="px-3 py-8 text-center text-[color:var(--pv-fg-3)]">
                   {parameters.length === 0 ? 'No parameters yet. Create one or import a file.' : 'No parameters match your filters.'}
                 </td></tr>
               ) : (() => {
@@ -3115,15 +3099,16 @@ export default function ParametersPage() {
                               <button
                                 type="button"
                                 onClick={() => toggleGroup(group.id)}
-                                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 0, cursor: 'pointer', padding: 0, font: 'inherit', color: 'inherit' }}
+                                className="inline-flex items-center gap-1.5 bg-transparent border-0 cursor-pointer p-0 [font:inherit] [color:inherit]"
                               >
-                                {isCollapsed ? <ChevronDown size={12} style={{ color: 'var(--pv-fg-3)' }} /> : <ChevronUp size={12} style={{ color: 'var(--pv-fg-3)' }} />}
+                                {isCollapsed ? <ChevronDown size={12} className="text-[color:var(--pv-fg-3)]" /> : <ChevronUp size={12} className="text-[color:var(--pv-fg-3)]" />}
                                 {group.color && (
                                   <span
-                                    style={{ width: 8, height: 8, borderRadius: '50%', display: 'inline-block', flexShrink: 0, backgroundColor: group.color }}
+                                    className="w-2 h-2 rounded-full inline-block shrink-0"
+                                    style={{ backgroundColor: group.color }}
                                   />
                                 )}
-                                <FolderOpen size={12} style={{ color: 'var(--pv-fg-3)' }} />
+                                <FolderOpen size={12} className="text-[color:var(--pv-fg-3)]" />
                                 <span className="gr-name">{group.label}</span>
                               </button>
                               {(() => {
