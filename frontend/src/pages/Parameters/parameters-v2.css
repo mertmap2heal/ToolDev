@@ -920,6 +920,14 @@ html[data-theme='midnight'] .params-v2 .pv-dr-diff { color: #EAC54F; }
   color: var(--pv-blue); text-decoration: none; cursor: pointer;
 }
 .params-v2 .pv-dr-kv a:hover { text-decoration: underline; }
+.params-v2 .src-link {
+  font-family: var(--pv-font-mono); font-size: 12px;
+  color: var(--pv-blue-ink); text-decoration: none; cursor: pointer;
+  border-bottom: 1px dotted rgba(9, 105, 218, 0.5);
+}
+.params-v2 .src-link:hover {
+  color: var(--pv-blue); border-bottom-color: var(--pv-blue);
+}
 .params-v2 .pv-dr-author {
   display: inline-flex; align-items: center; gap: 6px;
 }

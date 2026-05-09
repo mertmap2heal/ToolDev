@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { projectService } from '../../services/project.service'
-import { X, Edit2, ChevronDown, ChevronRight, GitCompare, Copy, RotateCcw, Eye, Send, ExternalLink, Link2, MoreHorizontal, Maximize2, GitPullRequestArrow, ListChecks, Code2, SlidersHorizontal, Lock } from 'lucide-react'
+import { X, Edit2, GitCompare, Copy, RotateCcw, Eye, Send, ExternalLink, Link2, MoreHorizontal, Maximize2, GitPullRequestArrow, ListChecks, Code2, SlidersHorizontal, Lock } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { parameterService } from '../../services/parameter.service'
@@ -8,7 +8,7 @@ import { evaluateFormula } from './evaluateFormula'
 import { useParameterPresence } from '../../hooks/useParameterPresence'
 import { useAuthStore } from '../../store/authStore'
 import type { Parameter } from 'shared/types/engineering.types'
-import { format } from 'date-fns'
+import { format, formatDistanceToNow } from 'date-fns'
 import clsx from 'clsx'
 
 interface ParameterDetailDrawerProps {
@@ -629,6 +629,29 @@ function computeDiff(prev: Record<string, unknown> | null, next: Record<string, 
   return diffs
 }
 
+// Inline avatar + name chip used in Provenance + Timeline.
+function AuthorChip({ name, email, subtitle }: { name?: string | null; email?: string | null; subtitle?: string }) {
+  const display = name?.trim() || email || 'Unknown'
+  return (
+    <span className="pv-dr-author">
+      <span className="pv-avatar" aria-hidden>{initials(name ?? undefined, email ?? undefined)}</span>
+      {display}
+      {subtitle && (
+        <span style={{ color: 'var(--pv-fg-3)', fontSize: 11, marginLeft: 4 }}>· {subtitle}</span>
+      )}
+    </span>
+  )
+}
+
+// Classify a version-to-version diff into one of the timeline event kinds.
+function classifyDiff(diffs: FieldDiff[], origIdx: number): 'publish' | 'stale' | 'edit' | 'created' {
+  if (origIdx === 0) return 'created'
+  const statusDiff = diffs.find(d => d.field === 'status')
+  if (statusDiff && /^(approved|released)$/i.test(statusDiff.next)) return 'publish'
+  if (diffs.some(d => d.field === 'defaultValue')) return 'stale'
+  return 'edit'
+}
+
 export default function ParameterDetailDrawer({
   isOpen,
   onClose,
@@ -1031,6 +1054,42 @@ export default function ParameterDetailDrawer({
           </div>
 
           <div className="pv-dr-body">
+          {/* DIFF / STALE banner — value changed since prior version */}
+          {(() => {
+            if (versions.length < 2) return null
+            const latest = versions[versions.length - 1]
+            const prev = versions[versions.length - 2]
+            const diffs = computeDiff(prev.snapshot as Record<string, unknown>, latest.snapshot as Record<string, unknown>)
+            const valDiff = diffs.find(d => d.field === 'defaultValue')
+            if (!valDiff) return null
+            const fromN = parseFloat(valDiff.prev)
+            const toN = parseFloat(valDiff.next)
+            const pct = (!isNaN(fromN) && !isNaN(toN) && fromN !== 0)
+              ? `${toN > fromN ? '+' : ''}${(((toN - fromN) / Math.abs(fromN)) * 100).toFixed(1)}%`
+              : null
+            return (
+              <div className="pv-dr-diff">
+                <div className="row">
+                  <span className="label">Value</span>
+                  <span className="from">{valDiff.prev || '—'}</span>
+                  <span style={{ color: 'var(--pv-fg-3)' }}>→</span>
+                  <span className="to">{valDiff.next || '—'}{parameter.unit ? ` ${parameter.unit}` : ''}</span>
+                  {pct && <span className="meta">{pct}</span>}
+                </div>
+                <div className="row">
+                  <span className="label">Edited</span>
+                  <span style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 11.5, color: 'var(--pv-fg-2)' }}>
+                    v{latest.version}.{String((latest as unknown as Record<string, unknown>).minorVersion ?? 0)}
+                  </span>
+                  <span className="meta">
+                    {formatDistanceToNow(new Date(latest.createdAt), { addSuffix: true })}
+                    {latest.createdBy?.name ? ` · ${latest.createdBy.name}` : ''}
+                  </span>
+                </div>
+              </div>
+            )
+          })()}
+
           {/* CURRENT VALUE */}
           {(parameter.defaultValue != null || parameter.unit) && (
             <div className="pv-dr-section">
@@ -1198,6 +1257,73 @@ export default function ParameterDetailDrawer({
                             {p.name}{p.defaultValue ? ` = ${p.defaultValue}` : ''}
                           </span>
                         ))}
+                      </dd>
+                    </>
+                  )}
+                </dl>
+              </div>
+            )
+          })()}
+
+          {/* SOURCE & PROVENANCE */}
+          {(() => {
+            const lastVersion = versions.length > 0 ? versions[versions.length - 1] : null
+            const firstVersion = versions.length > 0 ? versions[0] : null
+            const hasOrigin = !!parameter.sourceFunction
+            const hasEditor = !!lastVersion?.createdBy
+            if (!hasOrigin && !hasEditor && !firstVersion) return null
+            const fnLink = parameter.sourceFunction
+              ? `/projects/${projectId}/functions?selectedId=${parameter.sourceFunction.id}`
+              : null
+            return (
+              <div className="pv-dr-section">
+                <h4>Source &amp; provenance</h4>
+                <dl className="pv-dr-kv">
+                  <dt>Origin</dt>
+                  <dd>
+                    {parameter.sourceFunction ? (
+                      <>
+                        <Link to={fnLink!} className="src-link">
+                          {parameter.sourceFunction.functionId || parameter.sourceFunction.name}
+                        </Link>
+                        <span style={{ color: 'var(--pv-fg-3)', marginLeft: 6 }}>· system function</span>
+                      </>
+                    ) : (
+                      <span style={{ color: 'var(--pv-fg-3)' }}>Manual entry</span>
+                    )}
+                  </dd>
+                  <dt>Sync method</dt>
+                  <dd>
+                    <span style={{ color: 'var(--pv-fg-2)' }}>
+                      {parameter.sourceFunction ? 'Function-derived · auto on commit' : 'Manual'}
+                    </span>
+                    {lastVersion && (
+                      <span style={{ color: 'var(--pv-fg-3)', fontSize: 11, marginLeft: 6 }}>
+                        · last sync {format(new Date(lastVersion.createdAt), 'd MMM HH:mm')}
+                      </span>
+                    )}
+                  </dd>
+                  {lastVersion?.createdBy && (
+                    <>
+                      <dt>Last edited by</dt>
+                      <dd>
+                        <AuthorChip
+                          name={lastVersion.createdBy.name}
+                          email={lastVersion.createdBy.email}
+                          subtitle={`v${lastVersion.version}.${String((lastVersion as unknown as Record<string, unknown>).minorVersion ?? 0)}`}
+                        />
+                      </dd>
+                    </>
+                  )}
+                  {firstVersion?.createdBy && versions.length > 1 && (
+                    <>
+                      <dt>Created by</dt>
+                      <dd>
+                        <AuthorChip
+                          name={firstVersion.createdBy.name}
+                          email={firstVersion.createdBy.email}
+                          subtitle={format(new Date(firstVersion.createdAt), 'd MMM yyyy')}
+                        />
                       </dd>
                     </>
                   )}
@@ -1379,59 +1505,83 @@ export default function ParameterDetailDrawer({
                 })()}
               </div>
             ) : (
-              // ── Timeline mode — newest first ───────────────────────────────
-              <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden divide-y divide-gray-200 dark:divide-gray-700">
+              // ── Timeline mode — newest first, design's pv-dr-timeline ─────
+              <div className="pv-dr-timeline">
                 {[...versions].reverse().map((v, displayIdx) => {
-                  // origIdx: position in the ascending (oldest-first) versions array
                   const origIdx = versions.length - 1 - displayIdx
-                  // Diff against the immediately preceding version (one step older)
                   const prevSnapshot = origIdx > 0 ? (versions[origIdx - 1].snapshot as Record<string, unknown>) : null
                   const diffs = computeDiff(prevSnapshot, v.snapshot as Record<string, unknown>)
+                  const kind = classifyDiff(diffs, origIdx)
                   const isExpanded = expandedVersionId === v.id
-                  const isCurrentVersion = displayIdx === 0
+                  const isCurrent = displayIdx === 0
+                  const vLabel = `v${v.version}.${String((v as unknown as Record<string, unknown>).minorVersion ?? 0)}`
+
+                  // Headline action text per kind
+                  let action: React.ReactNode
+                  if (kind === 'created') action = <><b>Created</b> initial version</>
+                  else if (kind === 'publish') action = <><b>Released</b> on {vLabel}</>
+                  else if (kind === 'stale') {
+                    const valDiff = diffs.find(d => d.field === 'defaultValue')
+                    action = <><b>Value updated</b>{valDiff ? <> · <span style={{ fontFamily: 'var(--pv-font-mono)' }}>{valDiff.prev || '—'} → {valDiff.next || '—'}</span></> : null}</>
+                  }
+                  else action = <><b>{diffs[0]?.label ?? 'Edited'}</b>{diffs.length > 1 ? ` + ${diffs.length - 1} more` : ''}</>
+
+                  const detail = diffs.length > 0
+                    ? diffs.slice(0, 3).map(d => `${d.label}: ${d.prev || '—'} → ${d.next || '—'}`).join(' · ')
+                    : (origIdx === 0 ? 'Initial version' : 'No tracked changes')
 
                   return (
-                    <div key={v.id} className="bg-white dark:bg-gray-800">
+                    <div key={v.id} className={clsx('pv-dr-event', kind === 'publish' && 'is-publish', kind === 'stale' && 'is-stale', kind === 'edit' && 'is-edit')}>
                       <button
                         type="button"
                         onClick={() => setExpandedVersionId(isExpanded ? null : v.id)}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                        style={{ background: 'none', border: 0, padding: 0, width: '100%', textAlign: 'left', cursor: 'pointer', font: 'inherit', color: 'inherit' }}
                       >
-                        {isExpanded
-                          ? <ChevronDown size={14} className="text-gray-400 flex-shrink-0" />
-                          : <ChevronRight size={14} className="text-gray-400 flex-shrink-0" />
-                        }
-                        <span className={`text-xs font-semibold w-14 flex-shrink-0 ${isCurrentVersion ? 'text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'}`}>
-                          v{v.version}.{String((v as unknown as Record<string, unknown>).minorVersion ?? 0)}
-                          {isCurrentVersion && <span className="ml-1 text-blue-400 dark:text-blue-500 font-normal text-[10px]">current</span>}
-                        </span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
-                          {format(new Date(v.createdAt), 'MMM d, yyyy HH:mm')}
-                        </span>
-                        <span className="text-xs text-gray-400 dark:text-gray-500 mx-1">·</span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
-                          {v.createdBy?.name ?? 'Unknown'}
-                        </span>
-                        <span className="flex-1 text-right text-xs text-gray-400 dark:text-gray-500 truncate ml-2">
-                          {diffs.length > 0 ? diffs.map(d => d.label).join(', ') : (origIdx === 0 ? 'Initial version' : 'No tracked changes')}
-                        </span>
-                        {!isCurrentVersion && (
-                          pendingRestoreId === v.id ? (
-                            <span className="ml-2 flex-shrink-0 flex items-center gap-1">
-                              <span className="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">Restore this version?</span>
+                        <div className="e-row">
+                          <span className="e-action">
+                            {action}
+                            {isCurrent && <span style={{ marginLeft: 6, color: 'var(--pv-blue-ink)', fontSize: 11 }}>· current</span>}
+                          </span>
+                          <span className="e-meta">
+                            {formatDistanceToNow(new Date(v.createdAt), { addSuffix: false })}
+                          </span>
+                        </div>
+                        <div className="e-detail">
+                          {vLabel} · {v.createdBy?.name ?? 'Unknown'} · {detail}
+                        </div>
+                      </button>
+                      {isExpanded && diffs.length > 0 && (
+                        <div style={{ marginTop: 6, paddingLeft: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {diffs.map(d => (
+                            <div key={d.field} style={{ fontSize: 11.5, fontFamily: 'var(--pv-font-mono)' }}>
+                              <span style={{ color: 'var(--pv-fg-3)', marginRight: 6 }}>{d.label}</span>
+                              <span style={{ textDecoration: 'line-through', color: 'var(--pv-fg-3)' }}>{d.prev || '—'}</span>
+                              <span style={{ color: 'var(--pv-fg-3)', margin: '0 6px' }}>→</span>
+                              <span style={{ color: 'var(--pv-fg)', fontWeight: 600 }}>{d.next || '—'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {!isCurrent && (
+                        <div style={{ marginTop: 4 }}>
+                          {pendingRestoreId === v.id ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontSize: 10, color: 'var(--pv-fg-3)' }}>Restore this version?</span>
                               <button
                                 type="button"
-                                onClick={e => { e.stopPropagation(); handleRestoreVersion(v.id) }}
+                                onClick={() => handleRestoreVersion(v.id)}
                                 disabled={restoringVersionId === v.id}
-                                className="flex items-center gap-1 px-2 py-0.5 rounded text-xs border border-amber-400 bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 font-semibold transition-colors"
+                                className="pv-dr-btn"
+                                style={{ height: 22, padding: '0 8px', fontSize: 11, color: 'var(--pv-amber)', borderColor: 'var(--pv-amber-line)' }}
                               >
                                 <RotateCcw size={10} />
                                 {restoringVersionId === v.id ? 'Restoring…' : 'Yes, restore'}
                               </button>
                               <button
                                 type="button"
-                                onClick={e => { e.stopPropagation(); setPendingRestoreId(null) }}
-                                className="flex items-center px-2 py-0.5 rounded text-xs border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition-colors"
+                                onClick={() => setPendingRestoreId(null)}
+                                className="pv-dr-btn ghost"
+                                style={{ height: 22, padding: '0 8px', fontSize: 11 }}
                               >
                                 Cancel
                               </button>
@@ -1439,48 +1589,15 @@ export default function ParameterDetailDrawer({
                           ) : (
                             <button
                               type="button"
-                              onClick={e => { e.stopPropagation(); setPendingRestoreId(v.id) }}
+                              onClick={() => setPendingRestoreId(v.id)}
                               disabled={restoringVersionId === v.id}
-                              className="ml-2 flex-shrink-0 flex items-center gap-1 px-2 py-0.5 rounded text-xs border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 transition-colors"
+                              className="pv-dr-btn ghost"
+                              style={{ height: 22, padding: '0 8px', fontSize: 11 }}
                               title="Restore to this version"
                             >
                               <RotateCcw size={10} />
                               Restore
                             </button>
-                          )
-                        )}
-                      </button>
-                      {isExpanded && (
-                        <div className="px-3 pb-3 pt-1 bg-gray-50 dark:bg-gray-900/30 border-t border-gray-100 dark:border-gray-700">
-                          {diffs.length === 0 ? (
-                            <p className="text-xs text-gray-400 dark:text-gray-500 italic pl-6">
-                              {origIdx === 0 ? 'Initial version — no previous version to compare.' : 'No tracked field changes detected.'}
-                            </p>
-                          ) : (
-                            <div className="space-y-2 pl-6">
-                              {diffs.map(diff => (
-                                <div key={diff.field} className="text-xs">
-                                  <span className="font-medium text-gray-700 dark:text-gray-300">{diff.label}</span>
-                                  <div className="mt-0.5 flex items-start gap-2 flex-wrap">
-                                    {diff.prev !== '' ? (
-                                      <span className="inline-block px-2 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 line-through font-mono text-xs max-w-[200px] truncate" title={diff.prev}>
-                                        {diff.prev}
-                                      </span>
-                                    ) : (
-                                      <span className="text-gray-400 dark:text-gray-500 italic">—</span>
-                                    )}
-                                    <span className="text-gray-400">→</span>
-                                    {diff.next !== '' ? (
-                                      <span className="inline-block px-2 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 font-mono text-xs max-w-[200px] truncate" title={diff.next}>
-                                        {diff.next}
-                                      </span>
-                                    ) : (
-                                      <span className="text-gray-400 dark:text-gray-500 italic">—</span>
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
                           )}
                         </div>
                       )}
@@ -1503,13 +1620,16 @@ export default function ParameterDetailDrawer({
           />
           </div>{/* end pv-dr-body */}
 
-          {/* FOOTER */}
+          {/* FOOTER — adaptive: function-sourced shows source flow, manual shows edit flow */}
           <div className="pv-dr-foot">
             <span className="left">
               {parameter.sourceFunction ? (
                 <>
                   <Lock size={12} />
-                  Sourced from <span className="pv-mono" style={{ marginLeft: 4 }}>{parameter.sourceFunction.functionId || parameter.sourceFunction.name}</span>
+                  Read-only · sourced from{' '}
+                  <span className="pv-mono" style={{ marginLeft: 4 }}>
+                    {parameter.sourceFunction.functionId || parameter.sourceFunction.name}
+                  </span>
                 </>
               ) : (
                 <>
@@ -1519,31 +1639,68 @@ export default function ParameterDetailDrawer({
               )}
             </span>
             <span className="right">
-              <button
-                type="button"
-                onClick={() => { onEdit(parameter); onClose() }}
-                className="pv-dr-btn"
-              >
-                <Edit2 size={11} />
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={() => copyToClipboard(parameter.name, 'footer-ref')}
-                className="pv-dr-btn"
-                title="Copy parameter reference"
-              >
-                <Code2 size={11} />
-                Copy ref
-              </button>
-              <button
-                type="button"
-                className="pv-dr-btn primary"
-                onClick={() => { onEdit(parameter); onClose() }}
-              >
-                <GitPullRequestArrow size={11} />
-                Open
-              </button>
+              {parameter.sourceFunction ? (
+                <>
+                  <Link
+                    to={`/projects/${projectId}/functions?selectedId=${parameter.sourceFunction.id}`}
+                    className="pv-dr-btn ghost"
+                  >
+                    <ExternalLink size={11} />
+                    View source
+                  </Link>
+                  {versions.length >= 2 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCompareMode(true)
+                        setCompareA(versions[versions.length - 2].id)
+                        setCompareB(versions[versions.length - 1].id)
+                      }}
+                      className="pv-dr-btn"
+                    >
+                      <GitCompare size={11} />
+                      View diff
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => { onEdit(parameter); onClose() }}
+                    className="pv-dr-btn primary"
+                    title="Override the function-derived value locally"
+                  >
+                    <Edit2 size={11} />
+                    Override locally
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(parameter.name, 'footer-ref')}
+                    className="pv-dr-btn ghost"
+                    title="Copy parameter reference"
+                  >
+                    <Code2 size={11} />
+                    Copy ref
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { onEdit(parameter); onClose() }}
+                    className="pv-dr-btn"
+                  >
+                    <Edit2 size={11} />
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="pv-dr-btn primary"
+                    onClick={() => { onEdit(parameter); onClose() }}
+                  >
+                    <GitPullRequestArrow size={11} />
+                    Open
+                  </button>
+                </>
+              )}
             </span>
           </div>
         </>
