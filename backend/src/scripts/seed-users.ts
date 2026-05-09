@@ -8,7 +8,7 @@ import bcrypt from 'bcryptjs'
  *
  * Required env vars (set in backend/.env or shell):
  *   SEED_PASSWORD_MERT       - password for mert.caferoglu@example.com
- *   SEED_PASSWORD_CHRISTIAN  - password for christian.mandle@example.com
+ *   SEED_PASSWORD_CHRISTIAN  - password for christian.mandle@gmail.com
  *   SEED_PASSWORD_ADMIN      - password for admin@example.com (platform admin)
  */
 async function seedUsers() {
@@ -29,7 +29,7 @@ async function seedUsers() {
       password: process.env.SEED_PASSWORD_MERT as string,
     },
     {
-      email: 'christian.mandle@example.com',
+      email: 'christian.mandle@gmail.com',
       name: 'Christian Mandle',
       password: process.env.SEED_PASSWORD_CHRISTIAN as string,
     },
