@@ -44,7 +44,11 @@ test.describe('Parameters — air-gap (Core package)', () => {
     await expect(page.getByRole('button', { name: /^List$/i })).toBeVisible()
     await expect(page.getByRole('button', { name: /^Board$/i })).toBeVisible()
     await expect(page.getByRole('button', { name: /^Graph$/i })).toBeVisible()
+    // v2 redesign moved Baselines into the More-actions overflow menu.
+    await page.getByRole('button', { name: /more actions/i }).click()
     await expect(page.getByRole('button', { name: /Baselines/i })).toBeVisible()
+    // Close the menu so subsequent assertions interact with the toolbar cleanly.
+    await page.keyboard.press('Escape').catch(() => {})
 
     // Tri-toggle still functional.
     await page.getByRole('button', { name: /^Board$/i }).click()

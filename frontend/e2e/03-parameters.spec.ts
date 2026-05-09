@@ -177,8 +177,14 @@ test.describe('Parameters — CRUD', () => {
     await expect(paramRow).toBeVisible({ timeout: 8_000 })
     await paramRow.locator('button[title="Edit"]').click()
 
-    // Edit modal should open
-    const modal = page.locator(MODAL).filter({ has: page.getByRole('heading', { name: /Edit Parameter:/i }) })
+    // Edit modal should open. v2 redesign replaced the old <h2>Edit Parameter:</h2>
+    // heading with <span class="pv-dr-display">Edit parameter</span>; identify the
+    // modal by the "Edit parameter" sub-header and the "Save changes" submit
+    // button (unique to this modal).
+    const modal = page
+      .locator(MODAL)
+      .filter({ hasText: /Edit parameter/i })
+      .filter({ has: page.getByRole('button', { name: /save changes/i }) })
     await expect(modal).toBeVisible({ timeout: 5_000 })
     await page.waitForTimeout(AFTER_OPEN_WAIT)
 
@@ -188,7 +194,7 @@ test.describe('Parameters — CRUD', () => {
     await descTextarea.fill('Updated by E2E test')
 
     // Save
-    await modal.getByRole('button', { name: /^save|^update/i }).click()
+    await modal.getByRole('button', { name: /save changes/i }).click()
 
     // Modal should close
     await expect(modal).not.toBeVisible({ timeout: 8_000 })
@@ -325,7 +331,10 @@ test.describe('Parameters — Export', () => {
   test.beforeEach(async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/parameters`)
     await page.waitForLoadState('domcontentloaded')
-    await expect(page.locator('h2').filter({ hasText: /parameters/i }).first()).toBeVisible({ timeout: 10_000 })
+    // d303ae2 promoted the page heading to <h1>; the previous <h2>Parameters</h2>
+    // selector never matched and the entire describe-block timed out before
+    // any test ran.
+    await expect(page.locator('h1').filter({ hasText: /parameters/i }).first()).toBeVisible({ timeout: 10_000 })
   })
 
   test('export dropdown opens', async ({ page }) => {
@@ -511,18 +520,21 @@ test.describe('Parameters — Version Compare', () => {
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('table').first()).toBeVisible({ timeout: 10_000 })
 
-    // Open the first DATA row — click the parameter name button (td 2) to open the detail drawer
+    // Open the first DATA row. v2 redesign moved the row-open click target —
+    // the FIRST <button> inside td.col-name is now the Star toggle (it calls
+    // e.stopPropagation), so clicking it does NOT open the drawer. Click the
+    // parameter name span (.nm) inside col-name instead, which lets the
+    // td-level onClick fire onOpenDetail.
     const firstRow = page.locator('table tbody tr').filter({ has: page.locator('td:nth-child(2)') }).first()
     await expect(firstRow).toBeVisible({ timeout: 5_000 })
-    await firstRow.locator('td:nth-child(2) button').first().click()
+    await firstRow.locator('td.col-name span.nm').first().click()
 
     // Drawer should open (ParameterDetailDrawer renders with role="dialog")
     const drawer = page.locator('[role="dialog"]')
     await expect(drawer).toBeVisible({ timeout: 5_000 })
 
-    // If 2+ versions exist, the Compare versions button should be visible
-    const compareBtn = drawer.getByRole('button', { name: /compare versions/i })
-    // Button is only present when >= 2 versions — check non-strictly
+    // v2 button label is just "Compare" (or "Cancel compare" when active).
+    const compareBtn = drawer.getByRole('button', { name: /^compare$/i })
     const hasCompare = await compareBtn.isVisible()
     if (hasCompare) {
       await compareBtn.click()
@@ -757,24 +769,30 @@ test.describe('Parameters — count badge', () => {
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 10_000 })
 
-    // The pv-tab-count span on the Parameters tab shows total/filtered count
-    // since the v2 redesign moved the heading to <h1>Parameters</h1> + a
-    // sibling count chip.
-    const badge = page.locator('span.pv-tab-count').first()
-    await expect(badge).toBeVisible({ timeout: 8_000 })
-    const totalText = await badge.innerText()
+    // v2 redesign:
+    //   - <span class="pv-tab-count"> on the Parameters tab always shows
+    //     just the project total (never narrows on search).
+    //   - The "filtered / total" chip lives in <span class="pv-title-meta">
+    //     next to the <h1> and only includes the slash form when narrowed.
+    const tabBadge = page.locator('span.pv-tab-count').first()
+    await expect(tabBadge).toBeVisible({ timeout: 8_000 })
+    const totalText = await tabBadge.innerText()
     const totalCount = parseInt(totalText.replace(/[^\d]/g, ''), 10)
 
-    // Only run the filtered count assertion if there are parameters to filter
     if (totalCount > 0) {
+      const titleMeta = page.locator('span.pv-title-meta').first()
+      await expect(titleMeta).toBeVisible()
+
       const searchInput = page.getByPlaceholder(/filter parameters/i)
       await searchInput.fill('__nonexistent_xyz__')
-      // Badge should now show "0 / N" format
-      await expect(badge).toHaveText(/0\s*\/\s*\d+/, { timeout: 5_000 })
+      // After filtering with no matches, title-meta shows "0 / N records …"
+      await expect(titleMeta).toContainText(/0\s*\/\s*\d+\s+records/i, { timeout: 5_000 })
 
-      // Clear search — badge returns to plain number
+      // Clear search — title-meta drops the slash and shows just N records
       await searchInput.fill('')
-      await expect(badge).toHaveText(String(totalCount), { timeout: 5_000 })
+      await expect(titleMeta).toContainText(/\d+\s+records/i, { timeout: 5_000 })
+      // Tab badge always remains the project total (locale-formatted).
+      await expect(tabBadge).toContainText(/\d/, { timeout: 5_000 })
     }
   })
 })

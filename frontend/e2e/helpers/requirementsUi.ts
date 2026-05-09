@@ -236,6 +236,36 @@ export async function readAuthToken(page: Page): Promise<string> {
 }
 
 /**
+ * Reset server-persisted Requirements view preferences for a project.
+ *
+ * The Requirements page persists `listViewStyle`, `visibleFieldKeys`, etc. via
+ * `prefsMutation` to /projects/:id/requirements/view-preferences after an
+ * 800ms debounce, and re-hydrates from `prefsQuery` on every mount. Tests
+ * that previously switched to Document View or hid columns will leak that
+ * state into subsequent tests across spec files because the worker runs
+ * with a single account against a single shared project.
+ *
+ * Call this before navigating to /requirements in any test that depends on
+ * the table view + default column set being present. If the test already
+ * does a `page.reload()` later, the preceding PUT will be picked up there;
+ * otherwise call it before the first `page.goto` and reload manually.
+ */
+export async function resetRequirementsViewPreferences(
+  page: Page,
+  projectId: string,
+  preferences: Record<string, unknown> = { listViewStyle: 'table' },
+): Promise<void> {
+  const token = await readAuthToken(page)
+  await page.request.put(
+    `${E2E_API_V1}/projects/${projectId}/requirements/view-preferences`,
+    {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: { preferences },
+    },
+  ).catch(() => { /* best effort — fall back to localStorage clear + reload */ })
+}
+
+/**
  * Requirements toolbar: Traceability opens a menu; the matrix modal opens from the menu item.
  *
  * The menu item button text "Traceability Matrix" appears more than once on the

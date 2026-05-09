@@ -12,6 +12,7 @@ import {
   ensureVerificationPlanWithCase,
   openTraceabilityMatrixFromToolbar,
   readAuthToken,
+  resetRequirementsViewPreferences,
   seedE2eLifecycleAndStatusDefinitions,
   selectRequirementsLeftPanelTab,
 } from './helpers/requirementsUi'
@@ -224,6 +225,11 @@ test.describe('Requirements', () => {
   test('Document view: collapsible sections persist on reload', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
+    // The previous test ("Columns picker affects both Table and Document views")
+    // can leave server-side prefs at listViewStyle:'document'; the View toggle
+    // label then reads "Table View" and the click below would time out.
+    await resetRequirementsViewPreferences(page, projectId, { listViewStyle: 'table' })
+    await page.reload({ waitUntil: 'domcontentloaded' })
 
     // Switch to Document View
     await page.getByRole('button', { name: /^view/i }).click()
@@ -264,6 +270,11 @@ test.describe('Requirements', () => {
     try {
       await page.goto(`/projects/${projectId}/requirements`)
       await page.waitForLoadState('domcontentloaded')
+      // Server-side prefs may persist from a prior test; localStorage clear
+      // alone is not enough because prefsQuery rehydrates from the API.
+      await resetRequirementsViewPreferences(page, projectId, {
+        listViewStyle: 'table',
+      })
       await page.evaluate(() => {
         try {
           localStorage.removeItem('requirements-columns')
@@ -355,6 +366,12 @@ test.describe('Requirements', () => {
     })
     expect(createResp.ok(), await createResp.text()).toBeTruthy()
 
+    // Reset server-side prefs so the description column is visible again
+    // (prior "Columns picker" test hid it server-side via prefsMutation).
+    await resetRequirementsViewPreferences(page, projectId, {
+      listViewStyle: 'table',
+      visibleFieldKeys: ['requirementId', 'title', 'description', 'priority', 'status', 'owner'],
+    })
     await page.evaluate(() => {
       try {
         localStorage.removeItem('requirements-columns')
@@ -388,6 +405,8 @@ test.describe('Requirements', () => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
     const token = await readAuthToken(page)
+    // Server-side prefs may force document view, hiding the table chevron.
+    await resetRequirementsViewPreferences(page, projectId, { listViewStyle: 'table' })
 
     const listResp = await page.request.get(
       `${E2E_API_V1}/requirements/${projectId}?page=1&pageSize=1`,
@@ -472,11 +491,20 @@ test.describe('Requirements', () => {
   test('child requirements: parent row can be expanded to reveal children', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
+    // Server-side prefs may force document view; the table chevron only renders in table mode.
+    await resetRequirementsViewPreferences(page, projectId, { listViewStyle: 'table' })
+    await page.reload({ waitUntil: 'domcontentloaded' })
     // Wait for the requirements table to render
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
 
-    // Look for expand/chevron buttons (rows with children have an expand toggle)
-    const expandBtn = page.locator('button[aria-label*="expand" i], button[title*="expand" i], [data-testid*="expand"], td button svg').first()
+    // Scope to the table chevron (aria-label "Expand linked items, change requests, description").
+    // The previous broad union (button[title*="expand"], td button svg) matched the
+    // RequirementDocumentCard "Expand details" toggle and every row action SVG.
+    const expandBtn = page
+      .locator('table tbody tr')
+      .first()
+      .locator('button[aria-label*="expand linked" i], button[title*="expand linked" i]')
+      .first()
     const hasExpand = await expandBtn.isVisible({ timeout: 3_000 }).catch(() => false)
 
     if (!hasExpand) {
