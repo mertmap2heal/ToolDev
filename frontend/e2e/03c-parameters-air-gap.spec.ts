@@ -44,16 +44,18 @@ test.describe('Parameters — air-gap (Core package)', () => {
     await expect(page.getByRole('button', { name: /^List$/i })).toBeVisible()
     await expect(page.getByRole('button', { name: /^Board$/i })).toBeVisible()
     await expect(page.getByRole('button', { name: /^Graph$/i })).toBeVisible()
-    // v2 redesign moved Baselines into the More-actions overflow menu.
-    await page.getByRole('button', { name: /more actions/i }).click()
-    await expect(page.getByRole('button', { name: /Baselines/i })).toBeVisible()
-    // Close the menu so subsequent assertions interact with the toolbar cleanly.
-    await page.keyboard.press('Escape').catch(() => {})
 
-    // Tri-toggle still functional.
+    // Tri-toggle still functional. Click BEFORE opening More-actions menu —
+    // the menu's <a> children intercept pointer events on the page-head and
+    // would block the Board click otherwise.
     await page.getByRole('button', { name: /^Board$/i }).click()
     await expect(page.getByRole('heading', { level: 3, name: /^Draft$/ })).toBeVisible({ timeout: 8_000 })
     await page.getByRole('button', { name: /^List$/i }).click()
+
+    // v2 redesign moved Baselines into the More-actions overflow menu.
+    // Asserting reachability is the air-gap surface this test guards.
+    await page.getByRole('button', { name: /more actions/i }).click()
+    await expect(page.getByRole('button', { name: /Baselines/i })).toBeVisible()
   })
 
   test('Direct REST /ai/draft returns 403', async ({ page, projectId }) => {

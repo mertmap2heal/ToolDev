@@ -235,13 +235,18 @@ test.describe('Requirements', () => {
     await page.getByRole('button', { name: /^view/i }).click()
     await page.getByRole('button', { name: /document view/i }).click()
 
-    const firstCard = page.locator('div.shadow-sm').first()
-    const detailsToggle = firstCard.getByRole('button', { name: /requirement details/i })
-    await detailsToggle.click()
+    // Match the requirement-card root by its compound class (rounded shadow card),
+    // not the bare div.shadow-sm which also matches dropdowns / tooltips / chrome.
+    const firstCard = page
+      .locator('div.bg-white.rounded-lg.shadow-sm, div.dark\\:bg-gray-800.rounded-lg.shadow-sm')
+      .filter({ has: page.getByRole('button', { name: /requirement details/i }) })
+      .first()
+    await expect(firstCard).toBeVisible({ timeout: 15_000 })
+    await firstCard.getByRole('button', { name: /requirement details/i }).click()
 
     // Reload and ensure details are still collapsed (no table cells for a typical field like Priority)
     await page.reload({ waitUntil: 'domcontentloaded' })
-    await expect(page.locator('div.shadow-sm').first().getByText(/^Priority$/)).toHaveCount(0)
+    await expect(firstCard.getByText(/^Priority$/)).toHaveCount(0, { timeout: 10_000 })
   })
 
   test('Manage menu: Audit log opens audit log modal', async ({ page, projectId }) => {
