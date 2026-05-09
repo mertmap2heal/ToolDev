@@ -1,10 +1,64 @@
-import React, { memo } from 'react'
-import { Folder, FileText, Edit2, Trash2 } from 'lucide-react'
+import React, { memo, useState, useCallback } from 'react'
+import { Folder, FileText, Edit2, Trash2, MoreHorizontal, Star } from 'lucide-react'
 import clsx from 'clsx'
 import { format } from 'date-fns'
 import { useDraggable } from '@dnd-kit/core'
 import type { Parameter, ParameterFolder } from 'shared/types/engineering.types'
 import type { ParameterWithUsage } from '../../services/parameter.service'
+
+// v2: type tag pill colour bucket
+function typeTagBucket(t: string | null | undefined): 'float' | 'int' | 'bool' | 'str' | 'array' | '' {
+  if (!t) return ''
+  const lower = t.toLowerCase()
+  if (lower.includes('float') || lower.includes('double') || lower.includes('real') || lower.includes('number')) return 'float'
+  if (lower.includes('int') || lower.includes('uint')) return 'int'
+  if (lower.includes('bool')) return 'bool'
+  if (lower.includes('str') || lower.includes('text') || lower.includes('char')) return 'str'
+  if (lower.includes('array') || lower.includes('list') || lower.includes('vec')) return 'array'
+  return ''
+}
+
+// v2: status pill class
+function statusClass(s: string | null | undefined): string {
+  const v = (s ?? 'draft').toLowerCase()
+  if (v === 'approved' || v === 'released') return 'released'
+  if (v === 'review' || v === 'in_review' || v === 'in review') return 'review'
+  if (v === 'obsolete' || v === 'deprecated') return 'deprecated'
+  return 'draft'
+}
+
+function statusLabel(s: string | null | undefined): string {
+  const v = (s ?? 'draft').toLowerCase()
+  if (v === 'approved') return 'Approved'
+  if (v === 'released') return 'Released'
+  if (v === 'review' || v === 'in_review' || v === 'in review') return 'In review'
+  if (v === 'obsolete') return 'Obsolete'
+  if (v === 'deprecated') return 'Deprecated'
+  return 'Draft'
+}
+
+// Local-only "starred" set, persisted to localStorage. The list is
+// shared across all rows; toggling broadcasts a custom event so any
+// row currently mounted reflects the change without re-rendering the
+// full table.
+const STAR_KEY = 'param-starred-v1'
+function readStarred(): Set<string> {
+  try {
+    const raw = localStorage.getItem(STAR_KEY)
+    if (!raw) return new Set()
+    return new Set(JSON.parse(raw) as string[])
+  } catch {
+    return new Set()
+  }
+}
+function writeStarred(set: Set<string>) {
+  try {
+    localStorage.setItem(STAR_KEY, JSON.stringify([...set]))
+    window.dispatchEvent(new CustomEvent('param-star-change'))
+  } catch {
+    /* ignore */
+  }
+}
 
 export type ColKey =
   | 'description'
@@ -17,8 +71,6 @@ export type ColKey =
   | 'status'
   | 'usedIn'
   | 'created'
-
-const ROW_HOVER = 'hover:bg-gray-200/20 dark:hover:bg-gray-400/10'
 
 export interface ParameterRowProps {
   param: ParameterWithUsage
@@ -83,11 +135,12 @@ function ParameterRowImpl(props: ParameterRowProps) {
   } = props
 
   const folder = param.folderId ? foldersById.get(param.folderId) : undefined
+  const leafName = (n: string | undefined) => n?.split(/[\\/]/).pop()?.trim() || n
   const parentFolder = folder?.parentId ? foldersById.get(folder.parentId) : null
   const folderPath = folder
     ? parentFolder
-      ? `${parentFolder.name} / ${folder.name}`
-      : folder.name
+      ? `${leafName(parentFolder.name)} / ${leafName(folder.name)}`
+      : leafName(folder.name)
     : null
   const showFolderBadge =
     folder && !showGroups && selectedFolderId !== null && selectedFolderId !== param.folderId
@@ -101,72 +154,87 @@ function ParameterRowImpl(props: ParameterRowProps) {
     if (measureRef) measureRef(el)
   }
 
+  const tagBucket = typeTagBucket(param.dataType)
+  const stClass = statusClass(param.status)
+  const stLabel = statusLabel(param.status)
+  const requirementCount = (param as ParameterWithUsage).requirementCount
+
+  const [starred, setStarred] = useState<boolean>(() => readStarred().has(param.id))
+  const toggleStar = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    const set = readStarred()
+    if (set.has(param.id)) set.delete(param.id)
+    else set.add(param.id)
+    writeStarred(set)
+    setStarred(set.has(param.id))
+  }, [param.id])
+  React.useEffect(() => {
+    const handler = () => setStarred(readStarred().has(param.id))
+    window.addEventListener('param-star-change', handler)
+    return () => window.removeEventListener('param-star-change', handler)
+  }, [param.id])
+
   return (
     <tr
       ref={rowRef}
       data-index={dataIndex}
-      className={clsx(
-        'cursor-grab border-b border-gray-200 dark:border-gray-700',
-        ROW_HOVER,
-        isDragging && 'opacity-40',
-      )}
-      // #278: folder colour is user-assigned hex, not a design token.
-      // Phase 2c-iii: height pinned to 36 px so the virtualizer's
-      // spacer-row math stays exact -- prevents drift + blank gaps
-      // on fast scroll without needing measureElement (which froze
-      // the tab via known tanstack/virtual #997 #1001).
+      className={clsx(selected && 'is-selected', isDragging && 'opacity-40')}
       style={{
-        borderLeft: folderColor ? `3px solid ${folderColor}` : '3px solid transparent',
+        borderLeft: folderColor ? `3px solid ${folderColor}` : undefined,
+        cursor: 'grab',
         height: 36,
       }}
       {...attributes}
       {...listeners}
     >
-      <td
-        className="px-3 py-2 w-8 sticky left-0 z-[1] bg-gray-50 dark:bg-gray-800"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <td className="col-check" onClick={(e) => e.stopPropagation()}>
         <input
           type="checkbox"
+          className="pv-check"
           checked={selected}
           onChange={() => onToggleSelection(param.id)}
-          className="cursor-pointer"
         />
       </td>
-      <td className="px-3 py-1.5 sticky left-8 z-[1] bg-gray-50 dark:bg-gray-800 shadow-[2px_0_4px_rgba(0,0,0,0.06)]">
-        <button
-          type="button"
-          onClick={() => onOpenDetail(param)}
-          className="bg-transparent border-none cursor-pointer text-blue-600 dark:text-blue-400 font-semibold text-xs p-0 whitespace-nowrap block"
-        >
-          {param.name}
-        </button>
-        {showFolderBadge && folderPath && (
-          <span
-            className="inline-flex items-center gap-[3px] text-[10px] mt-px text-gray-600 dark:text-gray-400"
-            style={folder?.color ? { color: folder.color } : undefined}
+      <td
+        className="col-name"
+        onClick={(e) => {
+          e.stopPropagation()
+          onOpenDetail(param)
+        }}
+        style={{ cursor: 'pointer' }}
+      >
+        <div className="cell-name">
+          <button
+            type="button"
+            className={clsx('star', starred && 'is-on')}
+            aria-label={starred ? 'Unstar parameter' : 'Star parameter'}
+            title={starred ? 'Unstar' : 'Star'}
+            onClick={toggleStar}
           >
-            <Folder size={9} className="shrink-0" />
-            {folderPath}
+            <Star size={13} fill={starred ? 'currentColor' : 'none'} />
+          </button>
+          <span className="nm" title={param.name}>
+            <span style={{ color: 'var(--pv-blue-ink)' }}>{param.name}</span>
           </span>
-        )}
+          {showFolderBadge && folderPath && (
+            <span
+              className="id"
+              title={folderPath}
+              style={folder?.color ? { color: folder.color } : undefined}
+            >
+              <Folder size={10} />
+              {folderPath}
+            </span>
+          )}
+        </div>
       </td>
-      {visibleCols.has('description') && (
-        <td className="px-3 py-2 text-gray-600 dark:text-gray-400 max-w-[200px]">
-          <span
-            className="overflow-hidden block text-ellipsis whitespace-nowrap"
-            title={param.description ?? ''}
-          >
-            {param.description || '—'}
-          </span>
-        </td>
-      )}
       {visibleCols.has('type') && (
-        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{param.dataType || '—'}</td>
+        <td>
+          {param.dataType ? <span className={clsx('type-tag', tagBucket)}>{param.dataType}</span> : <span style={{ color: 'var(--pv-fg-4)' }}>—</span>}
+        </td>
       )}
       {visibleCols.has('value') && (
         <td
-          className="px-3 py-2 font-mono text-gray-900 dark:text-gray-100 min-w-[80px]"
           onClick={(e) => {
             if (!isInlineEditing) {
               e.stopPropagation()
@@ -191,55 +259,61 @@ function ParameterRowImpl(props: ParameterRowProps) {
                 }
               }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full px-1.5 py-0.5 font-mono text-xs border border-blue-600 dark:border-blue-400 rounded bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 outline-none"
+              style={{
+                width: '100%', padding: '2px 6px', fontFamily: 'var(--pv-font-mono)', fontSize: 12,
+                border: '1px solid var(--pv-blue)', borderRadius: 3, background: 'var(--pv-bg)',
+                color: 'var(--pv-fg)', outline: 'none',
+              }}
             />
           ) : (
-            <span className="flex items-center gap-[5px]">
+            <div className={clsx('cell-value', param.formula && 'computed')}>
+              {param.formula && (
+                <span className="fx" title={`Computed: ${param.formula}`}>ƒ</span>
+              )}
               {scenarioOverride !== undefined ? (
                 <>
-                  <span className="text-purple-700 dark:text-purple-300 font-semibold">
+                  <span className="num" style={{ color: '#7c3aed', fontWeight: 600 }}>
                     {scenarioOverride || '—'}
                   </span>
                   <span
                     title={`Scenario overlay (was ${param.defaultValue || '—'})`}
-                    className="inline-flex items-center justify-center px-1.5 py-px rounded text-[9px] font-bold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/30 cursor-default shrink-0"
+                    style={{
+                      flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      height: 16, padding: '0 5px', borderRadius: 3,
+                      background: 'rgba(124,58,237,0.10)', color: '#7c3aed',
+                      fontFamily: 'var(--pv-font-mono)', fontSize: 10, fontWeight: 700,
+                      border: '1px solid rgba(124,58,237,0.3)',
+                    }}
                   >
                     SCN
                   </span>
                 </>
               ) : (
-                <span>{param.defaultValue || '—'}</span>
+                <span className="num">{param.defaultValue || '—'}</span>
               )}
-              {param.formula && (
-                <span
-                  title={param.formula}
-                  className="inline-flex items-center justify-center px-1.5 py-px rounded text-[10px] font-bold font-serif italic bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 cursor-default shrink-0"
-                >
-                  f
-                </span>
-              )}
-            </span>
+            </div>
           )}
         </td>
       )}
       {visibleCols.has('computed') && (
-        <td
-          className={clsx(
-            'px-3 py-2 font-mono text-[11px]',
-            computedVal ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400',
-          )}
-        >
-          {computedVal ?? (param.formula ? '…' : '—')}
+        <td>
+          <div className="cell-value" style={{ color: computedVal ? 'var(--pv-blue-ink)' : 'var(--pv-fg-3)' }}>
+            <span className="num">{computedVal ?? (param.formula ? '…' : '—')}</span>
+          </div>
         </td>
       )}
       {visibleCols.has('unit') && (
-        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{param.unit || '—'}</td>
+        <td className="cell-unit">{param.unit || '—'}</td>
+      )}
+      {visibleCols.has('description') && (
+        <td>
+          <span className="cell-desc" title={param.description ?? ''}>
+            {param.description || '—'}
+          </span>
+        </td>
       )}
       {visibleCols.has('folder') && (
-        <td
-          className="px-3 py-2 text-gray-600 dark:text-gray-400"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <td onClick={(e) => e.stopPropagation()}>
           <select
             aria-label="Move parameter to folder"
             value={param.folderId ?? ''}
@@ -247,7 +321,8 @@ function ParameterRowImpl(props: ParameterRowProps) {
               const v = e.target.value
               onMoveToFolder(param.id, v === '' ? null : v)
             }}
-            className="text-xs border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 px-1.5 py-0.5 max-w-[140px]"
+            className="pv-pill compact"
+            style={{ maxWidth: 140 }}
           >
             <option value="">— Ungrouped</option>
             {folderOptions.map((opt) => (
@@ -259,88 +334,84 @@ function ParameterRowImpl(props: ParameterRowProps) {
         </td>
       )}
       {visibleCols.has('source') && (
-        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">
+        <td className="cell-source">
           {param.sourceFunction ? (
-            <button
-              type="button"
-              onClick={() => onViewSource(param)}
-              className="bg-transparent border-none cursor-pointer text-blue-600 dark:text-blue-400 text-xs p-0"
-            >
+            <a onClick={() => onViewSource(param)}>
               {param.sourceFunction.functionId || 'N/A'}: {param.sourceFunction.name}
-            </button>
+            </a>
           ) : (
-            '—'
+            <span className="none">manual entry</span>
           )}
         </td>
       )}
       {visibleCols.has('status') && (
-        <td className="px-3 py-2">
-          <span
-            className={clsx(
-              'px-[7px] py-0.5 rounded-[10px] text-[10px] font-semibold',
-              (param.status ?? 'draft') === 'approved' &&
-                'bg-green-500/10 text-green-700 dark:text-green-400',
-              (param.status ?? 'draft') === 'obsolete' &&
-                'bg-gray-200/30 dark:bg-gray-400/15 text-gray-600 dark:text-gray-400',
-              (param.status ?? 'draft') === 'draft' &&
-                'bg-amber-500/10 text-amber-700 dark:text-amber-400',
-            )}
-          >
-            {param.status ?? 'draft'}
-          </span>
+        <td>
+          <span className={clsx('pv-status', stClass)}>{stLabel}</span>
         </td>
       )}
       {visibleCols.has('usedIn') && (
-        <td className="px-3 py-2">
-          {(param as ParameterWithUsage).requirementCount != null ? (
-            <button
-              type="button"
-              onClick={() => onOpenDetail(param)}
-              className="bg-transparent border-none cursor-pointer text-blue-600 dark:text-blue-400 font-semibold text-xs p-0"
-            >
-              {(param as ParameterWithUsage).requirementCount}
-            </button>
+        <td className="cell-used">
+          {requirementCount != null ? (
+            <>
+              <span className="num">{requirementCount}</span> refs
+              <span className="bar"><i style={{ width: `${Math.min(100, (requirementCount / 40) * 100)}%` }} /></span>
+            </>
           ) : (
-            '—'
+            <span style={{ color: 'var(--pv-fg-4)' }}>—</span>
           )}
         </td>
       )}
       {visibleCols.has('created') && (
-        <td className="px-3 py-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">
-          {format(new Date(param.createdAt), 'MMM dd, yyyy')}
+        <td className="cell-updated">
+          {format(new Date(param.createdAt), 'd MMM, HH:mm')}
         </td>
       )}
-      <td className="px-3 py-2">
-        <div className="flex items-center gap-1">
+      <td className="col-actions">
+        <span className="row-actions">
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation()
               onOpenChangeRequest(param)
             }}
             title="Change Request"
-            className="bg-transparent border-none cursor-pointer p-[3px] rounded text-green-500 hover:bg-green-500/10 transition-colors"
+            className="pv-icon-btn"
+            style={{ width: 22, height: 22 }}
           >
-            <FileText size={14} />
+            <FileText size={13} />
           </button>
           <button
+            type="button"
             onClick={(e) => onEditClick(e, param)}
             title="Edit"
-            className="bg-transparent border-none cursor-pointer p-[3px] rounded text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950 transition-colors"
+            className="pv-icon-btn"
+            style={{ width: 22, height: 22 }}
           >
-            <Edit2 size={14} />
+            <Edit2 size={13} />
           </button>
           <button
+            type="button"
             onClick={(e) => onDeleteClick(e, param.id, param.name)}
             disabled={deleteConfirmPending}
             title="Delete"
-            className={clsx(
-              'bg-transparent border-none cursor-pointer p-[3px] rounded text-red-500 hover:bg-red-500/10 transition-colors',
-              deleteConfirmPending && 'opacity-40',
-            )}
+            className={clsx('pv-icon-btn', 'danger', deleteConfirmPending && 'opacity-40')}
+            style={{ width: 22, height: 22 }}
           >
-            <Trash2 size={14} />
+            <Trash2 size={13} />
           </button>
-        </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpenDetail(param)
+            }}
+            title="More"
+            className="pv-icon-btn"
+            style={{ width: 22, height: 22 }}
+          >
+            <MoreHorizontal size={14} />
+          </button>
+        </span>
       </td>
     </tr>
   )
