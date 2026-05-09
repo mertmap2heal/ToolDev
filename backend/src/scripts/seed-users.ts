@@ -7,9 +7,9 @@ import bcrypt from 'bcryptjs'
  * Run with: npm run seed:users
  *
  * Required env vars (set in backend/.env or shell):
- *   SEED_PASSWORD_MERT       - password for mert.caferoglu
- *   SEED_PASSWORD_CHRISTIAN  - password for christian.mandle
- *   SEED_PASSWORD_ADMIN      - password for admin (platform admin)
+ *   SEED_PASSWORD_MERT       - password for mert.caferoglu@example.com
+ *   SEED_PASSWORD_CHRISTIAN  - password for christian.mandle@example.com
+ *   SEED_PASSWORD_ADMIN      - password for admin@example.com (platform admin)
  */
 async function seedUsers() {
   // Fail fast if any seed password env var is missing — never seed with placeholder passwords
@@ -24,12 +24,12 @@ async function seedUsers() {
   // Defined after pre-flight: env vars are guaranteed to be set at this point
   const USERS = [
     {
-      email: 'mert.caferoglu',
+      email: 'mert.caferoglu@example.com',
       name: 'Mert Caferoglu',
       password: process.env.SEED_PASSWORD_MERT as string,
     },
     {
-      email: 'christian.mandle',
+      email: 'christian.mandle@example.com',
       name: 'Christian Mandle',
       password: process.env.SEED_PASSWORD_CHRISTIAN as string,
     },
@@ -37,7 +37,7 @@ async function seedUsers() {
 
   /** Superior Admin (Platform Owner) - same login, redirects to /platform-admin */
   const SUPERIOR_ADMIN = {
-    email: 'admin',
+    email: 'admin@example.com',
     name: 'Platform Admin',
     password: process.env.SEED_PASSWORD_ADMIN as string,
     role: 'SUPERIOR_ADMIN' as const,
