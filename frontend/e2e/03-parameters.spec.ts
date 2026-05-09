@@ -269,7 +269,7 @@ test.describe('Parameters — Search & Filter', () => {
   test('search by name', async ({ page }) => {
     // Type the unique prefix into the search box
     const searchPrefix = searchSeedName.substring(0, 12)
-    await page.getByPlaceholder(/search parameters/i).fill(searchPrefix)
+    await page.getByPlaceholder(/filter parameters/i).fill(searchPrefix)
 
     // Only rows matching the search should be visible
     await page.waitForTimeout(400)
@@ -286,13 +286,14 @@ test.describe('Parameters — Search & Filter', () => {
     }
 
     // Clear the search
-    await page.getByPlaceholder(/search parameters/i).clear()
+    await page.getByPlaceholder(/filter parameters/i).clear()
   })
 
   test('filter by status: draft', async ({ page }) => {
     // New filter UI: pill bar uses native <select> styled as pills. The
-    // status pill carries aria-label="Status" so we target it that way.
-    const statusPill = page.locator('select[aria-label="Status"]')
+    // status select carries aria-label="Filter by status" (per the v2
+    // redesign in d303ae2).
+    const statusPill = page.locator('select[aria-label="Filter by status"]')
     await expect(statusPill).toBeVisible()
     await statusPill.selectOption('draft')
     await page.waitForTimeout(500)
@@ -742,7 +743,7 @@ test.describe('Parameters — Ctrl+F shortcut', () => {
 
     // Press Ctrl+F and verify the search input receives focus
     await page.keyboard.press('Control+f')
-    const searchInput = page.getByPlaceholder(/search.*ctrl\+f/i)
+    const searchInput = page.getByPlaceholder(/filter parameters/i)
     await expect(searchInput).toBeFocused({ timeout: 3_000 })
   })
 })
@@ -756,15 +757,17 @@ test.describe('Parameters — count badge', () => {
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 10_000 })
 
-    // The badge should be visible and contain a number
-    const badge = page.locator('h2 span').first()
+    // The pv-tab-count span on the Parameters tab shows total/filtered count
+    // since the v2 redesign moved the heading to <h1>Parameters</h1> + a
+    // sibling count chip.
+    const badge = page.locator('span.pv-tab-count').first()
     await expect(badge).toBeVisible({ timeout: 8_000 })
     const totalText = await badge.innerText()
-    const totalCount = parseInt(totalText, 10)
+    const totalCount = parseInt(totalText.replace(/[^\d]/g, ''), 10)
 
     // Only run the filtered count assertion if there are parameters to filter
     if (totalCount > 0) {
-      const searchInput = page.getByPlaceholder(/search.*ctrl\+f/i)
+      const searchInput = page.getByPlaceholder(/filter parameters/i)
       await searchInput.fill('__nonexistent_xyz__')
       // Badge should now show "0 / N" format
       await expect(badge).toHaveText(/0\s*\/\s*\d+/, { timeout: 5_000 })
