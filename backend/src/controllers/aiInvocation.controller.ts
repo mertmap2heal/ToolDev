@@ -7,12 +7,52 @@ import { prisma } from '../lib/prisma'
  * one AiInvocation row; the list endpoint serves them paged for the
  * admin UI, and the export endpoint streams NDJSON for ISO/IEC 42001
  * Annex B audits. Both are gated by `requireAdmin` upstream.
+ *
+ * SECURITY (HIGH-3): requireAdmin admits any COMPANY_ADMIN. Without an
+ * extra company filter, an admin of company A could read or stream every
+ * other tenant's AI audit trail. We compute an allowed-project-id set
+ * (caller's company's projects) for non-superior admins and intersect any
+ * caller-supplied projectId filter with it. SUPERIOR_ADMIN keeps
+ * platform-wide visibility.
  */
 
 const MAX_PAGE = 200
 
+async function buildTenantScope(callerId: string, requestedProjectId: string | undefined): Promise<{
+  where: Record<string, unknown>
+  forbidden: boolean
+}> {
+  const caller = await prisma.user.findUnique({
+    where: { id: callerId },
+    select: { role: true, company: true },
+  })
+  const where: Record<string, unknown> = {}
+  if (caller?.role === 'SUPERIOR_ADMIN') {
+    if (requestedProjectId) where.projectId = requestedProjectId
+    return { where, forbidden: false }
+  }
+  // Non-superior admins (COMPANY_ADMIN, ADMIN_EMAILS, first-user fallback)
+  // see only their own company's projects.
+  const company = caller?.company ?? null
+  const allowed = company
+    ? await prisma.project.findMany({
+        where: { companyName: company },
+        select: { id: true },
+      })
+    : []
+  const allowedIds = new Set(allowed.map((p) => p.id))
+  if (requestedProjectId) {
+    if (!allowedIds.has(requestedProjectId)) return { where, forbidden: true }
+    where.projectId = requestedProjectId
+  } else {
+    where.projectId = { in: Array.from(allowedIds) }
+  }
+  return { where, forbidden: false }
+}
+
 export async function list(req: AuthRequest, res: Response) {
   try {
+    if (!req.userId) return res.status(401).json({ success: false, error: 'Unauthorized' })
     const projectId = (req.query.projectId as string) || undefined
     const tier = (req.query.tier as string) || undefined
     const page = Math.max(1, parseInt((req.query.page as string) ?? '1', 10) || 1)
@@ -20,8 +60,12 @@ export async function list(req: AuthRequest, res: Response) {
       MAX_PAGE,
       Math.max(1, parseInt((req.query.pageSize as string) ?? '50', 10) || 50),
     )
-    const where: Record<string, unknown> = {}
-    if (projectId) where.projectId = projectId
+
+    const scope = await buildTenantScope(req.userId, projectId)
+    if (scope.forbidden) {
+      return res.status(403).json({ success: false, error: 'Project not in your tenant' })
+    }
+    const where: Record<string, unknown> = { ...scope.where }
     if (tier) where.tier = tier
 
     const [data, total] = await Promise.all([
@@ -55,9 +99,13 @@ export async function list(req: AuthRequest, res: Response) {
 
 export async function exportNdjson(req: AuthRequest, res: Response) {
   try {
+    if (!req.userId) return res.status(401).json({ success: false, error: 'Unauthorized' })
     const projectId = (req.query.projectId as string) || undefined
-    const where: Record<string, unknown> = {}
-    if (projectId) where.projectId = projectId
+    const scope = await buildTenantScope(req.userId, projectId)
+    if (scope.forbidden) {
+      return res.status(403).json({ success: false, error: 'Project not in your tenant' })
+    }
+    const where = scope.where
 
     res.setHeader('Content-Type', 'application/x-ndjson')
     res.setHeader(

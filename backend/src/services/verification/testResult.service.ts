@@ -59,15 +59,21 @@ export const testResultService = {
   },
 
   /**
-   * Link test result to an entity (test case or test plan)
+   * Link test result to an entity (test case or test plan).
+   *
+   * SECURITY (HIGH-5): scope the linked entity lookup by projectId. Without
+   * this, a member of project A can submit `linkedEntityId` of a TestCase /
+   * TestPlan in project B and the link would be created — leaking cross-
+   * project IDs into traceability + corrupting coverage queries.
    */
   async linkTestResult(params: {
     testResultId: string
     linkedEntityType: 'TEST_CASE' | 'TEST_PLAN'
     linkedEntityId: string
     relation?: 'PRIMARY' | 'SUPPORTING'
+    projectId?: string
   }): Promise<void> {
-    const { testResultId, linkedEntityType, linkedEntityId, relation = 'PRIMARY' } = params
+    const { testResultId, linkedEntityType, linkedEntityId, relation = 'PRIMARY', projectId } = params
 
     // Check if link already exists
     const existingLink = await prisma.verTestResultLink.findFirst({
@@ -82,17 +88,19 @@ export const testResultService = {
       throw new Error('Link already exists')
     }
 
-    // Verify entity exists
+    // Verify entity exists AND belongs to this project (when projectId
+    // supplied — defensive: when omitted, behavior is unchanged for
+    // backward compatibility with existing internal callers).
     if (linkedEntityType === 'TEST_CASE') {
-      const testCase = await prisma.verTestCase.findUnique({
-        where: { id: linkedEntityId },
+      const testCase = await prisma.verTestCase.findFirst({
+        where: projectId ? { id: linkedEntityId, projectId } : { id: linkedEntityId },
       })
       if (!testCase) {
         throw new Error('Test case not found')
       }
     } else if (linkedEntityType === 'TEST_PLAN') {
-      const testPlan = await prisma.verTestPlan.findUnique({
-        where: { id: linkedEntityId },
+      const testPlan = await prisma.verTestPlan.findFirst({
+        where: projectId ? { id: linkedEntityId, projectId } : { id: linkedEntityId },
       })
       if (!testPlan) {
         throw new Error('Test plan not found')

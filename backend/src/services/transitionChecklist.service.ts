@@ -393,7 +393,8 @@ export const transitionChecklistService = {
   async validateFieldOnEntity(
     entityType: string,
     entityId: string,
-    validationConfig: Record<string, unknown>
+    validationConfig: Record<string, unknown>,
+    projectId?: string,
   ): Promise<{ valid: boolean; message: string }> {
     const field = validationConfig.field as string
     const operator = validationConfig.operator as string
@@ -402,11 +403,32 @@ export const transitionChecklistService = {
       return { valid: false, message: `Unsupported entity type: ${entityType}` }
     }
 
-    const requirement = await prisma.requirement.findUnique({
-      where: { id: entityId },
+    // SECURITY (HIGH-4): scope by projectId when provided so this endpoint
+    // cannot be used as an oracle to probe cross-tenant requirements.
+    const requirement = await prisma.requirement.findFirst({
+      where: projectId ? { id: entityId, projectId, deletedAt: null } : { id: entityId, deletedAt: null },
     })
     if (!requirement) {
       return { valid: false, message: 'Entity not found' }
+    }
+
+    // Allowlist the requirement column being inspected. Without this, an
+    // attacker could read any string column on the row (e.g. internal
+    // notes, audit columns) by name.
+    const ALLOWED_FIELDS = new Set([
+      'title',
+      'description',
+      'requirementId',
+      'priority',
+      'status',
+      'category',
+      'rationale',
+      'acceptanceCriteria',
+      'verificationMethod',
+      'allocatedTo',
+    ])
+    if (!ALLOWED_FIELDS.has(field)) {
+      return { valid: false, message: `Field not allowed: ${field}` }
     }
 
     const fieldValue = (requirement as Record<string, unknown>)[field]
@@ -427,13 +449,23 @@ export const transitionChecklistService = {
       }
       case 'MATCHES_REGEX': {
         const pattern = validationConfig.value as string
+        // SECURITY (HIGH-4): cap pattern length and reject nested-quantifier
+        // shapes that are the canonical ReDoS vector. Without these guards,
+        // an attacker could send `(a+)+$` against a long field value and
+        // block the event loop.
+        if (typeof pattern !== 'string' || pattern.length > 256) {
+          return { valid: false, message: 'Regex pattern too long (max 256 chars)' }
+        }
+        if (/(\+\+|\*\+|\+\*|\*\*|\(.+\)\+\+|\(.+\)\+\*|\(.+\)\*\+|\(.*\+\).*\+|\(.*\*\).*\*)/.test(pattern)) {
+          return { valid: false, message: 'Regex pattern uses unsafe nested quantifiers' }
+        }
         let regex: RegExp
         try {
           regex = new RegExp(pattern)
         } catch {
           return { valid: false, message: 'Invalid regex pattern' }
         }
-        const str = String(fieldValue ?? '')
+        const str = String(fieldValue ?? '').slice(0, 8192)
         return {
           valid: regex.test(str),
           message: regex.test(str) ? `${field} matches pattern` : `${field} does not match required pattern`,
@@ -441,12 +473,9 @@ export const transitionChecklistService = {
       }
       case 'IS_UNIQUE': {
         if (!fieldValue) return { valid: false, message: `${field} is empty` }
-        const requirement2 = await prisma.requirement.findUnique({ where: { id: entityId } })
-        if (!requirement2) return { valid: false, message: 'Entity not found' }
-        const projectId = requirement2.projectId
         const count = await prisma.requirement.count({
           where: {
-            projectId,
+            projectId: requirement.projectId,
             [field]: fieldValue,
             id: { not: entityId },
             deletedAt: null,
@@ -465,14 +494,15 @@ export const transitionChecklistService = {
   async evaluateChecklistForEntity(
     checklistItems: { id: string; itemType: string; validationConfig: unknown; isRequired: boolean }[],
     entityType: string,
-    entityId: string
+    entityId: string,
+    projectId?: string,
   ) {
     const results: { checklistItemId: string; passed: boolean; value: Record<string, unknown> }[] = []
 
     for (const item of checklistItems) {
       if (item.itemType === 'FIELD_VALIDATION' || item.itemType === 'RULE_BASED') {
         const config = (item.validationConfig as Record<string, unknown>) ?? {}
-        const result = await this.validateFieldOnEntity(entityType, entityId, config)
+        const result = await this.validateFieldOnEntity(entityType, entityId, config, projectId)
         results.push({
           checklistItemId: item.id,
           passed: result.valid,

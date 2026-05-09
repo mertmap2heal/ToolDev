@@ -86,7 +86,7 @@ export function stopBulkJobWorker() {
   workerStarted = false
 }
 
-async function processOneJob() {
+export async function processOneJob() {
   // Atomically pick + mark running. Optimistic update via where=status='pending'.
   const candidate = await prisma.parameterBulkJob.findFirst({
     where: { status: 'pending' },
@@ -107,12 +107,20 @@ async function processOneJob() {
   try {
     if (job.operation === 'bulk-delete') {
       const ids = (job.payload as { ids?: string[] }).ids ?? []
-      // Process in batches of 50 so one bad row doesn't fail the whole job.
+      // SECURITY (HIGH-1): scope each delete by job.projectId so a member of
+      // project A cannot submit a payload referencing project-B parameter ids
+      // and have the worker delete them. deleteMany returns count=0 when the
+      // id does not belong to this project — record that as a per-item error.
       for (const id of ids) {
         try {
-          await prisma.parameter.delete({ where: { id } })
-          results.push({ id, status: 'ok' })
-          done++
+          const r = await prisma.parameter.deleteMany({ where: { id, projectId: job.projectId } })
+          if (r.count === 0) {
+            results.push({ id, status: 'error', error: 'Parameter not in this project' })
+            failed++
+          } else {
+            results.push({ id, status: 'ok' })
+            done++
+          }
         } catch (e) {
           results.push({ id, status: 'error', error: (e as Error).message })
           failed++
@@ -131,12 +139,18 @@ async function processOneJob() {
       const newStatus = payload.status ?? 'draft'
       for (const id of ids) {
         try {
-          await prisma.parameter.update({
-            where: { id },
+          // SECURITY (HIGH-1): same projectId scoping as bulk-delete above.
+          const r = await prisma.parameter.updateMany({
+            where: { id, projectId: job.projectId },
             data: { status: newStatus },
           })
-          results.push({ id, status: 'ok' })
-          done++
+          if (r.count === 0) {
+            results.push({ id, status: 'error', error: 'Parameter not in this project' })
+            failed++
+          } else {
+            results.push({ id, status: 'ok' })
+            done++
+          }
         } catch (e) {
           results.push({ id, status: 'error', error: (e as Error).message })
           failed++

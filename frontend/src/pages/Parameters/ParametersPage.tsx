@@ -3466,15 +3466,24 @@ export default function ParametersPage() {
       </> /* end parameters tab */}
 
       {/* ── Toast notification ── */}
+      {/* a11y (HIGH-4): role="status" + aria-live so screen readers announce */}
       {toastMessage && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[2000] px-4.5 py-2.5 rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-[13px] font-medium shadow-lg pointer-events-none">
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[2000] px-4.5 py-2.5 rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-[13px] font-medium shadow-lg pointer-events-none"
+        >
           {toastMessage}
         </div>
       )}
 
       {/* ── Bulk-job progress toast ── */}
       {bulkJobProgress && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[2000] px-4 py-3 rounded-lg bg-blue-600 text-white text-xs font-medium shadow-lg min-w-[280px]">
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[2000] px-4 py-3 rounded-lg bg-blue-600 text-white text-xs font-medium shadow-lg min-w-[280px]"
+        >
           <div className="flex items-center justify-between mb-2">
             <span>
               Bulk delete — {bulkJobProgress.done + bulkJobProgress.failed}/{bulkJobProgress.total}
@@ -3499,7 +3508,11 @@ export default function ParametersPage() {
 
       {/* ── Pull from Git result ── */}
       {pullResult && (
-        <div className="fixed bottom-6 right-6 z-[2000] px-4 py-3 rounded-lg max-w-[340px] bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 shadow-lg text-xs">
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 right-6 z-[2000] px-4 py-3 rounded-lg max-w-[340px] bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 shadow-lg text-xs"
+        >
           <div className="flex items-center justify-between mb-1.5">
             <strong>Pull from Git complete</strong>
             <button onClick={() => setPullResult(null)} className="bg-transparent border-none cursor-pointer text-gray-600 dark:text-gray-400 p-0.5"><X size={13} /></button>

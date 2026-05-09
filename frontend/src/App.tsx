@@ -87,11 +87,13 @@ import PreviewLandingPage from './pages/PreviewLanding/PreviewLandingPage'
 import { FeaturePackageProvider } from './contexts/FeaturePackageContext'
 import FeatureGuard from './components/access/FeatureGuard'
 import PackageSwitcher from './components/dev/PackageSwitcher'
+import RouteErrorBoundary from './components/common/RouteErrorBoundary'
 
 function App() {
   return (
     <BrowserRouter>
       <FeaturePackageProvider>
+      <RouteErrorBoundary>
       <Routes>
         {/* Login - public route */}
         <Route path="/login" element={<LoginPage />} />
@@ -203,6 +205,7 @@ function App() {
           </Route>
         </Route>
       </Routes>
+      </RouteErrorBoundary>
       <PackageSwitcher />
       </FeaturePackageProvider>
     </BrowserRouter>

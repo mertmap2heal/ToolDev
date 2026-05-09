@@ -40,6 +40,17 @@ export const updateRequirementsViewPreferences = async (req: AuthRequest, res: R
       return res.status(400).json({ success: false, error: 'preferences object required' })
     }
 
+    // SECURITY (MEDIUM): cap the serialized preferences blob. The Express
+    // body limit is 50MB platform-wide; without a per-user-per-project cap,
+    // any member could persist a 50MB row per project they have access to.
+    const serialized = JSON.stringify(preferences)
+    const MAX_PREFS_BYTES = 64 * 1024
+    if (serialized.length > MAX_PREFS_BYTES) {
+      return res
+        .status(413)
+        .json({ success: false, error: `preferences payload too large (max ${MAX_PREFS_BYTES} bytes)` })
+    }
+
     const existing = await prisma.taskSavedView.findFirst({
       where: {
         projectId,
@@ -54,7 +65,7 @@ export const updateRequirementsViewPreferences = async (req: AuthRequest, res: R
       userId,
       name: 'Requirements view preferences',
       viewType: VIEW_TYPE,
-      columnsJson: JSON.stringify(preferences),
+      columnsJson: serialized,
     }
 
     const saved = existing

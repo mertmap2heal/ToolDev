@@ -183,14 +183,19 @@ export async function getCompletionHistory(req: AuthRequest, res: Response) {
 
 export async function evaluateChecklist(req: AuthRequest, res: Response) {
   try {
+    const { projectId } = req.params
     const { entityType, entityId, checklistItems } = req.body
     if (!entityId || !checklistItems?.length) {
       return res.status(400).json({ success: false, error: 'entityId and checklistItems are required' })
     }
+    // SECURITY (HIGH-4): pass projectId so the service scopes the entity
+    // lookup. Without this, a project-A member could probe project-B
+    // requirements via this endpoint.
     const data = await transitionChecklistService.evaluateChecklistForEntity(
       checklistItems,
       entityType || 'Requirement',
-      entityId
+      entityId,
+      projectId,
     )
     res.json({ success: true, data })
   } catch (e) {

@@ -112,7 +112,8 @@ export const createTestResult = async (req: AuthRequest, res: Response) => {
       },
     })
 
-    // Create links to test cases if provided
+    // Create links to test cases if provided. Pass projectId so the
+    // service rejects cross-project linkage (see HIGH-5).
     if (linkedTestCaseIds && linkedTestCaseIds.length > 0) {
       for (const testCaseId of linkedTestCaseIds) {
         try {
@@ -121,6 +122,7 @@ export const createTestResult = async (req: AuthRequest, res: Response) => {
             linkedEntityType: 'TEST_CASE',
             linkedEntityId: testCaseId,
             relation: 'PRIMARY',
+            projectId,
           })
         } catch (error: any) {
           console.warn(`Failed to link test case ${testCaseId}:`, error.message)
@@ -136,6 +138,7 @@ export const createTestResult = async (req: AuthRequest, res: Response) => {
           linkedEntityType: 'TEST_PLAN',
           linkedEntityId: linkedTestPlanId,
           relation: 'PRIMARY',
+          projectId,
         })
       } catch (error: any) {
         console.warn(`Failed to link test plan ${linkedTestPlanId}:`, error.message)
@@ -285,6 +288,7 @@ export const linkTestResult = async (req: AuthRequest, res: Response) => {
       linkedEntityType,
       linkedEntityId,
       relation,
+      projectId,
     })
 
     res.json({ success: true, message: 'Test result linked' })
