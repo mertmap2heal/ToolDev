@@ -235,18 +235,26 @@ test.describe('Requirements', () => {
     await page.getByRole('button', { name: /^view/i }).click()
     await page.getByRole('button', { name: /document view/i }).click()
 
-    // Match the requirement-card root by its compound class (rounded shadow card),
-    // not the bare div.shadow-sm which also matches dropdowns / tooltips / chrome.
-    const firstCard = page
-      .locator('div.bg-white.rounded-lg.shadow-sm, div.dark\\:bg-gray-800.rounded-lg.shadow-sm')
-      .filter({ has: page.getByRole('button', { name: /requirement details/i }) })
-      .first()
-    await expect(firstCard).toBeVisible({ timeout: 15_000 })
-    await firstCard.getByRole('button', { name: /requirement details/i }).click()
+    // Anchor on the toggle button itself — the surrounding card markup
+    // (compound bg/border/shadow class chains) was brittle when the page
+    // also renders a wrapping panel with overlapping classes. The toggle's
+    // accessible name is its inner text "Requirement Details ({n})" and
+    // its `title` attribute flips between "Expand details" and "Collapse
+    // details" — the perfect proof of collapsed state.
+    const toggle = page.getByRole('button', { name: /requirement details/i }).first()
+    await expect(toggle).toBeVisible({ timeout: 15_000 })
+    // Pre-click: details are expanded ("Collapse details").
+    await expect(toggle).toHaveAttribute('title', /Collapse details/i, { timeout: 5_000 })
+    await toggle.click()
+    // After click: collapsed.
+    await expect(toggle).toHaveAttribute('title', /Expand details/i, { timeout: 5_000 })
 
-    // Reload and ensure details are still collapsed (no table cells for a typical field like Priority)
+    // Reload and ensure the collapse state was persisted in
+    // docCollapsedSections (localStorage + server prefs).
     await page.reload({ waitUntil: 'domcontentloaded' })
-    await expect(firstCard.getByText(/^Priority$/)).toHaveCount(0, { timeout: 10_000 })
+    const toggleAfter = page.getByRole('button', { name: /requirement details/i }).first()
+    await expect(toggleAfter).toBeVisible({ timeout: 15_000 })
+    await expect(toggleAfter).toHaveAttribute('title', /Expand details/i, { timeout: 5_000 })
   })
 
   test('Manage menu: Audit log opens audit log modal', async ({ page, projectId }) => {
