@@ -229,6 +229,30 @@ test.describe('Requirements', () => {
     // can leave server-side prefs at listViewStyle:'document'; the View toggle
     // label then reads "Table View" and the click below would time out.
     await resetRequirementsViewPreferences(page, projectId, { listViewStyle: 'table' })
+
+    // Document view renders an empty state ("No requirements found") when the
+    // project has no requirements. Make sure at least one row exists before
+    // we switch — without this seed the toggle button below never renders
+    // and the test times out.
+    const token = await readAuthToken(page)
+    const listResp = await page.request.get(
+      `${E2E_API_V1}/requirements/${projectId}?page=1&pageSize=1`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    if (listResp.ok()) {
+      const body = await listResp.json()
+      const total: number = body?.data?.total ?? 0
+      if (total === 0) {
+        await page.request.post(`${E2E_API_V1}/requirements/${projectId}`, {
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          data: {
+            title: 'E2E doc-view seed',
+            description: 'Created by Playwright so document view renders at least one card.',
+          },
+        })
+      }
+    }
+
     await page.reload({ waitUntil: 'domcontentloaded' })
 
     // Switch to Document View
