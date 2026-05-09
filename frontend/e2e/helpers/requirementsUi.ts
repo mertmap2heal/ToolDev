@@ -4,8 +4,14 @@ import { expect } from '@playwright/test'
 /** Modals in this app use a full-viewport fixed overlay, not role="dialog". */
 export const MODAL_OVERLAY = '.fixed.inset-0'
 
-/** Raw backend base URL for `page.request` (matches other requirements e2e helpers). */
-export { E2E_API_V1 } from './api'
+/**
+ * Raw backend base URL for `page.request` (matches other requirements e2e helpers).
+ * NB: must be `import` + `export`, not a bare `export ... from` re-export — the
+ * latter does NOT bind the symbol locally and the helper functions below would
+ * throw `ReferenceError: E2E_API_V1 is not defined` at runtime.
+ */
+import { E2E_API_V1 } from './api'
+export { E2E_API_V1 }
 
 function bearerJsonHeaders(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
@@ -231,13 +237,18 @@ export async function readAuthToken(page: Page): Promise<string> {
 
 /**
  * Requirements toolbar: Traceability opens a menu; the matrix modal opens from the menu item.
+ *
+ * The menu item button text "Traceability Matrix" appears more than once on the
+ * page (toolbar menu item + the modal heading + breadcrumb). We scope the click
+ * to the dropdown panel using its layout class, then wait for the modal heading.
  */
 export async function openTraceabilityMatrixFromToolbar(
   page: Page,
   opts?: { headingTimeout?: number },
 ): Promise<void> {
   await page.getByRole('button', { name: /^Traceability$/ }).click()
-  await page.getByRole('button', { name: /traceability matrix/i }).click()
+  const dropdown = page.locator('div.absolute.left-0.top-full')
+  await dropdown.getByRole('button', { name: /^Traceability Matrix$/ }).click()
   await expect(page.getByRole('heading', { name: /traceability matrix/i })).toBeVisible({
     timeout: opts?.headingTimeout ?? 15_000,
   })

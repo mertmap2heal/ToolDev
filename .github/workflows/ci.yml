@@ -1247,6 +1247,14 @@ jobs:
         env:
           DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
 
+      - name: Seed verification MoCs
+        # 02-requirements.spec.ts UI create flow asserts the
+        # "Means of Compliance" select has more than 1 option. seed:demo does
+        # not populate VerMoc rows; this dedicated seed does.
+        run: cd backend && npm run seed:mocs
+        env:
+          DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+
       - name: Start backend
         run: cd backend && npm run dev &
         env:

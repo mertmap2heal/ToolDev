@@ -90,7 +90,11 @@ test.describe('Requirements / Traceability matrix', () => {
     const traceBtn = page.getByRole('button', { name: /^Traceability$/ })
     await expect(traceBtn).toBeEnabled()
     await traceBtn.click()
-    const matrixItem = page.getByRole('button', { name: /traceability matrix/i })
+    // Scope to dropdown panel: "Traceability Matrix" text also appears on the
+    // modal heading, which would make a bare role+regex selector ambiguous.
+    const matrixItem = page
+      .locator('div.absolute.left-0.top-full')
+      .getByRole('button', { name: /^Traceability Matrix$/ })
     await expect(matrixItem).toBeDisabled()
     await expect(matrixItem).toHaveAttribute('title', /unavailable in baseline view/i)
   })

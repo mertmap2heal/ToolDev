@@ -84,7 +84,7 @@ test.describe('Requirements', () => {
   test('open Create Requirement modal', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /create requirement/i }).click()
+    await page.locator('[data-testid="toolbar-create-requirement"]').click()
     await expect(page.locator(MODAL_OVERLAY)).toBeVisible({ timeout: 5_000 })
     await expect(page.locator(MODAL_OVERLAY)).toContainText(/requirement/i)
   })
@@ -92,7 +92,7 @@ test.describe('Requirements', () => {
   test('create modal: Traceability tab shows structured sections', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /create requirement/i }).click()
+    await page.locator('[data-testid="toolbar-create-requirement"]').click()
     const modal = page.locator(MODAL_OVERLAY)
     await expect(modal).toBeVisible({ timeout: 5_000 })
     await modal.getByRole('button', { name: /traceability/i }).click()
@@ -108,7 +108,7 @@ test.describe('Requirements', () => {
   test('create modal: required field validation', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /create requirement/i }).click()
+    await page.locator('[data-testid="toolbar-create-requirement"]').click()
     await expect(page.locator(MODAL_OVERLAY)).toBeVisible({ timeout: 5_000 })
     // Submit without filling anything
     await page.locator(MODAL_OVERLAY).getByRole('button', { name: /^create/i }).click()
@@ -119,7 +119,7 @@ test.describe('Requirements', () => {
   test('create modal: no unsaved-changes warning on clean open/close', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /create requirement/i }).click()
+    await page.locator('[data-testid="toolbar-create-requirement"]').click()
     await expect(page.locator(MODAL_OVERLAY)).toBeVisible({ timeout: 5_000 })
     // Cancel immediately without typing — guardClose should just close
     await page.locator(MODAL_OVERLAY).getByRole('button', { name: /cancel/i }).click()
@@ -131,7 +131,7 @@ test.describe('Requirements', () => {
   test('create modal: unsaved-changes warning after typing', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /create requirement/i }).click()
+    await page.locator('[data-testid="toolbar-create-requirement"]').click()
     const modal = page.locator(MODAL_OVERLAY)
     await expect(modal).toBeVisible({ timeout: 5_000 })
     // Wait for suppression window to expire before typing
@@ -148,7 +148,7 @@ test.describe('Requirements', () => {
   test('create modal: Clear all button appears after typing', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /create requirement/i }).click()
+    await page.locator('[data-testid="toolbar-create-requirement"]').click()
     const modal = page.locator(MODAL_OVERLAY)
     await expect(modal).toBeVisible({ timeout: 5_000 })
     // Wait for suppression window before typing
@@ -161,7 +161,7 @@ test.describe('Requirements', () => {
   test('create modal: Keep for later preserves draft on reopen', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /create requirement/i }).click()
+    await page.locator('[data-testid="toolbar-create-requirement"]').click()
     const modal = page.locator(MODAL_OVERLAY)
     await expect(modal).toBeVisible({ timeout: 5_000 })
     await page.waitForTimeout(AFTER_OPEN_WAIT)
@@ -170,7 +170,7 @@ test.describe('Requirements', () => {
     await modal.getByRole('button', { name: /cancel/i }).click()
     await page.getByRole('button', { name: /keep for later/i }).click()
     // Reopen — isDirty was preserved → Clear all should appear immediately
-    await page.getByRole('button', { name: /create requirement/i }).click()
+    await page.locator('[data-testid="toolbar-create-requirement"]').click()
     await expect(page.locator(MODAL_OVERLAY).getByRole('button', { name: /clear all/i })).toBeVisible({ timeout: 5_000 })
   })
 
@@ -277,7 +277,7 @@ test.describe('Requirements', () => {
       await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
 
       const uniq = `e2e_ui_${Date.now()}`
-      await page.getByRole('button', { name: /create requirement/i }).click()
+      await page.locator('[data-testid="toolbar-create-requirement"]').click()
       const modal = page.locator(MODAL_OVERLAY)
       await expect(modal).toBeVisible({ timeout: 5_000 })
       await page.waitForTimeout(AFTER_OPEN_WAIT)
