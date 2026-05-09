@@ -148,22 +148,51 @@ export function setupRealtime(server: http.Server, prisma: PrismaClient) {
   }, 3000);
 
   // --- Database Polling Loop (Actual Counts) ---
+  // Guard against tick re-entrancy + capped-parallel fan-out so that one
+  // slow count() cannot serialize 157 model counts and starve the pool.
+  let dbPollInFlight = false;
+  const DB_POLL_CONCURRENCY = 8;
   setInterval(async () => {
+    if (dbPollInFlight) {
+      // Previous tick still running -> drop this one. Counts are advisory.
+      return;
+    }
+    dbPollInFlight = true;
     try {
       const views = getAllViews();
       const dataState = views['DATA'];
       if (dataState) {
-        for (const node of dataState.nodes) {
-          const modelName = node.data.metadata?.model;
-          if (modelName && (prisma as any)[modelName.toLowerCase()]) {
-            const count = await (prisma as any)[modelName.toLowerCase()].count();
-            node.data.metadata.records = count;
+        const targets = dataState.nodes
+          .map((node: any) => {
+            const modelName = node.data.metadata?.model;
+            if (!modelName) return null;
+            const delegate = (prisma as any)[modelName.toLowerCase()];
+            if (!delegate || typeof delegate.count !== 'function') return null;
+            return { node, delegate };
+          })
+          .filter((t: any): t is { node: any; delegate: any } => t !== null);
+
+        let cursor = 0;
+        const worker = async () => {
+          while (cursor < targets.length) {
+            const i = cursor++;
+            const { node, delegate } = targets[i];
+            try {
+              node.data.metadata.records = await delegate.count();
+            } catch (err) {
+              console.error(`Realtime: count() failed for ${node.data.metadata?.model}`, err);
+            }
           }
-        }
+        };
+        const pool = Math.min(DB_POLL_CONCURRENCY, targets.length);
+        await Promise.all(Array.from({ length: pool }, () => worker()));
+
         io.to('view:DATA').emit('dataflow:update', { view: 'DATA', ...dataState });
       }
     } catch (e) {
       console.error('Realtime: DB Polling failed', e);
+    } finally {
+      dbPollInFlight = false;
     }
   }, 30000);
 

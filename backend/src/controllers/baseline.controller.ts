@@ -367,41 +367,49 @@ export const createBaseline = async (req: AuthRequest, res: Response) => {
           data: snapshotData,
         })
 
-        // Record each included requirement in its version history as a baselined snapshot
-        for (const requirement of requirements) {
-          const latestVersion = await tx.requirementVersion.findFirst({
-            where: { requirementId: requirement.id, projectId },
-            orderBy: { version: 'desc' },
-            select: { version: true },
-          })
-          const newVersionNumber = (latestVersion?.version ?? 0) + 1
+        // Record each included requirement in its version history as a baselined snapshot.
+        // Replaced 2N+1 round-trip loop (findFirst + create per requirement) with one
+        // groupBy + one createMany inside the same transaction (atomic against concurrent writers).
+        const reqIds = requirements.map((r) => r.id)
+        const maxVersionRows = await tx.requirementVersion.groupBy({
+          by: ['requirementId'],
+          where: { projectId, requirementId: { in: reqIds } },
+          _max: { version: true },
+        })
+        const maxVersionByReq = new Map<string, number>(
+          maxVersionRows.map((row) => [row.requirementId, row._max.version ?? 0])
+        )
+
+        const versionRows = requirements.map((requirement) => {
           const tagsArray = Array.isArray(requirement.tags)
             ? requirement.tags.map((t: unknown) => (typeof t === 'string' ? t : String(t)))
             : []
-          await tx.requirementVersion.create({
-            data: {
-              requirementId: requirement.id,
-              projectId,
-              version: newVersionNumber,
-              title: String(requirement.title ?? ''),
-              description: String(requirement.description ?? ''),
-              priority: String(requirement.priority ?? ''),
-              status: String(requirement.status ?? ''),
-              stage: requirement.stage != null ? String(requirement.stage) : null,
-              owner: requirement.owner != null ? String(requirement.owner) : null,
-              category: requirement.category != null ? String(requirement.category) : null,
-              source: requirement.source != null ? String(requirement.source) : null,
-              verificationMethod: requirement.verificationMethod != null ? String(requirement.verificationMethod) : null,
-              acceptanceCriteria: requirement.acceptanceCriteria != null ? String(requirement.acceptanceCriteria) : null,
-              tags: tagsArray,
-              changedBy: createdByUserId,
-              changedByName: createdByName,
-              changeReason: `Baselined: ${newBaseline.name}`,
-              snapshot: JSON.stringify(requirement),
-              baselineId: newBaseline.id,
-              baselineName: newBaseline.name,
-            },
-          })
+          return {
+            requirementId: requirement.id,
+            projectId,
+            version: (maxVersionByReq.get(requirement.id) ?? 0) + 1,
+            title: String(requirement.title ?? ''),
+            description: String(requirement.description ?? ''),
+            priority: String(requirement.priority ?? ''),
+            status: String(requirement.status ?? ''),
+            stage: requirement.stage != null ? String(requirement.stage) : null,
+            owner: requirement.owner != null ? String(requirement.owner) : null,
+            category: requirement.category != null ? String(requirement.category) : null,
+            source: requirement.source != null ? String(requirement.source) : null,
+            verificationMethod: requirement.verificationMethod != null ? String(requirement.verificationMethod) : null,
+            acceptanceCriteria: requirement.acceptanceCriteria != null ? String(requirement.acceptanceCriteria) : null,
+            tags: tagsArray,
+            changedBy: createdByUserId,
+            changedByName: createdByName,
+            changeReason: `Baselined: ${newBaseline.name}`,
+            snapshot: JSON.stringify(requirement),
+            baselineId: newBaseline.id,
+            baselineName: newBaseline.name,
+          }
+        })
+
+        if (versionRows.length > 0) {
+          await tx.requirementVersion.createMany({ data: versionRows })
         }
       }
 

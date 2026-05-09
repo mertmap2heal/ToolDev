@@ -66,59 +66,78 @@ export async function runComplianceChecks(
     },
   })
 
-  const requirements = await prisma.requirement.findMany({
-    where: { projectId },
-    select: {
-      id: true,
-      requirementId: true,
-      title: true,
-      acceptanceCriteria: true,
-      owner: true,
-      verificationMethod: true,
-    },
-  })
+  // Bug fix: exclude soft-deleted requirements (project-wide soft-delete rule).
+  // Memory: chunk requirement scan + finding inserts so very large projects
+  // don't hold rules x requirements rows in memory before insert.
+  const REQ_CHUNK = 500
+  const FIND_CHUNK = 1000
+  let cursor: string | undefined = undefined
 
-  const findings: Array<{
-    runId: string
-    ruleId: string
-    status: string
-    entityType: string
-    entityId: string
-    message: string | null
-  }> = []
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const chunk: Array<{
+      id: string
+      requirementId: string | null
+      title: string
+      acceptanceCriteria: string | null
+      owner: string | null
+      verificationMethod: string | null
+    }> = await prisma.requirement.findMany({
+      where: { projectId, deletedAt: null },
+      select: {
+        id: true,
+        requirementId: true,
+        title: true,
+        acceptanceCriteria: true,
+        owner: true,
+        verificationMethod: true,
+      },
+      orderBy: { id: 'asc' },
+      take: REQ_CHUNK,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+    })
+    if (chunk.length === 0) break
 
-  for (const rule of rules) {
-    for (const req of requirements) {
-      const { status, message } = evaluateRule(rule, {
-        id: req.id,
-        requirementId: req.requirementId,
-        title: req.title,
-        acceptanceCriteria: req.acceptanceCriteria,
-        owner: req.owner,
-        verificationMethod: req.verificationMethod,
-      })
-      findings.push({
-        runId: run.id,
-        ruleId: rule.id,
-        status,
-        entityType: 'requirement',
-        entityId: req.id,
-        message: message ?? null,
+    const chunkFindings: Array<{
+      projectId: string
+      runId: string
+      ruleId: string
+      status: string
+      entityType: string
+      entityId: string
+      message: string | null
+    }> = []
+    for (const rule of rules) {
+      for (const req of chunk) {
+        const { status, message } = evaluateRule(rule, {
+          id: req.id,
+          requirementId: req.requirementId,
+          title: req.title,
+          acceptanceCriteria: req.acceptanceCriteria,
+          owner: req.owner,
+          verificationMethod: req.verificationMethod,
+        })
+        chunkFindings.push({
+          projectId,
+          runId: run.id,
+          ruleId: rule.id,
+          status,
+          entityType: 'requirement',
+          entityId: req.id,
+          message: message ?? null,
+        })
+      }
+    }
+
+    for (let i = 0; i < chunkFindings.length; i += FIND_CHUNK) {
+      await prisma.complianceFinding.createMany({
+        data: chunkFindings.slice(i, i + FIND_CHUNK),
       })
     }
-  }
 
-  await prisma.complianceFinding.createMany({
-    data: findings.map((f) => ({
-      projectId,
-      runId: f.runId,
-      ruleId: f.ruleId,
-      status: f.status,
-      entityType: f.entityType,
-      entityId: f.entityId,
-      message: f.message,
-    })),
-  })
+    cursor = chunk[chunk.length - 1].id
+    if (chunk.length < REQ_CHUNK) break
+  }
 
   const created = await prisma.complianceFinding.findMany({
     where: { runId: run.id },

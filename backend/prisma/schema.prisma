@@ -163,9 +163,9 @@ model Project {
   // AI feature flag (ai-ready-vision.md §5). Global env kill-switch
   // (FEATURES_AI_ENABLED) overrides this; this field is the per-project
   // opt-in that a project admin sets.
-  aiEnabled   Boolean   @default(false)
-  aiEnabledAt DateTime?
-  aiEnabledBy String?
+  aiEnabled       Boolean   @default(false)
+  aiEnabledAt     DateTime?
+  aiEnabledBy     String?
   // Optional per-project self-hosted OpenAI-compatible endpoint URL.
   // Slots into the provider precedence chain (see aiProvider/index.ts):
   //   BYOK -> project self-hosted -> env default. Used by air-gap or
@@ -604,6 +604,8 @@ model SystemFunction {
 
   @@index([projectId])
   @@index([parentId])
+  @@index([projectId, parentId])
+  @@index([projectId, pbsComponentId])
 }
 
 model Architecture {
@@ -710,6 +712,9 @@ model Issue {
   @@index([issueKey])
   @@index([status])
   @@index([assigneeId])
+  @@index([projectId, status])
+  @@index([assigneeId, status])
+  @@index([relatedFunctionIds(ops: ArrayOps)], type: Gin)
 }
 
 model IssueComment {
@@ -1606,6 +1611,10 @@ model AuditLog {
   action    String
   details   String?
   createdAt DateTime @default(now())
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([action])
 }
 
 model ProjectAnalytics {
@@ -3241,6 +3250,8 @@ model ComplianceFinding {
 
   @@index([projectId])
   @@index([createdAt])
+  @@index([runId])
+  @@index([ruleId])
 }
 
 // ----- Certification module -----
@@ -3838,17 +3849,17 @@ model ParameterBulkJob {
 // the AES-256-GCM envelope (iv || tag || ciphertext, base64). `keyMeta`
 // carries non-secret hints the UI can display (masked tail, label).
 model UserAiCredential {
-  id             String    @id @default(uuid())
-  userId         String
-  provider       String // "anthropic" | "openai" | "azure" | "google" | "self_hosted"
-  label          String // user-supplied friendly name
-  keyCiphertext  String // base64 AES-256-GCM envelope
-  maskedTail     String // last 4 chars of the plaintext, for UI display
-  scopes         String[] // optional, provider-agnostic ("draft","review","impact")
-  lastUsedAt     DateTime?
-  revokedAt      DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id            String    @id @default(uuid())
+  userId        String
+  provider      String // "anthropic" | "openai" | "azure" | "google" | "self_hosted"
+  label         String // user-supplied friendly name
+  keyCiphertext String // base64 AES-256-GCM envelope
+  maskedTail    String // last 4 chars of the plaintext, for UI display
+  scopes        String[] // optional, provider-agnostic ("draft","review","impact")
+  lastUsedAt    DateTime?
+  revokedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -3869,8 +3880,8 @@ model ParameterBaseline {
   createdBy   String
   createdAt   DateTime @default(now())
 
-  items       ParameterBaselineItem[]
-  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items   ParameterBaselineItem[]
+  project Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, createdAt])
 }
@@ -3908,7 +3919,7 @@ model ParameterScenario {
   updatedAt   DateTime @updatedAt
 
   overrides ParameterScenarioOverride[]
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, name])
   @@index([projectId, createdAt])
