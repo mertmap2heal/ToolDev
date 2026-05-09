@@ -38,7 +38,13 @@ export async function updateProjectUnitHandler(req: Request, res: Response) {
 
 export async function deleteProjectUnitHandler(req: Request, res: Response) {
   try {
-    const usage = await svc.countUnitUsage(req.params.projectId, req.params.id)
+    // BUG FIX: countUnitUsage takes the unit's symbol, not its row id.
+    // Look up the unit first so the in-use guard actually fires.
+    const unit = await svc.getProjectUnit(req.params.projectId, req.params.id)
+    if (!unit) {
+      return res.status(404).json({ success: false, error: 'Unit not found' })
+    }
+    const usage = await svc.countUnitUsage(req.params.projectId, unit.symbol)
     if (usage > 0) {
       // Return count so UI can warn but still allow forced delete
       return res.status(409).json({ success: false, error: 'Unit is in use', usageCount: usage })

@@ -269,8 +269,11 @@ jobs:
         env:
           DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
 
-      - name: Run backend unit tests
-        run: cd backend && npm test
+      - name: Run backend unit tests with coverage
+        # Coverage thresholds defined in backend/vitest.config.ts so any
+        # regression below the measured floor fails CI. Raise the floor as
+        # new tests land (target: 50% lines).
+        run: cd backend && npx vitest run --coverage
         env:
           DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
           JWT_SECRET: ci-test-secret

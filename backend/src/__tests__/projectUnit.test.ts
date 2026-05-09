@@ -4,16 +4,14 @@
  * authenticateToken → projectIdParam → requireProjectMember → handler.
  *
  * Coverage: auth guard, project-membership enforcement, validation
- * (missing fields, duplicate symbol), happy-path CRUD, and the usage
- * counter exposed by GET /:symbol/usage.
+ * (missing fields, duplicate symbol), happy-path CRUD, the usage counter
+ * exposed by GET /:symbol/usage, and the in-use 409 guard on DELETE.
  *
- * KNOWN CONTROLLER BUG (not asserted on): the DELETE handler calls
- * `countUnitUsage(projectId, id)` instead of `countUnitUsage(projectId, symbol)`.
- * Because Parameter.unit holds the symbol string, the count is always 0
- * during delete, so deletion succeeds even if a parameter still
- * references the unit. The /usage GET endpoint correctly takes the
- * symbol and is asserted below. When the controller bug is fixed, the
- * `DELETE returns 409` test in this file should be reinstated.
+ * The earlier revision of this file documented a controller bug where
+ * DELETE called `countUnitUsage(projectId, id)` (Parameter.unit holds
+ * the symbol, so the count was always 0). That bug is now fixed —
+ * deleteProjectUnitHandler resolves the unit row first and passes the
+ * symbol to countUnitUsage. The 409 path is asserted below.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import request from 'supertest'
@@ -182,9 +180,21 @@ describe('Project units — /api/v1/parameters/:projectId/units', () => {
     expect(after.body.data.count).toBe(1)
   })
 
-  it('DELETE removes the unit row when the caller is a member', async () => {
-    // Clean the parameter first so we are not relying on the controller's
-    // (currently buggy) usage check inside DELETE.
+  it('DELETE returns 409 with usageCount when a parameter still references the unit', async () => {
+    // The previous test planted a parameter referencing the unit; the
+    // delete handler must surface that as 409 + usageCount.
+    expect(parameterUsingUnit).not.toBeNull()
+    const id = createdUnitIds[0]
+    const res = await request(app)
+      .delete(`/api/v1/parameters/${projectAId}/units/${id}`)
+      .set('Authorization', `Bearer ${tokenMember}`)
+    expect(res.status).toBe(409)
+    expect(res.body.usageCount).toBeGreaterThan(0)
+    const stillThere = await prisma.projectUnit.findUnique({ where: { id } })
+    expect(stillThere).not.toBeNull()
+  })
+
+  it('DELETE removes the unit row once nothing references it', async () => {
     if (parameterUsingUnit) {
       await prisma.parameter.delete({ where: { id: parameterUsingUnit } }).catch(() => {})
       parameterUsingUnit = null

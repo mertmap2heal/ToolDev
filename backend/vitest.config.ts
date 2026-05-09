@@ -25,6 +25,16 @@ export default defineConfig({
         'src/server.ts',
         'src/realtime/realtime.ts',
       ],
+      // CI floor — `vitest run --coverage` exits non-zero when any of these
+      // drops below the threshold. Set 1-2 points below the current measured
+      // value so a no-op rebase does not flake; raise as new tests land.
+      // Target to climb to: 50% lines.
+      thresholds: {
+        statements: 32,
+        branches: 19,
+        functions: 28,
+        lines: 32,
+      },
     },
   },
   resolve: {
