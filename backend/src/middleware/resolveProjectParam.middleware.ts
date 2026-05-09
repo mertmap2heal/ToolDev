@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
+import { resolveIsAdmin } from '../lib/adminAuth'
 import type { AuthRequest } from './auth.middleware'
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -52,21 +53,8 @@ async function userCanAccessProject(userId: string | undefined, projectId: strin
   ) {
     return true
   }
-  if (user?.email && (await isEnvAdmin(user.email))) return true
+  if (user?.email && (await resolveIsAdmin(user.email))) return true
   return false
-}
-
-async function isEnvAdmin(email: string): Promise<boolean> {
-  const list = process.env.ADMIN_EMAILS
-  if (list) {
-    const emails = list.split(',').map((e) => e.trim().toLowerCase())
-    return emails.includes(email.toLowerCase())
-  }
-  const first = await prisma.user.findFirst({
-    orderBy: { createdAt: 'asc' },
-    select: { email: true },
-  })
-  return first?.email?.toLowerCase() === email.toLowerCase()
 }
 
 function createResolver(paramName: string) {

@@ -9,6 +9,13 @@ on:
 jobs:
   secret-scan:
     runs-on: ubuntu-latest
+    # gitleaks-action calls /repos/.../pulls/:n/commits which requires
+    # pull-requests: read. Default workflow token is contents-only on
+    # many repo settings, which surfaces as "Resource not accessible by
+    # integration" 403. Grant the minimum needed scopes here.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -219,6 +226,14 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    # Job-level env applies to every step. ADMIN_EMAILS pins the admin
+    # allowlist to a sentinel that no test ever uses, which DISABLES the
+    # "first user in DB is admin" fallback in resolveIsAdmin (lib/adminAuth.ts).
+    # Without this, parallel test files create + delete users churn-style and
+    # whichever user is currently oldest is granted platform-admin, leaking
+    # past every requireAdmin / projectIdParam / membership middleware.
+    env:
+      ADMIN_EMAILS: ci-no-fallback@example.invalid
     services:
       postgres:
         image: postgres:15-alpine
@@ -1208,6 +1223,15 @@ jobs:
         run: cd backend && npm run seed:users
         env:
           DATABASE_URL: postgresql://engineering_user:engineering_password@localhost:5432/engineering_tool
+          # seed-users.ts (cf1686a) hard-fails when these env vars are unset.
+          # Configure repo secrets SEED_PASSWORD_MERT / _CHRISTIAN / _ADMIN
+          # in Repo Settings > Secrets and variables > Actions. The fallback
+          # values below keep CI green when secrets are absent — they are
+          # plain non-secret placeholders, applied only against the
+          # ephemeral CI Postgres container that is destroyed after the run.
+          SEED_PASSWORD_MERT: ${{ secrets.SEED_PASSWORD_MERT || 'CI_PLACEHOLDER_MERT' }}
+          SEED_PASSWORD_CHRISTIAN: ${{ secrets.SEED_PASSWORD_CHRISTIAN || 'CI_PLACEHOLDER_CHRISTIAN' }}
+          SEED_PASSWORD_ADMIN: ${{ secrets.SEED_PASSWORD_ADMIN || 'CI_PLACEHOLDER_ADMIN' }}
 
       - name: Seed demo project
         run: cd backend && npm run seed:demo
