@@ -453,13 +453,14 @@ export default function ValidationPage() {
           </p>
         </div>
       ) : (
-        <div className="border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden bg-white dark:bg-gray-900">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-800/50">
-              <tr className="border-b border-gray-200 dark:border-gray-700">
-                <th className="w-10 px-3 py-2">
+        <div className="pv-table-pane" style={{ border: '1px solid var(--pv-line)', borderRadius: 6, overflow: 'hidden' }}>
+          <table className="pv-params">
+            <thead>
+              <tr>
+                <th className="col-check">
                   <input
                     type="checkbox"
+                    className="pv-check"
                     aria-label="Select all"
                     checked={items.length > 0 && selectedIds.size === items.length}
                     onChange={(e) => {
@@ -468,31 +469,31 @@ export default function ValidationPage() {
                     }}
                   />
                 </th>
-                <th className="w-10 px-3 py-2" aria-label="Star"></th>
-                <th
-                  className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-28 cursor-pointer select-none"
-                  onClick={() => toggleSort('key')}
-                >
+                <th style={{ width: 32 }} aria-label="Star"></th>
+                <th className="sortable" style={{ width: 110 }} onClick={() => toggleSort('key')}>
                   Key<SortArrow col="key" />
                 </th>
-                <th className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300">Title</th>
-                <th className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-40">Method</th>
+                <th>Title</th>
+                <th style={{ width: 160 }}>Method</th>
                 <th
-                  className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-24 cursor-pointer select-none"
+                  className="sortable"
+                  style={{ width: 100 }}
                   onClick={() => toggleSort('milestone')}
                 >
                   Milestone<SortArrow col="milestone" />
                 </th>
                 <th
-                  className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-28 cursor-pointer select-none"
+                  className="sortable"
+                  style={{ width: 120 }}
                   onClick={() => toggleSort('status')}
                 >
                   Status<SortArrow col="status" />
                 </th>
-                <th className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-24">Criteria</th>
-                <th className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-20">Sign-offs</th>
+                <th style={{ width: 84 }}>Criteria</th>
+                <th style={{ width: 80 }}>Sign-offs</th>
                 <th
-                  className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-28 cursor-pointer select-none"
+                  className="sortable"
+                  style={{ width: 110 }}
                   onClick={() => toggleSort('updatedAt')}
                   title="When this item was last modified"
                 >
@@ -508,13 +509,13 @@ export default function ValidationPage() {
                   <tr
                     key={it.id}
                     onClick={() => setSelectedItemId(it.id)}
-                    className={`border-b border-gray-100 dark:border-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/10 cursor-pointer ${
-                      it.deletedAt ? 'opacity-60' : ''
-                    } ${selectedIds.has(it.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                    className={`${it.deletedAt ? 'is-archived' : ''} ${selectedIds.has(it.id) ? 'is-selected' : ''}`}
+                    style={{ cursor: 'pointer', opacity: it.deletedAt ? 0.6 : 1 }}
                   >
-                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                    <td className="col-check" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
+                        className="pv-check"
                         aria-label={`Select ${it.key}`}
                         checked={selectedIds.has(it.id)}
                         onChange={(e) => {
@@ -527,7 +528,7 @@ export default function ValidationPage() {
                         }}
                       />
                     </td>
-                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                    <td onClick={(e) => e.stopPropagation()} style={{ paddingLeft: 6 }}>
                       <button
                         type="button"
                         aria-label={it.starredByMe ? 'Unstar' : 'Star'}
@@ -538,60 +539,65 @@ export default function ValidationPage() {
                           else await validationService.star(projectId, it.id)
                           refetchAll()
                         }}
-                        className="text-gray-300 hover:text-yellow-500"
+                        className={`vv-star-btn ${it.starredByMe ? 'on' : ''}`}
                       >
-                        <Star
-                          size={14}
-                          className={
-                            it.starredByMe ? 'fill-yellow-500 text-yellow-500' : ''
-                          }
-                        />
+                        <Star size={14} fill={it.starredByMe ? 'currentColor' : 'none'} />
                       </button>
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs text-blue-700 dark:text-blue-300">
+                    <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12, color: 'var(--pv-fg-2)' }}>
                       {it.key}
                       {it.isSuspect && (
                         <span
-                          className="ml-1 inline-flex items-center gap-0.5 text-[9px] text-amber-700 dark:text-amber-400"
+                          className="vv-row-suspect"
                           title="A linked requirement was updated after this validation. Re-run recommended."
                         >
                           <AlertTriangle size={10} /> suspect
                         </span>
                       )}
                       {it.deletedAt && (
-                        <span className="ml-1 text-[9px] text-amber-700 dark:text-amber-400">
+                        <span style={{ marginLeft: 4, fontSize: 10, color: 'var(--pv-amber)' }}>
                           (archived)
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-gray-900 dark:text-white">{it.title}</td>
+                    <td>{it.title}</td>
                     <td
-                      className="px-3 py-2 text-gray-700 dark:text-gray-300"
+                      style={{ color: 'var(--pv-fg-2)' }}
                       title={METHOD_TOOLTIP[it.methodType]}
                     >
                       {METHOD_LABEL[it.methodType]}
                     </td>
                     <td
-                      className="px-3 py-2 text-gray-700 dark:text-gray-300"
+                      style={{ color: 'var(--pv-fg-2)', fontFamily: 'var(--pv-font-mono)', fontSize: 12 }}
                       title={MILESTONE_TOOLTIP[it.targetMilestone]}
                     >
                       {it.targetMilestone}
                     </td>
-                    <td className="px-3 py-2">
+                    <td>
                       <span
-                        className={`text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded ${STATUS_COLOR[it.status]}`}
+                        className={`pv-status ${
+                          it.status === 'VALIDATED'
+                            ? 'approved'
+                            : it.status === 'EXECUTED'
+                            ? 'review'
+                            : it.status === 'BLOCKED'
+                            ? 'deprecated'
+                            : it.status === 'OBSOLETE'
+                            ? 'obsolete'
+                            : 'draft'
+                        }`}
                       >
                         {STATUS_LABEL[it.status]}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400">
-                      {met}/{total}
+                    <td className="cell-used" style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12 }}>
+                      <span className="num">{met}</span>/{total}
                     </td>
-                    <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400">
+                    <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12, color: 'var(--pv-fg-3)' }}>
                       {it._count?.signOffs ?? 0}
                     </td>
                     <td
-                      className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap"
+                      className="cell-updated"
                       title={new Date(it.updatedAt).toLocaleString()}
                     >
                       {relativeTime(it.updatedAt)}
