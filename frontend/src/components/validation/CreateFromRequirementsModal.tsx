@@ -218,10 +218,10 @@ export default function CreateFromRequirementsModal({
                     Requirement title
                   </th>
                   <th
-                    className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-32"
-                    title="Whether the requirement has acceptance criteria text. If yes, the criteria are seeded as validation criteria."
+                    className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-44"
+                    title="Whether the requirement has acceptance criteria text. If yes, those criteria are copied as the starting validation criteria."
                   >
-                    Has AC?
+                    Acceptance criteria
                   </th>
                 </tr>
               </thead>
@@ -255,16 +255,16 @@ export default function CreateFromRequirementsModal({
                         {hasAc ? (
                           <span
                             className="inline-flex items-center gap-1 text-green-700 dark:text-green-400"
-                            title="Acceptance criteria will be seeded as validation criteria."
+                            title="The requirement has acceptance criteria. They will be copied as the starting validation criteria."
                           >
-                            <Check size={12} /> Yes
+                            <Check size={12} /> Will be copied
                           </span>
                         ) : (
                           <span
                             className="text-gray-500 dark:text-gray-400"
-                            title="No acceptance criteria — you'll add criteria manually after creation."
+                            title="The requirement has no acceptance criteria. You will add validation criteria manually after creation."
                           >
-                            None
+                            None — add manually
                           </span>
                         )}
                       </td>
