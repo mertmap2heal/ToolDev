@@ -13,34 +13,37 @@ interface Props {
 export default function ValidationHelpDrawer({ isOpen, onClose }: Props) {
   if (!isOpen) return null
   return (
-    <div className="fixed inset-0 z-50 flex">
+    <div className="params-v2 validation-v2 fixed inset-0 z-50 flex">
       <button
         type="button"
         aria-label="Close help"
-        className="flex-1 bg-black/30"
+        className="flex-1"
+        style={{ background: 'rgba(15,20,25,0.3)' }}
         onClick={onClose}
       />
-      <div className="w-[560px] max-w-full bg-white dark:bg-gray-900 shadow-2xl flex flex-col">
-        <div className="bg-blue-500/20 backdrop-blur-sm border-b border-blue-500/30 px-6 py-4 flex items-center justify-between flex-shrink-0">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+      <div className="pv-drawer-shell" style={{ width: 600, maxWidth: '100%', margin: 0, borderRadius: 0 }}>
+        <div className="pv-dr-head" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--pv-fg)' }}>
               Validation — quick guide
             </h2>
-            <p className="text-xs text-gray-600 dark:text-gray-400">
-              The user manual page lives at <code className="font-mono">docs/user-manual/12-validation.md</code>.
-            </p>
+            <div style={{ flex: 1 }} />
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="pv-icon-btn"
+              style={{ width: 24, height: 24 }}
+            >
+              <X size={14} />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-          >
-            <X size={18} />
-          </button>
+          <p style={{ margin: 0, fontSize: 11, color: 'var(--pv-fg-3)' }}>
+            User manual: <code style={{ fontFamily: 'var(--pv-font-mono)' }}>docs/user-manual/12-validation.md</code>
+          </p>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-5 text-sm text-gray-800 dark:text-gray-200">
+        <div className="pv-dr-body" style={{ padding: 16, fontSize: 13, color: 'var(--pv-fg)' }}>
           <section>
             <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Purpose</h3>
             <p>
