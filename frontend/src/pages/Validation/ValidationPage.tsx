@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Plus, Search, Download, Filter, X, AlertCircle, ListPlus, Archive, Trash2, RotateCcw,
-  AlertTriangle, Target, HelpCircle, Star, ArrowUp, ArrowDown, ArrowUpDown,
+  AlertTriangle, Target, HelpCircle, Star, ArrowUp, ArrowDown, ArrowUpDown, Settings,
 } from 'lucide-react'
 import ValidationHelpDrawer from '../../components/validation/ValidationHelpDrawer'
 import {
@@ -182,6 +182,13 @@ export default function ValidationPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            to={`/projects/${projectId}/validation/settings`}
+            title="Configure prefixes and tags (Project Owner / admin only)"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
+          >
+            <Settings size={14} /> Settings
+          </Link>
           <button
             type="button"
             onClick={() => setCreateFromReqOpen(true)}

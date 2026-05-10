@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { authenticateToken } from '../middleware/auth.middleware'
 import { projectIdParam } from '../middleware/resolveProjectParam.middleware'
 import { requireProjectMember } from '../middleware/requireProjectMember.middleware'
+import { requireProjectOwnerOrAdmin } from '../middleware/requireProjectOwnerOrAdmin.middleware'
 import {
   listItems,
   exportItemsCsv,
@@ -29,6 +30,8 @@ import {
   createComment,
   updateComment,
   deleteComment,
+  getSettings,
+  updateSettings,
 } from '../controllers/validation.controller'
 import { ensureValidationApproverRole } from '../services/validation.service'
 
@@ -44,6 +47,14 @@ const router = Router()
 router.use(authenticateToken)
 router.param('projectId', projectIdParam)
 router.use('/projects/:projectId', requireProjectMember)
+
+// Settings (admin-gated)
+router.get('/projects/:projectId/settings', getSettings)
+router.put(
+  '/projects/:projectId/settings',
+  requireProjectOwnerOrAdmin,
+  updateSettings,
+)
 
 // Coverage rollup + gap finder
 router.get('/projects/:projectId/coverage', getCoverage)

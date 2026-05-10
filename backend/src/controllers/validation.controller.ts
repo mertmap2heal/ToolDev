@@ -282,6 +282,24 @@ export async function getCoverage(req: AuthRequest, res: Response) {
   }
 }
 
+export async function getSettings(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.getSettings(req.params.projectId)
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function updateSettings(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.updateSettings(req.params.projectId, userId(req), req.body ?? {})
+    res.json({ success: true, data })
+  } catch (e) {
+    return fail(res, 400, (e as Error).message)
+  }
+}
+
 export async function listComments(req: AuthRequest, res: Response) {
   try {
     const data = await svc.listComments(req.params.projectId, req.params.id)

@@ -270,6 +270,7 @@ model Project {
   projectUserEngineeringRoles ProjectUserEngineeringRole[]
   parameterFolders            ParameterFolder[]
   validationItems             ValidationItem[]
+  validationSettings          ValidationSettings?
 }
 
 // Requirements export templates (ExportBuilder) - enterprise export wizard presets.
@@ -3967,6 +3968,9 @@ model ValidationItem {
   ownerUserId     String?
   // Inline criteria array: [{ id, text, outcome (MET|PARTIAL|NOT_MET|PENDING), notes, orderIndex }]
   criteria        Json    @default("[]")
+  // Tags chosen from the project's ValidationSettings.tags library. Storing
+  // labels (not ids) keeps each row self-describing.
+  tags            String[] @default([])
 
   // Soft-delete (mirrors Requirement)
   deletedAt    DateTime?
@@ -4003,6 +4007,23 @@ model ValidationItemStar {
   @@unique([userId, validationItemId])
   @@index([validationItemId])
   @@index([userId])
+}
+
+model ValidationSettings {
+  id        String   @id @default(uuid())
+  projectId String   @unique
+  // Custom key prefixes. JSON array of { prefix, label, description?, isDefault }.
+  // The first or `isDefault:true` entry is what new items use unless the
+  // creator picks a different one.
+  prefixes  Json     @default("[{\"prefix\":\"VAL-\",\"label\":\"Validation\",\"description\":\"Default validation activities\",\"isDefault\":true}]")
+  // Tag library. JSON array of { label, color }. Items pick tags from this
+  // library; arbitrary free-text tags are not allowed so the set stays
+  // navigable.
+  tags      Json     @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model ValidationComment {

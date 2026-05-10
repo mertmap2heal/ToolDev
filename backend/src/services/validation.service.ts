@@ -66,29 +66,32 @@ type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
 
 async function createWithUniqueKey<T>(
   projectId: string,
+  prefix: string,
   attempt: (tx: Tx, key: string) => Promise<T>,
 ): Promise<T> {
-  // Serialize VAL-### key allocation per project via a Postgres advisory lock.
-  // The lock is held for the lifetime of the transaction; concurrent calls for
-  // the same project queue, concurrent calls for different projects do not.
+  // Serialize key allocation per (project, prefix) via a Postgres advisory
+  // lock. Concurrent creates for the same prefix queue; different prefixes
+  // (e.g. VAL- vs VAL-SYS-) progress in parallel.
   return prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe(
-      "SELECT pg_advisory_xact_lock(hashtext('validation-key-' || $1))",
+      "SELECT pg_advisory_xact_lock(hashtext('validation-key-' || $1 || '-' || $2))",
       projectId,
+      prefix,
     )
     const items = await tx.validationItem.findMany({
-      where: { projectId, key: { startsWith: 'VAL-' } },
+      where: { projectId, key: { startsWith: prefix } },
       select: { key: true },
     })
     let max = 0
+    const re = new RegExp(`^${prefix.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}(\\d+)$`)
     for (const it of items) {
-      const m = it.key.match(/^VAL-(\d+)$/)
+      const m = it.key.match(re)
       if (m) {
         const n = parseInt(m[1], 10)
         if (n > max) max = n
       }
     }
-    const key = `VAL-${(max + 1).toString().padStart(3, '0')}`
+    const key = `${prefix}${(max + 1).toString().padStart(3, '0')}`
     return attempt(tx, key)
   })
 }
@@ -204,6 +207,91 @@ export async function star(projectId: string, itemId: string, userId: string) {
     create: { userId, validationItemId: itemId },
   })
   return { starred: true }
+}
+
+// ---- Settings (project-scoped, admin-gated) ----
+
+export interface ValidationKeyPrefix {
+  prefix: string
+  label: string
+  description?: string
+  isDefault?: boolean
+}
+
+export interface ValidationTag {
+  label: string
+  color: string
+}
+
+async function ensureSettings(projectId: string) {
+  return prisma.validationSettings.upsert({
+    where: { projectId },
+    update: {},
+    create: { projectId },
+  })
+}
+
+export async function getSettings(projectId: string) {
+  return ensureSettings(projectId)
+}
+
+export async function updateSettings(
+  projectId: string,
+  userId: string,
+  payload: { prefixes?: ValidationKeyPrefix[]; tags?: ValidationTag[] },
+) {
+  if (payload.prefixes) {
+    if (!Array.isArray(payload.prefixes) || payload.prefixes.length === 0)
+      throw new Error('at least one key prefix is required')
+    const seen = new Set<string>()
+    for (const p of payload.prefixes) {
+      if (!p.prefix?.match(/^[A-Z][A-Z0-9-]{0,15}-$/))
+        throw new Error(
+          `invalid prefix "${p.prefix}" — must be uppercase letters/numbers/dashes and end with a dash`,
+        )
+      if (seen.has(p.prefix)) throw new Error(`duplicate prefix "${p.prefix}"`)
+      seen.add(p.prefix)
+      if (!p.label?.trim()) throw new Error(`label required for prefix "${p.prefix}"`)
+    }
+    const defaults = payload.prefixes.filter((p) => p.isDefault)
+    if (defaults.length > 1) throw new Error('only one prefix can be the default')
+  }
+  if (payload.tags) {
+    const seen = new Set<string>()
+    for (const t of payload.tags) {
+      if (!t.label?.trim()) throw new Error('tag label is required')
+      if (seen.has(t.label)) throw new Error(`duplicate tag "${t.label}"`)
+      seen.add(t.label)
+      if (!t.color?.match(/^#[0-9a-f]{6}$/i))
+        throw new Error(`tag "${t.label}" — color must be a #rrggbb hex`)
+    }
+  }
+  await ensureSettings(projectId)
+  const updated = await prisma.validationSettings.update({
+    where: { projectId },
+    data: {
+      ...(payload.prefixes
+        ? { prefixes: payload.prefixes as unknown as Prisma.InputJsonValue }
+        : {}),
+      ...(payload.tags
+        ? { tags: payload.tags as unknown as Prisma.InputJsonValue }
+        : {}),
+    },
+  })
+  await writeAudit(projectId, userId, 'validation:settings-update', {
+    prefixesChanged: !!payload.prefixes,
+    tagsChanged: !!payload.tags,
+  })
+  return updated
+}
+
+function defaultPrefix(prefixes: unknown): string {
+  if (Array.isArray(prefixes)) {
+    const arr = prefixes as ValidationKeyPrefix[]
+    const def = arr.find((p) => p.isDefault) ?? arr[0]
+    if (def?.prefix) return def.prefix
+  }
+  return 'VAL-'
 }
 
 // ---- Comments / discussions ----
@@ -346,6 +434,12 @@ interface CreatePayload {
   targetMilestone?: string
   ownerUserId?: string | null
   criteria?: Omit<ValidationCriterion, 'id' | 'orderIndex'>[]
+  /**
+   * Optional key prefix override. Must be present in the project's
+   * ValidationSettings.prefixes list. Defaults to the configured default.
+   */
+  prefix?: string
+  tags?: string[]
 }
 
 export async function createItem(projectId: string, userId: string, payload: CreatePayload) {
@@ -366,7 +460,28 @@ export async function createItem(projectId: string, userId: string, payload: Cre
     orderIndex: i,
   }))
 
-  const created = await createWithUniqueKey(projectId, (tx, key) =>
+  // Resolve prefix from project settings. Validate the caller's choice when
+  // provided; otherwise use the configured default.
+  const settings = await ensureSettings(projectId)
+  const allowed = Array.isArray(settings.prefixes)
+    ? (settings.prefixes as unknown as ValidationKeyPrefix[]).map((p) => p.prefix)
+    : ['VAL-']
+  const chosenPrefix =
+    payload.prefix && allowed.includes(payload.prefix)
+      ? payload.prefix
+      : defaultPrefix(settings.prefixes)
+
+  // Validate tags are in the library (or empty). Free-text tags are rejected.
+  if (payload.tags && payload.tags.length > 0) {
+    const lib = Array.isArray(settings.tags)
+      ? (settings.tags as unknown as ValidationTag[]).map((t) => t.label)
+      : []
+    for (const tag of payload.tags) {
+      if (!lib.includes(tag)) throw new Error(`tag "${tag}" is not in the project library`)
+    }
+  }
+
+  const created = await createWithUniqueKey(projectId, chosenPrefix, (tx, key) =>
     tx.validationItem.create({
       data: {
         projectId,
@@ -377,6 +492,7 @@ export async function createItem(projectId: string, userId: string, payload: Cre
         targetMilestone: payload.targetMilestone ?? 'OTHER',
         ownerUserId: payload.ownerUserId ?? null,
         criteria: criteria as unknown as Prisma.InputJsonValue,
+        tags: payload.tags ?? [],
         createdById: userId,
       },
       include: { owner: true, createdBy: true },
@@ -526,6 +642,10 @@ export async function createFromRequirements(
   })
   const reqMeta = new Map(reqsFull.map((r) => [r.id, r]))
 
+  // Resolve default prefix once for the whole batch.
+  const bulkSettings = await ensureSettings(projectId)
+  const bulkPrefix = defaultPrefix(bulkSettings.prefixes)
+
   const created: { id: string; key: string; sourceRequirementId: string }[] = []
   for (const r of reqs) {
     const acText = r.acceptanceCriteria?.trim()
@@ -542,7 +662,7 @@ export async function createFromRequirements(
           }))
       : []
     const meta = reqMeta.get(r.id)
-    const item = await createWithUniqueKey(projectId, async (tx, key) => {
+    const item = await createWithUniqueKey(projectId, bulkPrefix, async (tx, key) => {
       const newItem = await tx.validationItem.create({
         data: {
           projectId,

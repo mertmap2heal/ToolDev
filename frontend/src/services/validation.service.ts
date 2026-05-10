@@ -365,6 +365,38 @@ export const validationService = {
       `/validation/projects/${projectId}/items/${id}/comments/${commentId}`,
     )
   },
+
+  async getSettings(projectId: string): Promise<ApiResponse<ValidationSettings>> {
+    return apiClient.get(`/validation/projects/${projectId}/settings`)
+  },
+
+  async updateSettings(
+    projectId: string,
+    payload: { prefixes?: ValidationKeyPrefix[]; tags?: ValidationTag[] },
+  ): Promise<ApiResponse<ValidationSettings>> {
+    return apiClient.put(`/validation/projects/${projectId}/settings`, payload)
+  },
+}
+
+export interface ValidationKeyPrefix {
+  prefix: string
+  label: string
+  description?: string
+  isDefault?: boolean
+}
+
+export interface ValidationTag {
+  label: string
+  color: string
+}
+
+export interface ValidationSettings {
+  id: string
+  projectId: string
+  prefixes: ValidationKeyPrefix[]
+  tags: ValidationTag[]
+  createdAt: string
+  updatedAt: string
 }
 
 export interface ValidationCommentRow {
