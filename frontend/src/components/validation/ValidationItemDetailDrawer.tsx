@@ -533,8 +533,6 @@ export default function ValidationItemDetailDrawer({
               </p>
             )}
             {/* Sign-off list comes from item.signOffs in get response. */}
-            {/* Sign-off list */}
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {item && (item as ValidationItemSummary & { signOffs?: { id: string; signerRoleLabel: string; signedAt: string; supersededById: string | null; signer?: { name: string }; comment: string | null }[] }).signOffs && (
               <ul className="space-y-1">
                 {(item as ValidationItemSummary & { signOffs?: { id: string; signerRoleLabel: string; signedAt: string; supersededById: string | null; signer?: { name: string }; comment: string | null }[] }).signOffs!
