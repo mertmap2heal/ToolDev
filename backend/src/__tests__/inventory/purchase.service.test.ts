@@ -250,14 +250,6 @@ describe('Inventory Purchase service via HTTP', () => {
   })
 
   describe('Goods receipts', () => {
-    // BUG (not fixed): purchase.service.ts createGoodsReceipt + getGoodsReceipt include
-    // `lot: true` on GoodsReceiptLine, but the Lot relation has been removed from the
-    // schema (the lots field is gone from Item too — see schema comment line 1447).
-    // Until the source is fixed, the create/getOne tests can't pass. List endpoint
-    // does not include `lot`, so it still works.
-    it.skip('creates a receipt with lines (BLOCKED by lot include bug)', async () => {})
-    it.skip('lists receipts and fetches one by id (BLOCKED by lot include bug)', async () => {})
-
     it('returns 400 when receipt has no lines', async () => {
       const res = await request(app)
         .post('/api/v1/inventory/receipts')
@@ -276,13 +268,11 @@ describe('Inventory Purchase service via HTTP', () => {
       expect(list.body.data).toMatchObject({ page: 1, limit: 5 })
     })
 
-    it('returns 404 for unknown receipt id (also hits the lot-include bug — service throws 400)', async () => {
+    it('returns 404 for unknown receipt id (lot include removed)', async () => {
       const res = await request(app)
         .get('/api/v1/inventory/receipts/00000000-0000-0000-0000-000000000000')
         .set('Authorization', `Bearer ${adminToken}`)
-      // Bug surface: validation fails before findUnique returns null, so 404 controller
-      // path is never reached. Accept either 404 (correct) or 400 (current behaviour).
-      expect([400, 404]).toContain(res.status)
+      expect(res.status).toBe(404)
     })
   })
 })

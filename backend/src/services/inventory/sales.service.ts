@@ -411,9 +411,9 @@ export class SalesService {
               },
             },
             fromLocation: true,
-            lot: true,
+            // `lot` relation removed — Lot model dropped from schema.
             serial: true,
-          } as any,
+          },
         },
       },
     })

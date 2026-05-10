@@ -237,11 +237,7 @@ describe('Inventory Item service via HTTP', () => {
       expect(res.body.data.length).toBe(0)
     })
 
-    it('GET /:id/ledger returns 404 with stale `lot` include (existing service bug)', async () => {
-      // The ledger endpoint's prisma include is cast through `as any` and references
-      // a non-existent `lot` relation on InventoryLedger. The controller catches
-      // the resulting PrismaClientValidationError and returns 404. This test pins
-      // the current behaviour so a fix can flip the assertion to 200.
+    it('GET /:id/ledger returns 200 with empty ledger (lot include removed)', async () => {
       const sku = `SKU_L_${stamp}`
       const item = await prisma.item.create({
         data: { sku, name: 'LedgerItem', uomId, trackingPolicy: 'NONE' },
@@ -251,8 +247,9 @@ describe('Inventory Item service via HTTP', () => {
       const res = await request(app)
         .get(`/api/v1/inventory/items/${item.id}/ledger?limit=10`)
         .set('Authorization', `Bearer ${adminToken}`)
-      expect(res.status).toBe(404)
-      expect(res.body.success).toBe(false)
+      expect(res.status).toBe(200)
+      expect(res.body.success).toBe(true)
+      expect(Array.isArray(res.body.data)).toBe(true)
     })
   })
 })

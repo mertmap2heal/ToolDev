@@ -197,13 +197,12 @@ describe('Issue link / subscription / label endpoints', () => {
       expect(res.status).toBe(401)
     })
 
-    it('returns empty list initially', async () => {
-      // NOTE: GET /:projectId/labels is shadowed by /:projectId/:id in the
-      // route table (issues.routes.ts), so the controller is never reached
-      // via HTTP. This is a known source bug. Verify via DB instead until
-      // the route ordering is fixed.
-      const labels = await prisma.issueLabel.findMany({ where: { projectId } })
-      expect(Array.isArray(labels)).toBe(true)
+    it('GET /labels returns empty list initially (route ordering fixed)', async () => {
+      const res = await request(app)
+        .get(`/api/v1/issues/${projectId}/labels`)
+        .set('Authorization', `Bearer ${token}`)
+      expect(res.status).toBe(200)
+      expect(Array.isArray(res.body.data)).toBe(true)
     })
 
     it('POST /labels creates a label with default color', async () => {
@@ -233,14 +232,12 @@ describe('Issue link / subscription / label endpoints', () => {
       expect(res.status).toBe(400)
     })
 
-    it('two distinct labels are persisted with correct names', async () => {
-      // GET /labels is currently shadowed by GET /:projectId/:id in the
-      // route table — assert via DB.
-      const labels = await prisma.issueLabel.findMany({
-        where: { projectId },
-        orderBy: { name: 'asc' },
-      })
-      const names = labels.map((l) => l.name)
+    it('GET /labels lists both labels (route ordering fixed)', async () => {
+      const res = await request(app)
+        .get(`/api/v1/issues/${projectId}/labels`)
+        .set('Authorization', `Bearer ${token}`)
+      expect(res.status).toBe(200)
+      const names = (res.body.data as Array<{ name: string }>).map((l) => l.name)
       expect(names).toContain(`bug-${stamp}`)
       expect(names).toContain(`urgent-${stamp}`)
     })

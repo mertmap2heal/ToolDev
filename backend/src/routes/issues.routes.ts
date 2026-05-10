@@ -27,6 +27,11 @@ const router = Router()
 router.use(authenticateToken)
 router.param('projectId', projectIdParam)
 
+// Labels — MUST come before `/:id` routes; otherwise Express matches
+// the literal string "labels" as a `:id` value and getIssue 404s.
+router.get('/:projectId/labels', getProjectLabels)
+router.post('/:projectId/labels', createProjectLabel)
+
 // Issue CRUD
 router.post('/:projectId', createIssue)
 router.get('/:projectId', getIssues)
@@ -54,9 +59,5 @@ router.delete('/:projectId/links/:linkId', deleteIssueLink)
 router.post('/:projectId/:id/attachments', uploadIssueAttachment)
 router.get('/:projectId/:id/attachments', getIssueAttachments)
 router.delete('/:projectId/:id/attachments/:attachmentId', deleteIssueAttachment)
-
-// Labels
-router.get('/:projectId/labels', getProjectLabels)
-router.post('/:projectId/labels', createProjectLabel)
 
 export default router

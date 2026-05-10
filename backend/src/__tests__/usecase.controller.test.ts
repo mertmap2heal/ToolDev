@@ -187,11 +187,7 @@ describe('UseCases & Actors — /api/v1/usecases', () => {
     expect(res.status).toBe(400)
   })
 
-  it.skip('GET actors lists the actor (BUG: route shadowed by /:projectId/:useCaseId)', async () => {
-    // BUG: in usecases.routes.ts the route GET /:projectId/:useCaseId is
-    // declared before GET /:projectId/actors, so Express treats "actors"
-    // as a useCaseId and returns 404. Skipping until the route order is
-    // fixed (move actors block above useCase :useCaseId routes).
+  it('GET actors lists the actor (route ordering fixed)', async () => {
     const res = await request(app)
       .get(`/api/v1/usecases/${projectId}/actors`)
       .set('Authorization', `Bearer ${tokenOwner}`)
