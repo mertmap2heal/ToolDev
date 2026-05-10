@@ -96,7 +96,7 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
 
         <form onSubmit={handleSubmit} className="pv-dr-body" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--pv-fg-2)', marginBottom: 4 }}>
               Title <span className="text-red-500">*</span>
             </label>
             <input
@@ -104,13 +104,13 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Pilots can complete approach in under 2 minutes"
-              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              style={{ width: '100%', height: 30, padding: '0 10px', fontSize: 13, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
               required
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--pv-fg-2)', marginBottom: 4 }}>
               Description
             </label>
             <textarea
@@ -118,20 +118,20 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
               placeholder="Why this validation matters; the stakeholder need being addressed."
-              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              style={{ width: '100%', height: 30, padding: '0 10px', fontSize: 13, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--pv-fg-2)', marginBottom: 4 }}>
                 Method
               </label>
               <select
                 value={methodType}
                 onChange={(e) => setMethodType(e.target.value as ValidationMethodType)}
                 title={METHOD_TOOLTIP[methodType]}
-                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                style={{ width: '100%', height: 30, padding: '0 10px', fontSize: 13, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
               >
                 {VALIDATION_METHOD_TYPES.map((m) => (
                   <option key={m} value={m} title={METHOD_TOOLTIP[m]}>
@@ -152,14 +152,14 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
               )}
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--pv-fg-2)', marginBottom: 4 }}>
                 Target milestone
               </label>
               <select
                 value={targetMilestone}
                 onChange={(e) => setTargetMilestone(e.target.value as ValidationMilestone)}
                 title={MILESTONE_TOOLTIP[targetMilestone]}
-                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                style={{ width: '100%', height: 30, padding: '0 10px', fontSize: 13, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
               >
                 {VALIDATION_MILESTONES.map((m) => (
                   <option key={m} value={m} title={MILESTONE_TOOLTIP[m]}>
@@ -174,7 +174,7 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--pv-fg-2)', marginBottom: 4 }}>
               Acceptance criteria (one per line)
             </label>
             <textarea
@@ -182,7 +182,7 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
               onChange={(e) => setCriteriaText(e.target.value)}
               rows={4}
               placeholder={'Each line becomes a criterion you mark Met / Partial / Not Met later.\nDemo runs end-to-end without manual intervention.\nApproach completes in <120s.'}
-              className="w-full px-3 py-2 text-sm font-mono border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              style={{ width: '100%', padding: 8, fontSize: 12.5, fontFamily: 'var(--pv-font-mono)', border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)' }}
             />
           </div>
 
