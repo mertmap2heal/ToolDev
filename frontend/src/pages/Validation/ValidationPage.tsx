@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   Plus, Search, Download, Filter, X, AlertCircle, ListPlus, Archive, Trash2, RotateCcw,
   AlertTriangle, Target, HelpCircle, Star, ArrowUp, ArrowDown, ArrowUpDown, Settings,
+  MessageCircle,
 } from 'lucide-react'
 import ValidationHelpDrawer from '../../components/validation/ValidationHelpDrawer'
 import {
@@ -222,7 +223,7 @@ export default function ValidationPage() {
         <div className="pv-right">
           <Link
             to={`/projects/${projectId}/validation/settings`}
-            title="Configure prefixes and tags (Project Owner / admin only)"
+            title="Configure prefixes and tags. The settings page itself is editable by Project Owner / admin only — others see a read-only view."
             className="pv-btn"
           >
             <Settings size={14} /> Settings
@@ -679,6 +680,21 @@ export default function ValidationPage() {
                     </td>
                     <td style={{ fontFamily: 'var(--pv-font-mono)', fontSize: 12, color: 'var(--pv-fg-3)' }}>
                       {it._count?.signOffs ?? 0}
+                      {(it._count?.comments ?? 0) > 0 && (
+                        <span
+                          style={{
+                            marginLeft: 6,
+                            color: 'var(--pv-fg-3)',
+                            fontSize: 11,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 2,
+                          }}
+                          title={`${it._count?.comments} comment${(it._count?.comments ?? 0) === 1 ? '' : 's'}`}
+                        >
+                          <MessageCircle size={11} /> {it._count?.comments}
+                        </span>
+                      )}
                     </td>
                     <td
                       className="cell-updated"

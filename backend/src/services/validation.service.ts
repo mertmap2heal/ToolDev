@@ -177,7 +177,7 @@ export async function listItems(projectId: string, filters: ListFilters = {}) {
     include: {
       owner: { select: { id: true, name: true, email: true } },
       createdBy: { select: { id: true, name: true, email: true } },
-      _count: { select: { signOffs: true, stars: true } },
+      _count: { select: { signOffs: true, stars: true, comments: true } },
       // Hoist current-user's star presence; the caller passes their userId via
       // filters.starredByUserId. Saves a second round-trip in the UI.
       stars: filters.starredByUserId

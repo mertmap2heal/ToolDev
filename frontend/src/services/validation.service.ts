@@ -50,7 +50,7 @@ export interface ValidationItemSummary {
   deletedAt: string | null
   owner?: { id: string; name: string; email: string } | null
   createdBy?: { id: string; name: string; email: string }
-  _count?: { signOffs: number }
+  _count?: { signOffs: number; stars?: number; comments?: number }
   /**
    * True when at least one linked requirement was updated after this item
    * was last touched. Indicates the validation may need to be re-run.
