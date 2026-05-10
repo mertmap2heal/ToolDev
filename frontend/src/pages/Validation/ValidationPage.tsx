@@ -414,53 +414,60 @@ export default function ValidationPage() {
       )}
 
       {items.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-10 text-center space-y-4">
-          <AlertCircle size={36} className="mx-auto text-gray-400" />
-          <div>
-            <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-              No validation items yet
-            </p>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-              Validation activities confirm the system meets stakeholder needs. Two quick ways
-              to start:
+        <div
+          style={{
+            background: 'var(--pv-bg)',
+            border: '1px solid var(--pv-line)',
+            borderRadius: 6,
+            padding: 32,
+            textAlign: 'center',
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 560, margin: '0 auto' }}>
+            <div>
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: 'var(--pv-fg)',
+                  letterSpacing: '-0.01em',
+                }}
+              >
+                No validation items.
+              </h3>
+              <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--pv-fg-3)' }}>
+                Start by bulk-creating from existing requirements, or write a single item from
+                scratch.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setCreateFromReqOpen(true)}
+                className="pv-btn primary"
+              >
+                <ListPlus size={14} /> From requirements
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+                className="pv-btn"
+              >
+                <Plus size={14} /> New item
+              </button>
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--pv-fg-3)', margin: 0 }}>
+              Verifying a low-level requirement? Use{' '}
+              <a
+                href={`/projects/${projectId}/verification`}
+                style={{ color: 'var(--pv-blue)' }}
+              >
+                Verification
+              </a>{' '}
+              instead.
             </p>
           </div>
-          <div className="flex flex-col sm:flex-row items-stretch justify-center gap-2 max-w-xl mx-auto">
-            <button
-              type="button"
-              onClick={() => setCreateFromReqOpen(true)}
-              className="flex-1 flex flex-col items-center gap-1 px-4 py-3 text-sm border border-blue-300 dark:border-blue-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md text-left"
-            >
-              <span className="flex items-center gap-1.5 font-semibold text-blue-700 dark:text-blue-300">
-                <ListPlus size={14} /> From existing requirements
-              </span>
-              <span className="text-[11px] text-gray-600 dark:text-gray-400 font-normal">
-                Pick requirements; their acceptance criteria seed the validation criteria.
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setCreateOpen(true)}
-              className="flex-1 flex flex-col items-center gap-1 px-4 py-3 text-sm border border-gray-300 dark:border-gray-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md text-left"
-            >
-              <span className="flex items-center gap-1.5 font-semibold text-gray-700 dark:text-gray-300">
-                <Plus size={14} /> One-off new item
-              </span>
-              <span className="text-[11px] text-gray-600 dark:text-gray-400 font-normal">
-                Write a validation activity from scratch.
-              </span>
-            </button>
-          </div>
-          <p className="pt-2 text-[11px] text-gray-500 dark:text-gray-400">
-            Looking to verify a low-level requirement? Use the{' '}
-            <a
-              href={`/projects/${projectId}/verification`}
-              className="text-blue-600 hover:underline"
-            >
-              Verification module
-            </a>
-            .
-          </p>
         </div>
       ) : (
         <div className="pv-table-pane" style={{ border: '1px solid var(--pv-line)', borderRadius: 6, overflow: 'hidden' }}>
