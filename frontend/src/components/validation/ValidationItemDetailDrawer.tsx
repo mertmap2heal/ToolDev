@@ -513,33 +513,33 @@ export default function ValidationItemDetailDrawer({
               Evidence
             </h3>
             {evidence && evidence.length > 0 ? (
-              <ul className="space-y-1">
+              <div className="pv-dr-refs">
                 {evidence.map((link) => (
-                  <li
-                    key={link.id}
-                    className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
-                  >
-                    <Paperclip size={14} className="text-gray-400" />
-                    <span className="truncate flex-1">{link.evidence.title}</span>
-                    <span className="text-[11px] text-gray-500">{link.evidence.evidenceType}</span>
+                  <div key={link.id} className="pv-dr-ref">
+                    <span className="ref-kind">
+                      <Paperclip size={12} />
+                    </span>
+                    <span className="ref-id">{link.evidence.evidenceType}</span>
+                    <span className="ref-title">{link.evidence.title}</span>
                     <button
                       type="button"
                       onClick={async () => {
                         await validationService.detachEvidence(projectId, itemId!, link.id)
                         reload()
                       }}
-                      className="text-gray-400 hover:text-red-500"
+                      className="pv-icon-btn"
+                      style={{ width: 22, height: 22 }}
                       aria-label="Remove evidence"
                     >
-                      <X size={14} />
+                      <X size={12} />
                     </button>
-                  </li>
+                  </div>
                 ))}
-              </ul>
+              </div>
             ) : (
-              <p className="text-sm text-gray-500 italic">
-                No evidence attached. Drag a file here or attach via the upload dialog (coming
-                soon — file upload is wired in a follow-up; for now use the API directly).
+              <p style={{ fontSize: 12, color: 'var(--pv-fg-3)', fontStyle: 'italic', margin: 0 }}>
+                No evidence attached. (File upload UI is wired in a follow-up; use the API
+                or attach via a Verification test run.)
               </p>
             )}
           </section>
