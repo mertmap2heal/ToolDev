@@ -638,10 +638,11 @@ export default function ValidationPage() {
       )}
 
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-3 py-2 rounded-full shadow-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-          <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 px-2">
-            {selectedIds.size} selected
+        <div className="pv-bulk-dock">
+          <span className="ct">
+            <span className="num">{selectedIds.size}</span> selected
           </span>
+          <span className="sep" />
           <select
             value={bulkMilestone}
             onChange={async (e) => {
@@ -655,7 +656,8 @@ export default function ValidationPage() {
               setSelectedIds(new Set())
               refetchAll()
             }}
-            className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800"
+            className="b"
+            style={{ background: 'transparent', border: 0, color: 'inherit' }}
           >
             <option value="">Set milestone…</option>
             {VALIDATION_MILESTONES.map((m) => (
@@ -675,7 +677,7 @@ export default function ValidationPage() {
                 setSelectedIds(new Set())
                 refetchAll()
               }}
-              className="text-xs flex items-center gap-1 px-3 py-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md"
+              className="b"
             >
               <RotateCcw size={12} /> Restore
             </button>
@@ -691,7 +693,7 @@ export default function ValidationPage() {
                 setSelectedIds(new Set())
                 refetchAll()
               }}
-              className="text-xs flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md"
+              className="b danger"
             >
               <Trash2 size={12} /> Delete
             </button>
@@ -700,7 +702,7 @@ export default function ValidationPage() {
             type="button"
             onClick={() => setSelectedIds(new Set())}
             aria-label="Clear selection"
-            className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-1"
+            className="clear"
           >
             <X size={14} />
           </button>
