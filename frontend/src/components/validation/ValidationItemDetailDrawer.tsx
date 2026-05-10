@@ -390,13 +390,16 @@ export default function ValidationItemDetailDrawer({
                 back to the system specification.
               </p>
             ) : (
-              <ul className="space-y-1 mt-2">
+              <div className="pv-dr-refs" style={{ marginTop: 8 }}>
                 {linkedReqs.map((l) => (
-                  <li
+                  <div
                     key={l.id}
-                    className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                    className="pv-dr-ref"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <Link2 size={14} className="text-blue-500" />
+                    <span className="ref-kind req">
+                      <Link2 size={12} />
+                    </span>
                     <RequirementHoverCard
                       projectId={projectId}
                       requirementId={l.requirementId}
@@ -405,7 +408,7 @@ export default function ValidationItemDetailDrawer({
                       <a
                         href={`/projects/${projectId}/requirements?focus=${l.requirementId}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="font-mono text-xs text-blue-700 dark:text-blue-300 hover:underline"
+                        className="ref-id src-link"
                       >
                         {l.requirement?.requirementId ?? l.requirementId.slice(0, 6)}
                       </a>
@@ -414,9 +417,9 @@ export default function ValidationItemDetailDrawer({
                       projectId={projectId}
                       requirementId={l.requirementId}
                       fallbackTitle={l.requirement?.title ?? null}
-                      className="truncate flex-1"
+                      className="ref-title"
                     >
-                      <span className="truncate cursor-help">
+                      <span className="ref-title" style={{ cursor: 'help' }}>
                         {l.requirement?.title ?? '(deleted)'}
                       </span>
                     </RequirementHoverCard>
@@ -428,14 +431,15 @@ export default function ValidationItemDetailDrawer({
                           queryKey: ['validation-linked-reqs', projectId, itemId],
                         })
                       }}
-                      className="text-gray-400 hover:text-red-500"
+                      className="pv-icon-btn"
+                      style={{ width: 22, height: 22 }}
                       aria-label="Unlink"
                     >
-                      <X size={14} />
+                      <X size={12} />
                     </button>
-                  </li>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
           </section>
 
