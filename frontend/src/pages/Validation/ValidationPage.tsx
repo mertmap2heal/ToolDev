@@ -347,15 +347,25 @@ export default function ValidationPage() {
       </div>
 
       {filtersOpen && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800/50">
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gap: 8,
+            padding: 12,
+            border: '1px solid var(--pv-line)',
+            borderRadius: 6,
+            background: 'var(--pv-surface-soft)',
+          }}
+        >
           <div>
-            <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">
+            <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--pv-fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
               Status
             </label>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as ValidationStatus | '')}
-              className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+              style={{ width: '100%', height: 26, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
             >
               <option value="">All</option>
               {VALIDATION_STATUSES.map((s) => (
@@ -366,14 +376,14 @@ export default function ValidationPage() {
             </select>
           </div>
           <div>
-            <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">
+            <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--pv-fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
               Method
             </label>
             <select
               value={methodFilter}
               onChange={(e) => setMethodFilter(e.target.value as ValidationMethodType | '')}
               title={methodFilter ? METHOD_TOOLTIP[methodFilter] : 'Filter by validation method'}
-              className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+              style={{ width: '100%', height: 26, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
             >
               <option value="">All</option>
               {VALIDATION_METHOD_TYPES.map((m) => (
@@ -384,14 +394,14 @@ export default function ValidationPage() {
             </select>
           </div>
           <div>
-            <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">
+            <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--pv-fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
               Milestone
             </label>
             <select
               value={milestoneFilter}
               onChange={(e) => setMilestoneFilter(e.target.value as ValidationMilestone | '')}
               title={milestoneFilter ? MILESTONE_TOOLTIP[milestoneFilter] : 'Filter by lifecycle milestone'}
-              className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+              style={{ width: '100%', height: 26, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
             >
               <option value="">All</option>
               {VALIDATION_MILESTONES.map((m) => (
