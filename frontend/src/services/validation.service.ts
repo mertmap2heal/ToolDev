@@ -58,6 +58,7 @@ export interface ValidationItemSummary {
   isSuspect?: boolean
   /** True when the calling user has starred this item. */
   starredByMe?: boolean
+  tags?: string[]
 }
 
 export type ValidationSortBy = 'key' | 'updatedAt' | 'createdAt' | 'status' | 'milestone'
@@ -172,7 +173,7 @@ export const validationService = {
         ValidationItemSummary,
         'title' | 'description' | 'methodType' | 'targetMilestone' | 'ownerUserId' | 'status'
       >
-    > & { criteria?: ValidationCriterion[] },
+    > & { criteria?: ValidationCriterion[]; tags?: string[] },
   ): Promise<ApiResponse<ValidationItemSummary>> {
     return apiClient.put(`/validation/projects/${projectId}/items/${id}`, payload)
   },

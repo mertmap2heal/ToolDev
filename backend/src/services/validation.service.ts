@@ -514,6 +514,7 @@ interface UpdatePayload {
   ownerUserId?: string | null
   criteria?: ValidationCriterion[]
   status?: string
+  tags?: string[]
 }
 
 export async function updateItem(
@@ -561,6 +562,7 @@ export async function updateItem(
         payload.criteria !== undefined
           ? (payload.criteria as unknown as Prisma.InputJsonValue)
           : (existing.criteria as Prisma.InputJsonValue),
+      tags: payload.tags !== undefined ? payload.tags : existing.tags,
       status: nextStatus,
     },
     include: { owner: true, createdBy: true },

@@ -89,6 +89,15 @@ export default function ValidationItemDetailDrawer({
     if (item) setDraft(item)
   }, [item])
 
+  const { data: settings } = useQuery({
+    queryKey: ['validation-settings', projectId],
+    enabled: isOpen,
+    queryFn: async () => {
+      const res = await validationService.getSettings(projectId)
+      return res.success && res.data ? res.data : null
+    },
+  })
+
   const isAuthor = useMemo(() => draft?.createdById === currentUserId, [draft, currentUserId])
   const canSignOff = useMemo(() => !!draft && draft.status === 'EXECUTED' && !isAuthor, [draft, isAuthor])
 
@@ -151,6 +160,7 @@ export default function ValidationItemDetailDrawer({
         methodType: draft.methodType,
         targetMilestone: draft.targetMilestone,
         criteria: draft.criteria.filter((c) => c.text.trim().length > 0),
+        tags: draft.tags,
       })
       if (res.success) {
         reload()
@@ -351,6 +361,42 @@ export default function ValidationItemDetailDrawer({
               </div>
             </div>
           </section>
+
+          {settings && settings.tags.length > 0 && (
+            <section>
+              <h3 className="pv-dr-section-title">Tags</h3>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {settings.tags.map((t) => {
+                  const active = (draft?.tags ?? []).includes(t.label)
+                  return (
+                    <button
+                      key={t.label}
+                      type="button"
+                      onClick={() => {
+                        if (!draft) return
+                        const has = (draft.tags ?? []).includes(t.label)
+                        setDraft({
+                          ...draft,
+                          tags: has
+                            ? (draft.tags ?? []).filter((x) => x !== t.label)
+                            : [...(draft.tags ?? []), t.label],
+                        })
+                      }}
+                      className="vv-tag"
+                      style={{
+                        background: active ? `${t.color}22` : 'var(--pv-surface)',
+                        color: active ? t.color : 'var(--pv-fg-3)',
+                        border: `1px solid ${active ? `${t.color}55` : 'var(--pv-line)'}`,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+          )}
 
           <section>
             <div className="flex items-center justify-between mb-2">
