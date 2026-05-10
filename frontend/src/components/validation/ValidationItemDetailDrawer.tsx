@@ -702,16 +702,16 @@ export default function ValidationItemDetailDrawer({
               <h3 className="pv-dr-section-title">
                 Failed validation
               </h3>
-              <div className="rounded-md border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/10 p-3 space-y-2">
-                <p className="text-sm text-red-800 dark:text-red-300 flex items-start gap-2">
-                  <AlertOctagon size={14} className="mt-0.5 flex-shrink-0" />
+              <div style={{ borderRadius: 6, border: '1px solid var(--pv-red)', background: 'var(--pv-red-tint)', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--pv-red)', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                  <AlertOctagon size={14} style={{ marginTop: 2, flexShrink: 0 }} />
                   <span>
                     This validation is blocked. Raise a change request so the source requirement
                     can be revised.
                   </span>
                 </p>
                 {linkedReqs.length === 0 ? (
-                  <p className="text-xs text-red-700 dark:text-red-400 italic">
+                  <p style={{ margin: 0, fontSize: 11.5, color: 'var(--pv-red)', fontStyle: 'italic' }}>
                     Link a requirement above first — change requests are scoped to a source
                     requirement.
                   </p>
@@ -719,7 +719,8 @@ export default function ValidationItemDetailDrawer({
                   <button
                     type="button"
                     onClick={() => setCrModalOpen(true)}
-                    className="text-xs flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700"
+                    className="pv-dr-btn"
+                    style={{ background: 'var(--pv-red)', borderColor: 'var(--pv-red)', color: '#fff', width: 'fit-content' }}
                   >
                     <GitPullRequestArrow size={12} /> Raise change request
                   </button>
