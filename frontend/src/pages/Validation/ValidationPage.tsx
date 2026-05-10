@@ -211,24 +211,39 @@ export default function ValidationPage() {
       <ValidationOnboardingBanner />
 
       {coverage && coverage.total + coverage.totals.requirements > 0 && (
-        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Target size={14} className="text-gray-500" />
-            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-              Coverage at a glance
-            </span>
-            <div className="ml-auto flex items-center gap-2 flex-wrap">
+        <div className="vv-coverage">
+          <div className="vv-coverage-head">
+            <Target size={14} style={{ color: 'var(--pv-fg-3)' }} />
+            <span className="vv-label">Coverage at a glance</span>
+            <div className="vv-chips">
               {VALIDATION_STATUSES.filter((s) => coverage.byStatus[s] > 0).map((s) => (
                 <button
                   key={s}
                   type="button"
                   onClick={() => setStatusFilter(statusFilter === s ? '' : s)}
-                  className={`text-[11px] font-bold tracking-wide px-2 py-0.5 rounded ${STATUS_COLOR[s]} ${
-                    statusFilter === s ? 'ring-2 ring-offset-1 ring-blue-500' : ''
+                  className={`pv-status ${
+                    s === 'VALIDATED'
+                      ? 'approved'
+                      : s === 'EXECUTED'
+                      ? 'review'
+                      : s === 'BLOCKED'
+                      ? 'deprecated'
+                      : s === 'OBSOLETE'
+                      ? 'obsolete'
+                      : 'draft'
                   }`}
+                  style={{
+                    border: '1px solid transparent',
+                    cursor: 'pointer',
+                    outline: statusFilter === s ? '2px solid var(--pv-blue)' : 'none',
+                    outlineOffset: 1,
+                  }}
                   title={`${coverage.byStatus[s]} ${STATUS_LABEL[s]} item(s) — click to filter`}
                 >
-                  {coverage.byStatus[s]} {STATUS_LABEL[s]}
+                  <span style={{ fontFamily: 'var(--pv-font-mono)', marginRight: 4 }}>
+                    {coverage.byStatus[s]}
+                  </span>
+                  {STATUS_LABEL[s]}
                 </button>
               ))}
               {coverage.suspectCount > 0 && (
@@ -236,52 +251,47 @@ export default function ValidationPage() {
                   type="button"
                   onClick={() => setShowSuspectOnly((v) => !v)}
                   title="Items whose linked requirement was updated after the validation — re-run recommended."
-                  className={`text-[11px] font-bold tracking-wide px-2 py-0.5 rounded flex items-center gap-1 bg-amber-200 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200 ${
-                    showSuspectOnly ? 'ring-2 ring-offset-1 ring-amber-500' : ''
-                  }`}
+                  className={`vv-suspect-chip ${showSuspectOnly ? 'active' : ''}`}
                 >
                   <AlertTriangle size={11} /> {coverage.suspectCount} suspect
                 </button>
               )}
             </div>
           </div>
-          <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-            <div className="px-3 py-2 rounded-md bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-              <div className="text-gray-500">Validation items</div>
-              <div className="text-base font-bold text-gray-900 dark:text-white">{coverage.total}</div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+              gap: 8,
+            }}
+          >
+            <div className="vv-tile">
+              <div className="vv-tile-label">Validation items</div>
+              <div className="vv-tile-value">{coverage.total}</div>
             </div>
-            <div className="px-3 py-2 rounded-md bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-              <div className="text-gray-500">Requirements covered</div>
-              <div className="text-base font-bold text-gray-900 dark:text-white">
+            <div className="vv-tile">
+              <div className="vv-tile-label">Requirements covered</div>
+              <div className="vv-tile-value">
                 {coverage.totals.requirementsWithValidation} / {coverage.totals.requirements}
               </div>
             </div>
-            <div className="px-3 py-2 rounded-md bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-              <div className="text-gray-500">Validated</div>
-              <div className="text-base font-bold text-green-700 dark:text-green-400">
-                {coverage.byStatus.VALIDATED}
-              </div>
+            <div className="vv-tile vv-tile-validated">
+              <div className="vv-tile-label">Validated</div>
+              <div className="vv-tile-value">{coverage.byStatus.VALIDATED}</div>
             </div>
             <button
               type="button"
               onClick={() => setUncoveredOpen(true)}
-              className={`text-left px-3 py-2 rounded-md border ${
-                coverage.totals.requirementsWithoutValidation > 0
-                  ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/20'
-                  : 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'
+              className={`vv-tile ${
+                coverage.totals.requirementsWithoutValidation > 0 ? 'vv-tile-gap' : ''
               }`}
+              style={{ textAlign: 'left', cursor: 'pointer', border: 0, font: 'inherit' }}
               title="Find requirements that don't have a validation item yet."
             >
-              <div className="text-gray-500 flex items-center gap-1">
+              <div className="vv-tile-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <AlertCircle size={11} /> Without validation
               </div>
-              <div
-                className={`text-base font-bold ${
-                  coverage.totals.requirementsWithoutValidation > 0
-                    ? 'text-amber-800 dark:text-amber-300'
-                    : 'text-gray-900 dark:text-white'
-                }`}
-              >
+              <div className="vv-tile-value">
                 {coverage.totals.requirementsWithoutValidation}
               </div>
             </button>
