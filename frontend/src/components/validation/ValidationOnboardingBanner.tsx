@@ -30,24 +30,43 @@ export default function ValidationOnboardingBanner() {
   }
 
   return (
-    <div className="rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 px-4 py-3 flex items-start gap-3">
-      <Info size={18} className="mt-0.5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-      <div className="flex-1 text-sm">
-        <p className="font-semibold text-blue-900 dark:text-blue-200">
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 10,
+        padding: '10px 14px',
+        background: 'var(--pv-blue-tint)',
+        border: '1px solid #B6DCFE',
+        borderRadius: 6,
+        fontSize: 12,
+        color: 'var(--pv-blue-ink)',
+      }}
+    >
+      <Info size={14} style={{ marginTop: 2, flexShrink: 0 }} />
+      <div style={{ flex: 1 }}>
+        <p style={{ margin: 0, fontWeight: 600 }}>
           Validation answers to a stakeholder. Verification answers to a requirement.
         </p>
-        <p className="mt-1 text-blue-800 dark:text-blue-300">
+        <p style={{ margin: '4px 0 0', color: 'inherit', opacity: 0.85 }}>
           Use Validation to confirm the system meets stakeholder needs (demos, operational tests,
-          stakeholder reviews). For low-level requirement compliance, use the Verification module.
+          stakeholder reviews). For low-level requirement compliance, use Verification.
         </p>
       </div>
       <button
         type="button"
         onClick={dismiss}
         aria-label="Dismiss"
-        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200"
+        style={{
+          background: 'none',
+          border: 0,
+          color: 'inherit',
+          cursor: 'pointer',
+          padding: 0,
+          flexShrink: 0,
+        }}
       >
-        <X size={16} />
+        <X size={14} />
       </button>
     </div>
   )
