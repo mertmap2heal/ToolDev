@@ -257,3 +257,21 @@ export async function bulkUpdate(req: AuthRequest, res: Response) {
     return fail(res, 400, (e as Error).message)
   }
 }
+
+export async function getCoverage(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.coverage(req.params.projectId)
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function listUncoveredRequirements(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.uncoveredRequirements(req.params.projectId)
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}

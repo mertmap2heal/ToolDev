@@ -17,6 +17,16 @@ interface Props {
   isOpen: boolean
   onClose: () => void
   onCreated: () => void
+  /**
+   * When provided, the modal lists only requirements whose ids are in this
+   * set. Used by the page-level "Without validation" entry point so the
+   * user can blast through coverage gaps without scrolling the full list.
+   */
+  restrictToRequirementIds?: string[]
+  /**
+   * Headline override — defaults to "New validation items from requirements".
+   */
+  title?: string
 }
 
 export default function CreateFromRequirementsModal({
@@ -24,6 +34,8 @@ export default function CreateFromRequirementsModal({
   isOpen,
   onClose,
   onCreated,
+  restrictToRequirementIds,
+  title,
 }: Props) {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -42,14 +54,18 @@ export default function CreateFromRequirementsModal({
   })
 
   const filtered = useMemo(() => {
+    const allowed = restrictToRequirementIds
+      ? new Set(restrictToRequirementIds)
+      : null
+    const base = allowed ? requirements.filter((r) => allowed.has(r.id)) : requirements
     const q = search.trim().toLowerCase()
-    if (!q) return requirements
-    return requirements.filter(
+    if (!q) return base
+    return base.filter(
       (r) =>
         (r.title ?? '').toLowerCase().includes(q) ||
         (r.requirementId ?? '').toLowerCase().includes(q),
     )
-  }, [requirements, search])
+  }, [requirements, search, restrictToRequirementIds])
 
   if (!isOpen) return null
 
@@ -93,11 +109,12 @@ export default function CreateFromRequirementsModal({
         <div className="bg-blue-500/20 backdrop-blur-sm border-b border-blue-500/30 px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div>
             <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-              New validation items from requirements
+              {title ?? 'New validation items from requirements'}
             </h2>
             <p className="text-xs text-gray-600 dark:text-gray-400">
-              Pick the requirements you want to validate, then choose how and when. One
-              validation item is created per requirement, automatically linked back to its source.
+              {restrictToRequirementIds
+                ? `Showing the ${restrictToRequirementIds.length} requirement(s) without a validation item yet. Pick the ones to cover, choose method and milestone, and create.`
+                : 'Pick the requirements you want to validate, then choose how and when. One validation item is created per requirement, automatically linked back to its source.'}
             </p>
           </div>
           <button

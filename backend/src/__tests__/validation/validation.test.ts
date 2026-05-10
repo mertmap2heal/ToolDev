@@ -496,6 +496,56 @@ describe('Validation module integration', () => {
     })
   })
 
+  describe('Coverage rollup + uncovered requirements', () => {
+    it('reports coverage counts and surfaces uncovered requirements', async () => {
+      // Create a requirement that has no validation
+      const orphan = await prisma.requirement.create({
+        data: {
+          projectId,
+          requirementId: `REQ-orphan-${stamp}`,
+          title: 'Orphan req',
+          description: 'No validation yet',
+          priority: 'low',
+          status: 'draft',
+          stage: 'system',
+          requirementType: 'functional',
+        },
+      })
+      const cov = await request(app)
+        .get(`/api/v1/validation/projects/${projectId}/coverage`)
+        .set('Authorization', `Bearer ${authorToken}`)
+      expect(cov.status).toBe(200)
+      expect(cov.body.data.totals.requirements).toBeGreaterThanOrEqual(1)
+      const uncov = await request(app)
+        .get(`/api/v1/validation/projects/${projectId}/uncovered-requirements`)
+        .set('Authorization', `Bearer ${authorToken}`)
+      expect(uncov.status).toBe(200)
+      expect(uncov.body.data.find((r: { id: string }) => r.id === orphan.id)).toBeDefined()
+    })
+
+    it('marks an item suspect when its linked requirement is updated after the item', async () => {
+      const create = await request(app)
+        .post(`/api/v1/validation/projects/${projectId}/items`)
+        .set('Authorization', `Bearer ${authorToken}`)
+        .send({ title: 'Suspect-test' })
+      const itemId = create.body.data.id
+      await request(app)
+        .post(`/api/v1/validation/projects/${projectId}/items/${itemId}/linked-requirements`)
+        .set('Authorization', `Bearer ${authorToken}`)
+        .send({ requirementId: seedRequirementId })
+      // Bump requirement updatedAt by writing to it
+      await prisma.requirement.update({
+        where: { id: seedRequirementId },
+        data: { description: `Touched at ${Date.now()}` },
+      })
+      const list = await request(app)
+        .get(`/api/v1/validation/projects/${projectId}/items`)
+        .set('Authorization', `Bearer ${authorToken}`)
+      const row = list.body.data.find((i: { id: string }) => i.id === itemId)
+      expect(row?.isSuspect).toBe(true)
+    })
+  })
+
   describe('Validation Approver role bootstrap', () => {
     it('system role exists after a validation route is hit', async () => {
       // The bootstrap fires on validation.routes.ts module import (before any

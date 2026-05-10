@@ -21,6 +21,8 @@ import {
   linkRequirement,
   unlinkRequirement,
   bulkUpdate,
+  getCoverage,
+  listUncoveredRequirements,
 } from '../controllers/validation.controller'
 import { ensureValidationApproverRole } from '../services/validation.service'
 
@@ -36,6 +38,10 @@ const router = Router()
 router.use(authenticateToken)
 router.param('projectId', projectIdParam)
 router.use('/projects/:projectId', requireProjectMember)
+
+// Coverage rollup + gap finder
+router.get('/projects/:projectId/coverage', getCoverage)
+router.get('/projects/:projectId/uncovered-requirements', listUncoveredRequirements)
 
 // Items
 router.get('/projects/:projectId/items', listItems)

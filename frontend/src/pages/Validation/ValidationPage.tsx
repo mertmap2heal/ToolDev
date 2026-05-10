@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Plus, Search, Download, Filter, X, AlertCircle, ListPlus, Archive, Trash2, RotateCcw,
+  AlertTriangle, Target,
 } from 'lucide-react'
 import {
   validationService,
@@ -18,6 +19,7 @@ import { useAuthStore } from '../../store/authStore'
 import ValidationOnboardingBanner from '../../components/validation/ValidationOnboardingBanner'
 import CreateValidationItemModal from '../../components/validation/CreateValidationItemModal'
 import CreateFromRequirementsModal from '../../components/validation/CreateFromRequirementsModal'
+import UncoveredRequirementsLauncher from '../../components/validation/UncoveredRequirementsLauncher'
 import ValidationItemDetailDrawer from '../../components/validation/ValidationItemDetailDrawer'
 import {
   METHOD_LABEL,
@@ -42,8 +44,10 @@ export default function ValidationPage() {
   const [createFromReqOpen, setCreateFromReqOpen] = useState(false)
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
+  const [showSuspectOnly, setShowSuspectOnly] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkMilestone, setBulkMilestone] = useState<ValidationMilestone | ''>('')
+  const [uncoveredOpen, setUncoveredOpen] = useState(false)
 
   const filters = useMemo(
     () => ({
@@ -56,7 +60,7 @@ export default function ValidationPage() {
     [search, statusFilter, methodFilter, milestoneFilter, showArchived],
   )
 
-  const { data: items = [], refetch } = useQuery({
+  const { data: rawItems = [], refetch } = useQuery({
     queryKey: ['validation-items', projectId, filters],
     enabled: !!projectId,
     queryFn: async () => {
@@ -64,6 +68,25 @@ export default function ValidationPage() {
       return res.success && res.data ? res.data : []
     },
   })
+
+  const { data: coverage, refetch: refetchCoverage } = useQuery({
+    queryKey: ['validation-coverage', projectId],
+    enabled: !!projectId,
+    queryFn: async () => {
+      const res = await validationService.coverage(projectId!)
+      return res.success && res.data ? res.data : null
+    },
+  })
+
+  const items = useMemo(
+    () => (showSuspectOnly ? rawItems.filter((i) => i.isSuspect) : rawItems),
+    [rawItems, showSuspectOnly],
+  )
+
+  const refetchAll = () => {
+    refetch()
+    refetchCoverage()
+  }
 
   const activeFilterCount =
     (statusFilter ? 1 : 0) + (methodFilter ? 1 : 0) + (milestoneFilter ? 1 : 0)
@@ -126,6 +149,85 @@ export default function ValidationPage() {
       </div>
 
       <ValidationOnboardingBanner />
+
+      {coverage && coverage.total + coverage.totals.requirements > 0 && (
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Target size={14} className="text-gray-500" />
+            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+              Coverage at a glance
+            </span>
+            <div className="ml-auto flex items-center gap-2 flex-wrap">
+              {VALIDATION_STATUSES.filter((s) => coverage.byStatus[s] > 0).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStatusFilter(statusFilter === s ? '' : s)}
+                  className={`text-[11px] font-bold tracking-wide px-2 py-0.5 rounded ${STATUS_COLOR[s]} ${
+                    statusFilter === s ? 'ring-2 ring-offset-1 ring-blue-500' : ''
+                  }`}
+                  title={`${coverage.byStatus[s]} ${STATUS_LABEL[s]} item(s) — click to filter`}
+                >
+                  {coverage.byStatus[s]} {STATUS_LABEL[s]}
+                </button>
+              ))}
+              {coverage.suspectCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowSuspectOnly((v) => !v)}
+                  title="Items whose linked requirement was updated after the validation — re-run recommended."
+                  className={`text-[11px] font-bold tracking-wide px-2 py-0.5 rounded flex items-center gap-1 bg-amber-200 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200 ${
+                    showSuspectOnly ? 'ring-2 ring-offset-1 ring-amber-500' : ''
+                  }`}
+                >
+                  <AlertTriangle size={11} /> {coverage.suspectCount} suspect
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+            <div className="px-3 py-2 rounded-md bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+              <div className="text-gray-500">Validation items</div>
+              <div className="text-base font-bold text-gray-900 dark:text-white">{coverage.total}</div>
+            </div>
+            <div className="px-3 py-2 rounded-md bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+              <div className="text-gray-500">Requirements covered</div>
+              <div className="text-base font-bold text-gray-900 dark:text-white">
+                {coverage.totals.requirementsWithValidation} / {coverage.totals.requirements}
+              </div>
+            </div>
+            <div className="px-3 py-2 rounded-md bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+              <div className="text-gray-500">Validated</div>
+              <div className="text-base font-bold text-green-700 dark:text-green-400">
+                {coverage.byStatus.VALIDATED}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setUncoveredOpen(true)}
+              className={`text-left px-3 py-2 rounded-md border ${
+                coverage.totals.requirementsWithoutValidation > 0
+                  ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/20'
+                  : 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700'
+              }`}
+              title="Find requirements that don't have a validation item yet."
+            >
+              <div className="text-gray-500 flex items-center gap-1">
+                <AlertCircle size={11} /> Without validation
+              </div>
+              <div
+                className={`text-base font-bold ${
+                  coverage.totals.requirementsWithoutValidation > 0
+                    ? 'text-amber-800 dark:text-amber-300'
+                    : 'text-gray-900 dark:text-white'
+                }`}
+              >
+                {coverage.totals.requirementsWithoutValidation}
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex-1 min-w-[260px] flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
@@ -353,6 +455,14 @@ export default function ValidationPage() {
                     </td>
                     <td className="px-3 py-2 font-mono text-xs text-blue-700 dark:text-blue-300">
                       {it.key}
+                      {it.isSuspect && (
+                        <span
+                          className="ml-1 inline-flex items-center gap-0.5 text-[9px] text-amber-700 dark:text-amber-400"
+                          title="A linked requirement was updated after this validation. Re-run recommended."
+                        >
+                          <AlertTriangle size={10} /> suspect
+                        </span>
+                      )}
                       {it.deletedAt && (
                         <span className="ml-1 text-[9px] text-amber-700 dark:text-amber-400">
                           (archived)
@@ -409,7 +519,7 @@ export default function ValidationPage() {
                 patch: { targetMilestone: ms },
               })
               setSelectedIds(new Set())
-              refetch()
+              refetchAll()
             }}
             className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800"
           >
@@ -429,7 +539,7 @@ export default function ValidationPage() {
                   patch: { deletedAt: 'null' },
                 })
                 setSelectedIds(new Set())
-                refetch()
+                refetchAll()
               }}
               className="text-xs flex items-center gap-1 px-3 py-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md"
             >
@@ -445,7 +555,7 @@ export default function ValidationPage() {
                   patch: { deletedAt: 'now' },
                 })
                 setSelectedIds(new Set())
-                refetch()
+                refetchAll()
               }}
               className="text-xs flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md"
             >
@@ -467,14 +577,21 @@ export default function ValidationPage() {
         projectId={projectId}
         isOpen={createOpen}
         onClose={() => setCreateOpen(false)}
-        onCreated={() => refetch()}
+        onCreated={() => refetchAll()}
       />
 
       <CreateFromRequirementsModal
         projectId={projectId}
         isOpen={createFromReqOpen}
         onClose={() => setCreateFromReqOpen(false)}
-        onCreated={() => refetch()}
+        onCreated={() => refetchAll()}
+      />
+
+      <UncoveredRequirementsLauncher
+        projectId={projectId}
+        isOpen={uncoveredOpen}
+        onClose={() => setUncoveredOpen(false)}
+        onCreated={() => refetchAll()}
       />
 
       <ValidationItemDetailDrawer
@@ -482,7 +599,7 @@ export default function ValidationPage() {
         itemId={selectedItemId}
         currentUserId={currentUserId}
         onClose={() => setSelectedItemId(null)}
-        onChanged={() => refetch()}
+        onChanged={() => refetchAll()}
       />
     </div>
   )

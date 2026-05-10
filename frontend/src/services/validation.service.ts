@@ -51,6 +51,32 @@ export interface ValidationItemSummary {
   owner?: { id: string; name: string; email: string } | null
   createdBy?: { id: string; name: string; email: string }
   _count?: { signOffs: number }
+  /**
+   * True when at least one linked requirement was updated after this item
+   * was last touched. Indicates the validation may need to be re-run.
+   */
+  isSuspect?: boolean
+}
+
+export interface ValidationCoverage {
+  total: number
+  byStatus: Record<ValidationStatus, number>
+  byMilestone: Record<ValidationMilestone, { total: number; validated: number }>
+  totals: {
+    requirements: number
+    requirementsWithValidation: number
+    requirementsWithoutValidation: number
+  }
+  suspectCount: number
+}
+
+export interface UncoveredRequirement {
+  id: string
+  requirementId: string | null
+  title: string
+  priority: string | null
+  status: string
+  acceptanceCriteria: string | null
 }
 
 export interface ValidationSignOff {
@@ -225,6 +251,16 @@ export const validationService = {
 
   csvExportUrl(projectId: string, filters: ListFilters = {}): string {
     return `/api/v1/validation/projects/${projectId}/items.csv${qs(filters)}`
+  },
+
+  async coverage(projectId: string): Promise<ApiResponse<ValidationCoverage>> {
+    return apiClient.get(`/validation/projects/${projectId}/coverage`)
+  },
+
+  async uncoveredRequirements(
+    projectId: string,
+  ): Promise<ApiResponse<UncoveredRequirement[]>> {
+    return apiClient.get(`/validation/projects/${projectId}/uncovered-requirements`)
   },
 
   async listLinkedRequirements(

@@ -150,7 +150,10 @@ export async function listItems(projectId: string, filters: ListFilters = {}) {
       _count: { select: { signOffs: true } },
     },
   })
-  return items
+  // Decorate with isSuspect — linked requirement updated after this item.
+  // One round-trip for the whole project keeps the list endpoint cheap.
+  const suspect = await suspectItemIds(projectId)
+  return items.map((i) => ({ ...i, isSuspect: suspect.has(i.id) }))
 }
 
 export async function getItem(projectId: string, id: string) {
@@ -768,6 +771,156 @@ export async function detachEvidence(
     evidenceId: link.evidenceId,
   })
   return { deleted: true }
+}
+
+// ---- Coverage rollup + gap finder ----
+
+export interface ValidationCoverage {
+  total: number
+  byStatus: Record<ValidationStatus, number>
+  byMilestone: Record<ValidationMilestone, { total: number; validated: number }>
+  totals: {
+    requirements: number
+    requirementsWithValidation: number
+    requirementsWithoutValidation: number
+  }
+  suspectCount: number
+}
+
+export async function coverage(projectId: string): Promise<ValidationCoverage> {
+  const items = await prisma.validationItem.findMany({
+    where: { projectId, deletedAt: null },
+    select: {
+      id: true,
+      status: true,
+      targetMilestone: true,
+      updatedAt: true,
+    },
+  })
+
+  const byStatus = STATUSES.reduce(
+    (acc, s) => ({ ...acc, [s]: 0 }),
+    {} as Record<ValidationStatus, number>,
+  )
+  const byMilestone = MILESTONES.reduce(
+    (acc, m) => ({ ...acc, [m]: { total: 0, validated: 0 } }),
+    {} as Record<ValidationMilestone, { total: number; validated: number }>,
+  )
+  for (const it of items) {
+    if ((STATUSES as readonly string[]).includes(it.status))
+      byStatus[it.status as ValidationStatus]++
+    const ms = (MILESTONES as readonly string[]).includes(it.targetMilestone)
+      ? (it.targetMilestone as ValidationMilestone)
+      : 'OTHER'
+    byMilestone[ms].total++
+    if (it.status === 'VALIDATED') byMilestone[ms].validated++
+  }
+
+  // Suspect detection — linked requirement updated after the validation item.
+  // We pull TraceLinks scoped to ValidationItem -> Requirement, then bulk-fetch
+  // the requirements' updatedAt timestamps.
+  const links = await prisma.traceLink.findMany({
+    where: {
+      projectId,
+      sourceType: 'ValidationItem',
+      targetType: 'Requirement',
+      linkType: 'validates',
+    },
+    select: { sourceId: true, targetId: true },
+  })
+  const itemUpdated = new Map(items.map((i) => [i.id, i.updatedAt]))
+  const reqIds = Array.from(new Set(links.map((l) => l.targetId)))
+  const reqs =
+    reqIds.length === 0
+      ? []
+      : await prisma.requirement.findMany({
+          where: { id: { in: reqIds } },
+          select: { id: true, updatedAt: true },
+        })
+  const reqUpdated = new Map(reqs.map((r) => [r.id, r.updatedAt]))
+  const suspectItemIds = new Set<string>()
+  for (const l of links) {
+    const ru = reqUpdated.get(l.targetId)
+    const iu = itemUpdated.get(l.sourceId)
+    if (ru && iu && ru > iu) suspectItemIds.add(l.sourceId)
+  }
+
+  // Coverage of stakeholder needs: count requirements that DO and DON'T have
+  // a TraceLink with linkType='validates' from a ValidationItem.
+  const totalReqs = await prisma.requirement.count({
+    where: { projectId, deletedAt: null },
+  })
+  const reqsCoveredIds = new Set(links.map((l) => l.targetId))
+  return {
+    total: items.length,
+    byStatus,
+    byMilestone,
+    totals: {
+      requirements: totalReqs,
+      requirementsWithValidation: reqsCoveredIds.size,
+      requirementsWithoutValidation: Math.max(0, totalReqs - reqsCoveredIds.size),
+    },
+    suspectCount: suspectItemIds.size,
+  }
+}
+
+export async function uncoveredRequirements(projectId: string) {
+  const links = await prisma.traceLink.findMany({
+    where: {
+      projectId,
+      sourceType: 'ValidationItem',
+      targetType: 'Requirement',
+      linkType: 'validates',
+    },
+    select: { targetId: true },
+  })
+  const covered = new Set(links.map((l) => l.targetId))
+  const reqs = await prisma.requirement.findMany({
+    where: { projectId, deletedAt: null },
+    select: {
+      id: true,
+      requirementId: true,
+      title: true,
+      priority: true,
+      status: true,
+      acceptanceCriteria: true,
+    },
+    orderBy: { createdAt: 'asc' },
+  })
+  return reqs.filter((r) => !covered.has(r.id))
+}
+
+export async function suspectItemIds(projectId: string): Promise<Set<string>> {
+  const items = await prisma.validationItem.findMany({
+    where: { projectId, deletedAt: null },
+    select: { id: true, updatedAt: true },
+  })
+  const links = await prisma.traceLink.findMany({
+    where: {
+      projectId,
+      sourceType: 'ValidationItem',
+      targetType: 'Requirement',
+      linkType: 'validates',
+    },
+    select: { sourceId: true, targetId: true },
+  })
+  const itemUpdated = new Map(items.map((i) => [i.id, i.updatedAt]))
+  const reqIds = Array.from(new Set(links.map((l) => l.targetId)))
+  const reqs =
+    reqIds.length === 0
+      ? []
+      : await prisma.requirement.findMany({
+          where: { id: { in: reqIds } },
+          select: { id: true, updatedAt: true },
+        })
+  const reqUpdated = new Map(reqs.map((r) => [r.id, r.updatedAt]))
+  const out = new Set<string>()
+  for (const l of links) {
+    const ru = reqUpdated.get(l.targetId)
+    const iu = itemUpdated.get(l.sourceId)
+    if (ru && iu && ru > iu) out.add(l.sourceId)
+  }
+  return out
 }
 
 // ---- CSV export ----
