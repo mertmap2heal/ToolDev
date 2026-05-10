@@ -206,6 +206,112 @@ export async function star(projectId: string, itemId: string, userId: string) {
   return { starred: true }
 }
 
+// ---- Comments / discussions ----
+
+export async function listComments(projectId: string, itemId: string) {
+  const item = await prisma.validationItem.findFirst({
+    where: { id: itemId, projectId },
+    select: { id: true },
+  })
+  if (!item) return null
+  return prisma.validationComment.findMany({
+    where: { validationItemId: itemId },
+    orderBy: { createdAt: 'asc' },
+    include: { author: { select: { id: true, name: true, email: true } } },
+  })
+}
+
+export async function createComment(
+  projectId: string,
+  itemId: string,
+  userId: string,
+  payload: { body: string; parentId?: string },
+) {
+  const body = (payload.body ?? '').trim()
+  if (!body) throw new Error('body is required')
+  const item = await prisma.validationItem.findFirst({
+    where: { id: itemId, projectId },
+    select: { id: true },
+  })
+  if (!item) return null
+  // Parent must belong to the same item
+  if (payload.parentId) {
+    const parent = await prisma.validationComment.findFirst({
+      where: { id: payload.parentId, validationItemId: itemId },
+      select: { id: true },
+    })
+    if (!parent) throw new Error('parent comment not found on this item')
+  }
+  const comment = await prisma.validationComment.create({
+    data: {
+      validationItemId: itemId,
+      authorUserId: userId,
+      body,
+      parentId: payload.parentId ?? null,
+    },
+    include: { author: { select: { id: true, name: true, email: true } } },
+  })
+  await writeAudit(projectId, userId, 'validation:comment-create', {
+    validationItemId: itemId,
+    commentId: comment.id,
+    parentId: payload.parentId ?? null,
+  })
+  return comment
+}
+
+export async function updateComment(
+  projectId: string,
+  itemId: string,
+  commentId: string,
+  userId: string,
+  payload: { body: string },
+) {
+  const comment = await prisma.validationComment.findFirst({
+    where: { id: commentId, validationItemId: itemId },
+  })
+  if (!comment) return null
+  if (comment.authorUserId !== userId)
+    throw new Error('only the author can edit a comment')
+  if (comment.deletedAt) throw new Error('cannot edit a deleted comment')
+  const body = (payload.body ?? '').trim()
+  if (!body) throw new Error('body is required')
+  const updated = await prisma.validationComment.update({
+    where: { id: commentId },
+    data: { body },
+    include: { author: { select: { id: true, name: true, email: true } } },
+  })
+  await writeAudit(projectId, userId, 'validation:comment-update', {
+    validationItemId: itemId,
+    commentId,
+  })
+  return updated
+}
+
+export async function softDeleteComment(
+  projectId: string,
+  itemId: string,
+  commentId: string,
+  userId: string,
+  isAdmin: boolean,
+) {
+  const comment = await prisma.validationComment.findFirst({
+    where: { id: commentId, validationItemId: itemId },
+  })
+  if (!comment) return null
+  if (comment.authorUserId !== userId && !isAdmin)
+    throw new Error('only the author or an admin can delete a comment')
+  if (comment.deletedAt) return comment
+  const updated = await prisma.validationComment.update({
+    where: { id: commentId },
+    data: { deletedAt: new Date() },
+  })
+  await writeAudit(projectId, userId, 'validation:comment-delete', {
+    validationItemId: itemId,
+    commentId,
+  })
+  return updated
+}
+
 export async function unstar(projectId: string, itemId: string, userId: string) {
   const item = await prisma.validationItem.findFirst({
     where: { id: itemId, projectId },

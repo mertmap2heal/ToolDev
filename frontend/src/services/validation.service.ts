@@ -325,6 +325,58 @@ export const validationService = {
   async unstar(projectId: string, id: string): Promise<ApiResponse<{ starred: boolean }>> {
     return apiClient.delete(`/validation/projects/${projectId}/items/${id}/star`)
   },
+
+  async listComments(
+    projectId: string,
+    id: string,
+  ): Promise<ApiResponse<ValidationCommentRow[]>> {
+    return apiClient.get(`/validation/projects/${projectId}/items/${id}/comments`)
+  },
+
+  async createComment(
+    projectId: string,
+    id: string,
+    payload: { body: string; parentId?: string },
+  ): Promise<ApiResponse<ValidationCommentRow>> {
+    return apiClient.post(
+      `/validation/projects/${projectId}/items/${id}/comments`,
+      payload,
+    )
+  },
+
+  async updateComment(
+    projectId: string,
+    id: string,
+    commentId: string,
+    body: string,
+  ): Promise<ApiResponse<ValidationCommentRow>> {
+    return apiClient.put(
+      `/validation/projects/${projectId}/items/${id}/comments/${commentId}`,
+      { body },
+    )
+  },
+
+  async deleteComment(
+    projectId: string,
+    id: string,
+    commentId: string,
+  ): Promise<ApiResponse<{ id: string; deletedAt: string }>> {
+    return apiClient.delete(
+      `/validation/projects/${projectId}/items/${id}/comments/${commentId}`,
+    )
+  },
+}
+
+export interface ValidationCommentRow {
+  id: string
+  validationItemId: string
+  authorUserId: string
+  body: string
+  parentId: string | null
+  deletedAt: string | null
+  createdAt: string
+  updatedAt: string
+  author?: { id: string; name: string; email: string }
 }
 
 export interface ValidationLinkedRequirement {

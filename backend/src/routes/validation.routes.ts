@@ -25,6 +25,10 @@ import {
   listUncoveredRequirements,
   star,
   unstar,
+  listComments,
+  createComment,
+  updateComment,
+  deleteComment,
 } from '../controllers/validation.controller'
 import { ensureValidationApproverRole } from '../services/validation.service'
 
@@ -57,6 +61,12 @@ router.delete('/projects/:projectId/items/:id', deleteItem)
 router.post('/projects/:projectId/items/:id/restore', restoreItem)
 router.post('/projects/:projectId/items/:id/star', star)
 router.delete('/projects/:projectId/items/:id/star', unstar)
+
+// Comments / discussions
+router.get('/projects/:projectId/items/:id/comments', listComments)
+router.post('/projects/:projectId/items/:id/comments', createComment)
+router.put('/projects/:projectId/items/:id/comments/:commentId', updateComment)
+router.delete('/projects/:projectId/items/:id/comments/:commentId', deleteComment)
 
 // Linked requirements (TraceLink with sourceType=ValidationItem)
 router.get('/projects/:projectId/items/:id/linked-requirements', listLinkedRequirements)

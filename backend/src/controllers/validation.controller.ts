@@ -282,6 +282,65 @@ export async function getCoverage(req: AuthRequest, res: Response) {
   }
 }
 
+export async function listComments(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.listComments(req.params.projectId, req.params.id)
+    if (data == null) return fail(res, 404, 'Validation item not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function createComment(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.createComment(
+      req.params.projectId,
+      req.params.id,
+      userId(req),
+      req.body ?? {},
+    )
+    if (data == null) return fail(res, 404, 'Validation item not found')
+    res.status(201).json({ success: true, data })
+  } catch (e) {
+    return fail(res, 400, (e as Error).message)
+  }
+}
+
+export async function updateComment(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.updateComment(
+      req.params.projectId,
+      req.params.id,
+      req.params.commentId,
+      userId(req),
+      req.body ?? {},
+    )
+    if (data == null) return fail(res, 404, 'Comment not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    return fail(res, 400, (e as Error).message)
+  }
+}
+
+export async function deleteComment(req: AuthRequest, res: Response) {
+  try {
+    // For now, "admin" privilege is the project owner. Stricter role gating
+    // will land in the Settings slice.
+    const data = await svc.softDeleteComment(
+      req.params.projectId,
+      req.params.id,
+      req.params.commentId,
+      userId(req),
+      false,
+    )
+    if (data == null) return fail(res, 404, 'Comment not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    return fail(res, 400, (e as Error).message)
+  }
+}
+
 export async function star(req: AuthRequest, res: Response) {
   try {
     const data = await svc.star(req.params.projectId, req.params.id, userId(req))

@@ -49,6 +49,7 @@ model User {
   validationItemsOwned                ValidationItem[]                  @relation("ValidationItemOwner")
   validationSignOffs                  ValidationSignOff[]
   validationItemStars                 ValidationItemStar[]
+  validationComments                  ValidationComment[]
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -3982,6 +3983,7 @@ model ValidationItem {
   owner     User?               @relation("ValidationItemOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   signOffs  ValidationSignOff[]
   stars     ValidationItemStar[]
+  comments  ValidationComment[]
 
   @@unique([projectId, key])
   @@index([projectId, status])
@@ -4001,6 +4003,30 @@ model ValidationItemStar {
   @@unique([userId, validationItemId])
   @@index([validationItemId])
   @@index([userId])
+}
+
+model ValidationComment {
+  id               String   @id @default(uuid())
+  validationItemId String
+  authorUserId     String
+  body             String   @db.Text
+  // Null = top-level comment; otherwise a threaded reply to another comment
+  // on the SAME validation item.
+  parentId         String?
+  // Author-side edit is allowed; we keep history via updatedAt + audit log.
+  // Hard delete is forbidden — set deletedAt instead so the thread stays
+  // navigable and removed posts render as tombstones.
+  deletedAt        DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  validationItem ValidationItem      @relation(fields: [validationItemId], references: [id], onDelete: Cascade)
+  author         User                @relation(fields: [authorUserId], references: [id])
+  parent         ValidationComment?  @relation("ValidationCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies        ValidationComment[] @relation("ValidationCommentReplies")
+
+  @@index([validationItemId, createdAt])
+  @@index([authorUserId])
 }
 
 model ValidationSignOff {

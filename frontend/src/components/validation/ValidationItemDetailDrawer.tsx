@@ -8,6 +8,7 @@ import SafetyLinkPanel from '../safety/SafetyLinkPanel'
 import LinkRequirementPicker from './LinkRequirementPicker'
 import CreateChangeRequestModal from '../changeRequests/CreateChangeRequestModal'
 import RequirementHoverCard from './RequirementHoverCard'
+import ValidationCommentsSection from './ValidationCommentsSection'
 import {
   validationService,
   CRITERION_OUTCOMES,
@@ -654,6 +655,14 @@ export default function ValidationItemDetailDrawer({
             </h3>
             <SafetyLinkPanel variant="impact" />
           </section>
+
+          {itemId && (
+            <ValidationCommentsSection
+              projectId={projectId}
+              itemId={itemId}
+              currentUserId={currentUserId}
+            />
+          )}
         </div>
 
         {linkedReqs.length > 0 && crModalOpen && draft && (
