@@ -226,4 +226,64 @@ export const validationService = {
   csvExportUrl(projectId: string, filters: ListFilters = {}): string {
     return `/api/v1/validation/projects/${projectId}/items.csv${qs(filters)}`
   },
+
+  async listLinkedRequirements(
+    projectId: string,
+    id: string,
+  ): Promise<ApiResponse<ValidationLinkedRequirement[]>> {
+    return apiClient.get(
+      `/validation/projects/${projectId}/items/${id}/linked-requirements`,
+    )
+  },
+
+  async linkRequirement(
+    projectId: string,
+    id: string,
+    requirementId: string,
+    rationale?: string,
+  ): Promise<ApiResponse<{ id: string }>> {
+    return apiClient.post(
+      `/validation/projects/${projectId}/items/${id}/linked-requirements`,
+      { requirementId, rationale },
+    )
+  },
+
+  async unlinkRequirement(
+    projectId: string,
+    id: string,
+    traceLinkId: string,
+  ): Promise<ApiResponse<{ deleted: boolean }>> {
+    return apiClient.delete(
+      `/validation/projects/${projectId}/items/${id}/linked-requirements/${traceLinkId}`,
+    )
+  },
+
+  async bulkUpdate(
+    projectId: string,
+    payload: {
+      ids: string[]
+      patch: {
+        targetMilestone?: ValidationMilestone
+        status?: ValidationStatus
+        deletedAt?: 'now' | 'null'
+      }
+    },
+  ): Promise<ApiResponse<{ count: number }>> {
+    return apiClient.post(`/validation/projects/${projectId}/items/bulk`, payload)
+  },
+}
+
+export interface ValidationLinkedRequirement {
+  id: string // traceLink id
+  requirementId: string
+  requirement: {
+    id: string
+    requirementId: string | null
+    title: string
+    status: string
+    deletedAt: string | null
+  } | null
+  rationale: string | null
+  isSuspect: boolean
+  createdAt: string
 }

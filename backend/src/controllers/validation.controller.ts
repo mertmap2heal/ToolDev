@@ -207,3 +207,53 @@ export async function detachEvidence(req: AuthRequest, res: Response) {
     err(res, e)
   }
 }
+
+export async function listLinkedRequirements(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.listLinkedRequirements(req.params.projectId, req.params.id)
+    if (data == null) return fail(res, 404, 'Validation item not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function linkRequirement(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.linkRequirement(
+      req.params.projectId,
+      req.params.id,
+      req.body?.requirementId,
+      userId(req),
+      req.body?.rationale,
+    )
+    if (!data) return fail(res, 404, 'Validation item or requirement not found')
+    res.status(201).json({ success: true, data })
+  } catch (e) {
+    return fail(res, 400, (e as Error).message)
+  }
+}
+
+export async function unlinkRequirement(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.unlinkRequirement(
+      req.params.projectId,
+      req.params.id,
+      req.params.traceLinkId,
+      userId(req),
+    )
+    if (!data) return fail(res, 404, 'Trace link not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function bulkUpdate(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.bulkUpdate(req.params.projectId, userId(req), req.body ?? {})
+    res.json({ success: true, data })
+  } catch (e) {
+    return fail(res, 400, (e as Error).message)
+  }
+}

@@ -17,7 +17,19 @@ import {
   listEvidence,
   attachEvidence,
   detachEvidence,
+  listLinkedRequirements,
+  linkRequirement,
+  unlinkRequirement,
+  bulkUpdate,
 } from '../controllers/validation.controller'
+import { ensureValidationApproverRole } from '../services/validation.service'
+
+// Bootstrap the system "Validation Approver" engineering role on first import.
+// Idempotent upsert; failures are logged but do not block route handlers.
+ensureValidationApproverRole().catch((e) => {
+  // eslint-disable-next-line no-console
+  console.error('[validation] ensureValidationApproverRole failed:', (e as Error).message)
+})
 
 const router = Router()
 
@@ -30,10 +42,19 @@ router.get('/projects/:projectId/items', listItems)
 router.get('/projects/:projectId/items.csv', exportItemsCsv)
 router.post('/projects/:projectId/items', createItem)
 router.post('/projects/:projectId/items/from-requirements', createFromRequirements)
+router.post('/projects/:projectId/items/bulk', bulkUpdate)
 router.get('/projects/:projectId/items/:id', getItem)
 router.put('/projects/:projectId/items/:id', updateItem)
 router.delete('/projects/:projectId/items/:id', deleteItem)
 router.post('/projects/:projectId/items/:id/restore', restoreItem)
+
+// Linked requirements (TraceLink with sourceType=ValidationItem)
+router.get('/projects/:projectId/items/:id/linked-requirements', listLinkedRequirements)
+router.post('/projects/:projectId/items/:id/linked-requirements', linkRequirement)
+router.delete(
+  '/projects/:projectId/items/:id/linked-requirements/:traceLinkId',
+  unlinkRequirement,
+)
 
 // Sign-offs
 router.get('/projects/:projectId/items/:id/sign-offs', listSignOffs)

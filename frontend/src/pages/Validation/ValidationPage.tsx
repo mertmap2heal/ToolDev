@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Plus, Search, Download, Filter, X, AlertCircle, ListPlus, Archive,
+  Plus, Search, Download, Filter, X, AlertCircle, ListPlus, Archive, Trash2, RotateCcw,
 } from 'lucide-react'
 import {
   validationService,
@@ -42,6 +42,8 @@ export default function ValidationPage() {
   const [createFromReqOpen, setCreateFromReqOpen] = useState(false)
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkMilestone, setBulkMilestone] = useState<ValidationMilestone | ''>('')
 
   const filters = useMemo(
     () => ({
@@ -283,6 +285,17 @@ export default function ValidationPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-800/50">
               <tr className="border-b border-gray-200 dark:border-gray-700">
+                <th className="w-10 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all"
+                    checked={items.length > 0 && selectedIds.size === items.length}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedIds(new Set(items.map((i) => i.id)))
+                      else setSelectedIds(new Set())
+                    }}
+                  />
+                </th>
                 <th className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-24">Key</th>
                 <th className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300">Title</th>
                 <th className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-40">Method</th>
@@ -302,8 +315,23 @@ export default function ValidationPage() {
                     onClick={() => setSelectedItemId(it.id)}
                     className={`border-b border-gray-100 dark:border-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/10 cursor-pointer ${
                       it.deletedAt ? 'opacity-60' : ''
-                    }`}
+                    } ${selectedIds.has(it.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
                   >
+                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${it.key}`}
+                        checked={selectedIds.has(it.id)}
+                        onChange={(e) => {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev)
+                            if (e.target.checked) next.add(it.id)
+                            else next.delete(it.id)
+                            return next
+                          })
+                        }}
+                      />
+                    </td>
                     <td className="px-3 py-2 font-mono text-xs text-blue-700 dark:text-blue-300">
                       {it.key}
                       {it.deletedAt && (
@@ -343,6 +371,76 @@ export default function ValidationPage() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-3 py-2 rounded-full shadow-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+          <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 px-2">
+            {selectedIds.size} selected
+          </span>
+          <select
+            value={bulkMilestone}
+            onChange={async (e) => {
+              const ms = e.target.value as ValidationMilestone
+              if (!ms) return
+              setBulkMilestone('')
+              await validationService.bulkUpdate(projectId, {
+                ids: Array.from(selectedIds),
+                patch: { targetMilestone: ms },
+              })
+              setSelectedIds(new Set())
+              refetch()
+            }}
+            className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800"
+          >
+            <option value="">Set milestone…</option>
+            {VALIDATION_MILESTONES.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+          {showArchived ? (
+            <button
+              type="button"
+              onClick={async () => {
+                await validationService.bulkUpdate(projectId, {
+                  ids: Array.from(selectedIds),
+                  patch: { deletedAt: 'null' },
+                })
+                setSelectedIds(new Set())
+                refetch()
+              }}
+              className="text-xs flex items-center gap-1 px-3 py-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md"
+            >
+              <RotateCcw size={12} /> Restore
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={async () => {
+                if (!window.confirm(`Soft-delete ${selectedIds.size} item(s)?`)) return
+                await validationService.bulkUpdate(projectId, {
+                  ids: Array.from(selectedIds),
+                  patch: { deletedAt: 'now' },
+                })
+                setSelectedIds(new Set())
+                refetch()
+              }}
+              className="text-xs flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md"
+            >
+              <Trash2 size={12} /> Delete
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setSelectedIds(new Set())}
+            aria-label="Clear selection"
+            className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-1"
+          >
+            <X size={14} />
+          </button>
         </div>
       )}
 

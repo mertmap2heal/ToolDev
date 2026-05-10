@@ -1,6 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { X, Trash2, RotateCcw, CheckCircle, Plus, Save, Paperclip } from 'lucide-react'
+import {
+  X, Trash2, RotateCcw, CheckCircle, Plus, Save, Paperclip,
+  GitPullRequestArrow, Link2, AlertOctagon,
+} from 'lucide-react'
+import SafetyLinkPanel from '../safety/SafetyLinkPanel'
+import LinkRequirementPicker from './LinkRequirementPicker'
+import CreateChangeRequestModal from '../changeRequests/CreateChangeRequestModal'
 import {
   validationService,
   CRITERION_OUTCOMES,
@@ -64,6 +70,18 @@ export default function ValidationItemDetailDrawer({
       return res.success ? res.data : []
     },
   })
+
+  const { data: linkedReqs = [] } = useQuery({
+    queryKey: ['validation-linked-reqs', projectId, itemId],
+    enabled: isOpen,
+    queryFn: async () => {
+      const res = await validationService.listLinkedRequirements(projectId, itemId!)
+      return res.success && res.data ? res.data : []
+    },
+  })
+
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [crModalOpen, setCrModalOpen] = useState(false)
 
   useEffect(() => {
     if (item) setDraft(item)
@@ -352,6 +370,78 @@ export default function ValidationItemDetailDrawer({
           </section>
 
           <section>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                Linked requirements
+              </h3>
+              {!pickerOpen && (
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen(true)}
+                  className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                >
+                  <Link2 size={12} /> Link requirement
+                </button>
+              )}
+            </div>
+            {pickerOpen && (
+              <LinkRequirementPicker
+                projectId={projectId}
+                excludeRequirementIds={linkedReqs.map((l) => l.requirementId)}
+                onCancel={() => setPickerOpen(false)}
+                onPick={async (reqId) => {
+                  const res = await validationService.linkRequirement(projectId, itemId!, reqId)
+                  if (res.success) {
+                    setPickerOpen(false)
+                    queryClient.invalidateQueries({
+                      queryKey: ['validation-linked-reqs', projectId, itemId],
+                    })
+                    onChanged()
+                  }
+                }}
+              />
+            )}
+            {linkedReqs.length === 0 && !pickerOpen ? (
+              <p className="text-sm text-gray-500 italic">
+                No requirements linked. Link a requirement to make this validation traceable
+                back to the system specification.
+              </p>
+            ) : (
+              <ul className="space-y-1 mt-2">
+                {linkedReqs.map((l) => (
+                  <li
+                    key={l.id}
+                    className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                  >
+                    <Link2 size={14} className="text-blue-500" />
+                    <a
+                      href={`/projects/${projectId}/requirements?focus=${l.requirementId}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-mono text-xs text-blue-700 dark:text-blue-300 hover:underline"
+                    >
+                      {l.requirement?.requirementId ?? l.requirementId.slice(0, 6)}
+                    </a>
+                    <span className="truncate flex-1">{l.requirement?.title ?? '(deleted)'}</span>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await validationService.unlinkRequirement(projectId, itemId!, l.id)
+                        queryClient.invalidateQueries({
+                          queryKey: ['validation-linked-reqs', projectId, itemId],
+                        })
+                      }}
+                      className="text-gray-400 hover:text-red-500"
+                      aria-label="Unlink"
+                    >
+                      <X size={14} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section>
             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
               Evidence
             </h3>
@@ -442,7 +532,9 @@ export default function ValidationItemDetailDrawer({
                 You created this item — another project member must sign it off.
               </p>
             )}
-            {/* Sign-off list comes from item.signOffs in get response */}
+            {/* Sign-off list comes from item.signOffs in get response. */}
+            {/* Sign-off list */}
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {item && (item as ValidationItemSummary & { signOffs?: { id: string; signerRoleLabel: string; signedAt: string; supersededById: string | null; signer?: { name: string }; comment: string | null }[] }).signOffs && (
               <ul className="space-y-1">
                 {(item as ValidationItemSummary & { signOffs?: { id: string; signerRoleLabel: string; signedAt: string; supersededById: string | null; signer?: { name: string }; comment: string | null }[] }).signOffs!
@@ -472,7 +564,57 @@ export default function ValidationItemDetailDrawer({
               </ul>
             )}
           </section>
+
+          {draft?.status === 'BLOCKED' && (
+            <section>
+              <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+                Failed validation
+              </h3>
+              <div className="rounded-md border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/10 p-3 space-y-2">
+                <p className="text-sm text-red-800 dark:text-red-300 flex items-start gap-2">
+                  <AlertOctagon size={14} className="mt-0.5 flex-shrink-0" />
+                  <span>
+                    This validation is blocked. Raise a change request so the source requirement
+                    can be revised.
+                  </span>
+                </p>
+                {linkedReqs.length === 0 ? (
+                  <p className="text-xs text-red-700 dark:text-red-400 italic">
+                    Link a requirement above first — change requests are scoped to a source
+                    requirement.
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setCrModalOpen(true)}
+                    className="text-xs flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700"
+                  >
+                    <GitPullRequestArrow size={12} /> Raise change request
+                  </button>
+                )}
+              </div>
+            </section>
+          )}
+
+          <section>
+            <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+              Safety impact
+            </h3>
+            <SafetyLinkPanel variant="impact" />
+          </section>
         </div>
+
+        {linkedReqs.length > 0 && crModalOpen && draft && (
+          <CreateChangeRequestModal
+            isOpen={crModalOpen}
+            onClose={() => setCrModalOpen(false)}
+            projectId={projectId}
+            sourceType="requirement"
+            sourceId={linkedReqs[0].requirementId}
+            sourceTitle={linkedReqs[0].requirement?.title ?? ''}
+            sourceDescription={`Triggered by failed Validation item ${draft.key}: ${draft.title}`}
+          />
+        )}
 
         <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-3 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">

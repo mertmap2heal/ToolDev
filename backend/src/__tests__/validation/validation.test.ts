@@ -93,6 +93,9 @@ describe('Validation module integration', () => {
   })
 
   afterAll(async () => {
+    await prisma.traceLink.deleteMany({
+      where: { projectId: { in: [projectId, otherProjectId] } },
+    })
     await prisma.validationSignOff.deleteMany({
       where: { validationItem: { projectId: { in: [projectId, otherProjectId] } } },
     })
@@ -378,6 +381,130 @@ describe('Validation module integration', () => {
       const keys = results.map((r) => r.body.data?.key as string)
       expect(results.every((r) => r.status === 201)).toBe(true)
       expect(new Set(keys).size).toBe(keys.length)
+    })
+  })
+
+  describe('Linked requirements (TraceLink reuse)', () => {
+    it('links a requirement and lists it; rejects duplicate', async () => {
+      const create = await request(app)
+        .post(`/api/v1/validation/projects/${projectId}/items`)
+        .set('Authorization', `Bearer ${authorToken}`)
+        .send({ title: 'Linked-req e2e' })
+      const itemId = create.body.data.id
+      const link1 = await request(app)
+        .post(`/api/v1/validation/projects/${projectId}/items/${itemId}/linked-requirements`)
+        .set('Authorization', `Bearer ${authorToken}`)
+        .send({ requirementId: seedRequirementId })
+      expect(link1.status).toBe(201)
+      const link2 = await request(app)
+        .post(`/api/v1/validation/projects/${projectId}/items/${itemId}/linked-requirements`)
+        .set('Authorization', `Bearer ${authorToken}`)
+        .send({ requirementId: seedRequirementId })
+      expect(link2.status).toBe(201)
+      // Idempotent — same TraceLink id
+      expect(link2.body.data.id).toBe(link1.body.data.id)
+      const list = await request(app)
+        .get(`/api/v1/validation/projects/${projectId}/items/${itemId}/linked-requirements`)
+        .set('Authorization', `Bearer ${authorToken}`)
+      expect(list.status).toBe(200)
+      expect(list.body.data.length).toBe(1)
+      expect(list.body.data[0].requirementId).toBe(seedRequirementId)
+    })
+
+    it('unlinks a requirement', async () => {
+      const create = await request(app)
+        .post(`/api/v1/validation/projects/${projectId}/items`)
+        .set('Authorization', `Bearer ${authorToken}`)
+        .send({ title: 'Unlink-req e2e' })
+      const itemId = create.body.data.id
+      const link = await request(app)
+        .post(`/api/v1/validation/projects/${projectId}/items/${itemId}/linked-requirements`)
+        .set('Authorization', `Bearer ${authorToken}`)
+        .send({ requirementId: seedRequirementId })
+      const traceLinkId = link.body.data.id
+      const unlink = await request(app)
+        .delete(
+          `/api/v1/validation/projects/${projectId}/items/${itemId}/linked-requirements/${traceLinkId}`,
+        )
+        .set('Authorization', `Bearer ${authorToken}`)
+      expect(unlink.status).toBe(200)
+      const list = await request(app)
+        .get(`/api/v1/validation/projects/${projectId}/items/${itemId}/linked-requirements`)
+        .set('Authorization', `Bearer ${authorToken}`)
+      expect(list.body.data.length).toBe(0)
+    })
+  })
+
+  describe('Bulk update', () => {
+    it('sets milestone on N items in one call', async () => {
+      const a = await request(app)
+        .post(`/api/v1/validation/projects/${projectId}/items`)
+        .set('Authorization', `Bearer ${authorToken}`)
+        .send({ title: 'Bulk-A' })
+      const b = await request(app)
+        .post(`/api/v1/validation/projects/${projectId}/items`)
+        .set('Authorization', `Bearer ${authorToken}`)
+        .send({ title: 'Bulk-B' })
+      const res = await request(app)
+        .post(`/api/v1/validation/projects/${projectId}/items/bulk`)
+        .set('Authorization', `Bearer ${authorToken}`)
+        .send({
+          ids: [a.body.data.id, b.body.data.id],
+          patch: { targetMilestone: 'CDR' },
+        })
+      expect(res.status).toBe(200)
+      expect(res.body.data.count).toBe(2)
+      const after = await request(app)
+        .get(`/api/v1/validation/projects/${projectId}/items/${a.body.data.id}`)
+        .set('Authorization', `Bearer ${authorToken}`)
+      expect(after.body.data.targetMilestone).toBe('CDR')
+    })
+
+    it('rejects an invalid milestone', async () => {
+      const res = await request(app)
+        .post(`/api/v1/validation/projects/${projectId}/items/bulk`)
+        .set('Authorization', `Bearer ${authorToken}`)
+        .send({ ids: ['nonexistent'], patch: { targetMilestone: 'NOPE' } })
+      expect(res.status).toBe(400)
+    })
+
+    it('soft-deletes and restores via bulk', async () => {
+      const a = await request(app)
+        .post(`/api/v1/validation/projects/${projectId}/items`)
+        .set('Authorization', `Bearer ${authorToken}`)
+        .send({ title: 'Bulk-delete-test' })
+      const id = a.body.data.id
+      const del = await request(app)
+        .post(`/api/v1/validation/projects/${projectId}/items/bulk`)
+        .set('Authorization', `Bearer ${authorToken}`)
+        .send({ ids: [id], patch: { deletedAt: 'now' } })
+      expect(del.status).toBe(200)
+      expect(del.body.data.count).toBe(1)
+      const list = await request(app)
+        .get(`/api/v1/validation/projects/${projectId}/items`)
+        .set('Authorization', `Bearer ${authorToken}`)
+      expect(list.body.data.find((i: { id: string }) => i.id === id)).toBeUndefined()
+      const restore = await request(app)
+        .post(`/api/v1/validation/projects/${projectId}/items/bulk`)
+        .set('Authorization', `Bearer ${authorToken}`)
+        .send({ ids: [id], patch: { deletedAt: 'null' } })
+      expect(restore.status).toBe(200)
+      const list2 = await request(app)
+        .get(`/api/v1/validation/projects/${projectId}/items`)
+        .set('Authorization', `Bearer ${authorToken}`)
+      expect(list2.body.data.find((i: { id: string }) => i.id === id)).toBeDefined()
+    })
+  })
+
+  describe('Validation Approver role bootstrap', () => {
+    it('system role exists after a validation route is hit', async () => {
+      // The bootstrap fires on validation.routes.ts module import (before any
+      // request); the first describe block above already triggered it.
+      const role = await prisma.engineeringRole.findUnique({
+        where: { name: 'Validation Approver' },
+      })
+      expect(role).not.toBeNull()
+      expect(role?.isSystem).toBe(true)
     })
   })
 

@@ -117,6 +117,29 @@ async function writeAudit(projectId: string, userId: string, action: string, det
   })
 }
 
+// Idempotent system-role bootstrap. Safe to call repeatedly; uses upsert.
+let _validationApproverRoleEnsured: Promise<void> | null = null
+export function ensureValidationApproverRole(): Promise<void> {
+  if (_validationApproverRoleEnsured) return _validationApproverRoleEnsured
+  _validationApproverRoleEnsured = prisma.engineeringRole
+    .upsert({
+      where: { name: 'Validation Approver' },
+      update: {},
+      create: {
+        name: 'Validation Approver',
+        description:
+          'Authorised to sign off Validation items on behalf of a stakeholder. Cannot be the item author.',
+        isSystem: true,
+      },
+    })
+    .then(() => undefined)
+    .catch((e) => {
+      _validationApproverRoleEnsured = null
+      throw e
+    })
+  return _validationApproverRoleEnsured
+}
+
 export async function listItems(projectId: string, filters: ListFilters = {}) {
   const items = await prisma.validationItem.findMany({
     where: buildWhere(projectId, filters),
@@ -361,6 +384,172 @@ export async function createFromRequirements(
     count: created.length,
   })
   return created
+}
+
+// ---- Linked requirements (TraceLink with sourceType=ValidationItem,
+// targetType=Requirement, linkType='validates'. ISO/IEC/IEEE 42010
+// stakeholder viewpoint reuses the existing trace infrastructure rather
+// than introducing a parallel join table.) ----
+
+export async function listLinkedRequirements(projectId: string, itemId: string) {
+  const item = await prisma.validationItem.findFirst({
+    where: { id: itemId, projectId },
+    select: { id: true },
+  })
+  if (!item) return null
+  const links = await prisma.traceLink.findMany({
+    where: {
+      projectId,
+      sourceType: 'ValidationItem',
+      sourceId: itemId,
+      targetType: 'Requirement',
+      linkType: 'validates',
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (links.length === 0) return []
+  const targetIds = links.map((l) => l.targetId)
+  const reqs = await prisma.requirement.findMany({
+    where: { id: { in: targetIds } },
+    select: { id: true, requirementId: true, title: true, status: true, deletedAt: true },
+  })
+  const byId = new Map(reqs.map((r) => [r.id, r]))
+  return links.map((l) => ({
+    id: l.id,
+    requirementId: l.targetId,
+    requirement: byId.get(l.targetId) ?? null,
+    rationale: l.rationale,
+    isSuspect: l.isSuspect,
+    createdAt: l.createdAt,
+  }))
+}
+
+export async function linkRequirement(
+  projectId: string,
+  itemId: string,
+  requirementId: string,
+  userId: string,
+  rationale?: string,
+) {
+  const [item, req] = await Promise.all([
+    prisma.validationItem.findFirst({ where: { id: itemId, projectId }, select: { id: true } }),
+    prisma.requirement.findFirst({
+      where: { id: requirementId, projectId, deletedAt: null },
+      select: { id: true, title: true, requirementId: true },
+    }),
+  ])
+  if (!item || !req) return null
+
+  const existing = await prisma.traceLink.findFirst({
+    where: {
+      projectId,
+      sourceType: 'ValidationItem',
+      sourceId: itemId,
+      targetType: 'Requirement',
+      targetId: requirementId,
+      linkType: 'validates',
+    },
+  })
+  if (existing) return existing
+
+  const link = await prisma.traceLink.create({
+    data: {
+      projectId,
+      sourceType: 'ValidationItem',
+      sourceId: itemId,
+      targetType: 'Requirement',
+      targetId: requirementId,
+      linkType: 'validates',
+      rationale: rationale ?? null,
+      createdBy: userId,
+      cachedTargetDisplayId: req.requirementId ?? null,
+      cachedTargetTitle: req.title,
+    },
+  })
+  await writeAudit(projectId, userId, 'validation:link-requirement', {
+    validationItemId: itemId,
+    requirementId,
+  })
+  return link
+}
+
+export async function unlinkRequirement(
+  projectId: string,
+  itemId: string,
+  traceLinkId: string,
+  userId: string,
+) {
+  const link = await prisma.traceLink.findFirst({
+    where: {
+      id: traceLinkId,
+      projectId,
+      sourceType: 'ValidationItem',
+      sourceId: itemId,
+    },
+  })
+  if (!link) return null
+  await prisma.traceLink.delete({ where: { id: traceLinkId } })
+  await writeAudit(projectId, userId, 'validation:unlink-requirement', {
+    validationItemId: itemId,
+    requirementId: link.targetId,
+  })
+  return { deleted: true }
+}
+
+// ---- Bulk operations ----
+
+interface BulkUpdatePayload {
+  ids: string[]
+  patch: {
+    targetMilestone?: string
+    status?: string
+    deletedAt?: 'now' | 'null' // 'now' = soft delete; 'null' = restore
+  }
+}
+
+export async function bulkUpdate(
+  projectId: string,
+  userId: string,
+  payload: BulkUpdatePayload,
+) {
+  if (!Array.isArray(payload.ids) || payload.ids.length === 0)
+    throw new Error('ids is required')
+  if (payload.ids.length > 200)
+    throw new Error('cannot update more than 200 items at once')
+  if (
+    payload.patch.targetMilestone &&
+    !MILESTONES.includes(payload.patch.targetMilestone as ValidationMilestone)
+  )
+    throw new Error('invalid targetMilestone')
+  if (
+    payload.patch.status &&
+    !STATUSES.includes(payload.patch.status as ValidationStatus)
+  )
+    throw new Error('invalid status')
+
+  const data: Prisma.ValidationItemUpdateManyMutationInput = {}
+  if (payload.patch.targetMilestone) data.targetMilestone = payload.patch.targetMilestone
+  if (payload.patch.status) data.status = payload.patch.status
+  if (payload.patch.deletedAt === 'now') {
+    data.deletedAt = new Date()
+    data.deletedById = userId
+    data.restoredAt = null
+  } else if (payload.patch.deletedAt === 'null') {
+    data.deletedAt = null
+    data.deletedById = null
+    data.deleteReason = null
+    data.restoredAt = new Date()
+  }
+
+  const result = await prisma.validationItem.updateMany({
+    where: { id: { in: payload.ids }, projectId },
+    data,
+  })
+  await writeAudit(projectId, userId, 'validation:bulk-update', {
+    count: result.count,
+    patch: payload.patch,
+  })
+  return { count: result.count }
 }
 
 // ---- Sign-off ----
