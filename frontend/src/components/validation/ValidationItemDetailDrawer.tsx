@@ -7,6 +7,7 @@ import {
 import SafetyLinkPanel from '../safety/SafetyLinkPanel'
 import LinkRequirementPicker from './LinkRequirementPicker'
 import CreateChangeRequestModal from '../changeRequests/CreateChangeRequestModal'
+import RequirementHoverCard from './RequirementHoverCard'
 import {
   validationService,
   CRITERION_OUTCOMES,
@@ -381,14 +382,29 @@ export default function ValidationItemDetailDrawer({
                     className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
                   >
                     <Link2 size={14} className="text-blue-500" />
-                    <a
-                      href={`/projects/${projectId}/requirements?focus=${l.requirementId}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="font-mono text-xs text-blue-700 dark:text-blue-300 hover:underline"
+                    <RequirementHoverCard
+                      projectId={projectId}
+                      requirementId={l.requirementId}
+                      fallbackTitle={l.requirement?.title ?? null}
                     >
-                      {l.requirement?.requirementId ?? l.requirementId.slice(0, 6)}
-                    </a>
-                    <span className="truncate flex-1">{l.requirement?.title ?? '(deleted)'}</span>
+                      <a
+                        href={`/projects/${projectId}/requirements?focus=${l.requirementId}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="font-mono text-xs text-blue-700 dark:text-blue-300 hover:underline"
+                      >
+                        {l.requirement?.requirementId ?? l.requirementId.slice(0, 6)}
+                      </a>
+                    </RequirementHoverCard>
+                    <RequirementHoverCard
+                      projectId={projectId}
+                      requirementId={l.requirementId}
+                      fallbackTitle={l.requirement?.title ?? null}
+                      className="truncate flex-1"
+                    >
+                      <span className="truncate cursor-help">
+                        {l.requirement?.title ?? '(deleted)'}
+                      </span>
+                    </RequirementHoverCard>
                     <button
                       type="button"
                       onClick={async () => {

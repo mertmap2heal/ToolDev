@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Search, X } from 'lucide-react'
 import { requirementService } from '../../services/requirement.service'
+import RequirementHoverCard from './RequirementHoverCard'
 
 interface Props {
   projectId: string
@@ -80,16 +81,23 @@ export default function LinkRequirementPicker({
           <ul>
             {filtered.slice(0, 50).map((r) => (
               <li key={r.id}>
-                <button
-                  type="button"
-                  onClick={() => onPick(r.id)}
-                  className="w-full text-left px-2 py-1.5 text-xs hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center gap-2"
+                <RequirementHoverCard
+                  projectId={projectId}
+                  requirementId={r.id}
+                  fallbackTitle={r.title}
+                  className="w-full"
                 >
-                  <span className="font-mono text-blue-700 dark:text-blue-300 w-20 truncate">
-                    {r.requirementId ?? r.id.slice(0, 6)}
-                  </span>
-                  <span className="text-gray-900 dark:text-white truncate">{r.title}</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => onPick(r.id)}
+                    className="w-full text-left px-2 py-1.5 text-xs hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center gap-2"
+                  >
+                    <span className="font-mono text-blue-700 dark:text-blue-300 w-20 truncate">
+                      {r.requirementId ?? r.id.slice(0, 6)}
+                    </span>
+                    <span className="text-gray-900 dark:text-white truncate">{r.title}</span>
+                  </button>
+                </RequirementHoverCard>
               </li>
             ))}
           </ul>

@@ -10,6 +10,7 @@ import {
   type ValidationMilestone,
 } from '../../services/validation.service'
 import { METHOD_LABEL, METHOD_TOOLTIP, MILESTONE_LABEL, MILESTONE_TOOLTIP } from './validationLabels'
+import RequirementHoverCard from './RequirementHoverCard'
 
 interface Props {
   projectId: string
@@ -248,9 +249,23 @@ export default function CreateFromRequirementsModal({
                         />
                       </td>
                       <td className="px-3 py-2 font-mono text-xs text-blue-700 dark:text-blue-300">
-                        {r.requirementId ?? r.id.slice(0, 6)}
+                        <RequirementHoverCard
+                          projectId={projectId}
+                          requirementId={r.id}
+                          fallbackTitle={r.title}
+                        >
+                          <span className="cursor-help">{r.requirementId ?? r.id.slice(0, 6)}</span>
+                        </RequirementHoverCard>
                       </td>
-                      <td className="px-3 py-2 text-gray-900 dark:text-white">{r.title}</td>
+                      <td className="px-3 py-2 text-gray-900 dark:text-white">
+                        <RequirementHoverCard
+                          projectId={projectId}
+                          requirementId={r.id}
+                          fallbackTitle={r.title}
+                        >
+                          <span className="cursor-help">{r.title}</span>
+                        </RequirementHoverCard>
+                      </td>
                       <td className="px-3 py-2 text-xs">
                         {hasAc ? (
                           <span
