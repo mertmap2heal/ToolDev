@@ -198,51 +198,65 @@ export default function ValidationItemDetailDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex">
+    <div className="params-v2 validation-v2 fixed inset-0 z-40 flex">
       <button
         type="button"
         aria-label="Close drawer"
-        className="flex-1 bg-black/30"
+        className="flex-1"
+        style={{ background: 'rgba(15,20,25,0.3)' }}
         onClick={close}
       />
-      <div className="w-[640px] max-w-full bg-white dark:bg-gray-900 shadow-2xl flex flex-col">
-        <div className="bg-blue-500/20 backdrop-blur-sm border-b border-blue-500/30 px-6 py-4 flex items-start justify-between flex-shrink-0">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-xs text-blue-700 dark:text-blue-300">
-                {draft?.key ?? '…'}
-              </span>
-              {draft && (
-                <span
-                  className={`text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded ${STATUS_COLOR[draft.status]}`}
-                >
-                  {STATUS_LABEL[draft.status]}
-                </span>
-              )}
-              {draft?.deletedAt && (
-                <span className="text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded bg-red-200 text-red-800 dark:bg-red-900/40 dark:text-red-200">
-                  DELETED
-                </span>
-              )}
-            </div>
-            <input
-              type="text"
-              value={draft?.title ?? ''}
-              onChange={(e) => draft && setDraft({ ...draft, title: e.target.value })}
-              className="mt-1 w-full text-base font-semibold text-gray-900 dark:text-white bg-transparent border-0 focus:ring-0 px-0"
-            />
-          </div>
+      <div className="pv-drawer-shell" style={{ width: 720, maxWidth: '100%', margin: 0, borderRadius: 0 }}>
+        <div className="pv-dr-head">
+          <span className="pv-dr-id">{draft?.key ?? '…'}</span>
+          {draft && (
+            <span
+              className={`pv-dr-pill ${
+                draft.status === 'VALIDATED'
+                  ? 'released'
+                  : draft.status === 'EXECUTED'
+                  ? 'review'
+                  : draft.status === 'BLOCKED'
+                  ? 'deprecated'
+                  : draft.status === 'OBSOLETE'
+                  ? 'obsolete'
+                  : 'draft'
+              }`}
+            >
+              {STATUS_LABEL[draft.status]}
+            </span>
+          )}
+          {draft?.deletedAt && <span className="pv-dr-pill deprecated">DELETED</span>}
+          <div className="pv-dr-spacer" />
           <button
             type="button"
             onClick={close}
             aria-label="Close"
-            className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 ml-2"
+            className="pv-icon-btn"
+            style={{ width: 24, height: 24 }}
           >
-            <X size={18} />
+            <X size={14} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="pv-dr-sub">
+          <input
+            type="text"
+            value={draft?.title ?? ''}
+            onChange={(e) => draft && setDraft({ ...draft, title: e.target.value })}
+            className="pv-dr-display"
+            style={{
+              width: '100%',
+              background: 'transparent',
+              border: 0,
+              outline: 0,
+              padding: 0,
+            }}
+          />
+        </div>
+
+        <div className="pv-dr-body" style={{ padding: 0 }}>
+          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 18 }}>
           <section>
             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
               Overview
@@ -663,6 +677,7 @@ export default function ValidationItemDetailDrawer({
               currentUserId={currentUserId}
             />
           )}
+          </div>
         </div>
 
         {linkedReqs.length > 0 && crModalOpen && draft && (
@@ -677,13 +692,13 @@ export default function ValidationItemDetailDrawer({
           />
         )}
 
-        <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-3 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-2">
+        <div className="pv-dr-foot">
+          <div className="left">
             {draft?.deletedAt ? (
               <button
                 type="button"
                 onClick={handleRestore}
-                className="text-sm flex items-center gap-1 px-3 py-1.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
+                className="pv-dr-btn"
               >
                 <RotateCcw size={14} /> Restore
               </button>
@@ -691,21 +706,22 @@ export default function ValidationItemDetailDrawer({
               <button
                 type="button"
                 onClick={handleDelete}
-                className="text-sm flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md"
+                className="pv-dr-btn"
+                style={{ color: 'var(--pv-red)' }}
               >
                 <Trash2 size={14} /> Delete
               </button>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="right">
             {error && (
-              <span className="text-xs text-red-600 dark:text-red-400">{error}</span>
+              <span style={{ fontSize: 11, color: 'var(--pv-red)' }}>{error}</span>
             )}
             <button
               type="button"
               onClick={save}
               disabled={saving || !!draft?.deletedAt}
-              className="text-sm flex items-center gap-1 px-4 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+              className="pv-dr-btn primary"
             >
               <Save size={14} /> {saving ? 'Saving…' : 'Save'}
             </button>
