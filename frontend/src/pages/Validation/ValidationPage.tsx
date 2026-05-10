@@ -3,8 +3,9 @@ import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Plus, Search, Download, Filter, X, AlertCircle, ListPlus, Archive, Trash2, RotateCcw,
-  AlertTriangle, Target,
+  AlertTriangle, Target, HelpCircle,
 } from 'lucide-react'
+import ValidationHelpDrawer from '../../components/validation/ValidationHelpDrawer'
 import {
   validationService,
   VALIDATION_METHOD_TYPES,
@@ -48,6 +49,7 @@ export default function ValidationPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkMilestone, setBulkMilestone] = useState<ValidationMilestone | ''>('')
   const [uncoveredOpen, setUncoveredOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const filters = useMemo(
     () => ({
@@ -124,7 +126,18 @@ export default function ValidationPage() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-lg font-bold text-gray-900 dark:text-white">Validation</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-bold text-gray-900 dark:text-white">Validation</h1>
+            <button
+              type="button"
+              onClick={() => setHelpOpen(true)}
+              aria-label="Open Validation help"
+              title="What is this page? Who signs off? How does it work? Click for the user manual."
+              className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+            >
+              <HelpCircle size={16} />
+            </button>
+          </div>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
             Confirm the system meets stakeholder needs through demonstrations, operational tests,
             simulations, analyses, and stakeholder reviews.
@@ -593,6 +606,8 @@ export default function ValidationPage() {
         onClose={() => setUncoveredOpen(false)}
         onCreated={() => refetchAll()}
       />
+
+      <ValidationHelpDrawer isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
 
       <ValidationItemDetailDrawer
         projectId={projectId}

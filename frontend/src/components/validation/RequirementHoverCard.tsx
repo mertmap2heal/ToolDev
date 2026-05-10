@@ -98,18 +98,22 @@ export default function RequirementHoverCard({
             {data?.title ?? fallbackTitle ?? 'Loading…'}
           </p>
           {data?.description && (
-            <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap line-clamp-6">
-              {data.description}
-            </p>
+            <div className="max-h-72 overflow-y-auto">
+              <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                {data.description}
+              </p>
+            </div>
           )}
           {data?.acceptanceCriteria && (
             <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
               <p className="text-[10px] font-semibold uppercase text-gray-500 mb-0.5">
                 Acceptance criteria
               </p>
-              <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap line-clamp-4">
-                {data.acceptanceCriteria}
-              </p>
+              <div className="max-h-60 overflow-y-auto">
+                <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                  {data.acceptanceCriteria}
+                </p>
+              </div>
             </div>
           )}
           {data === null && (

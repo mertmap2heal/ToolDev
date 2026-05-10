@@ -20,7 +20,7 @@ test.describe('Validation page', () => {
   test('opens the New item modal and validates required fields', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/validation`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /new item/i }).click()
+    await page.getByRole('button', { name: /^New item$/ }).click()
     const modal = page.locator(MODAL).filter({ hasText: /new validation item/i })
     await expect(modal).toBeVisible({ timeout: 5_000 })
     // Submit button is disabled until title is entered
@@ -34,7 +34,7 @@ test.describe('Validation page', () => {
     const title = `e2e_validation_${stamp}`
     await page.goto(`/projects/${projectId}/validation`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /new item/i }).click()
+    await page.getByRole('button', { name: /^New item$/ }).click()
     const modal = page.locator(MODAL).filter({ hasText: /new validation item/i })
     await expect(modal).toBeVisible({ timeout: 5_000 })
     await modal
