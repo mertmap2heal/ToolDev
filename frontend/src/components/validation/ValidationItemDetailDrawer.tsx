@@ -89,6 +89,21 @@ export default function ValidationItemDetailDrawer({
     if (item) setDraft(item)
   }, [item])
 
+  useEffect(() => {
+    if (!isOpen) return
+    const handler = (e: KeyboardEvent) => {
+      // Ignore when typing in a field
+      const tgt = e.target as HTMLElement | null
+      const inField = tgt?.matches('input, textarea, select, [contenteditable="true"]')
+      if (e.key === 'Escape' && !inField) {
+        e.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [isOpen, onClose])
+
   const { data: settings } = useQuery({
     queryKey: ['validation-settings', projectId],
     enabled: isOpen,
