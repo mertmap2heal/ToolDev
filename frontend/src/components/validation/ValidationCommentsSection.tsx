@@ -268,23 +268,24 @@ export default function ValidationCommentsSection({
       ) : (
         <ul className="space-y-2 mb-3">{tree.map((c) => renderComment(c, 0))}</ul>
       )}
-      <div className="flex gap-2 items-start">
+      <div className="pv-dr-comment-add">
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           rows={2}
           placeholder="Leave a comment, raise a question, or document a decision…"
-          className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
         />
-        <button
-          type="button"
-          onClick={submit}
-          disabled={!draft.trim() || submitting}
-          aria-label="Post comment"
-          className="px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
-        >
-          <Send size={14} /> Post
-        </button>
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!draft.trim() || submitting}
+            aria-label="Post comment"
+            className="pv-btn primary compact"
+          >
+            <Send size={12} /> Post
+          </button>
+        </div>
       </div>
     </section>
   )
