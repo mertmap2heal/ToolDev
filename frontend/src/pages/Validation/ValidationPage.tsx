@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import './validation-v2.css'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -161,7 +162,7 @@ export default function ValidationPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="params-v2 validation-v2 space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">

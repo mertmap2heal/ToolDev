@@ -1,0 +1,131 @@
+/* =============================================================================
+   Validation page — v2 scoped tokens.
+   Imports the parameters-v2 token set so the validation page inherits the
+   same design vocabulary. Anything Validation-specific lives here.
+   ============================================================================ */
+@import url('../Parameters/parameters-v2.css');
+
+.validation-v2 {
+  /* Validation-specific tokens, layered on top of pv-* */
+  --val-suspect:        var(--pv-amber);
+  --val-suspect-tint:   var(--pv-amber-tint);
+  --val-validated:      var(--pv-green);
+  --val-validated-tint: var(--pv-green-tint);
+}
+
+/* Coverage strip */
+.validation-v2 .vv-coverage {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--pv-bg);
+  border: 1px solid var(--pv-line);
+  border-radius: 6px;
+}
+.validation-v2 .vv-coverage-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.validation-v2 .vv-coverage-head .vv-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pv-fg-2);
+}
+.validation-v2 .vv-coverage-head .vv-chips {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.validation-v2 .vv-tile {
+  padding: 8px 12px;
+  border: 1px solid var(--pv-line);
+  border-radius: 4px;
+  background: var(--pv-surface-soft);
+}
+.validation-v2 .vv-tile .vv-tile-label {
+  font-size: 11px;
+  color: var(--pv-fg-3);
+}
+.validation-v2 .vv-tile .vv-tile-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--pv-fg);
+  font-family: var(--pv-font-mono);
+  letter-spacing: -0.01em;
+}
+.validation-v2 .vv-tile.vv-tile-gap {
+  background: var(--pv-amber-tint);
+  border-color: var(--pv-amber-line);
+  cursor: pointer;
+}
+.validation-v2 .vv-tile.vv-tile-gap:hover {
+  filter: brightness(0.98);
+}
+.validation-v2 .vv-tile.vv-tile-gap .vv-tile-value {
+  color: #5C4400;
+}
+html[data-theme='midnight'] .validation-v2 .vv-tile.vv-tile-gap .vv-tile-value {
+  color: #EAC54F;
+}
+.validation-v2 .vv-tile.vv-tile-validated .vv-tile-value {
+  color: var(--pv-green);
+}
+
+/* Suspect chip */
+.validation-v2 .vv-suspect-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pv-amber);
+  background: var(--pv-amber-tint);
+  border: 1px solid var(--pv-amber-line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.validation-v2 .vv-suspect-chip.active {
+  background: var(--pv-amber);
+  color: #fff;
+  border-color: var(--pv-amber);
+}
+
+/* Row suspect badge */
+.validation-v2 .vv-row-suspect {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--pv-amber);
+  margin-left: 4px;
+}
+
+/* Star button (cell + header) */
+.validation-v2 .vv-star-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: var(--pv-fg-4);
+}
+.validation-v2 .vv-star-btn:hover { color: var(--pv-amber); }
+.validation-v2 .vv-star-btn.on { color: var(--pv-amber); }
+
+/* Tag chip */
+.validation-v2 .vv-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  font-family: var(--pv-font-mono);
+  border-radius: 3px;
+}
