@@ -147,21 +147,42 @@ export default function ValidationPage() {
   const activeFilterCount =
     (statusFilter ? 1 : 0) + (methodFilter ? 1 : 0) + (milestoneFilter ? 1 : 0)
 
-  // ⌘F focuses the search box
+  // ⌘F focuses the search box; j/k navigate rows; Enter opens drawer
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const isMod = e.metaKey || e.ctrlKey
-      if (isMod && e.key === 'f') {
+      const tgt = e.target as HTMLElement | null
+      const inField = !!tgt?.matches('input, textarea, select, [contenteditable="true"]')
+      if (isMod && e.key === 'f' && !inField) {
         const target = document.getElementById('validation-search') as HTMLInputElement | null
         if (target) {
           e.preventDefault()
           target.focus()
         }
+        return
+      }
+      if (inField) return
+      if (e.key === 'j' || e.key === 'k') {
+        if (items.length === 0) return
+        const idx = selectedItemId
+          ? items.findIndex((i) => i.id === selectedItemId)
+          : -1
+        const next =
+          e.key === 'j'
+            ? Math.min(items.length - 1, idx + 1)
+            : Math.max(0, idx - 1)
+        if (next >= 0 && next < items.length) {
+          e.preventDefault()
+          setSelectedItemId(items[next].id)
+        }
+      } else if (e.key === 'Enter' && selectedItemId === null && items.length > 0) {
+        e.preventDefault()
+        setSelectedItemId(items[0].id)
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [])
+  }, [items, selectedItemId])
 
   if (!projectId) return null
 
