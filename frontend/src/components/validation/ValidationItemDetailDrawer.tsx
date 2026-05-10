@@ -627,26 +627,26 @@ export default function ValidationItemDetailDrawer({
               are the intended signers.
             </p>
             {signOffOpen && (
-              <div className="border border-green-300 dark:border-green-700 rounded-md p-3 mb-3 bg-green-50 dark:bg-green-900/20 space-y-2">
+              <div style={{ border: '1px solid var(--pv-green)', borderRadius: 6, padding: 12, marginBottom: 12, background: 'var(--pv-green-tint)', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <input
                   type="text"
                   value={roleLabel}
                   onChange={(e) => setRoleLabel(e.target.value)}
                   placeholder="Your role (e.g. Customer Operations Lead)"
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800"
+                  style={{ width: '100%', height: 28, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
                 />
                 <textarea
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
                   rows={2}
                   placeholder="Optional comment"
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800"
+                  style={{ width: '100%', padding: 6, fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
                 />
-                <div className="flex justify-end gap-2">
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                   <button
                     type="button"
                     onClick={() => setSignOffOpen(false)}
-                    className="px-3 py-1 text-xs text-gray-600 dark:text-gray-400 hover:underline"
+                    className="pv-dr-btn"
                   >
                     Cancel
                   </button>
@@ -654,7 +654,8 @@ export default function ValidationItemDetailDrawer({
                     type="button"
                     onClick={submitSignOff}
                     disabled={!roleLabel.trim()}
-                    className="px-3 py-1 text-xs bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                    className="pv-dr-btn"
+                    style={{ background: 'var(--pv-green)', borderColor: 'var(--pv-green)', color: '#fff' }}
                   >
                     Confirm sign-off
                   </button>
@@ -662,7 +663,7 @@ export default function ValidationItemDetailDrawer({
               </div>
             )}
             {item?.status === 'EXECUTED' && isAuthor && !signOffOpen && (
-              <p className="text-[11px] text-amber-700 dark:text-amber-400 italic">
+              <p style={{ fontSize: 11, color: 'var(--pv-amber)', fontStyle: 'italic', margin: 0 }}>
                 You created this item — another project member must sign it off.
               </p>
             )}
