@@ -108,86 +108,109 @@ export default function ValidationCommentsSection({
   const renderComment = (c: ThreadedComment, depth: number) => {
     const isMine = c.authorUserId === currentUserId
     const isDeleted = !!c.deletedAt
+    const initials = (c.author?.name ?? '?')
+      .split(' ')
+      .map((s) => s[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase()
     return (
-      <li key={c.id} className={depth > 0 ? 'ml-5 mt-2 pl-3 border-l border-gray-200 dark:border-gray-700' : ''}>
-        <div className="rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-2 text-sm">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <span className="font-semibold text-gray-900 dark:text-white truncate">
-              {c.author?.name ?? 'Unknown'}
-            </span>
-            <span className="text-[11px] text-gray-500" title={new Date(c.createdAt).toLocaleString()}>
-              {relativeTime(c.createdAt)}
-              {c.updatedAt !== c.createdAt && !isDeleted && ' · edited'}
-            </span>
-          </div>
-          {isDeleted ? (
-            <p className="text-xs text-gray-400 italic">(deleted)</p>
-          ) : editing === c.id ? (
-            <div className="space-y-1">
-              <textarea
-                value={editDraft}
-                onChange={(e) => setEditDraft(e.target.value)}
-                rows={2}
-                className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900"
-              />
-              <div className="flex justify-end gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditing(null)
-                    setEditDraft('')
-                  }}
-                  className="text-[11px] text-gray-500 hover:underline"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => submitEdit(c.id)}
-                  className="text-[11px] flex items-center gap-0.5 text-blue-600 hover:text-blue-700"
-                >
-                  <Check size={11} /> Save
-                </button>
-              </div>
+      <li
+        key={c.id}
+        style={{
+          marginLeft: depth * 18,
+          paddingLeft: depth > 0 ? 10 : 0,
+          borderLeft: depth > 0 ? '1px solid var(--pv-line)' : undefined,
+        }}
+      >
+        <div className="pv-dr-comment">
+          <span className="pv-avatar">{initials}</span>
+          <div className="body">
+            <div className="head">
+              <b>{c.author?.name ?? 'Unknown'}</b>
+              <span className="when" title={new Date(c.createdAt).toLocaleString()}>
+                {relativeTime(c.createdAt)}
+                {c.updatedAt !== c.createdAt && !isDeleted && ' · edited'}
+              </span>
             </div>
-          ) : (
-            <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{c.body}</p>
-          )}
-          {!isDeleted && editing !== c.id && (
-            <div className="mt-1 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setReplyTo(replyTo === c.id ? null : c.id)
-                  setReplyDraft('')
-                }}
-                className="text-[11px] text-blue-600 hover:underline"
-              >
-                Reply
-              </button>
-              {isMine && (
-                <>
+            {isDeleted ? (
+              <p className="text" style={{ color: 'var(--pv-fg-4)', fontStyle: 'italic' }}>(deleted)</p>
+            ) : editing === c.id ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <textarea
+                  value={editDraft}
+                  onChange={(e) => setEditDraft(e.target.value)}
+                  rows={2}
+                  style={{
+                    width: '100%',
+                    padding: 6,
+                    fontSize: 12,
+                    border: '1px solid var(--pv-line)',
+                    borderRadius: 4,
+                    background: 'var(--pv-bg)',
+                    color: 'var(--pv-fg)',
+                    fontFamily: 'inherit',
+                  }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
                   <button
                     type="button"
                     onClick={() => {
-                      setEditing(c.id)
-                      setEditDraft(c.body)
+                      setEditing(null)
+                      setEditDraft('')
                     }}
-                    className="text-[11px] text-gray-500 hover:text-blue-600 flex items-center gap-0.5"
+                    style={{ fontSize: 11, color: 'var(--pv-fg-3)', background: 'none', border: 0, cursor: 'pointer' }}
                   >
-                    <Edit2 size={11} /> Edit
+                    Cancel
                   </button>
                   <button
                     type="button"
-                    onClick={() => remove(c.id)}
-                    className="text-[11px] text-gray-500 hover:text-red-600 flex items-center gap-0.5"
+                    onClick={() => submitEdit(c.id)}
+                    style={{ fontSize: 11, color: 'var(--pv-blue)', background: 'none', border: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 2 }}
                   >
-                    <Trash2 size={11} /> Delete
+                    <Check size={11} /> Save
                   </button>
-                </>
-              )}
-            </div>
-          )}
+                </div>
+              </div>
+            ) : (
+              <p className="text">{c.body}</p>
+            )}
+            {!isDeleted && editing !== c.id && (
+              <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReplyTo(replyTo === c.id ? null : c.id)
+                    setReplyDraft('')
+                  }}
+                  style={{ fontSize: 11, color: 'var(--pv-blue)', background: 'none', border: 0, padding: 0, cursor: 'pointer' }}
+                >
+                  Reply
+                </button>
+                {isMine && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditing(c.id)
+                        setEditDraft(c.body)
+                      }}
+                      style={{ fontSize: 11, color: 'var(--pv-fg-3)', background: 'none', border: 0, padding: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 2 }}
+                    >
+                      <Edit2 size={11} /> Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => remove(c.id)}
+                      style={{ fontSize: 11, color: 'var(--pv-fg-3)', background: 'none', border: 0, padding: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 2 }}
+                    >
+                      <Trash2 size={11} /> Delete
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         {replyTo === c.id && (
           <div className="mt-1 ml-3 flex gap-1">
