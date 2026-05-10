@@ -347,6 +347,14 @@ export async function createFromRequirements(
     select: { id: true, title: true, description: true, acceptanceCriteria: true },
   })
 
+  // Need full requirement payload (incl. requirementId, title) to populate
+  // TraceLink display cache without an extra round-trip.
+  const reqsFull = await prisma.requirement.findMany({
+    where: { id: { in: reqs.map((r) => r.id) } },
+    select: { id: true, requirementId: true, title: true },
+  })
+  const reqMeta = new Map(reqsFull.map((r) => [r.id, r]))
+
   const created: { id: string; key: string; sourceRequirementId: string }[] = []
   for (const r of reqs) {
     const acText = r.acceptanceCriteria?.trim()
@@ -362,21 +370,42 @@ export async function createFromRequirements(
             orderIndex: i,
           }))
       : []
-    const item = await createWithUniqueKey(projectId, (tx, key) =>
-      tx.validationItem.create({
+    const meta = reqMeta.get(r.id)
+    const item = await createWithUniqueKey(projectId, async (tx, key) => {
+      const newItem = await tx.validationItem.create({
         data: {
           projectId,
           key,
           title: `Validate: ${r.title}`,
-          description: r.description ? `Source requirement ${r.id}\n\n${r.description}` : null,
+          // Description is a plain copy of the source requirement's text — no
+          // embedded UUID, no markup. Source linkage lives on the TraceLink
+          // row created below so it renders as a real clickable chip in the UI.
+          description: r.description ?? null,
           methodType: payload.methodType ?? 'DEMONSTRATION',
           targetMilestone: payload.targetMilestone ?? 'OTHER',
           criteria: criteria as unknown as Prisma.InputJsonValue,
           createdById: userId,
         },
         select: { id: true, key: true },
-      }),
-    )
+      })
+      // Auto-link the source requirement so it appears in the drawer's
+      // "Linked requirements" section and is reachable for Raise CR.
+      await tx.traceLink.create({
+        data: {
+          projectId,
+          sourceType: 'ValidationItem',
+          sourceId: newItem.id,
+          targetType: 'Requirement',
+          targetId: r.id,
+          linkType: 'validates',
+          rationale: 'Auto-linked when this item was created from the requirement.',
+          createdBy: userId,
+          cachedTargetDisplayId: meta?.requirementId ?? null,
+          cachedTargetTitle: meta?.title ?? null,
+        },
+      })
+      return newItem
+    })
     created.push({ ...item, sourceRequirementId: r.id })
   }
 

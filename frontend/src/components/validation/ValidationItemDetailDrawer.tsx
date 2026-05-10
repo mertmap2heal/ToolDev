@@ -245,6 +245,38 @@ export default function ValidationItemDetailDrawer({
             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
               Overview
             </h3>
+            {/* Legacy items created before commit 4d7e... had a literal
+                "Source requirement <uuid>\n\n..." prefix in the description.
+                Detect it, surface a clean callout, and offer a one-click
+                cleanup. New items skip this entirely (auto-link via TraceLink). */}
+            {(() => {
+              const desc = draft?.description ?? ''
+              const match = desc.match(/^Source requirement ([0-9a-f-]{36})\n\n([\s\S]*)$/i)
+              if (!match) return null
+              const [, sourceId, body] = match
+              return (
+                <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded-md border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/10 text-xs">
+                  <span className="text-gray-700 dark:text-gray-300 flex-shrink-0">
+                    Source requirement:
+                  </span>
+                  <a
+                    href={`/projects/${projectId}/requirements?focus=${sourceId}`}
+                    className="font-mono text-blue-700 dark:text-blue-300 hover:underline truncate"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {sourceId.slice(0, 8)}…
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => draft && setDraft({ ...draft, description: body })}
+                    className="ml-auto text-[11px] text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                    title="Remove the legacy prefix from the description (the link is preserved on this item via Linked requirements)."
+                  >
+                    Clean up
+                  </button>
+                </div>
+              )
+            })()}
             <textarea
               value={draft?.description ?? ''}
               onChange={(e) => draft && setDraft({ ...draft, description: e.target.value })}
@@ -302,71 +334,6 @@ export default function ValidationItemDetailDrawer({
                 )}
               </div>
             </div>
-          </section>
-
-          <section>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                Acceptance criteria
-              </h3>
-              <button
-                type="button"
-                onClick={addCriterion}
-                className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-700 dark:text-blue-400"
-              >
-                <Plus size={12} /> Add
-              </button>
-            </div>
-            {draft && draft.criteria.length === 0 ? (
-              <p className="text-sm text-gray-500 italic">No criteria yet — add at least one.</p>
-            ) : (
-              <ul className="space-y-2">
-                {draft?.criteria.map((c) => (
-                  <li
-                    key={c.id}
-                    className="border border-gray-200 dark:border-gray-700 rounded-md p-2 bg-gray-50 dark:bg-gray-800/50"
-                  >
-                    <input
-                      type="text"
-                      value={c.text}
-                      onChange={(e) => updateCriterion(c.id, { text: e.target.value })}
-                      placeholder="Criterion text"
-                      className="w-full px-2 py-1 text-sm border-0 bg-transparent text-gray-900 dark:text-white focus:ring-0"
-                    />
-                    <div className="mt-1 flex items-center gap-2">
-                      <select
-                        value={c.outcome}
-                        onChange={(e) =>
-                          updateCriterion(c.id, { outcome: e.target.value as CriterionOutcome })
-                        }
-                        className={`text-xs px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 ${OUTCOME_COLOR[c.outcome]}`}
-                      >
-                        {CRITERION_OUTCOMES.map((o) => (
-                          <option key={o} value={o}>
-                            {OUTCOME_LABEL[o]}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="text"
-                        value={c.notes ?? ''}
-                        onChange={(e) => updateCriterion(c.id, { notes: e.target.value })}
-                        placeholder="Notes"
-                        className="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeCriterion(c.id)}
-                        className="text-gray-400 hover:text-red-500"
-                        aria-label="Remove criterion"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
           </section>
 
           <section>
@@ -435,6 +402,71 @@ export default function ValidationItemDetailDrawer({
                     >
                       <X size={14} />
                     </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                Acceptance criteria
+              </h3>
+              <button
+                type="button"
+                onClick={addCriterion}
+                className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-700 dark:text-blue-400"
+              >
+                <Plus size={12} /> Add
+              </button>
+            </div>
+            {draft && draft.criteria.length === 0 ? (
+              <p className="text-sm text-gray-500 italic">No criteria yet — add at least one.</p>
+            ) : (
+              <ul className="space-y-2">
+                {draft?.criteria.map((c) => (
+                  <li
+                    key={c.id}
+                    className="border border-gray-200 dark:border-gray-700 rounded-md p-2 bg-gray-50 dark:bg-gray-800/50"
+                  >
+                    <input
+                      type="text"
+                      value={c.text}
+                      onChange={(e) => updateCriterion(c.id, { text: e.target.value })}
+                      placeholder="Criterion text"
+                      className="w-full px-2 py-1 text-sm border-0 bg-transparent text-gray-900 dark:text-white focus:ring-0"
+                    />
+                    <div className="mt-1 flex items-center gap-2">
+                      <select
+                        value={c.outcome}
+                        onChange={(e) =>
+                          updateCriterion(c.id, { outcome: e.target.value as CriterionOutcome })
+                        }
+                        className={`text-xs px-2 py-1 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 ${OUTCOME_COLOR[c.outcome]}`}
+                      >
+                        {CRITERION_OUTCOMES.map((o) => (
+                          <option key={o} value={o}>
+                            {OUTCOME_LABEL[o]}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        value={c.notes ?? ''}
+                        onChange={(e) => updateCriterion(c.id, { notes: e.target.value })}
+                        placeholder="Notes"
+                        className="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeCriterion(c.id)}
+                        className="text-gray-400 hover:text-red-500"
+                        aria-label="Remove criterion"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
