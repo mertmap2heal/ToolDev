@@ -289,48 +289,33 @@ export default function ValidationPage() {
         </div>
       )}
 
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex-1 min-w-[260px] flex items-center gap-2 px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
-          <Search size={14} className="text-gray-400" />
+      <div className="pv-subbar" style={{ margin: 0, borderRadius: 6, border: '1px solid var(--pv-line)' }}>
+        <div className="pv-search">
+          <Search size={14} />
           <input
             id="validation-search"
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by title, description, or VAL-### key…"
-            className="flex-1 text-sm bg-transparent border-0 focus:ring-0 text-gray-900 dark:text-white"
+            placeholder="Search by title, description, or key…"
           />
-          <span className="hidden sm:inline-block text-[10px] text-gray-400 border border-gray-300 dark:border-gray-700 rounded px-1 py-0.5">
-            ⌘F
-          </span>
+          <span className="pv-kbd">⌘F</span>
         </div>
         <button
           type="button"
           onClick={() => setFiltersOpen((v) => !v)}
-          className={`flex items-center gap-1.5 px-3 py-2 text-sm border rounded-md ${
-            activeFilterCount > 0
-              ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
-              : 'border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-          }`}
+          className={`pv-pill ${activeFilterCount > 0 ? 'active' : ''}`}
         >
           <Filter size={14} /> Filters
-          {activeFilterCount > 0 && (
-            <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold bg-blue-600 text-white rounded-full">
-              {activeFilterCount}
-            </span>
-          )}
+          {activeFilterCount > 0 && <span className="pv-badge">{activeFilterCount}</span>}
         </button>
         <button
           type="button"
           onClick={() => setStarredOnly((v) => !v)}
           title={starredOnly ? 'Show all items' : 'Show only items you starred'}
-          className={`flex items-center gap-1.5 px-3 py-2 text-sm border rounded-md ${
-            starredOnly
-              ? 'border-yellow-500 bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300'
-              : 'border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-          }`}
+          className={`pv-pill ${starredOnly ? 'active' : ''}`}
         >
-          <Star size={14} className={starredOnly ? 'fill-yellow-500 text-yellow-500' : ''} /> Starred
+          <Star size={14} className={starredOnly ? 'vv-star-btn on' : ''} /> Starred
         </button>
         <button
           type="button"
@@ -340,21 +325,15 @@ export default function ValidationPage() {
               ? 'Hide soft-deleted items'
               : 'Show soft-deleted items so they can be restored'
           }
-          className={`flex items-center gap-1.5 px-3 py-2 text-sm border rounded-md ${
-            showArchived
-              ? 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300'
-              : 'border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-          }`}
+          className={`pv-pill ${showArchived ? 'active' : ''}`}
         >
           <Archive size={14} /> {showArchived ? 'Hide archived' : 'Show archived'}
         </button>
-        <button
-          type="button"
-          onClick={downloadCsv}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
-        >
-          <Download size={14} /> Export CSV
-        </button>
+        <div className="pv-subbar-right">
+          <button type="button" onClick={downloadCsv} className="pv-btn">
+            <Download size={14} /> Export CSV
+          </button>
+        </div>
       </div>
 
       {filtersOpen && (
