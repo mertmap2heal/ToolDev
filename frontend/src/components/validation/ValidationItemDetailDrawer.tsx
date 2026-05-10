@@ -258,7 +258,7 @@ export default function ValidationItemDetailDrawer({
         <div className="pv-dr-body" style={{ padding: 0 }}>
           <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 18 }}>
           <section>
-            <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+            <h3 className="pv-dr-section-title">
               Overview
             </h3>
             {/* Legacy items created before commit 4d7e... had a literal
@@ -354,7 +354,7 @@ export default function ValidationItemDetailDrawer({
 
           <section>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+              <h3 className="pv-dr-section-title">
                 Linked requirements
               </h3>
               {!pickerOpen && (
@@ -441,7 +441,7 @@ export default function ValidationItemDetailDrawer({
 
           <section>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+              <h3 className="pv-dr-section-title">
                 Acceptance criteria
               </h3>
               <button
@@ -505,7 +505,7 @@ export default function ValidationItemDetailDrawer({
           </section>
 
           <section>
-            <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+            <h3 className="pv-dr-section-title">
               Evidence
             </h3>
             {evidence && evidence.length > 0 ? (
@@ -542,7 +542,7 @@ export default function ValidationItemDetailDrawer({
 
           <section>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+              <h3 className="pv-dr-section-title">
                 Sign-offs
               </h3>
               {canSignOff && !signOffOpen && (
@@ -634,7 +634,7 @@ export default function ValidationItemDetailDrawer({
 
           {draft?.status === 'BLOCKED' && (
             <section>
-              <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+              <h3 className="pv-dr-section-title">
                 Failed validation
               </h3>
               <div className="rounded-md border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/10 p-3 space-y-2">
@@ -664,7 +664,7 @@ export default function ValidationItemDetailDrawer({
           )}
 
           <section>
-            <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+            <h3 className="pv-dr-section-title">
               Safety impact
             </h3>
             <SafetyLinkPanel variant="impact" />

@@ -119,6 +119,19 @@ html[data-theme='midnight'] .validation-v2 .vv-tile.vv-tile-gap .vv-tile-value {
 .validation-v2 .vv-star-btn:hover { color: var(--pv-amber); }
 .validation-v2 .vv-star-btn.on { color: var(--pv-amber); }
 
+/* Drawer section title (shared) */
+.validation-v2 .pv-dr-section-title {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pv-fg-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* Tag chip */
 .validation-v2 .vv-tag {
   display: inline-flex;
