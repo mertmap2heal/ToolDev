@@ -48,6 +48,7 @@ model User {
   validationItemsCreated              ValidationItem[]                  @relation("ValidationItemCreator")
   validationItemsOwned                ValidationItem[]                  @relation("ValidationItemOwner")
   validationSignOffs                  ValidationSignOff[]
+  validationItemStars                 ValidationItemStar[]
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -3980,11 +3981,26 @@ model ValidationItem {
   createdBy User                @relation("ValidationItemCreator", fields: [createdById], references: [id])
   owner     User?               @relation("ValidationItemOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   signOffs  ValidationSignOff[]
+  stars     ValidationItemStar[]
 
   @@unique([projectId, key])
   @@index([projectId, status])
   @@index([projectId, deletedAt])
   @@index([projectId, targetMilestone])
+}
+
+model ValidationItemStar {
+  id               String   @id @default(uuid())
+  userId           String
+  validationItemId String
+  createdAt        DateTime @default(now())
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  validationItem ValidationItem @relation(fields: [validationItemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, validationItemId])
+  @@index([validationItemId])
+  @@index([userId])
 }
 
 model ValidationSignOff {

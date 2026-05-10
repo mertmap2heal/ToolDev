@@ -23,6 +23,8 @@ import {
   bulkUpdate,
   getCoverage,
   listUncoveredRequirements,
+  star,
+  unstar,
 } from '../controllers/validation.controller'
 import { ensureValidationApproverRole } from '../services/validation.service'
 
@@ -53,6 +55,8 @@ router.get('/projects/:projectId/items/:id', getItem)
 router.put('/projects/:projectId/items/:id', updateItem)
 router.delete('/projects/:projectId/items/:id', deleteItem)
 router.post('/projects/:projectId/items/:id/restore', restoreItem)
+router.post('/projects/:projectId/items/:id/star', star)
+router.delete('/projects/:projectId/items/:id/star', unstar)
 
 // Linked requirements (TraceLink with sourceType=ValidationItem)
 router.get('/projects/:projectId/items/:id/linked-requirements', listLinkedRequirements)

@@ -18,6 +18,17 @@ function err(res: Response, e: unknown) {
 
 export async function listItems(req: AuthRequest, res: Response) {
   try {
+    const uid = req.userId ?? req.user?.userId
+    const sortByRaw = req.query.sortBy as string | undefined
+    const sortDirRaw = req.query.sortDir as string | undefined
+    const validSortBy = ['key', 'updatedAt', 'createdAt', 'status', 'milestone'] as const
+    type ValidSortBy = (typeof validSortBy)[number]
+    const sortBy: ValidSortBy | undefined =
+      sortByRaw && (validSortBy as readonly string[]).includes(sortByRaw)
+        ? (sortByRaw as ValidSortBy)
+        : undefined
+    const sortDir: 'asc' | 'desc' | undefined =
+      sortDirRaw === 'asc' || sortDirRaw === 'desc' ? sortDirRaw : undefined
     const data = await svc.listItems(req.params.projectId, {
       status: req.query.status as string | undefined,
       methodType: req.query.methodType as string | undefined,
@@ -25,6 +36,10 @@ export async function listItems(req: AuthRequest, res: Response) {
       ownerId: req.query.ownerId as string | undefined,
       search: req.query.search as string | undefined,
       includeDeleted: req.query.includeDeleted === 'true',
+      starredOnly: req.query.starredOnly === 'true',
+      starredByUserId: uid,
+      sortBy,
+      sortDir,
     })
     res.json({ success: true, data })
   } catch (e) {
@@ -261,6 +276,26 @@ export async function bulkUpdate(req: AuthRequest, res: Response) {
 export async function getCoverage(req: AuthRequest, res: Response) {
   try {
     const data = await svc.coverage(req.params.projectId)
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function star(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.star(req.params.projectId, req.params.id, userId(req))
+    if (!data) return fail(res, 404, 'Validation item not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
+export async function unstar(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.unstar(req.params.projectId, req.params.id, userId(req))
+    if (!data) return fail(res, 404, 'Validation item not found')
     res.json({ success: true, data })
   } catch (e) {
     err(res, e)

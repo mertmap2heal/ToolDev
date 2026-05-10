@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Plus, Search, Download, Filter, X, AlertCircle, ListPlus, Archive, Trash2, RotateCcw,
-  AlertTriangle, Target, HelpCircle,
+  AlertTriangle, Target, HelpCircle, Star, ArrowUp, ArrowDown, ArrowUpDown,
 } from 'lucide-react'
 import ValidationHelpDrawer from '../../components/validation/ValidationHelpDrawer'
 import {
@@ -15,6 +15,7 @@ import {
   type ValidationStatus,
   type ValidationMethodType,
   type ValidationMilestone,
+  type ValidationSortBy,
 } from '../../services/validation.service'
 import { useAuthStore } from '../../store/authStore'
 import ValidationOnboardingBanner from '../../components/validation/ValidationOnboardingBanner'
@@ -30,6 +31,19 @@ import {
   STATUS_COLOR,
   STATUS_LABEL,
 } from '../../components/validation/validationLabels'
+
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime()
+  const diff = Date.now() - then
+  const m = Math.floor(diff / 60_000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24)
+  if (d < 30) return `${d}d ago`
+  return new Date(iso).toLocaleDateString()
+}
 
 export default function ValidationPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -50,6 +64,9 @@ export default function ValidationPage() {
   const [bulkMilestone, setBulkMilestone] = useState<ValidationMilestone | ''>('')
   const [uncoveredOpen, setUncoveredOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [starredOnly, setStarredOnly] = useState(false)
+  const [sortBy, setSortBy] = useState<ValidationSortBy>('key')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   const filters = useMemo(
     () => ({
@@ -58,9 +75,30 @@ export default function ValidationPage() {
       methodType: methodFilter || undefined,
       milestone: milestoneFilter || undefined,
       includeDeleted: showArchived || undefined,
+      starredOnly: starredOnly || undefined,
+      sortBy,
+      sortDir,
     }),
-    [search, statusFilter, methodFilter, milestoneFilter, showArchived],
+    [search, statusFilter, methodFilter, milestoneFilter, showArchived, starredOnly, sortBy, sortDir],
   )
+
+  const toggleSort = (col: ValidationSortBy) => {
+    if (sortBy === col) setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
+    else {
+      setSortBy(col)
+      setSortDir(col === 'updatedAt' || col === 'createdAt' ? 'desc' : 'asc')
+    }
+  }
+  const SortArrow = ({ col }: { col: ValidationSortBy }) =>
+    sortBy === col ? (
+      sortDir === 'asc' ? (
+        <ArrowUp size={11} className="inline ml-0.5" />
+      ) : (
+        <ArrowDown size={11} className="inline ml-0.5" />
+      )
+    ) : (
+      <ArrowUpDown size={11} className="inline ml-0.5 opacity-30" />
+    )
 
   const { data: rawItems = [], refetch } = useQuery({
     queryKey: ['validation-items', projectId, filters],
@@ -275,6 +313,18 @@ export default function ValidationPage() {
         </button>
         <button
           type="button"
+          onClick={() => setStarredOnly((v) => !v)}
+          title={starredOnly ? 'Show all items' : 'Show only items you starred'}
+          className={`flex items-center gap-1.5 px-3 py-2 text-sm border rounded-md ${
+            starredOnly
+              ? 'border-yellow-500 bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300'
+              : 'border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+          }`}
+        >
+          <Star size={14} className={starredOnly ? 'fill-yellow-500 text-yellow-500' : ''} /> Starred
+        </button>
+        <button
+          type="button"
           onClick={() => setShowArchived((v) => !v)}
           title={
             showArchived
@@ -430,13 +480,36 @@ export default function ValidationPage() {
                     }}
                   />
                 </th>
-                <th className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-24">Key</th>
+                <th className="w-10 px-3 py-2" aria-label="Star"></th>
+                <th
+                  className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-28 cursor-pointer select-none"
+                  onClick={() => toggleSort('key')}
+                >
+                  Key<SortArrow col="key" />
+                </th>
                 <th className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300">Title</th>
                 <th className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-40">Method</th>
-                <th className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-24">Milestone</th>
-                <th className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-28">Status</th>
+                <th
+                  className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-24 cursor-pointer select-none"
+                  onClick={() => toggleSort('milestone')}
+                >
+                  Milestone<SortArrow col="milestone" />
+                </th>
+                <th
+                  className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-28 cursor-pointer select-none"
+                  onClick={() => toggleSort('status')}
+                >
+                  Status<SortArrow col="status" />
+                </th>
                 <th className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-24">Criteria</th>
                 <th className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-20">Sign-offs</th>
+                <th
+                  className="text-left px-3 py-2 font-semibold text-gray-700 dark:text-gray-300 w-28 cursor-pointer select-none"
+                  onClick={() => toggleSort('updatedAt')}
+                  title="When this item was last modified"
+                >
+                  Updated<SortArrow col="updatedAt" />
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -465,6 +538,27 @@ export default function ValidationPage() {
                           })
                         }}
                       />
+                    </td>
+                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        aria-label={it.starredByMe ? 'Unstar' : 'Star'}
+                        title={it.starredByMe ? 'Unstar' : 'Star this item'}
+                        onClick={async () => {
+                          if (it.starredByMe)
+                            await validationService.unstar(projectId, it.id)
+                          else await validationService.star(projectId, it.id)
+                          refetchAll()
+                        }}
+                        className="text-gray-300 hover:text-yellow-500"
+                      >
+                        <Star
+                          size={14}
+                          className={
+                            it.starredByMe ? 'fill-yellow-500 text-yellow-500' : ''
+                          }
+                        />
+                      </button>
                     </td>
                     <td className="px-3 py-2 font-mono text-xs text-blue-700 dark:text-blue-300">
                       {it.key}
@@ -507,6 +601,12 @@ export default function ValidationPage() {
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400">
                       {it._count?.signOffs ?? 0}
+                    </td>
+                    <td
+                      className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap"
+                      title={new Date(it.updatedAt).toLocaleString()}
+                    >
+                      {relativeTime(it.updatedAt)}
                     </td>
                   </tr>
                 )

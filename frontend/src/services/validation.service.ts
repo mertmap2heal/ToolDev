@@ -56,7 +56,11 @@ export interface ValidationItemSummary {
    * was last touched. Indicates the validation may need to be re-run.
    */
   isSuspect?: boolean
+  /** True when the calling user has starred this item. */
+  starredByMe?: boolean
 }
+
+export type ValidationSortBy = 'key' | 'updatedAt' | 'createdAt' | 'status' | 'milestone'
 
 export interface ValidationCoverage {
   total: number
@@ -114,6 +118,9 @@ interface ListFilters {
   ownerId?: string
   search?: string
   includeDeleted?: boolean
+  starredOnly?: boolean
+  sortBy?: ValidationSortBy
+  sortDir?: 'asc' | 'desc'
 }
 
 function qs(filters: ListFilters): string {
@@ -124,6 +131,9 @@ function qs(filters: ListFilters): string {
   if (filters.ownerId) p.set('ownerId', filters.ownerId)
   if (filters.search) p.set('search', filters.search)
   if (filters.includeDeleted) p.set('includeDeleted', 'true')
+  if (filters.starredOnly) p.set('starredOnly', 'true')
+  if (filters.sortBy) p.set('sortBy', filters.sortBy)
+  if (filters.sortDir) p.set('sortDir', filters.sortDir)
   const s = p.toString()
   return s ? `?${s}` : ''
 }
@@ -306,6 +316,14 @@ export const validationService = {
     },
   ): Promise<ApiResponse<{ count: number }>> {
     return apiClient.post(`/validation/projects/${projectId}/items/bulk`, payload)
+  },
+
+  async star(projectId: string, id: string): Promise<ApiResponse<{ starred: boolean }>> {
+    return apiClient.post(`/validation/projects/${projectId}/items/${id}/star`, {})
+  },
+
+  async unstar(projectId: string, id: string): Promise<ApiResponse<{ starred: boolean }>> {
+    return apiClient.delete(`/validation/projects/${projectId}/items/${id}/star`)
   },
 }
 

@@ -96,6 +96,9 @@ describe('Validation module integration', () => {
     await prisma.traceLink.deleteMany({
       where: { projectId: { in: [projectId, otherProjectId] } },
     })
+    await prisma.validationItemStar.deleteMany({
+      where: { validationItem: { projectId: { in: [projectId, otherProjectId] } } },
+    })
     await prisma.validationSignOff.deleteMany({
       where: { validationItem: { projectId: { in: [projectId, otherProjectId] } } },
     })

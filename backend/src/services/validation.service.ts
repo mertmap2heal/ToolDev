@@ -36,6 +36,10 @@ interface ListFilters {
   ownerId?: string
   search?: string
   includeDeleted?: boolean
+  starredOnly?: boolean
+  starredByUserId?: string // required when starredOnly is true
+  sortBy?: 'key' | 'updatedAt' | 'createdAt' | 'status' | 'milestone'
+  sortDir?: 'asc' | 'desc'
 }
 
 async function nextKey(projectId: string): Promise<string> {
@@ -103,7 +107,30 @@ function buildWhere(projectId: string, filters: ListFilters): Prisma.ValidationI
       { key: { contains: filters.search, mode: 'insensitive' } },
     ]
   }
+  if (filters.starredOnly && filters.starredByUserId) {
+    where.stars = { some: { userId: filters.starredByUserId } }
+  }
   return where
+}
+
+function buildOrderBy(
+  filters: ListFilters,
+): Prisma.ValidationItemOrderByWithRelationInput[] {
+  const dir = filters.sortDir === 'desc' ? 'desc' : 'asc'
+  switch (filters.sortBy) {
+    case 'updatedAt':
+      return [{ updatedAt: dir }]
+    case 'createdAt':
+      return [{ createdAt: dir }]
+    case 'status':
+      return [{ status: dir }, { key: 'asc' }]
+    case 'milestone':
+      return [{ targetMilestone: dir }, { key: 'asc' }]
+    case 'key':
+      return [{ key: dir }]
+    default:
+      return [{ targetMilestone: 'asc' }, { key: 'asc' }]
+  }
 }
 
 async function writeAudit(projectId: string, userId: string, action: string, details?: unknown) {
@@ -143,17 +170,52 @@ export function ensureValidationApproverRole(): Promise<void> {
 export async function listItems(projectId: string, filters: ListFilters = {}) {
   const items = await prisma.validationItem.findMany({
     where: buildWhere(projectId, filters),
-    orderBy: [{ targetMilestone: 'asc' }, { key: 'asc' }],
+    orderBy: buildOrderBy(filters),
     include: {
       owner: { select: { id: true, name: true, email: true } },
       createdBy: { select: { id: true, name: true, email: true } },
-      _count: { select: { signOffs: true } },
+      _count: { select: { signOffs: true, stars: true } },
+      // Hoist current-user's star presence; the caller passes their userId via
+      // filters.starredByUserId. Saves a second round-trip in the UI.
+      stars: filters.starredByUserId
+        ? { where: { userId: filters.starredByUserId }, select: { id: true } }
+        : false,
     },
   })
-  // Decorate with isSuspect — linked requirement updated after this item.
-  // One round-trip for the whole project keeps the list endpoint cheap.
   const suspect = await suspectItemIds(projectId)
-  return items.map((i) => ({ ...i, isSuspect: suspect.has(i.id) }))
+  return items.map((i) => ({
+    ...i,
+    isSuspect: suspect.has(i.id),
+    starredByMe: Array.isArray((i as { stars?: { id: string }[] }).stars)
+      ? ((i as { stars?: { id: string }[] }).stars?.length ?? 0) > 0
+      : false,
+  }))
+}
+
+export async function star(projectId: string, itemId: string, userId: string) {
+  const item = await prisma.validationItem.findFirst({
+    where: { id: itemId, projectId },
+    select: { id: true },
+  })
+  if (!item) return null
+  await prisma.validationItemStar.upsert({
+    where: { userId_validationItemId: { userId, validationItemId: itemId } },
+    update: {},
+    create: { userId, validationItemId: itemId },
+  })
+  return { starred: true }
+}
+
+export async function unstar(projectId: string, itemId: string, userId: string) {
+  const item = await prisma.validationItem.findFirst({
+    where: { id: itemId, projectId },
+    select: { id: true },
+  })
+  if (!item) return null
+  await prisma.validationItemStar
+    .delete({ where: { userId_validationItemId: { userId, validationItemId: itemId } } })
+    .catch(() => undefined)
+  return { starred: false }
 }
 
 export async function getItem(projectId: string, id: string) {
