@@ -46,6 +46,13 @@ import {
   reorderFolders,
   moveParameterToFolder,
 } from '../controllers/parameterFolder.controller'
+import {
+  submit as submitBulkJob,
+  get as getBulkJob,
+  list as listBulkJobs,
+} from '../controllers/parameterBulkJob.controller'
+import * as baselineCtrl from '../controllers/parameterBaseline.controller'
+import * as scenarioCtrl from '../controllers/parameterScenario.controller'
 
 const router = Router()
 
@@ -87,6 +94,27 @@ router.post('/:projectId/git/setup', gitPublishSetupHandler)
 router.post('/:projectId/git/sync', gitPublishSyncHandler)
 router.post('/:projectId/:id/restore/:versionId', restoreParameterVersionHandler)
 router.get('/:projectId/facets', getParameterFacets)
+// Async bulk-ops job runner endpoints. Live alongside the inline
+// /bulk PATCH/DELETE for backwards-compat; the UI prefers these for
+// jobs that exceed ~50 items.
+router.post('/:projectId/bulk-jobs', submitBulkJob)
+router.get('/:projectId/bulk-jobs', listBulkJobs)
+router.get('/:projectId/bulk-jobs/:jobId', getBulkJob)
+// Parameter baselines.
+router.post('/:projectId/baselines', baselineCtrl.create)
+router.get('/:projectId/baselines', baselineCtrl.list)
+router.get('/:projectId/baselines/compare', baselineCtrl.compare)
+router.get('/:projectId/baselines/:baselineId', baselineCtrl.get)
+router.post('/:projectId/baselines/:baselineId/restore', baselineCtrl.restore)
+router.delete('/:projectId/baselines/:baselineId', baselineCtrl.remove)
+// Parameter scenarios — what-if overlays.
+router.get('/:projectId/scenarios', scenarioCtrl.list)
+router.post('/:projectId/scenarios', scenarioCtrl.create)
+router.get('/:projectId/scenarios/:scenarioId', scenarioCtrl.get)
+router.put('/:projectId/scenarios/:scenarioId', scenarioCtrl.update)
+router.delete('/:projectId/scenarios/:scenarioId', scenarioCtrl.remove)
+router.put('/:projectId/scenarios/:scenarioId/overrides/:parameterId', scenarioCtrl.setOverride)
+router.delete('/:projectId/scenarios/:scenarioId/overrides/:parameterId', scenarioCtrl.removeOverride)
 router.get('/:projectId', getParameters)
 router.get('/:projectId/:id', getParameter)
 router.post('/:projectId', createParameter)

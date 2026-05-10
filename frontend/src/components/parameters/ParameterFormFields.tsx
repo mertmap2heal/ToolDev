@@ -396,6 +396,7 @@ export function ParameterFormFields({ projectId, values, onChange, onManageTypes
         <label className={LABEL_CLS}>Value / Default</label>
         {category === 'boolean' ? (
           <select
+            aria-label="Default value"
             value={values.defaultValue}
             onChange={e => onChange('defaultValue', e.target.value)}
             className={INPUT_CLS}
@@ -406,6 +407,7 @@ export function ParameterFormFields({ projectId, values, onChange, onManageTypes
           </select>
         ) : category === 'enum' && enumDefaultOptions.length > 0 ? (
           <select
+            aria-label="Default value"
             value={values.defaultValue}
             onChange={e => onChange('defaultValue', e.target.value)}
             className={displayValueError ? INPUT_ERR_CLS : INPUT_CLS}

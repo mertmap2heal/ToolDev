@@ -19,6 +19,7 @@ import VerificationSettingsPage from './pages/Verification/VerificationSettingsP
 import TemplatesLandingPage from './pages/Verification/TemplatesLandingPage'
 import TemplateEditorPage from './pages/Verification/TemplateEditorPage'
 import DocumentationPage from './pages/Documentation/DocumentationPage'
+import HelpLayout from './pages/Help/HelpLayout'
 import ProjectLandingPage from './pages/ProjectLanding/ProjectLandingPage'
 import StakeholderPage from './pages/Stakeholder/StakeholderPage'
 import PBSPage from './modules/pbs/PBSPage'
@@ -71,6 +72,7 @@ import InventoryReportsPage from './pages/Inventory/Reports/ReportsPage'
 import InventoryDashboardPage from './pages/Inventory/Dashboard/DashboardPage'
 import AdminRouteGuard from './components/admin/AdminRouteGuard'
 import AdminPage from './pages/Admin/AdminPage'
+import AiInvocationsPage from './pages/Admin/AiInvocationsPage'
 import PlatformAdminRouteGuard from './components/platform-admin/PlatformAdminRouteGuard'
 import PlatformAdminLayout from './components/platform-admin/PlatformAdminLayout'
 import PlatformAdminPage from './pages/PlatformAdmin/PlatformAdminPage'
@@ -85,11 +87,13 @@ import PreviewLandingPage from './pages/PreviewLanding/PreviewLandingPage'
 import { FeaturePackageProvider } from './contexts/FeaturePackageContext'
 import FeatureGuard from './components/access/FeatureGuard'
 import PackageSwitcher from './components/dev/PackageSwitcher'
+import RouteErrorBoundary from './components/common/RouteErrorBoundary'
 
 function App() {
   return (
     <BrowserRouter>
       <FeaturePackageProvider>
+      <RouteErrorBoundary>
       <Routes>
         {/* Login - public route */}
         <Route path="/login" element={<LoginPage />} />
@@ -182,8 +186,11 @@ function App() {
               <Route path="settings" element={<SafetySettingsPage />} />
             </Route>
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="help" element={<HelpLayout />} />
+            <Route path="help/:slug" element={<HelpLayout />} />
             <Route path="admin" element={<AdminRouteGuard />}>
               <Route index element={<AdminPage />} />
+              <Route path="ai-invocations" element={<AiInvocationsPage />} />
             </Route>
             <Route path="inventory">
             <Route index element={<Navigate to="/inventory/items" replace />} />
@@ -198,6 +205,7 @@ function App() {
           </Route>
         </Route>
       </Routes>
+      </RouteErrorBoundary>
       <PackageSwitcher />
       </FeaturePackageProvider>
     </BrowserRouter>

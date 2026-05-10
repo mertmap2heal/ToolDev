@@ -290,12 +290,9 @@ export class ItemService {
             name: true,
           },
         },
-        lot: {
-          select: {
-            id: true,
-            lotCode: true,
-          },
-        },
+        // `lot` relation removed — Lot model dropped from schema
+        // (see schema.prisma:1447 comment). Using it raised
+        // PrismaClientValidationError on every call.
         serial: {
           select: {
             id: true,
@@ -308,7 +305,7 @@ export class ItemService {
             name: true,
           },
         },
-      } as any,
+      },
       orderBy: {
         occurredAt: 'desc',
       },

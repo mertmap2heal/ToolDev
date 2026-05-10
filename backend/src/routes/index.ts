@@ -13,6 +13,10 @@ import documentationRoutes from './documentation.routes'
 import issuesRoutes from './issues.routes'
 import parametersRoutes from './parameters.routes'
 import aiParameterRoutes from './aiParameter.routes'
+import aiCredentialRoutes from './aiCredential.routes'
+import aiInvocationRoutes from './aiInvocation.routes'
+import mcpRoutes from './mcp.routes'
+import mcpKeyRoutes from './mcpKey.routes'
 import commRoutes from './comm.routes'
 import definitionEntriesRoutes from './definitionEntries.routes'
 import changeRequestsRoutes from './changeRequests.routes'
@@ -89,6 +93,17 @@ router.use('/parameters', parametersRoutes)
 // The middleware chain inside this router enforces the three-layer AI
 // feature gate (env -> project -> package).
 router.use('/parameters', aiParameterRoutes)
+// BYOK user-scoped AI credentials. Mounted at /ai so the URLs are
+// /api/v1/ai/credentials regardless of which project is active.
+router.use('/ai', aiCredentialRoutes)
+// Admin-only AiInvocation list + NDJSON export for ISO/IEC 42001 audits.
+router.use('/admin', aiInvocationRoutes)
+// MCP Streamable HTTP endpoint (Claude Desktop, claude-code, etc).
+// Auth is via scoped API key, NOT the session JWT - handler verifies
+// the bearer token inside `handleMcpRequest`.
+router.use('/mcp', mcpRoutes)
+// Admin-only MCP key management endpoints.
+router.use('/admin/projects', mcpKeyRoutes)
 router.use('/comm', commRoutes)
 router.use('/definitions', definitionEntriesRoutes)
 router.use('/change-requests', changeRequestsRoutes)

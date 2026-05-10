@@ -1,25 +1,7 @@
 import { Response } from 'express'
 import { AuthRequest } from '../middleware/auth.middleware'
 import { prisma } from '../lib/prisma'
-
-
-// Helper to generate use case ID
-async function generateUseCaseId(projectId: string): Promise<string> {
-  const allUseCases = await prisma.useCase.findMany({
-    where: { projectId },
-    select: { useCaseId: true },
-  })
-
-  const existingIds = allUseCases
-    .filter((uc) => uc.useCaseId && uc.useCaseId.startsWith('UC-'))
-    .map((uc) => {
-      const match = uc.useCaseId?.match(/\d+$/)
-      return match ? parseInt(match[0], 10) : 0
-    })
-
-  const maxNumber = existingIds.length > 0 ? Math.max(...existingIds) : 0
-  return `UC-${(maxNumber + 1).toString().padStart(3, '0')}`
-}
+import { allocateUseCaseId } from '../lib/useCaseId'
 
 export const getUseCases = async (req: AuthRequest, res: Response) => {
   try {
@@ -98,42 +80,41 @@ export const createUseCase = async (req: AuthRequest, res: Response) => {
       })
     }
 
-    let finalUseCaseId = providedUseCaseId
-    if (!finalUseCaseId) {
-      finalUseCaseId = await generateUseCaseId(projectId)
-    }
+    // SECURITY (MEDIUM): allocate the use-case id under a per-project
+    // advisory lock, mirroring lib/paramId.ts. Without this, two concurrent
+    // POSTs would race and produce duplicate UC-NNN values.
+    const useCase = await prisma.$transaction(async (tx) => {
+      const finalUseCaseId = providedUseCaseId
+        ? providedUseCaseId
+        : await allocateUseCaseId(tx, projectId)
 
-    const existing = await prisma.useCase.findFirst({
-      where: {
-        projectId,
-        useCaseId: finalUseCaseId,
-      },
-    })
+      if (providedUseCaseId) {
+        const existing = await tx.useCase.findFirst({
+          where: { projectId, useCaseId: finalUseCaseId },
+        })
+        if (existing) {
+          throw new Error(`Use case ID "${finalUseCaseId}" already exists`)
+        }
+      }
 
-    if (existing) {
-      return res.status(400).json({
-        success: false,
-        error: `Use case ID "${finalUseCaseId}" already exists`,
+      return tx.useCase.create({
+        data: {
+          projectId,
+          useCaseId: finalUseCaseId,
+          name,
+          description: description || null,
+          actors: actors || [],
+          preconditions: preconditions || null,
+          postconditions: postconditions || null,
+          mainFlow: mainFlow || null,
+          alternativeFlows: alternativeFlows && Array.isArray(alternativeFlows) ? JSON.stringify(alternativeFlows) : null,
+          extensions: extensions && Array.isArray(extensions) ? JSON.stringify(extensions) : null,
+          priority: priority || null,
+          complexity: complexity || null,
+          status: status || 'draft',
+          relatedRequirementIds: relatedRequirementIds || [],
+        },
       })
-    }
-
-    const useCase = await prisma.useCase.create({
-      data: {
-        projectId,
-        useCaseId: finalUseCaseId,
-        name,
-        description: description || null,
-        actors: actors || [],
-        preconditions: preconditions || null,
-        postconditions: postconditions || null,
-        mainFlow: mainFlow || null,
-        alternativeFlows: alternativeFlows && Array.isArray(alternativeFlows) ? JSON.stringify(alternativeFlows) : null,
-        extensions: extensions && Array.isArray(extensions) ? JSON.stringify(extensions) : null,
-        priority: priority || null,
-        complexity: complexity || null,
-        status: status || 'draft',
-        relatedRequirementIds: relatedRequirementIds || [],
-      },
     })
 
     res.status(201).json({

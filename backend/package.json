@@ -30,6 +30,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.90.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@prisma/client": "^5.7.1",
     "archiver": "^7.0.1",
     "bcryptjs": "^2.4.3",
@@ -44,7 +46,7 @@
     "nodemailer": "^8.0.1",
     "pdfkit": "^0.17.2",
     "socket.io": "^4.8.3",
-    "zod": "^3.22.4"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/archiver": "^7.0.0",
@@ -55,6 +57,7 @@
     "@types/node": "^20.10.5",
     "@types/nodemailer": "^7.0.9",
     "@types/supertest": "^6.0.3",
+    "@vitest/coverage-v8": "^4.1.5",
     "prisma": "^5.7.1",
     "supertest": "^7.2.2",
     "tsx": "^4.7.0",

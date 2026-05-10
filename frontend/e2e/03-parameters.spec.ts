@@ -177,8 +177,14 @@ test.describe('Parameters — CRUD', () => {
     await expect(paramRow).toBeVisible({ timeout: 8_000 })
     await paramRow.locator('button[title="Edit"]').click()
 
-    // Edit modal should open
-    const modal = page.locator(MODAL).filter({ has: page.getByRole('heading', { name: /Edit Parameter:/i }) })
+    // Edit modal should open. v2 redesign replaced the old <h2>Edit Parameter:</h2>
+    // heading with <span class="pv-dr-display">Edit parameter</span>; identify the
+    // modal by the "Edit parameter" sub-header and the "Save changes" submit
+    // button (unique to this modal).
+    const modal = page
+      .locator(MODAL)
+      .filter({ hasText: /Edit parameter/i })
+      .filter({ has: page.getByRole('button', { name: /save changes/i }) })
     await expect(modal).toBeVisible({ timeout: 5_000 })
     await page.waitForTimeout(AFTER_OPEN_WAIT)
 
@@ -188,7 +194,7 @@ test.describe('Parameters — CRUD', () => {
     await descTextarea.fill('Updated by E2E test')
 
     // Save
-    await modal.getByRole('button', { name: /^save|^update/i }).click()
+    await modal.getByRole('button', { name: /save changes/i }).click()
 
     // Modal should close
     await expect(modal).not.toBeVisible({ timeout: 8_000 })
@@ -269,7 +275,7 @@ test.describe('Parameters — Search & Filter', () => {
   test('search by name', async ({ page }) => {
     // Type the unique prefix into the search box
     const searchPrefix = searchSeedName.substring(0, 12)
-    await page.getByPlaceholder(/search parameters/i).fill(searchPrefix)
+    await page.getByPlaceholder(/filter parameters/i).fill(searchPrefix)
 
     // Only rows matching the search should be visible
     await page.waitForTimeout(400)
@@ -286,36 +292,35 @@ test.describe('Parameters — Search & Filter', () => {
     }
 
     // Clear the search
-    await page.getByPlaceholder(/search parameters/i).clear()
+    await page.getByPlaceholder(/filter parameters/i).clear()
   })
 
   test('filter by status: draft', async ({ page }) => {
-    // Expand the Filters panel
-    await page.getByRole('button', { name: /^filters$/i }).click()
-    await page.waitForTimeout(300)
+    // New filter UI: pill bar uses native <select> styled as pills. The
+    // status select carries aria-label="Filter by status" (per the v2
+    // redesign in d303ae2).
+    const statusPill = page.locator('select[aria-label="Filter by status"]')
+    await expect(statusPill).toBeVisible()
+    await statusPill.selectOption('draft')
+    await page.waitForTimeout(500)
 
-    // Find the Status select and choose "Draft"
-    const filtersPanel = page.locator('select').filter({ has: page.locator('option[value="draft"]') }).first()
-    await filtersPanel.selectOption('draft')
-    await page.waitForTimeout(400)
-
-    // All visible status badges should show "draft" (or table should show empty state)
-    const rows = page.locator('tbody tr')
-    const rowCount = await rows.count()
-
+    // Filter is server-side now; check that every visible row's status
+    // badge reads "draft".
+    const dataRows = page
+      .locator('table tbody tr')
+      .filter({ has: page.locator('td:nth-child(2)') })
+    const rowCount = await dataRows.count()
     if (rowCount > 0) {
-      // Check each row's status badge content
-      // The status cell uses a span with the status text
-      const statusCells = page.locator('tbody tr td:nth-child(7) span')
-      const count = await statusCells.count()
-      for (let i = 0; i < Math.min(count, 10); i++) {
-        const text = await statusCells.nth(i).textContent()
-        expect(text?.toLowerCase()).toBe('draft')
+      const sample = Math.min(rowCount, 10)
+      for (let i = 0; i < sample; i++) {
+        const row = dataRows.nth(i)
+        const statusBadge = row.locator('span').filter({ hasText: /^draft$/i }).first()
+        await expect(statusBadge).toBeVisible()
       }
     }
 
-    // Reset filter
-    await filtersPanel.selectOption('all')
+    // Reset to "all" so subsequent tests start clean.
+    await statusPill.selectOption('all')
   })
 })
 
@@ -326,7 +331,10 @@ test.describe('Parameters — Export', () => {
   test.beforeEach(async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/parameters`)
     await page.waitForLoadState('domcontentloaded')
-    await expect(page.locator('h2').filter({ hasText: /parameters/i }).first()).toBeVisible({ timeout: 10_000 })
+    // d303ae2 promoted the page heading to <h1>; the previous <h2>Parameters</h2>
+    // selector never matched and the entire describe-block timed out before
+    // any test ran.
+    await expect(page.locator('h1').filter({ hasText: /parameters/i }).first()).toBeVisible({ timeout: 10_000 })
   })
 
   test('export dropdown opens', async ({ page }) => {
@@ -512,18 +520,21 @@ test.describe('Parameters — Version Compare', () => {
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('table').first()).toBeVisible({ timeout: 10_000 })
 
-    // Open the first DATA row — click the parameter name button (td 2) to open the detail drawer
+    // Open the first DATA row. v2 redesign moved the row-open click target —
+    // the FIRST <button> inside td.col-name is now the Star toggle (it calls
+    // e.stopPropagation), so clicking it does NOT open the drawer. Click the
+    // parameter name span (.nm) inside col-name instead, which lets the
+    // td-level onClick fire onOpenDetail.
     const firstRow = page.locator('table tbody tr').filter({ has: page.locator('td:nth-child(2)') }).first()
     await expect(firstRow).toBeVisible({ timeout: 5_000 })
-    await firstRow.locator('td:nth-child(2) button').first().click()
+    await firstRow.locator('td.col-name span.nm').first().click()
 
     // Drawer should open (ParameterDetailDrawer renders with role="dialog")
     const drawer = page.locator('[role="dialog"]')
     await expect(drawer).toBeVisible({ timeout: 5_000 })
 
-    // If 2+ versions exist, the Compare versions button should be visible
-    const compareBtn = drawer.getByRole('button', { name: /compare versions/i })
-    // Button is only present when >= 2 versions — check non-strictly
+    // v2 button label is just "Compare" (or "Cancel compare" when active).
+    const compareBtn = drawer.getByRole('button', { name: /^compare$/i })
     const hasCompare = await compareBtn.isVisible()
     if (hasCompare) {
       await compareBtn.click()
@@ -744,7 +755,7 @@ test.describe('Parameters — Ctrl+F shortcut', () => {
 
     // Press Ctrl+F and verify the search input receives focus
     await page.keyboard.press('Control+f')
-    const searchInput = page.getByPlaceholder(/search.*ctrl\+f/i)
+    const searchInput = page.getByPlaceholder(/filter parameters/i)
     await expect(searchInput).toBeFocused({ timeout: 3_000 })
   })
 })
@@ -758,22 +769,30 @@ test.describe('Parameters — count badge', () => {
     await page.waitForLoadState('domcontentloaded')
     await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 10_000 })
 
-    // The badge should be visible and contain a number
-    const badge = page.locator('h2 span').first()
-    await expect(badge).toBeVisible({ timeout: 8_000 })
-    const totalText = await badge.innerText()
-    const totalCount = parseInt(totalText, 10)
+    // v2 redesign:
+    //   - <span class="pv-tab-count"> on the Parameters tab always shows
+    //     just the project total (never narrows on search).
+    //   - The "filtered / total" chip lives in <span class="pv-title-meta">
+    //     next to the <h1> and only includes the slash form when narrowed.
+    const tabBadge = page.locator('span.pv-tab-count').first()
+    await expect(tabBadge).toBeVisible({ timeout: 8_000 })
+    const totalText = await tabBadge.innerText()
+    const totalCount = parseInt(totalText.replace(/[^\d]/g, ''), 10)
 
-    // Only run the filtered count assertion if there are parameters to filter
     if (totalCount > 0) {
-      const searchInput = page.getByPlaceholder(/search.*ctrl\+f/i)
-      await searchInput.fill('__nonexistent_xyz__')
-      // Badge should now show "0 / N" format
-      await expect(badge).toHaveText(/0\s*\/\s*\d+/, { timeout: 5_000 })
+      const titleMeta = page.locator('span.pv-title-meta').first()
+      await expect(titleMeta).toBeVisible()
 
-      // Clear search — badge returns to plain number
+      const searchInput = page.getByPlaceholder(/filter parameters/i)
+      await searchInput.fill('__nonexistent_xyz__')
+      // After filtering with no matches, title-meta shows "0 / N records …"
+      await expect(titleMeta).toContainText(/0\s*\/\s*\d+\s+records/i, { timeout: 5_000 })
+
+      // Clear search — title-meta drops the slash and shows just N records
       await searchInput.fill('')
-      await expect(badge).toHaveText(String(totalCount), { timeout: 5_000 })
+      await expect(titleMeta).toContainText(/\d+\s+records/i, { timeout: 5_000 })
+      // Tab badge always remains the project total (locale-formatted).
+      await expect(tabBadge).toContainText(/\d/, { timeout: 5_000 })
     }
   })
 })

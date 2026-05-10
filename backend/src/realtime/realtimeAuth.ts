@@ -92,17 +92,25 @@ export async function verifySocketToken(
 }
 
 /**
- * Admin resolution mirrors auth.middleware.requireAdmin:
- * - SUPERIOR_ADMIN / COMPANY_ADMIN role → admin
+ * Admin resolution for socket-level isAdmin flag.
+ *
+ * #281: Only SUPERIOR_ADMIN gets platform-wide socket admin. COMPANY_ADMIN
+ * is tenant-scoped — it must NOT auto-join ADMIN_LOGS or bypass project
+ * membership across companies. COMPANY_ADMIN access to their OWN company
+ * projects must go through an explicit ProjectMember row or a project:join
+ * handler that walks Project.companyName vs User.company (mirrors
+ * middleware/requireProjectMember).
+ *
+ * - SUPERIOR_ADMIN role → admin
  * - ADMIN_EMAILS env var lists email → admin
- * - otherwise first-registered user is admin
+ * - otherwise first-registered user is admin (bootstrap fallback)
  */
 async function resolveIsAdmin(
   email: string | null,
   role: string | null,
   adminEmailsEnv: string | undefined
 ): Promise<boolean> {
-  if (role === 'SUPERIOR_ADMIN' || role === 'COMPANY_ADMIN') return true
+  if (role === 'SUPERIOR_ADMIN') return true
   if (!email) return false
   const lower = email.toLowerCase()
   if (adminEmailsEnv && adminEmailsEnv.trim().length > 0) {

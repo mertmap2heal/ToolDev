@@ -1,0 +1,25 @@
+# MATLAB
+*.asv
+*.mat~
+slprj/
+sccprj/
+codegen/
+*.autosave
+*.mldatx
+*.mlx~
+
+# Toolbox build artefacts
+*.mltbx
+build/
+dist/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Local secrets / cached tokens
+.env
+prefdir-cache/

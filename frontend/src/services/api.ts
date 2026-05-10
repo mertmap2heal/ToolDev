@@ -4,6 +4,23 @@ import type { ApiResponse } from 'shared/types/api.types'
 // In dev, use relative URL so Vite proxy forwards /api to backend (avoids CORS and localhost vs 127.0.0.1 issues)
 const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api/v1' : 'http://localhost:5000/api/v1')
 
+/**
+ * Safe localStorage wrappers. Safari private mode and some sandboxed
+ * iframes throw SecurityError on `localStorage` access; we don't want
+ * that to crash the axios interceptor and block every request.
+ */
+function safeReadToken(): string | null {
+  try {
+    return localStorage.getItem('token') ?? sessionStorage.getItem('token')
+  } catch {
+    return null
+  }
+}
+function safeRemoveToken(): void {
+  try { localStorage.removeItem('token') } catch { /* private mode */ }
+  try { sessionStorage.removeItem('token') } catch { /* private mode */ }
+}
+
 class ApiClient {
   private client: AxiosInstance
 
@@ -24,7 +41,7 @@ class ApiClient {
         ) {
           config.headers['ngrok-skip-browser-warning'] = '1'
         }
-        const token = localStorage.getItem('token') ?? sessionStorage.getItem('token')
+        const token = safeReadToken()
         if (token) {
           config.headers.Authorization = `Bearer ${token}`
         }
@@ -53,11 +70,10 @@ class ApiClient {
             data.code === 'AI_MISSING_PROJECT_ID'
           )
           if (!nonAuthCode) {
-            const token = localStorage.getItem('token') ?? sessionStorage.getItem('token')
+            const token = safeReadToken()
             if (token) {
               console.log('Token is invalid or expired, removing from storage')
-              localStorage.removeItem('token')
-              sessionStorage.removeItem('token')
+              safeRemoveToken()
               window.dispatchEvent(new CustomEvent('token-expired'))
             }
           }

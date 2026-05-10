@@ -155,9 +155,15 @@ test.describe('Change Requests', () => {
       await modal.getByRole('button', { name: /^save changes$/i }).click()
       await expect(modal).toBeHidden({ timeout: 8_000 })
 
-      // Original row gone, updated row present.
-      await expect(page.locator('table tbody tr').filter({ hasText: original })).toHaveCount(0, { timeout: 8_000 })
-      await expect(page.locator('table tbody tr').filter({ hasText: updated }).first()).toBeVisible({ timeout: 8_000 })
+      // Wait for the refreshed list to surface the updated title FIRST — once
+      // the React Query cache invalidation lands, the row's text reflects the
+      // new title and the original cannot match (`updated` and `original`
+      // share no overlapping substring). Asserting in the other order races
+      // against the refetch from the mutation onSuccess.
+      await expect(page.locator('table tbody tr').filter({ hasText: updated }).first())
+        .toBeVisible({ timeout: 10_000 })
+      await expect(page.locator('table tbody tr').filter({ hasText: original }))
+        .toHaveCount(0, { timeout: 10_000 })
     })
   })
 

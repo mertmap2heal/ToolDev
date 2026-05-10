@@ -212,9 +212,9 @@ export class PurchaseService {
                 warehouse: true,
               },
             },
-            lot: true,
+            // `lot` relation removed — Lot model dropped from schema.
             serial: true,
-          } as any,
+          },
         },
       },
     })
@@ -289,10 +289,10 @@ export class PurchaseService {
                 warehouse: true,
               },
             },
-            lot: true,
+            // `lot` relation removed — Lot model dropped from schema.
             serial: true,
             poLine: true,
-          } as any,
+          },
         },
       },
     })

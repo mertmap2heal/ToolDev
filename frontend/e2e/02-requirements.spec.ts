@@ -12,6 +12,7 @@ import {
   ensureVerificationPlanWithCase,
   openTraceabilityMatrixFromToolbar,
   readAuthToken,
+  resetRequirementsViewPreferences,
   seedE2eLifecycleAndStatusDefinitions,
   selectRequirementsLeftPanelTab,
 } from './helpers/requirementsUi'
@@ -84,7 +85,7 @@ test.describe('Requirements', () => {
   test('open Create Requirement modal', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /create requirement/i }).click()
+    await page.locator('[data-testid="toolbar-create-requirement"]').click()
     await expect(page.locator(MODAL_OVERLAY)).toBeVisible({ timeout: 5_000 })
     await expect(page.locator(MODAL_OVERLAY)).toContainText(/requirement/i)
   })
@@ -92,7 +93,7 @@ test.describe('Requirements', () => {
   test('create modal: Traceability tab shows structured sections', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /create requirement/i }).click()
+    await page.locator('[data-testid="toolbar-create-requirement"]').click()
     const modal = page.locator(MODAL_OVERLAY)
     await expect(modal).toBeVisible({ timeout: 5_000 })
     await modal.getByRole('button', { name: /traceability/i }).click()
@@ -108,7 +109,7 @@ test.describe('Requirements', () => {
   test('create modal: required field validation', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /create requirement/i }).click()
+    await page.locator('[data-testid="toolbar-create-requirement"]').click()
     await expect(page.locator(MODAL_OVERLAY)).toBeVisible({ timeout: 5_000 })
     // Submit without filling anything
     await page.locator(MODAL_OVERLAY).getByRole('button', { name: /^create/i }).click()
@@ -119,7 +120,7 @@ test.describe('Requirements', () => {
   test('create modal: no unsaved-changes warning on clean open/close', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /create requirement/i }).click()
+    await page.locator('[data-testid="toolbar-create-requirement"]').click()
     await expect(page.locator(MODAL_OVERLAY)).toBeVisible({ timeout: 5_000 })
     // Cancel immediately without typing — guardClose should just close
     await page.locator(MODAL_OVERLAY).getByRole('button', { name: /cancel/i }).click()
@@ -131,7 +132,7 @@ test.describe('Requirements', () => {
   test('create modal: unsaved-changes warning after typing', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /create requirement/i }).click()
+    await page.locator('[data-testid="toolbar-create-requirement"]').click()
     const modal = page.locator(MODAL_OVERLAY)
     await expect(modal).toBeVisible({ timeout: 5_000 })
     // Wait for suppression window to expire before typing
@@ -148,7 +149,7 @@ test.describe('Requirements', () => {
   test('create modal: Clear all button appears after typing', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /create requirement/i }).click()
+    await page.locator('[data-testid="toolbar-create-requirement"]').click()
     const modal = page.locator(MODAL_OVERLAY)
     await expect(modal).toBeVisible({ timeout: 5_000 })
     // Wait for suppression window before typing
@@ -161,7 +162,7 @@ test.describe('Requirements', () => {
   test('create modal: Keep for later preserves draft on reopen', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: /create requirement/i }).click()
+    await page.locator('[data-testid="toolbar-create-requirement"]').click()
     const modal = page.locator(MODAL_OVERLAY)
     await expect(modal).toBeVisible({ timeout: 5_000 })
     await page.waitForTimeout(AFTER_OPEN_WAIT)
@@ -170,7 +171,7 @@ test.describe('Requirements', () => {
     await modal.getByRole('button', { name: /cancel/i }).click()
     await page.getByRole('button', { name: /keep for later/i }).click()
     // Reopen — isDirty was preserved → Clear all should appear immediately
-    await page.getByRole('button', { name: /create requirement/i }).click()
+    await page.locator('[data-testid="toolbar-create-requirement"]').click()
     await expect(page.locator(MODAL_OVERLAY).getByRole('button', { name: /clear all/i })).toBeVisible({ timeout: 5_000 })
   })
 
@@ -224,18 +225,75 @@ test.describe('Requirements', () => {
   test('Document view: collapsible sections persist on reload', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
+    // The previous test ("Columns picker affects both Table and Document views")
+    // can leave server-side prefs at listViewStyle:'document'; the View toggle
+    // label then reads "Table View" and the click below would time out.
+    await resetRequirementsViewPreferences(page, projectId, { listViewStyle: 'table' })
+
+    // Document view renders an empty state ("No requirements found") when the
+    // project has no requirements. Make sure at least one row exists before
+    // we switch — without this seed the toggle button below never renders
+    // and the test times out.
+    const token = await readAuthToken(page)
+    const listResp = await page.request.get(
+      `${E2E_API_V1}/requirements/${projectId}?page=1&pageSize=1`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    if (listResp.ok()) {
+      const body = await listResp.json()
+      const total: number = body?.data?.total ?? 0
+      if (total === 0) {
+        await page.request.post(`${E2E_API_V1}/requirements/${projectId}`, {
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          data: {
+            title: 'E2E doc-view seed',
+            description: 'Created by Playwright so document view renders at least one card.',
+          },
+        })
+      }
+    }
+
+    await page.reload({ waitUntil: 'domcontentloaded' })
 
     // Switch to Document View
     await page.getByRole('button', { name: /^view/i }).click()
     await page.getByRole('button', { name: /document view/i }).click()
 
-    const firstCard = page.locator('div.shadow-sm').first()
-    const detailsToggle = firstCard.getByRole('button', { name: /requirement details/i })
-    await detailsToggle.click()
+    // Anchor on the toggle button itself — the surrounding card markup
+    // (compound bg/border/shadow class chains) was brittle when the page
+    // also renders a wrapping panel with overlapping classes. The toggle's
+    // accessible name is its inner text "Requirement Details ({n})" and
+    // its `title` attribute flips between "Expand details" and "Collapse
+    // details" — the perfect proof of collapsed state.
+    const toggle = page.getByRole('button', { name: /requirement details/i }).first()
+    await expect(toggle).toBeVisible({ timeout: 15_000 })
+    // Pre-click: details are expanded ("Collapse details").
+    await expect(toggle).toHaveAttribute('title', /Collapse details/i, { timeout: 5_000 })
+    await toggle.click()
+    // After click: collapsed.
+    await expect(toggle).toHaveAttribute('title', /Expand details/i, { timeout: 5_000 })
 
-    // Reload and ensure details are still collapsed (no table cells for a typical field like Priority)
+    // The page debounces the prefs PUT at 800ms. Reloading before the
+    // server has the new docCollapsedSections re-hydrates with the OLD
+    // server value, which overwrites localStorage and the card boots
+    // expanded again. Wait for the next prefs PUT to land before reload.
+    await page
+      .waitForResponse(
+        (resp) =>
+          /\/api\/v1\/projects\/[^/]+\/requirements\/view-preferences/.test(resp.url()) &&
+          resp.request().method() === 'PUT' &&
+          resp.ok(),
+        { timeout: 5_000 },
+      )
+      .catch(() => { /* fall through to a hard wait */ })
+    await page.waitForTimeout(200)
+
+    // Reload and ensure the collapse state was persisted in
+    // docCollapsedSections (localStorage + server prefs).
     await page.reload({ waitUntil: 'domcontentloaded' })
-    await expect(page.locator('div.shadow-sm').first().getByText(/^Priority$/)).toHaveCount(0)
+    const toggleAfter = page.getByRole('button', { name: /requirement details/i }).first()
+    await expect(toggleAfter).toBeVisible({ timeout: 15_000 })
+    await expect(toggleAfter).toHaveAttribute('title', /Expand details/i, { timeout: 5_000 })
   })
 
   test('Manage menu: Audit log opens audit log modal', async ({ page, projectId }) => {
@@ -264,6 +322,11 @@ test.describe('Requirements', () => {
     try {
       await page.goto(`/projects/${projectId}/requirements`)
       await page.waitForLoadState('domcontentloaded')
+      // Server-side prefs may persist from a prior test; localStorage clear
+      // alone is not enough because prefsQuery rehydrates from the API.
+      await resetRequirementsViewPreferences(page, projectId, {
+        listViewStyle: 'table',
+      })
       await page.evaluate(() => {
         try {
           localStorage.removeItem('requirements-columns')
@@ -277,7 +340,7 @@ test.describe('Requirements', () => {
       await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
 
       const uniq = `e2e_ui_${Date.now()}`
-      await page.getByRole('button', { name: /create requirement/i }).click()
+      await page.locator('[data-testid="toolbar-create-requirement"]').click()
       const modal = page.locator(MODAL_OVERLAY)
       await expect(modal).toBeVisible({ timeout: 5_000 })
       await page.waitForTimeout(AFTER_OPEN_WAIT)
@@ -355,6 +418,12 @@ test.describe('Requirements', () => {
     })
     expect(createResp.ok(), await createResp.text()).toBeTruthy()
 
+    // Reset server-side prefs so the description column is visible again
+    // (prior "Columns picker" test hid it server-side via prefsMutation).
+    await resetRequirementsViewPreferences(page, projectId, {
+      listViewStyle: 'table',
+      visibleFieldKeys: ['requirementId', 'title', 'description', 'priority', 'status', 'owner'],
+    })
     await page.evaluate(() => {
       try {
         localStorage.removeItem('requirements-columns')
@@ -388,6 +457,8 @@ test.describe('Requirements', () => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
     const token = await readAuthToken(page)
+    // Server-side prefs may force document view, hiding the table chevron.
+    await resetRequirementsViewPreferences(page, projectId, { listViewStyle: 'table' })
 
     const listResp = await page.request.get(
       `${E2E_API_V1}/requirements/${projectId}?page=1&pageSize=1`,
@@ -472,11 +543,20 @@ test.describe('Requirements', () => {
   test('child requirements: parent row can be expanded to reveal children', async ({ page, projectId }) => {
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
+    // Server-side prefs may force document view; the table chevron only renders in table mode.
+    await resetRequirementsViewPreferences(page, projectId, { listViewStyle: 'table' })
+    await page.reload({ waitUntil: 'domcontentloaded' })
     // Wait for the requirements table to render
     await expect(page.locator('table, h1, h2').first()).toBeVisible({ timeout: 10_000 })
 
-    // Look for expand/chevron buttons (rows with children have an expand toggle)
-    const expandBtn = page.locator('button[aria-label*="expand" i], button[title*="expand" i], [data-testid*="expand"], td button svg').first()
+    // Scope to the table chevron (aria-label "Expand linked items, change requests, description").
+    // The previous broad union (button[title*="expand"], td button svg) matched the
+    // RequirementDocumentCard "Expand details" toggle and every row action SVG.
+    const expandBtn = page
+      .locator('table tbody tr')
+      .first()
+      .locator('button[aria-label*="expand linked" i], button[title*="expand linked" i]')
+      .first()
     const hasExpand = await expandBtn.isVisible({ timeout: 3_000 }).catch(() => false)
 
     if (!hasExpand) {

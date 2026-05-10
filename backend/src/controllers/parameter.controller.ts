@@ -148,8 +148,31 @@ async function generateParameterId(
   return prisma.$transaction((inner) => allocateParameterId(inner, projectId))
 }
 
-function buildParameterWhere(projectId: string, query: Record<string, string | undefined>) {
+function buildParameterWhere(
+  projectId: string,
+  query: Record<string, string | undefined>,
+  opts: { hasItarAccess?: boolean; requestedAuthorType?: string } = {},
+) {
   const where: Record<string, unknown> = { projectId }
+
+  // ITAR filter (plan §2.1 item 18). Classification=itar rows are
+  // invisible to users who lack ITAR access. The MCP server already
+  // enforces this server-side; this layer does it for the REST API.
+  // Intentionally silent (not a 403) so users without clearance are
+  // not given a side-channel signal that the row exists.
+  if (!opts.hasItarAccess) {
+    where.classification = { not: 'itar' }
+  }
+
+  // authorType filter (plan §2.1 / AI provenance). Allows the UI to
+  // ship a "recently AI-modified" saved view by passing e.g.
+  //   authorType=ai_suggestion,ai_accepted,ai_applied
+  if (opts.requestedAuthorType) {
+    const parts = opts.requestedAuthorType.split(',').map((v) => v.trim()).filter(Boolean)
+    if (parts.length > 0) {
+      where.authorType = parts.length === 1 ? parts[0] : { in: parts }
+    }
+  }
   // Free-text search (alias: `q`). Searches name + description + dataType
   // with case-insensitive substring. Aerospace-scale projects should
   // prefer the paged endpoint with this filter so the network payload
@@ -181,9 +204,20 @@ function buildParameterWhere(projectId: string, query: Record<string, string | u
   if (units) where.unit = units.length === 1 ? units[0] : { in: units }
 
   if (query.ownerType) where.ownerType = query.ownerType
+  // folderId accepts:
+  //   "__none__"           -> only ungrouped (folderId = null)
+  //   "<uuid>"             -> exact folder
+  //   "<uuid>,<uuid>,..."  -> any of those folders (used for subtree selection)
   if (query.folderId !== undefined && query.folderId !== '') {
-    if (query.folderId === '__none__') where.folderId = null
-    else where.folderId = query.folderId
+    if (query.folderId === '__none__') {
+      where.folderId = null
+    } else if (typeof query.folderId === 'string' && query.folderId.includes(',')) {
+      const ids = query.folderId.split(',').map(s => s.trim()).filter(Boolean)
+      if (ids.length === 1) where.folderId = ids[0]
+      else if (ids.length > 1) where.folderId = { in: ids }
+    } else {
+      where.folderId = query.folderId
+    }
   }
 
   // hasFormula as a tri-state: "true" => must have formula, "false" =>
@@ -301,10 +335,24 @@ export const getParameters = async (req: AuthRequest, res: Response) => {
       folderId,
       hasFormula,
       tags,
+      authorType,
       sort = 'updatedAt',
       order = 'desc',
       includeUsageCounts,
     } = q
+
+    // Role-gated ITAR access. Fine-grained per-project scope lands in a
+    // follow-up; for now SUPERIOR_ADMIN + COMPANY_ADMIN see classified
+    // rows so regulated customers have at least one access path while
+    // the explicit scope feature is built. The JWT only carries userId
+    // so we fetch the role per request (one extra query - acceptable
+    // because list is idempotent and the read is cached by Postgres).
+    const userId = req.user?.userId ?? req.user?.id
+    const userRoleRow = userId
+      ? await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+      : null
+    const hasItarAccess =
+      userRoleRow?.role === 'SUPERIOR_ADMIN' || userRoleRow?.role === 'COMPANY_ADMIN'
 
     // Pagination — opt-in. Existing callers that pass no `page` param
     // get the legacy unbounded response so nothing breaks. New callers
@@ -317,17 +365,21 @@ export const getParameters = async (req: AuthRequest, res: Response) => {
       ? Math.max(1, Math.min(Number.isFinite(rawPageSize) ? rawPageSize : 50, 500))
       : undefined
 
-    const where = buildParameterWhere(projectId, {
-      q: qSearch,
-      search,
-      status,
-      dataType,
-      unit,
-      ownerType,
-      folderId,
-      hasFormula,
-      tags,
-    })
+    const where = buildParameterWhere(
+      projectId,
+      {
+        q: qSearch,
+        search,
+        status,
+        dataType,
+        unit,
+        ownerType,
+        folderId,
+        hasFormula,
+        tags,
+      },
+      { hasItarAccess, requestedAuthorType: authorType },
+    )
 
     // Prisma does not support array_contains on Json, so tag filtering
     // still runs in memory after the query. When paginating, the count
@@ -1008,9 +1060,18 @@ export async function exportParametersHandler(req: AuthRequest, res: Response) {
 
     const meta = getExportMeta(format)
     const isBinary = (BINARY_EXPORT_FORMATS as readonly string[]).includes(format)
-    const content = isBinary
-      ? await exportParametersBinary(format, params)
-      : formatExport(format, params)
+    let content: string | Buffer
+    if (format === 'reqif') {
+      // ReqIF needs the DB-level parameter (description, formula,
+      // classification) — bypass the ExportParameter mapping above and
+      // hit the dedicated builder.
+      const { exportParametersAsReqIF } = await import('../services/parameterReqif.service')
+      content = await exportParametersAsReqIF({ projectId })
+    } else if (isBinary) {
+      content = await exportParametersBinary(format, params)
+    } else {
+      content = formatExport(format, params)
+    }
     res.setHeader('Content-Type', meta.contentType)
     res.setHeader('Content-Disposition', `attachment; filename="${meta.filename}"`)
     res.send(content)
@@ -1035,6 +1096,28 @@ export async function importParametersHandler(req: AuthRequest, res: Response) {
 
     if (!content) {
       return res.status(400).json({ success: false, error: 'Missing "content" in request body' })
+    }
+
+    // ReqIF takes a different code path — it has its own match-by-name
+    // upsert logic and produces a different result envelope.
+    if (format === 'reqif' || (filename && filename.toLowerCase().endsWith('.reqif'))) {
+      const { importParametersFromReqIF } = await import('../services/parameterReqif.service')
+      const result = await importParametersFromReqIF({
+        projectId,
+        xml: content,
+        dryRun: false,
+      })
+      return res.json({
+        success: true,
+        data: {
+          format: 'reqif',
+          imported: result.imported,
+          updated: result.updated,
+          skipped: result.skipped,
+          errors: result.errors,
+          warnings: [],
+        },
+      })
     }
 
     const resolvedFormat = format ?? (filename ? detectFormat(filename, content) : null)

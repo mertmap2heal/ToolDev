@@ -371,79 +371,118 @@ export const reqifService = {
       throw new Error('Project not found')
     }
 
-    // Process each spec object
-    for (let i = 0; i < specObjects.length; i++) {
-      const specObj = specObjects[i]
+    // Bucket existing-vs-new with one findMany, then bulk createMany for new
+    // and capped-parallel updates. Replaces the per-row N+1 (findFirst + update/create).
+    type MappedRow = { row: number; req: any | null; err?: string }
+    const mapped: MappedRow[] = specObjects.map((s, i) => {
       try {
-        const requirement = this.mapSpecObjectToRequirement(specObj, projectId)
-
-        // Check if requirement already exists (by requirementId if available)
-        let existing = null
-        if (requirement.requirementId) {
-          existing = await prisma.requirement.findFirst({
-            where: {
-              projectId,
-              requirementId: requirement.requirementId,
-            },
-          })
-        }
-
-        if (existing) {
-          // Update existing requirement
-          const updatedRequirement = await prisma.requirement.update({
-            where: { id: existing.id },
-            data: {
-              title: requirement.title,
-              description: requirement.description,
-              priority: requirement.priority || existing.priority,
-              status: requirement.status || existing.status,
-              requirementType: requirement.requirementType || existing.requirementType,
-              requirementLevel: requirement.requirementLevel || existing.requirementLevel,
-              risk: requirement.risk || existing.risk,
-              complexity: requirement.complexity || existing.complexity,
-              rationale: requirement.rationale || existing.rationale,
-              assumptions: requirement.assumptions || existing.assumptions,
-              owner: requirement.owner || existing.owner,
-              category: requirement.category || existing.category,
-              source: requirement.source || existing.source,
-              tags: requirement.tags || existing.tags,
-              verificationStatus: requirement.verificationStatus || existing.verificationStatus,
-              verificationNotes: requirement.verificationNotes || existing.verificationNotes,
-            },
-          })
-
-          const changes = buildRequirementChangeSummary(existing as any, updatedRequirement as any)
-          await notifyRequirementSubscribers({
-            projectId,
-            requirementId: updatedRequirement.id,
-            actorUserId,
-            changes,
-            requirementSnapshot: {
-              id: updatedRequirement.id,
-              requirementId: updatedRequirement.requirementId,
-              title: updatedRequirement.title,
-            },
-          })
-          updated.push(i)
-        } else {
-          // Create new requirement
-          await prisma.requirement.create({
-            data: {
-              ...requirement,
-              projectId,
-              priority: requirement.priority || 'medium',
-              status: requirement.status || 'draft',
-            },
-          })
-          created.push(i)
-        }
-      } catch (error: any) {
-        errors.push({
-          row: i + 1,
-          errors: [error.message || 'Failed to import requirement'],
-        })
-        skipped.push(i)
+        return { row: i, req: this.mapSpecObjectToRequirement(s, projectId) }
+      } catch (e: any) {
+        return { row: i, req: null, err: e?.message || 'Failed to map SPEC-OBJECT' }
       }
+    })
+    for (const m of mapped) {
+      if (m.err) {
+        errors.push({ row: m.row + 1, errors: [m.err] })
+        skipped.push(m.row)
+      }
+    }
+
+    const idCarrying = mapped.filter((m) => m.req && m.req.requirementId)
+    const incomingIds = idCarrying.map((m) => m.req.requirementId as string)
+    const existingRows = incomingIds.length
+      ? await prisma.requirement.findMany({
+          where: { projectId, requirementId: { in: incomingIds } },
+        })
+      : []
+    const existingByReqId = new Map(existingRows.map((e) => [e.requirementId as string, e]))
+
+    const toCreate: any[] = []
+    const createdIndices: number[] = []
+    const updateOps: Array<{ index: number; existing: typeof existingRows[number]; req: any }> = []
+    for (const m of mapped) {
+      if (!m.req) continue
+      const exist = m.req.requirementId ? existingByReqId.get(m.req.requirementId) : undefined
+      if (exist) {
+        updateOps.push({ index: m.row, existing: exist, req: m.req })
+      } else {
+        toCreate.push({
+          ...m.req,
+          projectId,
+          priority: m.req.priority || 'medium',
+          status: m.req.status || 'draft',
+        })
+        createdIndices.push(m.row)
+      }
+    }
+
+    if (toCreate.length > 0) {
+      try {
+        await prisma.requirement.createMany({ data: toCreate, skipDuplicates: true })
+        for (const idx of createdIndices) created.push(idx)
+      } catch (error: any) {
+        // Fall back to per-row inserts so successful rows still land and per-row
+        // errors map to the right `errors[]` index, preserving previous failure semantics.
+        for (let k = 0; k < toCreate.length; k++) {
+          const idx = createdIndices[k]
+          try {
+            await prisma.requirement.create({ data: toCreate[k] })
+            created.push(idx)
+          } catch (e: any) {
+            errors.push({ row: idx + 1, errors: [e?.message || 'Failed to import requirement'] })
+            skipped.push(idx)
+          }
+        }
+      }
+    }
+
+    const UPDATE_CONCURRENCY = 16
+    for (let i = 0; i < updateOps.length; i += UPDATE_CONCURRENCY) {
+      const slice = updateOps.slice(i, i + UPDATE_CONCURRENCY)
+      await Promise.all(
+        slice.map(async ({ index, existing, req: requirement }) => {
+          try {
+            const updatedRequirement = await prisma.requirement.update({
+              where: { id: existing.id },
+              data: {
+                title: requirement.title,
+                description: requirement.description,
+                priority: requirement.priority || existing.priority,
+                status: requirement.status || existing.status,
+                requirementType: requirement.requirementType || (existing as any).requirementType,
+                requirementLevel: requirement.requirementLevel || (existing as any).requirementLevel,
+                risk: requirement.risk || (existing as any).risk,
+                complexity: requirement.complexity || (existing as any).complexity,
+                rationale: requirement.rationale || (existing as any).rationale,
+                assumptions: requirement.assumptions || (existing as any).assumptions,
+                owner: requirement.owner || existing.owner,
+                category: requirement.category || existing.category,
+                source: requirement.source || existing.source,
+                tags: requirement.tags || existing.tags,
+                verificationStatus: requirement.verificationStatus || (existing as any).verificationStatus,
+                verificationNotes: requirement.verificationNotes || (existing as any).verificationNotes,
+              },
+            })
+
+            const changes = buildRequirementChangeSummary(existing as any, updatedRequirement as any)
+            await notifyRequirementSubscribers({
+              projectId,
+              requirementId: updatedRequirement.id,
+              actorUserId,
+              changes,
+              requirementSnapshot: {
+                id: updatedRequirement.id,
+                requirementId: updatedRequirement.requirementId,
+                title: updatedRequirement.title,
+              },
+            })
+            updated.push(index)
+          } catch (error: any) {
+            errors.push({ row: index + 1, errors: [error?.message || 'Failed to import requirement'] })
+            skipped.push(index)
+          }
+        }),
+      )
     }
 
     return {

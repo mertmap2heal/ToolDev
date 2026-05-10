@@ -3426,6 +3426,7 @@ export default function RequirementsPage() {
                 setIsCreateModalOpen(true)
               }}
               disabled={isBaselineView}
+              data-testid="toolbar-create-requirement"
               className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-colors flex-shrink-0"
             >
               <Plus size={16} />

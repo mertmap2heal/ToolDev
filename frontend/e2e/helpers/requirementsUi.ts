@@ -4,8 +4,14 @@ import { expect } from '@playwright/test'
 /** Modals in this app use a full-viewport fixed overlay, not role="dialog". */
 export const MODAL_OVERLAY = '.fixed.inset-0'
 
-/** Raw backend base URL for `page.request` (matches other requirements e2e helpers). */
-export { E2E_API_V1 } from './api'
+/**
+ * Raw backend base URL for `page.request` (matches other requirements e2e helpers).
+ * NB: must be `import` + `export`, not a bare `export ... from` re-export — the
+ * latter does NOT bind the symbol locally and the helper functions below would
+ * throw `ReferenceError: E2E_API_V1 is not defined` at runtime.
+ */
+import { E2E_API_V1 } from './api'
+export { E2E_API_V1 }
 
 function bearerJsonHeaders(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
@@ -230,14 +236,49 @@ export async function readAuthToken(page: Page): Promise<string> {
 }
 
 /**
+ * Reset server-persisted Requirements view preferences for a project.
+ *
+ * The Requirements page persists `listViewStyle`, `visibleFieldKeys`, etc. via
+ * `prefsMutation` to /projects/:id/requirements/view-preferences after an
+ * 800ms debounce, and re-hydrates from `prefsQuery` on every mount. Tests
+ * that previously switched to Document View or hid columns will leak that
+ * state into subsequent tests across spec files because the worker runs
+ * with a single account against a single shared project.
+ *
+ * Call this before navigating to /requirements in any test that depends on
+ * the table view + default column set being present. If the test already
+ * does a `page.reload()` later, the preceding PUT will be picked up there;
+ * otherwise call it before the first `page.goto` and reload manually.
+ */
+export async function resetRequirementsViewPreferences(
+  page: Page,
+  projectId: string,
+  preferences: Record<string, unknown> = { listViewStyle: 'table' },
+): Promise<void> {
+  const token = await readAuthToken(page)
+  await page.request.put(
+    `${E2E_API_V1}/projects/${projectId}/requirements/view-preferences`,
+    {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: { preferences },
+    },
+  ).catch(() => { /* best effort — fall back to localStorage clear + reload */ })
+}
+
+/**
  * Requirements toolbar: Traceability opens a menu; the matrix modal opens from the menu item.
+ *
+ * The menu item button text "Traceability Matrix" appears more than once on the
+ * page (toolbar menu item + the modal heading + breadcrumb). We scope the click
+ * to the dropdown panel using its layout class, then wait for the modal heading.
  */
 export async function openTraceabilityMatrixFromToolbar(
   page: Page,
   opts?: { headingTimeout?: number },
 ): Promise<void> {
   await page.getByRole('button', { name: /^Traceability$/ }).click()
-  await page.getByRole('button', { name: /traceability matrix/i }).click()
+  const dropdown = page.locator('div.absolute.left-0.top-full')
+  await dropdown.getByRole('button', { name: /^Traceability Matrix$/ }).click()
   await expect(page.getByRole('heading', { name: /traceability matrix/i })).toBeVisible({
     timeout: opts?.headingTimeout ?? 15_000,
   })

@@ -282,52 +282,72 @@ export default function EditParameterModal({
   if (!isOpen || !parameter) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}>
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Edit Parameter: @{parameter.name}@
-            </h2>
-            <div className="flex items-center gap-3 mt-1">
-              <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
-                <span>ID: <code className="font-mono">{parameter.id.slice(0, 8)}…</code></span>
-                <button
-                  type="button"
-                  title="Copy full ID"
-                  onClick={() => handleCopy(parameter.id, 'id')}
-                  className="p-0.5 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                >
-                  {copiedField === 'id' ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
-                </button>
-              </span>
-              <span className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
-                <span>Copy name</span>
-                <button
-                  type="button"
-                  title="Copy parameter name"
-                  onClick={() => handleCopy(parameter.name, 'name')}
-                  className="p-0.5 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                >
-                  {copiedField === 'name' ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
-                </button>
-              </span>
-            </div>
+    <div
+      className="params-v2 fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      onClick={(e) => { if (e.target === e.currentTarget) guardClose() }}
+    >
+      <div
+        className="pv-drawer-shell"
+        style={{
+          width: '100%',
+          maxWidth: 760,
+          maxHeight: '90vh',
+          margin: 0,
+        }}
+      >
+        {/* Header — id + name + actions */}
+        <div className="pv-dr-head">
+          <span className="pv-dr-id">
+            {parameter.parameterId || parameter.id.slice(0, 8)}
+          </span>
+          <span className="pv-dr-name" title={parameter.name}>{parameter.name}</span>
+          <span className="pv-dr-spacer" />
+          <button
+            type="button"
+            onClick={() => handleCopy(parameter.id, 'id')}
+            className="pv-icon-btn"
+            title="Copy ID"
+          >
+            {copiedField === 'id' ? <Check size={13} style={{ color: 'var(--pv-green)' }} /> : <Copy size={13} />}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleCopy(parameter.name, 'name')}
+            className="pv-icon-btn"
+            title="Copy name"
+          >
+            {copiedField === 'name' ? <Check size={13} style={{ color: 'var(--pv-green)' }} /> : <Copy size={13} />}
+          </button>
+          <button
+            type="button"
+            onClick={guardClose}
+            className="pv-icon-btn"
+            aria-label="Close"
+            title="Close"
+          >
+            <X size={15} />
+          </button>
+        </div>
+
+        {/* Sub-header — display name + dirty indicator */}
+        <div className="pv-dr-sub">
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+            <span className="pv-dr-display">Edit parameter</span>
+            <span className="pv-dr-display-id">{parameter.parameterId || parameter.id.slice(0, 8)}</span>
+            <span style={{ marginLeft: 'auto' }}>{draftBanner}</span>
           </div>
-          <div className="flex items-center gap-2">
-            {draftBanner}
-            <button
-              onClick={guardClose}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-            >
-              <X size={20} className="text-gray-600 dark:text-gray-400" />
-            </button>
-          </div>
+          <p className="pv-dr-desc" style={{ marginTop: 4 }}>
+            Editing will create a new version. Changes propagate to all references on save.
+          </p>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form
+          id="edit-parameter-form"
+          onSubmit={handleSubmit}
+          className="pv-dr-body"
+          style={{ padding: '14px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}
+        >
           {/* Parameter Name (editable for centralized library) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">
@@ -510,25 +530,32 @@ export default function EditParameterModal({
             </div>
           )}
 
-          {/* Actions */}
-          <div className="flex items-center justify-end gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+        </form>
+
+        {/* Footer — sticky pv-dr-foot */}
+        <div className="pv-dr-foot">
+          <span className="left">
+            Editing creates a new version on save.
+          </span>
+          <span className="right">
             <button
               type="button"
               onClick={guardClose}
-              className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+              className="pv-dr-btn"
               disabled={updateParameterMutation.isPending}
             >
               Cancel
             </button>
             <button
               type="submit"
+              form="edit-parameter-form"
               disabled={updateParameterMutation.isPending}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="pv-dr-btn primary"
             >
-              {updateParameterMutation.isPending ? 'Saving...' : 'Save Changes'}
+              {updateParameterMutation.isPending ? 'Saving…' : 'Save changes'}
             </button>
-          </div>
-        </form>
+          </span>
+        </div>
       </div>
 
       {/* Type Management slide-in panel */}

@@ -31,6 +31,8 @@ export interface GetParametersPageQuery {
   unit?: string
   hasFormula?: 'true' | 'false'
   folderId?: string
+  /** Comma-separated list of authorType values, e.g. "ai_suggestion,ai_accepted" */
+  authorType?: string
   sort?: string
   order?: 'asc' | 'desc'
   includeUsageCounts?: boolean
@@ -92,6 +94,7 @@ export const parameterService = {
     if (query.unit) params.set('unit', query.unit)
     if (query.hasFormula) params.set('hasFormula', query.hasFormula)
     if (query.folderId !== undefined) params.set('folderId', query.folderId)
+    if (query.authorType) params.set('authorType', query.authorType)
     if (query.sort) params.set('sort', query.sort)
     if (query.order) params.set('order', query.order)
     if (query.includeUsageCounts) params.set('includeUsageCounts', 'true')

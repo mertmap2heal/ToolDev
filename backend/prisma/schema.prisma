@@ -44,6 +44,7 @@ model User {
   parameterMcpKeys                    ParameterMcpKey[]
   aiInvocations                       AiInvocation[]
   submittedBulkJobs                   ParameterBulkJob[]
+  aiCredentials                       UserAiCredential[]
 }
 
 // Admin roles: permission templates (Viewer, Editor, Admin, etc.). Company-scoped via companyKey.
@@ -162,9 +163,14 @@ model Project {
   // AI feature flag (ai-ready-vision.md §5). Global env kill-switch
   // (FEATURES_AI_ENABLED) overrides this; this field is the per-project
   // opt-in that a project admin sets.
-  aiEnabled   Boolean   @default(false)
-  aiEnabledAt DateTime?
-  aiEnabledBy String?
+  aiEnabled       Boolean   @default(false)
+  aiEnabledAt     DateTime?
+  aiEnabledBy     String?
+  // Optional per-project self-hosted OpenAI-compatible endpoint URL.
+  // Slots into the provider precedence chain (see aiProvider/index.ts):
+  //   BYOK -> project self-hosted -> env default. Used by air-gap or
+  //   ITAR customers running their own llama.cpp / vLLM / Azure OpenAI.
+  aiSelfHostedUrl String?
 
   createdAt                   DateTime                     @default(now())
   updatedAt                   DateTime                     @updatedAt
@@ -198,6 +204,8 @@ model Project {
   parameterMcpKeys            ParameterMcpKey[]
   aiInvocations               AiInvocation[]
   parameterBulkJobs           ParameterBulkJob[]
+  parameterBaselines          ParameterBaseline[]
+  parameterScenarios          ParameterScenario[]
   items                       Item[]
   verTestResults              VerTestResult[]
   tasks                       Task[]
@@ -596,6 +604,8 @@ model SystemFunction {
 
   @@index([projectId])
   @@index([parentId])
+  @@index([projectId, parentId])
+  @@index([projectId, pbsComponentId])
 }
 
 model Architecture {
@@ -702,6 +712,9 @@ model Issue {
   @@index([issueKey])
   @@index([status])
   @@index([assigneeId])
+  @@index([projectId, status])
+  @@index([assigneeId, status])
+  @@index([relatedFunctionIds(ops: ArrayOps)], type: Gin)
 }
 
 model IssueComment {
@@ -1598,6 +1611,10 @@ model AuditLog {
   action    String
   details   String?
   createdAt DateTime @default(now())
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([action])
 }
 
 model ProjectAnalytics {
@@ -3233,6 +3250,8 @@ model ComplianceFinding {
 
   @@index([projectId])
   @@index([createdAt])
+  @@index([runId])
+  @@index([ruleId])
 }
 
 // ----- Certification module -----
@@ -3822,4 +3841,101 @@ model ParameterBulkJob {
 
   @@index([projectId, status])
   @@index([submittedBy, createdAt])
+}
+
+// BYOK — per-user encrypted AI provider API key. The plaintext key never
+// leaves `aiCredentials.service.ts`; it is decrypted only for a single
+// outbound call and zeroed from memory after use. `keyCiphertext` stores
+// the AES-256-GCM envelope (iv || tag || ciphertext, base64). `keyMeta`
+// carries non-secret hints the UI can display (masked tail, label).
+model UserAiCredential {
+  id            String    @id @default(uuid())
+  userId        String
+  provider      String // "anthropic" | "openai" | "azure" | "google" | "self_hosted"
+  label         String // user-supplied friendly name
+  keyCiphertext String // base64 AES-256-GCM envelope
+  maskedTail    String // last 4 chars of the plaintext, for UI display
+  scopes        String[] // optional, provider-agnostic ("draft","review","impact")
+  lastUsedAt    DateTime?
+  revokedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, provider])
+  @@index([userId, revokedAt])
+}
+
+// Parameter-only baseline. Captures a point-in-time snapshot of every
+// parameter in the project so authors can compare current state to a
+// baseline and roll back on demand. Distinct from the requirements
+// `Baseline` model — they live independently because they have different
+// approval flows and snapshot shapes.
+model ParameterBaseline {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  description String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  items   ParameterBaselineItem[]
+  project Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+}
+
+model ParameterBaselineItem {
+  id          String   @id @default(uuid())
+  baselineId  String
+  parameterId String
+  // Full Parameter row at baseline time (json). Restoring writes the
+  // contained name / dataType / defaultValue / unit / status / formula
+  // / etc back onto the live row, creating a new ParameterVersion in
+  // the process.
+  snapshot    Json
+  createdAt   DateTime @default(now())
+
+  baseline ParameterBaseline @relation(fields: [baselineId], references: [id], onDelete: Cascade)
+
+  @@index([baselineId])
+  @@index([parameterId])
+}
+
+// Parameter scenarios — named what-if overlays. A scenario carries a
+// list of (parameterId -> overrideValue) pairs that the UI overlays
+// on top of the live parameter set when the scenario is "active".
+// Pure projection — overlays never mutate the underlying parameter
+// row. Serialised next to parameters.json on Git publish so consumers
+// of the published file can replay a scenario offline.
+model ParameterScenario {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  description String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  overrides ParameterScenarioOverride[]
+  project   Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, name])
+  @@index([projectId, createdAt])
+}
+
+model ParameterScenarioOverride {
+  id          String   @id @default(uuid())
+  scenarioId  String
+  parameterId String
+  // Override value as a string in the same encoding as
+  // Parameter.defaultValue so the apply step is a flat string swap.
+  value       String
+  createdAt   DateTime @default(now())
+
+  scenario ParameterScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  @@unique([scenarioId, parameterId])
+  @@index([scenarioId])
 }

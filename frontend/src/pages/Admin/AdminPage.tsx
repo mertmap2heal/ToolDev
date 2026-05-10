@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Users, FolderOpen, Shield, Bookmark, ListOrdered } from 'lucide-react'
+import { Users, FolderOpen, Shield, Bookmark, ListOrdered, Sparkles } from 'lucide-react'
+import AiInvocationsPage from './AiInvocationsPage'
 import UsersTab from '../../components/admin/UsersTab'
 import ProjectsTab from '../../components/admin/ProjectsTab'
 import RolesTab from '../../components/admin/RolesTab'
@@ -76,6 +77,7 @@ const TABS = [
   { id: 'roles', label: 'Roles', icon: Shield },
   { id: 'authorities', label: 'Authorities', icon: Bookmark },
   { id: 'audit', label: 'Audit Log', icon: ListOrdered },
+  { id: 'ai-invocations', label: 'AI Invocations', icon: Sparkles },
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
@@ -123,6 +125,7 @@ export default function AdminPage() {
         {activeTab === 'roles' && <RolesTab />}
         {activeTab === 'authorities' && <AuthoritiesTab />}
         {activeTab === 'audit' && <AuditLogTable />}
+        {activeTab === 'ai-invocations' && <AiInvocationsPage />}
       </div>
     </div>
   )

@@ -773,6 +773,7 @@ export function getExportMeta(format: string): ExportMeta {
     autosar:       { filename: 'parameters.arxml',        contentType: 'application/xml' },
     ros:           { filename: 'parameters_ros.yaml',     contentType: 'application/x-yaml' },
     dds:           { filename: 'parameters.idl',          contentType: 'text/plain' },
+    reqif:         { filename: 'parameters.reqif',        contentType: 'application/xml' },
     excel:         { filename: 'parameters.xlsx',         contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
     pdf:           { filename: 'parameters.pdf',          contentType: 'application/pdf' },
   }
@@ -993,12 +994,14 @@ export async function exportParametersBinary(format: string, params: ExportParam
 export const SUPPORTED_EXPORT_FORMATS = [
   'matlab', 'simulink', 'mat', 'python', 'c_header', 'ada',
   'json', 'yaml', 'csv', 'xml', 'xtce', 'autosar', 'ros', 'dds',
+  'reqif',
   'excel', 'pdf',
 ] as const
 
 export const TEXT_EXPORT_FORMATS = [
   'matlab', 'simulink', 'mat', 'python', 'c_header', 'ada',
   'json', 'yaml', 'csv', 'xml', 'xtce', 'autosar', 'ros', 'dds',
+  'reqif',
 ] as const
 
 export type ExportFormat = typeof SUPPORTED_EXPORT_FORMATS[number]

@@ -358,7 +358,7 @@ export const getProject = async (req: AuthRequest, res: Response) => {
 export const updateProject = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params
-    const { name, description, domain, companyName, progress, status, deadline, strictLifecycleGates, aiEnabled } = req.body
+    const { name, description, domain, companyName, progress, status, deadline, strictLifecycleGates, aiEnabled, aiSelfHostedUrl } = req.body
 
     // Ownership/admin enforcement is handled by requireProjectOwnerOrAdmin
     // middleware on the route (#152).  This findUnique is kept to return the
@@ -394,6 +394,11 @@ export const updateProject = async (req: AuthRequest, res: Response) => {
               aiEnabledAt: Boolean(aiEnabled) ? new Date() : null,
               aiEnabledBy: Boolean(aiEnabled) ? req.user?.userId ?? null : null,
             }
+          : {}),
+        // Per-project self-hosted AI endpoint (air-gap / ITAR). Empty
+        // string clears it; undefined leaves the existing value alone.
+        ...(aiSelfHostedUrl !== undefined
+          ? { aiSelfHostedUrl: aiSelfHostedUrl ? String(aiSelfHostedUrl).trim() : null }
           : {}),
       },
       include: {

@@ -1,5 +1,6 @@
 import { Response, NextFunction } from 'express'
 import { prisma } from '../lib/prisma'
+import { resolveIsAdmin } from '../lib/adminAuth'
 import { AuthRequest } from './auth.middleware'
 
 /**
@@ -67,7 +68,7 @@ export async function requireProjectOwnerOrAdmin(
       return
     }
 
-    if (user?.email && (await isEnvAdmin(user.email))) {
+    if (user?.email && (await resolveIsAdmin(user.email))) {
       next()
       return
     }
@@ -89,17 +90,4 @@ export async function requireProjectOwnerOrAdmin(
     console.error('requireProjectOwnerOrAdmin error:', err)
     res.status(500).json({ success: false, error: 'Internal server error' })
   }
-}
-
-async function isEnvAdmin(email: string): Promise<boolean> {
-  const list = process.env.ADMIN_EMAILS
-  if (list) {
-    const emails = list.split(',').map((e) => e.trim().toLowerCase())
-    return emails.includes(email.toLowerCase())
-  }
-  const first = await prisma.user.findFirst({
-    orderBy: { createdAt: 'asc' },
-    select: { email: true },
-  })
-  return first?.email?.toLowerCase() === email.toLowerCase()
 }

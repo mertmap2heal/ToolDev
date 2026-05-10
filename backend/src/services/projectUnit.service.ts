@@ -77,6 +77,20 @@ export async function updateProjectUnit(
   }
 }
 
+export async function getProjectUnit(projectId: string, id: string): Promise<ProjectUnitRecord | null> {
+  const row = await prisma.projectUnit.findFirst({ where: { id, projectId } })
+  if (!row) return null
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    name: row.name,
+    symbol: row.symbol,
+    description: row.description,
+    category: row.category,
+    createdAt: row.createdAt.toISOString(),
+  }
+}
+
 export async function deleteProjectUnit(id: string, projectId: string): Promise<void> {
   const row = await prisma.projectUnit.findUnique({ where: { id } })
   if (!row || row.projectId !== projectId) throw new Error('Not found')

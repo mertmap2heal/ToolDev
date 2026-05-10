@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useSearchParams } from 'react-router-dom'
 import {
   Search, X, Check, Trash2, Edit2, Plus, Filter, ChevronDown, ChevronUp,
-  FileText, Upload, Download, GitBranch, RefreshCw, CheckCircle,
-  AlertTriangle, Settings, Radio, List, Share2,
+  Upload, Download, GitBranch, RefreshCw, CheckCircle,
+  Settings, List, Share2,
   Folder, FolderOpen, MoreHorizontal, Layers, ArrowUpDown, ArrowUp, ArrowDown,
+  Star, Clock, FolderInput, Tag, CircleDot,
+  LayoutGrid, History, GitPullRequestArrow, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
+import './parameters-v2.css'
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   DndContext,
@@ -30,6 +33,7 @@ import { CSS } from '@dnd-kit/utilities'
 
 import SafetyLinkPanel from '../../components/safety/SafetyLinkPanel'
 import { parameterService, type ParameterWithUsage } from '../../services/parameter.service'
+import { parameterBulkJobService } from '../../services/parameterBulkJob.service'
 import { evaluateFormula } from '../../components/parameters/evaluateFormula'
 import DeleteConfirmationModal from '../../components/projects/DeleteConfirmationModal'
 import EditParameterModal from '../../components/parameters/EditParameterModal'
@@ -45,13 +49,22 @@ import PublishToGitModal, {
 const ParameterDependencyGraph = lazy(
   () => import('../../components/parameters/ParameterDependencyGraph'),
 )
+// Board view is also lazy so the default List tab keeps its bundle lean.
+const ParameterBoardView = lazy(
+  () => import('../../components/parameters/ParameterBoardView'),
+)
 import ImportParameterModal from '../../components/parameters/ImportParameterModal'
 import CommunicationsTab from './CommunicationsTab'
+import ParameterCommandPalette from '../../components/parameters/ParameterCommandPalette'
+import ShortcutsOverlay from '../../components/parameters/ShortcutsOverlay'
+import ParameterBaselinesPanel from '../../components/parameters/ParameterBaselinesPanel'
+import { parameterScenarioService, type Scenario, type ScenarioSummary } from '../../services/parameterScenario.service'
 import type { Parameter, ParameterFolder } from 'shared/types/engineering.types'
 import clsx from 'clsx'
-import { format } from 'date-fns'
 import { AiFeatureProvider } from '../../contexts/AiFeatureContext'
-import ParameterFilterBar from '../../components/parameters/ParameterFilterBar'
+import AiFeatureGuard from '../../components/ai/AiFeatureGuard'
+import { aiParameterService } from '../../services/aiParameter.service'
+import { Sparkles } from 'lucide-react'
 import ParameterRow from './ParameterRow'
 
 // ---------------------------------------------------------------------------
@@ -65,24 +78,8 @@ const FOLDER_COLORS = ['#6366f1', '#0ea5e9', '#22c55e', '#f59e0b', '#ef4444', '#
 // Token mapping table lives in the PR description; see index.css for CSS
 // custom-property values.
 // ---------------------------------------------------------------------------
-const CARD =
-  'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg'
-const INPUT_CLS =
-  'w-full text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
-const BTN_PRIMARY =
-  'inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-500 transition-colors disabled:opacity-50'
-const BTN_GHOST =
-  'inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors'
-const BTN_TOOLBAR =
-  'flex items-center gap-1.5 px-2.5 py-[5px] rounded-md text-xs font-medium border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed'
 const MENU_POPOVER =
   'absolute right-0 z-[200] rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 shadow-lg overflow-hidden'
-const BTN_ICON =
-  'p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors'
-const LABEL_CLS =
-  'text-xs font-medium text-gray-700 dark:text-gray-300'
-const TEXT_MUTED = 'text-gray-600 dark:text-gray-400'
-const TEXT_STRONG = 'text-gray-900 dark:text-gray-100'
 const ROW_HOVER = 'hover:bg-gray-200/20 dark:hover:bg-gray-400/10'
 
 // ---------------------------------------------------------------------------
@@ -230,10 +227,11 @@ const EXPORT_GROUPS = [
   {
     label: 'Data interchange',
     formats: [
-      { key: 'json', label: 'JSON (.json)' },
-      { key: 'yaml', label: 'YAML (.yaml)' },
-      { key: 'csv',  label: 'CSV (.csv)' },
-      { key: 'xml',  label: 'XML (.xml)' },
+      { key: 'json',  label: 'JSON (.json)' },
+      { key: 'yaml',  label: 'YAML (.yaml)' },
+      { key: 'csv',   label: 'CSV (.csv)' },
+      { key: 'xml',   label: 'XML (.xml)' },
+      { key: 'reqif', label: 'ReqIF 1.2 (.reqif)' },
     ],
   },
   {
@@ -251,6 +249,7 @@ const FORMAT_EXTENSIONS: Record<string, string> = {
   xtce: 'parameters.xtce', autosar: 'parameters.arxml', ros: 'parameters_ros.yaml',
   dds: 'parameters.idl', json: 'parameters.json', yaml: 'parameters.yaml',
   csv: 'parameters.csv', xml: 'parameters.xml',
+  reqif: 'parameters.reqif',
   excel: 'parameters.xlsx', pdf: 'parameters.pdf',
 }
 
@@ -259,6 +258,7 @@ const IMPORT_FORMATS = [
   { key: 'json',     label: 'JSON (.json)' },
   { key: 'c_header', label: 'C/C++ header (.h)' },
   { key: 'matlab',   label: 'MATLAB script (.m)' },
+  { key: 'reqif',    label: 'ReqIF 1.2 (.reqif)' },
 ]
 
 // ---------------------------------------------------------------------------
@@ -280,6 +280,7 @@ function triggerDownload(blob: Blob, filename: string) {
 // ---------------------------------------------------------------------------
 export default function ParametersPage() {
   const { projectId } = useParams<{ projectId: string }>()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [searchQuery, setSearchQuery] = useState('')
   // Debounced search — 300 ms delay before filtering
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -299,6 +300,37 @@ export default function ParametersPage() {
           e.preventDefault()
           searchInputRef.current.focus()
           searchInputRef.current.select()
+        }
+      }
+      // Cmd/Ctrl + / opens the parameter command palette. Cmd+K is the
+      // global app palette and Cmd+Shift+P is reserved by Firefox for
+      // Private Window. Cmd+/ is free in every major browser and matches
+      // GitHub/Slack/Linear shortcut conventions.
+      if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+        const target = e.target as HTMLElement | null
+        const tag = target?.tagName
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !target?.isContentEditable) {
+          e.preventDefault()
+          setIsPaletteOpen((v) => !v)
+        }
+      }
+      // ? alone opens the keyboard cheatsheet. Block when an input is
+      // focused so typing "?" into a field doesn't pop the overlay.
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const target = e.target as HTMLElement | null
+        const tag = target?.tagName
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !target?.isContentEditable) {
+          e.preventDefault()
+          setIsShortcutsOpen((v) => !v)
+        }
+      }
+      // Ctrl/Cmd + 1/2/3 switches view modes (List/Board/Graph).
+      if ((e.ctrlKey || e.metaKey) && (e.key === '1' || e.key === '2' || e.key === '3')) {
+        const target = e.target as HTMLElement | null
+        const tag = target?.tagName
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && !target?.isContentEditable) {
+          e.preventDefault()
+          setParamViewMode(e.key === '1' ? 'list' : e.key === '2' ? 'board' : 'graph')
         }
       }
     }
@@ -329,15 +361,51 @@ export default function ParametersPage() {
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string; name: string } | null>(null)
   const [editingParameter, setEditingParameter] = useState<Parameter | null>(null)
   const [detailParameter, setDetailParameter] = useState<Parameter | null>(null)
+  // URL deep-link sync — `?param=<id>` opens that parameter's detail drawer.
+  // Used by the drawer's open-in-new-tab button so the second tab lands
+  // directly on the same record.
+  const deepLinkParamId = searchParams.get('param')
+  useEffect(() => {
+    if (detailParameter) {
+      if (searchParams.get('param') !== detailParameter.id) {
+        const next = new URLSearchParams(searchParams)
+        next.set('param', detailParameter.id)
+        setSearchParams(next, { replace: true })
+      }
+    } else if (searchParams.get('param')) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('param')
+      setSearchParams(next, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailParameter])
   const [viewingSource, setViewingSource] = useState<Parameter | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [aiDrafting, setAiDrafting] = useState(false)
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false)
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false)
+  const [isBaselinesOpen, setIsBaselinesOpen] = useState(false)
+  // Active what-if scenario. When non-null, the row default-value cell
+  // is overlaid by the scenario's override for that parameter (UI only —
+  // the underlying row stays untouched).
+  const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'parameters' | 'communications'>('parameters')
   const [changeRequestModal, setChangeRequestModal] = useState<{ isOpen: boolean; sourceId: string; sourceName: string } | null>(null)
   const [dataTypeFilter, setDataTypeFilter] = useState<string>('all')
   const [unitFilter, setUnitFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [paramViewMode, setParamViewMode] = useState<'list' | 'graph'>('list')
+  // Client-side qfilter-row filters (not server-side because the backend
+  // controller doesn't accept them).
+  const [valueFilter, setValueFilter] = useState<string>('')         // contains-text on defaultValue
+  const [usedInFilter, setUsedInFilter] = useState<'all' | 'has' | 'none'>('all')
+  const [updatedFilter, setUpdatedFilter] = useState<'all' | '7d' | '30d' | '90d'>('all')
+  const [computedFilter, setComputedFilter] = useState<'all' | 'computed' | 'static'>('all')
+  // Built-in saved view: when on, filter to parameters touched by AI
+  // (authorType ∈ ai_suggestion | ai_accepted | ai_applied). Server-side
+  // via the authorType=CSV query param.
+  const [aiModifiedView, setAiModifiedView] = useState<boolean>(false)
+  const [paramViewMode, setParamViewMode] = useState<'list' | 'board' | 'graph'>('list')
   const queryClient = useQueryClient()
 
   // Folder sidebar state
@@ -347,6 +415,7 @@ export default function ParametersPage() {
   const [createFolderName, setCreateFolderName] = useState('')
   const [createFolderColor, setCreateFolderColor] = useState(FOLDER_COLORS[0])
   const [isCreatingFolder, setIsCreatingFolder] = useState(false)
+  const [folderFilter, setFolderFilter] = useState('')
   const [folderMenuOpen, setFolderMenuOpen] = useState<string | null>(null)
   const [renamingFolder, setRenamingFolder] = useState<{ id: string; name: string } | null>(null)
   const [renamingColor, setRenamingColor] = useState<string>('#6366f1')
@@ -387,7 +456,11 @@ export default function ParametersPage() {
     { key: 'usedIn',      label: 'Used in' },
     { key: 'created',     label: 'Created' },
   ]
-  const DEFAULT_COLS: ColKey[] = ['description', 'type', 'value', 'computed', 'unit', 'folder', 'source', 'status', 'usedIn', 'created']
+  // Folder column is intentionally NOT in defaults — the folder sidebar
+  // already shows folder context, and dragging rows onto the sidebar is
+  // the primary move-to-folder gesture. Users can re-enable it from the
+  // Columns menu when they need bulk per-row folder editing.
+  const DEFAULT_COLS: ColKey[] = ['description', 'type', 'value', 'computed', 'unit', 'source', 'status', 'usedIn', 'created']
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(() => {
     if (!COL_STORAGE_KEY) return new Set(DEFAULT_COLS)
     try {
@@ -398,6 +471,10 @@ export default function ParametersPage() {
   })
   const [isColMenuOpen, setIsColMenuOpen] = useState(false)
   const colMenuRef = useRef<HTMLDivElement>(null)
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false)
+  const moreMenuRef = useRef<HTMLDivElement>(null)
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false)
+  const filtersRef = useRef<HTMLDivElement>(null)
   const toggleCol = (key: ColKey) => {
     setVisibleCols(prev => {
       const next = new Set(prev)
@@ -412,6 +489,14 @@ export default function ParametersPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  // Live progress for an in-flight async bulk job (delete > 50 items).
+  // null when no job is running.
+  const [bulkJobProgress, setBulkJobProgress] = useState<{
+    done: number
+    failed: number
+    total: number
+    status: 'pending' | 'running' | 'completed' | 'failed' | 'partial'
+  } | null>(null)
 
   // Export state
   const [isExportOpen, setIsExportOpen] = useState(false)
@@ -466,7 +551,7 @@ export default function ParametersPage() {
     return
   }
 
-  // Close export dropdown and column menu on outside click
+  // Close menu popovers on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
@@ -474,6 +559,12 @@ export default function ParametersPage() {
       }
       if (colMenuRef.current && !colMenuRef.current.contains(e.target as Node)) {
         setIsColMenuOpen(false)
+      }
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setIsMoreMenuOpen(false)
+      }
+      if (filtersRef.current && !filtersRef.current.contains(e.target as Node)) {
+        setIsFiltersOpen(false)
       }
     }
     document.addEventListener('mousedown', handler)
@@ -489,6 +580,100 @@ export default function ParametersPage() {
   // the client for now and apply to the flattened result.
   const PAGE_SIZE = 200
   const trimmedQ = debouncedSearch.trim()
+
+  // Folders are fetched first so the parameters paged query below can
+  // use them to expand a selected folder into its subtree before the
+  // server round-trip.
+  const { data: foldersData } = useQuery({
+    queryKey: ['parameter-folders', projectId],
+    queryFn: async () => {
+      if (!projectId) throw new Error('Project ID required')
+      const response = await parameterService.getFolders(projectId)
+      if (response.success && response.data) return response.data
+      throw new Error(response.error || 'Failed to load folders')
+    },
+    enabled: !!projectId,
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
+  })
+  // Stable reference so dependent useMemo / useEffect deps don't
+  // re-fire on every render with foldersData unchanged.
+  const folders: ParameterFolder[] = useMemo(() => foldersData ?? [], [foldersData])
+  const foldersById = useMemo(
+    () => new Map<string, ParameterFolder>(folders.map((f) => [f.id, f])),
+    [folders],
+  )
+
+  // Unfiltered project total — used for the sidebar "All Parameters"
+  // count + the Ungrouped subtraction. Stays stable while a folder
+  // filter narrows the paged parameters query below.
+  const { data: facetsData } = useQuery({
+    queryKey: ['parameter-facets', projectId],
+    queryFn: async () => {
+      if (!projectId) return null
+      const response = await parameterService.getFacets(projectId)
+      if (response.success && response.data) return response.data
+      return null
+    },
+    enabled: !!projectId,
+    staleTime: 30_000,
+  })
+  const projectTotalParameters = facetsData?.total ?? 0
+
+  // Scenario list (for the toolbar dropdown).
+  const { data: scenarios = [] } = useQuery({
+    queryKey: ['parameter-scenarios', projectId],
+    queryFn: async () => {
+      if (!projectId) return [] as ScenarioSummary[]
+      const res = await parameterScenarioService.list(projectId)
+      return res.success && res.data ? res.data : []
+    },
+    enabled: !!projectId,
+    staleTime: 30_000,
+  })
+
+  // Active scenario detail (override map) — fetched only while one is
+  // selected, so the toolbar dropdown stays cheap.
+  const { data: activeScenario } = useQuery({
+    queryKey: ['parameter-scenario', projectId, activeScenarioId],
+    queryFn: async () => {
+      if (!projectId || !activeScenarioId) return null
+      const res = await parameterScenarioService.get(projectId, activeScenarioId)
+      return res.success && res.data ? (res.data as Scenario) : null
+    },
+    enabled: !!projectId && !!activeScenarioId,
+    staleTime: 10_000,
+  })
+
+  // parameterId -> override value, derived once per scenario change.
+  const scenarioOverrides = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const o of activeScenario?.overrides ?? []) {
+      map.set(o.parameterId, o.value)
+    }
+    return map
+  }, [activeScenario])
+
+  // Compute the folder filter to send to the server. The selectedFolderId
+  // is the user's pick; we expand to its subtree (so a top-level folder
+  // returns everything inside it including sub-folders). `__none__`
+  // forwards verbatim — the controller turns it into `folderId = null`.
+  const serverFolderId = (() => {
+    if (!selectedFolderId) return undefined
+    if (selectedFolderId === '__none__') return '__none__'
+    // Synthetic views (Starred, Recently edited) are client-side only —
+    // do not narrow the server query, otherwise the controller treats the
+    // sentinel as a real folder id and returns no rows.
+    if (selectedFolderId === '__starred__' || selectedFolderId === '__recent__') return undefined
+    const ids: string[] = []
+    const queue = [selectedFolderId]
+    while (queue.length > 0) {
+      const id = queue.shift()!
+      ids.push(id)
+      for (const f of folders) if (f.parentId === id) queue.push(f.id)
+    }
+    return ids.join(',')
+  })()
   const serverQuery = {
     q: trimmedQ || undefined,
     // Only single-value filters go to the server (keeps compatible with
@@ -498,6 +683,10 @@ export default function ParametersPage() {
     dataType:
       dataTypeFilter !== 'all' && dataTypeFilter !== 'unassigned' ? dataTypeFilter : undefined,
     unit: unitFilter !== 'all' && unitFilter !== 'unassigned' ? unitFilter : undefined,
+    folderId: serverFolderId,
+    // Built-in "AI-modified recently" view — set authorType to the AI
+    // subset. Server's parameter.controller already accepts a CSV.
+    authorType: aiModifiedView ? 'ai_suggestion,ai_accepted,ai_applied' : undefined,
   }
   const {
     data: paramPages,
@@ -528,6 +717,8 @@ export default function ParametersPage() {
     enabled: !!projectId,
     staleTime: 30_000,
   })
+  // Hoisted intentionally — referenced before definition is fine for the
+  // deep-link useEffect since it's wrapped in useEffect (runs post-render).
   // Flatten + dedupe by id. Page boundaries in the backend can
   // theoretically serve the same row on two pages if a write races
   // between page fetches; dedupe makes the UI robust either way.
@@ -546,28 +737,21 @@ export default function ParametersPage() {
   }, [paramPages])
   const totalParameters = paramPages?.pages[0]?.total ?? parameters.length
 
-  // Folder queries and mutations
-  const { data: foldersData } = useQuery({
-    queryKey: ['parameter-folders', projectId],
-    queryFn: async () => {
-      if (!projectId) throw new Error('Project ID required')
-      const response = await parameterService.getFolders(projectId)
-      if (response.success && response.data) return response.data
-      throw new Error(response.error || 'Failed to load folders')
-    },
-    enabled: !!projectId,
-    staleTime: 30_000,
-    placeholderData: (prev) => prev,
-  })
-  const folders: ParameterFolder[] = foldersData ?? []
-  // O(1) folder lookups. Before this, every row's .find() over the
-  // folders array turned the table render into O(n * folders). With
-  // hundreds of folders that was the dominant cost.
-  const foldersById = useMemo(
-    () => new Map<string, ParameterFolder>(folders.map((f) => [f.id, f])),
-    [folders],
-  )
+  // Open the detail drawer automatically when the URL carries ?param=<id>.
+  // Triggered once parameters are loaded; if the id is on a later page, the
+  // user will need to scroll/load. For now we accept that limitation —
+  // deep-linking after a fresh tab open lands on the first 200 rows.
+  useEffect(() => {
+    if (!deepLinkParamId) return
+    if (detailParameter?.id === deepLinkParamId) return
+    const found = parameters.find((p) => p.id === deepLinkParamId)
+    if (found) setDetailParameter(found)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkParamId, parameters])
 
+  // Folder mutations (the fetch + foldersById are now hoisted earlier so
+  // the parameters paged query can expand a selected folder into its
+  // subtree before round-tripping the server).
   const createFolderMutation = useMutation({
     mutationFn: async (name: string) => {
       if (!projectId) throw new Error('Project ID required')
@@ -741,18 +925,19 @@ export default function ParametersPage() {
     }
 
     if (activeDragFolderId) {
-      // Folder drag: detect nest intent when hovering over another folder for >600ms
+      // Folder drag: highlight any other folder as a nest target immediately.
+      // Same-parent siblings still reorder via the sortable strategy; different
+      // parents trigger a nest move on drop. No 650ms hold — the user wanted
+      // a direct drag-to-move gesture.
       const targetId = overId?.startsWith('sortfolder-') ? overId.replace('sortfolder-', '') : null
       if (targetId && targetId !== activeDragFolderId) {
         setOverFolderId(targetId)
-        // Reset timer if target changed
-        if (nestTimerRef.current) clearTimeout(nestTimerRef.current)
-        nestTimerRef.current = setTimeout(() => {
-          setNestTargetId(targetId)
-        }, 650)
+        const activeFolderData = foldersById.get(activeDragFolderId)
+        const targetFolderData = foldersById.get(targetId)
+        const sameParent = (activeFolderData?.parentId ?? null) === (targetFolderData?.parentId ?? null)
+        setNestTargetId(sameParent ? null : targetId)
       } else {
         setOverFolderId(null)
-        if (nestTimerRef.current) clearTimeout(nestTimerRef.current)
         setNestTargetId(null)
       }
     }
@@ -768,25 +953,44 @@ export default function ParametersPage() {
       const activeFolder = activeDragFolderId
       setActiveDragFolderId(null)
       setOverFolderId(null)
-
-      if (!over) { setNestTargetId(null); return }
-
-      // If nest intent was triggered (held over another folder), show subfolder confirm
-      if (nestTargetId && nestTargetId !== activeFolder) {
-        setPendingSubfolder({ childId: activeFolder, parentId: nestTargetId })
-        setNestTargetId(null)
-        return
-      }
       setNestTargetId(null)
 
-      // Otherwise it's a reorder within the same level
+      if (!over) return
+
       const overId = String(over.id)
       const targetId = overId.startsWith('sortfolder-') ? overId.replace('sortfolder-', '') : null
       if (!targetId || targetId === activeFolder) return
 
-      // Find which parent level this folder belongs to
       const activeFolderData = foldersById.get(activeFolder)
-      const parentId = activeFolderData?.parentId ?? null
+      const targetFolderData = foldersById.get(targetId)
+      if (!activeFolderData || !targetFolderData) return
+
+      // Refuse cycles: never nest a folder into one of its own descendants.
+      const wouldCycle = (rootId: string, candidateParent: string): boolean => {
+        let cur: string | null = candidateParent
+        while (cur) {
+          if (cur === rootId) return true
+          cur = foldersById.get(cur)?.parentId ?? null
+        }
+        return false
+      }
+      if (wouldCycle(activeFolder, targetId)) {
+        setToastMessage('Cannot move folder into its own subtree.')
+        return
+      }
+
+      const sameParent = (activeFolderData.parentId ?? null) === (targetFolderData.parentId ?? null)
+
+      if (!sameParent) {
+        // Drop on a folder at a different level → move active folder to be
+        // a direct child of the target. No confirmation modal — the gesture
+        // is intentional and reversible via the menu.
+        makeFolderChildMutation.mutate({ childId: activeFolder, parentId: targetId })
+        return
+      }
+
+      // Same-parent siblings → reorder within the level
+      const parentId = activeFolderData.parentId ?? null
       const levelOrder = folderOrderByParent.get(parentId) ?? []
 
       const oldIdx = levelOrder.indexOf(activeFolder)
@@ -827,7 +1031,26 @@ export default function ParametersPage() {
       targetFolderId = overId.replace('sortfolder-', '')
     }
     if (targetFolderId !== undefined) {
-      moveToFolderMutation.mutate({ parameterId: paramId, folderId: targetFolderId })
+      // If the dragged row is part of a multi-select, move every selected
+      // row in one batch instead of just the row under the cursor.
+      const ids = selectedIds.has(paramId) && selectedIds.size > 1
+        ? Array.from(selectedIds)
+        : [paramId]
+      if (ids.length === 1) {
+        moveToFolderMutation.mutate({ parameterId: ids[0], folderId: targetFolderId })
+      } else {
+        Promise.all(
+          ids.map(id => parameterService.moveParameterToFolder(projectId!, id, targetFolderId)),
+        ).then(() => {
+          queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
+          queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
+          const label = targetFolderId
+            ? (folderOptions.find(o => o.value === targetFolderId)?.label.trim() ?? 'folder')
+            : 'Ungrouped'
+          setToastMessage(`Moved ${ids.length} parameters to ${label}`)
+          setSelectedIds(new Set())
+        })
+      }
     }
   }
 
@@ -867,20 +1090,58 @@ export default function ParametersPage() {
 
   // Bulk delete mutation
   const bulkDeleteMutation = useMutation({
-    mutationFn: (ids: string[]) => {
+    mutationFn: async (ids: string[]) => {
       if (!projectId) throw new Error('Project ID required')
-      return parameterService.bulkDelete(projectId, ids)
+      // Small batches stay synchronous for snappy feedback. Large
+      // batches go through the async job runner so the HTTP request
+      // returns immediately and the UI polls for progress.
+      if (ids.length <= 50) {
+        return parameterService.bulkDelete(projectId, ids)
+      }
+      const submitRes = await parameterBulkJobService.submit(projectId, {
+        operation: 'bulk-delete',
+        payload: { ids },
+      })
+      if (!submitRes.success || !submitRes.data) {
+        throw new Error(
+          (submitRes as { error?: string }).error || 'Bulk job submit failed',
+        )
+      }
+      const jobId = submitRes.data.id
+      // Poll every 1s until job leaves the running family (max 5 min).
+      for (let i = 0; i < 300; i++) {
+        await new Promise((r) => setTimeout(r, 1_000))
+        const statusRes = await parameterBulkJobService.get(projectId, jobId)
+        if (!statusRes.success || !statusRes.data) continue
+        const job = statusRes.data
+        setBulkJobProgress({
+          done: job.doneItems,
+          failed: job.failedItems,
+          total: job.totalItems,
+          status: job.status,
+        })
+        if (
+          job.status === 'completed' ||
+          job.status === 'failed' ||
+          job.status === 'partial'
+        ) {
+          return { success: true, data: job }
+        }
+      }
+      throw new Error('Bulk job timed out — check Recent jobs in admin')
     },
     onSuccess: (_data, ids) => {
       queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
       setSelectedIds(new Set())
       setBulkDeleteConfirm(false)
+      setBulkJobProgress(null)
       setToastMessage(`${ids.length} parameter${ids.length > 1 ? 's' : ''} deleted`)
     },
     onError: (error: any) => {
       console.error('Bulk delete error:', error)
-      alert(error?.error || 'Bulk delete failed')
+      alert(error?.error || error?.message || 'Bulk delete failed')
       setBulkDeleteConfirm(false)
+      setBulkJobProgress(null)
     },
   })
 
@@ -918,12 +1179,51 @@ export default function ParametersPage() {
   }, [selectedFolderId, folders])
 
   // Apply folder filter first, then search/column filters
+  // Starred set lives in localStorage (see ParameterRow). We re-read on
+  // every render that observes it; a window event ('param-star-change')
+  // bumps a counter so React knows the read changed.
+  const [starTick, setStarTick] = useState(0)
+  useEffect(() => {
+    const handler = () => setStarTick((n) => n + 1)
+    window.addEventListener('param-star-change', handler)
+    return () => window.removeEventListener('param-star-change', handler)
+  }, [])
+  const starredIds = useMemo<Set<string>>(() => {
+    void starTick // re-read on every star-change tick
+    try {
+      const raw = localStorage.getItem('param-starred-v1')
+      if (!raw) return new Set()
+      return new Set(JSON.parse(raw) as string[])
+    } catch { return new Set() }
+  }, [starTick])
+  // "Recently edited" — top N sorted by updatedAt desc. Date thresholds
+  // break against seeded fixtures and air-gapped clocks; rank-based is
+  // always meaningful.
+  const RECENT_LIMIT = 20
+  const recentlyEditedIds = useMemo<Set<string>>(() => {
+    const sorted = [...parameters].sort((a, b) => {
+      const ta = new Date(a.updatedAt ?? a.createdAt).getTime()
+      const tb = new Date(b.updatedAt ?? b.createdAt).getTime()
+      return tb - ta
+    })
+    return new Set(sorted.slice(0, RECENT_LIMIT).map((p) => p.id))
+  }, [parameters])
+
   const folderFilteredParameters =
     selectedFolderId === null
       ? parameters
       : selectedFolderId === '__none__'
         ? parameters.filter(p => !p.folderId)
-        : parameters.filter(p => p.folderId && folderSubtreeIds?.has(p.folderId))
+        : selectedFolderId === '__starred__'
+          ? parameters.filter(p => starredIds.has(p.id))
+          : selectedFolderId === '__recent__'
+            ? parameters.filter(p => recentlyEditedIds.has(p.id))
+            : parameters.filter(p => p.folderId && folderSubtreeIds?.has(p.folderId))
+
+  const starredCount = useMemo(() =>
+    parameters.filter(p => starredIds.has(p.id)).length,
+  [parameters, starredIds])
+  const recentCount = recentlyEditedIds.size
 
   const filteredParameters = folderFilteredParameters.filter((param) => {
     if (debouncedSearch) {
@@ -948,6 +1248,26 @@ export default function ParametersPage() {
       if (sourceFilter === 'has-source' && !param.sourceFunction) return false
     }
     if (statusFilter !== 'all' && (param.status ?? 'draft') !== statusFilter) return false
+    if (valueFilter.trim()) {
+      const v = (param.defaultValue ?? '').toLowerCase()
+      if (!v.includes(valueFilter.trim().toLowerCase())) return false
+    }
+    if (computedFilter !== 'all') {
+      const isComputed = !!param.formula
+      if (computedFilter === 'computed' && !isComputed) return false
+      if (computedFilter === 'static' && isComputed) return false
+    }
+    if (usedInFilter !== 'all') {
+      const refs = (param as ParameterWithUsage).requirementCount ?? 0
+      if (usedInFilter === 'has' && refs <= 0) return false
+      if (usedInFilter === 'none' && refs > 0) return false
+    }
+    if (updatedFilter !== 'all') {
+      const ts = new Date(param.updatedAt ?? param.createdAt).getTime()
+      const days = updatedFilter === '7d' ? 7 : updatedFilter === '30d' ? 30 : 90
+      const cutoff = Date.now() - days * 86_400_000
+      if (ts < cutoff) return false
+    }
     return true
   })
 
@@ -1048,6 +1368,34 @@ export default function ParametersPage() {
     moveToFolderMutation.mutate({ parameterId: paramId, folderId })
   }, [moveToFolderMutation])
 
+  const handleAiDraft = async () => {
+    if (!projectId) return
+    const description = window.prompt('Describe the parameter you want the AI to draft:')
+    if (!description || !description.trim()) return
+    setAiDrafting(true)
+    try {
+      const res = await aiParameterService.draft(projectId, description.trim())
+      if (!res.success || !res.data) {
+        alert(res.error || 'AI draft failed')
+        return
+      }
+      const d = res.data.draft
+      // v1: alert with the structured draft + open blank create
+      // modal. Follow-up PR adds initial-values plumbing so the
+      // modal shows the AI draft directly.
+      alert(
+        'AI draft:\n\n' +
+          JSON.stringify(d, null, 2) +
+          `\n\nTokens: ${res.data.provenance.tokensIn} in / ${res.data.provenance.tokensOut} out\nModel: ${res.data.provenance.modelVersion}`,
+      )
+      setIsCreateModalOpen(true)
+    } catch (e) {
+      alert(`AI draft failed: ${(e as Error).message}`)
+    } finally {
+      setAiDrafting(false)
+    }
+  }
+
   const handleConfirmDelete = () => {
     if (deleteConfirmation) deleteParameterMutation.mutate(deleteConfirmation.id)
   }
@@ -1117,6 +1465,31 @@ export default function ParametersPage() {
   }
 
   // ---------------------------------------------------------------------------
+  // Subtree parameter counts. Server returns _count.parameters as DIRECT
+  // children only; the sidebar shows the rolled-up total so a top-level
+  // folder reflects everything inside it. Computed once per folder set
+  // change.
+  // ---------------------------------------------------------------------------
+  const folderSubtreeCounts = useMemo((): Map<string, { direct: number; total: number }> => {
+    const childrenOf = new Map<string | null, string[]>()
+    for (const f of folders) {
+      const p = f.parentId ?? null
+      if (!childrenOf.has(p)) childrenOf.set(p, [])
+      childrenOf.get(p)!.push(f.id)
+    }
+    const counts = new Map<string, { direct: number; total: number }>()
+    const visit = (id: string): number => {
+      const direct = foldersById.get(id)?._count?.parameters ?? 0
+      let total = direct
+      for (const childId of childrenOf.get(id) ?? []) total += visit(childId)
+      counts.set(id, { direct, total })
+      return total
+    }
+    for (const rootId of childrenOf.get(null) ?? []) visit(rootId)
+    return counts
+  }, [folders, foldersById])
+
+  // ---------------------------------------------------------------------------
   // Build a flat ordered list of folder options for dropdowns (any depth)
   // ---------------------------------------------------------------------------
   // Flattened folder options for dropdowns (bulk-move + per-row folder
@@ -1150,6 +1523,11 @@ export default function ParametersPage() {
     color: string | null
     params: typeof filteredParameters
     depth: number
+    /** Server-known total for this group (subtree-aware). Falls back to
+     *  params.length when not known. Surfaced in the group header so the
+     *  visible count doesn't drop below reality just because pagination
+     *  hasn't loaded the next page yet. */
+    totalKnown?: number
   }
   const { showGroupsForTable, visibleGroupsForTable } = useMemo(() => {
     const showGroups = selectedFolderId !== '__none__' && folders.length > 0
@@ -1158,7 +1536,15 @@ export default function ParametersPage() {
       const walk = (parentId: string | null, depth: number): void => {
         for (const folder of folders.filter((f) => (f.parentId ?? null) === parentId)) {
           const ownParams = filteredParameters.filter((p) => p.folderId === folder.id)
-          flatGroups.push({ id: folder.id, label: folder.name, color: folder.color ?? null, params: ownParams, depth })
+          const subtree = folderSubtreeCounts.get(folder.id)
+          flatGroups.push({
+            id: folder.id,
+            label: folder.name.split(/[\\/]/).pop()?.trim() || folder.name,
+            color: folder.color ?? null,
+            params: ownParams,
+            depth,
+            totalKnown: subtree?.direct ?? ownParams.length,
+          })
           walk(folder.id, depth + 1)
         }
       }
@@ -1169,9 +1555,25 @@ export default function ParametersPage() {
       } else {
         const root = foldersById.get(selectedFolderId)
         if (root) {
-          const ownParams = filteredParameters.filter((p) => p.folderId === root.id)
-          flatGroups.push({ id: root.id, label: root.name, color: root.color ?? null, params: ownParams, depth: 0 })
-          walk(root.id, 1)
+          // Roll the entire subtree into a single group. Picking a top
+          // folder should return everything inside it (including
+          // sub-folders) instead of fragmenting the view across
+          // sub-folder group headers — pick a sub-folder explicitly to
+          // narrow further.
+          const allInSubtree = filteredParameters.filter(
+            (p) => p.folderId && folderSubtreeIds?.has(p.folderId),
+          )
+          flatGroups.push({
+            id: root.id,
+            label: root.name,
+            color: root.color ?? null,
+            params: allInSubtree,
+            depth: 0,
+            // Use the rolled-up subtree total so the header stays
+            // accurate while the paged query is still loading rows.
+            totalKnown:
+              folderSubtreeCounts.get(root.id)?.total ?? allInSubtree.length,
+          })
         }
       }
     } else {
@@ -1187,7 +1589,7 @@ export default function ParametersPage() {
       if (collapsedGroups.has(g.id)) skipBelowDepth = g.depth
     }
     return { showGroupsForTable: showGroups, visibleGroupsForTable: visibleGroups }
-  }, [selectedFolderId, folders, filteredParameters, foldersById, collapsedGroups])
+  }, [selectedFolderId, folders, filteredParameters, foldersById, collapsedGroups, folderSubtreeIds, folderSubtreeCounts])
 
   // Flat item list the virtualizer iterates over. Mixes group header
   // rows and parameter rows; the render layer branches on `kind`.
@@ -1246,12 +1648,61 @@ export default function ParametersPage() {
     }
   }, [virtualItemsForPaging, flatRowItems.length, hasNextPage, isFetchingNextPage, fetchNextPage])
 
+  // Eagerly fetch every page when the user can SEE the totals and
+  // expects the rows to match. Three cases:
+  //   - Board / Graph render all rows at once (no virtualisation)
+  //   - Folder picked — user expects the full subtree on screen
+  //   - Group-by-folder enabled and folder count headers visible —
+  //     "Subsystem 1 (141 records)" with only 2 rows under it is a lie.
+  // List view without grouping keeps lazy paging.
+  useEffect(() => {
+    const needAll = paramViewMode !== 'list' || !!selectedFolderId || showGroupsForTable
+    if (!needAll) return
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage()
+    }
+  }, [paramViewMode, selectedFolderId, showGroupsForTable, hasNextPage, isFetchingNextPage, fetchNextPage])
+
   // ---------------------------------------------------------------------------
   // Recursive folder tree rendering — arbitrary depth, sortable at every level
   // ---------------------------------------------------------------------------
+  // Build set of folder ids whose subtree (or self) matches the active filter.
+  // When the filter is empty the set is null and every folder renders.
+  const folderFilterMatches: Set<string> | null = (() => {
+    const q = folderFilter.trim().toLowerCase()
+    if (!q) return null
+    const matches = new Set<string>()
+    const direct = new Set<string>()
+    for (const f of folders) if (f.name.toLowerCase().includes(q)) direct.add(f.id)
+    // Walk up ancestors so parents stay visible
+    for (const id of direct) {
+      let cur: string | null | undefined = id
+      while (cur) {
+        matches.add(cur)
+        cur = foldersById.get(cur)?.parentId ?? null
+      }
+    }
+    // Also include descendants of matched folders so subtrees stay visible
+    const stack = [...direct]
+    while (stack.length) {
+      const id = stack.pop()!
+      const children = folderOrderByParent.get(id) ?? []
+      for (const c of children) {
+        if (!matches.has(c)) {
+          matches.add(c)
+          stack.push(c)
+        }
+      }
+    }
+    return matches
+  })()
+
   const renderFolderTree = (parentId: string | null, depth: number): React.ReactNode => {
-    const levelIds = folderOrderByParent.get(parentId) ?? []
+    const all = folderOrderByParent.get(parentId) ?? []
+    const levelIds = folderFilterMatches ? all.filter(id => folderFilterMatches.has(id)) : all
     if (levelIds.length === 0) return null
+    const depthClass = depth >= 3 ? 'depth-3' : depth >= 2 ? 'depth-2' : depth >= 1 ? 'depth-1' : ''
+    const iconSize = depth >= 2 ? 11 : depth >= 1 ? 12 : 13
     return (
       <SortableContext items={levelIds.map(id => `sortfolder-${id}`)} strategy={verticalListSortingStrategy}>
         {levelIds.map(folderId => {
@@ -1263,26 +1714,23 @@ export default function ParametersPage() {
           const isNestTarget = nestTargetId === folder.id
           const childIds = folderOrderByParent.get(folder.id) ?? []
           const hasChildren = childIds.length > 0
-          const isExpanded = expandedParents.has(folder.id)
+          const isExpanded = expandedParents.has(folder.id) || (folderFilterMatches !== null && hasChildren)
           const isCreatingChild = creatingSubFolderIn === folder.id
-          const paddingLeft = depth * 18
           return (
             <div key={folder.id}>
               <SortableFolderWrapper folderId={folder.id} isOver={overFolderId === folder.id && !isNestTarget}>
                 {(dragHandleProps) => (
                   <div
+                    {...(isRenaming ? {} : dragHandleProps)}
                     className={clsx(
-                      'group flex items-center rounded-[5px] transition-colors',
-                      isSelected
-                        ? 'bg-gray-200/30 dark:bg-gray-400/15'
-                        : isNestTarget
-                          ? 'bg-indigo-500/10 outline outline-2 outline-dashed -outline-offset-2 outline-blue-600 dark:outline-blue-400'
-                          : 'hover:bg-gray-200/20 dark:hover:bg-gray-400/10',
+                      'pv-tnode group',
+                      depthClass,
+                      isSelected && 'is-selected',
+                      isNestTarget && 'is-nest-target',
                     )}
-                    style={{ paddingLeft }} // depth-computed indent
                   >
                     {isRenaming ? (
-                      <div className="flex-1 flex items-center gap-[3px] p-1">
+                      <div className="flex-1 flex items-center gap-[3px]">
                         <div className="flex gap-0.5 flex-wrap shrink-0">
                           {FOLDER_COLORS.map(c => (
                             <button key={c} onClick={() => setRenamingColor(c)}
@@ -1290,7 +1738,7 @@ export default function ParametersPage() {
                                 'w-[11px] h-[11px] rounded-full cursor-pointer p-0',
                                 renamingColor === c ? 'border-2 border-gray-900 dark:border-gray-100' : 'border border-transparent',
                               )}
-                              style={{ backgroundColor: c }} // user-chosen hex
+                              style={{ backgroundColor: c }}
                             />
                           ))}
                         </div>
@@ -1304,19 +1752,19 @@ export default function ParametersPage() {
                             }
                             if (e.key === 'Escape') setRenamingFolder(null)
                           }}
-                          className="flex-1 min-w-0 text-[11px] px-1 py-0.5 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100"
+                          className="flex-1 min-w-0 text-[12px] px-1.5 py-0.5 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100"
                         />
                         <button
                           onClick={() => { if (renamingFolder?.name.trim()) updateFolderMutation.mutate({ folderId: folder.id, data: { name: renamingFolder.name, color: renamingColor } }) }}
                           title="Save"
-                          className="bg-transparent border-none cursor-pointer text-blue-600 dark:text-blue-400 p-px shrink-0"
+                          className="pv-icon-btn w-[18px] h-[18px]"
                         >
                           <Check size={11} />
                         </button>
                         <button
                           onClick={() => setRenamingFolder(null)}
                           title="Cancel"
-                          className="bg-transparent border-none cursor-pointer text-gray-600 dark:text-gray-400 p-px shrink-0"
+                          className="pv-icon-btn w-[18px] h-[18px]"
                         >
                           <X size={11} />
                         </button>
@@ -1324,59 +1772,72 @@ export default function ParametersPage() {
                     ) : (
                       <>
                         <span
-                          {...dragHandleProps}
-                          className="cursor-grab pt-1 pr-0.5 pb-1 pl-1 text-gray-600 dark:text-gray-400 opacity-40 flex items-center shrink-0"
-                          title="Drag to reorder; hold 650ms over another folder to nest"
+                          className="pv-chev"
+                          onClick={hasChildren ? (e) => {
+                            e.stopPropagation()
+                            setExpandedParents(prev => {
+                              const next = new Set(prev)
+                              if (next.has(folder.id)) next.delete(folder.id)
+                              else next.add(folder.id)
+                              return next
+                            })
+                          } : undefined}
+                          title={hasChildren ? (isExpanded ? 'Collapse' : 'Expand') : undefined}
+                          style={{ cursor: hasChildren ? 'pointer' : 'default' }}
                         >
-                          ⠿
-                        </span>
-                        {hasChildren ? (
-                          <button
-                            onClick={e => {
-                              e.stopPropagation()
-                              setExpandedParents(prev => {
-                                const next = new Set(prev)
-                                if (next.has(folder.id)) next.delete(folder.id)
-                                else next.add(folder.id)
-                                return next
-                              })
-                            }}
-                            title={isExpanded ? 'Collapse' : 'Expand'}
-                            className="bg-transparent border-none cursor-pointer p-0.5 text-gray-600 dark:text-gray-400 flex items-center shrink-0"
-                          >
-                            <ChevronDown size={10} className={clsx('transition-transform', !isExpanded && '-rotate-90')} />
-                          </button>
-                        ) : (
-                          <span className="w-[14px] shrink-0" />
-                        )}
-                        <button
-                          onClick={() => setSelectedFolderId(folder.id)}
-                          className={clsx(
-                            'flex-1 flex items-center gap-[5px] min-w-0 py-[5px] px-[3px] border-none cursor-pointer text-left bg-transparent text-xs font-medium',
-                            isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-gray-100',
+                          {hasChildren && (
+                            <ChevronDown
+                              size={11}
+                              style={{
+                                transition: 'transform 120ms',
+                                transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                              }}
+                            />
                           )}
+                        </span>
+                        <span className="pv-ico" onClick={() => setSelectedFolderId(folder.id)}>
+                          {hasChildren && isExpanded ? (
+                            <FolderOpen size={iconSize} />
+                          ) : (
+                            <Folder size={iconSize} />
+                          )}
+                        </span>
+                        <span
+                          className="pv-name"
+                          onClick={() => setSelectedFolderId(folder.id)}
+                          title={folder.name}
                         >
-                          <FolderOpen
-                            size={13}
-                            className="shrink-0"
-                            style={{ color: folder.color ?? '#6366f1' }} // user-chosen folder colour
-                          />
-                          <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-                            {folder.name}
-                          </span>
-                          <span className="text-[10px] text-gray-600 dark:text-gray-400 shrink-0">
-                            {folder._count?.parameters ?? 0}
-                          </span>
-                        </button>
-                        <div className="relative" ref={folderMenuOpen === folder.id ? folderMenuRef : undefined}>
+                          {/* Show only leaf segment — indentation already conveys hierarchy. */}
+                          {folder.name.split(/[\\/]/).pop()?.trim() || folder.name}
+                        </span>
+                        {(() => {
+                          const c = folderSubtreeCounts.get(folder.id)
+                          const total = c?.total ?? folder._count?.parameters ?? 0
+                          const direct = c?.direct ?? folder._count?.parameters ?? 0
+                          const showSplit = total !== direct
+                          return (
+                            <span
+                              className="pv-count"
+                              title={showSplit ? `${direct} direct + ${total - direct} in sub-folders` : undefined}
+                            >
+                              {total}
+                            </span>
+                          )
+                        })()}
+                        <div
+                          className="relative shrink-0"
+                          ref={folderMenuOpen === folder.id ? folderMenuRef : undefined}
+                        >
                           <button
                             onClick={e => { e.stopPropagation(); setFolderMenuOpen(isMenuOpen ? null : folder.id); setRenamingColor(folder.color ?? FOLDER_COLORS[0]) }}
+                            aria-label={`Folder actions for ${folder.name}`}
+                            title={`Folder actions for ${folder.name}`}
                             className={clsx(
-                              'folder-menu-btn bg-transparent border-none cursor-pointer p-1 text-gray-600 dark:text-gray-400 rounded shrink-0 transition-opacity',
+                              'pv-icon-btn folder-menu-btn w-5 h-5',
                               isMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus:opacity-100',
                             )}
                           >
-                            <MoreHorizontal size={11} />
+                            <MoreHorizontal size={12} />
                           </button>
                           {isMenuOpen && (
                             <div className="absolute right-0 top-full z-[300] w-[158px] rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 shadow-lg overflow-hidden">
@@ -1420,11 +1881,9 @@ export default function ParametersPage() {
                   </div>
                 )}
               </SortableFolderWrapper>
-              {/* Inline sub-folder creation form */}
               {isCreatingChild && (
                 <div
-                  className="pr-1.5 py-1 flex flex-col gap-1"
-                  style={{ paddingLeft: (depth + 1) * 12 + 8 }} // depth-computed indent
+                  className={clsx('pv-tnode flex-col items-stretch gap-1 px-2 py-1', depth + 1 >= 3 ? 'depth-3' : depth + 1 >= 2 ? 'depth-2' : 'depth-1')}
                 >
                   <div className="flex gap-[3px] flex-wrap">
                     {FOLDER_COLORS.map(c => (
@@ -1433,7 +1892,7 @@ export default function ParametersPage() {
                           'w-3 h-3 rounded-full cursor-pointer p-0',
                           subFolderColor === c ? 'border-2 border-gray-900 dark:border-gray-100' : 'border border-transparent',
                         )}
-                        style={{ backgroundColor: c }} // user-chosen hex
+                        style={{ backgroundColor: c }}
                       />
                     ))}
                   </div>
@@ -1446,7 +1905,7 @@ export default function ParametersPage() {
                       if (e.key === 'Escape') setCreatingSubFolderIn(null)
                     }}
                     placeholder="Sub-folder name"
-                    className="w-full text-[11px] px-1.5 py-[3px] border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 box-border"
+                    className="w-full text-[12px] px-1.5 py-[3px] border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 box-border"
                   />
                   <div className="flex gap-[3px]">
                     <button
@@ -1468,7 +1927,6 @@ export default function ParametersPage() {
                   </div>
                 </div>
               )}
-              {/* Recursively render children when expanded */}
               {isExpanded && hasChildren && renderFolderTree(folder.id, depth + 1)}
             </div>
           )
@@ -1482,139 +1940,285 @@ export default function ParametersPage() {
   // ============================================================
   return (
     <AiFeatureProvider projectId={projectId ?? null}>
-    <div className="space-y-4">
+    <div className="params-v2 space-y-0">
 
-      {/* ── Tab navigation ── */}
-      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
-        {([
-          { key: 'parameters', label: 'Parameters', icon: null },
-          { key: 'communications', label: 'Communications', icon: <Radio size={13} /> },
-        ] as const).map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={clsx(
-              'flex items-center gap-[5px] px-3.5 py-[7px] text-[13px] font-medium border-none bg-transparent cursor-pointer -mb-px border-b-2',
-              activeTab === tab.key
-                ? 'border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-600 dark:text-gray-400',
-            )}
+      {/* ── Tab navigation (v2) ── */}
+      <div className="pv-tabs">
+        <button
+          onClick={() => setActiveTab('parameters')}
+          className={clsx('pv-tab', activeTab === 'parameters' && 'is-active')}
+        >
+          Parameters
+          <span className="pv-tab-count">{(projectTotalParameters || totalParameters || parameters.length).toLocaleString()}</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('communications')}
+          className={clsx('pv-tab', activeTab === 'communications' && 'is-active')}
+        >
+          Communications
+        </button>
+        {projectId && (
+          <Link
+            to={`/projects/${projectId}/parameters/settings`}
+            className="pv-tab no-underline"
           >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
+            Settings
+          </Link>
+        )}
       </div>
 
       {/* ── Communications tab ── */}
       {activeTab === 'communications' && projectId && (
-        <CommunicationsTab projectId={projectId} />
+        <div className="p-4">
+          <CommunicationsTab projectId={projectId} />
+        </div>
       )}
 
       {/* ── Parameters tab content ── */}
       {activeTab === 'parameters' && <>
 
-      {/* ── Staleness banner ── */}
+      {/* ── Staleness banner (v2) ── */}
       {isStale && (
-        <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg border border-amber-500 bg-amber-500/10 text-xs text-amber-900 dark:text-amber-200">
-          <AlertTriangle size={14} className="text-amber-500 shrink-0" />
-          <span className="flex-1">Parameters have been updated since the last Git sync.</span>
-          <button
-            onClick={handleBannerSync}
-            disabled={isBannerSyncing}
-            className={clsx(
-              'flex items-center gap-[5px] px-2.5 py-1 rounded-[5px] border border-amber-500 bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200 text-[11px] font-semibold',
-              isBannerSyncing ? 'cursor-not-allowed opacity-70' : 'cursor-pointer opacity-100',
-            )}
-          >
-            <RefreshCw size={11} className={clsx(isBannerSyncing && 'animate-spin')} />
-            {isBannerSyncing ? 'Syncing…' : 'Sync Now'}
-          </button>
+        <div className="pv-stale">
+          <span className="pv-stale-badge">
+            <GitPullRequestArrow size={12} />
+            Out of sync
+          </span>
+          <span>
+            <b>Parameters</b> have been updated since the last Git sync to{' '}
+            {storedGitConfig ? <b className="pv-mono">{storedGitConfig.repoUrl?.split('/').slice(-2).join('/')}</b> : <b>origin</b>}
+          </span>
+          <div className="pv-stale-actions">
+            <button
+              type="button"
+              className="pv-link"
+              onClick={() => storedGitConfig && handleGitPull()}
+              title="Pull latest to compare"
+            >
+              View diff
+            </button>
+            <button
+              type="button"
+              onClick={handleBannerSync}
+              disabled={isBannerSyncing}
+              className={clsx('pv-btn primary compact', isBannerSyncing && 'opacity-70 cursor-not-allowed')}
+            >
+              <RefreshCw size={13} className={clsx(isBannerSyncing && 'animate-spin')} />
+              {isBannerSyncing ? 'Syncing…' : 'Sync now'}
+            </button>
+          </div>
         </div>
       )}
 
-      {/* ── Toolbar ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-          Parameters
-          {!isLoading && (
-            <span className="text-xs font-normal text-gray-600 dark:text-gray-400 bg-gray-200/30 dark:bg-gray-400/15 px-[7px] py-0.5 rounded-[10px]">
-              {filteredParameters.length !== parameters.length
-                ? `${filteredParameters.length} / ${parameters.length}`
-                : parameters.length}
+      {/* ── Toolbar (v2 page-head title row) ── */}
+      <div className="pv-page-head">
+      <div className="pv-title-row">
+        <h1>Parameters</h1>
+        {!isLoading && (() => {
+          const projectTotal = projectTotalParameters || totalParameters || parameters.length
+          const filtered = filteredParameters.length
+          const hasActiveFilter =
+            trimmedQ.length > 0 ||
+            statusFilter !== 'all' ||
+            dataTypeFilter !== 'all' ||
+            unitFilter !== 'all' ||
+            sourceFilter !== 'all' ||
+            !!selectedFolderId
+          const narrowed = hasActiveFilter && filtered < projectTotal
+          const lastUpdate = parameters.reduce<number>((max, p) => {
+            const t = new Date(p.updatedAt ?? p.createdAt).getTime()
+            return t > max ? t : max
+          }, 0)
+          const baselineLabel = storedGitConfig
+            ? (storedGitConfig.repoUrl?.split('/').slice(-2).join('/') ?? 'origin')
+            : 'unset'
+          return (
+            <span className="pv-title-meta">
+              <b>{narrowed ? `${filtered.toLocaleString()} / ${projectTotal.toLocaleString()}` : projectTotal.toLocaleString()}</b>
+              {' '}records
+              {' · '}baseline <b className="pv-mono">{baselineLabel}</b>
+              {lastUpdate > 0 && (
+                <>
+                  {' · '}updated <b>{new Date(lastUpdate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</b>
+                </>
+              )}
             </span>
-          )}
-        </h2>
-        <div className="flex flex-wrap items-center gap-2">
-          {projectId && <SafetyLinkPanel variant="relevance" count={1} />}
-
-          {/* Settings */}
-          {projectId && (
-            <Link
-              to={`/projects/${projectId}/parameters/settings`}
-              className={clsx(BTN_TOOLBAR, 'no-underline')}
-              title="Parameter settings — type registry, unit registry"
-            >
-              <Settings size={13} />
-              Settings
-            </Link>
-          )}
-
-          {/* Publish to Git */}
-          <button
-            onClick={() => setIsPublishOpen(true)}
-            className={BTN_TOOLBAR}
-            title={storedGitConfig ? `Connected: ${storedGitConfig.repoUrl}` : 'Publish parameters to Git'}
-          >
-            <GitBranch size={13} />
-            Publish to Git
-            {storedGitConfig && (
-              <span
-                className={clsx(
-                  'w-1.5 h-1.5 rounded-full ml-0.5',
-                  isStale ? 'bg-amber-500' : 'bg-green-500',
-                )}
-              />
-            )}
-          </button>
-
-          {/* Pull from Git — import round-trip */}
+          )
+        })()}
+        <div className="pv-right">
+          {/* Pull from Git */}
           {storedGitConfig && (
             <button
+              type="button"
               onClick={handleGitPull}
               disabled={isPulling}
-              className={clsx(BTN_TOOLBAR, !isPulling && 'text-blue-600 dark:text-blue-400')}
+              className="pv-btn"
               title={`Pull latest parameters.json from ${storedGitConfig.platform}`}
             >
-              <RefreshCw size={13} className={clsx(isPulling && 'animate-spin')} />
+              <GitBranch size={14} />
               {isPulling ? 'Pulling…' : 'Pull from Git'}
             </button>
           )}
 
-          {/* Import — opens the guided CSV import modal */}
+          {/* Publish split-button */}
+          <div className="pv-btn-split">
+            <button
+              type="button"
+              onClick={() => setIsPublishOpen(true)}
+              className="pv-btn"
+              title={storedGitConfig ? `Connected: ${storedGitConfig.repoUrl}` : 'Publish parameters to Git'}
+            >
+              <Upload size={14} />
+              Publish
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsPublishOpen(true)}
+              className="pv-btn"
+              title="Publish settings"
+              aria-label="Publish settings"
+            >
+              <ChevronDown size={14} />
+            </button>
+          </div>
+
+          {/* Import */}
           <button
+            type="button"
             onClick={() => setIsCsvImportOpen(true)}
-            className={BTN_TOOLBAR}
+            className="pv-btn"
           >
-            <Upload size={13} />
+            <Upload size={14} />
             Import
           </button>
 
-          {/* Column visibility toggle */}
-          <div ref={colMenuRef} className="relative">
+          {/* Export dropdown moved here — design has it as a single right-aligned button. */}
+          <div ref={exportRef} className="relative">
             <button
-              onClick={() => setIsColMenuOpen(v => !v)}
-              title="Show / hide columns"
-              className={BTN_TOOLBAR}
+              type="button"
+              onClick={() => setIsExportOpen(v => !v)}
+              disabled={!!exportingFormat}
+              className="pv-btn"
             >
-              <Layers size={13} />
-              Columns
-              {visibleCols.size < ALL_COLS.length && (
-                <span className="px-1 rounded-lg text-[10px] font-bold bg-blue-600 text-white">
-                  {ALL_COLS.length - visibleCols.size} hidden
-                </span>
-              )}
+              <Download size={14} />
+              {exportingFormat ? 'Exporting…' : 'Export'}
+              <ChevronDown size={13} />
             </button>
+            {isExportOpen && (
+              <div className={clsx(MENU_POPOVER, 'top-[calc(100%+4px)] w-[280px]')}>
+                {EXPORT_GROUPS.map(group => (
+                  <div key={group.label}>
+                    <div className="px-3 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-[0.06em] text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700">
+                      {group.label}
+                    </div>
+                    {group.formats.map(f => (
+                      <button
+                        key={f.key}
+                        onClick={() => handleExport(f.key)}
+                        className="flex items-center gap-2 w-full px-3 py-[7px] text-xs text-left text-gray-900 dark:text-gray-100 bg-transparent border-none cursor-pointer hover:bg-gray-200/20 dark:hover:bg-gray-400/10"
+                      >
+                        <Download size={12} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Create — primary */}
+          <button
+            type="button"
+            onClick={() => setIsCreateModalOpen(true)}
+            className="pv-btn primary"
+          >
+            <Plus size={14} />
+            New parameter
+          </button>
+
+          {/* Overflow menu — Settings / Baselines / Scenario / Columns / AI */}
+          <div ref={moreMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setIsMoreMenuOpen(v => !v)}
+              className="pv-btn"
+              title="More actions"
+              aria-label="More actions"
+            >
+              <MoreHorizontal size={14} />
+            </button>
+            {isMoreMenuOpen && (
+              <div className={clsx(MENU_POPOVER, 'top-[calc(100%+4px)] w-[220px] py-1.5')}>
+                {projectId && (
+                  <Link
+                    to={`/projects/${projectId}/parameters/settings`}
+                    onClick={() => setIsMoreMenuOpen(false)}
+                    className="flex items-center gap-2 w-full px-3 py-[7px] text-xs text-left text-gray-900 dark:text-gray-100 hover:bg-gray-200/20 dark:hover:bg-gray-400/10 no-underline"
+                  >
+                    <Settings size={13} className="text-gray-500" />
+                    Settings
+                  </Link>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { setIsMoreMenuOpen(false); setIsBaselinesOpen(true) }}
+                  className="flex items-center gap-2 w-full px-3 py-[7px] text-xs text-left text-gray-900 dark:text-gray-100 bg-transparent border-0 cursor-pointer hover:bg-gray-200/20 dark:hover:bg-gray-400/10"
+                >
+                  <History size={13} className="text-gray-500" />
+                  Baselines
+                </button>
+                {projectId && (
+                  <div className="px-3 py-[5px]">
+                    <label className="text-[10px] uppercase tracking-wider text-gray-500 mb-1 block">Scenario</label>
+                    <select
+                      value={activeScenarioId ?? ''}
+                      onChange={(e) => setActiveScenarioId(e.target.value || null)}
+                      className="w-full text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950"
+                    >
+                      <option value="">No scenario</option>
+                      {scenarios.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name} ({s.overrideCount})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <AiFeatureGuard>
+                  <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+                  <button
+                    type="button"
+                    onClick={() => { setIsMoreMenuOpen(false); handleAiDraft() }}
+                    disabled={aiDrafting}
+                    className="flex items-center gap-2 w-full px-3 py-[7px] text-xs text-left text-gray-900 dark:text-gray-100 bg-transparent border-0 cursor-pointer hover:bg-gray-200/20 dark:hover:bg-gray-400/10 disabled:opacity-50"
+                  >
+                    <Sparkles size={13} className="text-blue-500" />
+                    {aiDrafting ? 'Drafting…' : 'AI draft'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIsMoreMenuOpen(false); setAiModifiedView(v => !v) }}
+                    className="flex items-center gap-2 w-full px-3 py-[7px] text-xs text-left text-gray-900 dark:text-gray-100 bg-transparent border-0 cursor-pointer hover:bg-gray-200/20 dark:hover:bg-gray-400/10"
+                  >
+                    <Sparkles size={13} className="text-purple-500" />
+                    {aiModifiedView ? 'AI rows ✓' : 'AI rows'}
+                  </button>
+                </AiFeatureGuard>
+                {projectId && (
+                  <>
+                    <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+                    <div className="px-3 py-[5px]">
+                      <SafetyLinkPanel variant="relevance" count={1} />
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      </div>{/* end pv-page-head */}
+      {/* DEAD: legacy popover scaffolding kept for tsc until full prune */}
+      <div className="hidden" ref={colMenuRef}>
             {isColMenuOpen && (
               <div className={clsx(MENU_POPOVER, 'top-[calc(100%+4px)] w-[180px] py-1.5')}>
                 <div className="px-3 pt-1 pb-1.5 text-[10px] font-bold uppercase tracking-[0.06em] text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 mb-1">
@@ -1643,128 +2247,183 @@ export default function ParametersPage() {
                 </div>
               </div>
             )}
-          </div>
+      </div>{/* end legacy hidden wrapper */}
 
-          {/* Export dropdown */}
-          <div ref={exportRef} className="relative">
-            <button
-              onClick={() => setIsExportOpen(v => !v)}
-              disabled={!!exportingFormat}
-              className={BTN_TOOLBAR}
-            >
-              <Download size={13} />
-              {exportingFormat ? 'Exporting…' : 'Export'}
-              <ChevronDown size={11} />
-            </button>
-            {isExportOpen && (
-              <div className={clsx(MENU_POPOVER, 'top-[calc(100%+4px)] w-[280px]')}>
-                {EXPORT_GROUPS.map(group => (
-                  <div key={group.label}>
-                    <div className="px-3 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-[0.06em] text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700">
-                      {group.label}
-                    </div>
-                    {group.formats.map(f => (
-                      <button
-                        key={f.key}
-                        onClick={() => handleExport(f.key)}
-                        className="flex items-center gap-2 w-full px-3 py-[7px] text-xs text-left text-gray-900 dark:text-gray-100 bg-transparent border-none cursor-pointer hover:bg-gray-200/20 dark:hover:bg-gray-400/10"
-                      >
-                        <Download size={12} className="text-blue-600 dark:text-blue-400 shrink-0" />
-                        {f.label}
-                      </button>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* View toggle: List / Graph */}
-          <div className="flex border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden">
-            <button
-              onClick={() => setParamViewMode('list')}
-              title="List view"
-              className={clsx(
-                'flex items-center gap-[5px] px-2.5 py-[5px] text-xs font-medium border-none cursor-pointer border-r border-gray-200 dark:border-gray-700',
-                paramViewMode === 'list'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400',
-              )}
-            >
-              <List size={13} />
-              List
-            </button>
-            <button
-              onClick={() => setParamViewMode('graph')}
-              title="Dependency graph view"
-              className={clsx(
-                'flex items-center gap-[5px] px-2.5 py-[5px] text-xs font-medium border-none cursor-pointer',
-                paramViewMode === 'graph'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400',
-              )}
-            >
-              <Share2 size={13} />
-              Graph
-            </button>
-          </div>
-
-          {/* Create */}
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-[5px] rounded-md text-xs font-semibold border-none bg-blue-600 hover:bg-blue-500 text-white cursor-pointer transition-colors"
-          >
-            <Plus size={13} />
-            New Parameter
-          </button>
-        </div>
-      </div>
-
-      {/* ── Search ── */}
-      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-3">
-        <div className="relative">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-600 dark:text-gray-400" />
+      {/* ── Subbar (v2): search + filter pills + view toggle ── */}
+      <div className="pv-subbar">
+        <div className="pv-search">
+          <Search size={14} className="text-[color:var(--pv-fg-3)] shrink-0" />
           <input
             ref={searchInputRef}
             type="text"
-            placeholder="Search parameters… (Ctrl+F)"
+            placeholder="Filter parameters by name, description, formula…"
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className={clsx(
-              'w-full pl-8 py-1.5 border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 text-xs outline-none box-border',
-              searchQuery ? 'pr-8' : 'pr-2.5',
-            )}
           />
-          {searchQuery && (
+          {searchQuery ? (
             <button
+              type="button"
               onClick={() => { setSearchQuery(''); setDebouncedSearch('') }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-gray-600 dark:text-gray-400 p-0"
+              className="pv-icon-btn w-[18px] h-[18px]"
+              aria-label="Clear search"
             >
-              <X size={13} />
+              <X size={12} />
             </button>
+          ) : (
+            <span className="pv-kbd">⌘F</span>
           )}
         </div>
-      </div>
 
-      {/* ── Filters (pill chips, parity with Requirements page) ── */}
-      <ParameterFilterBar
-        statusFilter={statusFilter}
-        onStatusChange={setStatusFilter}
-        dataTypeFilter={dataTypeFilter}
-        onDataTypeChange={setDataTypeFilter}
-        unitFilter={unitFilter}
-        onUnitChange={setUnitFilter}
-        sourceFilter={sourceFilter}
-        onSourceChange={setSourceFilter}
-        availableDataTypes={availableDataTypes}
-        availableUnits={availableUnits}
-        onClearAll={() => {
-          setStatusFilter('all')
-          setDataTypeFilter('all')
-          setUnitFilter('all')
-          setSourceFilter('all')
-        }}
-      />
+        {/* Single Filters pill popover (per design) */}
+        {(() => {
+          const activeCount =
+            (statusFilter !== 'all' ? 1 : 0) +
+            (dataTypeFilter !== 'all' ? 1 : 0) +
+            (unitFilter !== 'all' ? 1 : 0) +
+            (sourceFilter !== 'all' ? 1 : 0)
+          return (
+            <div ref={filtersRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setIsFiltersOpen(v => !v)}
+                className={clsx('pv-pill', activeCount > 0 && 'active')}
+              >
+                <Filter size={13} />
+                Filters
+                {activeCount > 0 && <span className="pv-badge">{activeCount}</span>}
+              </button>
+              {isFiltersOpen && (
+                <div className={clsx(MENU_POPOVER, 'top-[calc(100%+4px)] left-0 w-[280px] py-2')}>
+                  <div className="px-3 py-1 flex flex-col gap-2">
+                    <label className="text-[10px] uppercase tracking-wider text-gray-500">Status</label>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950"
+                    >
+                      <option value="all">All statuses</option>
+                      <option value="draft">Draft</option>
+                      <option value="approved">Approved</option>
+                      <option value="obsolete">Obsolete</option>
+                    </select>
+                    <label className="text-[10px] uppercase tracking-wider text-gray-500 mt-1">Data type</label>
+                    <select
+                      value={dataTypeFilter}
+                      onChange={(e) => setDataTypeFilter(e.target.value)}
+                      className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950"
+                    >
+                      <option value="all">All data types</option>
+                      <option value="unassigned">Unassigned</option>
+                      {availableDataTypes.map((v) => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                    <label className="text-[10px] uppercase tracking-wider text-gray-500 mt-1">Unit</label>
+                    <select
+                      value={unitFilter}
+                      onChange={(e) => setUnitFilter(e.target.value)}
+                      className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950"
+                    >
+                      <option value="all">All units</option>
+                      <option value="unassigned">Unassigned</option>
+                      {availableUnits.map((v) => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                    <label className="text-[10px] uppercase tracking-wider text-gray-500 mt-1">Source</label>
+                    <select
+                      value={sourceFilter}
+                      onChange={(e) => setSourceFilter(e.target.value)}
+                      className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950"
+                    >
+                      <option value="all">All sources</option>
+                      <option value="has-source">Has source</option>
+                      <option value="unassigned">Unassigned</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
+        {(statusFilter !== 'all' || dataTypeFilter !== 'all' || unitFilter !== 'all' || sourceFilter !== 'all') && (
+          <button
+            type="button"
+            className="pv-clear"
+            onClick={() => {
+              setStatusFilter('all')
+              setDataTypeFilter('all')
+              setUnitFilter('all')
+              setSourceFilter('all')
+            }}
+          >
+            Clear filters
+          </button>
+        )}
+
+        <div className="pv-subbar-right">
+          <button
+            type="button"
+            onClick={() => handleSortBy(sortField === 'name' ? 'createdAt' : 'name')}
+            className="pv-pill"
+            title={`Sort: ${sortField === 'name' ? 'Name' : 'Created'} ${sortOrder === 'asc' ? '↑' : '↓'}`}
+          >
+            <ArrowUpDown size={13} />
+            Sort: {sortField === 'name' ? 'Name' : 'Created'} {sortOrder === 'asc' ? '↑' : '↓'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              // Toggle: collapse all visible folder groups, or expand them.
+              setCollapsedGroups(prev => {
+                if (prev.size > 0) return new Set()
+                const all = new Set<string>()
+                for (const f of folders) all.add(`folder-${f.id}`)
+                return all
+              })
+            }}
+            className={clsx('pv-pill', collapsedGroups.size > 0 && 'active')}
+            title="Group by folder — collapse / expand all"
+          >
+            <Layers size={13} />
+            Group: Folder
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsColMenuOpen(v => !v)}
+            className="pv-pill"
+            title="Show / hide columns"
+          >
+            <LayoutGrid size={13} />
+            Columns
+            {visibleCols.size < ALL_COLS.length && (
+              <span className="pv-badge">{ALL_COLS.length - visibleCols.size}</span>
+            )}
+          </button>
+          <div className="pv-seg" title="View">
+            <button
+              type="button"
+              onClick={() => setParamViewMode('list')}
+              className={clsx('pv-seg-btn', paramViewMode === 'list' && 'is-active')}
+              title="List view"
+            >
+              <List size={13} />List
+            </button>
+            <button
+              type="button"
+              onClick={() => setParamViewMode('board')}
+              className={clsx('pv-seg-btn', paramViewMode === 'board' && 'is-active')}
+              title="Kanban board (Draft / Approved / Obsolete)"
+            >
+              <LayoutGrid size={13} />Board
+            </button>
+            <button
+              type="button"
+              onClick={() => setParamViewMode('graph')}
+              className={clsx('pv-seg-btn', paramViewMode === 'graph' && 'is-active')}
+              title="Dependency graph view"
+            >
+              <Share2 size={13} />Graph
+            </button>
+          </div>
+        </div>
+      </div>
 
 
       {/* ── Folders + content layout ── */}
@@ -1774,60 +2433,109 @@ export default function ParametersPage() {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-      <div className="flex gap-3 items-stretch min-h-[calc(100vh-280px)]">
+      <div className="pv-workspace min-h-[calc(100vh-240px)]">
 
-        {/* ── Folder sidebar ── */}
+        {/* ── Folder tree (v2) ── */}
         {isFolderSidebarOpen ? (
-          <div className="w-[200px] shrink-0 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-hidden">
-            {/* Sidebar header */}
-            <div className="flex items-center justify-between px-2.5 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">Folders</span>
-              <button
-                onClick={() => setIsFolderSidebarOpen(false)}
-                title="Collapse sidebar"
-                className="bg-transparent border-none cursor-pointer text-gray-600 dark:text-gray-400 p-0.5 flex items-center"
-              >
-                <ChevronDown size={12} className="rotate-90" />
-              </button>
+          <aside className="pv-tree">
+            <div className="pv-tree-head">
+              <span className="pv-lbl">Folders</span>
+              <span className="pv-ct">{folders.length}</span>
+              <span className="ml-auto flex gap-1">
+                <button
+                  type="button"
+                  className="pv-icon-btn w-6 h-6"
+                  onClick={() => setIsCreatingFolder(true)}
+                  title="New folder"
+                >
+                  <Plus size={13} />
+                </button>
+                <button
+                  type="button"
+                  className="pv-icon-btn w-6 h-6"
+                  onClick={() => setIsFolderSidebarOpen(false)}
+                  title="Hide folder tree"
+                >
+                  <PanelLeftClose size={13} />
+                </button>
+              </span>
             </div>
-            <div className="p-1">
-              {/* All Parameters */}
-              <button
-                onClick={() => setSelectedFolderId(null)}
-                className={clsx(
-                  'w-full flex items-center gap-1.5 px-2 py-1.5 rounded-[5px] text-xs font-medium border-none cursor-pointer text-left',
-                  selectedFolderId === null
-                    ? 'bg-gray-200/30 dark:bg-gray-400/15 text-blue-600 dark:text-blue-400'
-                    : 'bg-transparent text-gray-900 dark:text-gray-100',
-                )}
-              >
-                <Layers
-                  size={13}
-                  className={clsx(
-                    'shrink-0',
-                    selectedFolderId === null ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400',
-                  )}
+            <div className="pv-tree-search">
+              <div className="pv-tree-input">
+                <Search size={12} className="text-[color:var(--pv-fg-3)] shrink-0" />
+                <input
+                  value={folderFilter}
+                  onChange={(e) => setFolderFilter(e.target.value)}
+                  placeholder="Filter folders"
+                  aria-label="Filter folders"
                 />
-                <span className="flex-1">All Parameters</span>
-                <span className="text-[10px] text-gray-600 dark:text-gray-400">{parameters.length}</span>
+                {folderFilter && (
+                  <button
+                    type="button"
+                    onClick={() => setFolderFilter('')}
+                    className="pv-icon-btn w-4 h-4"
+                    aria-label="Clear filter"
+                  >
+                    <X size={10} />
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="pv-tree-list">
+              {/* All parameters */}
+              <button
+                type="button"
+                onClick={() => setSelectedFolderId(null)}
+                className={clsx('pv-tnode w-full bg-transparent border-0 [font:inherit]', selectedFolderId === null && 'is-selected')}
+              >
+                <span className="pv-chev" />
+                <span className="pv-ico"><Layers size={13} /></span>
+                <span className="pv-name">All parameters</span>
+                <span className="pv-count">{(projectTotalParameters || totalParameters || 0).toLocaleString()}</span>
               </button>
-              {/* Ungrouped — droppable zone */}
+              {/* Ungrouped — droppable */}
               <DroppableFolder folderId="ungrouped" isOver={overFolderId === 'ungrouped'}>
                 <button
+                  type="button"
                   onClick={() => setSelectedFolderId('__none__')}
-                  className={clsx(
-                    'w-full flex items-center gap-1.5 px-2 py-1.5 rounded-[5px] text-xs font-medium border-none cursor-pointer text-left',
-                    selectedFolderId === '__none__'
-                      ? 'bg-gray-200/30 dark:bg-gray-400/15 text-blue-600 dark:text-blue-400'
-                      : 'bg-transparent text-gray-600 dark:text-gray-400',
-                  )}
+                  className={clsx('pv-tnode w-full bg-transparent border-0 [font:inherit]', selectedFolderId === '__none__' && 'is-selected')}
                 >
-                  <Folder size={13} className="shrink-0" />
-                  <span className="flex-1">Ungrouped</span>
-                  <span className="text-[10px]">{parameters.filter(p => !p.folderId).length}</span>
+                  <span className="pv-chev" />
+                  <span className="pv-ico"><Folder size={13} /></span>
+                  <span className="pv-name">Ungrouped</span>
+                  {(() => {
+                    const total = projectTotalParameters || totalParameters
+                    let inFolders = 0
+                    for (const c of folderSubtreeCounts.values()) inFolders += c.direct
+                    const ungrouped = Math.max(0, total - inFolders)
+                    return <span className="pv-count">{ungrouped.toLocaleString()}</span>
+                  })()}
                 </button>
               </DroppableFolder>
-              {/* Named folders — recursive tree, sortable at every depth level */}
+              {/* Starred (synthetic — local-stored stars) */}
+              <button
+                type="button"
+                onClick={() => setSelectedFolderId('__starred__')}
+                className={clsx('pv-tnode w-full bg-transparent border-0 [font:inherit]', selectedFolderId === '__starred__' && 'is-selected')}
+              >
+                <span className="pv-chev" />
+                <span className="pv-ico"><Star size={13} /></span>
+                <span className="pv-name">Starred</span>
+                <span className="pv-count">{starredCount.toLocaleString()}</span>
+              </button>
+              {/* Recently edited (last 7 days) */}
+              <button
+                type="button"
+                onClick={() => setSelectedFolderId('__recent__')}
+                className={clsx('pv-tnode w-full bg-transparent border-0 [font:inherit]', selectedFolderId === '__recent__' && 'is-selected')}
+              >
+                <span className="pv-chev" />
+                <span className="pv-ico"><Clock size={13} /></span>
+                <span className="pv-name">Recently edited</span>
+                <span className="pv-count">{recentCount.toLocaleString()}</span>
+              </button>
+              <div className="h-px border-t border-[color:var(--pv-line-soft)] mt-1.5 mx-1 mb-1" />
+              {/* Named folders */}
               {renderFolderTree(null, 0)}
               {/* New folder */}
               {isCreatingFolder ? (
@@ -1883,20 +2591,20 @@ export default function ParametersPage() {
                 </button>
               )}
             </div>
-          </div>
+          </aside>
         ) : (
-          /* Collapsed sidebar toggle */
           <button
+            type="button"
             onClick={() => setIsFolderSidebarOpen(true)}
-            title="Expand folder sidebar"
-            className="shrink-0 flex items-center justify-center w-6 min-h-[40px] rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-pointer text-gray-600 dark:text-gray-400"
+            title="Show folder tree"
+            className="pv-icon-btn w-7 h-auto min-h-10 self-start mt-2 ml-1 rounded-md border border-[color:var(--pv-line)] bg-[color:var(--pv-bg)]"
           >
-            <Folder size={13} />
+            <PanelLeftOpen size={14} />
           </button>
         )}
 
         {/* ── Right: tip / graph / bulk bar / table ── */}
-        <div className="flex-1 min-w-0 flex flex-col gap-3">
+        <div className={clsx('pv-table-pane min-w-0', !!detailParameter && 'drawer-open')}>
 
       {/* ── Info / tip ── */}
       {parameters.length === 0 && !isLoading && (
@@ -1909,6 +2617,12 @@ export default function ParametersPage() {
       {/* ── Dependency Graph view ── */}
       {paramViewMode === 'graph' && (
         <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-hidden">
+          {hasNextPage && (
+            <div className="px-3 py-1.5 text-[11px] text-gray-600 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 flex items-center gap-2">
+              <RefreshCw size={11} className="animate-spin" />
+              Loading {parameters.length} of {totalParameters || projectTotalParameters || '?'} parameters…
+            </div>
+          )}
           <Suspense
             fallback={
               <div className="flex items-center justify-center h-[600px] text-sm text-gray-600 dark:text-gray-400">
@@ -1921,108 +2635,180 @@ export default function ParametersPage() {
         </div>
       )}
 
-      {/* ── Bulk action toolbar ── */}
-      {selectedIds.size > 0 && (
-        <div className="flex items-center gap-2 flex-wrap px-3 py-2 rounded-lg border border-blue-600 dark:border-blue-400 bg-blue-100 dark:bg-blue-950">
-          <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 mr-1">
-            {selectedIds.size} selected
-          </span>
-          {/* Bulk move to folder */}
-          {folders.length > 0 && (
-            <select
-              defaultValue=""
-              onChange={async e => {
-                const folderId = e.target.value || null
-                await Promise.all(
-                  Array.from(selectedIds).map(id =>
-                    parameterService.moveParameterToFolder(projectId!, id, folderId)
-                  )
-                )
-                queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
-                queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
-                setToastMessage(`Moved ${selectedIds.size} parameter${selectedIds.size > 1 ? 's' : ''} to ${folderId ? (foldersById.get(folderId)?.name ?? 'folder') : 'root'}`)
-                setSelectedIds(new Set())
-              }}
-              className="px-2 py-1 rounded-md text-xs font-medium border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 cursor-pointer"
-            >
-              <option value="">Move to folder…</option>
-              <option value="">— Root (ungrouped)</option>
-              {buildAllFolderOptions().map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
+      {/* ── Board view (Draft / Approved / Obsolete Kanban) ── */}
+      {paramViewMode === 'board' && projectId && (
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-hidden">
+          {hasNextPage && (
+            <div className="px-3 py-1.5 text-[11px] text-gray-600 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 flex items-center gap-2">
+              <RefreshCw size={11} className="animate-spin" />
+              Loading {parameters.length} of {totalParameters || projectTotalParameters || '?'} parameters…
+            </div>
           )}
-          <button
-            onClick={() => bulkUpdateMutation.mutate({ ids: Array.from(selectedIds), updates: { status: 'approved' } })}
-            disabled={bulkUpdateMutation.isPending}
-            className="px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer border border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-400"
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-[400px] text-sm text-gray-600 dark:text-gray-400">
+                Loading board…
+              </div>
+            }
           >
-            Approve
-          </button>
+            <ParameterBoardView
+              parameters={filteredParameters}
+              folders={folders}
+              projectId={projectId}
+            />
+          </Suspense>
+        </div>
+      )}
+
+      {/* ── Floating bulk action dock (v2) ── */}
+      {selectedIds.size > 0 && (
+        <div className="pv-bulk-dock" role="toolbar" aria-label="Bulk actions">
+          <span className="ct">
+            <span className="num">{selectedIds.size.toLocaleString()}</span> selected
+          </span>
+          {/* Move */}
+          {folders.length > 0 && (
+            <label className="b relative">
+              <FolderInput size={13} />
+              Move
+              <select
+                value=""
+                onChange={async e => {
+                  const raw = e.target.value
+                  if (!raw) return
+                  const folderId = raw === '__root__' ? null : raw
+                  const count = selectedIds.size
+                  await Promise.all(
+                    Array.from(selectedIds).map(id =>
+                      parameterService.moveParameterToFolder(projectId!, id, folderId)
+                    )
+                  )
+                  queryClient.invalidateQueries({ queryKey: ['parameters', projectId] })
+                  queryClient.invalidateQueries({ queryKey: ['parameter-folders', projectId] })
+                  const label = folderId
+                    ? (folderOptions.find(o => o.value === folderId)?.label.trim() ?? 'folder')
+                    : 'Ungrouped'
+                  setToastMessage(`Moved ${count} parameter${count > 1 ? 's' : ''} to ${label}`)
+                  setSelectedIds(new Set())
+                }}
+                aria-label="Move to folder"
+                style={{
+                  position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer',
+                  border: 0,
+                }}
+              >
+                <option value="" disabled>Move to folder…</option>
+                <option value="__root__">— Ungrouped (root)</option>
+                {buildAllFolderOptions().map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          {/* Set status */}
+          <label className="b relative">
+            <CircleDot size={13} />
+            Set status
+            <select
+              value=""
+              onChange={(e) => {
+                const v = e.target.value
+                if (!v) return
+                bulkUpdateMutation.mutate({ ids: Array.from(selectedIds), updates: { status: v } })
+              }}
+              disabled={bulkUpdateMutation.isPending}
+              aria-label="Set status"
+              style={{
+                position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer',
+                border: 0,
+              }}
+            >
+              <option value="" disabled>Set status…</option>
+              <option value="approved">Approved</option>
+              <option value="draft">Draft</option>
+              <option value="obsolete">Obsolete</option>
+            </select>
+          </label>
+          {/* Add tag (placeholder — wires to existing per-row tag UI in future) */}
           <button
-            onClick={() => bulkUpdateMutation.mutate({ ids: Array.from(selectedIds), updates: { status: 'draft' } })}
-            disabled={bulkUpdateMutation.isPending}
-            className="px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+            type="button"
+            className="b"
+            onClick={() => setToastMessage('Tip: open a parameter to manage its tags.')}
+            title="Tag editing — open a parameter to manage tags"
           >
-            Set Draft
+            <Tag size={13} />
+            Add tag
           </button>
+          {/* Export selected */}
           <button
-            onClick={() => bulkUpdateMutation.mutate({ ids: Array.from(selectedIds), updates: { status: 'obsolete' } })}
-            disabled={bulkUpdateMutation.isPending}
-            className="px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
+            type="button"
+            className="b"
+            onClick={() => handleExport('csv')}
+            disabled={!!exportingFormat}
           >
-            Obsolete
+            <Download size={13} />
+            Export
           </button>
+          <span className="sep" />
           {!bulkDeleteConfirm ? (
             <button
+              type="button"
+              className="b danger"
               onClick={() => setBulkDeleteConfirm(true)}
-              className="px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer border border-red-500/40 bg-red-500/10 text-red-500"
             >
+              <Trash2 size={13} />
               Delete
             </button>
           ) : (
-            <span className="flex items-center gap-1.5">
-              <span className="text-xs text-red-500 font-medium">Are you sure?</span>
+            <>
+              <span className="text-[#ff8e84] font-medium px-1.5">Confirm?</span>
               <button
+                type="button"
+                className="b bg-[#B42318] text-white"
                 onClick={() => bulkDeleteMutation.mutate(Array.from(selectedIds))}
                 disabled={bulkDeleteMutation.isPending}
-                className="px-2.5 py-1 rounded-md text-xs font-semibold cursor-pointer border-none bg-red-500 text-white"
               >
-                Confirm
+                Yes, delete
               </button>
               <button
+                type="button"
+                className="b"
                 onClick={() => setBulkDeleteConfirm(false)}
-                className="px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
               >
                 Cancel
               </button>
-            </span>
+            </>
           )}
-          <span className="flex-1" />
           <button
+            type="button"
+            className="clear"
             onClick={() => { setSelectedIds(new Set()); setBulkDeleteConfirm(false) }}
             title="Clear selection"
-            className="bg-transparent border-none cursor-pointer text-gray-600 dark:text-gray-400 p-0.5 flex items-center"
+            aria-label="Clear selection"
           >
             <X size={14} />
           </button>
         </div>
       )}
 
-      {/* ── Table ── */}
+      {/* ── Table (v2) ── */}
       {paramViewMode === 'list' && (
-      <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-hidden">
-        <div
-          ref={tableScrollRef}
-          className="overflow-auto max-h-[calc(100vh-360px)]"
-        >
-          <table className="w-full border-collapse text-xs">
-            <thead className="sticky top-0 z-[3]">
-              <tr className="bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700">
-                <th className="px-3 py-2 w-8 sticky left-0 z-[2] bg-white dark:bg-gray-950">
+      <div className="pv-scroll-area max-h-[calc(100vh-240px)]" ref={tableScrollRef}>
+          <table className="pv-params">
+            <thead>
+              <tr>
+                <th className="col-check">
                   <input
                     type="checkbox"
+                    className="pv-check"
                     checked={filteredParameters.length > 0 && filteredParameters.every(p => selectedIds.has(p.id))}
+                    ref={(el) => {
+                      if (el) {
+                        const some = filteredParameters.some(p => selectedIds.has(p.id))
+                        const all = filteredParameters.length > 0 && filteredParameters.every(p => selectedIds.has(p.id))
+                        el.indeterminate = some && !all
+                      }
+                    }}
                     onChange={e => {
                       if (e.target.checked) {
                         setSelectedIds(new Set(filteredParameters.map(p => p.id)))
@@ -2030,54 +2816,260 @@ export default function ParametersPage() {
                         setSelectedIds(new Set())
                       }
                     }}
-                    className="cursor-pointer"
                   />
                 </th>
                 {([
-                  { label: 'Parameter',   field: 'name' as const,     colKey: null,                       sticky: true },
-                  { label: 'Description', field: null,                 colKey: 'description' as ColKey, sticky: false },
-                  { label: 'Type',        field: null,                 colKey: 'type' as ColKey,        sticky: false },
-                  { label: 'Value',       field: null,                 colKey: 'value' as ColKey,       sticky: false },
-                  { label: 'Computed',    field: null,                 colKey: 'computed' as ColKey,    sticky: false },
-                  { label: 'Unit',        field: null,                 colKey: 'unit' as ColKey,        sticky: false },
-                  { label: 'Folder',      field: null,                 colKey: 'folder' as ColKey,      sticky: false },
-                  { label: 'Source',      field: null,                 colKey: 'source' as ColKey,      sticky: false },
-                  { label: 'Status',      field: null,                 colKey: 'status' as ColKey,      sticky: false },
-                  { label: 'Used in',     field: null,                 colKey: 'usedIn' as ColKey,      sticky: false },
-                  { label: 'Created',     field: 'createdAt' as const, colKey: 'created' as ColKey,     sticky: false },
-                  { label: '',            field: null,                 colKey: null,                    sticky: false },
-                ] as Array<{ label: string; field: 'name' | 'createdAt' | 'updatedAt' | null; colKey: ColKey | null; sticky: boolean }>)
+                  { label: 'Name',        field: 'name' as const,     colKey: null,                       cls: 'col-name' },
+                  { label: 'Type',        field: null,                 colKey: 'type' as ColKey,        cls: '' },
+                  { label: 'Value',       field: null,                 colKey: 'value' as ColKey,       cls: '' },
+                  { label: 'Computed',    field: null,                 colKey: 'computed' as ColKey,    cls: '' },
+                  { label: 'Unit',        field: null,                 colKey: 'unit' as ColKey,        cls: '' },
+                  { label: 'Description', field: null,                 colKey: 'description' as ColKey, cls: '' },
+                  { label: 'Folder',      field: null,                 colKey: 'folder' as ColKey,      cls: '' },
+                  { label: 'Source',      field: null,                 colKey: 'source' as ColKey,      cls: '' },
+                  { label: 'Status',      field: null,                 colKey: 'status' as ColKey,      cls: '' },
+                  { label: 'Used in',     field: null,                 colKey: 'usedIn' as ColKey,      cls: '' },
+                  { label: 'Updated',     field: 'createdAt' as const, colKey: 'created' as ColKey,     cls: '' },
+                  { label: '',            field: null,                 colKey: null,                    cls: 'col-actions' },
+                ] as Array<{ label: string; field: 'name' | 'createdAt' | 'updatedAt' | null; colKey: ColKey | null; cls: string }>)
                 .filter(h => h.colKey === null || visibleCols.has(h.colKey))
                 .map(h => (
                   <th
                     key={h.label || 'actions'}
                     onClick={h.field ? () => handleSortBy(h.field!) : undefined}
-                    className={clsx(
-                      'px-3 py-2 text-left text-[10px] font-bold tracking-wider uppercase text-gray-600 dark:text-gray-400 whitespace-nowrap select-none',
-                      h.field ? 'cursor-pointer' : 'cursor-default',
-                      h.sticky && 'sticky left-8 z-[2] bg-white dark:bg-gray-950 shadow-[2px_0_4px_rgba(0,0,0,0.06)]',
-                    )}
+                    className={clsx(h.cls, h.field && 'sortable')}
                     title={h.field ? `Sort by ${h.label}` : undefined}
                   >
-                    <span className="inline-flex items-center gap-1">
-                      {h.label}
-                      {h.field && (
-                        sortField === h.field
-                          ? sortOrder === 'asc'
-                            ? <ArrowUp size={10} className="text-blue-600 dark:text-blue-400" />
-                            : <ArrowDown size={10} className="text-blue-600 dark:text-blue-400" />
-                          : <ArrowUpDown size={10} className="opacity-40" />
+                    {h.label}
+                    {h.field && sortField === h.field && (
+                      <span className="sortmark">
+                        {sortOrder === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
+                      </span>
+                    )}
+                    {h.field && sortField !== h.field && (
+                      <span className="sortmark opacity-35">
+                        <ArrowUpDown size={11} />
+                      </span>
+                    )}
+                  </th>
+                ))}
+              </tr>
+              {/* Per-column quick-filter chip row (v2). Mirrors top-bar
+                  filter state so the user can clear from either place. */}
+              <tr className="qfilter">
+                <th className="col-check"></th>
+                <th className="col-name">
+                  <button
+                    type="button"
+                    className="qf"
+                    onClick={() => searchInputRef.current?.focus()}
+                    title="Search by name"
+                  >
+                    <Search size={11} />
+                    <span className="val">{trimmedQ ? trimmedQ : 'Any name'}</span>
+                    {trimmedQ && (
+                      <span
+                        className="x"
+                        role="button"
+                        aria-label="Clear name filter"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSearchQuery('')
+                          setDebouncedSearch('')
+                        }}
+                      >
+                        <X size={10} />
+                      </span>
+                    )}
+                  </button>
+                </th>
+                {visibleCols.has('type') && (
+                  <th>
+                    <select
+                      aria-label="Filter by type"
+                      value={dataTypeFilter}
+                      onChange={(e) => setDataTypeFilter(e.target.value)}
+                      className={clsx('qf', dataTypeFilter !== 'all' && 'active')}
+                    >
+                      <option value="all">Any type</option>
+                      <option value="unassigned">Unassigned</option>
+                      {availableDataTypes.map((v) => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                    </select>
+                  </th>
+                )}
+                {visibleCols.has('value') && (
+                  <th className="text-right">
+                    <span className={clsx('qf p-0', valueFilter && 'active')}>
+                      <input
+                        aria-label="Filter by value"
+                        value={valueFilter}
+                        onChange={(e) => setValueFilter(e.target.value)}
+                        placeholder="Any value"
+                        style={{
+                          all: 'unset', padding: '0 7px', width: '100%',
+                          fontFamily: 'var(--pv-font-mono)', fontSize: 11,
+                          color: 'inherit',
+                        }}
+                      />
+                      {valueFilter && (
+                        <button
+                          type="button"
+                          onClick={() => setValueFilter('')}
+                          aria-label="Clear value filter"
+                          className="x bg-transparent border-0 cursor-pointer px-1"
+                        >
+                          <X size={10} />
+                        </button>
                       )}
                     </span>
                   </th>
-                ))}
+                )}
+                {visibleCols.has('computed') && (
+                  <th className="text-right">
+                    <select
+                      aria-label="Filter by computed"
+                      value={computedFilter}
+                      onChange={(e) => setComputedFilter(e.target.value as typeof computedFilter)}
+                      className={clsx('qf', computedFilter !== 'all' && 'active')}
+                    >
+                      <option value="all">Any</option>
+                      <option value="computed">Computed (ƒ)</option>
+                      <option value="static">Static</option>
+                    </select>
+                  </th>
+                )}
+                {visibleCols.has('unit') && (
+                  <th>
+                    <select
+                      aria-label="Filter by unit"
+                      value={unitFilter}
+                      onChange={(e) => setUnitFilter(e.target.value)}
+                      className={clsx('qf', unitFilter !== 'all' && 'active')}
+                    >
+                      <option value="all">Any unit</option>
+                      <option value="unassigned">Unassigned</option>
+                      {availableUnits.map((v) => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                    </select>
+                  </th>
+                )}
+                {visibleCols.has('description') && (
+                  <th>
+                    <button
+                      type="button"
+                      className={clsx('qf', trimmedQ && 'active')}
+                      onClick={() => searchInputRef.current?.focus()}
+                      title="Search filters by description (and other fields)"
+                    >
+                      <Search size={11} />
+                      <span className="val">{trimmedQ ? trimmedQ : 'All'}</span>
+                      {trimmedQ && (
+                        <span
+                          className="x"
+                          role="button"
+                          aria-label="Clear search"
+                          onClick={(e) => { e.stopPropagation(); setSearchQuery(''); setDebouncedSearch('') }}
+                        >
+                          <X size={10} />
+                        </span>
+                      )}
+                    </button>
+                  </th>
+                )}
+                {visibleCols.has('folder') && (
+                  <th>
+                    <button
+                      type="button"
+                      className={clsx('qf', selectedFolderId && 'active')}
+                      onClick={() => setSelectedFolderId(null)}
+                      title="Pick a folder in the sidebar tree; click here to clear"
+                    >
+                      <span className="val">
+                        {selectedFolderId === '__none__'
+                          ? 'Ungrouped'
+                          : selectedFolderId === '__starred__'
+                            ? 'Starred'
+                            : selectedFolderId === '__recent__'
+                              ? 'Recently edited'
+                              : selectedFolderId
+                                ? (foldersById.get(selectedFolderId)?.name.split(/[\\/]/).pop() ?? 'Folder')
+                                : 'Any folder'}
+                      </span>
+                      {selectedFolderId && (
+                        <span className="x"><X size={10} /></span>
+                      )}
+                    </button>
+                  </th>
+                )}
+                {visibleCols.has('source') && (
+                  <th>
+                    <select
+                      aria-label="Filter by source"
+                      value={sourceFilter}
+                      onChange={(e) => setSourceFilter(e.target.value)}
+                      className={clsx('qf', sourceFilter !== 'all' && 'active')}
+                    >
+                      <option value="all">Any source</option>
+                      <option value="has-source">Has source</option>
+                      <option value="unassigned">Unassigned</option>
+                    </select>
+                  </th>
+                )}
+                {visibleCols.has('status') && (
+                  <th>
+                    <select
+                      aria-label="Filter by status"
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className={clsx('qf', statusFilter !== 'all' && 'active')}
+                    >
+                      <option value="all">Any status</option>
+                      <option value="draft">Draft</option>
+                      <option value="approved">Approved</option>
+                      <option value="obsolete">Obsolete</option>
+                    </select>
+                  </th>
+                )}
+                {visibleCols.has('usedIn') && (
+                  <th>
+                    <select
+                      aria-label="Filter by usage"
+                      value={usedInFilter}
+                      onChange={(e) => setUsedInFilter(e.target.value as typeof usedInFilter)}
+                      className={clsx('qf', usedInFilter !== 'all' && 'active')}
+                    >
+                      <option value="all">Any usage</option>
+                      <option value="has">≥ 1 ref</option>
+                      <option value="none">No refs</option>
+                    </select>
+                  </th>
+                )}
+                {visibleCols.has('created') && (
+                  <th>
+                    <select
+                      aria-label="Filter by last update"
+                      value={updatedFilter}
+                      onChange={(e) => setUpdatedFilter(e.target.value as typeof updatedFilter)}
+                      className={clsx('qf', updatedFilter !== 'all' && 'active')}
+                    >
+                      <option value="all">All time</option>
+                      <option value="7d">Last 7 d</option>
+                      <option value="30d">Last 30 d</option>
+                      <option value="90d">Last 90 d</option>
+                    </select>
+                  </th>
+                )}
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={2 + visibleCols.size} className="px-3 py-8 text-center text-gray-600 dark:text-gray-400">Loading parameters…</td></tr>
+                <tr><td colSpan={2 + visibleCols.size} className="px-3 py-8 text-center text-[color:var(--pv-fg-3)]">Loading parameters…</td></tr>
               ) : filteredParameters.length === 0 ? (
-                <tr><td colSpan={2 + visibleCols.size} className="px-3 py-8 text-center text-gray-600 dark:text-gray-400">
+                <tr><td colSpan={2 + visibleCols.size} className="px-3 py-8 text-center text-[color:var(--pv-fg-3)]">
                   {parameters.length === 0 ? 'No parameters yet. Create one or import a file.' : 'No parameters match your filters.'}
                 </td></tr>
               ) : (() => {
@@ -2101,35 +3093,56 @@ export default function ParametersPage() {
                         const group = item.group
                         const isCollapsed = item.isCollapsed
                         return (
-                          <tr
-                            key={item.key}
-                            style={{ height: ROW_FIXED_HEIGHT_PX }}
-                            className="bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700"
-                          >
-                            <td
-                              colSpan={colSpanTotal}
-                              className="py-[5px] pr-3"
-                              style={{ paddingLeft: group.depth * 18 + 12 }}
-                            >
+                          <tr key={item.key} className="group-row" style={{ height: ROW_FIXED_HEIGHT_PX }}>
+                            <td className="col-check"></td>
+                            <td colSpan={colSpanTotal - 1} style={{ paddingLeft: group.depth * 18 + 12 }}>
                               <button
                                 type="button"
                                 onClick={() => toggleGroup(group.id)}
-                                className="flex items-center gap-1.5 bg-transparent border-none cursor-pointer p-0 text-[11px] font-bold tracking-wider uppercase text-gray-600 dark:text-gray-400"
-                        >
-                          {group.color && (
-                            <span
-                              className="w-2 h-2 rounded-full inline-block shrink-0"
-                              style={{ backgroundColor: group.color }} // user-chosen hex
-                            />
-                          )}
-                          {isCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
-                          {group.label}
-                          <span className="text-[10px] text-gray-600 dark:text-gray-400 font-normal normal-case tracking-normal">
-                            ({group.params.length})
-                          </span>
-                        </button>
-                      </td>
-                    </tr>
+                                className="inline-flex items-center gap-1.5 bg-transparent border-0 cursor-pointer p-0 [font:inherit] [color:inherit]"
+                              >
+                                {isCollapsed ? <ChevronDown size={12} className="text-[color:var(--pv-fg-3)]" /> : <ChevronUp size={12} className="text-[color:var(--pv-fg-3)]" />}
+                                {group.color && (
+                                  <span
+                                    className="w-2 h-2 rounded-full inline-block shrink-0"
+                                    style={{ backgroundColor: group.color }}
+                                  />
+                                )}
+                                <FolderOpen size={12} className="text-[color:var(--pv-fg-3)]" />
+                                <span className="gr-name">{group.label}</span>
+                              </button>
+                              {(() => {
+                                const draft = group.params.filter((p) => (p.status ?? 'draft') === 'draft').length
+                                const obsolete = group.params.filter((p) => p.status === 'obsolete').length
+                                return (
+                                  <span
+                                    className="gr-meta"
+                                    title={
+                                      group.totalKnown !== undefined && group.totalKnown !== group.params.length
+                                        ? `${group.params.length} loaded of ${group.totalKnown} total — fetching remaining pages…`
+                                        : undefined
+                                    }
+                                  >
+                                    {group.totalKnown !== undefined && group.totalKnown !== group.params.length
+                                      ? `${group.params.length.toLocaleString()} / ${group.totalKnown.toLocaleString()} records`
+                                      : `${(group.totalKnown ?? group.params.length).toLocaleString()} records`}
+                                    {draft > 0 && (
+                                      <>
+                                        <span className="gr-dot" />
+                                        <span className="gr-stale">{draft.toLocaleString()} draft</span>
+                                      </>
+                                    )}
+                                    {obsolete > 0 && (
+                                      <>
+                                        <span className="gr-dot" />
+                                        <span className="gr-deprecated">{obsolete.toLocaleString()} obsolete</span>
+                                      </>
+                                    )}
+                                  </span>
+                                )
+                              })()}
+                            </td>
+                          </tr>
                         )
                       }
                       // data-row branch
@@ -2158,6 +3171,7 @@ export default function ParametersPage() {
                           onCancelInlineEdit={handleCancelInlineEdit}
                           onViewSource={handleViewSource}
                           onMoveToFolder={handleMoveToFolderFromRow}
+                          scenarioOverride={scenarioOverrides.get(param.id)}
                           onOpenChangeRequest={handleOpenChangeRequest}
                           onEditClick={handleEditClick}
                           onDeleteClick={handleDeleteClick}
@@ -2174,11 +3188,10 @@ export default function ParametersPage() {
               })()}
             </tbody>
           </table>
-        </div>
       </div>
       )}
 
-        </div>{/* end right column */}
+        </div>{/* end right column / pv-table-pane */}
 
         {/* Inline detail drawer — side-by-side with table, matches Requirements page */}
         {projectId && (
@@ -2189,6 +3202,34 @@ export default function ParametersPage() {
             parameter={detailParameter}
             onEdit={setEditingParameter}
             allParameters={parameters}
+            defaultExpanded={!!deepLinkParamId && deepLinkParamId === detailParameter?.id}
+          />
+        )}
+
+        {/* Command palette (Cmd/Ctrl + Shift + P). Receives the parameter + folder
+            lists and wires the four main actions. Closes after any pick. */}
+        <ParameterCommandPalette
+          open={isPaletteOpen}
+          onClose={() => setIsPaletteOpen(false)}
+          parameters={parameters}
+          folders={folders}
+          onOpenParameter={(id) => {
+            const p = parameters.find((x) => x.id === id)
+            if (p) setDetailParameter(p)
+          }}
+          onFilterToFolder={(folderId) => setSelectedFolderId(folderId)}
+          onCreate={() => setIsCreateModalOpen(true)}
+          onImport={() => setIsImportOpen(true)}
+          onExport={() => setIsExportOpen(true)}
+        />
+        <ShortcutsOverlay
+          open={isShortcutsOpen}
+          onClose={() => setIsShortcutsOpen(false)}
+        />
+        {projectId && isBaselinesOpen && (
+          <ParameterBaselinesPanel
+            projectId={projectId}
+            onClose={() => setIsBaselinesOpen(false)}
           />
         )}
       </div>{/* end folders + content layout */}
@@ -2425,15 +3466,53 @@ export default function ParametersPage() {
       </> /* end parameters tab */}
 
       {/* ── Toast notification ── */}
+      {/* a11y (HIGH-4): role="status" + aria-live so screen readers announce */}
       {toastMessage && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[2000] px-4.5 py-2.5 rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-[13px] font-medium shadow-lg pointer-events-none">
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[2000] px-4.5 py-2.5 rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-[13px] font-medium shadow-lg pointer-events-none"
+        >
           {toastMessage}
+        </div>
+      )}
+
+      {/* ── Bulk-job progress toast ── */}
+      {bulkJobProgress && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[2000] px-4 py-3 rounded-lg bg-blue-600 text-white text-xs font-medium shadow-lg min-w-[280px]"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span>
+              Bulk delete — {bulkJobProgress.done + bulkJobProgress.failed}/{bulkJobProgress.total}
+              {bulkJobProgress.failed > 0 && (
+                <span className="text-amber-200 ml-2">{bulkJobProgress.failed} failed</span>
+              )}
+            </span>
+            <span className="text-[10px] uppercase tracking-wider opacity-80">
+              {bulkJobProgress.status}
+            </span>
+          </div>
+          <div className="h-1.5 bg-blue-700 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-white rounded-full transition-all"
+              style={{
+                width: `${Math.min(100, ((bulkJobProgress.done + bulkJobProgress.failed) / Math.max(1, bulkJobProgress.total)) * 100)}%`,
+              }}
+            />
+          </div>
         </div>
       )}
 
       {/* ── Pull from Git result ── */}
       {pullResult && (
-        <div className="fixed bottom-6 right-6 z-[2000] px-4 py-3 rounded-lg max-w-[340px] bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 shadow-lg text-xs">
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 right-6 z-[2000] px-4 py-3 rounded-lg max-w-[340px] bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 shadow-lg text-xs"
+        >
           <div className="flex items-center justify-between mb-1.5">
             <strong>Pull from Git complete</strong>
             <button onClick={() => setPullResult(null)} className="bg-transparent border-none cursor-pointer text-gray-600 dark:text-gray-400 p-0.5"><X size={13} /></button>
@@ -2443,6 +3522,7 @@ export default function ParametersPage() {
           {pullResult.warnings.length > 0 && <div className="text-amber-500 mt-1">{pullResult.warnings.length} warnings</div>}
         </div>
       )}
+
     </div>
     </AiFeatureProvider>
   )

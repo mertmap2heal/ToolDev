@@ -637,7 +637,10 @@ export const updateFunctionComponent = async (req: AuthRequest, res: Response) =
       },
     })
 
-    // Sync allocated_to trace link (same as requirements)
+    // Sync allocated_to trace link (same as requirements).
+    // Replaced sequential per-link deleteTraceLink loop (~5 round-trips x N) with
+    // capped-parallel fan-out. deleteTraceLink preserves all audit + notify
+    // side effects per link; Promise.all just removes the wall-clock serialization.
     const existingAllocLinks = await prisma.traceLink.findMany({
       where: {
         projectId,
@@ -647,8 +650,16 @@ export const updateFunctionComponent = async (req: AuthRequest, res: Response) =
         linkType: 'allocated_to',
       },
     })
-    for (const link of existingAllocLinks) {
-      await traceabilityService.deleteTraceLink(projectId, link.id, req.userId)
+    if (existingAllocLinks.length > 0) {
+      const DELETE_CONCURRENCY = 16
+      for (let i = 0; i < existingAllocLinks.length; i += DELETE_CONCURRENCY) {
+        const slice = existingAllocLinks.slice(i, i + DELETE_CONCURRENCY)
+        await Promise.all(
+          slice.map((link) =>
+            traceabilityService.deleteTraceLink(projectId, link.id, req.userId)
+          )
+        )
+      }
     }
     if (componentId) {
       await traceabilityService.createTraceLink(

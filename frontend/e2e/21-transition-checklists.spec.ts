@@ -3,6 +3,7 @@
  */
 import { test, expect } from './helpers/fixtures'
 import { E2E_API_V1 } from './helpers/api'
+import { resetRequirementsViewPreferences } from './helpers/requirementsUi'
 
 const MODAL = '.fixed.inset-0'
 
@@ -784,6 +785,11 @@ test.describe('Transition Checklists', () => {
 
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
+    // 02-requirements.spec.ts can persist listViewStyle:'document' server-side;
+    // without resetting, the page renders document cards and `td .font-mono`
+    // never resolves.
+    await resetRequirementsViewPreferences(page, projectId, { listViewStyle: 'table' })
+    await page.reload({ waitUntil: 'domcontentloaded' })
 
     const idCell = page.locator('td .font-mono.cursor-pointer').first()
     await expect(idCell).toBeVisible({ timeout: 15_000 })
@@ -858,6 +864,9 @@ test.describe('Transition Checklists', () => {
 
     await page.goto(`/projects/${projectId}/requirements`)
     await page.waitForLoadState('domcontentloaded')
+    // Same prefs-leak guard as the previous test.
+    await resetRequirementsViewPreferences(page, projectId, { listViewStyle: 'table' })
+    await page.reload({ waitUntil: 'domcontentloaded' })
 
     const openLabel = row.requirementId?.trim() || row.id.slice(0, 8)
     const idCell = page.locator('td .font-mono.cursor-pointer').filter({ hasText: openLabel }).first()
