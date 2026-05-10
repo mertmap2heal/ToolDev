@@ -119,6 +119,21 @@ export default function ValidationPage() {
     },
   })
 
+  const { data: settings } = useQuery({
+    queryKey: ['validation-settings', projectId],
+    enabled: !!projectId,
+    queryFn: async () => {
+      const res = await validationService.getSettings(projectId!)
+      return res.success && res.data ? res.data : null
+    },
+  })
+
+  const tagColors = useMemo(() => {
+    const m = new Map<string, string>()
+    settings?.tags.forEach((t) => m.set(t.label, t.color))
+    return m
+  }, [settings])
+
   const items = useMemo(
     () => (showSuspectOnly ? rawItems.filter((i) => i.isSuspect) : rawItems),
     [rawItems, showSuspectOnly],
@@ -587,7 +602,28 @@ export default function ValidationPage() {
                         </span>
                       )}
                     </td>
-                    <td>{it.title}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.title}</span>
+                        {it.tags?.map((tag) => {
+                          const color = tagColors.get(tag) ?? 'var(--pv-fg-3)'
+                          return (
+                            <span
+                              key={tag}
+                              className="vv-tag"
+                              style={{
+                                background: `${color}22`,
+                                color,
+                                border: `1px solid ${color}44`,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {tag}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    </td>
                     <td
                       style={{ color: 'var(--pv-fg-2)' }}
                       title={METHOD_TOOLTIP[it.methodType]}
