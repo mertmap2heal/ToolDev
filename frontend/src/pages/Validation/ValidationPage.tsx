@@ -163,44 +163,45 @@ export default function ValidationPage() {
 
   return (
     <div className="params-v2 validation-v2 space-y-4">
-      <div className="flex items-start justify-between gap-4">
+      <div className="pv-title-row">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold text-gray-900 dark:text-white">Validation</h1>
+            <h1>Validation</h1>
             <button
               type="button"
               onClick={() => setHelpOpen(true)}
               aria-label="Open Validation help"
               title="What is this page? Who signs off? How does it work? Click for the user manual."
-              className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+              className="pv-icon-btn"
+              style={{ width: 22, height: 22 }}
             >
-              <HelpCircle size={16} />
+              <HelpCircle size={14} />
             </button>
           </div>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          <p className="pv-title-meta">
             Confirm the system meets stakeholder needs through demonstrations, operational tests,
             simulations, analyses, and stakeholder reviews.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="pv-right">
           <Link
             to={`/projects/${projectId}/validation/settings`}
             title="Configure prefixes and tags (Project Owner / admin only)"
-            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
+            className="pv-btn"
           >
             <Settings size={14} /> Settings
           </Link>
           <button
             type="button"
             onClick={() => setCreateFromReqOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
+            className="pv-btn"
           >
             <ListPlus size={14} /> From requirements
           </button>
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            className="pv-btn primary"
           >
             <Plus size={14} /> New item
           </button>
