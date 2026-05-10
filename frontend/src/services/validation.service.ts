@@ -160,6 +160,8 @@ export const validationService = {
       targetMilestone?: ValidationMilestone
       ownerUserId?: string | null
       criteria?: { text: string; notes?: string }[]
+      prefix?: string
+      tags?: string[]
     },
   ): Promise<ApiResponse<ValidationItemSummary>> {
     return apiClient.post(`/validation/projects/${projectId}/items`, payload)

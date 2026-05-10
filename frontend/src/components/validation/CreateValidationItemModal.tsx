@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { X, AlertTriangle } from 'lucide-react'
 import {
   validationService,
@@ -22,8 +23,25 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
   const [methodType, setMethodType] = useState<ValidationMethodType>('DEMONSTRATION')
   const [targetMilestone, setTargetMilestone] = useState<ValidationMilestone>('OTHER')
   const [criteriaText, setCriteriaText] = useState('')
+  const [prefix, setPrefix] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const { data: settings } = useQuery({
+    queryKey: ['validation-settings', projectId],
+    enabled: isOpen,
+    queryFn: async () => {
+      const res = await validationService.getSettings(projectId)
+      return res.success && res.data ? res.data : null
+    },
+  })
+
+  useEffect(() => {
+    if (settings && !prefix) {
+      const def = settings.prefixes.find((p) => p.isDefault) ?? settings.prefixes[0]
+      if (def) setPrefix(def.prefix)
+    }
+  }, [settings, prefix])
 
   if (!isOpen) return null
 
@@ -57,6 +75,7 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
         methodType,
         targetMilestone,
         criteria,
+        prefix: prefix || undefined,
       })
       if (res.success) {
         reset()
@@ -95,9 +114,27 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
         </div>
 
         <form onSubmit={handleSubmit} className="pv-dr-body" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {settings && settings.prefixes.length > 1 && (
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--pv-fg-2)', marginBottom: 4 }}>
+                Key prefix
+              </label>
+              <select
+                value={prefix}
+                onChange={(e) => setPrefix(e.target.value)}
+                style={{ width: '100%', height: 30, padding: '0 10px', fontSize: 13, fontFamily: 'var(--pv-font-mono)', border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)' }}
+              >
+                {settings.prefixes.map((p) => (
+                  <option key={p.prefix} value={p.prefix} title={p.description}>
+                    {p.prefix} — {p.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--pv-fg-2)', marginBottom: 4 }}>
-              Title <span className="text-red-500">*</span>
+              Title <span style={{ color: 'var(--pv-red)' }}>*</span>
             </label>
             <input
               type="text"
