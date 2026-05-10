@@ -104,27 +104,32 @@ export default function CreateFromRequirementsModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-3xl bg-white dark:bg-gray-900 rounded-lg shadow-2xl flex flex-col max-h-[90vh]">
-        <div className="bg-blue-500/20 backdrop-blur-sm border-b border-blue-500/30 px-6 py-4 flex items-center justify-between flex-shrink-0">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,20,25,0.4)' }}>
+      <div
+        className="pv-drawer-shell params-v2 validation-v2"
+        style={{ width: '100%', maxWidth: 880, margin: 0, maxHeight: '90vh' }}
+      >
+        <div className="pv-dr-head" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4, padding: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+            <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--pv-fg)' }}>
               {title ?? 'New validation items from requirements'}
             </h2>
-            <p className="text-xs text-gray-600 dark:text-gray-400">
-              {restrictToRequirementIds
-                ? `Showing the ${restrictToRequirementIds.length} requirement(s) without a validation item yet. Pick the ones to cover, choose method and milestone, and create.`
-                : 'Pick the requirements you want to validate, then choose how and when. One validation item is created per requirement, automatically linked back to its source.'}
-            </p>
+            <div style={{ flex: 1 }} />
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="pv-icon-btn"
+              style={{ width: 24, height: 24 }}
+            >
+              <X size={14} />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-          >
-            <X size={18} />
-          </button>
+          <p style={{ margin: 0, fontSize: 11.5, color: 'var(--pv-fg-3)' }}>
+            {restrictToRequirementIds
+              ? `Showing the ${restrictToRequirementIds.length} requirement(s) without a validation item yet. Pick the ones to cover, choose method and milestone, and create.`
+              : 'Pick the requirements you want to validate, then choose how and when. One validation item is created per requirement, automatically linked back to its source.'}
+          </p>
         </div>
 
         <div className="px-6 py-3 border-b border-gray-200 dark:border-gray-700 space-y-3 flex-shrink-0">
