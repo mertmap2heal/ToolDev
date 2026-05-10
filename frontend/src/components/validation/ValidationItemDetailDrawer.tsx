@@ -11,8 +11,17 @@ import {
   type CriterionOutcome,
   type ValidationMethodType,
   type ValidationMilestone,
-  type ValidationStatus,
 } from '../../services/validation.service'
+import {
+  METHOD_LABEL,
+  METHOD_TOOLTIP,
+  MILESTONE_LABEL,
+  MILESTONE_TOOLTIP,
+  STATUS_COLOR,
+  STATUS_LABEL,
+  OUTCOME_LABEL,
+  OUTCOME_COLOR,
+} from './validationLabels'
 
 interface Props {
   projectId: string
@@ -20,28 +29,6 @@ interface Props {
   currentUserId: string
   onClose: () => void
   onChanged: () => void
-}
-
-const STATUS_COLOR: Record<ValidationStatus, string> = {
-  PLANNED: 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
-  EXECUTED: 'bg-blue-200 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
-  VALIDATED: 'bg-green-200 text-green-800 dark:bg-green-900/40 dark:text-green-200',
-  BLOCKED: 'bg-red-200 text-red-800 dark:bg-red-900/40 dark:text-red-200',
-  OBSOLETE: 'bg-gray-200 text-gray-500 dark:bg-gray-800 dark:text-gray-500',
-}
-
-const OUTCOME_LABEL: Record<CriterionOutcome, string> = {
-  PENDING: 'Pending',
-  MET: 'Met',
-  PARTIAL: 'Partial',
-  NOT_MET: 'Not Met',
-}
-
-const OUTCOME_COLOR: Record<CriterionOutcome, string> = {
-  PENDING: 'text-gray-500',
-  MET: 'text-green-700 dark:text-green-400',
-  PARTIAL: 'text-amber-700 dark:text-amber-400',
-  NOT_MET: 'text-red-700 dark:text-red-400',
 }
 
 export default function ValidationItemDetailDrawer({
@@ -209,7 +196,7 @@ export default function ValidationItemDetailDrawer({
                 <span
                   className={`text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded ${STATUS_COLOR[draft.status]}`}
                 >
-                  {draft.status}
+                  {STATUS_LABEL[draft.status]}
                 </span>
               )}
               {draft?.deletedAt && (
@@ -257,14 +244,20 @@ export default function ValidationItemDetailDrawer({
                   onChange={(e) =>
                     draft && setDraft({ ...draft, methodType: e.target.value as ValidationMethodType })
                   }
+                  title={draft ? METHOD_TOOLTIP[draft.methodType] : ''}
                   className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 >
                   {VALIDATION_METHOD_TYPES.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
+                    <option key={m} value={m} title={METHOD_TOOLTIP[m]}>
+                      {METHOD_LABEL[m]}
                     </option>
                   ))}
                 </select>
+                {draft && (
+                  <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+                    {METHOD_TOOLTIP[draft.methodType]}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">
@@ -275,14 +268,20 @@ export default function ValidationItemDetailDrawer({
                   onChange={(e) =>
                     draft && setDraft({ ...draft, targetMilestone: e.target.value as ValidationMilestone })
                   }
+                  title={draft ? MILESTONE_TOOLTIP[draft.targetMilestone] : ''}
                   className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 >
                   {VALIDATION_MILESTONES.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
+                    <option key={m} value={m} title={MILESTONE_TOOLTIP[m]}>
+                      {MILESTONE_LABEL[m]}
                     </option>
                   ))}
                 </select>
+                {draft && (
+                  <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+                    {MILESTONE_TOOLTIP[draft.targetMilestone]}
+                  </p>
+                )}
               </div>
             </div>
           </section>

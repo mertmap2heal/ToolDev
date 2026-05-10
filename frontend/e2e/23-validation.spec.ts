@@ -81,8 +81,9 @@ test.describe('Validation page', () => {
     await page.goto(`/projects/${projectId}/validation`)
     await page.waitForLoadState('domcontentloaded')
     await page.getByRole('button', { name: /^filters$/i }).click()
-    await expect(page.getByText(/^Status$/)).toBeVisible({ timeout: 3_000 })
-    await expect(page.getByText(/^Method$/)).toBeVisible({ timeout: 3_000 })
-    await expect(page.getByText(/^Milestone$/)).toBeVisible({ timeout: 3_000 })
+    // Scope to <label> elements to avoid colliding with the table column header "Status"
+    await expect(page.locator('label').filter({ hasText: /^Status$/ })).toBeVisible({ timeout: 3_000 })
+    await expect(page.locator('label').filter({ hasText: /^Method$/ })).toBeVisible({ timeout: 3_000 })
+    await expect(page.locator('label').filter({ hasText: /^Milestone$/ })).toBeVisible({ timeout: 3_000 })
   })
 })

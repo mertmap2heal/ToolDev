@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Plus, Search, Download, Filter, X, AlertCircle, ListPlus,
+  Plus, Search, Download, Filter, X, AlertCircle, ListPlus, Archive,
 } from 'lucide-react'
 import {
   validationService,
@@ -19,14 +19,14 @@ import ValidationOnboardingBanner from '../../components/validation/ValidationOn
 import CreateValidationItemModal from '../../components/validation/CreateValidationItemModal'
 import CreateFromRequirementsModal from '../../components/validation/CreateFromRequirementsModal'
 import ValidationItemDetailDrawer from '../../components/validation/ValidationItemDetailDrawer'
-
-const STATUS_COLOR: Record<ValidationStatus, string> = {
-  PLANNED: 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
-  EXECUTED: 'bg-blue-200 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
-  VALIDATED: 'bg-green-200 text-green-800 dark:bg-green-900/40 dark:text-green-200',
-  BLOCKED: 'bg-red-200 text-red-800 dark:bg-red-900/40 dark:text-red-200',
-  OBSOLETE: 'bg-gray-200 text-gray-500 dark:bg-gray-800 dark:text-gray-500',
-}
+import {
+  METHOD_LABEL,
+  METHOD_TOOLTIP,
+  MILESTONE_LABEL,
+  MILESTONE_TOOLTIP,
+  STATUS_COLOR,
+  STATUS_LABEL,
+} from '../../components/validation/validationLabels'
 
 export default function ValidationPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -41,6 +41,7 @@ export default function ValidationPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [createFromReqOpen, setCreateFromReqOpen] = useState(false)
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
 
   const filters = useMemo(
     () => ({
@@ -48,8 +49,9 @@ export default function ValidationPage() {
       status: statusFilter || undefined,
       methodType: methodFilter || undefined,
       milestone: milestoneFilter || undefined,
+      includeDeleted: showArchived || undefined,
     }),
-    [search, statusFilter, methodFilter, milestoneFilter],
+    [search, statusFilter, methodFilter, milestoneFilter, showArchived],
   )
 
   const { data: items = [], refetch } = useQuery({
@@ -156,6 +158,22 @@ export default function ValidationPage() {
         </button>
         <button
           type="button"
+          onClick={() => setShowArchived((v) => !v)}
+          title={
+            showArchived
+              ? 'Hide soft-deleted items'
+              : 'Show soft-deleted items so they can be restored'
+          }
+          className={`flex items-center gap-1.5 px-3 py-2 text-sm border rounded-md ${
+            showArchived
+              ? 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300'
+              : 'border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+          }`}
+        >
+          <Archive size={14} /> {showArchived ? 'Hide archived' : 'Show archived'}
+        </button>
+        <button
+          type="button"
           onClick={downloadCsv}
           className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
         >
@@ -177,7 +195,7 @@ export default function ValidationPage() {
               <option value="">All</option>
               {VALIDATION_STATUSES.map((s) => (
                 <option key={s} value={s}>
-                  {s}
+                  {STATUS_LABEL[s]}
                 </option>
               ))}
             </select>
@@ -189,12 +207,13 @@ export default function ValidationPage() {
             <select
               value={methodFilter}
               onChange={(e) => setMethodFilter(e.target.value as ValidationMethodType | '')}
+              title={methodFilter ? METHOD_TOOLTIP[methodFilter] : 'Filter by validation method'}
               className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
             >
               <option value="">All</option>
               {VALIDATION_METHOD_TYPES.map((m) => (
-                <option key={m} value={m}>
-                  {m}
+                <option key={m} value={m} title={METHOD_TOOLTIP[m]}>
+                  {METHOD_LABEL[m]}
                 </option>
               ))}
             </select>
@@ -206,12 +225,13 @@ export default function ValidationPage() {
             <select
               value={milestoneFilter}
               onChange={(e) => setMilestoneFilter(e.target.value as ValidationMilestone | '')}
+              title={milestoneFilter ? MILESTONE_TOOLTIP[milestoneFilter] : 'Filter by lifecycle milestone'}
               className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
             >
               <option value="">All</option>
               {VALIDATION_MILESTONES.map((m) => (
-                <option key={m} value={m}>
-                  {m}
+                <option key={m} value={m} title={MILESTONE_TOOLTIP[m]}>
+                  {MILESTONE_LABEL[m]}
                 </option>
               ))}
             </select>
@@ -280,21 +300,36 @@ export default function ValidationPage() {
                   <tr
                     key={it.id}
                     onClick={() => setSelectedItemId(it.id)}
-                    className="border-b border-gray-100 dark:border-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/10 cursor-pointer"
+                    className={`border-b border-gray-100 dark:border-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/10 cursor-pointer ${
+                      it.deletedAt ? 'opacity-60' : ''
+                    }`}
                   >
                     <td className="px-3 py-2 font-mono text-xs text-blue-700 dark:text-blue-300">
                       {it.key}
+                      {it.deletedAt && (
+                        <span className="ml-1 text-[9px] text-amber-700 dark:text-amber-400">
+                          (archived)
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-gray-900 dark:text-white">{it.title}</td>
-                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
-                      {it.methodType.replace(/_/g, ' ')}
+                    <td
+                      className="px-3 py-2 text-gray-700 dark:text-gray-300"
+                      title={METHOD_TOOLTIP[it.methodType]}
+                    >
+                      {METHOD_LABEL[it.methodType]}
                     </td>
-                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{it.targetMilestone}</td>
+                    <td
+                      className="px-3 py-2 text-gray-700 dark:text-gray-300"
+                      title={MILESTONE_TOOLTIP[it.targetMilestone]}
+                    >
+                      {it.targetMilestone}
+                    </td>
                     <td className="px-3 py-2">
                       <span
                         className={`text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded ${STATUS_COLOR[it.status]}`}
                       >
-                        {it.status}
+                        {STATUS_LABEL[it.status]}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400">

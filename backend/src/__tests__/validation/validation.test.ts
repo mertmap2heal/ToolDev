@@ -366,6 +366,21 @@ describe('Validation module integration', () => {
     })
   })
 
+  describe('Key uniqueness under concurrent creates', () => {
+    it('all 8 parallel creates succeed with distinct VAL-### keys', async () => {
+      const promises = Array.from({ length: 8 }, () =>
+        request(app)
+          .post(`/api/v1/validation/projects/${projectId}/items`)
+          .set('Authorization', `Bearer ${authorToken}`)
+          .send({ title: `Concurrent ${Math.random().toString(36).slice(2, 6)}` }),
+      )
+      const results = await Promise.all(promises)
+      const keys = results.map((r) => r.body.data?.key as string)
+      expect(results.every((r) => r.status === 201)).toBe(true)
+      expect(new Set(keys).size).toBe(keys.length)
+    })
+  })
+
   describe('Soft delete + restore', () => {
     it('soft-deletes and restores correctly; default list excludes deleted', async () => {
       const created = await request(app)

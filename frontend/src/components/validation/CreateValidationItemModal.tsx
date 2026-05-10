@@ -7,20 +7,13 @@ import {
   type ValidationMethodType,
   type ValidationMilestone,
 } from '../../services/validation.service'
+import { METHOD_LABEL, METHOD_TOOLTIP, MILESTONE_LABEL, MILESTONE_TOOLTIP } from './validationLabels'
 
 interface Props {
   projectId: string
   isOpen: boolean
   onClose: () => void
   onCreated: () => void
-}
-
-const METHOD_LABEL: Record<ValidationMethodType, string> = {
-  DEMONSTRATION: 'Demonstration',
-  OPERATIONAL_TEST: 'Operational Test',
-  SIMULATION: 'Simulation',
-  ANALYSIS: 'Analysis',
-  STAKEHOLDER_ACCEPTANCE: 'Stakeholder Acceptance',
 }
 
 export default function CreateValidationItemModal({ projectId, isOpen, onClose, onCreated }: Props) {
@@ -132,14 +125,18 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
               <select
                 value={methodType}
                 onChange={(e) => setMethodType(e.target.value as ValidationMethodType)}
+                title={METHOD_TOOLTIP[methodType]}
                 className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
               >
                 {VALIDATION_METHOD_TYPES.map((m) => (
-                  <option key={m} value={m}>
+                  <option key={m} value={m} title={METHOD_TOOLTIP[m]}>
                     {METHOD_LABEL[m]}
                   </option>
                 ))}
               </select>
+              <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                {METHOD_TOOLTIP[methodType]}
+              </p>
               {methodType === 'ANALYSIS' && (
                 <p className="mt-1.5 flex items-start gap-1 text-[11px] text-amber-700 dark:text-amber-400">
                   <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
@@ -156,14 +153,18 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
               <select
                 value={targetMilestone}
                 onChange={(e) => setTargetMilestone(e.target.value as ValidationMilestone)}
+                title={MILESTONE_TOOLTIP[targetMilestone]}
                 className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
               >
                 {VALIDATION_MILESTONES.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
+                  <option key={m} value={m} title={MILESTONE_TOOLTIP[m]}>
+                    {MILESTONE_LABEL[m]}
                   </option>
                 ))}
               </select>
+              <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                {MILESTONE_TOOLTIP[targetMilestone]}
+              </p>
             </div>
           </div>
 

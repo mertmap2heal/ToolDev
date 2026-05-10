@@ -39,16 +39,54 @@ interface ListFilters {
 }
 
 async function nextKey(projectId: string): Promise<string> {
-  const last = await prisma.validationItem.findFirst({
-    where: { projectId },
-    orderBy: { createdAt: 'desc' },
+  // Compute the highest existing numeric suffix; pad to 3 digits unless we
+  // exceed 999, then natural width. Allocation is racy by design — callers
+  // that hit a unique-constraint collision retry via createWithUniqueKey.
+  const items = await prisma.validationItem.findMany({
+    where: { projectId, key: { startsWith: 'VAL-' } },
     select: { key: true },
   })
-  if (!last) return 'VAL-001'
-  const m = last.key.match(/^VAL-(\d+)$/)
-  if (!m) return `VAL-${Date.now().toString().slice(-6)}`
-  const next = (parseInt(m[1], 10) + 1).toString().padStart(3, '0')
+  let max = 0
+  for (const it of items) {
+    const m = it.key.match(/^VAL-(\d+)$/)
+    if (m) {
+      const n = parseInt(m[1], 10)
+      if (n > max) max = n
+    }
+  }
+  const next = (max + 1).toString().padStart(3, '0')
   return `VAL-${next}`
+}
+
+type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
+
+async function createWithUniqueKey<T>(
+  projectId: string,
+  attempt: (tx: Tx, key: string) => Promise<T>,
+): Promise<T> {
+  // Serialize VAL-### key allocation per project via a Postgres advisory lock.
+  // The lock is held for the lifetime of the transaction; concurrent calls for
+  // the same project queue, concurrent calls for different projects do not.
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(
+      "SELECT pg_advisory_xact_lock(hashtext('validation-key-' || $1))",
+      projectId,
+    )
+    const items = await tx.validationItem.findMany({
+      where: { projectId, key: { startsWith: 'VAL-' } },
+      select: { key: true },
+    })
+    let max = 0
+    for (const it of items) {
+      const m = it.key.match(/^VAL-(\d+)$/)
+      if (m) {
+        const n = parseInt(m[1], 10)
+        if (n > max) max = n
+      }
+    }
+    const key = `VAL-${(max + 1).toString().padStart(3, '0')}`
+    return attempt(tx, key)
+  })
 }
 
 function buildWhere(projectId: string, filters: ListFilters): Prisma.ValidationItemWhereInput {
@@ -126,7 +164,6 @@ export async function createItem(projectId: string, userId: string, payload: Cre
   )
     throw new Error('invalid targetMilestone')
 
-  const key = await nextKey(projectId)
   const criteria: ValidationCriterion[] = (payload.criteria ?? []).map((c, i) => ({
     id: randomUUID(),
     text: c.text,
@@ -135,20 +172,22 @@ export async function createItem(projectId: string, userId: string, payload: Cre
     orderIndex: i,
   }))
 
-  const created = await prisma.validationItem.create({
-    data: {
-      projectId,
-      key,
-      title: payload.title.trim(),
-      description: payload.description ?? null,
-      methodType: payload.methodType ?? 'DEMONSTRATION',
-      targetMilestone: payload.targetMilestone ?? 'OTHER',
-      ownerUserId: payload.ownerUserId ?? null,
-      criteria: criteria as unknown as Prisma.InputJsonValue,
-      createdById: userId,
-    },
-    include: { owner: true, createdBy: true },
-  })
+  const created = await createWithUniqueKey(projectId, (tx, key) =>
+    tx.validationItem.create({
+      data: {
+        projectId,
+        key,
+        title: payload.title.trim(),
+        description: payload.description ?? null,
+        methodType: payload.methodType ?? 'DEMONSTRATION',
+        targetMilestone: payload.targetMilestone ?? 'OTHER',
+        ownerUserId: payload.ownerUserId ?? null,
+        criteria: criteria as unknown as Prisma.InputJsonValue,
+        createdById: userId,
+      },
+      include: { owner: true, createdBy: true },
+    }),
+  )
 
   await writeAudit(projectId, userId, 'validation:create', {
     validationItemId: created.id,
@@ -287,7 +326,6 @@ export async function createFromRequirements(
 
   const created: { id: string; key: string; sourceRequirementId: string }[] = []
   for (const r of reqs) {
-    const key = await nextKey(projectId)
     const acText = r.acceptanceCriteria?.trim()
     const criteria: ValidationCriterion[] = acText
       ? acText
@@ -301,19 +339,21 @@ export async function createFromRequirements(
             orderIndex: i,
           }))
       : []
-    const item = await prisma.validationItem.create({
-      data: {
-        projectId,
-        key,
-        title: `Validate: ${r.title}`,
-        description: r.description ? `Source requirement ${r.id}\n\n${r.description}` : null,
-        methodType: payload.methodType ?? 'DEMONSTRATION',
-        targetMilestone: payload.targetMilestone ?? 'OTHER',
-        criteria: criteria as unknown as Prisma.InputJsonValue,
-        createdById: userId,
-      },
-      select: { id: true, key: true },
-    })
+    const item = await createWithUniqueKey(projectId, (tx, key) =>
+      tx.validationItem.create({
+        data: {
+          projectId,
+          key,
+          title: `Validate: ${r.title}`,
+          description: r.description ? `Source requirement ${r.id}\n\n${r.description}` : null,
+          methodType: payload.methodType ?? 'DEMONSTRATION',
+          targetMilestone: payload.targetMilestone ?? 'OTHER',
+          criteria: criteria as unknown as Prisma.InputJsonValue,
+          createdById: userId,
+        },
+        select: { id: true, key: true },
+      }),
+    )
     created.push({ ...item, sourceRequirementId: r.id })
   }
 

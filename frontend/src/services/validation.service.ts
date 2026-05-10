@@ -87,6 +87,7 @@ interface ListFilters {
   milestone?: ValidationMilestone | ''
   ownerId?: string
   search?: string
+  includeDeleted?: boolean
 }
 
 function qs(filters: ListFilters): string {
@@ -96,6 +97,7 @@ function qs(filters: ListFilters): string {
   if (filters.milestone) p.set('milestone', filters.milestone)
   if (filters.ownerId) p.set('ownerId', filters.ownerId)
   if (filters.search) p.set('search', filters.search)
+  if (filters.includeDeleted) p.set('includeDeleted', 'true')
   const s = p.toString()
   return s ? `?${s}` : ''
 }
