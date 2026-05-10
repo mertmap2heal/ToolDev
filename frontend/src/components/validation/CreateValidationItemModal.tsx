@@ -73,23 +73,28 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-2xl bg-white dark:bg-gray-900 rounded-lg shadow-2xl flex flex-col max-h-[90vh]">
-        <div className="bg-blue-500/20 backdrop-blur-sm border-b border-blue-500/30 px-6 py-4 flex items-center justify-between flex-shrink-0">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+    <div className="params-v2 validation-v2 fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,20,25,0.4)' }}>
+      <div
+        className="pv-drawer-shell"
+        style={{ width: '100%', maxWidth: 640, margin: 0, maxHeight: '90vh' }}
+      >
+        <div className="pv-dr-head">
+          <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--pv-fg)' }}>
             New validation item
-          </h2>
+          </span>
+          <div className="pv-dr-spacer" />
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+            className="pv-icon-btn"
+            style={{ width: 24, height: 24 }}
           >
-            <X size={18} />
+            <X size={14} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="pv-dr-body" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
             <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
               Title <span className="text-red-500">*</span>
@@ -188,22 +193,24 @@ export default function CreateValidationItemModal({ projectId, isOpen, onClose, 
           )}
         </form>
 
-        <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-3 flex items-center justify-end gap-2 flex-shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={submitting || !title.trim()}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-md"
-          >
-            {submitting ? 'Creating…' : 'Create item'}
-          </button>
+        <div className="pv-dr-foot">
+          <div className="right" style={{ marginLeft: 'auto' }}>
+            <button
+              type="button"
+              onClick={onClose}
+              className="pv-dr-btn"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={submitting || !title.trim()}
+              className="pv-dr-btn primary"
+            >
+              {submitting ? 'Creating…' : 'Create item'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
