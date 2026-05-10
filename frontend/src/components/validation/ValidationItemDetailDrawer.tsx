@@ -298,7 +298,7 @@ export default function ValidationItemDetailDrawer({
               onChange={(e) => draft && setDraft({ ...draft, description: e.target.value })}
               rows={3}
               placeholder="Why this validation matters"
-              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              style={{ width: '100%', padding: 8, fontSize: 13, lineHeight: 1.5, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit', resize: 'vertical' }}
             />
             <div className="mt-3 grid grid-cols-2 gap-3">
               <div>
@@ -311,7 +311,7 @@ export default function ValidationItemDetailDrawer({
                     draft && setDraft({ ...draft, methodType: e.target.value as ValidationMethodType })
                   }
                   title={draft ? METHOD_TOOLTIP[draft.methodType] : ''}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  style={{ width: '100%', height: 28, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
                 >
                   {VALIDATION_METHOD_TYPES.map((m) => (
                     <option key={m} value={m} title={METHOD_TOOLTIP[m]}>
@@ -335,7 +335,7 @@ export default function ValidationItemDetailDrawer({
                     draft && setDraft({ ...draft, targetMilestone: e.target.value as ValidationMilestone })
                   }
                   title={draft ? MILESTONE_TOOLTIP[draft.targetMilestone] : ''}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  style={{ width: '100%', height: 28, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
                 >
                   {VALIDATION_MILESTONES.map((m) => (
                     <option key={m} value={m} title={MILESTONE_TOOLTIP[m]}>
