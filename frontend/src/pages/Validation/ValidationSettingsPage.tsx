@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import './validation-v2.css'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, Plus, Trash2, Save, AlertCircle, Tag } from 'lucide-react'
@@ -91,7 +92,7 @@ export default function ValidationSettingsPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="params-v2 validation-v2 space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <Link
