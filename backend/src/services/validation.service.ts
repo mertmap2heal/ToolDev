@@ -1573,6 +1573,35 @@ export async function uncoveredRequirements(projectId: string) {
   return reqs.filter((r) => !covered.has(r.id))
 }
 
+/**
+ * Mark a suspect item as reviewed. Because the suspect flag is derived from
+ * (requirement.updatedAt > item.updatedAt), the simplest correct fix is to
+ * advance the item's updatedAt past the most-recent linked requirement
+ * timestamp. We do that by writing an empty patch via update().
+ *
+ * Distinct audit action so reviewers can later prove they actively cleared
+ * the flag rather than silently re-saving the item.
+ */
+export async function acknowledgeSuspect(
+  projectId: string,
+  itemId: string,
+  userId: string,
+) {
+  const item = await prisma.validationItem.findFirst({
+    where: { id: itemId, projectId },
+    select: { id: true },
+  })
+  if (!item) return null
+  const updated = await prisma.validationItem.update({
+    where: { id: itemId },
+    data: { updatedAt: new Date() },
+  })
+  await writeAudit(projectId, userId, 'validation:suspect-ack', {
+    validationItemId: itemId,
+  })
+  return updated
+}
+
 export async function suspectItemIds(projectId: string): Promise<Set<string>> {
   const items = await prisma.validationItem.findMany({
     where: { projectId, deletedAt: null },

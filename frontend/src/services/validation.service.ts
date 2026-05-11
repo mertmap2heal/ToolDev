@@ -360,6 +360,13 @@ export const validationService = {
     return apiClient.post(`/validation/projects/${projectId}/items/bulk`, payload)
   },
 
+  async acknowledgeSuspect(
+    projectId: string,
+    id: string,
+  ): Promise<ApiResponse<ValidationItemSummary>> {
+    return apiClient.post(`/validation/projects/${projectId}/items/${id}/acknowledge-suspect`, {})
+  },
+
   async star(projectId: string, id: string): Promise<ApiResponse<{ starred: boolean }>> {
     return apiClient.post(`/validation/projects/${projectId}/items/${id}/star`, {})
   },

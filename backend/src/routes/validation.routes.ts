@@ -43,6 +43,7 @@ import {
   getBaseline,
   createBaseline,
   deleteBaseline,
+  acknowledgeSuspect,
 } from '../controllers/validation.controller'
 import { ensureValidationApproverRole } from '../services/validation.service'
 
@@ -100,6 +101,7 @@ router.post('/projects/:projectId/items/:id/restore', restoreItem)
 router.post('/projects/:projectId/items/:id/duplicate', duplicateItem)
 router.post('/projects/:projectId/items/:id/star', star)
 router.delete('/projects/:projectId/items/:id/star', unstar)
+router.post('/projects/:projectId/items/:id/acknowledge-suspect', acknowledgeSuspect)
 
 // Activity feed (filtered audit log)
 router.get('/projects/:projectId/activity', listProjectActivity)

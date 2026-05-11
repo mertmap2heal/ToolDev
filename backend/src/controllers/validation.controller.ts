@@ -264,6 +264,20 @@ export async function listEvidence(req: AuthRequest, res: Response) {
   }
 }
 
+export async function acknowledgeSuspect(req: AuthRequest, res: Response) {
+  try {
+    const data = await svc.acknowledgeSuspect(
+      req.params.projectId,
+      req.params.id,
+      userId(req),
+    )
+    if (!data) return fail(res, 404, 'Validation item not found')
+    res.json({ success: true, data })
+  } catch (e) {
+    err(res, e)
+  }
+}
+
 export async function listBaselines(req: AuthRequest, res: Response) {
   try {
     const data = await svc.listBaselines(req.params.projectId)

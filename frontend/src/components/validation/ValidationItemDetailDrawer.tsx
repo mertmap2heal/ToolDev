@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   X, Trash2, RotateCcw, CheckCircle, Plus, Save, Paperclip,
-  GitPullRequestArrow, Link2, AlertOctagon, Copy,
+  GitPullRequestArrow, Link2, AlertOctagon, Copy, AlertTriangle,
 } from 'lucide-react'
 import SafetyLinkPanel from '../safety/SafetyLinkPanel'
 import { RenderWithEntityRefs } from '../../utils/entityRefs'
@@ -539,6 +539,44 @@ export default function ValidationItemDetailDrawer({
             <h3 className="pv-dr-section-title">
               Overview
             </h3>
+            {item?.isSuspect && (
+              <div
+                style={{
+                  marginBottom: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 12px',
+                  borderRadius: 4,
+                  border: '1px solid var(--pv-amber)',
+                  background: 'var(--pv-amber-tint, rgba(184,134,11,0.10))',
+                  fontSize: 12,
+                }}
+                title="A requirement linked to this validation item was updated after the item was last touched. Re-run the validation if the change is material, or acknowledge it if not."
+              >
+                <AlertTriangle size={14} style={{ color: 'var(--pv-amber)', flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <strong style={{ color: 'var(--pv-amber)' }}>Suspect</strong>
+                  <span style={{ marginLeft: 6, color: 'var(--pv-fg-2)' }}>
+                    A linked requirement was updated after this validation. Re-run if material;
+                    otherwise mark reviewed.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const res = await validationService.acknowledgeSuspect(projectId, itemId!)
+                    if (res.success) {
+                      reload()
+                    }
+                  }}
+                  className="pv-btn"
+                  style={{ height: 24, padding: '0 10px', fontSize: 11 }}
+                >
+                  Mark reviewed
+                </button>
+              </div>
+            )}
             {/* Legacy items created before commit 4d7e... had a literal
                 "Source requirement <uuid>\n\n..." prefix in the description.
                 Detect it, surface a clean callout, and offer a one-click
