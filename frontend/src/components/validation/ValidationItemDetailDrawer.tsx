@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   X, Trash2, RotateCcw, CheckCircle, Plus, Save, Paperclip,
-  GitPullRequestArrow, Link2, AlertOctagon,
+  GitPullRequestArrow, Link2, AlertOctagon, Copy,
 } from 'lucide-react'
 import SafetyLinkPanel from '../safety/SafetyLinkPanel'
 import { projectService } from '../../services/project.service'
@@ -283,6 +283,25 @@ export default function ValidationItemDetailDrawer({
           )}
           {draft?.deletedAt && <span className="pv-dr-pill deprecated">DELETED</span>}
           <div className="pv-dr-spacer" />
+          {itemId && (
+            <button
+              type="button"
+              onClick={async () => {
+                const res = await validationService.duplicate(projectId, itemId)
+                if (res.success && res.data) {
+                  onChanged()
+                  // open the new copy
+                  queryClient.invalidateQueries({ queryKey: ['validation-items', projectId] })
+                }
+              }}
+              aria-label="Duplicate"
+              title="Duplicate this validation item"
+              className="pv-icon-btn"
+              style={{ width: 24, height: 24 }}
+            >
+              <Copy size={14} />
+            </button>
+          )}
           <button
             type="button"
             onClick={close}
