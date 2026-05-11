@@ -423,79 +423,76 @@ export default function ValidationItemDetailDrawer({
         onClick={close}
       />
       <div className="pv-drawer-shell" style={{ width: 720, maxWidth: '100%', margin: 0, borderRadius: 0, background: 'var(--pv-bg)' }}>
-        <div className="pv-dr-head">
-          <span className="pv-dr-id">{draft?.key ?? '…'}</span>
+        {/* Drawer header — compact chrome with mono key + status pill +
+            stacked dirty/deleted state pills. Action icons right-aligned. */}
+        <div className="vv-dr-head">
+          <span className="vv-dr-key">{draft?.key ?? '…'}</span>
           {draft && (
             <span
-              className={`pv-dr-pill ${
+              className={`vv-status-pill ${
                 draft.status === 'VALIDATED'
-                  ? 'released'
+                  ? 'is-validated'
                   : draft.status === 'EXECUTED'
-                  ? 'review'
+                  ? 'is-executed'
                   : draft.status === 'BLOCKED'
-                  ? 'deprecated'
+                  ? 'is-blocked'
                   : draft.status === 'OBSOLETE'
-                  ? 'obsolete'
-                  : 'draft'
+                  ? 'is-obsolete'
+                  : 'is-planned'
               }`}
+              title={STATUS_LABEL[draft.status]}
             >
               {STATUS_LABEL[draft.status]}
             </span>
           )}
-          {draft?.deletedAt && <span className="pv-dr-pill deprecated">DELETED</span>}
+          {draft?.deletedAt && <span className="vv-status-pill is-deleted">DELETED</span>}
           {isDirty && (
             <span
-              className="pv-dr-pill"
-              style={{ background: 'var(--pv-amber-tint)', color: 'var(--pv-amber)', borderColor: 'var(--pv-amber-line)' }}
+              className="vv-status-pill is-unsaved"
               title="Unsaved changes — press Cmd/Ctrl+S to save"
             >
               UNSAVED
             </span>
           )}
-          <div className="pv-dr-spacer" />
-          {itemId && (
+          <div className="vv-dr-head-actions">
+            {itemId && (
+              <button
+                type="button"
+                onClick={async () => {
+                  const res = await validationService.duplicate(projectId, itemId)
+                  if (res.success && res.data) {
+                    onChanged()
+                    queryClient.invalidateQueries({ queryKey: ['validation-items', projectId] })
+                  }
+                }}
+                aria-label="Duplicate"
+                title="Duplicate this validation item"
+                className="pv-icon-btn"
+                style={{ width: 26, height: 26 }}
+              >
+                <Copy size={14} />
+              </button>
+            )}
             <button
               type="button"
-              onClick={async () => {
-                const res = await validationService.duplicate(projectId, itemId)
-                if (res.success && res.data) {
-                  onChanged()
-                  // open the new copy
-                  queryClient.invalidateQueries({ queryKey: ['validation-items', projectId] })
-                }
-              }}
-              aria-label="Duplicate"
-              title="Duplicate this validation item"
+              onClick={close}
+              aria-label="Close"
               className="pv-icon-btn"
-              style={{ width: 24, height: 24 }}
+              style={{ width: 26, height: 26 }}
             >
-              <Copy size={14} />
+              <X size={14} />
             </button>
-          )}
-          <button
-            type="button"
-            onClick={close}
-            aria-label="Close"
-            className="pv-icon-btn"
-            style={{ width: 24, height: 24 }}
-          >
-            <X size={14} />
-          </button>
+          </div>
         </div>
 
-        <div className="pv-dr-sub">
+        {/* Title row — Fraunces 24px, inline editable */}
+        <div className="vv-dr-title-row">
           <input
             type="text"
             value={draft?.title ?? ''}
             onChange={(e) => draft && setDraft({ ...draft, title: e.target.value })}
-            className="pv-dr-display"
-            style={{
-              width: '100%',
-              background: 'transparent',
-              border: 0,
-              outline: 0,
-              padding: 0,
-            }}
+            className="vv-dr-title"
+            placeholder="Untitled validation item"
           />
           {draft?.title && (() => {
             // T2 advisory per ai-ready-vision.md §5 — proposal only, no auto-fix.
@@ -554,8 +551,8 @@ export default function ValidationItemDetailDrawer({
         </div>
 
         <div className="pv-dr-body" style={{ padding: 0 }}>
-          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <section>
+          <div className="vv-dr-body-pad">
+          <section className="vv-drawer-section">
             <h3 className="pv-dr-section-title">
               Overview
             </h3>
@@ -698,104 +695,93 @@ export default function ValidationItemDetailDrawer({
                 </div>
               )
             })()}
-            <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">
-                  Method
-                </label>
-                <select
-                  value={draft?.methodType ?? 'DEMONSTRATION'}
-                  onChange={(e) =>
-                    draft && setDraft({ ...draft, methodType: e.target.value as ValidationMethodType })
-                  }
-                  title={draft ? METHOD_TOOLTIP[draft.methodType] : ''}
-                  style={{ width: '100%', height: 28, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
-                >
-                  {VALIDATION_METHOD_TYPES.map((m) => (
-                    <option key={m} value={m} title={METHOD_TOOLTIP[m]}>
-                      {METHOD_LABEL[m]}
-                    </option>
-                  ))}
-                </select>
-                {draft && (
-                  <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
-                    {METHOD_TOOLTIP[draft.methodType]}
-                  </p>
-                )}
+            {/* Compact meta strip — label above each select, two-column grid
+                that wraps. The verbose tooltip lines under each select were
+                removed to clean the layout; they live on the select's title
+                attribute so hovering still surfaces them. */}
+            <div className="vv-meta" style={{ marginTop: 16 }}>
+              <div className="vv-meta-row">
+                <span className="vv-meta-label">Method</span>
+                <div className="vv-meta-value">
+                  <select
+                    value={draft?.methodType ?? 'DEMONSTRATION'}
+                    onChange={(e) =>
+                      draft && setDraft({ ...draft, methodType: e.target.value as ValidationMethodType })
+                    }
+                    title={draft ? METHOD_TOOLTIP[draft.methodType] : ''}
+                  >
+                    {VALIDATION_METHOD_TYPES.map((m) => (
+                      <option key={m} value={m} title={METHOD_TOOLTIP[m]}>
+                        {METHOD_LABEL[m]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">
-                  Priority
-                </label>
-                <select
-                  value={draft?.priority ?? 'medium'}
-                  onChange={(e) =>
-                    draft && setDraft({ ...draft, priority: e.target.value as ValidationPriority })
-                  }
-                  style={{ width: '100%', height: 28, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
-                >
-                  {VALIDATION_PRIORITIES.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
+              <div className="vv-meta-row">
+                <span className="vv-meta-label">Milestone</span>
+                <div className="vv-meta-value">
+                  <select
+                    value={draft?.targetMilestone ?? 'OTHER'}
+                    onChange={(e) =>
+                      draft && setDraft({ ...draft, targetMilestone: e.target.value as ValidationMilestone })
+                    }
+                    title={draft ? MILESTONE_TOOLTIP[draft.targetMilestone] : ''}
+                  >
+                    {VALIDATION_MILESTONES.map((m) => (
+                      <option key={m} value={m} title={MILESTONE_TOOLTIP[m]}>
+                        {MILESTONE_LABEL[m]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">
-                  Due date
-                </label>
-                <input
-                  type="date"
-                  value={draft?.dueDate ? draft.dueDate.slice(0, 10) : ''}
-                  onChange={(e) =>
-                    draft && setDraft({ ...draft, dueDate: e.target.value || null })
-                  }
-                  style={{ width: '100%', height: 28, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
-                />
+              <div className="vv-meta-row">
+                <span className="vv-meta-label">Priority</span>
+                <div className="vv-meta-value">
+                  <select
+                    value={draft?.priority ?? 'medium'}
+                    onChange={(e) =>
+                      draft && setDraft({ ...draft, priority: e.target.value as ValidationPriority })
+                    }
+                  >
+                    {VALIDATION_PRIORITIES.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">
-                  Owner
-                </label>
-                <select
-                  value={draft?.ownerUserId ?? ''}
-                  onChange={(e) =>
-                    draft && setDraft({ ...draft, ownerUserId: e.target.value || null })
-                  }
-                  style={{ width: '100%', height: 28, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
-                >
-                  <option value="">— Unassigned —</option>
-                  {members.map((m) => (
-                    <option key={m.userId} value={m.userId}>
-                      {m.user?.name ?? m.user?.email ?? m.userId.slice(0, 8)}
-                    </option>
-                  ))}
-                </select>
+              <div className="vv-meta-row">
+                <span className="vv-meta-label">Due date</span>
+                <div className="vv-meta-value">
+                  <input
+                    type="date"
+                    value={draft?.dueDate ? draft.dueDate.slice(0, 10) : ''}
+                    onChange={(e) =>
+                      draft && setDraft({ ...draft, dueDate: e.target.value || null })
+                    }
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">
-                  Milestone
-                </label>
-                <select
-                  value={draft?.targetMilestone ?? 'OTHER'}
-                  onChange={(e) =>
-                    draft && setDraft({ ...draft, targetMilestone: e.target.value as ValidationMilestone })
-                  }
-                  title={draft ? MILESTONE_TOOLTIP[draft.targetMilestone] : ''}
-                  style={{ width: '100%', height: 28, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
-                >
-                  {VALIDATION_MILESTONES.map((m) => (
-                    <option key={m} value={m} title={MILESTONE_TOOLTIP[m]}>
-                      {MILESTONE_LABEL[m]}
-                    </option>
-                  ))}
-                </select>
-                {draft && (
-                  <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
-                    {MILESTONE_TOOLTIP[draft.targetMilestone]}
-                  </p>
-                )}
+              <div className="vv-meta-row">
+                <span className="vv-meta-label">Owner</span>
+                <div className="vv-meta-value">
+                  <select
+                    value={draft?.ownerUserId ?? ''}
+                    onChange={(e) =>
+                      draft && setDraft({ ...draft, ownerUserId: e.target.value || null })
+                    }
+                  >
+                    <option value="">— Unassigned —</option>
+                    {members.map((m) => (
+                      <option key={m.userId} value={m.userId}>
+                        {m.user?.name ?? m.user?.email ?? m.userId.slice(0, 8)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           </section>
@@ -836,7 +822,7 @@ export default function ValidationItemDetailDrawer({
             </section>
           )}
 
-          <section>
+          <section className="vv-drawer-section">
             <div className="flex items-center justify-between mb-2">
               <h3 className="pv-dr-section-title">
                 Linked requirements
@@ -927,7 +913,7 @@ export default function ValidationItemDetailDrawer({
             )}
           </section>
 
-          <section>
+          <section className="vv-drawer-section">
             <div className="flex items-center justify-between mb-2">
               <h3 className="pv-dr-section-title">
                 Acceptance criteria
@@ -1239,7 +1225,7 @@ export default function ValidationItemDetailDrawer({
             )}
           </section>
 
-          <section>
+          <section className="vv-drawer-section">
             <h3 className="pv-dr-section-title">
               Evidence
             </h3>
@@ -1288,7 +1274,7 @@ export default function ValidationItemDetailDrawer({
             />
           </section>
 
-          <section>
+          <section className="vv-drawer-section">
             <div className="flex items-center justify-between mb-2">
               <h3 className="pv-dr-section-title">
                 Sign-offs
@@ -1428,7 +1414,7 @@ export default function ValidationItemDetailDrawer({
             </section>
           )}
 
-          <section>
+          <section className="vv-drawer-section">
             <h3 className="pv-dr-section-title">
               Safety impact
             </h3>

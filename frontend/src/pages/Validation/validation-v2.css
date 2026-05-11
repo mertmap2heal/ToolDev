@@ -120,16 +120,188 @@ html[data-theme='midnight'] .validation-v2 .vv-tile.vv-tile-gap .vv-tile-value {
 .validation-v2 .vv-star-btn.on { color: var(--pv-amber); }
 
 /* Drawer section title (shared) */
+/* Section title — was small uppercase mono. Now a proper title using
+   Fraunces serif (already loaded by the design system) at 15px, slight
+   negative tracking, neutral ink. Aligned with design-system.md §2
+   "show the standard in context" — readable headings not template labels. */
 .validation-v2 .pv-dr-section-title {
-  margin: 0 0 8px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--pv-fg-3);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  margin: 0 0 12px;
+  font-family: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--pv-fg);
+  text-transform: none;
   display: flex;
   align-items: center;
   gap: 6px;
+}
+.validation-v2 .pv-dr-section-aside {
+  font-family: var(--pv-font);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--pv-fg-3);
+  letter-spacing: 0;
+  margin-left: 6px;
+}
+
+/* Section dividers between drawer blocks — quieter than the previous double
+   borders. 24px gap; thin line on top of every section after the first. */
+.validation-v2 .vv-drawer-section {
+  padding-top: 24px;
+  margin-top: 24px;
+  border-top: 1px solid var(--pv-line-soft, var(--pv-line));
+}
+.validation-v2 .vv-drawer-section:first-of-type {
+  padding-top: 0;
+  margin-top: 0;
+  border-top: 0;
+}
+
+/* Meta strip - definition-list-style horizontal row of compact key/value
+   pairs replacing the old four-column grid of select inputs. Each item
+   becomes a tap target that opens an inline editor. */
+.validation-v2 .vv-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 24px;
+  margin-bottom: 4px;
+}
+.validation-v2 .vv-meta-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.validation-v2 .vv-meta-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--pv-fg-3);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.validation-v2 .vv-meta-value {
+  font-size: 13px;
+  color: var(--pv-fg);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.validation-v2 .vv-meta-value select,
+.validation-v2 .vv-meta-value input[type="date"] {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 6px;
+  font-size: 12px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--pv-fg);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 80ms ease-out, border-color 80ms ease-out;
+}
+.validation-v2 .vv-meta-value select:hover,
+.validation-v2 .vv-meta-value input[type="date"]:hover {
+  background: var(--pv-surface-soft);
+  border-color: var(--pv-line);
+}
+.validation-v2 .vv-meta-value select:focus,
+.validation-v2 .vv-meta-value input[type="date"]:focus {
+  background: var(--pv-bg);
+  border-color: var(--pv-line-strong);
+  outline: none;
+}
+
+/* Drawer status pill - tighter, 12% tint */
+.validation-v2 .vv-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-family: var(--pv-font-mono);
+  border: 1px solid transparent;
+}
+.validation-v2 .vv-status-pill.is-validated {
+  background: var(--pv-green-tint);
+  color: var(--pv-green);
+}
+.validation-v2 .vv-status-pill.is-executed {
+  background: var(--pv-amber-tint);
+  color: var(--pv-amber);
+}
+.validation-v2 .vv-status-pill.is-blocked {
+  background: var(--pv-red-tint);
+  color: var(--pv-red);
+}
+.validation-v2 .vv-status-pill.is-obsolete {
+  background: var(--pv-gray-tint);
+  color: var(--pv-fg-3);
+}
+.validation-v2 .vv-status-pill.is-planned {
+  background: var(--pv-surface);
+  color: var(--pv-fg-2);
+  border-color: var(--pv-line);
+}
+.validation-v2 .vv-status-pill.is-deleted,
+.validation-v2 .vv-status-pill.is-unsaved {
+  background: var(--pv-amber-tint);
+  color: var(--pv-amber);
+}
+
+/* Drawer header redesign */
+.validation-v2 .vv-dr-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--pv-line);
+  background: var(--pv-bg);
+}
+.validation-v2 .vv-dr-key {
+  font-family: var(--pv-font-mono);
+  font-size: 12px;
+  color: var(--pv-fg-3);
+  font-weight: 500;
+}
+.validation-v2 .vv-dr-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.validation-v2 .vv-dr-title-row {
+  padding: 16px 20px 8px;
+}
+.validation-v2 .vv-dr-title {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  margin: 0;
+  font-family: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--pv-fg);
+}
+.validation-v2 .vv-dr-title::placeholder {
+  color: var(--pv-fg-4);
+  font-style: italic;
+}
+
+/* Body inner padding aligned with header */
+.validation-v2 .vv-dr-body-pad {
+  padding: 0 20px 20px;
 }
 
 /* Comfortable density */
