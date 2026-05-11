@@ -270,34 +270,35 @@ export default function EntityDiscussion({
           </div>
         </div>
         {replyTo === c.id && (
-          <div className="mt-1 ml-3 flex gap-1">
-            <textarea
+          <div style={{ marginTop: 6, marginLeft: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <MarkdownEditor
               value={replyDraft}
-              onChange={(e) => setReplyDraft(e.target.value)}
+              onChange={setReplyDraft}
               rows={2}
-              placeholder="Reply…"
-              className="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900"
-              autoFocus
+              placeholder="Reply — @mention, REQ-/VAL-/PRM- refs and Markdown supported"
+              members={members}
             />
-            <div className="flex flex-col gap-1">
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
               <button
                 type="button"
                 onClick={() => {
                   setReplyTo(null)
                   setReplyDraft('')
                 }}
-                aria-label="Cancel"
-                className="text-gray-400 hover:text-gray-700"
+                aria-label="Cancel reply"
+                style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', color: 'var(--pv-fg-3)', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 2 }}
               >
-                <X size={14} />
+                <X size={12} /> Cancel
               </button>
               <button
                 type="button"
                 onClick={() => submitReply(c.id)}
+                disabled={!replyDraft.trim()}
                 aria-label="Send reply"
-                className="text-blue-600 hover:text-blue-700"
+                className="pv-btn primary compact"
+                style={{ height: 22, padding: '0 10px', fontSize: 11 }}
               >
-                <Send size={14} />
+                <Send size={11} /> Reply
               </button>
             </div>
           </div>
