@@ -443,6 +443,18 @@ export default function ValidationPage() {
           <Filter size={14} /> Filters
           {activeFilterCount > 0 && <span className="pv-badge">{activeFilterCount}</span>}
         </button>
+        {currentUserId && (
+          <button
+            type="button"
+            onClick={() =>
+              setOwnerFilter(ownerFilter === currentUserId ? '' : currentUserId)
+            }
+            title={ownerFilter === currentUserId ? 'Show items from all owners' : 'Show only items assigned to you'}
+            className={`pv-pill ${ownerFilter === currentUserId ? 'active' : ''}`}
+          >
+            Mine
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setOverdueOnly((v) => !v)}
