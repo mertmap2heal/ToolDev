@@ -56,6 +56,7 @@ export default function ValidationPage() {
   const [statusFilter, setStatusFilter] = useState<ValidationStatus | ''>('')
   const [methodFilter, setMethodFilter] = useState<ValidationMethodType | ''>('')
   const [milestoneFilter, setMilestoneFilter] = useState<ValidationMilestone | ''>('')
+  const [ownerFilter, setOwnerFilter] = useState<string>('')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [createFromReqOpen, setCreateFromReqOpen] = useState(false)
@@ -82,8 +83,9 @@ export default function ValidationPage() {
       sortBy,
       sortDir,
       tagsAny: tagsAny.length > 0 ? tagsAny : undefined,
+      ownerId: ownerFilter || undefined,
     }),
-    [search, statusFilter, methodFilter, milestoneFilter, showArchived, starredOnly, sortBy, sortDir, tagsAny],
+    [search, statusFilter, methodFilter, milestoneFilter, showArchived, starredOnly, sortBy, sortDir, tagsAny, ownerFilter],
   )
 
   const toggleSort = (col: ValidationSortBy) => {
@@ -147,8 +149,21 @@ export default function ValidationPage() {
     refetchCoverage()
   }
 
+  const { data: projectMembers = [] } = useQuery({
+    queryKey: ['project-members', projectId],
+    enabled: !!projectId,
+    queryFn: async () => {
+      const { projectService } = await import('../../services/project.service')
+      const res = await projectService.getProjectMembers(projectId!)
+      return res.success && res.data ? res.data : []
+    },
+  })
+
   const activeFilterCount =
-    (statusFilter ? 1 : 0) + (methodFilter ? 1 : 0) + (milestoneFilter ? 1 : 0)
+    (statusFilter ? 1 : 0) +
+    (methodFilter ? 1 : 0) +
+    (milestoneFilter ? 1 : 0) +
+    (ownerFilter ? 1 : 0)
 
   // ⌘F focuses the search box; j/k navigate rows; Enter opens drawer
   useEffect(() => {
@@ -193,6 +208,7 @@ export default function ValidationPage() {
     setStatusFilter('')
     setMethodFilter('')
     setMilestoneFilter('')
+    setOwnerFilter('')
   }
 
   const downloadCsv = () => {
@@ -450,6 +466,25 @@ export default function ValidationPage() {
               ))}
             </select>
           </div>
+          {projectMembers.length > 0 && (
+            <div>
+              <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--pv-fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                Owner
+              </label>
+              <select
+                value={ownerFilter}
+                onChange={(e) => setOwnerFilter(e.target.value)}
+                style={{ width: '100%', height: 26, padding: '0 8px', fontSize: 12, border: '1px solid var(--pv-line)', borderRadius: 4, background: 'var(--pv-bg)', color: 'var(--pv-fg)', fontFamily: 'inherit' }}
+              >
+                <option value="">All</option>
+                {projectMembers.map((m) => (
+                  <option key={m.userId} value={m.userId}>
+                    {m.user?.name ?? m.user?.email ?? m.userId.slice(0, 8)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           {settings && settings.tags.length > 0 && (
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--pv-fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
