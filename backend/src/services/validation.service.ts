@@ -307,6 +307,15 @@ function defaultPrefix(prefixes: unknown): string {
 
 // ---- Comments / discussions ----
 
+export async function listProjectActivity(projectId: string, limit = 100) {
+  return prisma.auditLog.findMany({
+    where: { projectId, action: { startsWith: 'validation:' } },
+    orderBy: { createdAt: 'desc' },
+    take: Math.min(500, Math.max(1, limit)),
+    include: { user: { select: { id: true, name: true, email: true } } },
+  })
+}
+
 export async function listActivity(projectId: string, itemId: string) {
   // AuditLog rows have `details: String?` containing JSON. We filter to rows
   // whose action begins with 'validation:' and whose details mention this
