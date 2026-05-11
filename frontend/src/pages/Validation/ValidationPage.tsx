@@ -342,7 +342,7 @@ export default function ValidationPage() {
 
   // Total number of columns in the table - kept in sync with <thead> so the
   // group-header colSpan stays correct as columns are added or removed.
-  const TABLE_COL_COUNT = 11
+  const TABLE_COL_COUNT = 13
 
   const items = useMemo(() => {
     let arr = rawItems
@@ -530,51 +530,6 @@ export default function ValidationPage() {
         </td>
         <td>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {it.priority && it.priority !== 'medium' && (
-              <span
-                className="vv-tag"
-                style={{
-                  background:
-                    it.priority === 'critical'
-                      ? 'var(--pv-red-tint)'
-                      : it.priority === 'high'
-                      ? 'var(--pv-amber-tint)'
-                      : 'var(--pv-gray-tint)',
-                  color:
-                    it.priority === 'critical'
-                      ? 'var(--pv-red)'
-                      : it.priority === 'high'
-                      ? 'var(--pv-amber)'
-                      : 'var(--pv-fg-3)',
-                  border: '1px solid transparent',
-                  flexShrink: 0,
-                  textTransform: 'uppercase',
-                  fontWeight: 600,
-                }}
-                title={`Priority: ${it.priority}`}
-              >
-                {it.priority}
-              </span>
-            )}
-            {it.dueDate && (() => {
-              const due = new Date(it.dueDate)
-              const overdue = due.getTime() < Date.now() && it.status !== 'VALIDATED'
-              return (
-                <span
-                  className="vv-tag"
-                  style={{
-                    background: overdue ? 'var(--pv-red-tint)' : 'var(--pv-surface)',
-                    color: overdue ? 'var(--pv-red)' : 'var(--pv-fg-3)',
-                    border: '1px solid transparent',
-                    flexShrink: 0,
-                  }}
-                  title={overdue ? 'Overdue' : `Due ${due.toLocaleDateString()}`}
-                >
-                  {overdue ? 'overdue · ' : 'due '}
-                  {due.toLocaleDateString()}
-                </span>
-              )
-            })()}
             {inlineEditId === it.id ? (
               <input
                 autoFocus
@@ -698,6 +653,58 @@ export default function ValidationPage() {
               <i style={{ width: `${(met / total) * 100}%` }} />
             </span>
           )}
+        </td>
+        <td style={{ fontSize: 12 }}>
+          {it.priority ? (
+            <span
+              className="vv-tag"
+              style={{
+                background:
+                  it.priority === 'critical'
+                    ? 'var(--pv-red-tint)'
+                    : it.priority === 'high'
+                    ? 'var(--pv-amber-tint)'
+                    : it.priority === 'low'
+                    ? 'var(--pv-gray-tint)'
+                    : 'transparent',
+                color:
+                  it.priority === 'critical'
+                    ? 'var(--pv-red)'
+                    : it.priority === 'high'
+                    ? 'var(--pv-amber)'
+                    : 'var(--pv-fg-3)',
+                border: '1px solid transparent',
+                textTransform: 'uppercase',
+                fontWeight: 600,
+                fontSize: 10,
+              }}
+              title={`Priority: ${it.priority}`}
+            >
+              {it.priority}
+            </span>
+          ) : (
+            <span style={{ color: 'var(--pv-fg-3)' }}>—</span>
+          )}
+        </td>
+        <td style={{ fontSize: 12 }}>
+          {it.dueDate
+            ? (() => {
+                const due = new Date(it.dueDate)
+                const overdue = due.getTime() < Date.now() && it.status !== 'VALIDATED'
+                return (
+                  <span
+                    style={{
+                      fontFamily: 'var(--pv-font-mono)',
+                      color: overdue ? 'var(--pv-red)' : 'var(--pv-fg-2)',
+                      fontWeight: overdue ? 600 : 400,
+                    }}
+                    title={overdue ? 'Overdue' : `Due ${due.toLocaleDateString()}`}
+                  >
+                    {due.toISOString().slice(0, 10)}
+                  </span>
+                )
+              })()
+            : <span style={{ color: 'var(--pv-fg-3)' }}>—</span>}
         </td>
         <td
           style={{ fontSize: 12, color: 'var(--pv-fg-2)' }}
@@ -1739,6 +1746,22 @@ export default function ValidationPage() {
                   Status<SortArrow col="status" />
                 </th>
                 <th style={{ width: 84 }}>Criteria</th>
+                <th
+                  className="sortable"
+                  style={{ width: 80 }}
+                  onClick={() => toggleSort('priority')}
+                  title="Item priority — critical / high / medium / low"
+                >
+                  Priority<SortArrow col="priority" />
+                </th>
+                <th
+                  className="sortable"
+                  style={{ width: 100 }}
+                  onClick={() => toggleSort('dueDate')}
+                  title="When this validation is due"
+                >
+                  Due<SortArrow col="dueDate" />
+                </th>
                 <th style={{ width: 100 }}>Owner</th>
                 <th style={{ width: 80 }}>Sign-offs</th>
                 <th
