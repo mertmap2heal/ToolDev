@@ -14,14 +14,17 @@
 }
 
 /* Coverage strip */
+/* Coverage strip — was a verbose card with a row of tiles. Now an inline,
+   compact strip: small uppercase caption, then the metric cluster in a flat
+   horizontal row with thin dividers. Reads like an instrument panel. */
 .validation-v2 .vv-coverage {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 16px;
+  gap: 6px;
+  padding: 10px 14px;
   background: var(--pv-bg);
   border: 1px solid var(--pv-line);
-  border-radius: 6px;
+  border-radius: 4px;
 }
 .validation-v2 .vv-coverage-head {
   display: flex;
@@ -30,9 +33,11 @@
   flex-wrap: wrap;
 }
 .validation-v2 .vv-coverage-head .vv-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--pv-fg-2);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--pv-fg-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 .validation-v2 .vv-coverage-head .vv-chips {
   margin-left: auto;
@@ -42,21 +47,30 @@
   flex-wrap: wrap;
 }
 .validation-v2 .vv-tile {
-  padding: 8px 12px;
-  border: 1px solid var(--pv-line);
-  border-radius: 4px;
-  background: var(--pv-surface-soft);
+  padding: 6px 12px;
+  border: 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  position: relative;
+}
+.validation-v2 .vv-tile + .vv-tile {
+  border-left: 1px solid var(--pv-line-soft, var(--pv-line));
 }
 .validation-v2 .vv-tile .vv-tile-label {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--pv-fg-3);
+  letter-spacing: 0;
+  text-transform: none;
 }
 .validation-v2 .vv-tile .vv-tile-value {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 500;
   color: var(--pv-fg);
-  font-family: var(--pv-font-mono);
-  letter-spacing: -0.01em;
+  font-family: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 }
 .validation-v2 .vv-tile.vv-tile-gap {
   background: var(--pv-amber-tint);

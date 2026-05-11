@@ -785,51 +785,46 @@ export default function ValidationPage() {
           </p>
         </div>
         <div className="pv-right">
-          <button
-            type="button"
-            onClick={async () => {
-              const label = window.prompt(
-                'Baseline label (e.g. "PDR snapshot 2026-05-15"):',
-                `Baseline ${new Date().toISOString().slice(0, 10)}`,
-              )?.trim()
-              if (!label) return
-              const res = await validationService.createBaseline(projectId, { label })
-              if (res.success) toast.success(`Baselined ${res.data?.itemCount ?? 0} items as "${label}"`)
-              else toast.error(res.error ?? 'Baseline failed')
-            }}
-            title="Take a point-in-time snapshot of every live validation item. Frozen — later edits do not alter the baseline."
-            className="pv-btn"
-          >
-            Baseline state
-          </button>
-          <Link
-            to={`/projects/${projectId}/validation/baselines`}
-            title="View saved baselines for this project"
-            className="pv-btn"
-          >
-            Baselines
-          </Link>
-          <Link
-            to={`/projects/${projectId}/validation/activity`}
-            title="Chronological audit log of every validation action"
-            className="pv-btn"
-          >
-            Activity
-          </Link>
-          <Link
-            to={`/projects/${projectId}/validation/der`}
-            title="DER read-only view: milestone-indexed, sign-off-visible, print-friendly. Use this to hand off to certification authorities."
-            className="pv-btn"
-          >
-            DER view
-          </Link>
-          <Link
-            to={`/projects/${projectId}/validation/settings`}
-            title="Configure prefixes and tags. The settings page itself is editable by Project Owner / admin only — others see a read-only view."
-            className="pv-btn"
-          >
-            <Settings size={14} /> Settings
-          </Link>
+          <label className="pv-pill" style={{ cursor: 'pointer', paddingRight: 4 }} title="Open Baselines, Activity, DER, or Settings">
+            More
+            <select
+              value=""
+              onChange={async (e) => {
+                const action = e.target.value
+                e.currentTarget.value = ''
+                if (!action) return
+                if (action === 'baseline') {
+                  const label = window.prompt(
+                    'Baseline label (e.g. "PDR snapshot 2026-05-15"):',
+                    `Baseline ${new Date().toISOString().slice(0, 10)}`,
+                  )?.trim()
+                  if (!label) return
+                  const res = await validationService.createBaseline(projectId, { label })
+                  if (res.success) toast.success(`Baselined ${res.data?.itemCount ?? 0} items as "${label}"`)
+                  else toast.error(res.error ?? 'Baseline failed')
+                  return
+                }
+                if (action === 'baselines') window.location.href = `/projects/${projectId}/validation/baselines`
+                else if (action === 'activity') window.location.href = `/projects/${projectId}/validation/activity`
+                else if (action === 'der') window.location.href = `/projects/${projectId}/validation/der`
+                else if (action === 'settings') window.location.href = `/projects/${projectId}/validation/settings`
+              }}
+              style={{ background: 'transparent', border: 0, color: 'inherit', font: 'inherit', cursor: 'pointer', outline: 'none' }}
+            >
+              <option value="">Actions…</option>
+              <optgroup label="Snapshots">
+                <option value="baseline">Baseline this state…</option>
+                <option value="baselines">Open Baselines</option>
+              </optgroup>
+              <optgroup label="Read-only views">
+                <option value="der">DER view</option>
+                <option value="activity">Activity log</option>
+              </optgroup>
+              <optgroup label="Project">
+                <option value="settings">Settings</option>
+              </optgroup>
+            </select>
+          </label>
           <button
             type="button"
             onClick={() => setCreateFromReqOpen(true)}
@@ -900,8 +895,8 @@ export default function ValidationPage() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-              gap: 8,
+              gridTemplateColumns: 'repeat(auto-fit, minmax(120px, max-content))',
+              gap: 0,
             }}
           >
             <div className="vv-tile">

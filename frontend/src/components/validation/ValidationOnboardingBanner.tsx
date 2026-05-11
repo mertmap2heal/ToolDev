@@ -33,25 +33,26 @@ export default function ValidationOnboardingBanner() {
     <div
       style={{
         display: 'flex',
-        alignItems: 'flex-start',
-        gap: 10,
-        padding: '10px 14px',
-        background: 'var(--pv-blue-tint)',
-        border: '1px solid #B6DCFE',
-        borderRadius: 6,
+        alignItems: 'center',
+        gap: 8,
+        padding: '6px 12px',
+        background: 'var(--pv-surface-soft)',
+        border: '1px solid var(--pv-line)',
+        borderLeft: '2px solid var(--pv-blue)',
+        borderRadius: 4,
         fontSize: 12,
-        color: 'var(--pv-blue-ink)',
+        color: 'var(--pv-fg-2)',
       }}
     >
-      <Info size={14} style={{ marginTop: 2, flexShrink: 0 }} />
-      <div style={{ flex: 1 }}>
-        <p style={{ margin: 0, fontWeight: 600 }}>
-          Validation answers to a stakeholder. Verification answers to a requirement.
-        </p>
-        <p style={{ margin: '4px 0 0', color: 'inherit', opacity: 0.85 }}>
-          Use Validation to confirm the system meets stakeholder needs (demos, operational tests,
-          stakeholder reviews). For low-level requirement compliance, use Verification.
-        </p>
+      <Info size={12} style={{ flexShrink: 0, color: 'var(--pv-blue)' }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ fontWeight: 500, color: 'var(--pv-fg)' }}>
+          Validation answers to a stakeholder; Verification answers to a requirement.
+        </span>{' '}
+        <span style={{ color: 'var(--pv-fg-3)' }}>
+          Use this page for demos, operational tests, and stakeholder reviews — not low-level
+          requirement compliance.
+        </span>
       </div>
       <button
         type="button"
@@ -60,13 +61,13 @@ export default function ValidationOnboardingBanner() {
         style={{
           background: 'none',
           border: 0,
-          color: 'inherit',
+          color: 'var(--pv-fg-3)',
           cursor: 'pointer',
           padding: 0,
           flexShrink: 0,
         }}
       >
-        <X size={14} />
+        <X size={12} />
       </button>
     </div>
   )
