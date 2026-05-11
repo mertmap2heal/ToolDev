@@ -268,9 +268,11 @@ export const validationService = {
     projectId: string,
     id: string,
     file: File,
+    criterionId?: string,
   ): Promise<ApiResponse<ValidationEvidenceLink>> {
     const fd = new FormData()
     fd.append('file', file)
+    if (criterionId) fd.append('criterionId', criterionId)
     return apiClient.postForm(
       `/validation/projects/${projectId}/items/${id}/evidence/upload`,
       fd,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   X, Trash2, RotateCcw, CheckCircle, Plus, Save, Paperclip,
@@ -1157,6 +1157,15 @@ export default function ValidationItemDetailDrawer({
                         <Trash2 size={14} />
                       </button>
                     </div>
+                    {evidence && (
+                      <CriterionEvidence
+                        projectId={projectId}
+                        itemId={itemId!}
+                        criterionId={c.id}
+                        links={evidence.filter((l) => l.relation === `criterion:${c.id}`)}
+                        onChanged={reload}
+                      />
+                    )}
                   </li>
                 ))}
               </ul>
@@ -1169,7 +1178,7 @@ export default function ValidationItemDetailDrawer({
             </h3>
             {evidence && evidence.length > 0 && (
               <div className="pv-dr-refs">
-                {evidence.map((link) => (
+                {evidence.filter((l) => !l.relation?.startsWith('criterion:')).map((link) => (
                   <div key={link.id} className="pv-dr-ref">
                     <span className="ref-kind">
                       <Paperclip size={12} />
@@ -1510,6 +1519,121 @@ function EvidenceDropzone({
       </label>
       {errorMsg && (
         <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--pv-red)' }}>{errorMsg}</p>
+      )}
+    </div>
+  )
+}
+
+// Per-criterion evidence list + mini-dropzone. Each criterion can own its own
+// evidence using the polymorphic `relation = "criterion:<id>"` convention -
+// no schema change required beyond the existing VerEvidenceLink.relation
+// string field.
+function CriterionEvidence({
+  projectId,
+  itemId,
+  criterionId,
+  links,
+  onChanged,
+}: {
+  projectId: string
+  itemId: string
+  criterionId: string
+  links: Array<{
+    id: string
+    relation: string
+    evidence: { evidenceType: string; title: string; storageRef?: string }
+  }>
+  onChanged: () => void
+}) {
+  const [uploading, setUploading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement | null>(null)
+
+  const upload = async (files: FileList | File[]) => {
+    setErrorMsg(null)
+    const list = Array.from(files)
+    if (list.length === 0) return
+    setUploading(true)
+    for (const f of list) {
+      const res = await validationService.uploadEvidence(projectId, itemId, f, criterionId)
+      if (!res.success) {
+        setErrorMsg(res.error ?? `Upload failed for ${f.name}`)
+        break
+      }
+    }
+    setUploading(false)
+    onChanged()
+  }
+
+  return (
+    <div style={{ marginTop: 4, marginLeft: 8 }}>
+      {links.length > 0 && (
+        <div className="pv-dr-refs" style={{ marginBottom: 4 }}>
+          {links.map((link) => (
+            <div key={link.id} className="pv-dr-ref" style={{ fontSize: 11 }}>
+              <span className="ref-kind">
+                <Paperclip size={10} />
+              </span>
+              <span className="ref-id">{link.evidence.evidenceType}</span>
+              {link.evidence.storageRef?.startsWith('/uploads/') ? (
+                <a
+                  href={link.evidence.storageRef}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ref-title"
+                  style={{ color: 'var(--pv-blue)' }}
+                  title={`Open ${link.evidence.title}`}
+                >
+                  {link.evidence.title}
+                </a>
+              ) : (
+                <span className="ref-title">{link.evidence.title}</span>
+              )}
+              <button
+                type="button"
+                onClick={async () => {
+                  await validationService.detachEvidence(projectId, itemId, link.id)
+                  onChanged()
+                }}
+                className="pv-icon-btn"
+                style={{ width: 18, height: 18 }}
+                aria-label="Remove evidence"
+              >
+                <X size={10} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+        style={{
+          fontSize: 10,
+          background: 'transparent',
+          border: '1px dashed var(--pv-line)',
+          color: 'var(--pv-fg-3)',
+          padding: '2px 8px',
+          borderRadius: 3,
+          cursor: uploading ? 'progress' : 'pointer',
+        }}
+        title="Attach evidence to this specific criterion"
+      >
+        {uploading ? 'Uploading…' : '+ Attach evidence to this criterion'}
+      </button>
+      <input
+        ref={fileRef}
+        type="file"
+        multiple
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          if (e.target.files) void upload(e.target.files)
+          e.target.value = ''
+        }}
+      />
+      {errorMsg && (
+        <p style={{ margin: '2px 0 0', fontSize: 10, color: 'var(--pv-red)' }}>{errorMsg}</p>
       )}
     </div>
   )

@@ -1366,6 +1366,11 @@ export async function uploadEvidenceFile(
   itemId: string,
   userId: string,
   file: { originalname: string; mimetype: string; buffer: Buffer; size: number },
+  /**
+   * When set, the resulting evidence link is associated with a specific
+   * criterion via the polymorphic `relation` field: `criterion:<id>`.
+   */
+  criterionId?: string,
 ) {
   const item = await prisma.validationItem.findFirst({
     where: { id: itemId, projectId },
@@ -1405,7 +1410,7 @@ export async function uploadEvidenceFile(
       evidenceId: evidence.id,
       linkedEntityType: 'ValidationItem',
       linkedEntityId: itemId,
-      relation: 'PRIMARY',
+      relation: criterionId ? `criterion:${criterionId}` : 'PRIMARY',
     },
     include: { evidence: true },
   })
@@ -1414,6 +1419,7 @@ export async function uploadEvidenceFile(
     evidenceId: evidence.id,
     bytes: file.size,
     mime: file.mimetype,
+    criterionId: criterionId ?? null,
   })
   return link
 }
