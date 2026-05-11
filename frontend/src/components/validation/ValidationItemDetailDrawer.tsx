@@ -93,16 +93,22 @@ export default function ValidationItemDetailDrawer({
   useEffect(() => {
     if (!isOpen) return
     const handler = (e: KeyboardEvent) => {
-      // Ignore when typing in a field
       const tgt = e.target as HTMLElement | null
       const inField = tgt?.matches('input, textarea, select, [contenteditable="true"]')
+      const isMod = e.metaKey || e.ctrlKey
       if (e.key === 'Escape' && !inField) {
         e.preventDefault()
         onClose()
+      } else if (isMod && (e.key === 's' || e.key === 'Enter')) {
+        // Cmd/Ctrl + S or Cmd/Ctrl + Enter → save
+        e.preventDefault()
+        void save()
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
+    // `save` is stable enough — re-binding on every keystroke would interfere with browser shortcuts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, onClose])
 
   const { data: settings } = useQuery({
